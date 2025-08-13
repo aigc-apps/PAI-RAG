@@ -41,7 +41,6 @@ def formatter(record):
         )
     else:
         return (
-            "<level>API</level> | "
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{process}</level> | "
             "<level>{level: <8}</level> | "

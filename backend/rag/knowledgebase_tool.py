@@ -15,7 +15,7 @@ from common.knowledgebase.types import (
 from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition, query_file_ids_with_metadata_filter
 from rag.chunk_helper import (
     get_embedding_from_db,
-    get_kb_chunk_ids,
+    get_file_id_source_map,
     get_multimodal_llm_from_db,
     read_file_from_db,
     save_chunks_to_db_async,
@@ -140,7 +140,7 @@ class PaiKnowledgebaseClient:
 
             vector_store = self.create_vector_store_from_knowledgebase(knowledgebase, embed_model=embed_model)
             if old_chunk_ids:
-                vector_store.delete_nodes(node_ids=old_chunk_ids)
+                await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
 
             texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}" for node in nodes]
@@ -188,7 +188,7 @@ class PaiKnowledgebaseClient:
 
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
         vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
-        vector_store.delete_nodes(node_ids=node_ids)
+        await vector_store.adelete_nodes(node_ids=node_ids)
         logger.info(
             f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
         )
@@ -204,31 +204,6 @@ class PaiKnowledgebaseClient:
         vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
         await vector_store.async_add(nodes)
         logger.info(f"Finished inserting {len(nodes)} into vector store.")
-
-
-    async def aupdate_file_chunks_metadata(
-        self,
-        kb_id: str,
-        file_id: str,
-        new_metadata: dict,
-    ):
-        logger.info(f"Starting to update file chunks {file_id} with metadata: {new_metadata}.")
-        knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
-        chunk_ids = await get_kb_chunk_ids(kb_id=kb_id, file_id=file_id)
-        vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
-        nodes = await vector_store.aget_nodes(node_ids=chunk_ids)
-        embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
-            knowledgebase.embedding_model
-        )
-
-        for node in nodes:
-            node.metadata.update(new_metadata)
-            if node.embedding is None:
-                node.embedding = embed_model.aget_text_embedding(f"{node.text}\n\nfile_name: {node.metadata['file_name']}")
-        await vector_store.adelete_nodes(node_ids=chunk_ids)
-        await vector_store.async_add(nodes)
-        logger.info(f"Updated all chunks for file {file_id} with {new_metadata}.")
-
 
     async def aquery(
         self,
@@ -319,8 +294,10 @@ class PaiKnowledgebaseClient:
             logger.info(f"Reranked {len(query_result.nodes)} nodes.")
 
         result_nodes = []
+        file_ids = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
+                file_ids.append(node.metadata["doc_id"])
                 origin_text = node.text
                 pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
                 matches = re.findall(pattern, origin_text)
@@ -329,6 +306,12 @@ class PaiKnowledgebaseClient:
                     origin_text = origin_text.replace(src, image_url)
                 node.text = origin_text
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
+
+        file_source_map = await get_file_id_source_map(kb_id=knowledge_id, file_ids=file_ids)
+        for node in result_nodes:
+            file_source = file_source_map.get(node.node.metadata["doc_id"])
+            node.node.metadata["file_source"] = file_source
+
         logger.info(f"Get {len(result_nodes)} nodes above given threshold {similarity_threshold}.")
         return result_nodes
 

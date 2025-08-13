@@ -3,23 +3,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import McpConfig, { MCPConfig } from "@/app/config/mcp/page";
-import type { FC } from "react";
-import { useState, useEffect } from "react";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { McpConfig } from '@/app/config/mcp/mcp';
+import type { FC } from 'react';
+import { useState, useEffect } from 'react';
+import { useChatOptions } from '@/app/providers/chat';
 
-interface McpModalProps {
-  mcpConfigs: McpEntry[];
-  isOpen: boolean;
-  onSave: (configs: McpEntry[]) => void;
-  onClose: () => void;
-  isLoading: boolean;
-  error: string | null;
-}
-
-export class McpEntry extends MCPConfig {
+export class McpEntry extends McpConfig {
   active: boolean = false;
 
   constructor(
@@ -30,10 +21,20 @@ export class McpEntry extends MCPConfig {
     enabled: boolean,
     active: boolean,
   ) {
-    super(id, name, url, type, "", false, enabled);
+    super(id, name, url, type, '', false, enabled);
     this.active = active;
   }
 }
+
+interface McpModalProps {
+  mcpConfigs: McpEntry[];
+  isOpen: boolean;
+  onSave: (configs: McpEntry[]) => void;
+  onClose: () => void;
+  isLoading: boolean;
+  error: string | null;
+}
+
 
 export const McpModal: FC<McpModalProps> = ({
   mcpConfigs,
@@ -44,6 +45,7 @@ export const McpModal: FC<McpModalProps> = ({
   error,
 }) => {
   const [configs, setConfigs] = useState<McpEntry[]>([]);
+  const {mcp_ids, updateMcpIds} = useChatOptions();
 
   useEffect(() => {
     if (mcpConfigs.length > 0) {
@@ -83,10 +85,10 @@ export const McpModal: FC<McpModalProps> = ({
               <div key={cfg.id} className="flex justify-between items-center">
                 <span>{cfg.name}</span>
                 <Button
-                  variant={cfg.active ? "default" : "outline"}
+                  variant={cfg.active ? 'default' : 'outline'}
                   onClick={() => toggleActive(cfg.id)}
                 >
-                  {cfg.active ? "激活" : "激活"}
+                  {cfg.active ? '激活' : '激活'}
                 </Button>
               </div>
             ))

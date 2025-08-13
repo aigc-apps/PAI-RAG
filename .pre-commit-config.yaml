@@ -8,25 +8,36 @@ repos:
     rev: v4.5.0
     hooks:
       - id: check-byte-order-marker
+        files: ^backend/
       - id: check-merge-conflict
+        files: ^backend/
       - id: check-symlinks
+        files: ^backend/
       - id: check-toml
+        files: ^backend/
       - id: check-yaml
+        files: ^backend/
       - id: detect-private-key
+        files: ^backend/
       - id: end-of-file-fixer
+        files: ^backend/
       - id: mixed-line-ending
+        files: ^backend/
       - id: trailing-whitespace
+        files: ^backend/
   - repo: https://github.com/charliermarsh/ruff-pre-commit
     rev: v0.1.5
 
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+        files: ^backend/
         exclude: ".*poetry.lock|.*_static|.*__init__.py|.*app.py|.*worker.py|.*main.py|tests/app/|alembic/"
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.0.1
     hooks:
       - id: mypy
+        files: ^backend/
         additional_dependencies:
           [
             "types-requests",
@@ -51,7 +62,7 @@ repos:
       - id: black-jupyter
         name: black-docs-py
         alias: black
-        files: ^(.*\.ipynb$)
+        files: ^(backend\.*\.ipynb$)
         # Using PEP 8's line length in docs prevents excess left/right scrolling
         args: [--line-length=79]
   - repo: https://github.com/adamchainz/blacken-docs
@@ -68,6 +79,7 @@ repos:
     rev: v3.0.3
     hooks:
       - id: prettier
+        files: ^backend/
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.6
     hooks:

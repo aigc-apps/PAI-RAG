@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   TrashIcon,
   Edit,
   AlertCircleIcon,
   Loader2,
   CheckCircle,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { EmbeddingModelDialog } from "@/app/config/model/embedding/modelDialog";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { EmbeddingModelDialog } from '@/app/config/model/embedding/modelDialog';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -29,16 +29,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { set } from "date-fns";
+} from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { set } from 'date-fns';
 
 export interface Role {
   id: string;
@@ -47,16 +47,16 @@ export interface Role {
 }
 
 const newRole = {
-  name: "",
-  description: "",
+  name: '',
+  description: '',
 };
 
 export default function RolePage() {
   const [editRole, setEditRole] = useState(newRole); // 存储 Embedding 配置
   const [roles, setRoles] = useState<Role[]>([]); // 存储 Embedding 配置
   const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(""); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(""); // 删除时的错误信息
+  const [modelerror, setModelError] = useState(''); // 错误信息
+  const [errorMsg, setErrorMsg] = useState(''); // 删除时的错误信息
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -67,18 +67,16 @@ export default function RolePage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/roles?page=${page}&size=${modelSizePerPage}`,
+          `/v1/config/roles?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error("获取角色列表失败");
+        if (!res.ok) throw new Error('获取角色列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
         setRoles(data); // 合并
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || "加载失败");
+        setModelError(err || '加载失败');
       } finally {
         setModelLoading(false);
       }
@@ -88,19 +86,17 @@ export default function RolePage() {
 
   const handleDelete = async (role_id: string) => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/roles/${role_id}`, {
-        method: "DELETE",
+      const res = await fetch(`/v1/config/roles/${role_id}`, {
+        method: 'DELETE',
       });
-      if (!res.ok) throw new Error("获取角色列表失败");
+      if (!res.ok) throw new Error('获取角色列表失败');
       const json_data = await res.json();
       const data = json_data.data;
-      console.log("delete role success", data);
+      console.log('delete role success', data);
       setRoles((prev) => prev.filter((role) => role.id !== role_id)); // 合并
       setIsEditOpen(false);
     } catch (err: any) {
-      setModelError(err || "加载失败");
+      setModelError(err || '加载失败');
     } finally {
       setModelLoading(false);
     }
@@ -108,22 +104,20 @@ export default function RolePage() {
 
   const handleAddRole = async () => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/roles`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/v1/config/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editRole), // 包装为数组
       });
-      if (!res.ok) throw new Error("获取角色列表失败");
+      if (!res.ok) throw new Error('获取角色列表失败');
       const json_data = await res.json();
       const data = json_data.data;
-      console.log("create role success", data);
+      console.log('create role success', data);
       setRoles([...roles, data]); // 合并
       setIsEditOpen(false);
-      setModelError("");
+      setModelError('');
     } catch (err: any) {
-      setModelError(err || "加载失败");
+      setModelError(err || '加载失败');
     } finally {
       setModelLoading(false);
     }
@@ -229,7 +223,7 @@ export default function RolePage() {
       </div>
       <div></div>
       <div className="block w-full">
-        {errorMsg !== "" && (
+        {errorMsg !== '' && (
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertDescription>

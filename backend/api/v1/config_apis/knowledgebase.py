@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
-from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.knowledgebase.chunk import KbChunkEntity, KbChunkModel, create_text_node_from_chunk
 from db.models.knowledgebase.file import KbFileEntity
@@ -31,42 +30,7 @@ from rag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
 
 knowledgebase_router = APIRouter()
-@knowledgebase_router.post(
-    "/retrieval", response_model=ResponseModel[NewRetrievalResponse]
-)
-async def retrieval(
-    retrieval_request: RetrievalRequest, session: AsyncSession = Depends(get_session)
-):
-    knowledgebase = await session.get(KbEntity, retrieval_request.knowledgebase_id)
-    if knowledgebase is None:
-        return error_response(
-            code=404, message=f"找不到知识库{retrieval_request.knowledgebase_id}"
-        )
 
-    node_results = await kb_client.aquery(
-        query=retrieval_request.query,
-        user_id=retrieval_request.user_id,
-        knowledge_id=retrieval_request.knowledgebase_id,
-        retrieval_setting=retrieval_request.retrieval_setting,
-        metadata_condition=retrieval_request.metadata_condition,
-    )
-    logger.info(
-        f"Retrieved {len(node_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledgebase_id}."
-    )
-    records = []
-    for score_node in node_results:
-        origin_text = score_node.node.get_content()
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
-        matches = re.findall(pattern, origin_text)
-
-        score_node.node.metadata["images_info"] = [{"url":src, "desc": alt } for src, alt in matches]
-        records.append(DocRecord(
-            content=score_node.node.get_content(),
-            score=score_node.score,
-            title=score_node.node.metadata.get("file_name", "null"),
-            metadata=score_node.node.metadata,
-        ))
-    return success_response(data=NewRetrievalResponse(records=records), message="查询成功。")
 
 @knowledgebase_router.post("", response_model=ResponseModel[KbEntity])
 async def create_knowledgebase(
@@ -451,14 +415,6 @@ async def set_file_source(
 
     if not body.file_source:
         return error_response(code=400, message="文件来源不能为空。")
-
-    await kb_client.aupdate_file_chunks_metadata(
-        kb_id=kb_id,
-        file_id=file_id,
-        new_metadata={
-            "file_source": body.file_source,
-        },
-    )
 
     file_entity.file_source = body.file_source
     session.add(file_entity)

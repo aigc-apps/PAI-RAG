@@ -1,14 +1,13 @@
-"use client";
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Button } from "@/components/ui/button";
+'use client';
+import React, { useState, useEffect, useCallback, useRef, use } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardFooter,
-} from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -16,7 +15,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,8 +23,8 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/breadcrumb';
+import { Label } from '@/components/ui/label';
 import {
   Sheet,
   SheetContent,
@@ -35,10 +34,10 @@ import {
   SheetTrigger,
   SheetFooter,
   SheetClose,
-} from "@/components/ui/sheet";
+} from '@/components/ui/sheet';
 
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import {
   Loader2,
@@ -48,14 +47,14 @@ import {
   AlertCircleIcon,
   SearchIcon,
   ChevronDownIcon,
-} from "lucide-react";
-import { PreviewButton } from "@/app/knowledgebase/details/preview-button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { PlusIcon, FilterIcon } from "lucide-react";
-import * as Toast from "@radix-ui/react-toast";
-import { KbConfig, KbConfigCard, MetadataConfig } from "../kbconfig";
-import { formatFileSize, formatBeijingTime } from "../utils/utils";
+} from 'lucide-react';
+import { PreviewButton } from '@/app/knowledgebases/[kbId]/preview-button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { PlusIcon, FilterIcon } from 'lucide-react';
+import * as Toast from '@radix-ui/react-toast';
+import { KbConfig, KbConfigCard, MetadataConfig } from '../kbconfig';
+import { formatFileSize, formatBeijingTime } from '../utils/utils';
 import {
   Select,
   SelectContent,
@@ -64,7 +63,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -72,31 +71,27 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { PhotoProvider, PhotoView } from "react-photo-view";
-import "react-photo-view/dist/react-photo-view.css";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Skeleton } from "@/components/ui/skeleton";
-import { DatetimeInput } from "../datetime";
-import { Role } from "@/app/config/role/role";
+} from '@/components/ui/popover';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { PhotoProvider, PhotoView } from 'react-photo-view';
+import 'react-photo-view/dist/react-photo-view.css';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Skeleton } from '@/components/ui/skeleton';
+import { DatetimeInput } from '../datetime';
+import { Role } from '@/app/config/role/role';
+import { useRouter } from 'next/navigation';
 
 interface KnowledgeBaseFile {
   id: string;
   file_name: string;
   file_size: string;
   status: string;
+  file_source: string;
   created_at: string;
   updated_at: string;
   file_metadata: {
@@ -137,13 +132,9 @@ interface MetadataCondition {
   value: string | number;
 }
 
-export default function KnowledgeBaseDetailPage({
-  knowledgebase_id,
-  setActiveTab,
-}: {
-  knowledgebase_id: string;
-  setActiveTab: (tab: string) => void;
-}) {
+export default function KnowledgeBaseDetailPage(
+  { params } : { params: Promise<{ kbId: string }> }
+) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [knowledgebase, setKnowledgeBase] = useState<KbConfig>(); // 知识库列表
   const [kbfiles, setKbFiles] = useState(Array<KnowledgeBaseFile>); // 知识库列表
@@ -151,24 +142,29 @@ export default function KnowledgeBaseDetailPage({
   const pageRef = useRef(page);
   const [totalPages, setTotalPages] = useState(1);
   const fileSizePerPage = 8;
-  const [kbquery, setKbQuery] = useState(""); //查询
+  const [kbquery, setKbQuery] = useState(''); //查询
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [searching, setSearching] = useState(false);
-  const [logicalOperator, setLogicalOperator] = useState<string>("and");
+  const [logicalOperator, setLogicalOperator] = useState<string>('and');
   const [metadataConditions, setMetadataConditions] = useState<
     MetadataCondition[]
   >([]);
+  const [fileSource, setFileSource] = useState('');
+  const [fileSourceOpen, setFileSourceOpen] = useState<Record<string, boolean>>(
+    {},
+  );
+  const { kbId } = use(params);
 
   const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
-  const [knowledgebasesrror, setKnowledgeBasesError] = useState(""); // 错误信息
+  const [knowledgebasesrror, setKnowledgeBasesError] = useState(''); // 错误信息
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(""); // 错误信息
+  const [modelerror, setModelError] = useState(''); // 错误信息
   const [toastState, setToastState] = useState({
     open: false,
-    title: "",
-    description: "",
-    variant: "default" as "default" | "destructive",
+    title: '',
+    description: '',
+    variant: 'default' as 'default' | 'destructive',
   });
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -180,59 +176,57 @@ export default function KnowledgeBaseDetailPage({
   const [metadataValueTypes, setMetadataValueTypes] = useState<{
     [k: string]: any;
   }>({});
-  const [metadataEditError, setMetadataEditError] = useState<string>("");
+  const [metadataEditError, setMetadataEditError] = useState<string>('');
   const [availableMetadataKeys, setAvailableMetadataKeys] = useState<string[]>(
     [],
   );
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [openRole, setOpenRole] = useState(false);
-  const [editRoleFileId, setEditRoleFileId] = useState("");
+  const [editRoleFileId, setEditRoleFileId] = useState('');
   const [activeRoleIds, setActiveRoleIds] = useState<string[]>([]);
   const [activeRoleNames, setActiveRoleNames] = useState<string[]>([]);
-  const [user, setUser] = useState("");
+  const [user, setUser] = useState('');
+  
+  const router = useRouter();
 
   const default_comparator = [
-    "contains",
-    "not contains",
-    "start with",
-    "end with",
-    "is",
-    "is not",
-    "empty",
-    "not empty",
-    "=",
-    "≠",
-    ">",
-    "<",
-    "≥",
-    "≤",
-    "before",
-    "after",
+    'contains',
+    'not contains',
+    'start with',
+    'end with',
+    'is',
+    'is not',
+    'empty',
+    'not empty',
+    '=',
+    '≠',
+    '>',
+    '<',
+    '≥',
+    '≤',
+    'before',
+    'after',
   ];
   const default_metadata_keys = [
-    "file_name",
-    "file_path",
-    "file_size",
-    "file_extension",
-    "file_url",
-    "doc_id",
+    'file_name',
+    'file_path',
+    'file_size',
+    'file_extension',
+    'file_url',
+    'doc_id',
   ];
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        const [embRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/embeddings`),
-        ]);
+        const [embRes] = await Promise.all([fetch('/v1/config/embeddings')]);
 
         const embData = (await embRes.json())?.data.items || [];
-        console.log("embData", embData);
+        console.log('embData', embData);
         setEmbeddingModels([...embData]);
       } catch (err: any) {
-        setModelError(err || "加载失败");
+        setModelError(err || '加载失败');
       } finally {
         setModelLoading(false);
       }
@@ -251,32 +245,27 @@ export default function KnowledgeBaseDetailPage({
 
   const handleSearchSubmit = async () => {
     setSearching(true);
-    console.log("handleSearchSubmit");
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const search_result = await fetch(
-      `${API_BASE}/v1/config/knowledgebases/retrieval`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: kbquery,
-          user_id: user,
-          knowledgebase_id: knowledgebase_id,
-          metadata_condition: {
-            conditions: metadataConditions,
-            logical_operator: logicalOperator,
-          },
-        }),
+    console.log('handleSearchSubmit');
+    const search_result = await fetch('/v1/retrieval', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    );
-    if (!search_result.ok) throw new Error("搜索知识库失败");
+      body: JSON.stringify({
+        query: kbquery,
+        user_id: user,
+        knowledge_id: kbId,
+        metadata_condition: {
+          conditions: metadataConditions,
+          logical_operator: logicalOperator,
+        },
+      }),
+    });
+    if (!search_result.ok) throw new Error('搜索知识库失败');
 
     const search_json = await search_result.json();
-    console.log("搜索知识库结果:", search_json);
-    setSearchRecords(search_json.data.records);
+    console.log('搜索知识库结果:', search_json);
+    setSearchRecords(search_json.records);
     setSearching(false);
   };
 
@@ -285,57 +274,52 @@ export default function KnowledgeBaseDetailPage({
   }, [page]);
 
   const fetchKbMetadata = async () => {
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-
     const res = await fetch(
-      `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/metadata`,
+      `/v1/config/knowledgebases/${kbId}/metadata`,
     );
-    if (!res.ok) throw new Error("获取知识库元数据失败");
+    if (!res.ok) throw new Error('获取知识库元数据失败');
     const metadata_json = await res.json();
     const metadata_data = metadata_json.data as MetadataConfig[];
     const valueTypes = Object.fromEntries(
       metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
     ) as { [key: string]: string };
 
-    console.log("知识库元数据: ", metadata_data, valueTypes);
+    console.log('知识库元数据: ', metadata_data, valueTypes);
 
-    setMetadataValueTypes({ ...valueTypes, "": "string" });
+    setMetadataValueTypes({ ...valueTypes, '': 'string' });
     setMetadataConfigs(metadata_data);
   };
 
   const fetchKbFiles = useCallback(async () => {
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const url = `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
+    const url = `/v1/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
       const files_res = await fetch(url);
-      if (!files_res.ok) throw new Error("获取知识库文件列表失败");
+      if (!files_res.ok) throw new Error('获取知识库文件列表失败');
 
       const file_json_data = await files_res.json();
-      console.log("获取知识库文件reponse:", file_json_data);
+      console.log('获取知识库文件reponse:', file_json_data);
       const data = file_json_data.data.items;
       setKbFiles(data || []);
       setTotalPages(file_json_data.data.pages);
 
       const kb_files = data as KnowledgeBaseFile[];
       const files_unfinished = kb_files.some(
-        (file) => file.status !== "succeeded" && file.status !== "failed",
+        (file) => file.status !== 'succeeded' && file.status !== 'failed',
       );
 
       if (files_unfinished) {
-        console.log("存在未完成的文件，继续检查状态。");
+        console.log('存在未完成的文件，继续检查状态。');
         setTimeout(() => {
           fetchKbFiles(); // 依赖 ref 获取最新 page
         }, 3000);
       } else {
-        console.log("文件已上传完成。");
+        console.log('文件已上传完成。');
       }
     } catch (err) {
-      console.error("获取知识库文件失败:", err);
+      console.error('获取知识库文件失败:', err);
     }
-  }, [knowledgebase_id]);
+  }, [kbId]);
 
   useEffect(() => {
     fetchKbFiles();
@@ -349,19 +333,17 @@ export default function KnowledgeBaseDetailPage({
   useEffect(() => {
     const fetchKbConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}`,
+          `/v1/config/knowledgebases/${kbId}`,
         );
-        if (!res.ok) throw new Error("获取知识库列表失败");
+        if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
         const kb_data = json_data.data;
 
         setKnowledgeBase(kb_data); // 更新状态
-        console.log("知识库详情数据:", kb_data);
+        console.log('知识库详情数据:', kb_data);
       } catch (err: any) {
-        setKnowledgeBasesError(err || "加载失败");
+        setKnowledgeBasesError(err || '加载失败');
       } finally {
         setKnowledgeBasesLoading(false);
       }
@@ -377,61 +359,84 @@ export default function KnowledgeBaseDetailPage({
   const handleSaveSuccess = (kb: KbConfig) => {
     setToastState({
       open: true,
-      title: `知识库${knowledgebase_id} 配置已修改`,
-      description: "修改的模型配置已成功保存",
-      variant: "default",
+      title: `知识库${kbId} 配置已修改`,
+      description: '修改的模型配置已成功保存',
+      variant: 'default',
     });
-    console.log(`update ${knowledgebase_id}`);
+    console.log(`update ${kbId}`);
   };
 
   const handleDeleteFile = async (file_id: string) => {
     setDeleting(true);
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}`,
         {
-          method: "DELETE",
+          method: 'DELETE',
         },
       );
       if (!res.ok) throw new Error(`删除 ${file_id} 失败`);
-      console.log("delete file result:", res.text());
+      console.log('delete file result:', res.text());
     } catch (error) {
-      console.error("删除失败:", error);
+      console.error('删除失败:', error);
     } finally {
       setDeleting(false);
       fetchKbFiles();
     }
   };
 
+  const handleSaveFileSource = async (file_id: string) => {
+    try {
+      const res = await fetch(
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}/source`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            file_source: fileSource,
+          }),
+        },
+      );
+      if (!res.ok) throw new Error('Failed to save file source');
+
+      const fileObj = kbfiles.filter((file) => file.id === file_id)[0];
+      if (fileObj) {
+        fileObj.file_source = fileSource;
+      }
+      setFileSourceOpen((prev) => ({ ...prev, [file_id]: false }));
+    } catch (error) {
+      console.error('Error fetching file source:', error);
+      throw error;
+    }
+  };
+
   const selectMetadataKey = async (metadata_key: string) => {
-    setMetadataEditError("");
+    setMetadataEditError('');
     const emptyKeys = Object.keys(editingMetadata).filter(
-      (key) => editingMetadata[key] === "",
+      (key) => editingMetadata[key] === '',
     );
-    if (emptyKeys.length > 1) throw new Error(`有多于一个新建项。`);
+    if (emptyKeys.length > 1) throw new Error('有多于一个新建项。');
     else if (emptyKeys.length === 0) return;
     else {
-      editingMetadata[metadata_key] = editingMetadata[""];
-      delete editingMetadata[""];
+      editingMetadata[metadata_key] = editingMetadata[''];
+      delete editingMetadata[''];
       const updatedUsableKeys = availableMetadataKeys.filter(
         (name) => name !== metadata_key,
       );
       setAvailableMetadataKeys(updatedUsableKeys);
-      console.log("selected keys for metadata: ", editingMetadata);
+      console.log('selected keys for metadata: ', editingMetadata);
       setEditingMetadata({ ...editingMetadata });
     }
   };
 
   const handleOpenMetadata = async (file_id: string) => {
-    setMetadataEditError("");
+    setMetadataEditError('');
     setIsEditingMetadata(false);
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const file_res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}`,
       );
       if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
       const file_json = await file_res.json();
@@ -440,34 +445,34 @@ export default function KnowledgeBaseDetailPage({
         .map((metadata) => metadata.name)
         .filter((name) => !(name in file_json.data.file_metadata));
       setAvailableMetadataKeys(usable_metadata_keys);
-      console.log("可用的metadata名称：", availableMetadataKeys);
+      console.log('可用的metadata名称：', availableMetadataKeys);
     } catch (err) {
-      console.error("获取文件失败:", err);
+      console.error('获取文件失败:', err);
     }
   };
 
   const handAddFileMetadata = () => {
     if (availableMetadataKeys.length === 0) {
       setMetadataEditError(
-        "没有可用的自定义的元数据配置，你可以先去知识库设置页面添加。",
+        '没有可用的自定义的元数据配置，你可以先去知识库设置页面添加。',
       );
       return;
     }
     const hasEmptyEntry = Object.keys(editingMetadata).some(
-      (key) => editingMetadata[key] === "",
+      (key) => editingMetadata[key] === '',
     );
     if (!hasEmptyEntry) {
-      editingMetadata[""] = "";
+      editingMetadata[''] = '';
       setEditingMetadata({ ...editingMetadata });
-      setMetadataEditError("");
+      setMetadataEditError('');
     } else {
-      console.log("已经有一个待添加的项目了。");
-      setMetadataEditError("");
+      console.log('已经有一个待添加的项目了。');
+      setMetadataEditError('');
     }
   };
 
   const handleDeleteMetadata = (name: string) => {
-    console.log("删除metadata:", name, editingMetadata);
+    console.log('删除metadata:', name, editingMetadata);
     if (name in editingMetadata) {
       delete editingMetadata[name];
       setEditingMetadata(editingMetadata);
@@ -475,10 +480,10 @@ export default function KnowledgeBaseDetailPage({
         .map((metadata) => metadata.name)
         .filter((name) => !(name in editingMetadata));
       setAvailableMetadataKeys(usable_metadata_keys);
-      console.log("可用的metadata名称：", availableMetadataKeys);
+      console.log('可用的metadata名称：', availableMetadataKeys);
 
-      setMetadataEditError("");
-      console.log("已删除metadata:", name, editingMetadata);
+      setMetadataEditError('');
+      console.log('已删除metadata:', name, editingMetadata);
     }
   };
 
@@ -508,11 +513,9 @@ export default function KnowledgeBaseDetailPage({
   const checkFileRole = async (file_id: string) => {
     try {
       setEditRoleFileId(file_id);
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const roleRes = await fetch(`${API_BASE}/v1/config/roles?size=100`);
+      const roleRes = await fetch('/v1/config/roles?size=100');
       if (!roleRes.ok) {
-        alert("查询角色失败");
+        alert('查询角色失败');
         return;
       }
       const all_roles = (await roleRes.json()).data.items;
@@ -520,10 +523,10 @@ export default function KnowledgeBaseDetailPage({
 
       const permission_name = file_id;
       const res = await fetch(
-        `${API_BASE}/v1/config/roles/permissions?name=${permission_name}&size=100`,
+        `/v1/config/roles/permissions?name=${permission_name}&size=100`,
       );
       if (!res.ok) {
-        alert("查询文件permission失败");
+        alert('查询文件permission失败');
         return;
       }
 
@@ -534,26 +537,24 @@ export default function KnowledgeBaseDetailPage({
       const role_names = all_roles
         .filter((role: any) => role_ids.includes(role.id))
         .map((role: any) => role.name);
-      console.log("role_ids:", role_ids);
-      console.log("role_names:", role_names);
+      console.log('role_ids:', role_ids);
+      console.log('role_names:', role_names);
 
       setActiveRoleIds(role_ids);
       setActiveRoleNames(role_names);
     } catch (error) {
-      console.error("获取文件角色信息失败: ", error);
+      console.error('获取文件角色信息失败: ', error);
     }
   };
 
   const saveFilePermission = async () => {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const roleRes = await fetch(
-        `${API_BASE}/v1/config/roles/permissions/files/${editRoleFileId}`,
+        `/v1/config/roles/permissions/files/${editRoleFileId}`,
         {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             role_ids: activeRoleIds,
@@ -561,20 +562,20 @@ export default function KnowledgeBaseDetailPage({
         },
       );
       if (!roleRes.ok) {
-        alert("更新文件角色失败");
+        alert('更新文件角色失败');
         return;
       }
-      console.log("更新文件角色成功：", await roleRes.json());
+      console.log('更新文件角色成功：', await roleRes.json());
       setOpenRole(false);
     } catch (error) {
-      console.error("上传失败:", error);
+      console.error('上传失败:', error);
     }
   };
 
   const handleFileUpload = async (files: FileList | null) => {
-    console.log("##handleFileUpload", files);
+    console.log('##handleFileUpload', files);
     if (!files) {
-      alert("文件列表为空！");
+      alert('文件列表为空！');
       return;
     }
     setUploading(true);
@@ -582,13 +583,13 @@ export default function KnowledgeBaseDetailPage({
     // 文件校验 (Demo功能，后续调整优化)
     const validFiles = Array.from(files).filter((file) => {
       // const isValidType = ['application/pdf', 'application/msword'].includes(file.type);
-      const isValidSize = file.size <= 10 * 1024 * 1024;
+      const isValidSize = file.size <= 100 * 1024 * 1024;
       // return isValidType && isValidSize;
       return isValidSize;
     });
 
     if (validFiles.length === 0) {
-      alert("请选择有效的文件（如 PDF 或 Word，且小于 10MB）");
+      alert("请选择有效的文件（如 PDF 或 Word，且小于 100MB）");
       setUploading(false);
       return;
     }
@@ -596,32 +597,30 @@ export default function KnowledgeBaseDetailPage({
     // 上传文件
     const formData = new FormData();
     validFiles.forEach((file) => {
-      formData.append("files", file);
+      formData.append('files', file);
     });
 
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files`,
+        `/v1/config/knowledgebases/${kbId}/files`,
         {
-          method: "POST",
+          method: 'POST',
           body: formData,
         },
       );
       if (!res.ok) {
-        alert("上传失败");
+        alert('上传失败');
         return;
       }
       const upload_result = await res.json();
-      console.log("上传成功:", upload_result);
+      console.log('上传成功:', upload_result);
     } catch (error) {
-      console.error("上传失败:", error);
+      console.error('上传失败:', error);
     } finally {
       setUploading(false);
       // 清空文件选择框
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // 清空 input 的值
+        fileInputRef.current.value = ''; // 清空 input 的值
       }
       setPage(1);
       fetchKbFiles();
@@ -629,22 +628,20 @@ export default function KnowledgeBaseDetailPage({
   };
 
   const get_metadata_id = (name: string) => {
-    console.log("get id", metadataConfigs, name);
+    console.log('get id', metadataConfigs, name);
     return metadataConfigs.filter((metadata) => metadata.name === name)[0].id;
   };
 
   const saveEditMetadata = async (file_id: string) => {
     const hasEmptyEntry = Object.keys(editingMetadata).some(
-      (key) => editingMetadata[key] === "",
+      (key) => editingMetadata[key] === '',
     );
     if (hasEmptyEntry) {
-      setMetadataEditError("无法保存空的元数据名称。");
+      setMetadataEditError('无法保存空的元数据名称。');
       return;
     }
 
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
       const metadata_enties = Object.keys(editingMetadata)
         .filter((name) => !default_metadata_keys.includes(name))
         .map((name) => ({
@@ -656,37 +653,37 @@ export default function KnowledgeBaseDetailPage({
         entries: metadata_enties,
       };
       const res = await fetch(
-        `${API_BASE}/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/metadata`,
+        `/v1/config/knowledgebases/${kbId}/files/${file_id}/metadata`,
         {
-          method: "POST",
+          method: 'POST',
           body: JSON.stringify(bodyData),
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         },
       );
-      if (!res.ok) throw Error("保存metadata失败");
+      if (!res.ok) throw Error('保存metadata失败');
       const file_result = (await res.json()).data as KnowledgeBaseFile;
-      let updated_kbfiles = kbfiles;
+      const updated_kbfiles = kbfiles;
       const target_file_index = updated_kbfiles.findIndex(
         (file) => file.id === file_id,
       );
       updated_kbfiles[target_file_index] = file_result;
       setKbFiles(updated_kbfiles);
-      console.log("更新文件成功：", updated_kbfiles);
+      console.log('更新文件成功：', updated_kbfiles);
       setIsEditingMetadata(false);
     } catch (error: any) {
-      console.log("保存metadata失败", error);
+      console.log('保存metadata失败', error);
     } finally {
-      setMetadataEditError("");
+      setMetadataEditError('');
     }
   };
 
   const addCondition = () => {
     const newCondition = {
-      name: "",
-      comparison_operator: "",
-      value: "",
+      name: '',
+      comparison_operator: '',
+      value: '',
     };
     setMetadataConditions([...metadataConditions, newCondition]);
   };
@@ -699,7 +696,7 @@ export default function KnowledgeBaseDetailPage({
   const setConditionName = (i: number, name: string) => {
     const newConditions = metadataConditions.map((condition, idx) => {
       if (idx === i) {
-        if (metadataValueTypes[name] === "datetime") {
+        if (metadataValueTypes[name] === 'datetime') {
           return {
             name: name,
             value: new Date().getTime(),
@@ -757,7 +754,7 @@ export default function KnowledgeBaseDetailPage({
                     <Button
                       variant="link"
                       className="px-0"
-                      onClick={() => setActiveTab(`/knowledgebase`)}
+                      onClick={() => router.push('/knowledgebases')}
                     >
                       知识库
                     </Button>
@@ -802,7 +799,7 @@ export default function KnowledgeBaseDetailPage({
                   <div className="flex justify-between items-center">
                     <Button
                       onClick={() =>
-                        document.getElementById("file-upload")?.click()
+                        document.getElementById('file-upload')?.click()
                       }
                       disabled={uploading} // 上传时禁用按钮
                     >
@@ -827,7 +824,7 @@ export default function KnowledgeBaseDetailPage({
                     />
                     <div className="text-xs text-muted-foreground">
                       支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
-                      jsonl, jpg, jpeg, png{" "}
+                      jsonl, jpg, jpeg, png{' '}
                     </div>
                   </div>
                 </CardTitle>
@@ -854,8 +851,8 @@ export default function KnowledgeBaseDetailPage({
                                 variant="link"
                                 className="font-medium text-blue-600"
                                 onClick={() =>
-                                  setActiveTab(
-                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                  router.push(
+                                    `/knowledgebases/${kbId}/files/${file.id}`,
                                   )
                                 }
                               >
@@ -872,27 +869,27 @@ export default function KnowledgeBaseDetailPage({
                               {formatBeijingTime(file.updated_at)}
                             </TableCell>
                             <TableCell>
-                              {file.status === "pending" ? (
+                              {file.status === 'pending' ? (
                                 <div className="flex items-center text-yellow-500">
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   等待解析
                                 </div>
-                              ) : file.status === "parsing" ? (
+                              ) : file.status === 'parsing' ? (
                                 <div className="flex items-center text-blue-500">
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   解析中
                                 </div>
-                              ) : file.status === "persisting" ? (
+                              ) : file.status === 'persisting' ? (
                                 <div className="flex items-center text-blue-500">
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   索引中
                                 </div>
-                              ) : file.status === "succeeded" ? (
+                              ) : file.status === 'succeeded' ? (
                                 <div className="flex items-center text-green-500">
                                   <CheckCircle className="mr-1 h-4 w-4" />
                                   解析成功
                                 </div>
-                              ) : file.status === "failed" ? (
+                              ) : file.status === 'failed' ? (
                                 <div className="flex items-center text-red-500">
                                   <XCircle className="mr-1 h-4 w-4" />
                                   解析失败
@@ -903,16 +900,60 @@ export default function KnowledgeBaseDetailPage({
                             </TableCell>
                             <TableCell>
                               <PreviewButton
-                                kbId={knowledgebase_id}
+                                kbId={kbId}
                                 fileId={file.id}
                               />
+
+                              <Popover
+                                open={fileSourceOpen[file.id] ?? false}
+                                onOpenChange={(open) => {
+                                  if (open) {
+                                    setFileSource(file.file_source);
+                                  }
+                                  setFileSourceOpen((prev) => ({
+                                    ...prev,
+                                    [file.id]: open,
+                                  }));
+                                }}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="link"
+                                    className="text-sm text-blue-600"
+                                  >
+                                    源连接
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-160">
+                                  <div className="flex gap-3">
+                                    <Label>{file.file_name}</Label>
+                                    <Input
+                                      type="text"
+                                      className="w-130"
+                                      placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
+                                      value={fileSource || ''}
+                                      onChange={(e) => {
+                                        setFileSource(e.target.value);
+                                      }}
+                                    />
+                                    <Button
+                                      onClick={() =>
+                                        handleSaveFileSource(file.id)
+                                      }
+                                    >
+                                      {' '}
+                                      保存{' '}
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
 
                               <Button
                                 variant="link"
                                 className="text-sm text-blue-600"
                                 onClick={() =>
-                                  setActiveTab(
-                                    `/knowledgebase/chunks/${knowledgebase_id}__${file.id}`,
+                                  router.push(
+                                    `/knowledgebases/${kbId}/files/${file.id}`,
                                   )
                                 }
                               >
@@ -1085,50 +1126,50 @@ export default function KnowledgeBaseDetailPage({
                                       )}
                                       {isEditingMetadata
                                         ? Object.keys(editingMetadata)
-                                            .filter(
-                                              (key: string) =>
-                                                !default_metadata_keys.includes(
-                                                  key,
-                                                ),
-                                            )
-                                            .map((key: string) => (
-                                              <div
-                                                className="flex items-start space-x-2"
-                                                key={key}
-                                              >
-                                                {key !== "" ? (
-                                                  <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
-                                                    {key}
-                                                  </div>
-                                                ) : (
-                                                  <Select
-                                                    onValueChange={(value) =>
-                                                      selectMetadataKey(value)
-                                                    }
-                                                    defaultOpen={true}
-                                                  >
-                                                    <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
-                                                      <SelectValue placeholder="选择元数据名称" />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="w-[88px] text-xs">
-                                                      <SelectGroup>
-                                                        {availableMetadataKeys.map(
-                                                          (m_key) => (
-                                                            <SelectItem
-                                                              key={m_key}
-                                                              value={m_key}
-                                                            >
-                                                              {m_key}
-                                                            </SelectItem>
-                                                          ),
-                                                        )}
-                                                      </SelectGroup>
-                                                    </SelectContent>
-                                                  </Select>
-                                                )}
-                                                <div className="flex space-x-2 max-w-xs shrink-0">
-                                                  {metadataValueTypes[key] !==
-                                                  "datetime" ? (
+                                          .filter(
+                                            (key: string) =>
+                                              !default_metadata_keys.includes(
+                                                key,
+                                              ),
+                                          )
+                                          .map((key: string) => (
+                                            <div
+                                              className="flex items-start space-x-2"
+                                              key={key}
+                                            >
+                                              {key !== '' ? (
+                                                <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                  {key}
+                                                </div>
+                                              ) : (
+                                                <Select
+                                                  onValueChange={(value) =>
+                                                    selectMetadataKey(value)
+                                                  }
+                                                  defaultOpen={true}
+                                                >
+                                                  <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
+                                                    <SelectValue placeholder="选择元数据名称" />
+                                                  </SelectTrigger>
+                                                  <SelectContent className="w-[88px] text-xs">
+                                                    <SelectGroup>
+                                                      {availableMetadataKeys.map(
+                                                        (m_key) => (
+                                                          <SelectItem
+                                                            key={m_key}
+                                                            value={m_key}
+                                                          >
+                                                            {m_key}
+                                                          </SelectItem>
+                                                        ),
+                                                      )}
+                                                    </SelectGroup>
+                                                  </SelectContent>
+                                                </Select>
+                                              )}
+                                              <div className="flex space-x-2 max-w-xs shrink-0">
+                                                {metadataValueTypes[key] !==
+                                                  'datetime' ? (
                                                     <Input
                                                       type={
                                                         metadataValueTypes[key]
@@ -1160,40 +1201,40 @@ export default function KnowledgeBaseDetailPage({
                                                       }}
                                                     />
                                                   )}
-                                                  <Button
-                                                    variant="outline"
-                                                    className="w-3 h-3"
-                                                    onClick={() =>
-                                                      handleDeleteMetadata(key)
-                                                    }
-                                                  >
-                                                    <Trash2Icon className="h-3 w-3" />
-                                                  </Button>
-                                                </div>
+                                                <Button
+                                                  variant="outline"
+                                                  className="w-3 h-3"
+                                                  onClick={() =>
+                                                    handleDeleteMetadata(key)
+                                                  }
+                                                >
+                                                  <Trash2Icon className="h-3 w-3" />
+                                                </Button>
                                               </div>
-                                            ))
+                                            </div>
+                                          ))
                                         : Object.keys(editingMetadata)
-                                            .filter(
-                                              (key: string) =>
-                                                !default_metadata_keys.includes(
-                                                  key,
-                                                ),
-                                            )
-                                            .map((key: string) => (
-                                              <div
-                                                className="flex items-start space-x-2"
-                                                key={key}
-                                              >
-                                                <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
-                                                  {key}
-                                                </div>
-                                                <div className="max-w-xs shrink-0">
-                                                  <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
-                                                    {editingMetadata[key]}
-                                                  </div>
+                                          .filter(
+                                            (key: string) =>
+                                              !default_metadata_keys.includes(
+                                                key,
+                                              ),
+                                          )
+                                          .map((key: string) => (
+                                            <div
+                                              className="flex items-start space-x-2"
+                                              key={key}
+                                            >
+                                              <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                                {key}
+                                              </div>
+                                              <div className="max-w-xs shrink-0">
+                                                <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
+                                                  {editingMetadata[key]}
                                                 </div>
                                               </div>
-                                            ))}
+                                            </div>
+                                          ))}
                                     </div>
                                     <div className="text-xs">
                                       <Label htmlFor="sheet-custom-meta">
@@ -1221,7 +1262,7 @@ export default function KnowledgeBaseDetailPage({
                                     </div>
                                   </div>
                                   <SheetFooter>
-                                    {metadataEditError !== "" && (
+                                    {metadataEditError !== '' && (
                                       <Alert variant="destructive">
                                         <AlertCircleIcon />
                                         <AlertDescription>
@@ -1313,7 +1354,7 @@ export default function KnowledgeBaseDetailPage({
                     placeholder="请输入查询内容"
                     onChange={handleQueryInputChange}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === 'Enter') {
                         handleSearchSubmit();
                       }
                     }}
@@ -1400,27 +1441,27 @@ export default function KnowledgeBaseDetailPage({
                               </div>
                               <div>
                                 {metadataValueTypes[condition.name] ===
-                                "datetime" ? (
-                                  <DatetimeInput
-                                    value={
-                                      typeof condition.value === "number"
-                                        ? condition.value
-                                        : parseFloat(condition.value)
-                                    }
-                                    width="sm"
-                                    onValueChange={(value) => {
-                                      setConditionValue(i, value);
-                                    }}
-                                  />
-                                ) : (
-                                  <Input
-                                    className="w-128px"
-                                    value={condition.value.toString()}
-                                    onChange={(e) =>
-                                      setConditionValue(i, e.target.value)
-                                    }
-                                  />
-                                )}
+                                'datetime' ? (
+                                    <DatetimeInput
+                                      value={
+                                        typeof condition.value === 'number'
+                                          ? condition.value
+                                          : parseFloat(condition.value)
+                                      }
+                                      width="sm"
+                                      onValueChange={(value) => {
+                                        setConditionValue(i, value);
+                                      }}
+                                    />
+                                  ) : (
+                                    <Input
+                                      className="w-128px"
+                                      value={condition.value.toString()}
+                                      onChange={(e) =>
+                                        setConditionValue(i, e.target.value)
+                                      }
+                                    />
+                                  )}
                               </div>
                               <div>
                                 <Button
@@ -1520,7 +1561,7 @@ export default function KnowledgeBaseDetailPage({
                                 <PhotoProvider
                                   key={index}
                                   maskOpacity={0.8}
-                                  overlayRender={({}) => {
+                                  overlayRender={() => {
                                     return (
                                       <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
                                         <div>图片描述：{meta.desc}</div>
@@ -1551,9 +1592,9 @@ export default function KnowledgeBaseDetailPage({
           open={toastState.open}
           onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
           className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-            toastState.variant === "destructive"
-              ? "border-red-500 bg-red-50 text-red-900"
-              : "border-gray-200 bg-white text-gray-900"
+            toastState.variant === 'destructive'
+              ? 'border-red-500 bg-red-50 text-red-900'
+              : 'border-gray-200 bg-white text-gray-900'
           }`}
         >
           <Toast.Description className="pl-4 text-sm font-medium">

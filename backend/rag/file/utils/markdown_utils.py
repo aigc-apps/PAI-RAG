@@ -13,6 +13,8 @@ from mistletoe.block_token import (
 from mistletoe.span_token import RawText, Emphasis, Strong, InlineCode, Link, Image
 from mistletoe import Document
 
+START_HTML_TAG = "<html><body><table>"
+END_HTML_TAG = "</table></body></html>"
 
 class PaiTable(BaseModel):
     data: TList[TList[str]] = Field(description="The table data.", default=[])
@@ -197,14 +199,31 @@ class ASTTreeBuilder:
         self.stack[-1].add_child(new_node)
         self.stack.append(new_node)  # 将新节点压入堆栈
 
+    def _remove_html_table_tags(self, content: str) -> str:
+        """
+        移除HTML标签，保留表格内容。
+        """
+        if START_HTML_TAG in content and END_HTML_TAG in content:
+            content = content.replace(START_HTML_TAG, "<table>").replace(END_HTML_TAG, "</table>")
+        return content
+
     def handle_paragraph(self, node: Paragraph):
         content = self.render_span_tokens(node.children).strip()
         if not content:
             return  # 忽略空段落
 
-        new_node = TreeNode(
-            level=self.stack[-1].level, category="paragraph", content=content
-        )
+        if content.startswith(START_HTML_TAG) and content.endswith(END_HTML_TAG):
+            new_node = TreeNode(
+                level=self.stack[-1].level + 1, category="html_table", content=self._remove_html_table_tags(content)
+            )
+        elif content.startswith("<img") and content.endswith("/>"):
+            new_node = TreeNode(
+                level=self.stack[-1].level + 1, category="image_caption", content=content
+            )
+        else:
+            new_node = TreeNode(
+                level=self.stack[-1].level, category="paragraph", content=self._remove_html_table_tags(content)
+            )
         self.stack[-1].add_child(new_node)
 
     def handle_code_fence(self, node: CodeFence):

@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { TrashIcon, Edit, AlertCircleIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import React, { useState, useEffect } from 'react';
+import { TrashIcon, Edit, AlertCircleIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { LLMModelDialog } from "@/app/config/model/llm/modelDialog";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { LLMModelDialog } from '@/app/config/model/llm/modelDialog';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export interface LlmConfig {
   id: string;
@@ -30,12 +30,12 @@ export interface LlmConfig {
 }
 
 const newllmconfig: LlmConfig = {
-  id: "",
-  model_id: "",
-  source: "",
-  model: "",
-  base_url: "",
-  api_key: "",
+  id: '',
+  model_id: '',
+  source: '',
+  model: '',
+  base_url: '',
+  api_key: '',
   vision_support: false,
   max_context: 0,
   enabled: true,
@@ -45,8 +45,8 @@ export default function LlmConfigPage() {
   const [editLlmConfig, setEditLlmConfig] = useState<LlmConfig>(newllmconfig); // 存储 LLM 配置
   const [llmconfigs, setLlmConfigs] = useState<LlmConfig[]>([]); // 存储 LLM 配置
   const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(""); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(""); // 删除或更新时的错误信息
+  const [modelerror, setModelError] = useState(''); // 错误信息
+  const [errorMsg, setErrorMsg] = useState(''); // 删除或更新时的错误信息
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -58,18 +58,16 @@ export default function LlmConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
+          `/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error("获取LLM模型列表失败");
+        if (!res.ok) throw new Error('获取LLM模型列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
         setLlmConfigs(data); // 合并
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || "加载失败");
+        setModelError(err || '加载失败');
       } finally {
         setModelLoading(false);
       }
@@ -79,7 +77,7 @@ export default function LlmConfigPage() {
 
   const handleCreateSuccess = (llmConfig: LlmConfig) => {
     setLlmConfigs((prev) => [...prev, llmConfig]); // 追加新 LLM 配置
-    console.log("创建LLM成功", llmConfig);
+    console.log('创建LLM成功', llmConfig);
     setEditLlmConfig(newllmconfig);
   };
 
@@ -87,7 +85,7 @@ export default function LlmConfigPage() {
     setLlmConfigs((prev) =>
       prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
     );
-    console.log("编辑LLM成功", llmConfig);
+    console.log('编辑LLM成功', llmConfig);
     setEditLlmConfig(newllmconfig);
   };
 
@@ -97,20 +95,18 @@ export default function LlmConfigPage() {
   };
 
   const handleActivateToggle = async (llm: LlmConfig) => {
-    setErrorMsg("");
+    setErrorMsg('');
     llm.enabled = !llm.enabled;
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const url = `${API_BASE}/v1/config/llms/${llm.id}`;
+    const url = `/v1/config/llms/${llm.id}`;
 
     const res = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(llm), // 包装为数组
     });
 
     if (!res.ok) {
-      setErrorMsg("修改状态失败");
+      setErrorMsg('修改状态失败');
       return;
     }
     setLlmConfigs((prev) =>
@@ -119,15 +115,13 @@ export default function LlmConfigPage() {
   };
 
   const removeModel = async (id: string, model_type: string) => {
-    setErrorMsg("");
+    setErrorMsg('');
     try {
-      console.log("removeModel: id: ", id, "model_type: ", model_type);
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
-        method: "DELETE",
+      console.log('removeModel: id: ', id, 'model_type: ', model_type);
+      const res = await fetch(`/v1/config/${model_type}/${id}`, {
+        method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
@@ -137,11 +131,11 @@ export default function LlmConfigPage() {
       }
 
       // 删除成功后更新本地状态
-      if (model_type === "llms") {
+      if (model_type === 'llms') {
         setLlmConfigs((prev) => prev.filter((config) => config.id !== id));
       }
     } catch (err: any) {
-      setErrorMsg("删除失败，请检查网络或配置");
+      setErrorMsg('删除失败，请检查网络或配置');
     }
   };
 
@@ -196,11 +190,11 @@ export default function LlmConfigPage() {
                       <Badge
                         className={
                           llm.vision_support
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-green-100 text-green-800"
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-green-100 text-green-800'
                         }
                       >
-                        {llm.vision_support ? "多模态模型" : "语言模型"}
+                        {llm.vision_support ? '多模态模型' : '语言模型'}
                       </Badge>
                       <Badge
                         className={
@@ -212,7 +206,7 @@ export default function LlmConfigPage() {
                         {llm.enable_thinking ? "思考模型" : "语言模型"}
                       </Badge>
                       <Badge className="bg-gray-100 text-gray-800">
-                        {llm.enabled ? "已激活" : "未激活"}
+                        {llm.enabled ? '已激活' : '未激活'}
                       </Badge>
                       <Switch
                         checked={llm.enabled}
@@ -231,7 +225,7 @@ export default function LlmConfigPage() {
                 <CardFooter className="mt-auto pt-0 flex justify-end">
                   <Button
                     variant="link"
-                    onClick={() => removeModel(llm.id, "llms")}
+                    onClick={() => removeModel(llm.id, 'llms')}
                     className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
                   >
                     <TrashIcon className="ml-1" size={16} />
@@ -267,7 +261,7 @@ export default function LlmConfigPage() {
         </div>
       )}
       <div className="block w-full">
-        {errorMsg !== "" && (
+        {errorMsg !== '' && (
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertDescription>

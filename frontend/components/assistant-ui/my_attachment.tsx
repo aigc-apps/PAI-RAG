@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { PropsWithChildren, useEffect, useState, type FC } from "react";
-import { CircleXIcon, FileIcon, PaperclipIcon } from "lucide-react";
+import { PropsWithChildren, useEffect, useState, type FC } from 'react';
+import { CircleXIcon, FileIcon, PaperclipIcon } from 'lucide-react';
 import {
   AttachmentPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
   useAttachment,
-} from "@assistant-ui/react";
-import { useShallow } from "zustand/shallow";
+} from '@assistant-ui/react';
+import { useShallow } from 'zustand/shallow';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogTitle,
@@ -21,11 +21,11 @@ import {
   DialogTrigger,
   DialogOverlay,
   DialogPortal,
-} from "@/components/ui/dialog";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { DialogContent as DialogPrimitiveContent } from "@radix-ui/react-dialog";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+} from '@/components/ui/dialog';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
+import { DialogContent as DialogPrimitiveContent } from '@radix-ui/react-dialog';
+import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 const useFileSrc = (file: File | undefined) => {
   const [src, setSrc] = useState<string | undefined>(undefined);
 
@@ -49,9 +49,9 @@ const useFileSrc = (file: File | undefined) => {
 const useAttachmentSrc = () => {
   const { file, src } = useAttachment(
     useShallow((a): { file?: File; src?: string } => {
-      if (a.type !== "image") return {};
+      if (a.type !== 'image') return {};
       if (a.file) return { file: a.file };
-      const src = a.content?.filter((c) => c.type === "image")[0]?.image;
+      const src = a.content?.filter((c) => c.type === 'image')[0]?.image;
       if (!src) return {};
       return { src };
     }),
@@ -72,12 +72,12 @@ const AttachmentPreview: FC<AttachmentPreviewProps> = ({ src }) => {
     <img
       src={src}
       style={{
-        width: "auto",
-        height: "auto",
-        maxWidth: "75dvh",
-        maxHeight: "75dvh",
-        display: isLoaded ? "block" : "none",
-        overflow: "clip",
+        width: 'auto',
+        height: 'auto',
+        maxWidth: '75dvh',
+        maxHeight: '75dvh',
+        display: isLoaded ? 'block' : 'none',
+        overflow: 'clip',
       }}
       onLoad={() => setIsLoaded(true)}
       alt="Preview"
@@ -108,7 +108,7 @@ const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
 };
 
 const AttachmentThumb: FC = () => {
-  const isImage = useAttachment((a) => a.type === "image");
+  const isImage = useAttachment((a) => a.type === 'image');
   const src = useAttachmentSrc();
   return (
     <Avatar className="bg-muted flex size-10 items-center justify-center rounded border text-sm">
@@ -121,31 +121,31 @@ const AttachmentThumb: FC = () => {
 };
 
 const AttachmentUI: FC = () => {
-  const canRemove = useAttachment((a) => a.source !== "message");
+  const canRemove = useAttachment((a) => a.source !== 'message');
   const uploadStatus = useAttachment((a) => a.status);
   const typeLabel = useAttachment((a) => {
     const type = a.type;
     switch (type) {
-      case "image":
-        return "Image";
-      case "document":
-        return "Document";
-      case "file":
-        return "File";
-      default:
-        const _exhaustiveCheck: never = type;
-        throw new Error(`Unknown attachment type: ${_exhaustiveCheck}`);
+    case 'image':
+      return 'Image';
+    case 'document':
+      return 'Document';
+    case 'file':
+      return 'File';
+    default:
+      const _exhaustiveCheck: never = type;
+      throw new Error(`Unknown attachment type: ${_exhaustiveCheck}`);
     }
   });
-  console.log("uploadStatus", uploadStatus);
+  console.log('uploadStatus', uploadStatus);
   // 安全访问属性
   const progress =
-    "progress" in (uploadStatus ?? {})
+    'progress' in (uploadStatus ?? {})
       ? (uploadStatus as { progress: number }).progress
       : 0;
-  const isUploading = uploadStatus.type === "running" && progress < 100;
-  const isError = uploadStatus.type === "incomplete";
-  console.log("isUploading", isUploading);
+  const isUploading = uploadStatus.type === 'running' && progress < 100;
+  const isError = uploadStatus.type === 'incomplete';
+  console.log('isUploading', isUploading);
   return (
     <Tooltip>
       <AttachmentPrimitive.Root className="relative mt-3">
