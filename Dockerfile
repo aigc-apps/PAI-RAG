@@ -18,7 +18,7 @@ FROM python:3.11-slim AS prod
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
 
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential nodejs npm nginx
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential nodejs npm nginx procps redis-server
 
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH"
@@ -43,4 +43,4 @@ COPY . .
 
 RUN cd frontend && npm install
 
-CMD ["./scripts/start.sh"]
+CMD ["./scripts/start.sh", "--production"]
