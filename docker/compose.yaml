@@ -1,31 +1,41 @@
 services:
   api:
-    image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:1.1.0
+    image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:2.0.0
     ports:
       - "8680:8680"
     restart: always
     environment:
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      FILE_STORE_TYPE: ${FILE_STORE_TYPE}
+      OSS_ENDPOINT: ${OSS_ENDPOINT}
+      OSS_BUCKET: ${OSS_BUCKET}
       OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
-      PAIRAG_RAG__oss_store__bucket: ${OSS_BUCKET}
-      PAIRAG_RAG__oss_store__endpoint: ${OSS_ENDPOINT:-oss-cn-hangzhou.aliyuncs.com}
-      ARMS_APP_NAME: ${ARMS_APP_NAME}
-      ARMS_REGION_ID: ${ARMS_REGION_ID}
-      ARMS_LICENSE_KEY: ${ARMS_LICENSE_KEY}
-      ARMS_IS_PUBLIC: true
-      ENABLE_FASTAPI: false
-      ENABLE_REQUESTS: false
-      ENABLE_AIOHTTPCLIENT: false
-      ENABLE_HTTPX: false
-      LD_LIBRARY_PATH: /usr/local/lib
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_TYPE: ${DB_TYPE}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      VECTOR_STORE_TYPE: ${VECTOR_STORE_TYPE}
+      MILVUS_HOST: ${MILVUS_HOST}
+      MILVUS_PORT: ${MILVUS_PORT}
+      MILVUS_USER: ${MILVUS_USER}
+      MILVUS_PASSWORD: ${MILVUS_PASSWORD}
+      MILVUS_DATABASE: ${MILVUS_DATABASE}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL}
+      ELASTICSEARCH_USER: ${ELASTICSEARCH_USER}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE}
 
     volumes:
-      - ../model_repository:/app/model_repository
-      - ./app_data:/app/localdata
-    entrypoint: ["./scripts/start.sh", "-w", "1"]
+      - ../localdata:/app/localdata
+    entrypoint: ["./scripts/start.sh", "--production"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8680/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8680/v1/health"]
       interval: 30s
       retries: 40
       start_period: 20s
