@@ -26,10 +26,10 @@ from elasticsearch.helpers.vectorstore import (
 )
 
 from llama_index.vector_stores.elasticsearch.utils import (
-    get_elasticsearch_client,
     get_user_agent,
     convert_es_hit_to_node,
 )
+from rag.vector_store.elasticsearch_utils import get_elasticsearch_client
 
 logger = getLogger(__name__)
 
