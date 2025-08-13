@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import LlmConfigPage from "@/app/config/model/llm/page";
-import EmbConfigPage from "@/app/config/model/embedding/page";
-import RerankerConfigPage from "@/app/config/model/reranker/page";
+import React from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import LlmConfigPage from '@/app/config/model/llm/page';
+import EmbConfigPage from '@/app/config/model/embedding/page';
+import RerankerConfigPage from '@/app/config/model/reranker/page';
 
 export default function ModelConfigPage() {
   return (

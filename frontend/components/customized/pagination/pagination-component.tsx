@@ -1,4 +1,4 @@
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from '@/components/ui/button';
 
 import {
   Pagination,
@@ -8,8 +8,8 @@ import {
   PaginationEllipsis,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/pagination';
+import { cn } from '@/lib/utils';
 
 interface PaginationProps {
   currentPage: number;
@@ -36,10 +36,10 @@ export function PaginationComponent({
                 onClick={() => onPageChange(i)}
                 isActive={i === currentPage}
                 className={cn(
-                  "!shadow-none hover:!text-primary-foreground",
+                  '!shadow-none hover:!text-primary-foreground',
                   buttonVariants({
-                    variant: "default",
-                    size: "icon",
+                    variant: 'default',
+                    size: 'icon',
                   }),
                 )}
               >
@@ -58,8 +58,8 @@ export function PaginationComponent({
       }
     } else {
       // 显示省略号逻辑（如 1 ... 3 4 5 ... 10）
-      let start = Math.max(1, currentPage - 2);
-      let end = Math.min(totalPages, currentPage + 2);
+      const start = Math.max(1, currentPage - 2);
+      const end = Math.min(totalPages, currentPage + 2);
 
       if (start > 1) {
         items.push(
@@ -78,10 +78,10 @@ export function PaginationComponent({
                 onClick={() => onPageChange(i)}
                 isActive={i === currentPage}
                 className={cn(
-                  "!shadow-none hover:!text-primary-foreground",
+                  '!shadow-none hover:!text-primary-foreground',
                   buttonVariants({
-                    variant: "default",
-                    size: "icon",
+                    variant: 'default',
+                    size: 'icon',
                   }),
                 )}
               >

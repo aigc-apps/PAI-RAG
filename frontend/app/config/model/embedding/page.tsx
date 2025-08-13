@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   TrashIcon,
   Edit,
   AlertCircleIcon,
   Loader2,
   CheckCircle,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { EmbeddingModelDialog } from "@/app/config/model/embedding/modelDialog";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { EmbeddingModelDialog } from '@/app/config/model/embedding/modelDialog';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface EmbConfig {
   id: string;
@@ -35,12 +35,12 @@ interface EmbConfig {
 }
 
 const newembconfig: EmbConfig = {
-  id: "",
-  model_id: "",
-  model_name: "",
-  type: "",
-  api_key: "",
-  endpoint: "",
+  id: '',
+  model_id: '',
+  model_name: '',
+  type: '',
+  api_key: '',
+  endpoint: '',
   dimension: 0,
   embed_batch_size: 0,
   is_ready: false,
@@ -50,8 +50,8 @@ export default function EmbConfigPage() {
   const [editEmbConfig, setEditEmbConfig] = useState<EmbConfig>(newembconfig); // 存储 Embedding 配置
   const [embconfigs, setEmbConfigs] = useState<EmbConfig[]>([]); // 存储 Embedding 配置
   const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(""); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(""); // 删除时的错误信息
+  const [modelerror, setModelError] = useState(''); // 错误信息
+  const [errorMsg, setErrorMsg] = useState(''); // 删除时的错误信息
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -63,18 +63,16 @@ export default function EmbConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/embeddings?page=${page}&size=${modelSizePerPage}`,
+          `/v1/config/embeddings?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error("获取Embedding模型列表失败");
+        if (!res.ok) throw new Error('获取Embedding模型列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
         setEmbConfigs(data); // 合并
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || "加载失败");
+        setModelError(err || '加载失败');
       } finally {
         setModelLoading(false);
       }
@@ -84,7 +82,7 @@ export default function EmbConfigPage() {
 
   const handleCreateSuccess = (llmConfig: EmbConfig) => {
     setEmbConfigs((prev) => [...prev, llmConfig]); // 追加新 Embedding 配置
-    console.log("创建Embedding成功", llmConfig);
+    console.log('创建Embedding成功', llmConfig);
     setEditEmbConfig(newembconfig);
   };
 
@@ -92,7 +90,7 @@ export default function EmbConfigPage() {
     setEmbConfigs((prev) =>
       prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
     );
-    console.log("编辑Embedding成功", llmConfig);
+    console.log('编辑Embedding成功', llmConfig);
     setEditEmbConfig(newembconfig);
   };
 
@@ -102,16 +100,14 @@ export default function EmbConfigPage() {
   };
 
   const removeModel = async (id: string, model_type: string) => {
-    setErrorMsg("");
+    setErrorMsg('');
     try {
-      console.log("removeModel: id: ", id, "model_type: ", model_type);
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
+      console.log('removeModel: id: ', id, 'model_type: ', model_type);
 
-      const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
-        method: "DELETE",
+      const res = await fetch(`/v1/config/${model_type}/${id}`, {
+        method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
@@ -121,11 +117,11 @@ export default function EmbConfigPage() {
       }
 
       // 删除成功后更新本地状态
-      if (model_type === "embeddings") {
+      if (model_type === 'embeddings') {
         setEmbConfigs((prev) => prev.filter((config) => config.id !== id));
       }
     } catch (err: any) {
-      setErrorMsg("删除失败，请检查网络或配置");
+      setErrorMsg('删除失败，请检查网络或配置');
     }
   };
 
@@ -183,24 +179,24 @@ export default function EmbConfigPage() {
                       <Badge className="bg-blue-100 text-blue-800">
                         {emb.type}
                       </Badge>
-                      {emb.type === "local" ? (
+                      {emb.type === 'local' ? (
                         <Badge
                           className={
                             emb.is_ready
-                              ? "bg-green-100 text-green-800"
-                              : "bg-gray-100 text-gray-800"
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-800'
                           }
                         >
                           {emb.is_ready ? (
                             <span className="inline-flex items-center">
-                              {" "}
-                              可用{" "}
-                              <CheckCircle className="h-3 w-3 text-green-500" />{" "}
+                              {' '}
+                              可用{' '}
+                              <CheckCircle className="h-3 w-3 text-green-500" />{' '}
                             </span>
                           ) : (
                             <span className="inline-flex items-center">
-                              {" "}
-                              下载中{" "}
+                              {' '}
+                              下载中{' '}
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             </span>
                           )}
@@ -208,9 +204,9 @@ export default function EmbConfigPage() {
                       ) : (
                         <Badge className="bg-green-100 text-green-800">
                           <span className="inline-flex items-center">
-                            {" "}
-                            可用{" "}
-                            <CheckCircle className="h-3 w-3 text-green-500" />{" "}
+                            {' '}
+                            可用{' '}
+                            <CheckCircle className="h-3 w-3 text-green-500" />{' '}
                           </span>
                         </Badge>
                       )}
@@ -226,7 +222,7 @@ export default function EmbConfigPage() {
                 <CardFooter className="mt-auto pt-0 flex justify-end">
                   <Button
                     variant="link"
-                    onClick={() => removeModel(emb.id, "embeddings")}
+                    onClick={() => removeModel(emb.id, 'embeddings')}
                     className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
                   >
                     <TrashIcon className="ml-1" size={16} />
@@ -262,7 +258,7 @@ export default function EmbConfigPage() {
         </div>
       )}
       <div className="block w-full">
-        {errorMsg !== "" && (
+        {errorMsg !== '' && (
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertDescription>

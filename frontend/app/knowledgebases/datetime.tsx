@@ -1,16 +1,16 @@
-"use client";
-import { FC, useState } from "react";
-import * as React from "react";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Input } from "@/components/ui/input";
+'use client';
+import { FC, useState } from 'react';
+import * as React from 'react';
+import { format } from 'date-fns';
+import { CalendarIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from '@/components/ui/popover';
 
 interface DatetimeProps {
   value: number;
@@ -29,26 +29,26 @@ export const DatetimeInput: FC<DatetimeProps> = ({
   initialDate.setMinutes(0);
   initialDate.setSeconds(0);
 
-  const initalTime = "00:00:00";
+  const initalTime = '00:00:00';
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState<Date>(initialDate);
   const [time, setTime] = useState(initalTime);
 
   const handleSaveDate = (newDate: Date) => {
-    console.log("选择日期: ", newDate);
+    console.log('选择日期: ', newDate);
 
     const datetime = newDate;
-    datetime.setHours(parseInt(time.split(":")[0]));
-    datetime.setMinutes(parseInt(time.split(":")[1]));
-    datetime.setSeconds(parseInt(time.split(":")[2]));
+    datetime.setHours(parseInt(time.split(':')[0]));
+    datetime.setMinutes(parseInt(time.split(':')[1]));
+    datetime.setSeconds(parseInt(time.split(':')[2]));
     setDate(newDate);
   };
 
   const handleSaveTime = (newTime: string) => {
     const datetime = date;
-    datetime.setHours(parseInt(newTime.split(":")[0]));
-    datetime.setMinutes(parseInt(newTime.split(":")[1]));
-    datetime.setSeconds(parseInt(newTime.split(":")[2]));
+    datetime.setHours(parseInt(newTime.split(':')[0]));
+    datetime.setMinutes(parseInt(newTime.split(':')[1]));
+    datetime.setSeconds(parseInt(newTime.split(':')[2]));
     setDate(datetime);
     setTime(newTime);
   };
@@ -60,7 +60,7 @@ export const DatetimeInput: FC<DatetimeProps> = ({
   };
 
   const saveValue = () => {
-    console.log("保存时间: ", date.getTime());
+    console.log('保存时间: ', date.getTime());
     onValueChange(date.getTime());
     setOpen(false);
   };
@@ -74,14 +74,14 @@ export const DatetimeInput: FC<DatetimeProps> = ({
       modal={true}
     >
       <PopoverTrigger asChild>
-        {width === "sm" ? (
+        {width === 'sm' ? (
           <Button
             variant="outline"
             id="date-picker"
             className="w-[180px] justify-between text-xs"
           >
             {date ? (
-              format(date, "yyyy-MM-dd HH:mm:ss")
+              format(date, 'yyyy-MM-dd HH:mm:ss')
             ) : (
               <span>Pick a date</span>
             )}
@@ -94,7 +94,7 @@ export const DatetimeInput: FC<DatetimeProps> = ({
             className="w-[280px] h-6 justify-between text-xs"
           >
             {date ? (
-              format(date, "yyyy-MM-dd HH:mm:ss")
+              format(date, 'yyyy-MM-dd HH:mm:ss')
             ) : (
               <span>Pick a date</span>
             )}
@@ -108,7 +108,6 @@ export const DatetimeInput: FC<DatetimeProps> = ({
           mode="single"
           selected={date}
           captionLayout="dropdown"
-          autoFocus
           onSelect={(newDate) => {
             if (newDate) {
               handleSaveDate(newDate);

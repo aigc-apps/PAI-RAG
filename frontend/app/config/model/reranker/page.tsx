@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { TrashIcon, Edit, AlertCircleIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from 'react';
+import { TrashIcon, Edit, AlertCircleIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { RerankerModelDialog } from "@/app/config/model/reranker/modelDialog";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { RerankerModelDialog } from '@/app/config/model/reranker/modelDialog';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface RerankerConfig {
   id: string;
@@ -24,19 +24,19 @@ interface RerankerConfig {
 }
 
 const newrerankerconfig: RerankerConfig = {
-  id: "",
-  model_id: "",
-  model_name: "",
-  api_key: "",
-  base_url: "",
+  id: '',
+  model_id: '',
+  model_name: '',
+  api_key: '',
+  base_url: '',
 };
 export default function RerankerConfigPage() {
   const [editRerankerConfig, setEditRerankerConfig] =
     useState<RerankerConfig>(newrerankerconfig); // 存储 Reranker 配置
   const [rerankerconfigs, setRerankerConfigs] = useState<RerankerConfig[]>([]); // 存储 Reranker 配置
   const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(""); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(""); // 删除时的错误信息
+  const [modelerror, setModelError] = useState(''); // 错误信息
+  const [errorMsg, setErrorMsg] = useState(''); // 删除时的错误信息
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -48,18 +48,16 @@ export default function RerankerConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
         const res = await fetch(
-          `${API_BASE}/v1/config/rerankers?page=${page}&size=${modelSizePerPage}`,
+          `/v1/config/rerankers?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error("获取Reranker模型列表失败");
+        if (!res.ok) throw new Error('获取Reranker模型列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
         setRerankerConfigs(data); // 合并
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || "加载失败");
+        setModelError(err || '加载失败');
       } finally {
         setModelLoading(false);
       }
@@ -69,7 +67,7 @@ export default function RerankerConfigPage() {
 
   const handleCreateSuccess = (llmConfig: RerankerConfig) => {
     setRerankerConfigs((prev) => [...prev, llmConfig]); // 追加新 Reranker 配置
-    console.log("创建Reranker成功", llmConfig);
+    console.log('创建Reranker成功', llmConfig);
     setEditRerankerConfig(newrerankerconfig);
   };
 
@@ -77,7 +75,7 @@ export default function RerankerConfigPage() {
     setRerankerConfigs((prev) =>
       prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
     );
-    console.log("编辑Reranker成功", llmConfig);
+    console.log('编辑Reranker成功', llmConfig);
     setEditRerankerConfig(newrerankerconfig);
   };
 
@@ -87,15 +85,13 @@ export default function RerankerConfigPage() {
   };
 
   const removeModel = async (id: string, model_type: string) => {
-    setErrorMsg("");
+    setErrorMsg('');
     try {
-      console.log("removeModel: id: ", id, "model_type: ", model_type);
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/config/${model_type}/${id}`, {
-        method: "DELETE",
+      console.log('removeModel: id: ', id, 'model_type: ', model_type);
+      const res = await fetch(`/v1/config/${model_type}/${id}`, {
+        method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
@@ -105,11 +101,11 @@ export default function RerankerConfigPage() {
       }
 
       // 删除成功后更新本地状态
-      if (model_type === "rerankers") {
+      if (model_type === 'rerankers') {
         setRerankerConfigs((prev) => prev.filter((config) => config.id !== id));
       }
     } catch (err: any) {
-      setErrorMsg("删除失败，请检查网络或配置");
+      setErrorMsg('删除失败，请检查网络或配置');
     }
   };
 
@@ -170,7 +166,7 @@ export default function RerankerConfigPage() {
                 <CardFooter className="mt-auto pt-0 flex justify-end">
                   <Button
                     variant="link"
-                    onClick={() => removeModel(reranker.id, "rerankers")}
+                    onClick={() => removeModel(reranker.id, 'rerankers')}
                     className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
                   >
                     <TrashIcon className="ml-1" size={16} />
@@ -206,7 +202,7 @@ export default function RerankerConfigPage() {
         </div>
       )}
       <div className="block w-full">
-        {errorMsg !== "" && (
+        {errorMsg !== '' && (
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertDescription>

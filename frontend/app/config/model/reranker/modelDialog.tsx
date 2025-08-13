@@ -1,5 +1,5 @@
 // RerankerModelDialog.tsx
-import { useState, useEffect, FC } from "react";
+import { useState, useEffect, FC } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,12 +7,12 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon } from "lucide-react";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { AlertCircleIcon } from 'lucide-react';
 
 // 定义组件 props
 interface RerankerModelDialogProps {
@@ -40,40 +40,38 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 }) => {
   const [reranker, setReranker] = useState<RerankerConfig>(rerankerConfig);
   const [error, setError] = useState<string | null>(null);
-  const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
 
   useEffect(() => {
     setReranker(rerankerConfig);
   }, [isAdd, rerankerConfig]);
 
   useEffect(() => {
-    setSaveErrorMsg("");
+    setSaveErrorMsg('');
   }, [reranker]);
 
   const handleSubmit = async () => {
-    setSaveErrorMsg("");
-    console.log("reranker", reranker);
+    setSaveErrorMsg('');
+    console.log('reranker', reranker);
     if (
       !reranker.model_id ||
       (isAdd && !reranker.api_key) ||
       !reranker.model_name ||
       !reranker.base_url
     ) {
-      setSaveErrorMsg("请必须填写完整的模型信息");
+      setSaveErrorMsg('请必须填写完整的模型信息');
       return;
     }
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const submit_url = isAdd
-      ? `${API_BASE}/v1/config/rerankers`
-      : `${API_BASE}/v1/config/rerankers/${reranker.id}`;
-    const updateMethod = isAdd ? "POST" : "PATCH";
-    if (reranker.api_key === "******") reranker.api_key = "";
-    console.log("updateMethod", isAdd, updateMethod, submit_url, reranker);
+      ? '/v1/config/rerankers'
+      : `/v1/config/rerankers/${reranker.id}`;
+    const updateMethod = isAdd ? 'POST' : 'PATCH';
+    if (reranker.api_key === '******') reranker.api_key = '';
+    console.log('updateMethod', isAdd, updateMethod, submit_url, reranker);
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reranker),
       });
 
@@ -86,7 +84,6 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       setIsOpen(false);
     } catch (err: any) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
-    } finally {
     }
   };
 
@@ -95,7 +92,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
     setIsOpen(open);
     if (!open) {
       setError(null);
-      setSaveErrorMsg("");
+      setSaveErrorMsg('');
     }
   };
 
@@ -104,7 +101,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       <DialogContent className="sm:max-w-[700px]">
         {error && <div className="text-red-500 mb-4">{error}</div>}
         <DialogHeader>
-          <DialogTitle>{isAdd ? "添加模型" : "编辑模型"}</DialogTitle>
+          <DialogTitle>{isAdd ? '添加模型' : '编辑模型'}</DialogTitle>
           <DialogDescription>填写模型配置信息后，点击保存。</DialogDescription>
         </DialogHeader>
 
@@ -117,7 +114,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
             <Input
               id="model_id"
               placeholder="model_id"
-              value={reranker?.model_id ?? ""}
+              value={reranker?.model_id ?? ''}
               onChange={(e) =>
                 setReranker((prev) => ({ ...prev, model_id: e.target.value }))
               }
@@ -134,7 +131,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
             <Input
               id="model_name"
               placeholder="model_name"
-              value={reranker?.model_name ?? ""}
+              value={reranker?.model_name ?? ''}
               onChange={(e) =>
                 setReranker((prev) => ({ ...prev, model_name: e.target.value }))
               }
@@ -153,7 +150,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                 id="base_url"
                 list="base_url_options"
                 placeholder="输入或选择模型base_url"
-                value={reranker?.base_url ?? ""}
+                value={reranker?.base_url ?? ''}
                 onChange={(e) =>
                   setReranker((prev) => ({ ...prev, base_url: e.target.value }))
                 }
@@ -171,7 +168,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={reranker?.api_key ?? ""}
+                value={reranker?.api_key ?? ''}
                 onChange={(e) =>
                   setReranker((prev) => ({ ...prev, api_key: e.target.value }))
                 }
@@ -182,7 +179,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={reranker?.api_key || "******"}
+                value={reranker?.api_key || '******'}
                 onChange={(e) =>
                   setReranker((prev) => ({ ...prev, api_key: e.target.value }))
                 }
@@ -193,13 +190,13 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         </div>
 
         <DialogFooter className="flex flex-col gap-4">
-          {saveErrorMsg !== "" && (
+          {saveErrorMsg !== '' && (
             <Alert className="bg-destructive/10 dark:bg-destructive/20 border-none">
               <AlertCircleIcon className="h-4 w-4 !text-destructive" />
               <AlertTitle>{saveErrorMsg}</AlertTitle>
             </Alert>
           )}
-          <Button onClick={handleSubmit}>{isAdd ? "新增" : "保存"}</Button>
+          <Button onClick={handleSubmit}>{isAdd ? '新增' : '保存'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

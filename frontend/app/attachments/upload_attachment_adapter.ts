@@ -2,10 +2,10 @@ import {
   AttachmentAdapter,
   PendingAttachment,
   CompleteAttachment,
-} from "@assistant-ui/react";
+} from '@assistant-ui/react';
 
 export class UploadAttachmentAdapter implements AttachmentAdapter {
-  public accept = "*/*";
+  public accept = '*/*';
 
   public async *add({
     file,
@@ -17,13 +17,13 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
 
     yield {
       id: fid,
-      type: file.type.startsWith("image/") ? "image" : "document",
+      type: file.type.startsWith('image/') ? 'image' : 'document',
       name: file.name,
-      contentType: file.type || "application/octet-stream",
+      contentType: file.type || 'application/octet-stream',
       file,
       status: {
-        type: "running",
-        reason: "uploading",
+        type: 'running',
+        reason: 'uploading',
         progress: 0,
       },
     } as PendingAttachment;
@@ -32,14 +32,14 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     if (file.size > maxSize) {
       yield {
         id: fid,
-        type: file.type.startsWith("image/") ? "image" : "document",
+        type: file.type.startsWith('image/') ? 'image' : 'document',
         name: file.name,
-        contentType: file.type || "application/octet-stream",
+        contentType: file.type || 'application/octet-stream',
         file,
         status: {
-          type: "incomplete",
-          reason: "error",
-          error: new Error("File size exceeds 10MB limit"),
+          type: 'incomplete',
+          reason: 'error',
+          error: new Error('File size exceeds 10MB limit'),
         },
       } as PendingAttachment;
       return;
@@ -48,54 +48,52 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     try {
       // 构造上传请求
       const formData = new FormData();
-      formData.append("file_id", fid);
-      formData.append("file", file); // 将文件加入 FormData
+      formData.append('file_id', fid);
+      formData.append('file', file); // 将文件加入 FormData
 
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const response = await fetch(`${API_BASE}/v1/config/attachments/upload`, {
-        method: "POST",
+      const response = await fetch('/v1/config/attachments/upload', {
+        method: 'POST',
         body: formData, // 自动设置 content-type 为 multipart/form-data
       });
 
       if (!response.ok) {
-        throw new Error("上传失败");
+        throw new Error('上传失败');
       }
 
       // 解析响应
       const result = await response.json();
-      console.log("result", result);
+      console.log('result', result);
       if (result.code != 200) {
-        throw new Error("上传失败");
+        throw new Error('上传失败');
       }
 
       // 返回成功状态
       yield {
         id: fid,
-        type: file.type.startsWith("image/") ? "image" : "document",
+        type: file.type.startsWith('image/') ? 'image' : 'document',
         name: file.name,
-        contentType: file.type || "application/octet-stream",
+        contentType: file.type || 'application/octet-stream',
         file,
         status: {
-          type: "running",
-          reason: "uploading",
+          type: 'running',
+          reason: 'uploading',
           progress: 100,
         },
       } as PendingAttachment;
       return;
     } catch (error) {
       // 返回失败状态
-      console.log("error", error);
+      console.log('error', error);
       yield {
         id: fid,
-        type: file.type.startsWith("image/") ? "image" : "document",
+        type: file.type.startsWith('image/') ? 'image' : 'document',
         name: file.name,
-        contentType: file.type || "application/octet-stream",
+        contentType: file.type || 'application/octet-stream',
         file,
         status: {
-          type: "incomplete",
-          reason: "error",
-          error: new Error("上传失败，请稍后重试"),
+          type: 'incomplete',
+          reason: 'error',
+          error: new Error('上传失败，请稍后重试'),
         },
       } as PendingAttachment;
       return;
@@ -104,20 +102,20 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
   public async send(
     attachment: PendingAttachment,
   ): Promise<CompleteAttachment> {
-    if (attachment.status.type === "incomplete") {
-      throw new Error("Attachment upload failed");
+    if (attachment.status.type === 'incomplete') {
+      throw new Error('Attachment upload failed');
     }
-    if (attachment.type === "image") {
+    if (attachment.type === 'image') {
       const base64 = await this.fileToBase64DataURL(attachment.file);
       return {
         id: attachment.id,
-        type: "image",
+        type: 'image',
         name: attachment.name,
-        contentType: attachment.contentType || "application/octet-stream",
-        status: { type: "complete" },
+        contentType: attachment.contentType || 'application/octet-stream',
+        status: { type: 'complete' },
         content: [
           {
-            type: "image",
+            type: 'image',
             image: base64, // data:image/jpeg;base64,... format
           },
         ],
@@ -125,16 +123,18 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     } else {
       return {
         id: attachment.id,
-        type: "document",
+        type: 'document',
         name: attachment.name,
-        contentType: attachment.contentType || "application/octet-stream",
+        contentType: attachment.contentType || 'application/octet-stream',
         content: [],
-        status: { type: "complete" },
+        status: { type: 'complete' },
       };
     }
   }
+
   public async remove(attachment: PendingAttachment): Promise<void> {
     // Cleanup if needed
+    console.log('removing attachment:', attachment);
   }
 
   private async fileToBase64DataURL(file: File): Promise<string> {

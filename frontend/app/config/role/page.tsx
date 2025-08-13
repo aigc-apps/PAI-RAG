@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   TrashIcon,
   SettingsIcon,
   Edit,
   EyeIcon,
   EyeOffIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -17,10 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import * as Toast from "@radix-ui/react-toast";
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import * as Toast from '@radix-ui/react-toast';
 import {
   Table,
   TableBody,
@@ -28,12 +28,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
-import { v4 as uuidv4 } from "uuid";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import RolePage from "./role";
-import UserRolePage from "./user_role";
+} from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
+import { v4 as uuidv4 } from 'uuid';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import RolePage from './role';
+import UserRolePage from './user_role';
 
 export interface Permission {
   id: string;
