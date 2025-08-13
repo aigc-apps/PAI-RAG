@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 export function HtmlViewer({ file_url }: { file_url: string }) {
-  const [htmlContent, setHtmlContent] = useState("");
+  const [htmlContent, setHtmlContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(file_url)
       .then((response) => {
-        if (!response.ok) throw new Error("加载失败");
+        if (!response.ok) throw new Error('加载失败');
         return response.text();
       })
       .then((text) => {

@@ -62,7 +62,7 @@ class RetrievalSetting(BaseModel):
 
 
 class RetrievalRequest(BaseModel):
-    knowledgebase_id: Optional[str] = "default"  # 知识库名称（index_name）
+    knowledge_id: Optional[str] = "default"  # 知识库名称（index_name）
     query: str  # 查询内容
     user_id: Optional[str] = None
     retrieval_setting: Optional[RetrievalSetting] = None

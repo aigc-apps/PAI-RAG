@@ -3,18 +3,22 @@
 # ===================================================================
 # 启动脚本：支持可配置参数
 # 支持参数：
-#   --frontend-port       前端端口 (默认: 3000)
-#   --backend-port        后端端口 (默认: 8000)
+#   --port                应用入口 (默认: 8680)
+#   --frontend-port       前端端口 (默认: 8681)
+#   --backend-port        后端端口 (默认: 8682)
 #   --api-instances       API 实例数量 (默认: 1)
 #   --worker-instances    Worker 实例数量 (默认: 1)
+#   --production          Production模式
 #   --help                显示帮助
 # ===================================================================
 
 # 默认值
-FRONTEND_PORT=${FRONTEND_PORT:-8680}
-BACKEND_PORT=${BACKEND_PORT:-8688}
+PORT=${PORT:-8680}
+FRONTEND_PORT=${FRONTEND_PORT:-8681}
+BACKEND_PORT=${BACKEND_PORT:-8682}
 API_INSTANCE_COUNT=${API_INSTANCE_COUNT:-1}
 WORKER_INSTANCE_COUNT=${WORKER_INSTANCE_COUNT:-2}
+PRODUCTION=${PRODUCTION:-false}
 
 
 # 解析参数
@@ -24,6 +28,14 @@ while [[ $# -gt 0 ]]; do
       FRONTEND_PORT="$2"
       if ! [[ "$FRONTEND_PORT" =~ ^[0-9]+$ ]] || [ "$FRONTEND_PORT" -lt 1 ] || [ "$FRONTEND_PORT" -gt 65535 ]; then
         echo "错误: --frontend-port 必须是 1-65535 之间的有效端口号"
+        exit 1
+      fi
+      shift 2
+      ;;
+    --port)
+      PORT="$2"
+      if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+        echo "错误: --port 必须是 1-65535 之间的有效端口号"
         exit 1
       fi
       shift 2
@@ -52,14 +64,20 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
+    --production)
+      PRODUCTION=true
+      shift 1
+      ;;
     --help|-h)
       echo "用法: $0 [选项]"
       echo ""
       echo "选项:"
-      echo "  --frontend-port PORT       前端服务端口 (默认: 3000)"
-      echo "  --backend-port PORT        后端服务端口 (默认: 8000)"
+      echo "  --port PORT                应用端口    (默认: 8680) PRODUCTION模式为NGINX端口"
+      echo "  --frontend-port PORT       前端服务端口 (默认: 8681), 仅PRODUCTION模式生效"
+      echo "  --backend-port PORT        后端服务端口 (默认: 8682)"
       echo "  --api-instances N          启动 N 个 API 实例 (默认: 1)"
       echo "  --worker-instances N       启动 N 个 Worker 实例 (默认: 1)"
+      echo "  --production               使用RODUCTION模式启动web, 将配置nginx"
       echo "  --help                     显示此帮助信息"
       echo ""
       echo "示例:"
@@ -74,8 +92,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-NEXT_PUBLIC_API_BASE="http://localhost:${BACKEND_PORT}"
-
 # ===================================================================
 # 开始启动服务
 # ===================================================================
@@ -85,18 +101,52 @@ echo "   前端端口: $FRONTEND_PORT"
 echo "   后端端口: $BACKEND_PORT"
 echo "   API 实例数: $API_INSTANCE_COUNT"
 echo "   Worker 实例数: $WORKER_INSTANCE_COUNT"
-echo "   NEXT_PUBLIC_API_BASE: $NEXT_PUBLIC_API_BASE"
 echo
 echo "🚀 启动服务中..."
 
 
+setup_nginx() {
+  echo "🚀 配置 Nginx..."
+  # 模板路径
+  TEMPLATE="./scripts/nginx.template.conf"
+  CONFIG="/etc/nginx/conf.d/pairag.conf"
+
+  # 替换变量并生成实际配置
+  echo "Generating Nginx config with:"
+
+  export FRONTEND_PORT=$FRONTEND_PORT
+  export BACKEND_PORT=$BACKEND_PORT
+  export PORT=$PORT
+
+  envsubst < "$TEMPLATE" | sed -e 's/§/$/g' > "$CONFIG"
+
+  # 测试配置
+  sudo nginx -t
+  if [ $? -ne 0 ]; then
+    echo "❌ Nginx config test failed"
+    exit 1
+  fi
+
+  # 重新加载 Nginx
+  sudo systemctl start nginx
+  sudo systemctl reload nginx
+  echo "✅ Nginx reloaded with new ports"
+}
+
+
 # 启动前端（假设使用 Vite/React）
 start_frontend() {
-  echo "👉 启动前端服务 on port $FRONTEND_PORT"
   cd frontend || { echo "错误: 找不到 frontend 目录"; exit 1; }
   npm install || { echo "错误: npm 安装失败"; exit 1; }
-  NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE npm run dev -- --port $FRONTEND_PORT &
+  if [[ "$PRODUCTION" == true ]]; then
+    echo "👉 启动前端服务 on port $FRONTEND_PORT"
+    npm run build && npm run start  -- --port $FRONTEND_PORT &
+  else
+    echo "👉 启动前端服务 on port $PORT"
+    npm run dev -- --port $PORT &
+  fi
   FRONTEND_PID=$!
+  echo "👉 启动前端服务 with pid $FRONTEND_PID."
   cd ..
 }
 
@@ -137,9 +187,12 @@ cleanup() {
     fi
 
 }
-
 # 捕获信号（SIGTERM, SIGINT, EXIT）
 trap cleanup EXIT TERM INT
+
+if  [[ "$PRODUCTION" == true ]]; then
+  setup_nginx
+fi
 
 # 检查Redis服务是否已经在运行
 if pgrep redis-server > /dev/null

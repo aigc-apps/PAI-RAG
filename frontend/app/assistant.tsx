@@ -1,59 +1,38 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "@/components/assistant-ui/thread";
-import ModelSelector from "@/components/model-selector/index";
-import ToolUIWrapper from "@/components/assistant-ui/tool-ui";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import ModelConfigPage from "./config/model/page";
-import McpConfig from "./config/mcp/page";
-import SearchConfig from "./config/search/page";
-import { useMemo } from "react";
-import TracingConfig from "./config/tracing/page";
-import KnowledgeBase from "./knowledgebase/page";
-import ChatbotPage from "./chatbot/page";
-import { ChatbotConfigCard } from "./chatbot/chatbot_config";
-import PromptConfig from "./config/prompt/page";
-import { usePathname } from "next/navigation";
-import KnowledgeBaseDetailPage from "./knowledgebase/details/page";
-import KnowledgeBaseCreatePage from "./knowledgebase/create/page";
-import { UploadAttachmentAdapter } from "./attachments/upload_attachment_adapter";
-import { usePaiChatThreadRuntime } from "./runtime/usePaiChatThreadRuntime";
-import KnowledgeBaseFileChunksPage from "./knowledgebase/chunks/page";
-import RoleConfigPage from "./config/role/page";
+import React, { useState, useEffect } from 'react';
+import { Thread } from '@/components/assistant-ui/thread';
+import ModelSelector from '@/components/model-selector/index';
+import ToolUIWrapper from '@/components/assistant-ui/tool-ui';
+import { useChatOptions } from './providers/chat';
+
 export const Assistant = () => {
   // LLM 配置状态
   const [llmConfig, setLlmConfig] = useState({
-    id: "",
-    source: "",
-    model_id: "",
+    id: '',
+    source: '',
+    model_id: '',
   });
   const [optionsVisible, setoptionsVisible] = useState(true);
+  const {model, updateModel} = useChatOptions();
 
   // 页面加载时拉取 LLM 配置
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        console.log(
-          "assistant NEXT_PUBLIC_API_BASE",
-          process.env.NEXT_PUBLIC_API_BASE,
-          API_BASE,
-        );
-        const res = await fetch(`${API_BASE}/v1/config/llms`);
-        if (!res.ok) throw new Error("拉取 LLM 配置失败");
+        const res = await fetch('/v1/config/llms');
+        if (!res.ok) throw new Error('拉取 LLM 配置失败');
         const data = await res.json();
         const llms = data.data.items;
-        if (llms.length > 0) setLlmConfig(llms[0]);
+        
+        if (llms.length > 0) {
+          const default_model_id = model || llms[0].model_id;
+          const default_model = llms.filter((llm: any) => llm.model_id === default_model_id)[0];
+          updateModel(default_model_id);
+          setLlmConfig(default_model);
+        }
       } catch (error) {
-        console.error("拉取 LLM 配置失败:", error);
+        console.error('拉取 LLM 配置失败:', error);
       }
     };
 
@@ -73,204 +52,39 @@ export const Assistant = () => {
       model_id: model_id,
     }));
 
-    setoptionsVisible(source !== "chatbot");
+    updateModel(model_id);
+
+    setoptionsVisible(source !== 'chatbot');
     console.log(source);
   };
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
 
   useEffect(() => {
-    console.log("selectedOptions updated:", selectedOptions);
+    console.log('selectedOptions updated:', selectedOptions);
   }, [selectedOptions]);
 
-  const extra_body = useMemo(() => {
-    const mcpOptions = selectedOptions.filter((opt) => opt.startsWith("mcp:"));
-    const mcp_servers = mcpOptions.map((opt) => opt.split(":")[1]);
-    const kbOptions = selectedOptions.filter((opt) => opt.startsWith("kb:"));
-    const kb_ids = kbOptions.map((opt) => opt.split(":")[1]);
-
-    return {
-      model: llmConfig.model_id,
-      mcp_ids: mcp_servers,
-      enable_search: selectedOptions.includes("search"),
-      enable_thinking: selectedOptions.includes("thinking"),
-      kb_ids: kb_ids,
-      streamn: true,
-    };
-  }, [llmConfig.model_id, selectedOptions]);
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-  const runtime = usePaiChatThreadRuntime({
-    api: `${API_BASE}/v1/chat/completions`,
-    body: extra_body,
-    adapters: {
-      attachments: new UploadAttachmentAdapter(),
-    },
-  });
-  const pathname = usePathname();
-  console.log("pathname:", pathname);
-  const [activeTab, setActiveTab] = useState(pathname);
-
-  console.log("activeTab:", activeTab);
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <SidebarProvider defaultOpen={true}>
-        <AppSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <SidebarInset className="h-screen overflow-hidden">
-          {activeTab === "/" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-                <div className="flex justify-start px-20 border-none">
-                  <ModelSelector
-                    selectedModel={{
-                      source: llmConfig.source || "",
-                      model_id: llmConfig.model_id || "",
-                    }}
-                    onModelChange={handleModelChange}
-                  />
-                </div>
-              </header>
-              <Thread
-                optionsVisible={optionsVisible}
-                onToggleChange={(options) => {
-                  console.log("Received options from Thread:", options); // ✅ 添加日志
-                  setSelectedOptions(options); // 更新状态
-                }}
-              />
-              <ToolUIWrapper />
-            </div>
-          )}
-          {activeTab === "/knowledgebase" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <KnowledgeBase setActiveTab={setActiveTab} />
-            </div>
-          )}
-          {activeTab.startsWith("/knowledgebase/create") && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <KnowledgeBaseCreatePage setActiveTab={setActiveTab} />
-            </div>
-          )}
-          {activeTab.startsWith("/knowledgebase/details") && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <KnowledgeBaseDetailPage
-                knowledgebase_id={activeTab.split("/")[3]}
-                setActiveTab={setActiveTab}
-              />
-            </div>
-          )}
-          {activeTab.startsWith("/knowledgebase/chunks") && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <KnowledgeBaseFileChunksPage
-                knowledgebase_file_id={activeTab.split("/")[3]}
-                setActiveTab={setActiveTab}
-              />
-            </div>
-          )}
-          {activeTab.startsWith("/knowledgebase/chunks") && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <KnowledgeBaseFileChunksPage
-                knowledgebase_file_id={activeTab.split("/")[3]}
-                setActiveTab={setActiveTab}
-              />
-            </div>
-          )}
-
-          {activeTab.startsWith("/chatbot/edit") && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <ChatbotConfigCard
-                chatbotId={activeTab.split("/")[3]}
-                setActiveTab={setActiveTab}
-              />
-            </div>
-          )}
-          {activeTab === "/chatbot/create" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <ChatbotConfigCard
-                chatbotId={undefined}
-                setActiveTab={setActiveTab}
-              />
-            </div>
-          )}
-
-          {activeTab === "/chatbot" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <ChatbotPage setActiveTab={setActiveTab} />
-            </div>
-          )}
-          {activeTab === "/config/model" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <ModelConfigPage />
-            </div>
-          )}
-          {activeTab === "/config/mcp" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <McpConfig />
-            </div>
-          )}
-          {activeTab === "/config/search" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <SearchConfig />
-            </div>
-          )}
-          {activeTab === "/config/tracing" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <TracingConfig />
-            </div>
-          )}
-          {activeTab === "/config/prompts" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <PromptConfig />
-            </div>
-          )}
-          {activeTab === "/config/roles" && (
-            <div className="flex flex-col h-full">
-              <header className="flex h-12 border-b">
-                <SidebarTrigger />
-              </header>
-              <RoleConfigPage />
-            </div>
-          )}
-        </SidebarInset>
-      </SidebarProvider>
-    </AssistantRuntimeProvider>
+    <div className="flex flex-col h-full">
+      <header className="flex h-12 border-b">
+        <div className="flex justify-start px-20 border-none">
+          <ModelSelector
+            selectedModel={{
+              source: llmConfig.source || '',
+              model_id: llmConfig.model_id || '',
+            }}
+            onModelChange={handleModelChange}
+          />
+        </div>
+      </header>
+      <Thread
+        optionsVisible={optionsVisible}
+        onToggleChange={(options) => {
+          console.log('Received options from Thread:', options); // ✅ 添加日志
+          setSelectedOptions(options); // 更新状态
+        }}
+      />
+      <ToolUIWrapper />
+    </div>
   );
 };

@@ -52,7 +52,7 @@ def test_create_llm(client: Client):
     assert delete_json["message"] == f"大模型ID '{llm_id}' 删除成功。"
 
     get_response2 = client.get(f"/v1/config/llms/{llm_id}")
-    assert get_response2.status_code == 200
+    assert get_response2.status_code == 404
     deleted_model_json = get_response2.json()
     assert deleted_model_json["message"] == f"没有找到ID为'{llm_id}'的大模型配置。"
     assert deleted_model_json["code"] == 404

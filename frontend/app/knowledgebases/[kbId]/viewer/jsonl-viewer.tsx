@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card"; // shadcn/ui 容器组件 [[1]]
-import { ScrollArea } from "@/components/ui/scroll-area"; // 滚动区域支持 [[9]]
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card'; // shadcn/ui 容器组件 [[1]]
+import { ScrollArea } from '@/components/ui/scroll-area'; // 滚动区域支持 [[9]]
 
 export function JsonlViewer({ file_url }: { file_url: string }) {
   const [lines, setLines] = useState<Record<string, any>[]>([]);
@@ -11,17 +11,17 @@ export function JsonlViewer({ file_url }: { file_url: string }) {
     const fetchData = async () => {
       try {
         const response = await fetch(file_url);
-        if (!response.ok) throw new Error("文件加载失败");
+        if (!response.ok) throw new Error('文件加载失败');
 
         const text = await response.text();
         const parsedLines = text
-          .split("\n")
+          .split('\n')
           .filter(Boolean)
           .map((line) => JSON.parse(line));
 
         setLines(parsedLines);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "未知错误");
+        setError(err instanceof Error ? err.message : '未知错误');
       } finally {
         setLoading(false);
       }

@@ -1,10 +1,10 @@
-"use client";
-import React, { useState, useEffect, FC } from "react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { ChevronDownIcon, Terminal } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+'use client';
+import React, { useState, useEffect, FC } from 'react';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { ChevronDownIcon, Terminal } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import {
   Select,
@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -20,14 +20,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 
-import { Button } from "@/components/ui/button";
-import { MCPConfig } from "@/app/config/mcp/page";
-import { LlmConfig } from "@/app/config/model/llm/page";
-import { KbConfig } from "@/app/knowledgebase/kbconfig";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+import { Button } from '@/components/ui/button';
+import { McpConfig } from '@/app/config/mcp/mcp';
+import { LlmConfig } from '@/app/config/model/llm/page';
+import { KbConfig } from '@/app/knowledgebases/kbconfig';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
 
 export interface Chatbot {
   id: string;
@@ -43,125 +44,107 @@ export interface Chatbot {
 
 interface ChatbotConfigProps {
   chatbotId: string | undefined;
-  setActiveTab: (tab: string) => void;
 }
 
 const default_chat_config = {
-  id: "",
-  app_id: "",
-  description: "",
+  id: '',
+  app_id: '',
+  description: '',
   enable_search: false,
   mcp_ids: [],
   kb_ids: [],
-  model_id: "",
-  updated_at: "",
+  enable_agent: false,
+  model_id: '',
+  updated_at: '',
 };
 
 // 知识库配置卡片
 export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   chatbotId,
-  setActiveTab,
 }) => {
   const [botConfig, setBotConfig] = useState<Chatbot>(default_chat_config);
   const [llms, setLlms] = useState<LlmConfig[]>([]);
-  const [mcps, setMcps] = useState<MCPConfig[]>([]);
+  const [mcps, setMcps] = useState<McpConfig[]>([]);
   const [kbs, setKbs] = useState<KbConfig[]>([]);
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
-  const [saveErrorMsg, setSaveErrorMsg] = useState("");
-  const [isCreate, setIsCreate] = useState<boolean>(
-    chatbotId === undefined || chatbotId === "",
-  );
-  const [isLoading, setIsLoading] = useState(false);
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
+  const isCreate: boolean = chatbotId === undefined || chatbotId === '';
+  const router = useRouter();
+  // const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        setIsLoading(true);
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-
-        const [llmRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/llms`),
-        ]);
+        const [llmRes] = await Promise.all([fetch('/v1/config/llms')]);
 
         const llmData = (await llmRes.json())?.data.items || [];
-        console.log("llmData", llmData);
+        console.log('llmData', llmData);
         setLlms([...llmData]);
 
-        const [mcpRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/mcps`),
-        ]);
+        const [mcpRes] = await Promise.all([fetch('/v1/config/mcps')]);
 
         const mcpData =
-          ((await mcpRes.json())?.data.items as MCPConfig[]) || [];
-        console.log("mcpData", mcpData);
+          ((await mcpRes.json())?.data.items as McpConfig[]) || [];
+        console.log('mcpData', mcpData);
         setMcps([...mcpData]);
 
-        const [kbRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/config/knowledgebases`),
-        ]);
+        const [kbRes] = await Promise.all([fetch('/v1/config/knowledgebases')]);
 
         const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
-        console.log("kbData", kbData);
+        console.log('kbData', kbData);
         setKbs([...kbData]);
 
         if (!isCreate) {
-          const botRes = await fetch(
-            `${API_BASE}/v1/config/chatbots?app_id=${chatbotId}`,
-          );
+          const botRes = await fetch(`/v1/config/chatbots?app_id=${chatbotId}`);
           const botData = await botRes.json();
           setBotConfig(botData.data);
-          console.log("chatbotData: ", botData.data);
+          console.log('chatbotData: ', botData.data);
 
           const kbnames = kbData
             .filter((item) => botData.data.kb_ids.includes(item.id))
             .map((item) => item.name);
           setSelectedKbNames([...kbnames]);
-          console.log("selectedKbNames", kbnames);
+          console.log('selectedKbNames', kbnames);
 
           const mcpnames = mcpData
             .filter((item) => botData.data.mcp_ids.includes(item.id))
             .map((item) => item.name);
           setSelectedMcpNames([...mcpnames]);
-          console.log("selectedMcpNames", mcpnames);
+          console.log('selectedMcpNames', mcpnames);
         }
-      } catch (err: any) {
-        console.log(err || "加载失败");
-      } finally {
-        setIsLoading(false);
+      } catch (err: unknown) {
+        console.log(err || '加载失败');
       }
     };
     fetchModelConfigs();
-  }, []);
+  }, [chatbotId, isCreate]);
 
   const handleSaveChatConfig = async () => {
-    console.log("保存应用结果:", botConfig);
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
+    console.log('保存应用结果:', botConfig);
     const submit_url = isCreate
-      ? `${API_BASE}/v1/config/chatbots`
-      : `${API_BASE}/v1/config/chatbots/${botConfig.id}`;
-    const updateMethod = isCreate ? "POST" : "PATCH";
+      ? '/v1/config/chatbots'
+      : `/v1/config/chatbots/${botConfig.id}`;
+    const updateMethod = isCreate ? 'POST' : 'PATCH';
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(botConfig), // 包装为数组
       });
 
       if (!res.ok) throw new Error(`保存应用失败: ${await res.text()}`);
-      setActiveTab("/chatbot");
-      setSaveErrorMsg("");
+      router.push('/apps');
+      setSaveErrorMsg('');
       // onSaveSuccess(jsondata.data as KbConfig);
     } catch (err: any) {
-      console.log("保存应用失败", err.message);
+      console.log('保存应用失败', err.message);
       setSaveErrorMsg(err.message);
     }
   };
 
   const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
-    console.log("handleKbSelect", kb_id, kb_name, checked);
+    console.log('handleKbSelect', kb_id, kb_name, checked);
     if (checked) {
       const kb_ids = botConfig.kb_ids.includes(kb_id)
         ? botConfig.kb_ids
@@ -203,7 +186,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   return (
     <div className="grid gap-4 py-6 px-6">
       <div className="text-xl font-bold">
-        {isCreate ? "新建应用" : "编辑应用"}
+        {isCreate ? '新建应用' : '编辑应用'}
       </div>
       <div className="space-y-2">
         <Label htmlFor="app-id">
@@ -240,7 +223,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
       </div>
       <div className="flex">
         <Label htmlFor="basemodel" className="w-[90px]">
-          基模型选择 <span className="text-destructive">*</span>{" "}
+          基模型选择 <span className="text-destructive">*</span>{' '}
         </Label>
         <div className="px-6">
           {llms.length > 0 ? (
@@ -270,7 +253,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setActiveTab("/config/model/llm");
+                  router.push('/config/model/llm');
                 }}
               >
                 前往添加
@@ -408,7 +391,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
       {saveErrorMsg && (
         <Alert variant="destructive">
           <Terminal />
-          <AlertTitle>{isCreate ? "创建应用失败" : "保存应用失败"}</AlertTitle>
+          <AlertTitle>{isCreate ? '创建应用失败' : '保存应用失败'}</AlertTitle>
           <AlertDescription>{saveErrorMsg}</AlertDescription>
         </Alert>
       )}
@@ -417,7 +400,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           variant="secondary"
           className="w-20"
           onClick={() => {
-            setActiveTab("/chatbot");
+            router.push('/apps');
           }}
         >
           取消
@@ -429,7 +412,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             handleSaveChatConfig();
           }}
         >
-          {isCreate ? "创建" : "保存"}
+          {isCreate ? '创建' : '保存'}
         </Button>
       </div>
     </div>

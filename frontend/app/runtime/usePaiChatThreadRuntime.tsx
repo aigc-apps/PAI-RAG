@@ -1,24 +1,28 @@
+"use client";
+
 import {
   ChatModelAdapter,
   ChatModelRunOptions,
   ThreadMessage,
   ChatModelRunResult,
-} from "@assistant-ui/react";
-import { FC, useMemo } from "react";
-import { INTERNAL, ExportedMessageRepository } from "@assistant-ui/react";
+  AssistantRuntimeProvider,
+} from '@assistant-ui/react';
+import { INTERNAL } from '@assistant-ui/react';
 
-import { EdgeRuntimeOptions } from "@assistant-ui/react-edge";
+import { EdgeRuntimeOptions } from '@assistant-ui/react-edge';
 const { splitLocalRuntimeOptions } = INTERNAL;
-import { jsonrepair } from "jsonrepair";
+import { jsonrepair } from 'jsonrepair';
 import {
   useLocalThreadRuntime,
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
-  useThreadListItem,
   type unstable_RemoteThreadListAdapter,
-  type ThreadHistoryAdapter,
-} from "@assistant-ui/react";
-import { RuntimeAdapterProvider } from "@assistant-ui/react";
-import { ReactNode } from "react"; // ✅ 添加这一行以导入 ReactNode
+} from '@assistant-ui/react';
+import { ReactNode } from 'react'; // ✅ 添加这一行以导入 ReactNode
+import { useChatOptions } from '../providers/chat';
+import { StableProvider } from './stableProvider';
+import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
+import { TableBody } from '@/components/ui/table';
+
 interface Props {
   children?: ReactNode;
 }
@@ -57,7 +61,7 @@ function AddOrMergeToolCall(
   toolCall: any,
 ): void {
   const existingIndex = eventQueue.findIndex(
-    (item) => item.type === "tool-call" && item.data.id === toolCall.id,
+    (item) => item.type === 'tool-call' && item.data.id === toolCall.id,
   );
 
   if (existingIndex !== -1) {
@@ -67,7 +71,7 @@ function AddOrMergeToolCall(
   } else {
     // 新增条目
     eventQueue.push({
-      type: "tool-call",
+      type: 'tool-call',
       data: toolCall,
     });
   }
@@ -83,20 +87,21 @@ export class MyModelAdapter implements ChatModelAdapter {
     unstable_getMessage,
   }: ChatModelRunOptions) {
     const headersValue =
-      typeof this.options.headers === "function"
+      typeof this.options.headers === 'function'
         ? await this.options.headers()
         : this.options.headers;
 
     const headers = new Headers(headersValue);
-    headers.set("Content-Type", "application/json");
+    headers.set('Content-Type', 'application/json');
     const enableAttachments = messages.some(
       (m) => (m.attachments ?? []).length > 0,
     );
 
+
     const result = await fetch(this.options.api, {
-      method: "POST",
+      method: 'POST',
       headers,
-      credentials: this.options.credentials ?? "same-origin",
+      credentials: this.options.credentials ?? 'same-origin',
       body: JSON.stringify({
         system: context.system,
         messages: messages,
@@ -104,7 +109,6 @@ export class MyModelAdapter implements ChatModelAdapter {
         runConfig,
         ...context.callSettings,
         ...context.config,
-
         ...this.options.body,
         enable_attachments: enableAttachments,
       }),
@@ -116,16 +120,16 @@ export class MyModelAdapter implements ChatModelAdapter {
       throw new Error(`Status ${result.status}: ${await result.text()}`);
     }
     if (!result.body) {
-      throw new Error("Response body is null");
+      throw new Error('Response body is null');
     }
 
     const reader = result.body.getReader();
     const decoder = new TextDecoder();
-    let content = "";
+    let content = '';
     // let toolCalls: { [key: string]: any } = {};
-    let buffer = "";
+    let buffer = '';
 
-    let currentToolCallMap: {
+    const currentToolCallMap: {
       [key: string]: {
         id: string;
         type: string;
@@ -136,7 +140,7 @@ export class MyModelAdapter implements ChatModelAdapter {
     } = {};
 
     const eventQueue: Array<{
-      type: "text" | "tool-call";
+      type: 'text' | 'tool-call';
       data: any;
     }> = [];
 
@@ -145,22 +149,22 @@ export class MyModelAdapter implements ChatModelAdapter {
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
+      const lines = buffer.split('\n');
       buffer = lines.pop()!; // 保留未闭合的行
       for (const line of lines) {
-        if (line.startsWith("data:")) {
+        if (line.startsWith('data:')) {
           const chunk = JSON.parse(line.slice(5));
           // 处理单条数据
           const delta = chunk.choices[0]?.delta;
 
-          if (delta?.role === "assistant" && delta?.content) {
+          if (delta?.role === 'assistant' && delta?.content) {
             content += delta.content;
             if (
               eventQueue.length === 0 ||
-              eventQueue[eventQueue.length - 1].type !== "text"
+              eventQueue[eventQueue.length - 1].type !== 'text'
             ) {
               eventQueue.push({
-                type: "text",
+                type: 'text',
                 data: content,
               });
             } else {
@@ -174,14 +178,14 @@ export class MyModelAdapter implements ChatModelAdapter {
               if (!currentToolCallMap[toolCallId]) {
                 currentToolCallMap[toolCallId] = {
                   id: toolCallId,
-                  type: "function",
+                  type: 'function',
                   function: {
-                    name: toolCall.function?.name || "",
+                    name: toolCall.function?.name || '',
                     arguments: JSON.parse(
-                      jsonrepair(toolCall.function?.arguments || "{}"),
+                      jsonrepair(toolCall.function?.arguments || '{}'),
                     ),
                   },
-                  state: "running",
+                  state: 'running',
                   result: undefined,
                 };
               }
@@ -195,20 +199,20 @@ export class MyModelAdapter implements ChatModelAdapter {
                 try {
                   const jsonr = jsonrepair(toolCall.function.arguments);
                   currentToolCallMap[toolCallId].function.arguments =
-                    JSON.parse(jsonr || "{}");
+                    JSON.parse(jsonr || '{}');
                 } catch (e) {
-                  console.error("JSON parse error:", e);
+                  console.error('JSON parse error:', e);
                 }
               }
               AddOrMergeToolCall(eventQueue, currentToolCallMap[toolCallId]);
             }
           }
-          if (delta?.role === "tool") {
+          if (delta?.role === 'tool') {
             // 处理工具调用结果
             const keys = Object.keys(currentToolCallMap);
             const lastKey = keys[keys.length - 1];
             if (currentToolCallMap[lastKey]) {
-              currentToolCallMap[lastKey].state = "complete";
+              currentToolCallMap[lastKey].state = 'complete';
               currentToolCallMap[lastKey].result = delta.content;
             } else {
               console.warn(`Tool call with ID ${lastKey} not found.`);
@@ -220,15 +224,15 @@ export class MyModelAdapter implements ChatModelAdapter {
           yield {
             content: eventQueue
               .map((event) => {
-                if (event.type === "text") {
+                if (event.type === 'text') {
                   return {
-                    type: "text" as const,
+                    type: 'text' as const,
                     text: event.data,
                   };
-                } else if (event.type === "tool-call") {
+                } else if (event.type === 'tool-call') {
                   const toolCall = event.data;
                   return {
-                    type: "tool-call" as const,
+                    type: 'tool-call' as const,
                     toolCallId: toolCall.id,
                     toolName: toolCall.function.name,
                     args: toolCall.function.arguments,
@@ -249,53 +253,40 @@ export class MyModelAdapter implements ChatModelAdapter {
   }
 }
 
-let isInitializing = false;
-let initializedThreadId = "";
-
-function delay(ms: any) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 // Implement your custom adapter with proper message persistence
 const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/agent/threads`);
-      if (!res.ok) throw new Error("获取配置失败");
+      const res = await fetch('/v1/agent/threads');
+      if (!res.ok) throw new Error('获取配置失败');
       const response = await res.json();
       return {
         threads: response.map((t: any) => ({
-          status: t.archived ? "archived" : "regular",
+          status: t.archived ? 'archived' : 'regular',
           remoteId: t.id,
           title: t.title,
         })),
       };
     } catch (error) {
-      console.error("Error fetching threads:", error);
+      console.error('Error fetching threads:', error);
       return { threads: [] };
     }
   },
   async initialize(threadId: string) {
-    isInitializing = true;
-
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const url = `${API_BASE}/v1/agent/threads`;
+      const url = '/v1/agent/threads';
       const now = new Date();
       const formattedTime = `${now.getFullYear()}-${String(
         now.getMonth() + 1,
-      ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(
+      ).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(
         now.getHours(),
-      ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
       const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: "PAI-RAG Assistant",
+          user_id: 'PAI-RAG Assistant',
           title: `会话 - ${formattedTime}`, // 动态插入时间
           archived: false,
         }),
@@ -306,14 +297,12 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
       }
 
       const data = await response.json();
-      initializedThreadId = data.id;
-      isInitializing = false;
       return {
         remoteId: data.id,
         externalId: data.id,
       };
     } catch (error) {
-      console.error("Error creating thread:", error);
+      console.error('Error creating thread:', error);
       throw error;
     }
   },
@@ -326,20 +315,18 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async unarchive(remoteId) {},
   async delete(remoteId) {
     try {
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      const res = await fetch(`${API_BASE}/v1/agent/threads/${remoteId}`, {
-        method: "DELETE",
+      const res = await fetch(`/v1/agent/threads/${remoteId}`, {
+        method: 'DELETE',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       if (!res.ok) {
-        throw new Error("删除失败，请检查网络或配置");
+        throw new Error('删除失败，请检查网络或配置');
       }
     } catch (err: any) {
       // 显示错误提示
-      throw new Error("删除失败，请检查网络或配置");
+      throw new Error('删除失败，请检查网络或配置');
     }
   },
   async generateTitle(remoteId, messages) {
@@ -357,107 +344,17 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   },
 };
 
-const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
-  children,
-}) => {
-  // This runs in the context of each thread
-  const threadListItem = useThreadListItem();
-  const remoteId = threadListItem.remoteId;
-  // Create thread-specific history adapter
-  const history = useMemo<ThreadHistoryAdapter>(
-    () => ({
-      async load() {
-        if (!remoteId) return { headId: null, messages: [] };
-        // 模拟从后端获取数据
-        try {
-          const API_BASE =
-            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-          const res = await fetch(
-            `${API_BASE}/v1/agent/threads/${remoteId}/messages`,
-          );
-
-          if (!res.ok) throw new Error("获取配置失败");
-          const messages = await res.json();
-          if (messages.length === 0) {
-            return { headId: null, messages: [] };
-          }
-          const response = ExportedMessageRepository.fromArray(
-            messages.map((m: any) => ({
-              role: m.role as ThreadMessage["role"],
-              content: m.content,
-              attachments: m.attachments,
-              id: m.id,
-              createdAt: new Date(m.createdAt),
-            })),
-          );
-          return response;
-        } catch (error) {
-          console.error("Error fetching threads:", error);
-          return { headId: null, messages: [] };
-        }
-      },
-      async append(message) {
-        if (!remoteId) {
-          console.warn("Cannot save message - thread not initialized");
-          while (isInitializing) {
-            console.log(
-              "while isInitializing",
-              isInitializing,
-              initializedThreadId,
-            );
-            await delay(50);
-          }
-          console.log("initialized remoteId", initializedThreadId);
-        }
-        const remoteThreadId = remoteId ? remoteId : initializedThreadId;
-        if (!remoteThreadId) {
-          console.error("Thread initialized failed.");
-          return;
-        }
-        try {
-          const API_BASE =
-            process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-          const url = `${API_BASE}/v1/agent/threads/${remoteThreadId}/messages`;
-
-          console.log("append message", message);
-          const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              thread_id: remoteThreadId,
-              role: message.message.role,
-              attachments: message.message.attachments,
-              content: message.message.content,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to create thread: ${response.statusText}`);
-          }
-        } catch (error) {
-          console.error("Error creating thread:", error);
-          throw error;
-        }
-      },
-    }),
-    [remoteId],
-  );
-  const adapters = useMemo(() => ({ history }), [history]);
-  return (
-    <RuntimeAdapterProvider adapters={adapters}>
-      {children}
-    </RuntimeAdapterProvider>
-  );
-};
-
 export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   const { localRuntimeOptions, otherOptions } =
     splitLocalRuntimeOptions(options);
 
+  // load chat options
+  const { model, enable_thinking, enable_search, mcp_ids, kb_ids } = useChatOptions();
+
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
       return useLocalThreadRuntime(
-        new MyModelAdapter(otherOptions),
+        new MyModelAdapter({...otherOptions, body: { model, enable_thinking, enable_search, mcp_ids, kb_ids }}),
         localRuntimeOptions,
       );
     },
@@ -469,3 +366,19 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   });
   return runtime;
 };
+
+
+export function MyChatRuntimeProvider({ children }: { children: ReactNode }) {
+  const runtime = usePaiChatThreadRuntime({
+    api: '/v1/chat/completions',
+    adapters: {
+      attachments: new UploadAttachmentAdapter(),
+    },
+  });
+  
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      {children}
+    </AssistantRuntimeProvider>
+  )
+}

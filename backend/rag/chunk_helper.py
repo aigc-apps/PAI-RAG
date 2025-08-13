@@ -191,3 +191,22 @@ async def get_kb_chunk_ids(
 
     logger.info(f"[FileHelper] get {len(chunk_ids)} chunk ids for kb {kb_id} and file {file_id}")
     return chunk_ids
+
+
+@with_async_db_session
+async def get_file_id_source_map(
+    session: AsyncSession,
+    kb_id: str,
+    file_ids: List[str],
+):
+    file_source_results = (await session.exec(
+        select( KbFileEntity.id, KbFileEntity.file_source ).where(
+            KbFileEntity.kb_id == kb_id,
+            KbFileEntity.id.in_(file_ids),
+        )
+    )).all()
+    logger.info(f"Get file_source_results: {file_source_results}")
+    return {
+        file_id: file_source
+        for file_id, file_source in file_source_results
+    }

@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
-import React, { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import * as Toast from "@radix-ui/react-toast";
-import { EyeIcon, EyeOffIcon } from "lucide-react"; // 示例图标库
+import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import * as Toast from '@radix-ui/react-toast';
+import { EyeIcon, EyeOffIcon } from 'lucide-react'; // 示例图标库
 
 export default function SearchConfig() {
   const [aliyunHasKey, setAliyunHasKey] = useState(false); // AccessKey ID
-  const [aliyunAK, setAliyunAK] = useState(""); // AccessKey ID
-  const [aliyunSK, setAliyunSK] = useState(""); // AccessKey Secret
+  const [aliyunAK, setAliyunAK] = useState(''); // AccessKey ID
+  const [aliyunSK, setAliyunSK] = useState(''); // AccessKey Secret
   const [isLoading, setIsLoading] = useState(false); // 加载状态
-  const [error, setError] = useState(""); // 错误提示
+  const [error, setError] = useState(''); // 错误提示
   const [showAK, setShowAK] = useState(false); // 是否显示 AK
   const [showSK, setShowSK] = useState(false); // 是否显示 SK
   const [toastState, setToastState] = useState({
     open: false,
-    title: "",
-    description: "",
-    variant: "default" as "default" | "destructive",
+    title: '',
+    description: '',
+    variant: 'default' as 'default' | 'destructive',
   });
 
   // 初始化加载配置
@@ -27,28 +27,26 @@ export default function SearchConfig() {
     const fetchConfig = async () => {
       try {
         setIsLoading(true);
-        setError("");
+        setError('');
 
-        const API_BASE =
-          process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-        const res = await fetch(`${API_BASE}/v1/config/websearch`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/v1/config/websearch', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
         });
 
-        if (!res.ok) throw new Error("加载配置失败");
+        if (!res.ok) throw new Error('加载配置失败');
 
         const data = await res.json();
         setAliyunHasKey(data.length > 0);
-        setAliyunAK(data[0]?.encrypted_access_key_id || "");
-        setAliyunSK(data[0]?.encrypted_access_key_secret || "");
+        setAliyunAK(data[0]?.encrypted_access_key_id || '');
+        setAliyunSK(data[0]?.encrypted_access_key_secret || '');
       } catch (err: any) {
-        setError(err.message || "加载失败");
+        setError(err.message || '加载失败');
         setToastState({
           open: true,
-          title: "配置加载失败",
-          description: err.message || "请检查网络或重试",
-          variant: "destructive",
+          title: '配置加载失败',
+          description: err.message || '请检查网络或重试',
+          variant: 'destructive',
         });
       } finally {
         setIsLoading(false);
@@ -60,45 +58,43 @@ export default function SearchConfig() {
   // 保存配置
   const handleSave = async () => {
     if (!aliyunAK || !aliyunSK) {
-      setError("AccessKey ID 和 Secret 不能为空");
+      setError('AccessKey ID 和 Secret 不能为空');
       return;
     }
     try {
       setIsLoading(true);
-      setError("");
+      setError('');
 
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-      var update_ak = aliyunAK === "******" ? "" : aliyunAK;
-      var update_sk = aliyunSK === "******" ? "" : aliyunSK;
+      const update_ak = aliyunAK === '******' ? '' : aliyunAK;
+      const update_sk = aliyunSK === '******' ? '' : aliyunSK;
 
-      const res = await fetch(`${API_BASE}/v1/config/websearch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/v1/config/websearch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
 
         body: JSON.stringify({
           access_key_id: update_ak,
           access_key_secret: update_sk,
-          type: "aliyun",
-          endpoint: "iqs.cn-zhangjiakou.aliyuncs.com",
+          type: 'aliyun',
+          endpoint: 'iqs.cn-zhangjiakou.aliyuncs.com',
         }),
       });
 
-      if (!res.ok) throw new Error("保存失败，请检查网络或配置");
+      if (!res.ok) throw new Error('保存失败，请检查网络或配置');
 
       setToastState({
         open: true,
-        title: "阿里云搜索配置已成功保存",
-        description: "阿里云搜索配置已成功保存",
-        variant: "default",
+        title: '阿里云搜索配置已成功保存',
+        description: '阿里云搜索配置已成功保存',
+        variant: 'default',
       });
     } catch (err: any) {
-      setError(err.message || "保存失败，请重试");
+      setError(err.message || '保存失败，请重试');
       setToastState({
         open: true,
-        title: "阿里云搜索配置保存失败",
-        description: err.message || "请检查网络或重试",
-        variant: "destructive",
+        title: '阿里云搜索配置保存失败',
+        description: err.message || '请检查网络或重试',
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -108,7 +104,9 @@ export default function SearchConfig() {
   return (
     <div id="search">
       <div
-        className={`transition-colors rounded-lg p-4 overflow-hidden duration-200`}
+        className={
+          'transition-colors rounded-lg p-4 overflow-hidden duration-200'
+        }
       >
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           <h2 className="text-2xl font-bold text-gray-800">阿里云搜索配置</h2>
@@ -120,7 +118,7 @@ export default function SearchConfig() {
               <div className="col-span-3 flex items-center">
                 <Input
                   id="aliyun_ak"
-                  defaultValue={aliyunHasKey ? "******" : ""}
+                  defaultValue={aliyunHasKey ? '******' : ''}
                   type="password" // 动态切换类型
                   onChange={(e) => setAliyunAK(e.target.value)}
                   placeholder="输入 AccessKey ID"
@@ -135,7 +133,7 @@ export default function SearchConfig() {
               <div className="col-span-3 flex items-center">
                 <Input
                   id="aliyun_sk"
-                  defaultValue={aliyunHasKey ? "******" : ""}
+                  defaultValue={aliyunHasKey ? '******' : ''}
                   type="password" // 动态切换类型
                   onChange={(e) => setAliyunSK(e.target.value)}
                   placeholder="输入 AccessKey Secret"
@@ -149,7 +147,7 @@ export default function SearchConfig() {
             disabled={isLoading}
             className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
           >
-            {isLoading ? "保存中..." : "保存搜索配置"}
+            {isLoading ? '保存中...' : '保存搜索配置'}
           </Button>
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>
@@ -157,9 +155,9 @@ export default function SearchConfig() {
           open={toastState.open}
           onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
           className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-            toastState.variant === "destructive"
-              ? "border-red-500 bg-red-50 text-red-900"
-              : "border-gray-200 bg-white text-gray-900"
+            toastState.variant === 'destructive'
+              ? 'border-red-500 bg-red-50 text-red-900'
+              : 'border-gray-200 bg-white text-gray-900'
           }`}
         >
           <Toast.Description className="pl-4 text-sm font-medium">

@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
+import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 export function MarkdownViewer({ file_url }: { file_url: string }) {
-  const [markdown, setMarkdown] = useState("");
+  const [markdown, setMarkdown] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetch(file_url)
       .then((response) => {
-        if (!response.ok) throw new Error("文件加载失败");
+        if (!response.ok) throw new Error('文件加载失败');
         return response.text();
       })
       .then((text) => {

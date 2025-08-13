@@ -1,5 +1,5 @@
 // LLMModelDialog.tsx
-import { useState, useEffect, FC } from "react";
+import { useState, useEffect, FC } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,13 +7,13 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Alert, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon } from "lucide-react";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { AlertCircleIcon } from 'lucide-react';
 
 // 定义组件 props
 interface LLMModelDialogProps {
@@ -46,39 +46,35 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
 }) => {
   const [llm, setLlm] = useState<LlmConfig>(llmConfig);
   const [error, setError] = useState<string | null>(null);
-  const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
 
   useEffect(() => {
     setLlm(llmConfig);
   }, [isAdd, llmConfig]);
 
   useEffect(() => {
-    setSaveErrorMsg("");
+    setSaveErrorMsg('');
   }, [llm]);
 
   const handleSubmit = async () => {
-    setSaveErrorMsg("");
+    setSaveErrorMsg('');
     if (
       !llm.model ||
       (isAdd && !llm.api_key) ||
       !llm.base_url ||
       !llm.model_id
     ) {
-      setSaveErrorMsg("请必须填写完整的模型信息");
+      setSaveErrorMsg('请必须填写完整的模型信息');
       return;
     }
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
-    const submit_url = isAdd
-      ? `${API_BASE}/v1/config/llms`
-      : `${API_BASE}/v1/config/llms/${llm.id}`;
-    const updateMethod = isAdd ? "POST" : "PATCH";
-    if (llm.api_key === "******") llm.api_key = "";
-    console.log("updateMethod", isAdd, updateMethod, submit_url, llm);
+    const submit_url = isAdd ? '/v1/config/llms' : `/v1/config/llms/${llm.id}`;
+    const updateMethod = isAdd ? 'POST' : 'PATCH';
+    if (llm.api_key === '******') llm.api_key = '';
+    console.log('updateMethod', isAdd, updateMethod, submit_url, llm);
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(llm),
       });
 
@@ -91,7 +87,6 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
       setIsOpen(false);
     } catch (err: any) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
-    } finally {
     }
   };
 
@@ -100,7 +95,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
     setIsOpen(open);
     if (!open) {
       setError(null);
-      setSaveErrorMsg("");
+      setSaveErrorMsg('');
     }
   };
 
@@ -109,7 +104,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
       <DialogContent className="sm:max-w-[700px]">
         {error && <div className="text-red-500 mb-4">{error}</div>}
         <DialogHeader>
-          <DialogTitle>{isAdd ? "添加模型" : "编辑模型"}</DialogTitle>
+          <DialogTitle>{isAdd ? '添加模型' : '编辑模型'}</DialogTitle>
           <DialogDescription>填写模型配置信息后，点击保存。</DialogDescription>
         </DialogHeader>
 
@@ -122,7 +117,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
             <Input
               id="model_id"
               placeholder="model_id"
-              value={llm?.model_id ?? ""}
+              value={llm?.model_id ?? ''}
               onChange={(e) =>
                 setLlm((prev) => ({ ...prev, model_id: e.target.value }))
               }
@@ -141,7 +136,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                 id="base_url"
                 list="base_url_options"
                 placeholder="输入或选择模型base_url"
-                value={llm?.base_url ?? ""}
+                value={llm?.base_url ?? ''}
                 onChange={(e) =>
                   setLlm((prev) => ({ ...prev, base_url: e.target.value }))
                 }
@@ -166,7 +161,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={llm?.api_key ?? ""}
+                value={llm?.api_key ?? ''}
                 onChange={(e) =>
                   setLlm((prev) => ({ ...prev, api_key: e.target.value }))
                 }
@@ -177,7 +172,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={llm?.api_key || "******"}
+                value={llm?.api_key || '******'}
                 onChange={(e) =>
                   setLlm((prev) => ({ ...prev, api_key: e.target.value }))
                 }
@@ -195,7 +190,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
             <Input
               id="model"
               placeholder="model"
-              value={llm?.model ?? ""}
+              value={llm?.model ?? ''}
               onChange={(e) =>
                 setLlm((prev) => ({ ...prev, model: e.target.value }))
               }
@@ -219,13 +214,13 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
         </div>
 
         <DialogFooter className="flex flex-col gap-4">
-          {saveErrorMsg !== "" && (
+          {saveErrorMsg !== '' && (
             <Alert className="bg-destructive/10 dark:bg-destructive/20 border-none">
               <AlertCircleIcon className="h-4 w-4 !text-destructive" />
               <AlertTitle>{saveErrorMsg}</AlertTitle>
             </Alert>
           )}
-          <Button onClick={handleSubmit}>{isAdd ? "新增" : "保存"}</Button>
+          <Button onClick={handleSubmit}>{isAdd ? '新增' : '保存'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

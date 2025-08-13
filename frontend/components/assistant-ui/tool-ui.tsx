@@ -1,10 +1,10 @@
-"use client";
-import { GlobeIcon } from "@radix-ui/react-icons";
-import type { FC } from "react";
-import { makeAssistantToolUI } from "@assistant-ui/react";
-import React, { useState, useEffect } from "react";
-import { CarIcon, Search, FileSearch, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+'use client';
+import { GlobeIcon } from '@radix-ui/react-icons';
+import type { FC } from 'react';
+import { makeAssistantToolUI } from '@assistant-ui/react';
+import React, { useState, useEffect } from 'react';
+import { CarIcon, Search, FileSearch, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Sheet,
   SheetContent,
@@ -30,7 +30,7 @@ const JsonCodeBlock = ({
   return (
     <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-2 rounded-md font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
       <code className="language-json whitespace-pre-wrap break-words">
-        {jsonString ?? ""}
+        {jsonString ?? ''}
       </code>
     </pre>
   );
@@ -53,20 +53,20 @@ export type MapsGeoAddressInfo = {
 
 type RawResult = {
   content: Array<{
-    type: "text";
+    type: 'text';
     text: string;
   }>;
   isError: boolean;
 };
 function parseGeoResult(result: RawResult): MapsGeoAddressInfo[] | null {
   if (!result || result.isError) {
-    console.error("接口返回错误或为空");
+    console.error('接口返回错误或为空');
     return null;
   }
 
-  const textContent = result.content.find((item) => item.type === "text");
+  const textContent = result.content.find((item) => item.type === 'text');
   if (!textContent) {
-    console.warn("未找到文本类型的内容");
+    console.warn('未找到文本类型的内容');
     return null;
   }
 
@@ -84,24 +84,24 @@ function parseGeoResult(result: RawResult): MapsGeoAddressInfo[] | null {
       adcode: addr.adcode,
     }));
   } catch (e) {
-    console.error("JSON 解析失败", e);
+    console.error('JSON 解析失败', e);
     return null;
   }
 }
 
 export const MapsGeoToolUI = makeAssistantToolUI<MapsGeoArgs, RawResult>({
-  toolName: "maps_geo",
+  toolName: 'maps_geo',
   render: ({ args, status, result }) => {
     if (!result) {
       return null;
     }
     const addresses = parseGeoResult(result);
 
-    console.log("MapsGeoToolUI 参数:", args);
-    console.log("MapsGeoToolUI 状态:", status);
-    console.log("MapsGeoToolUI 结果:", addresses);
+    console.log('MapsGeoToolUI 参数:', args);
+    console.log('MapsGeoToolUI 状态:', status);
+    console.log('MapsGeoToolUI 结果:', addresses);
 
-    if (status.type == "running") {
+    if (status.type == 'running') {
       return (
         <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
           <GlobeIcon className="h-4 w-4 animate-pulse" />
@@ -169,13 +169,13 @@ export type RouteResult = {
 
 function parseRouteResult(result: RawResult | undefined): RouteResult | null {
   if (!result || result.isError) {
-    console.error("接口返回错误或为空");
+    console.error('接口返回错误或为空');
     return null;
   }
 
-  const textContent = result.content.find((item) => item.type === "text");
+  const textContent = result.content.find((item) => item.type === 'text');
   if (!textContent) {
-    console.warn("未找到文本类型的内容");
+    console.warn('未找到文本类型的内容');
     return null;
   }
 
@@ -199,7 +199,7 @@ function parseRouteResult(result: RawResult | undefined): RouteResult | null {
       })),
     };
   } catch (e) {
-    console.error("JSON 解析失败", e);
+    console.error('JSON 解析失败', e);
     return null;
   }
 }
@@ -208,7 +208,7 @@ export const MapsDirectionDrivingToolUI = makeAssistantToolUI<
   MapsDirectionDrivingArgs,
   RawResult
 >({
-  toolName: "maps_direction_driving",
+  toolName: 'maps_direction_driving',
   render: ({ args, status, result }) => {
     if (!result) {
       return null;
@@ -219,7 +219,7 @@ export const MapsDirectionDrivingToolUI = makeAssistantToolUI<
       setRoute(parsed);
     }, [result]);
 
-    if (status.type == "running") {
+    if (status.type == 'running') {
       return (
         <div className="flex items-center gap-2 text-sm font-medium text-gray-500">
           <GlobeIcon className="h-4 w-4 animate-pulse" />
@@ -252,11 +252,11 @@ export const MapsDirectionDrivingToolUI = makeAssistantToolUI<
           <strong>到：</strong> {args.destination}（{route.destination}）
         </div>
         <div className="mb-2 text-green-600">
-          <strong>总距离：</strong> {(firstPath.distance / 1000).toFixed(2)}{" "}
+          <strong>总距离：</strong> {(firstPath.distance / 1000).toFixed(2)}{' '}
           千米
         </div>
         <div className="mb-2 text-purple-600">
-          <strong>预计耗时：</strong> {(firstPath.duration / 60).toFixed(0)}{" "}
+          <strong>预计耗时：</strong> {(firstPath.duration / 60).toFixed(0)}{' '}
           分钟
         </div>
 
@@ -300,23 +300,23 @@ type SearchWebResult = {
 };
 
 export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
-  toolName: "search-web",
+  toolName: 'search-web',
   render: ({ args, status, result }) => {
-    console.log("SearchWebToolUI 参数:", args);
-    console.log("SearchWebToolUI 状态:", status);
+    console.log('SearchWebToolUI 参数:', args);
+    console.log('SearchWebToolUI 状态:', status);
 
-    if (status.type === "running") {
+    if (status.type === 'running') {
       return (
         <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
           <Button
             variant="link"
             className="flex items-center gap-2 px-4 text-blue-800"
           >
-            <Search className="size-4" /> 正在搜索网页中: {args.query}{" "}
+            <Search className="size-4" /> 正在搜索网页中: {args.query}{' '}
           </Button>
         </div>
       );
-    } else if (status.type === "complete") {
+    } else if (status.type === 'complete') {
       if (!result) {
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500">
@@ -334,9 +334,9 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
                 variant="link"
                 className="flex items-center gap-2 px-4 text-blue-800"
               >
-                {" "}
-                <Search className="size-4" /> 完成网页搜索: {args.query}{" "}
-                (点击查看结果){" "}
+                {' '}
+                <Search className="size-4" /> 完成网页搜索: {args.query}{' '}
+                (点击查看结果){' '}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
@@ -358,18 +358,18 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
                         <div className="flex items-center gap-1">
                           <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
                             <img
-                              src={item.metadata["host_logo"]}
-                              alt={item.metadata["host_name"]}
+                              src={item.metadata['host_logo']}
+                              alt={item.metadata['host_name']}
                               className="w-5 h-5 object-cover rounded-sm"
                             />
                           </div>
 
                           {/* 标题链接 */}
                           <a
-                            href={item.metadata["file_url"]}
+                            href={item.metadata['file_url']}
                             className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
                           >
-                            {item.metadata["file_name"]}
+                            {item.metadata['file_name']}
                           </a>
                         </div>
 
@@ -404,12 +404,12 @@ type ThinkResult = {
 };
 
 export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
-  toolName: "think-and-planning",
+  toolName: 'think-and-planning',
   render: ({ args, status, result }) => {
-    console.log("think args:", args);
-    console.log("think status:", status);
-    console.log("think result:", result);
-    if (status.type === "running") {
+    console.log('think args:', args);
+    console.log('think status:', status);
+    console.log('think result:', result);
+    if (status.type === 'running') {
       return (
         <div
           className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
@@ -437,7 +437,7 @@ export const ThinkToolUI = makeAssistantToolUI<ThinkArgs, ThinkResult>({
           </div>
         </div>
       );
-    } else if (status.type === "complete") {
+    } else if (status.type === 'complete') {
       return (
         <div
           className="thinking-box rounded-md p-4 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors"
@@ -480,9 +480,9 @@ export type ReadFileToolArgs = {
 };
 
 export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
-  toolName: "read-file",
+  toolName: 'read-file',
   render: ({ args, status, result }) => {
-    if (status.type === "running") {
+    if (status.type === 'running') {
       return (
         <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
           <Button
@@ -493,14 +493,14 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
           </Button>
         </div>
       );
-    } else if (status.type === "complete") {
+    } else if (status.type === 'complete') {
       if (!result) {
         return null;
       }
 
       const parsedResult = JSON.parse(result);
-      console.log("ReadFileToolUI 结果:", parsedResult);
-      console.log("ReadFileToolUI 参数:", args);
+      console.log('ReadFileToolUI 结果:', parsedResult);
+      console.log('ReadFileToolUI 参数:', args);
 
       return (
         <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
@@ -524,7 +524,7 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
                   <p className="font-semibold">文件读取结果:</p>
                   <JsonCodeBlock
                     jsonString={
-                      typeof parsedResult === "string"
+                      typeof parsedResult === 'string'
                         ? parsedResult
                         : JSON.stringify(parsedResult, null, 2)
                     }
@@ -549,11 +549,11 @@ export const SearchFileToollUI = makeAssistantToolUI<
   SearchFileToolArgs,
   string
 >({
-  toolName: "search-file",
+  toolName: 'search-file',
   render: ({ args, status, result }) => {
-    console.log("SearchFileToollUI 参数:", args);
+    console.log('SearchFileToollUI 参数:', args);
 
-    if (status.type === "running") {
+    if (status.type === 'running') {
       return (
         <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
           <Button
@@ -564,12 +564,12 @@ export const SearchFileToollUI = makeAssistantToolUI<
           </Button>
         </div>
       );
-    } else if (status.type === "complete") {
+    } else if (status.type === 'complete') {
       if (!result) {
         return null;
       }
       const parsedResult = JSON.parse(result);
-      console.log("SearchFileToollUI 结果:", parsedResult);
+      console.log('SearchFileToollUI 结果:', parsedResult);
 
       return (
         <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
@@ -593,7 +593,7 @@ export const SearchFileToollUI = makeAssistantToolUI<
                   <p className="font-semibold">文件搜索结果:</p>
                   <JsonCodeBlock
                     jsonString={
-                      typeof parsedResult === "string"
+                      typeof parsedResult === 'string'
                         ? parsedResult
                         : JSON.stringify(parsedResult, null, 2)
                     }

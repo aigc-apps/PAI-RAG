@@ -1,5 +1,5 @@
 // EmbeddingModelDialog.tsx
-import { useState, useEffect, FC } from "react";
+import { useState, useEffect, FC } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,14 +7,14 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Alert, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { AlertCircleIcon } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +24,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 
 // 定义组件 props
 interface EmbeddingModelDialogProps {
@@ -58,19 +58,19 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
 }) => {
   const [emb, setEmb] = useState<EmbConfig>(embConfig);
   const [error, setError] = useState<string | null>(null);
-  const [saveErrorMsg, setSaveErrorMsg] = useState(""); // 保存错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
 
   useEffect(() => {
     setEmb(embConfig);
   }, [isAdd, embConfig]);
 
   useEffect(() => {
-    setSaveErrorMsg("");
+    setSaveErrorMsg('');
   }, [emb]);
 
   const handleSubmit = async () => {
-    setSaveErrorMsg("");
-    const is_api_model = emb.type != "local";
+    setSaveErrorMsg('');
+    const is_api_model = emb.type != 'local';
     if (
       is_api_model &&
       (!emb.model_id ||
@@ -79,27 +79,25 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         !emb.model_name ||
         !emb.type)
     ) {
-      setSaveErrorMsg("请必须填写完整的模型信息");
+      setSaveErrorMsg('请必须填写完整的模型信息');
       return;
     } else if (
       !is_api_model &&
       (!emb.model_id || !emb.model_name || !emb.dimension || !emb.type)
     ) {
-      setSaveErrorMsg("请必须填写完整的模型信息");
+      setSaveErrorMsg('请必须填写完整的模型信息');
       return;
     }
-    const API_BASE =
-      process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8688";
     const submit_url = isAdd
-      ? `${API_BASE}/v1/config/embeddings`
-      : `${API_BASE}/v1/config/embeddings/${emb.id}`;
-    const updateMethod = isAdd ? "POST" : "PATCH";
-    if (emb.api_key === "******") emb.api_key = "";
-    console.log("updateMethod", isAdd, updateMethod, submit_url, emb);
+      ? '/v1/config/embeddings'
+      : `/v1/config/embeddings/${emb.id}`;
+    const updateMethod = isAdd ? 'POST' : 'PATCH';
+    if (emb.api_key === '******') emb.api_key = '';
+    console.log('updateMethod', isAdd, updateMethod, submit_url, emb);
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(emb),
       });
 
@@ -110,9 +108,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       const jsondata = await res.json();
       onSaveSuccess(jsondata.data as EmbConfig); // 触发回调
       setIsOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
-    } finally {
     }
   };
 
@@ -121,7 +118,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     setIsOpen(open);
     if (!open) {
       setError(null);
-      setSaveErrorMsg("");
+      setSaveErrorMsg('');
     }
   };
 
@@ -136,7 +133,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       <DialogContent className="sm:max-w-[700px]">
         {error && <div className="text-red-500 mb-4">{error}</div>}
         <DialogHeader>
-          <DialogTitle>{isAdd ? "添加模型" : "编辑模型"}</DialogTitle>
+          <DialogTitle>{isAdd ? '添加模型' : '编辑模型'}</DialogTitle>
           <DialogDescription>填写模型配置信息后，点击保存。</DialogDescription>
         </DialogHeader>
 
@@ -149,7 +146,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             <Input
               id="model_id"
               placeholder="model_id"
-              value={emb?.model_id ?? ""}
+              value={emb?.model_id ?? ''}
               onChange={(e) =>
                 setEmb((prev) => ({ ...prev, model_id: e.target.value }))
               }
@@ -157,7 +154,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             />
           </div>
         </div>
-        {emb?.type === "openai_like" && (
+        {emb?.type === 'openai_like' && (
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="endpoint" className="text-right">
               Endpoint URL
@@ -168,7 +165,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 id="endpoint"
                 list="endpoint_options"
                 placeholder="输入或选择模型endpoint"
-                value={emb?.endpoint ?? ""}
+                value={emb?.endpoint ?? ''}
                 onChange={(e) =>
                   setEmb((prev) => ({ ...prev, endpoint: e.target.value }))
                 }
@@ -184,7 +181,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             </div>
           </div>
         )}
-        {emb?.type === "openai_like" && (
+        {emb?.type === 'openai_like' && (
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="api_key" className="text-right">
               API Key
@@ -195,7 +192,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={emb?.api_key ?? ""}
+                value={emb?.api_key ?? ''}
                 onChange={(e) =>
                   setEmb((prev) => ({ ...prev, api_key: e.target.value }))
                 }
@@ -206,7 +203,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 id="api_key"
                 type="password"
                 placeholder="api_key"
-                value={emb?.api_key || "******"}
+                value={emb?.api_key || '******'}
                 onChange={(e) =>
                   setEmb((prev) => ({ ...prev, api_key: e.target.value }))
                 }
@@ -224,7 +221,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             <Input
               id="model_name"
               placeholder="model_name"
-              value={emb?.model_name ?? ""}
+              value={emb?.model_name ?? ''}
               onChange={(e) =>
                 setEmb((prev) => ({ ...prev, model_name: e.target.value }))
               }
@@ -264,7 +261,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 id="dimension"
                 type="number"
                 placeholder="向量维度"
-                defaultValue={emb?.dimension || "null"}
+                defaultValue={emb?.dimension || 'null'}
                 onChange={(e) =>
                   setEmb({
                     ...emb,
@@ -284,7 +281,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               id="embed_batch_size"
               type="number"
               placeholder="向量Batch大小"
-              defaultValue={emb?.embed_batch_size || "null"}
+              defaultValue={emb?.embed_batch_size || 'null'}
               onChange={(e) =>
                 setEmb({
                   ...emb,
@@ -319,8 +316,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <AlertDialogTitle>确认更改默认向量模型？</AlertDialogTitle>
               <AlertDialogDescription>
                 {pendingState
-                  ? "将此模型设为默认后，之前上传的附件都将被清空。"
-                  : "取消设为默认后，必须重新指定一个新的默认向量模型。"}
+                  ? '将此模型设为默认后，之前上传的附件都将被清空。'
+                  : '取消设为默认后，必须重新指定一个新的默认向量模型。'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -329,7 +326,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 onClick={() => {
                   setEmb({
                     ...emb,
-                    is_default: pendingState,
+                    is_default: pendingState || false,
                   });
                   setIsDialogOpen(false);
                 }}
@@ -341,13 +338,13 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         </AlertDialog>
 
         <DialogFooter className="flex flex-col gap-4">
-          {saveErrorMsg !== "" && (
+          {saveErrorMsg !== '' && (
             <Alert className="bg-destructive/10 dark:bg-destructive/20 border-none">
               <AlertCircleIcon className="h-4 w-4 !text-destructive" />
               <AlertTitle>{saveErrorMsg}</AlertTitle>
             </Alert>
           )}
-          <Button onClick={handleSubmit}>{isAdd ? "新增" : "保存"}</Button>
+          <Button onClick={handleSubmit}>{isAdd ? '新增' : '保存'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
