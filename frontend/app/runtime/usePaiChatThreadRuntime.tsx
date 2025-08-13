@@ -122,6 +122,7 @@ export class MyModelAdapter implements ChatModelAdapter {
     const reader = result.body.getReader();
     const decoder = new TextDecoder();
     let content = "";
+    let reasoning_content = "";
     // let toolCalls: { [key: string]: any } = {};
     let buffer = "";
 
@@ -136,7 +137,7 @@ export class MyModelAdapter implements ChatModelAdapter {
     } = {};
 
     const eventQueue: Array<{
-      type: "text" | "tool-call";
+      type: "text" | "tool-call" | "reasoning";
       data: any;
     }> = [];
 
@@ -152,6 +153,26 @@ export class MyModelAdapter implements ChatModelAdapter {
           const chunk = JSON.parse(line.slice(5));
           // 处理单条数据
           const delta = chunk.choices[0]?.delta;
+          if (delta.reasoning_completed) {
+            // 思考完成，清空 reasoning_content
+            reasoning_content = "";
+          }
+
+          if (delta?.role === "assistant" && delta?.reasoning_content) {
+            reasoning_content += delta.reasoning_content;
+            if (
+              eventQueue.length === 0 ||
+              eventQueue[eventQueue.length - 1].type !== "reasoning"
+            ) {
+              eventQueue.push({
+                type: "reasoning",
+                data: reasoning_content,
+              });
+            } else {
+              // 更新最后一条思考内容
+              eventQueue[eventQueue.length - 1].data = reasoning_content;
+            }
+          }
 
           if (delta?.role === "assistant" && delta?.content) {
             content += delta.content;
@@ -220,7 +241,12 @@ export class MyModelAdapter implements ChatModelAdapter {
           yield {
             content: eventQueue
               .map((event) => {
-                if (event.type === "text") {
+                if (event.type === "reasoning") {
+                  return {
+                    type: "reasoning" as const,
+                    text: event.data,
+                  };
+                } else if (event.type === "text") {
                   return {
                     type: "text" as const,
                     text: event.data,

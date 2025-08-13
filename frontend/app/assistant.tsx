@@ -93,7 +93,7 @@ export const Assistant = () => {
       model: llmConfig.model_id,
       mcp_ids: mcp_servers,
       enable_search: selectedOptions.includes("search"),
-      enable_agent: selectedOptions.includes("agent"),
+      enable_agent: selectedOptions.includes("planning"),
       kb_ids: kb_ids,
       streamn: true,
     };

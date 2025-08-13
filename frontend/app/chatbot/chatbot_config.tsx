@@ -55,6 +55,7 @@ const default_chat_config = {
   kb_ids: [],
   model_id: "",
   updated_at: "",
+  enable_agent: false,
 };
 
 // 知识库配置卡片

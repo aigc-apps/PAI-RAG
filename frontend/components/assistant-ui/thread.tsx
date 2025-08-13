@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+import { CollapsibleReasoning } from "@/components/assistant-ui/reasoning-ui";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 // import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { ToolFallback } from "@/components/ui/custom-tool-fallback";
@@ -504,7 +505,11 @@ const AssistantMessage: FC = () => {
       <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
         {/* <MessagePrimitive.Content components={{ Text: MarkdownText }} /> */}
         <MessagePrimitive.Content
-          components={{ tools: { Fallback: ToolFallback }, Text: MarkdownText }}
+          components={{
+            tools: { Fallback: ToolFallback },
+            Text: MarkdownText,
+            Reasoning: CollapsibleReasoning,
+          }}
         />
       </div>
 
