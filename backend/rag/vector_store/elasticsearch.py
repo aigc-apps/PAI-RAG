@@ -29,7 +29,7 @@ from llama_index.vector_stores.elasticsearch.utils import (
     get_user_agent,
     convert_es_hit_to_node,
 )
-from backend.rag.vector_store.elasticsearch_utils import get_elasticsearch_client
+from rag.vector_store.elasticsearch_utils import get_elasticsearch_client
 
 logger = getLogger(__name__)
 
