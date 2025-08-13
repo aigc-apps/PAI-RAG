@@ -1,55 +1,34 @@
-// htmlRenderer.tsx
 import parse, { Element, HTMLReactParserOptions } from "html-react-parser";
-import React from "react"; // 确保导入 React
+import React from "react";
 
-// --- 1. 通用的 isHtmlContent 函数 ---
-// 检查文本是否包含 <html> 标签（无论是作为开头还是嵌入其中）
-const isHtmlContent = (text: string) => {
+const isTableContent = (text: string) => {
   const trimmedText = text?.trim();
-  // 只要包含 <html> 就认为是包含 HTML 内容
-  return trimmedText?.includes("<html>");
+  return trimmedText?.includes("<table>");
 };
-
-// --- 2. 提取 <body> 内容的函数 (用于纯 HTML 文档) ---
-const extractBodyContent = (htmlString: string) => {
-  const bodyStart = htmlString.indexOf("<body");
-  const bodyEnd = htmlString.lastIndexOf("</body>");
-
-  if (bodyStart !== -1 && bodyEnd !== -1) {
-    const bodyOpenEnd = htmlString.indexOf(">", bodyStart);
-    if (bodyOpenEnd !== -1) {
-      return htmlString.substring(bodyOpenEnd + 1, bodyEnd).trim();
-    }
-  }
-  return htmlString; // Fallback
-};
-
-// --- 3. 提取所有 <html>...</html> 块的函数 (用于嵌入 HTML 的文本) ---
-const extractHtmlBlocks = (text: string): string[] => {
-  const htmlBlocks: string[] = [];
-  const prefix = "<html>";
-  const suffix = "</html>";
+const extractTableBlocks = (text: string): string[] => {
+  const tableBlocks: string[] = [];
+  const prefix = "<table";
+  const suffix = "</table>";
   let startIndex = 0;
 
   while (startIndex < text.length) {
     const blockStart = text.indexOf(prefix, startIndex);
-    if (blockStart === -1) break; // No more <html> found
+    if (blockStart === -1) break; // No more <table> found
 
     const blockEnd = text.indexOf(suffix, blockStart);
-    if (blockEnd === -1) break; // Unmatched <html>, stop processing
+    if (blockEnd === -1) break; // Unmatched <table>, stop processing
 
-    // Extract the full <html>...</html> block
-    const htmlBlock = text.substring(blockStart, blockEnd + suffix.length);
-    htmlBlocks.push(htmlBlock);
+    // Extract the full <table>...</table> block (包含 <table> 和 </table> 标签)
+    const tableBlock = text.substring(blockStart, blockEnd + suffix.length);
+    tableBlocks.push(tableBlock);
 
     // Move the search start index past the end of the current block
     startIndex = blockEnd + suffix.length;
   }
 
-  return htmlBlocks;
+  return tableBlocks;
 };
 
-// --- 4. 定义 HTMLReactParserOptions (为表格和单元格添加样式) ---
 const tableOptions: HTMLReactParserOptions = {
   replace(domNode) {
     // 处理 <table> 标签
@@ -91,59 +70,52 @@ const tableOptions: HTMLReactParserOptions = {
   },
 };
 
-// --- 5. 主要的 HTML 渲染函数 ---
 export const htmlRender = (text: string) => {
   const trimmedText = text.trim();
 
-  // 情况 1: chunk.text 本身就是一个完整的 HTML 文档
-  if (trimmedText.startsWith("<html>")) {
+  // Case 1: chunk.text 本身就是一个独立的 <table> 元素
+  // 检查是否以 <table 开头并以 </table> 结尾
+  if (
+    trimmedText.startsWith("<table") &&
+    trimmedText.endsWith("</table>") &&
+    trimmedText.indexOf("</table>") === trimmedText.lastIndexOf("</table>")
+  ) {
     try {
-      // 提取 <body> 内容并解析
-      const bodyContent = extractBodyContent(trimmedText);
-      return parse(bodyContent, tableOptions);
+      return parse(trimmedText, tableOptions);
     } catch (error) {
-      console.error("Error parsing standalone HTML document:", error);
-      // 如果解析失败，回退到显示原始文本
+      console.error("Error parsing standalone <table> element:", error);
       return <pre>{text}</pre>;
     }
   }
-  // 情况 2: chunk.text 是包含 HTML 块的文本
-  else if (isHtmlContent(text)) {
+  // Case 2: chunk.text 是包含一个或多个 <table> 块的文本
+  else if (isTableContent(text)) {
     try {
-      // 提取所有 <html>...</html> 块
-      const htmlBlocks = extractHtmlBlocks(text);
+      // 提取所有 <table>...</table> 块
+      const tableBlocks = extractTableBlocks(text);
 
-      if (htmlBlocks.length > 0) {
-        // 对每个 HTML 块提取 <body> 内容并解析，然后将结果组合起来
+      if (tableBlocks.length > 0) {
         return (
           <>
-            {/* 渲染 HTML 块之前的部分文本 */}
-            {text.substring(0, text.indexOf("<html>"))}
-            {/* 渲染每个解析后的 HTML 块 */}
-            {htmlBlocks.map((htmlBlock, index) => {
-              const bodyContent = extractBodyContent(htmlBlock);
-              // 使用 React Fragment 包裹，以防 parse 返回多个根元素
-              // key 用于 React 列表渲染
+            {text.substring(0, text.indexOf("<table"))}
+            {tableBlocks.map((tableBlock, index) => {
               return (
                 <React.Fragment key={index}>
-                  {parse(bodyContent, tableOptions)}
+                  {parse(tableBlock, tableOptions)}
                 </React.Fragment>
               );
             })}
-            {/* 渲染最后一个 HTML 块之后的部分文本 */}
-            {text.substring(text.lastIndexOf("</html>") + "</html>".length)}
+            {text.substring(text.lastIndexOf("</table>") + "</table>".length)}
           </>
         );
       } else {
         return text;
       }
     } catch (error) {
-      console.error("Error parsing embedded HTML blocks:", error);
-      // 如果解析嵌入的 HTML 失败，回退到显示原始文本
+      console.error("Error parsing embedded <table> blocks:", error);
       return <pre>{text}</pre>;
     }
   }
-  // 情况 3: 不包含 HTML，按普通文本渲染
+  // Case 3: 不包含 <table>，按普通文本渲染
   else {
     return text;
   }
