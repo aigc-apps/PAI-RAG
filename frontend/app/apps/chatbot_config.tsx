@@ -278,7 +278,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         />
       </div>
       <div className="flex gap-6">
-        <Label htmlFor="enable_search" className="w-[90px]">
+        <Label htmlFor="enable_agent" className="w-[90px]">
           Agentic模式
         </Label>
         <Switch

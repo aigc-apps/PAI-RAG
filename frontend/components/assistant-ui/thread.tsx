@@ -51,7 +51,7 @@ export const Thread: FC<{
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
   const [kbLoading, setKbLoading] = useState(false);
   const [kbError, setKbError] = useState<string | null>(null);
-  const {kb_ids, mcp_ids, enable_search, enable_thinking, updateEnableSearch, updateEnableThinking, updateKbIds, updateMcpIds} = useChatOptions();
+  const {kb_ids, mcp_ids, enable_search, enable_agent, updateEnableSearch, updateEnablePlanning, updateKbIds, updateMcpIds} = useChatOptions();
 
   // 获取MCP配置
   useEffect(() => {
@@ -116,8 +116,8 @@ export const Thread: FC<{
     if (enable_search) {
       newOptions.push('search');
     }
-    if (enable_thinking) {
-      newOptions.push('thinking');
+    if (enable_agent) {
+      newOptions.push('planning');
     }
     if (kb_ids.length > 0) {
       newOptions.push('kb');
@@ -133,7 +133,7 @@ export const Thread: FC<{
     value: string[]
   ) => {
     updateEnableSearch(value.includes('search'));
-    updateEnableThinking(value.includes('thinking'));
+    updateEnablePlanning(value.includes('planning'));
     setActiveTools(value);
   }
 
