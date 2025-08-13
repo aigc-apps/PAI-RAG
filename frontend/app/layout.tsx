@@ -30,6 +30,15 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
+      <head>
+        <title>PAI-RAG</title>
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="80x80"
+          href="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag_logo.png"
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

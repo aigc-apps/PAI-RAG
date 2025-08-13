@@ -38,17 +38,15 @@ export function AppSidebar() {
   return (
     <Sidebar side="left">
       <SidebarHeader>
-        <Link href='/'>
-          <div className="flex items-center space-x-2">
-            <Avatar>
-              <AvatarImage
-                src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag.png"
-                alt="@shadcn"
-              />
-            </Avatar>
-            <span className="text-lg font-medium">PAI-RAG</span>
-          </div>
-        </Link>
+        <div className="flex items-center space-x-2">
+          <Avatar>
+            <AvatarImage
+              src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag_logo.png"
+              alt="@shadcn"
+            />
+          </Avatar>
+          <span className="text-lg font-medium">PAI-RAG</span>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
