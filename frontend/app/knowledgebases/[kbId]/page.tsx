@@ -852,7 +852,7 @@ export default function KnowledgeBaseDetailPage(
                                 className="font-medium text-blue-600"
                                 onClick={() =>
                                   router.push(
-                                    `/knowledgebases/chunks/${kbId}__${file.id}`,
+                                    `/knowledgebases/${kbId}/files/${file.id}`,
                                   )
                                 }
                               >
@@ -953,7 +953,7 @@ export default function KnowledgeBaseDetailPage(
                                 className="text-sm text-blue-600"
                                 onClick={() =>
                                   router.push(
-                                    `/knowledgebases/chunks/${kbId}__${file.id}`,
+                                    `/knowledgebases/${kbId}/files/${file.id}`,
                                   )
                                 }
                               >

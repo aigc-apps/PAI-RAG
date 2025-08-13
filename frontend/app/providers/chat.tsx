@@ -5,11 +5,13 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 
 interface ChatOptions {
+  model: string;
   enable_thinking: boolean;
   enable_search: boolean;
   mcp_ids: string[];           // mcp列表
   kb_ids: string[];            // 知识库列表
 
+  updateModel: (model: string) => void;
   updateEnableThinking: (thinking: boolean) => void;
   updateEnableSearch: (search: boolean) => void;
   updateMcpIds: (mcp_ids: string[]) => void;
@@ -19,10 +21,15 @@ interface ChatOptions {
 const ChatContext = createContext<ChatOptions | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const [model, setModel] = useState('');
   const [enableThinking, setEnableThinking] = useState(false);
   const [enableSearch, setEnableSearch] = useState(false);
   const [mcpIds, setMcpIds] = useState<string[]>([]);
   const [kbIds, setKbIds] = useState<string[]>([]);
+
+  const updateModel = (model: string) => {
+    setModel(model);
+  }
 
   const updateEnableThinking = (thinking: boolean) => {
     setEnableThinking(thinking);
@@ -39,10 +46,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   return (
     <ChatContext.Provider value={{ 
+        model: model,
         enable_thinking: enableThinking, 
         enable_search: enableSearch,
         mcp_ids: mcpIds,
         kb_ids: kbIds,
+        updateModel,
         updateEnableSearch,
         updateEnableThinking,
         updateMcpIds,

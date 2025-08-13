@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit } from 'lucide-react';
 import {
@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { PhotoProvider, PhotoView } from 'react-photo-view';
 import 'react-photo-view/dist/react-photo-view.css';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
@@ -96,8 +95,10 @@ const activeMap: Record<string, string> = {
   false: 'bg-red-100 text-red-800',
   true: 'bg-green-100 text-green-800',
 };
-export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: string) {
-  const [knowledgebase_id, file_id] = knowledgebase_file_id.split('__');
+export default function KnowledgeBaseFileChunksPage(  
+  { params } : { params: Promise<{ kbId: string, fileId: string }> }
+) {
+  const {kbId, fileId} = use(params);
   const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库详情
   const [knowledgebaseloading, setKnowledgeBaseLoading] = useState(true); // 知识库加载状态
   const [knowledgebaseerror, setKnowledgeBaseError] = useState(''); // 知识库错误信息
@@ -124,7 +125,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
     const fetchKbConfigs = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${knowledgebase_id}`,
+          `/v1/config/knowledgebases/${kbId}`,
         );
         if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
@@ -141,7 +142,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
     const fetchKbFile = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}`,
+          `/v1/config/knowledgebases/${kbId}/files/${fileId}`,
         );
         if (!res.ok) throw new Error('获取知识库文件失败');
         const json_data = await res.json();
@@ -159,7 +160,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
     const fetchKbFileChunks = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks?page=${page}&size=${chunksSizePerPage}`,
+          `/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取知识库文件切片列表失败');
         const json_data = await res.json();
@@ -176,7 +177,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
     fetchKbConfigs();
     fetchKbFile();
     fetchKbFileChunks();
-  }, [page, file_id, knowledgebase_id]);
+  }, [page, fileId, kbId]);
   if (!knowledgebase || !kbfile) {
     return <div className="p-6">加载中...</div>;
   }
@@ -188,7 +189,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
 
   const handleActivateToggle = async (chunk: KbFileChunk) => {
     chunk.active = !chunk.active;
-    const url = `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${chunk.id}`;
+    const url = `/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
 
     const res = await fetch(url, {
       method: 'PATCH',
@@ -211,7 +212,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
   const handleSaveEdit = async () => {
     if (!selectedChunk) return;
     selectedChunk.text = editText;
-    const url = `/v1/config/knowledgebases/${knowledgebase_id}/files/${file_id}/chunks/${selectedChunk.id}`;
+    const url = `/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks/${selectedChunk.id}`;
 
     try {
       const response = await fetch(url, {
@@ -262,7 +263,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
                       className="px-0"
                       onClick={() =>
                         router.push(
-                          `/knowledgebases/view/${knowledgebase.id}`,
+                          `/knowledgebases/${knowledgebase.id}`,
                         )
                       }
                     >
@@ -282,7 +283,7 @@ export default function KnowledgeBaseFileChunksPage(knowledgebase_file_id: strin
               variant="outline"
               className="h-8 w-8"
               onClick={() =>
-                router.push(`/knowledgebases/view/${knowledgebase.id}`)
+                router.push(`/knowledgebases/${knowledgebase.id}`)
               }
             >
               <ArrowLeft />

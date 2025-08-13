@@ -8,15 +8,7 @@ import { Button } from '@/components/ui/button';
 import { McpConfig } from '@/app/config/mcp/mcp';
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
-
-interface McpModalProps {
-  mcpConfigs: McpEntry[];
-  isOpen: boolean;
-  onSave: (configs: McpEntry[]) => void;
-  onClose: () => void;
-  isLoading: boolean;
-  error: string | null;
-}
+import { useChatOptions } from '@/app/providers/chat';
 
 export class McpEntry extends McpConfig {
   active: boolean = false;
@@ -34,6 +26,16 @@ export class McpEntry extends McpConfig {
   }
 }
 
+interface McpModalProps {
+  mcpConfigs: McpEntry[];
+  isOpen: boolean;
+  onSave: (configs: McpEntry[]) => void;
+  onClose: () => void;
+  isLoading: boolean;
+  error: string | null;
+}
+
+
 export const McpModal: FC<McpModalProps> = ({
   mcpConfigs,
   isOpen,
@@ -43,6 +45,7 @@ export const McpModal: FC<McpModalProps> = ({
   error,
 }) => {
   const [configs, setConfigs] = useState<McpEntry[]>([]);
+  const {mcp_ids, updateMcpIds} = useChatOptions();
 
   useEffect(() => {
     if (mcpConfigs.length > 0) {

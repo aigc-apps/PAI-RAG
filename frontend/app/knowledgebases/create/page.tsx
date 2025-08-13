@@ -43,7 +43,7 @@ export default function KnowledgeBaseCreatePage() {
   const handleCreateSuccess = (kbConfig: KbConfig) => {
     console.log('创建知识库成功', kbConfig);
     setCreateErrorMsg('');
-    router.push(`/knowledgebases/view/${kbConfig.id}`);
+    router.push(`/knowledgebases/${kbConfig.id}`);
   };
 
   const handleCancel = () => {

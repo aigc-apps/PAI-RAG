@@ -116,7 +116,7 @@ export default function KnowledgeBasePage() {
                   return; // 是交互元素，不触发卡片跳转
                 }
 
-                router.push(`/knowledgebases/view/${base.id}`);
+                router.push(`/knowledgebases/${base.id}`);
               }}
               key={base.id}
               className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300"

@@ -33,6 +33,7 @@ import {
 } from '@/components/assistant-ui/my_attachment';
 import { UserMessageAttachments } from '@/components/assistant-ui/my_attachment';
 import { KbModal, KbSelection } from '@/app/knowledgebases/kbmodal';
+import { useChatOptions } from '@/app/providers/chat';
 
 export const Thread: FC<{
   onToggleChange?: (options: string[]) => void;
@@ -49,6 +50,7 @@ export const Thread: FC<{
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
   const [kbLoading, setKbLoading] = useState(false);
   const [kbError, setKbError] = useState<string | null>(null);
+  const {kb_ids, mcp_ids, enable_search, enable_thinking, updateEnableSearch, updateEnableThinking, updateKbIds, updateMcpIds} = useChatOptions();
 
   // 获取MCP配置
   useEffect(() => {
@@ -67,7 +69,7 @@ export const Thread: FC<{
               cfg.url,
               cfg.type,
               cfg.enabled ?? true,
-              cfg.active ?? false,
+              mcp_ids.includes(cfg.id),
             ),
         );
         const enabledConfigs = configs.filter(
@@ -95,7 +97,8 @@ export const Thread: FC<{
               cfg.id,
               cfg.name,
               cfg.description,
-              cfg.active ?? false,
+              kb_ids.includes(cfg.id),
+              cfg.updated_at,
             ),
         );
         console.log('all kb configs: ', configs);
@@ -108,81 +111,69 @@ export const Thread: FC<{
     };
 
     fetchConfigs();
+    let newOptions: string[] = [];
+    if (enable_search) {
+      newOptions.push('search');
+    }
+    if (enable_thinking) {
+      newOptions.push('thinking');
+    }
+    if (kb_ids.length > 0) {
+      newOptions.push('kb');
+    }
+    if (mcp_ids.length > 0) {
+      newOptions.push('mcp');
+    }
+    setActiveTools(newOptions);
+    onToggleChange?.(newOptions);
   }, []);
 
+  const handleToolUpdate = (
+    value: string[]
+  ) => {
+    updateEnableSearch(value.includes('search'));
+    updateEnableThinking(value.includes('thinking'));
+    setActiveTools(value);
+  }
+
   const handleKbUpdate = (
-    updatedConfigs: KbSelection[],
-    newOptions: string[],
+    updatedConfigs: KbSelection[]
   ) => {
-    console.log('handleKbUpdate', updatedConfigs, newOptions);
-    const hasActiveKb = updatedConfigs.some((cfg) => cfg.active);
-    const hasKb = newOptions.includes('kb');
+    const new_kb_ids = updatedConfigs.filter((kb) => kb.active).map((kb) => kb.id);
+    updateKbIds(new_kb_ids);
 
-    let updatedOptions = [...newOptions];
-    if (hasActiveKb && hasKb) {
-      const activeKbs = updatedConfigs.filter((cfg) => cfg.active);
-
-      updatedOptions = [
-        ...updatedOptions.filter((opt) => !opt.startsWith('kb:')), // 移除旧的 kb:id
-        ...activeKbs.map((kb) => `kb:${kb.id}`), // 添加所有激活的 kb:id
-      ];
+    const hasKb = activeTools.includes('kb');
+    if (!hasKb && new_kb_ids.length > 0) {
+        setActiveTools([...activeTools, 'kb']);
     }
+    else if (hasKb && new_kb_ids.length === 0) {
+      setActiveTools(activeTools.filter(v => v !== 'kb'))
+    }
+
     // 6. 更新本地状态
-    setActiveTools(updatedOptions);
     // 7. 同步到父组件
-    onToggleChange?.(updatedOptions);
+    onToggleChange?.(activeTools);
   };
 
-  const handleMcpAndToolUpdate = (
+  const handleMcpUpdate = (
     updatedConfigs: McpEntry[],
-    newOptions: string[],
   ) => {
-    // 1. 更新 MCP 配置
-    setMcpConfigs(updatedConfigs);
+    const new_mcp_ids = updatedConfigs.filter((mcp) => mcp.active).map((mcp) => mcp.id);
+    updateMcpIds(new_mcp_ids);
 
-    // 2. 检查是否有激活的 MCP
-    const hasActiveMcp = updatedConfigs.some((cfg) => cfg.active);
-    const hasMcp = newOptions.includes('mcp');
-    const hasThinking = newOptions.includes('thinking');
-
-    // 3. 根据 MCP 激活状态调整工具选项
-    let updatedOptions = [...newOptions];
-
-    if (hasActiveMcp && !hasMcp) {
-      updatedOptions.push('mcp'); // 自动启用 mcp
-    } else if (!hasActiveMcp && hasMcp) {
-      updatedOptions = updatedOptions.filter((opt) => opt !== 'mcp'); // 移除 mcp
+    const hasMcp = activeTools.includes('mcp');
+    if (!hasMcp && new_mcp_ids.length > 0) {
+        setActiveTools([...activeTools, 'mcp']);
     }
-
-    // 4. 自动添加 thinking（如果启用了 mcp 且未启用 thinking）
-    if (hasActiveMcp && !hasThinking && !activeTools.includes('thinking')) {
-      updatedOptions.push('thinking');
-    }
-
-    // 5. 如果 thinking 被移除且之前有 mcp，则自动移除 mcp
-    if (
-      !hasThinking &&
-      activeTools.includes('thinking') &&
-      activeTools.includes('mcp')
-    ) {
-      updatedOptions = updatedOptions.filter((opt) => opt !== 'mcp');
-    }
-
-    const activeMcps = updatedConfigs.filter((cfg) => cfg.active);
-
-    if (activeMcps.length > 0) {
-      updatedOptions = [
-        ...updatedOptions.filter((opt) => !opt.startsWith('mcp:')), // 移除旧的 mcp:id
-        ...activeMcps.map((mcp) => `mcp:${mcp.id}`), // 添加所有激活的 mcp:id
-      ];
+    else if (hasMcp && new_mcp_ids.length === 0) {
+      setActiveTools(activeTools.filter(v => v !== 'mcp'))
     }
 
     // 6. 更新本地状态
-    setActiveTools(updatedOptions);
-
     // 7. 同步到父组件
-    onToggleChange?.(updatedOptions);
+    onToggleChange?.(activeTools);
   };
+
   const handleOpenMcpModal = () => {
     setIsModalOpen(true);
   };
@@ -216,13 +207,10 @@ export const Thread: FC<{
           <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
             <ThreadScrollToBottom />
             <Composer
-              onToggleChange={handleMcpAndToolUpdate}
-              onKbToggleChange={handleKbUpdate}
               value={activeTools}
+              onValueChange={(value) => handleToolUpdate(value)}
               optionsVisible={optionsVisible}
-              mcpConfigs={mcpConfigs}
               onOpenMcpModal={handleOpenMcpModal}
-              kbConfigs={kbConfigs}
               onOpenKbModal={handleOpenKbModal}
             />
             {/* 传递回调 */}
@@ -234,7 +222,7 @@ export const Thread: FC<{
         isOpen={isModalOpen}
         onSave={(updatedConfigs) => {
           // 传入当前的 activeTools 作为 newOptions
-          handleMcpAndToolUpdate(updatedConfigs, activeTools);
+          handleMcpUpdate(updatedConfigs);
           setIsModalOpen(false);
         }}
         onClose={() => setIsModalOpen(false)}
@@ -246,7 +234,7 @@ export const Thread: FC<{
         isOpen={isKbModalOpen}
         onSave={(updatedKbConfigs) => {
           // 传入当前的 activeTools 作为 newOptions
-          handleKbUpdate(updatedKbConfigs, activeTools);
+          handleKbUpdate(updatedKbConfigs);
           setIsKbModalOpen(false);
         }}
         onClose={() => setIsKbModalOpen(false)}
@@ -312,30 +300,20 @@ const ThreadWelcomeSuggestions: FC = () => {
 };
 
 interface ComposerProps {
-  onToggleChange?: (updatedConfigs: McpEntry[], options: string[]) => void;
-  onKbToggleChange?: (
-    updatedKbConfigs: KbSelection[],
-    options: string[],
-  ) => void;
   value?: string[];
   optionsVisible: boolean;
-  mcpConfigs?: McpEntry[]; // 新增
   onOpenMcpModal?: () => void; // 新增
-  kbConfigs: KbSelection[];
+  onValueChange: (value: string[]) => void;
   onOpenKbModal: () => void;
 }
 
 const Composer: FC<ComposerProps> = ({
-  onToggleChange,
-  onKbToggleChange,
   value,
   optionsVisible,
-  mcpConfigs = [], // 默认值
+  onValueChange,
   onOpenMcpModal,
-  kbConfigs = [],
   onOpenKbModal,
 }) => {
-  const [prevMcpValue, setPrevMcpValue] = useState<string[]>(value || []);
   return (
     <ComposerPrimitive.Root
       // className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
@@ -363,11 +341,8 @@ const Composer: FC<ComposerProps> = ({
                   type="multiple"
                   variant="outline"
                   className="flex gap-x-4 overflow-visible"
-                  onValueChange={(newValue) => {
-                    onToggleChange?.(mcpConfigs, newValue);
-                    setPrevMcpValue(newValue);
-                  }}
                   value={value} // 同步 Thread 的 activeTools
+                  onValueChange={onValueChange}
                 >
                   <ToggleGroupItem
                     value="thinking"

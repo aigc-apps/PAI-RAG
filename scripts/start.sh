@@ -72,11 +72,12 @@ while [[ $# -gt 0 ]]; do
       echo "用法: $0 [选项]"
       echo ""
       echo "选项:"
-      echo "  --port PORT                应用端口    (默认: 8680)"
-      echo "  --frontend-port PORT       前端服务端口 (默认: 8681)"
+      echo "  --port PORT                应用端口    (默认: 8680) PRODUCTION模式为NGINX端口"
+      echo "  --frontend-port PORT       前端服务端口 (默认: 8681), 仅PRODUCTION模式生效"
       echo "  --backend-port PORT        后端服务端口 (默认: 8682)"
       echo "  --api-instances N          启动 N 个 API 实例 (默认: 1)"
       echo "  --worker-instances N       启动 N 个 Worker 实例 (默认: 1)"
+      echo "  --production               使用RODUCTION模式启动web, 将配置nginx"
       echo "  --help                     显示此帮助信息"
       echo ""
       echo "示例:"
@@ -135,13 +136,14 @@ setup_nginx() {
 
 # 启动前端（假设使用 Vite/React）
 start_frontend() {
-  echo "👉 启动前端服务 on port $FRONTEND_PORT"
   cd frontend || { echo "错误: 找不到 frontend 目录"; exit 1; }
   npm install || { echo "错误: npm 安装失败"; exit 1; }
   if [[ "$PRODUCTION" == true ]]; then
+    echo "👉 启动前端服务 on port $FRONTEND_PORT"
     npm run build && npm run start  -- --port $FRONTEND_PORT &
   else
-    npm run dev -- --port $FRONTEND_PORT &
+    echo "👉 启动前端服务 on port $PORT"
+    npm run dev -- --port $PORT &
   fi
   FRONTEND_PID=$!
   echo "👉 启动前端服务 with pid $FRONTEND_PID."
@@ -188,7 +190,9 @@ cleanup() {
 # 捕获信号（SIGTERM, SIGINT, EXIT）
 trap cleanup EXIT TERM INT
 
-setup_nginx
+if  [[ "$PRODUCTION" == true ]]; then
+  setup_nginx
+fi
 
 # 检查Redis服务是否已经在运行
 if pgrep redis-server > /dev/null

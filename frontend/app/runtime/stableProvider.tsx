@@ -48,21 +48,17 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
       async append(message) {
         if (!remoteId) {
           console.warn('Cannot save message - thread not initialized');
-        }
-        const remoteThreadId = remoteId;
-        if (!remoteThreadId) {
-          console.error('Thread initialized failed.');
           return;
         }
         try {
-          const url = `/v1/agent/threads/${remoteThreadId}/messages`;
-
+          const url = `/v1/agent/threads/${remoteId}/messages`;
           console.log('append message', message);
+          
           const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              thread_id: remoteThreadId,
+              thread_id: remoteId,
               role: message.message.role,
               attachments: message.message.attachments,
               content: message.message.content,

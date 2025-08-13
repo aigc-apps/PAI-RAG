@@ -21,6 +21,7 @@ import { ReactNode } from 'react'; // ✅ 添加这一行以导入 ReactNode
 import { useChatOptions } from '../providers/chat';
 import { StableProvider } from './stableProvider';
 import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
+import { TableBody } from '@/components/ui/table';
 
 interface Props {
   children?: ReactNode;
@@ -96,8 +97,6 @@ export class MyModelAdapter implements ChatModelAdapter {
       (m) => (m.attachments ?? []).length > 0,
     );
 
-    // load chat options
-    const { enable_thinking, enable_search, mcp_ids, kb_ids } = useChatOptions();
 
     const result = await fetch(this.options.api, {
       method: 'POST',
@@ -110,11 +109,7 @@ export class MyModelAdapter implements ChatModelAdapter {
         runConfig,
         ...context.callSettings,
         ...context.config,
-
-        enable_thinking: enable_thinking,
-        enable_search: enable_search,
-        mcp_ids: mcp_ids,
-        kb_ids: kb_ids,
+        ...this.options.body,
         enable_attachments: enableAttachments,
       }),
       signal: abortSignal,
@@ -258,13 +253,6 @@ export class MyModelAdapter implements ChatModelAdapter {
   }
 }
 
-let isInitializing = false;
-let initializedThreadId = '';
-
-function delay(ms: any) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 // Implement your custom adapter with proper message persistence
 const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
@@ -285,8 +273,6 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     }
   },
   async initialize(threadId: string) {
-    isInitializing = true;
-
     try {
       const url = '/v1/agent/threads';
       const now = new Date();
@@ -311,8 +297,6 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
       }
 
       const data = await response.json();
-      initializedThreadId = data.id;
-      isInitializing = false;
       return {
         remoteId: data.id,
         externalId: data.id,
@@ -364,10 +348,13 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   const { localRuntimeOptions, otherOptions } =
     splitLocalRuntimeOptions(options);
 
+  // load chat options
+  const { model, enable_thinking, enable_search, mcp_ids, kb_ids } = useChatOptions();
+
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
       return useLocalThreadRuntime(
-        new MyModelAdapter(otherOptions),
+        new MyModelAdapter({...otherOptions, body: { model, enable_thinking, enable_search, mcp_ids, kb_ids }}),
         localRuntimeOptions,
       );
     },

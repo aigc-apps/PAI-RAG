@@ -326,7 +326,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 onClick={() => {
                   setEmb({
                     ...emb,
-                    is_default: pendingState,
+                    is_default: pendingState || false,
                   });
                   setIsDialogOpen(false);
                 }}
