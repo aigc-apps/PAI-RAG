@@ -220,7 +220,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
             </Label>
             <Switch
               id="enable_thinking"
-              checked={llm?.enable_thinking ?? true}
+              checked={llm?.enable_thinking ?? false}
               onCheckedChange={(checked) =>
                 setLlm((prev) => ({ ...prev, enable_thinking: checked }))
               }
