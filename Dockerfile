@@ -36,13 +36,12 @@ RUN mkdir -p /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
  && curl https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar -o /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.tar \
  && tar xvf /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.tar -C /root/.paddleocr/whl/cls/
 
-RUN mkdir /app/model_repository
-
-RUN python -c "from modelscope import snapshot_download;snapshot_download('BAAI/bge-m3',cache_dir='/app/model_repository');snapshot_download('Ceceliachenen/PDF-Extract-Kit-1.0',cache_dir='/app/model_repository');"
-
 WORKDIR /app
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+
+RUN mkdir -p /app/model_repository && python -c "from modelscope import snapshot_download;snapshot_download('BAAI/bge-m3',cache_dir='/app/model_repository');snapshot_download('Ceceliachenen/PDF-Extract-Kit-1.0',cache_dir='/app/model_repository');"
+
 COPY . .
 
 RUN cd frontend && npm install && npm run build

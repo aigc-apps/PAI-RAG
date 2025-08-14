@@ -6,7 +6,6 @@ from tempfile import TemporaryDirectory
 import time
 from modelscope import snapshot_download
 from utils.cuda_utils import infer_cuda_device
-from utils.constants import DEFAULT_MODEL_DIR
 from pathlib import Path
 import os
 import json
