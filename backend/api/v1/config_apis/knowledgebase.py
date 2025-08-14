@@ -362,7 +362,7 @@ async def delete_file(
         f"Delete file {file_id}@{kb_id}: deleted {len(chunk_entities)} chunks in total."
     )
 
-    return success_response(data=node_ids, message="删除知识库文件成功。")
+    return success_response(data=None, message="删除知识库文件成功。")
 
 
 @knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks")
