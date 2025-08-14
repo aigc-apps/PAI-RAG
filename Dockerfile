@@ -38,21 +38,7 @@ RUN mkdir -p /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
 
 RUN mkdir /app/model_repository
 
-RUN python -c "
-import os
-os.environ['MODELSCOPE_CACHE'] = '/app/model_repository'
-from modelscope import snapshot_download
-try:
-    for model in ['Ceceliachenen/PDF-Extract-Kit-1.0', 'BAAI/bge-m3']:
-      model_dir = snapshot_download(
-          model,
-          cache_dir='/app/model_repository'
-      )
-      print(f'Model downloaded to: {model_dir}')
-except Exception as e:
-    print(f'Error downloading model: {e}')
-    exit(1)
-"
+RUN python -c "from modelscope import snapshot_download;snapshot_download('BAAI/bge-m3',cache_dir='/app/model_repository');snapshot_download('Ceceliachenen/PDF-Extract-Kit-1.0',cache_dir='/app/model_repository');"
 
 WORKDIR /app
 

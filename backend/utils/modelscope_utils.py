@@ -18,7 +18,7 @@ INTERNAL_MODELS = ["BAAI/bge-m3", "Ceceliachenen/PDF-Extract-Kit-1.0"] #必须�
 
 def init_mineru_config(model_dir: str = INTERNAL_MODEL_DIR):
     # 获取配置文件目录
-    download_model_to_directory("Ceceliachenen/PDF-Extract-Kit-1.0", model_dir=model_dir)
+    download_model_to_directory("Ceceliachenen/PDF-Extract-Kit-1.0")
 
     current_dir_path = Path(__file__).parent.parent.parent
     source_path = os.path.join(current_dir_path, "magic-pdf.template.json")
@@ -51,7 +51,7 @@ def init_mineru_config(model_dir: str = INTERNAL_MODEL_DIR):
     )
 
 
-def download_model_to_directory(model_name: str, model_dir: str = DEFAULT_MODEL_DIR):
+def download_model_to_directory(model_name: str):
     if model_name in INTERNAL_MODELS:
         default_model_dir = INTERNAL_MODEL_DIR
     else:
@@ -64,7 +64,7 @@ def download_model_to_directory(model_name: str, model_dir: str = DEFAULT_MODEL_
 
     model_id = model_name
 
-    pai_model_path = os.path.join(model_dir, model_id)
+    pai_model_path = os.path.join(default_model_dir, model_id)
     logger.info(f"Model {model_id} not found, start downloading to {pai_model_path}.")
 
     if not os.path.exists(pai_model_path):
