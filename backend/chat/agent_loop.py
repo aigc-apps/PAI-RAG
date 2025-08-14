@@ -31,6 +31,7 @@ from llama_index.core.base.llms.types import (
 from llama_index.core.bridge.pydantic import Field, BaseModel, ConfigDict
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from extensions.trace.base import use_current_span
+from chat.prompts import SYNTHESIZE_PROMPT
 from opentelemetry import trace
 
 class AgentState(BaseModel):
@@ -40,6 +41,7 @@ class AgentState(BaseModel):
     memory: BaseMemory = Field(description="memory", default=None)
     tools: List[Dict] = Field(description="tools", default=None)
     tool_name_map: Dict[str, FunctionTool] = Field(description="tool_name_map", default=None)
+    user_query: str = Field(description="user query", default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 def get_system_prompt(enable_search: bool = False, enable_thinking: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
@@ -106,6 +108,7 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
     return await async_fn.acall(**fn_args)
 
 async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
+    """
     history_memory_without_sys_prompt =  state.memory.get_context()[1:]
     synthesize_prompt = get_system_prompt()
     new_messages = []
@@ -114,10 +117,13 @@ async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, No
     sythesize_memory = BaseMemory()
     sythesize_memory.from_messages(new_messages)
     state.memory = sythesize_memory
+    """
 
     async for chunk in astep_gen(
             llm=state.llm,
             memory=state.memory,
+            is_last_step=True,
+            user_query=state.user_query,
         ):
         chunk.message.additional_kwargs["step"] = state.step
         yield chunk
@@ -139,12 +145,27 @@ async def step_agent(state: AgentState, attachments: List[dict]) -> AsyncGenerat
             state.stop_flag = True
             break
 
+def get_kb_content(tool_result: str):
+    node_list = (json.loads(tool_result)).get("result", [])
+    if len(node_list) == 0:
+        return "知识库中没有找到相关信息。"
+    
+    text = "\n\n".join([f"""
+    ## chunk {i+1}
+    file_name: {node.get("metadata", {}).get("file_name", "")}
+    chunk_content: {node.get("text")}
+    """ for i, node in enumerate(node_list)])
+
+    return text
+
 async def astep_gen(
     llm: LLM,
     tools: List[FunctionTool]= None,
     tool_name_map: Dict[str, FunctionTool]= None,
     memory: BaseMemory = None,
-    attachments: List[dict] = None
+    attachments: List[dict] = None,
+    is_last_step: bool = False,
+    user_query: str = None,
 ):
     image_urls = []
     if attachments and len(attachments) > 0:
@@ -196,6 +217,9 @@ async def astep_gen(
                     delta=tool_result.content,
                 )
     messages = memory.get_context(image_urls)
+    if is_last_step:
+        synthesize_content = SYNTHESIZE_PROMPT.format(query_str=user_query)
+        messages.append(ChatMessage(role=MessageRole.USER, content=synthesize_content))
     if tools:
         response_gen: ChatResponseAsyncGen = await llm.astream_chat(
             messages=messages,
@@ -248,6 +272,10 @@ async def astep_gen(
                 fn_args = {}
             tool_result = await call_tool_with_retry(async_tool_fn, fn_args)
 
+            tool_content = tool_result.content
+            if tool_call.function.name.startswith("search-knowledgebase"):
+                tool_content = get_kb_content(tool_result.content)
+
             tool_call_message = ChatMessage(
                 role=MessageRole.ASSISTANT,
                 content="",
@@ -255,7 +283,7 @@ async def astep_gen(
             )
             tool_result_message = ChatMessage(
                 role=MessageRole.TOOL,
-                content=tool_result.content,
+                content=tool_content,
                 additional_kwargs={
                     "tool_call_id": tool_call.id,
                 },
@@ -325,6 +353,7 @@ class AgentLoop:
                 memory=memory,
                 tools=tools,
                 tool_name_map=tool_name_map,
+                user_query=messages[-1].content,
             )
             while state.step < max_steps:
                 state.step += 1
