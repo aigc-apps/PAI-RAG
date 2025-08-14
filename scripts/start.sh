@@ -121,15 +121,15 @@ setup_nginx() {
   envsubst < "$TEMPLATE" | sed -e 's/§/$/g' > "$CONFIG"
 
   # 测试配置
-  sudo nginx -t
+  nginx -t
   if [ $? -ne 0 ]; then
     echo "❌ Nginx config test failed"
     exit 1
   fi
 
   # 重新加载 Nginx
-  sudo systemctl start nginx
-  sudo systemctl reload nginx
+  service nginx start
+  service nginx reload
   echo "✅ Nginx reloaded with new ports"
 }
 
@@ -140,7 +140,7 @@ start_frontend() {
   npm install || { echo "错误: npm 安装失败"; exit 1; }
   if [[ "$PRODUCTION" == true ]]; then
     echo "👉 启动前端服务 on port $FRONTEND_PORT"
-    npm run build && npm run start  -- --port $FRONTEND_PORT &
+    npm run start  -- --port $FRONTEND_PORT &
   else
     echo "👉 启动前端服务 on port $PORT"
     npm run dev -- --port $PORT &
