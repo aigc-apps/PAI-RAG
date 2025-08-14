@@ -39,7 +39,7 @@ const newllmconfig: LlmConfig = {
   vision_support: false,
   max_context: 0,
   enabled: true,
-  enable_thinking: true, // 默认支持思考模式
+  enable_thinking: false, // 默认支持思考模式
 };
 export default function LlmConfigPage() {
   const [editLlmConfig, setEditLlmConfig] = useState<LlmConfig>(newllmconfig); // 存储 LLM 配置

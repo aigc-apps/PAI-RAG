@@ -36,6 +36,24 @@ RUN mkdir -p /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
  && curl https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar -o /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.tar \
  && tar xvf /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer/ch_ppocr_mobile_v2.0_cls_infer.tar -C /root/.paddleocr/whl/cls/
 
+RUN mkdir /app/model_repository
+
+RUN python -c "
+import os
+os.environ['MODELSCOPE_CACHE'] = '/app/model_repository'
+from modelscope import snapshot_download
+try:
+    for model in ['Ceceliachenen/PDF-Extract-Kit-1.0', 'BAAI/bge-m3']:
+      model_dir = snapshot_download(
+          model,
+          cache_dir='/app/model_repository'
+      )
+      print(f'Model downloaded to: {model_dir}')
+except Exception as e:
+    print(f'Error downloading model: {e}')
+    exit(1)
+"
+
 WORKDIR /app
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}

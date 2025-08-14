@@ -20,24 +20,8 @@ def try_get_int_env(key, default_value=None):
         return None
 
 
-EAS_DEFAULT_MODEL_DIR = "/huggingface/pai_rag_model_repository_01"
-if not os.path.exists(EAS_DEFAULT_MODEL_DIR):
-    DEFAULT_MODEL_DIR = "./localdata/model_repository"
-else:
-    DEFAULT_MODEL_DIR = EAS_DEFAULT_MODEL_DIR
+DEFAULT_MODEL_DIR = "./localdata/model_repository"
 
-OSS_URL = "https://pai-rag-bj.oss-cn-beijing.aliyuncs.com/model_repository/model_config_1.1.0.json"
-
-DEFAULT_DATAFILE_DIR = "./data"
-
-DEFAULT_DASHSCOPE_EMBEDDING_MODEL = "text-embedding-v2"
-
-
-DEFAULT_TASK_FILE = "localdata/ingestion__task__summary.json"
-
-DEFAULT_INDEX_FILE = "localdata/default__rag__index.json"
-DEFAULT_INDEX_NAME = "default"
-DEFAULT_INDEX_NAME_OLD = "default_index"
 
 DEFAULT_KNOWLEDGEBASE_PATH = "localdata/knowledgebase"
 DEFAULT_KNOWLEDGEBASE_NAME = "default"

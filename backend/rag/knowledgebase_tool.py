@@ -389,16 +389,6 @@ class PaiKnowledgebaseClient:
 kb_client = PaiKnowledgebaseClient()
 
 
-def get_node_content(i: int, node: NodeWithScore):
-    text = f"""
-    ## chunk {i+1}
-    file_name: {node.node.metadata.get("file_name", "")}
-    chunk_content: {node.node.text}
-    """
-
-    return text
-
-
 async def aget_knowledgebase_result(query: str, kb_id: str) -> str:
     """Get aliyun search tool"""
     result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id)
@@ -426,7 +416,7 @@ async def aget_knowledgebase_tool(kb_id: str):
     aquery_knowledgebase_func = partial(aget_knowledgebase_result, kb_id=kb_id)
     search_knowledgebase_tool = FunctionTool.from_defaults(
         async_fn=aquery_knowledgebase_func,
-        name="search-knowledgebase",
-        description=f"从知识库中搜索给定查询的最新内容。知识库描述: {knowledgebase.description}",
+        name=f"search-knowledgebase-{kb_id}",
+        description=f"从知识库中搜索和用户查询相关的内容。\n知识库名称: {knowledgebase.name}\n知识库描述: {knowledgebase.description}\n",
     )
     return search_knowledgebase_tool

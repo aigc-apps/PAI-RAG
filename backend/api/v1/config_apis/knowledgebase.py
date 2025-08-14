@@ -1,7 +1,7 @@
 ### Knowledgebase configuration API ###
 from datetime import datetime, timezone
 import traceback
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -262,34 +262,44 @@ async def upload_files(
 @knowledgebase_router.get("/{kb_id}/files")
 async def list_files(
     kb_id: str,
+    file_name: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
 ) :
-    total_results = await session.exec(
-        select(func.count())
-        .select_from(select(KbFileEntity).where(KbFileEntity.kb_id == kb_id))
-    )
-    total_num = total_results.one_or_none()
-    pagination = get_pagination_meta(page, size, total_num)
-    file_results = await session.exec(
-        select(KbFileEntity)
-        .where(KbFileEntity.kb_id == kb_id)
-        .order_by(KbFileEntity.updated_at.desc())
-        .offset(pagination.offset)
-        .limit(size)
-    )
-    file_entities = file_results.all()
+    if file_name:
+        kb_file = (await session.exec(
+            select(KbFileEntity).where(KbFileEntity.file_name == file_name)
+        )).first()
+        if kb_file is None:
+            return error_response(code=404, message=f"文件名'{file_name}'不存在")
 
-    return success_response(
-        data=PagedResult(
-            items=file_entities,
-            total=pagination.total,
-            pages=pagination.pages,
-            page=pagination.page,
-            size=pagination.size,
-        ),
-        message="获取文件列表成功")
+        return success_response(data=kb_file, message="查询文件成功")
+    else:
+        total_results = await session.exec(
+            select(func.count())
+            .select_from(select(KbFileEntity).where(KbFileEntity.kb_id == kb_id))
+        )
+        total_num = total_results.one_or_none()
+        pagination = get_pagination_meta(page, size, total_num)
+        file_results = await session.exec(
+            select(KbFileEntity)
+            .where(KbFileEntity.kb_id == kb_id)
+            .order_by(KbFileEntity.updated_at.desc())
+            .offset(pagination.offset)
+            .limit(size)
+        )
+        file_entities = file_results.all()
+
+        return success_response(
+            data=PagedResult(
+                items=file_entities,
+                total=pagination.total,
+                pages=pagination.pages,
+                page=pagination.page,
+                size=pagination.size,
+            ),
+            message="获取文件列表成功")
 
 
 @knowledgebase_router.get(
@@ -352,7 +362,7 @@ async def delete_file(
         f"Delete file {file_id}@{kb_id}: deleted {len(chunk_entities)} chunks in total."
     )
 
-    return success_response(data=node_ids, message="删除知识库文件成功。")
+    return success_response(data=None, message="删除知识库文件成功。")
 
 
 @knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks")
