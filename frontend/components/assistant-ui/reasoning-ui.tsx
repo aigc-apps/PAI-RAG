@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { ReasoningContentPartComponent } from "@assistant-ui/react";
 
 export const CollapsibleReasoning: ReasoningContentPartComponent = ({
@@ -6,18 +6,12 @@ export const CollapsibleReasoning: ReasoningContentPartComponent = ({
   status,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [savedContent, setSavedContent] = useState<string>("");
-
-  // 保存最新的思考内容
-  useEffect(() => {
-    if (text && text.length > 0) {
-      setSavedContent(text);
-    }
-  }, [text]);
+  
+  // 直接使用传入的 text，不需要保存到 state
+  const displayText = text;
 
   // 根据 status 判断是否正在流式输出
   const isThinking = status.type === "running";
-  const displayText = text || savedContent;
 
   // 如果没有内容，不显示
   if (!displayText) return null;

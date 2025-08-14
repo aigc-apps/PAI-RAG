@@ -2,6 +2,7 @@ import json
 import traceback
 from typing import Dict, List, cast, AsyncGenerator
 from loguru import logger
+import re
 from common.chat.models import ChatAgentRequest
 from utils.message_utils import convert_to_chat_messages
 from utils.time_utils import get_prompt_current_time_str
@@ -211,7 +212,12 @@ async def astep_gen(
 
     tool_calls = []
     response_context = ""
+    thinking_model = llm.additional_kwargs.get("extra_body").get("chat_template_kwargs").get("enable_thinking")
+    content_thinking_close_flag = False
+    opening_tag, closing_tag = "<think>", "</think>"
+
     async for response in response_gen:
+        reasoning_content = response.raw.choices[0].delta.reasoning_content if response.raw and response.raw.choices else ""
         tool_calls = response.message.additional_kwargs.get("tool_calls")
         if tool_calls:
             tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
@@ -226,10 +232,36 @@ async def astep_gen(
                     message=tool_call_message,
                     delta="",
                 )
-        if response.delta:
+        if not reasoning_content:
+            if thinking_model and response.delta:
+                response.message.additional_kwargs.pop("tool_calls", None)
+                if not content_thinking_close_flag:
+                    end_pos = response.delta.find(closing_tag)
+
+                    if end_pos != -1:
+                        # Skip over the closing tag
+                        reasoning_content = response.delta[:end_pos]
+                        response.delta = response.delta[end_pos + len(closing_tag):]
+                        content_thinking_close_flag = True
+                    else:
+                        reasoning_content = response.delta
+                        response.delta = ""
+                if reasoning_content:
+                    response.raw.choices[0].delta.reasoning_content = re.sub(opening_tag, "", reasoning_content, flags=re.DOTALL)
+                if response.delta:
+                    response.delta = re.sub(opening_tag, "", response.delta, flags=re.DOTALL)
+                    response.additional_kwargs["reasoning_completed"] = True,
+                response_context += response.delta
+                yield response
+            elif response.delta:
+                response.message.additional_kwargs.pop("tool_calls", None)
+                response_context += response.delta
+                yield response
+        else:
+            content_thinking_close_flag = True
             response.message.additional_kwargs.pop("tool_calls", None)
-            response_context += response.delta
             yield response
+
 
     if response_context:
         memory.add(
