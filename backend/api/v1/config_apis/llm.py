@@ -148,6 +148,7 @@ async def update_llm(
     )
     llm.enabled = update_llm.enabled
     llm.vision_support = update_llm.vision_support
+    llm.enable_thinking = update_llm.enable_thinking
 
     logger.info(f"Updating LLM {llm_id} to {llm}.")
     session.add(llm)

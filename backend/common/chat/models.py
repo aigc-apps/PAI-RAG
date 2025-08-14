@@ -78,7 +78,7 @@ class ChatAgentRequest(BaseModel):
     mcp_ids: Optional[List[str]] = []
     kb_ids: Optional[List[str]] = []
     enable_search: Optional[bool] = False
-    enable_thinking: Optional[bool] = False
+    enable_agent: Optional[bool] = False
     max_steps: Optional[int] = None
 
     enable_attachments: Optional[bool] = False  # 是否启用附件功能
