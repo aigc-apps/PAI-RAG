@@ -274,7 +274,7 @@ async def list_files(
         if kb_file is None:
             return error_response(code=404, message=f"文件名'{file_name}'不存在")
         
-        return success_response(data=kb_file, message=f"查询文件成功")
+        return success_response(data=kb_file, message="查询文件成功")
     else:
         total_results = await session.exec(
             select(func.count())
