@@ -127,6 +127,7 @@ export class MyModelAdapter implements ChatModelAdapter {
     const decoder = new TextDecoder();
     let content = "";
     let reasoning_content = "";
+    let lastEventType: 'reasoning' | 'text' | 'tool-call' | null = null;
     // let toolCalls: { [key: string]: any } = {};
     let buffer = '';
 
@@ -164,14 +165,12 @@ export class MyModelAdapter implements ChatModelAdapter {
 
           if (delta?.role === "assistant" && delta?.reasoning_content) {
             reasoning_content += delta.reasoning_content;
-            if (
-              eventQueue.length === 0 ||
-              eventQueue[eventQueue.length - 1].type !== "reasoning"
-            ) {
+            if (lastEventType !== "reasoning") {
               eventQueue.push({
                 type: "reasoning",
                 data: reasoning_content,
-              });
+              })
+              lastEventType = "reasoning";;
             } else {
               // 更新最后一条思考内容
               eventQueue[eventQueue.length - 1].data = reasoning_content;
@@ -180,14 +179,13 @@ export class MyModelAdapter implements ChatModelAdapter {
 
           if (delta?.role === 'assistant' && delta?.content) {
             content += delta.content;
-            if (
-              eventQueue.length === 0 ||
-              eventQueue[eventQueue.length - 1].type !== 'text'
+            if (lastEventType !== 'text'
             ) {
               eventQueue.push({
                 type: 'text',
                 data: content,
               });
+              lastEventType = "text";
             } else {
               // 更新最后一条文本内容
               eventQueue[eventQueue.length - 1].data = content;

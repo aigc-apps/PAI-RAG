@@ -217,7 +217,11 @@ async def astep_gen(
     opening_tag, closing_tag = "<think>", "</think>"
 
     async for response in response_gen:
-        reasoning_content = response.raw.choices[0].delta.reasoning_content if response.raw and response.raw.choices else ""
+        reasoning_content = (
+    response.raw.choices[0].delta.reasoning_content
+    if response.raw and response.raw.choices and hasattr(response.raw.choices[0].delta, 'reasoning_content')
+    else ""
+)
         tool_calls = response.message.additional_kwargs.get("tool_calls")
         if tool_calls:
             tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
