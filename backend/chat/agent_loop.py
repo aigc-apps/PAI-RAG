@@ -150,7 +150,7 @@ def get_kb_content(tool_result: str):
     node_list = (json.loads(tool_result)).get("result", [])
     if len(node_list) == 0:
         return "知识库中没有找到相关信息。"
-    
+
     text = "\n\n".join([f"""
     ## chunk {i+1}
     file_name: {node.get("metadata", {}).get("file_name", "")}
