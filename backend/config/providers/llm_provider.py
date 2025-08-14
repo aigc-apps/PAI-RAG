@@ -45,6 +45,7 @@ class LlmProvider(BaseConfigProvider):
                 max_tokens=config.context_window,
                 is_chat_model=True,
                 is_function_calling_model=True,
+                additional_kwargs={"extra_body":{"chat_template_kwargs":{"enable_thinking": config.enable_thinking}}},
             )
 
     def get_llm_model(self, model_id: str) -> OpenAILike:

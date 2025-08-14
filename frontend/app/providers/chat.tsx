@@ -6,13 +6,13 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 
 interface ChatOptions {
   model: string;
-  enable_thinking: boolean;
+  enable_agent: boolean;
   enable_search: boolean;
   mcp_ids: string[];           // mcp列表
   kb_ids: string[];            // 知识库列表
 
   updateModel: (model: string) => void;
-  updateEnableThinking: (thinking: boolean) => void;
+  updateEnablePlanning: (planning: boolean) => void;
   updateEnableSearch: (search: boolean) => void;
   updateMcpIds: (mcp_ids: string[]) => void;
   updateKbIds: (kb_ids: string[]) => void;
@@ -22,7 +22,7 @@ const ChatContext = createContext<ChatOptions | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [model, setModel] = useState('');
-  const [enableThinking, setEnableThinking] = useState(false);
+  const [enablePlanning, setEnablePlanning] = useState(false);
   const [enableSearch, setEnableSearch] = useState(false);
   const [mcpIds, setMcpIds] = useState<string[]>([]);
   const [kbIds, setKbIds] = useState<string[]>([]);
@@ -31,8 +31,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setModel(model);
   }
 
-  const updateEnableThinking = (thinking: boolean) => {
-    setEnableThinking(thinking);
+  const updateEnablePlanning = (planning: boolean) => {
+    setEnablePlanning(planning);
   }
   const updateEnableSearch = (search: boolean) => {
     setEnableSearch(search);
@@ -47,13 +47,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   return (
     <ChatContext.Provider value={{ 
         model: model,
-        enable_thinking: enableThinking, 
+        enable_agent: enablePlanning, 
         enable_search: enableSearch,
         mcp_ids: mcpIds,
         kb_ids: kbIds,
         updateModel,
         updateEnableSearch,
-        updateEnableThinking,
+        updateEnablePlanning,
         updateMcpIds,
         updateKbIds}}>
       {children}

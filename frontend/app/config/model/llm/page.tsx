@@ -26,6 +26,7 @@ export interface LlmConfig {
   max_context: number;
   enabled: boolean;
   vision_support: boolean;
+  enable_thinking: boolean; // 是否支持思考模式
 }
 
 const newllmconfig: LlmConfig = {
@@ -38,6 +39,7 @@ const newllmconfig: LlmConfig = {
   vision_support: false,
   max_context: 0,
   enabled: true,
+  enable_thinking: true, // 默认支持思考模式
 };
 export default function LlmConfigPage() {
   const [editLlmConfig, setEditLlmConfig] = useState<LlmConfig>(newllmconfig); // 存储 LLM 配置
@@ -193,6 +195,15 @@ export default function LlmConfigPage() {
                         }
                       >
                         {llm.vision_support ? '多模态模型' : '语言模型'}
+                      </Badge>
+                      <Badge
+                        className={
+                          llm.enable_thinking
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-green-100 text-green-800"
+                        }
+                      >
+                        {llm.enable_thinking ? "思考模型" : "语言模型"}
                       </Badge>
                       <Badge className="bg-gray-100 text-gray-800">
                         {llm.enabled ? '已激活' : '未激活'}

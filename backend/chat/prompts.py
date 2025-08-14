@@ -21,7 +21,7 @@ SEARCH_WEB_TOOL_PROMPT = """
   - 切勿重复类似的搜索查询，因为它们不会产生新的信息。
 """
 
-THINKING_TOOL_PROMPT = """
+PLANNING_TOOL_PROMPT = """
 ## 「think-and-planning」是一个系统工具
   - 在任务开始的第一步，你必须**首先调用think-and-planning工具**，针对用户的任务详细思考和规划。
   - 在每次调用其他工具之前，你必须**首先调用think-and-planning工具**：针对用户的任务详细思考和规划，并对之前工具调用的结果进行深入反思（如有），输出的顺序是thought, plan, action, thought_number。

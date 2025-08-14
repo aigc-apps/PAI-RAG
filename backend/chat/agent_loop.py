@@ -2,6 +2,7 @@ import json
 import traceback
 from typing import Dict, List, cast, AsyncGenerator
 from loguru import logger
+import re
 from common.chat.models import ChatAgentRequest
 from utils.message_utils import convert_to_chat_messages
 from utils.time_utils import get_prompt_current_time_str
@@ -44,11 +45,11 @@ class AgentState(BaseModel):
     user_query: str = Field(description="user query", default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-def get_system_prompt(enable_search: bool = False, enable_thinking: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
+def get_system_prompt(enable_search: bool = False, enable_agent: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
     tools_prompt = []
     prompt = prompt_provider.get_prompts()
-    if enable_thinking:
-        tools_prompt.append(prompt.prompts["thinking_tool_prompt"])
+    if enable_agent:
+        tools_prompt.append(prompt.prompts["planning_tool_prompt"])
     if enable_search:
         tools_prompt.append(prompt.prompts["search_web_tool_prompt"].format(
         current_datetime=get_prompt_current_time_str()))
@@ -78,7 +79,7 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     # 获取思考工具
     think_cache = []
     think_tool = await aget_simple_think_tool(think_cache=think_cache)
-    if chat_request.enable_thinking:
+    if chat_request.enable_agent:
         mcp_tools.append(think_tool)
     if chat_request.enable_search:
         websearch_tools = websearch_provider.get_search_tools()
@@ -235,7 +236,16 @@ async def astep_gen(
 
     tool_calls = []
     response_context = ""
+    thinking_model = llm.additional_kwargs.get("extra_body").get("chat_template_kwargs").get("enable_thinking")
+    content_thinking_close_flag = False
+    opening_tag, closing_tag = "<think>", "</think>"
+
     async for response in response_gen:
+        reasoning_content = (
+    response.raw.choices[0].delta.reasoning_content
+    if response.raw and response.raw.choices and hasattr(response.raw.choices[0].delta, 'reasoning_content')
+    else ""
+)
         tool_calls = response.message.additional_kwargs.get("tool_calls")
         if tool_calls:
             tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
@@ -250,10 +260,36 @@ async def astep_gen(
                     message=tool_call_message,
                     delta="",
                 )
-        if response.delta:
+        if not reasoning_content:
+            if thinking_model and response.delta:
+                response.message.additional_kwargs.pop("tool_calls", None)
+                if not content_thinking_close_flag:
+                    end_pos = response.delta.find(closing_tag)
+
+                    if end_pos != -1:
+                        # Skip over the closing tag
+                        reasoning_content = response.delta[:end_pos]
+                        response.delta = response.delta[end_pos + len(closing_tag):]
+                        content_thinking_close_flag = True
+                    else:
+                        reasoning_content = response.delta
+                        response.delta = ""
+                if reasoning_content:
+                    response.raw.choices[0].delta.reasoning_content = re.sub(opening_tag, "", reasoning_content, flags=re.DOTALL)
+                if response.delta:
+                    response.delta = re.sub(opening_tag, "", response.delta, flags=re.DOTALL)
+                    response.additional_kwargs["reasoning_completed"] = True,
+                response_context += response.delta
+                yield response
+            elif response.delta:
+                response.message.additional_kwargs.pop("tool_calls", None)
+                response_context += response.delta
+                yield response
+        else:
+            content_thinking_close_flag = True
             response.message.additional_kwargs.pop("tool_calls", None)
-            response_context += response.delta
             yield response
+
 
     if response_context:
         memory.add(
@@ -326,7 +362,7 @@ class AgentLoop:
 
         system_prompt = get_system_prompt(
             enable_search=chat_request.enable_search,
-            enable_thinking=chat_request.enable_thinking,
+            enable_agent=chat_request.enable_agent,
             enable_attachments=chat_request.enable_attachments,
             kb_ids=chat_request.kb_ids,
 
@@ -339,7 +375,7 @@ class AgentLoop:
         messages = convert_to_chat_messages(input_messages)
         memory = BaseMemory()
         memory.from_messages(messages)
-        if not chat_request.enable_thinking:
+        if not chat_request.enable_agent:
             chat_request.max_steps = 1
 
         max_steps = chat_request.max_steps or self.max_steps
