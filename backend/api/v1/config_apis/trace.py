@@ -7,6 +7,8 @@ from db.models.trace import TraceModel, TraceModelEntity
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from extensions.trace.base import init_instrument, TraceConfig
+from db.models.change_event import ChangeEventSource, ChangeEventType
+from config.providers.config_change_manager import config_change_manager
 from config.providers.trace_provider import trace_provider
 
 from loguru import logger
@@ -45,10 +47,15 @@ async def set_trace_config(
     )
 
     session.add(trace_config)
-    trace_provider.update(trace_config)
     try:
         await session.commit()
         await session.refresh(trace_config)
+        trace_provider.update(trace_config)
+        config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.TRACE,
+            source_id=trace_config.id,
+            event_type=ChangeEventType.UPDATE,
+        )
         return trace_config
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add search config: {e.orig}")
