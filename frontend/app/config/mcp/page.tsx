@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   TrashIcon,
   SettingsIcon,
@@ -31,14 +31,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { v4 as uuidv4 } from 'uuid';
 import { McpConfig } from './mcp';
 
-
 export default function McpConfigPage() {
-  const [isOpen, setIsOpen] = useState(false); // 控制 AddMcpDialog 显示
-  const [isEditOpen, setIsEditOpen] = useState(false); // 控制 EditMcpDialog 显示
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<McpConfig | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // 加载 AddMcpDialog 状态
-  const [isEditLoading, setIsEditLoading] = useState(false); // 加载 EditMcpDialog 状态
-  const [error, setError] = useState(''); // 错误信息
+  const [isLoading, setIsLoading] = useState(false);
+  const [isEditLoading, setIsEditLoading] = useState(false);
+  const [error, setError] = useState('');
   const [toastState, setToastState] = useState({
     open: false,
     title: '',
@@ -47,51 +46,51 @@ export default function McpConfigPage() {
   });
 
   const [addFormData, setAddFormData] = useState({
-    id: uuidv4(),
-    name: '未命名服务器',
+    id: '',
+    name: '',
     url: '',
-    type: 'sse',
+    type: '',
     auth_token: '',
     need_token: false,
-    enabled: false,
+    enabled: true,
   });
 
-  const [mcpconfigs, setMcpConfigs] = useState(
-    Array<{
-      id: string;
-      name: string;
-      url: string;
-      type: string;
-      auth_token: string;
-      need_token: boolean;
-      enabled: boolean;
-    }>,
-  ); // 存储 MCP 配置
-  const [mcploading, setMcpLoading] = useState(true); // 加载状态
-  const [mcperror, setMcpError] = useState(''); // 错误信息
+  const [mcpconfigs, setMcpConfigs] = useState<Array<{
+    id: string;
+    name: string;
+    url: string;
+    type: string;
+    auth_token: string;
+    need_token: boolean;
+    enabled: boolean;
+  }>>([]);
+  const [mcploading, setMcpLoading] = useState(true);
+  const [mcperror, setMcpError] = useState('');
 
-  useEffect(() => {
-    const fetchConfigs = async () => {
-      try {
-        const res = await fetch('/v1/config/mcps');
-        if (!res.ok) throw new Error('获取配置失败');
-        const data = await res.json();
-        setMcpConfigs(data.data.items || []); // 更新状态
-      } catch (err: any) {
-        setMcpError(err || '加载失败');
-      } finally {
-        setMcpLoading(false);
-      }
-    };
-
-    fetchConfigs();
+  // 提取 fetchConfigs 为可复用函数
+  const fetchConfigs = useCallback(async () => {
+    try {
+      setMcpLoading(true);
+      const res = await fetch('/v1/config/mcps');
+      if (!res.ok) throw new Error('获取配置失败');
+      const data = await res.json();
+      setMcpConfigs(data.data.items || []);
+    } catch (err: any) {
+      setMcpError(err || '加载失败');
+    } finally {
+      setMcpLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchConfigs();
+  }, [fetchConfigs]);
+
   const handleEditClick = (config: McpConfig) => {
-    console.log('handleEditClick', config);
-    setEditingConfig({ ...config }); // 深拷贝当前配置
+    setEditingConfig({ ...config });
     setIsEditOpen(true);
   };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     const key = id.replace(/^mcp_/, '');
@@ -123,86 +122,156 @@ export default function McpConfigPage() {
     });
   };
 
-  const addMCP = async () => {
+  const handleToggleEnabled = async (id: string, enabled: boolean) => {
     try {
-      const mcp_data = {
-        ...addFormData,
-      };
-      mcp_data.need_token = mcp_data.auth_token ? true : false; // 如果 auth_token 有值，则 need_token 为 true
-      const res = await fetch('/v1/config/mcps', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mcp_data), // 包装为数组
-      });
-
-      if (!res.ok) throw new Error('添加 MCP 配置失败');
-
-      const mcpDto = await res.json();
-      const newMcp = new McpConfig(
-        mcpDto.id,
-        mcpDto.name,
-        mcpDto.url,
-        mcpDto.type,
-        mcpDto.auth_token,
-        mcpDto.need_token,
-        mcpDto.enabled,
-      );
-      setToastState({
-        open: true,
-        title: 'MCP 配置已添加',
-        description: '新模型配置已成功保存',
-        variant: 'default',
-      });
-      setIsOpen(false); // 关闭 AddDialog
-      setMcpConfigs((prev) => [...prev, newMcp]); // 追加新 MCP 配置
-    } catch (err: any) {
-      setError(err || '添加失败，请重试'); // 显示错误信息
-      setToastState({
-        open: true,
-        title: '添加失败',
-        description: err.message || '请检查网络或重试',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const updatedMCP = async () => {
-    try {
-      if (!editingConfig) return;
-      const res = await fetch(`/v1/config/mcps/${editingConfig.id}`, {
+      const res = await fetch(`/v1/config/mcps/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingConfig), // 包装为数组
+        body: JSON.stringify({ enabled: !enabled }),
       });
 
-      if (!res.ok) throw new Error('修改 MCP 配置失败');
-      setToastState({
-        open: true,
-        title: 'MCP 配置已修改',
-        description: '修改的模型配置已成功保存',
-        variant: 'default',
-      });
-      setIsEditOpen(false); // 关闭 EditDialog
-      console.log('updateMCP', editingConfig);
+      if (!res.ok) throw new Error('更新启用状态失败');
+
+      // 直接更新本地状态，保持数据一致性
       setMcpConfigs((prev) =>
         prev.map((config) =>
-          config.id === editingConfig.id ? editingConfig : config,
-        ),
+          config.id === id ? { ...config, enabled: !enabled } : config
+        )
       );
-    } catch (err: any) {
-      setError(err || '修改失败，请重试'); // 显示错误信息
+
       setToastState({
         open: true,
-        title: '修改失败',
+        title: '状态已更新',
+        description: `MCP 配置已${!enabled ? '启用' : '禁用'}`,
+        variant: 'default',
+      });
+    } catch (err: any) {
+      setToastState({
+        open: true,
+        title: '更新失败',
         description: err.message || '请检查网络或重试',
         variant: 'destructive',
       });
-    } finally {
-      setIsEditLoading(false);
     }
   };
+
+  const addMCP = async () => {
+  try {
+    setIsLoading(true);
+    setError('');
+    
+    // 直接使用表单数据，不包含ID
+    const mcp_data = {
+      name: addFormData.name,
+      url: addFormData.url,
+      type: addFormData.type,
+      auth_token: addFormData.auth_token,
+      need_token: addFormData.auth_token ? true : false,
+      enabled: addFormData.enabled,
+    };
+    
+    const res = await fetch('/v1/config/mcps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mcp_data),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`添加 MCP 配置失败: ${res.status} ${errorText || res.statusText}`);
+    }
+
+    // 成功后重新拉取列表，确保ID一致性
+    await fetchConfigs();
+    
+    setToastState({
+      open: true,
+      title: 'MCP 配置已添加',
+      description: '新模型配置已成功保存',
+      variant: 'default',
+    });
+    setIsOpen(false);
+
+    // 重置表单数据
+    setAddFormData({
+      id: uuidv4(),
+      name: '',
+      url: '',
+      type: 'sse',
+      auth_token: '',
+      need_token: false,
+      enabled: true,
+    });
+  } catch (err: any) {
+    const errorMessage = err.message || err.toString() || '添加失败，请重试';
+    setError(errorMessage);
+    setToastState({
+      open: true,
+      title: '添加失败',
+      description: errorMessage,
+      variant: 'destructive',
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const updatedMCP = async () => {
+  try {
+    if (!editingConfig) return;
+    setIsEditLoading(true);
+    setError('');
+    
+    // 构造干净的请求体
+    const updateData: any = {
+      name: editingConfig.name,
+      url: editingConfig.url,
+      type: editingConfig.type,
+      enabled: editingConfig.enabled,
+    };
+
+    // 只有当 auth_token 不为空时才发送
+    if (editingConfig.auth_token && editingConfig.auth_token.trim() !== '') {
+      updateData.auth_token = editingConfig.auth_token;
+      updateData.need_token = true;
+    } else {
+      updateData.need_token = false;
+    }
+
+    const res = await fetch(`/v1/config/mcps/${editingConfig.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`修改 MCP 配置失败: ${res.status} ${errorText || res.statusText}`);
+    }
+    
+    // 成功后重新拉取列表
+    await fetchConfigs();
+    
+    setToastState({
+      open: true,
+      title: 'MCP 配置已修改',
+      description: '修改的模型配置已成功保存',
+      variant: 'default',
+    });
+    setIsEditOpen(false);
+  } catch (err: any) {
+    const errorMessage = err.message || err.toString() || '修改失败，请重试';
+    setError(errorMessage);
+    setToastState({
+      open: true,
+      title: '修改失败',
+      description: errorMessage,
+      variant: 'destructive',
+    });
+  } finally {
+    setIsEditLoading(false);
+  }
+};
   const removeMCP = async (id: string) => {
     try {
       const res = await fetch(`/v1/config/mcps/${id}`, {
@@ -216,7 +285,6 @@ export default function McpConfigPage() {
         throw new Error('删除失败，请检查网络或配置');
       }
 
-      // 显示成功提示（可选）
       setToastState({
         open: true,
         title: '删除成功',
@@ -224,10 +292,9 @@ export default function McpConfigPage() {
         variant: 'default',
       });
 
-      // 删除成功后更新本地状态
+      // 直接从本地状态中移除
       setMcpConfigs((prev) => prev.filter((config) => config.id !== id));
     } catch (err: any) {
-      // 显示错误提示
       setToastState({
         open: true,
         title: '删除失败',
@@ -259,18 +326,24 @@ export default function McpConfigPage() {
                     <TableHead className="w-1/10">MCP 名称</TableHead>
                     <TableHead className="w-2/5">MCP 链接</TableHead>
                     <TableHead className="w-1/10">MCP 类型</TableHead>
-                    <TableHead className="w-1/10">是否激活</TableHead>
+                    <TableHead className="w-1/10">是否启用</TableHead>
                     <TableHead className="w-1/5">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {mcpconfigs.map((config) => (
                     <TableRow key={config.id}>
-                      <TableCell>{config.name} </TableCell>
-                      <TableCell>{config.url} </TableCell>
-                      <TableCell> {config.type} </TableCell>
+                      <TableCell>{config.name || ''}</TableCell>
+                      <TableCell>{config.url || ''}</TableCell>
+                      <TableCell>{config.type || ''}</TableCell>
                       <TableCell>
-                        <Checkbox id="terms" checked={config.enabled} />
+                        <Checkbox
+                          id={`enabled-${config.id}`}
+                          checked={config.enabled}
+                          onCheckedChange={(checked) => 
+                            handleToggleEnabled(config.id, config.enabled)
+                          }
+                        />
                       </TableCell>
                       <TableCell>
                         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -285,8 +358,7 @@ export default function McpConfigPage() {
                           <DialogContent className="sm:max-w-[425px]">
                             {error && (
                               <div className="text-red-500 mb-4">{error}</div>
-                            )}{' '}
-                            {/* 显示错误信息 */}
+                            )}
                             <DialogHeader>
                               <DialogTitle>编辑MCP配置</DialogTitle>
                               <DialogDescription>
@@ -303,7 +375,7 @@ export default function McpConfigPage() {
                                 </Label>
                                 <Input
                                   id="edit_mcp_name"
-                                  defaultValue={editingConfig?.name || 'null'}
+                                  value={editingConfig?.name || ''}
                                   onChange={handleEditInputChange}
                                   className="col-span-3"
                                 />
@@ -317,7 +389,7 @@ export default function McpConfigPage() {
                                 </Label>
                                 <Input
                                   id="edit_mcp_url"
-                                  defaultValue={editingConfig?.url || 'null'}
+                                  value={editingConfig?.url || ''}
                                   onChange={handleEditInputChange}
                                   className="col-span-3"
                                 />
@@ -327,11 +399,11 @@ export default function McpConfigPage() {
                                   htmlFor="edit_mcp_type"
                                   className="text-right"
                                 >
-                                  API Key
+                                  MCP 类型
                                 </Label>
                                 <Input
                                   id="edit_mcp_type"
-                                  defaultValue={editingConfig?.type || 'null'}
+                                  value={editingConfig?.type || ''}
                                   onChange={handleEditInputChange}
                                   className="col-span-3"
                                 />
@@ -346,8 +418,8 @@ export default function McpConfigPage() {
                                 <Input
                                   id="edit_mcp_auth_token"
                                   type="password"
-                                  defaultValue={
-                                    editingConfig?.need_token ? '******' : ''
+                                  value={
+                                    editingConfig?.auth_token || ''
                                   }
                                   onChange={handleEditInputChange}
                                   className="col-span-5"
@@ -364,7 +436,6 @@ export default function McpConfigPage() {
                                   id="edit_mcp_enabled"
                                   checked={editingConfig?.enabled || false}
                                   onCheckedChange={(checkedState) => {
-                                    // 将 CheckedState 转换为 boolean
                                     const isChecked = checkedState === true;
                                     handleEditInputChangeCheckbox(
                                       isChecked,
@@ -409,8 +480,7 @@ export default function McpConfigPage() {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              {error && <div className="text-red-500 mb-4">{error}</div>}{' '}
-              {/* 显示错误信息 */}
+              {error && <div className="text-red-500 mb-4">{error}</div>}
               <DialogHeader>
                 <DialogTitle>添加MCP</DialogTitle>
                 <DialogDescription>
@@ -426,6 +496,7 @@ export default function McpConfigPage() {
                   <Input
                     id="mcp_name"
                     placeholder="MCP"
+                    value={addFormData.name}
                     onChange={handleInputChange}
                     className="col-span-3"
                   />
@@ -438,6 +509,7 @@ export default function McpConfigPage() {
                   <Input
                     id="mcp_url"
                     placeholder="URL"
+                    value={addFormData.url}
                     onChange={handleInputChange}
                     className="col-span-3"
                   />
@@ -450,6 +522,7 @@ export default function McpConfigPage() {
                   <Input
                     id="mcp_type"
                     placeholder="SSE / STDIO / HTTP"
+                    value={addFormData.type}
                     onChange={handleInputChange}
                     className="col-span-3"
                   />
@@ -465,8 +538,22 @@ export default function McpConfigPage() {
                     id="mcp_auth_token"
                     type="password"
                     placeholder="Bearer Token (可选)"
+                    value={addFormData.auth_token}
                     onChange={handleInputChange}
                     className="col-span-5"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="mcp_enabled" className="text-right">
+                    默认启用
+                  </Label>
+                  <Checkbox
+                    id="mcp_enabled"
+                    checked={addFormData.enabled}
+                    onCheckedChange={(checked) => 
+                      setAddFormData(prev => ({ ...prev, enabled: checked === true }))
+                    }
+                    className="col-span-3"
                   />
                 </div>
               </div>
@@ -501,7 +588,6 @@ export default function McpConfigPage() {
             </Toast.Action>
           </Toast.Root>
 
-          {/* 触发 Toast 的隐藏容器 */}
           <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
         </div>
       </div>

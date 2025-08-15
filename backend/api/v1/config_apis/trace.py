@@ -7,6 +7,7 @@ from db.models.trace import TraceModel, TraceModelEntity
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from extensions.trace.base import init_instrument, TraceConfig
+from config.providers.trace_provider import trace_provider
 
 from loguru import logger
 
@@ -44,6 +45,7 @@ async def set_trace_config(
     )
 
     session.add(trace_config)
+    trace_provider.update(trace_config)
     try:
         await session.commit()
         await session.refresh(trace_config)
