@@ -35,7 +35,7 @@ async def create_mcp(
         await session.commit()
         await session.refresh(mcp)
         mcp_provider.add(mcp)
-        config_change_manager.notify_change_async(
+        await config_change_manager.notify_change_async(
             event_source=ChangeEventSource.MCP,
             source_id=mcp.id,
             event_type=ChangeEventType.ADD,
@@ -133,7 +133,7 @@ async def update_mcp(
     await session.refresh(mcp)
 
     mcp_provider.update(mcp)
-    config_change_manager.notify_change_async(
+    await config_change_manager.notify_change_async(
         event_source=ChangeEventSource.MCP,
         source_id=mcp.id,
         event_type=ChangeEventType.UPDATE,
@@ -157,7 +157,7 @@ async def delete_mcp(
     await session.commit()
 
     mcp_provider.delete(mcp_id)
-    config_change_manager.notify_change_async(
+    await config_change_manager.notify_change_async(
         event_source=ChangeEventSource.MCP,
         source_id=mcp_id,
         event_type=ChangeEventType.DELETE,

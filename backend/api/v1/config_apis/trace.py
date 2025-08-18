@@ -41,7 +41,7 @@ async def set_trace_config(
         await session.commit()
         await session.refresh(trace_config)
         trace_provider.update(trace_config)
-        config_change_manager.notify_change_async(
+        await config_change_manager.notify_change_async(
             event_source=ChangeEventSource.TRACE,
             source_id=trace_config.id,
             event_type=ChangeEventType.UPDATE,
