@@ -123,7 +123,7 @@ async def update_thread_title(
         thread.title = chat_response.message.content
     except Exception as e:
         logger.error(f"Failed to update conversation {thread_id} title: {e}")
-        thread.title = f"{messages[0].content[0]['text'][:5]}..." if messages else "未命名会话"
+        thread.title = f"{messages[0].content[0]['text'][:10]}..." if messages else "未命名会话"
 
     session.add(thread)
     await session.commit()
