@@ -8,6 +8,11 @@ from sqlalchemy.exc import IntegrityError
 from typing import List
 from sqlmodel import select
 from db.models.knowledgebase.file import KbFileEntity
+from llama_index.core.llms import LLM
+from config.providers.llm_provider import llm_provider
+from db.models.llm import LlmModelEntity
+from utils.message_utils import convert_to_chat_messages
+
 thread_router = APIRouter()
 
 
@@ -45,7 +50,7 @@ async def get_threads(
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
 ):
-    sql_results = await session.exec(select(ThreadEntity).offset(offset).limit(limit))
+    sql_results = await session.exec(select(ThreadEntity).order_by(ThreadEntity.created_at.desc()).offset(offset).limit(limit))
     thread_entities = sql_results.all()
     thread_models = [
         ThreadRead.model_validate(
@@ -54,6 +59,7 @@ async def get_threads(
         for thread in thread_entities
     ]
     return thread_models
+
 async def delete_related_attachments_in_messages(session: AsyncSession, thread_id: str):
     logger.info("[thread] Start deleting related attachments in messages.")
     sql_results = await session.exec(
@@ -77,6 +83,7 @@ async def delete_related_attachments_in_messages(session: AsyncSession, thread_i
         await session.delete(attachment_file_entity)
         await session.commit()
     logger.info("[thread] Deleted related attachments in messages successfully.")
+
 @thread_router.delete("/{thread_id}")
 async def delete_thread(
     thread_id: str,
@@ -95,6 +102,34 @@ async def delete_thread(
     logger.info(f"Conversation {thread_id} deleted.")
     return {"message": f"Conversation {thread_id} deleted."}
 
+@thread_router.patch("/{thread_id}")
+async def update_thread_title(
+    thread_id: str,
+    messages: List[MessageCreate],
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Updating conversation {thread_id} title based on messages {messages}.")
+    thread = await session.get(ThreadEntity, thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail=f"Conversation {thread_id} not found.")
+    try:
+        llm_sql_results = await session.exec(select(LlmModelEntity))
+        llm_entities = llm_sql_results.all()
+        llm: LLM = llm_provider.get_llm_model(model_id=llm_entities[0].model_id)
+        input_messages = [{"role": "system", "content": "你是一个智能助手，负责为对话生成标题，输出5-10个字即可。"} ] + [msg.model_dump() for msg in messages]
+        chat_response = await llm.achat(
+            messages=convert_to_chat_messages(input_messages),
+        )
+        thread.title = chat_response.message.content
+    except Exception as e:
+        logger.error(f"Failed to update conversation {thread_id} title: {e}")
+        thread.title = f"{messages[0].content[0]['text'][:5]}..." if messages else "未命名会话"
+
+    session.add(thread)
+    await session.commit()
+
+    logger.info(f"Conversation {thread_id} updated.")
+    return {"message": f"Conversation {thread_id} updated."}
 
 @thread_router.post("/{thread_id}/messages")
 async def create_thread_message(

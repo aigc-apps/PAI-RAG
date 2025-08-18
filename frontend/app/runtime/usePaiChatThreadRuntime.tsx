@@ -24,7 +24,6 @@ import {
 import { ReactNode, useMemo } from 'react'; // ✅ 添加这一行以导入 ReactNode
 import { useChatOptions } from '../providers/chat';
 import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
-import { TableBody } from '@/components/ui/table';
 
 interface Props {
   children?: ReactNode;
@@ -370,17 +369,23 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     }
   },
   async generateTitle(remoteId, messages) {
-    // Generate title from messages using your AI
-    // const title = await generateTitle(messages);
-    // await db.threads.update(remoteId, { title });
-    // return new ReadableStream(); // Return empty stream
-
-    // TODO:generateTitle
-    // const thread = mockThreads.find((t) => t.id === remoteId);
-    // if (thread) {
-    //   thread.title = `AI 生成标题: ${messages[0]?.content.slice(0, 10) || "..."}`;
-    // }
-    return new ReadableStream(); // 返回空流
+    console.log("generateTitle", remoteId, JSON.stringify(messages));
+    try {
+      const res = await fetch(`/v1/agent/threads/${remoteId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages), 
+      });
+      if (!res.ok) {
+        throw new Error('生成标题失败，请检查网络或配置');
+      }
+      return new ReadableStream(); // 返回空流
+    } catch (err: any) {
+      // 显示错误提示
+      throw new Error('生成标题失败，请检查网络或配置');
+    }
   },
 };
 
