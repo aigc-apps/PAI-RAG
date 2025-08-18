@@ -3,7 +3,7 @@ from typing import Type
 from sqlmodel import SQLModel
 from db.models.trace import TraceModelEntity
 from config.providers.base_provider import BaseConfigProvider
-from extensions.trace.base import init_instrument, TraceConfig
+from extensions.trace.base import init_instrument
 
 
 class TraceProvider(BaseConfigProvider):
@@ -15,21 +15,15 @@ class TraceProvider(BaseConfigProvider):
         if not entries:
             return
         entry = entries[0]
-        config = TraceConfig(
-                    service_name=getattr(entry, 'service_name', None),
-                    token=getattr(entry, 'token', None),
-                    endpoint=getattr(entry, 'endpoint', None),
-                    enabled=getattr(entry, 'enabled', None),
-                    user_args=getattr(entry, 'user_args', None)
-                )
-        if config.is_enabled():
-            init_instrument(config=config)
+        init_instrument(config=entry)
 
     def add(self, entry):
         super().add(entry)
+        init_instrument(config=entry)
 
     def update(self, entry):
         super().update(entry)
+        init_instrument(config=entry)
 
 
 

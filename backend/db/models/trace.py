@@ -1,4 +1,6 @@
 from sqlmodel import Field, SQLModel
+from sqlalchemy import Column, JSON
+from typing import Optional
 
 
 class TraceModel(SQLModel):
@@ -6,9 +8,12 @@ class TraceModel(SQLModel):
     token: str = Field(default=None)
     service_name: str = Field(default=None)
     enabled: bool = Field(default=False)
+    user_args: Optional[dict] = Field(default=None, sa_column=Column(JSON))
 
 
 class TraceModelEntity(TraceModel, table=True):
     __tablename__ = "pai_trace_config"
 
     id: str = Field(default="default_trace_id", primary_key=True)
+    def is_enabled(self) -> bool:
+        return self.enabled and self.service_name and self.token and self.endpoint

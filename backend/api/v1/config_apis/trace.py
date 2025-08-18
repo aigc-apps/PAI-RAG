@@ -6,7 +6,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.trace import TraceModel, TraceModelEntity
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
-from extensions.trace.base import init_instrument, TraceConfig
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from config.providers.config_change_manager import config_change_manager
 from config.providers.trace_provider import trace_provider
@@ -36,15 +35,6 @@ async def set_trace_config(
         trace_config.service_name = (
             new_trace_config.service_name or trace_config.service_name
         )
-
-    init_instrument(
-        config=TraceConfig(
-            service_name=trace_config.service_name,
-            endpoint=trace_config.endpoint,
-            token=trace_config.token,
-            enabled=trace_config.enabled,
-        )
-    )
 
     session.add(trace_config)
     try:
