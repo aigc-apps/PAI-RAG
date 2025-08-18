@@ -821,6 +821,7 @@ export default function KnowledgeBaseDetailPage(
                       className="hidden"
                       ref={fileInputRef}
                       onChange={(e) => handleFileUpload(e.target.files)}
+                      multiple
                     />
                     <div className="text-xs text-muted-foreground">
                       支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
