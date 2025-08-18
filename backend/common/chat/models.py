@@ -80,6 +80,7 @@ class ChatAgentRequest(BaseModel):
     enable_search: Optional[bool] = False
     enable_agent: Optional[bool] = False
     max_steps: Optional[int] = None
+    user_id: Optional[str] = None
 
     enable_attachments: Optional[bool] = False  # 是否启用附件功能
 
