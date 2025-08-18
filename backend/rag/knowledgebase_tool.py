@@ -202,6 +202,14 @@ class PaiKnowledgebaseClient:
         logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
         vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
+        embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
+            knowledgebase.embedding_model
+        )
+        texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}" for node in nodes]
+        embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
+        for i in range(len(nodes)):
+            nodes[i].embedding = embeddings[i]
+
         await vector_store.async_add(nodes)
         logger.info(f"Finished inserting {len(nodes)} into vector store.")
 
