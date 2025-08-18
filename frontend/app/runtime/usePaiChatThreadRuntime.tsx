@@ -293,7 +293,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
       if (!res.ok) throw new Error('获取配置失败');
       const response = await res.json();
       return {
-        threads: response.map((t: any) => ({
+        threads: response.data.map((t: any) => ({
           status: t.archived ? 'archived' : 'regular',
           remoteId: t.id,
           title: t.title,
@@ -331,12 +331,12 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
         throw new Error(`Failed to create thread: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      initializedThreadId = data.id;
+      const result = await response.json();
+      initializedThreadId = result.data.id;
 
       return {
-        remoteId: data.id,
-        externalId: data.id,
+        remoteId: result.data.id,
+        externalId: result.data.id,
       };
     } catch (error) {
       console.error('Error creating thread:', error);
@@ -370,10 +370,9 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     }
   },
   async generateTitle(remoteId, messages) {
-    console.log("generateTitle", remoteId, JSON.stringify(messages));
     try {
-      const res = await fetch(`/v1/agent/threads/${remoteId}`, {
-        method: 'PATCH',
+      const res = await fetch(`/v1/agent/threads/${remoteId}/title`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -407,7 +406,8 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           const res = await fetch(`/v1/agent/threads/${remoteId}/messages`);
 
           if (!res.ok) throw new Error('获取配置失败');
-          const messages = await res.json();
+          const result = await res.json();
+          const messages = result.data;
           if (messages.length === 0) {
             return { headId: null, messages: [] };
           }
