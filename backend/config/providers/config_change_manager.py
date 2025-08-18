@@ -42,6 +42,7 @@ class ConfigChangeManager:
         if not self.worker_mode:
             from config.providers.mcp_tool_provider import mcp_provider
             from config.providers.websearch_provider import websearch_provider
+            from config.providers.trace_provider import trace_provider
             from config.providers.reranker_provider import reranker_provider
             from config.providers.chatbot_provider import chatbot_provider
             await mcp_provider.full_load_from_db_async()
@@ -51,6 +52,8 @@ class ConfigChangeManager:
             await reranker_provider.full_load_from_db_async()
             logger.info("Initialized reranker configs.")
             await chatbot_provider.full_load_from_db_async()
+            logger.info("Initialized trace configs.")
+            await trace_provider.full_load_from_db_async()
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
@@ -185,6 +188,9 @@ class ConfigChangeManager:
             case ChangeEventSource.PROMPT:
                 from config.providers.prompt_provider import prompt_provider
                 return prompt_provider
+            case ChangeEventSource.TRACE:
+                from config.providers.trace_provider import trace_provider
+                return trace_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 

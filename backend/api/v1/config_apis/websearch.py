@@ -53,7 +53,7 @@ async def add_search_config(
         await session.commit()
         await session.refresh(search_config)
         websearch_provider.update(search_config)
-        config_change_manager.notify_change_async(
+        await config_change_manager.notify_change_async(
             event_source=ChangeEventSource.WEBSEARCH,
             source_id=search_config.id,
             event_type=ChangeEventType.UPDATE,
