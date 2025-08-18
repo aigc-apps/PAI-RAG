@@ -8,13 +8,19 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   async rewrites() {
-    return [
-      // 代理所有以/api开头的请求到目标服务器
-      {
-        source: '/v1/:path*', // 客户端请求的路径
-        destination: 'http://localhost:8682/v1/:path*' // 代理目标地址
-      }
-    ];
+    if (process.env.NODE_ENV === 'development') {
+      return [
+        // 代理所有以/api开头的请求到目标服务器
+        {
+          source: '/v1/:path*', // 客户端请求的路径
+          destination: 'http://localhost:8682/v1/:path*' // 代理目标地址
+        }
+      ];
+    }
+    else {
+      console.log("not using rewrite in production.")
+      return [];
+    }
   }
 };
 

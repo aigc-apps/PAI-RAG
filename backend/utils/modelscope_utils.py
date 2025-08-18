@@ -11,19 +11,13 @@ import os
 import json
 from loguru import logger
 
-DEFAULT_MODEL_DIR = "./localdata/model_repository"
-
-modelscope_id_map = {
-    "PDF-Extract-Kit-1.0": "Ceceliachenen/PDF-Extract-Kit-1.0",
-    "bge-m3": "BAAI/bge-m3",
-    "bge-reranker-base": "BAAI/bge-reranker-base",
-    "bge-reranker-large": "BAAI/bge-reranker-large",
-}
+INTERNAL_MODEL_DIR = "./model_repository"
+INTERNAL_MODELS = ["BAAI/bge-m3", "Ceceliachenen/PDF-Extract-Kit-1.0"] #必须的模型文件，提前下载
 
 
-def init_mineru_config(model_dir: str = DEFAULT_MODEL_DIR):
+def init_mineru_config(model_dir: str = INTERNAL_MODEL_DIR):
     # 获取配置文件目录
-    download_model_to_directory("PDF-Extract-Kit-1.0", model_dir=model_dir)
+    download_model_to_directory("Ceceliachenen/PDF-Extract-Kit-1.0")
 
     current_dir_path = Path(__file__).parent.parent.parent
     source_path = os.path.join(current_dir_path, "magic-pdf.template.json")
@@ -56,20 +50,20 @@ def init_mineru_config(model_dir: str = DEFAULT_MODEL_DIR):
     )
 
 
-def download_model_to_directory(model_name: str, model_dir: str = DEFAULT_MODEL_DIR):
-    default_model_dir = os.getenv("PAIRAG_MODEL_DIR")  # 在EAS上不可写入
+def download_model_to_directory(model_name: str):
+    if model_name in INTERNAL_MODELS:
+        default_model_dir = INTERNAL_MODEL_DIR
+    else:
+        default_model_dir = os.getenv("PAIRAG_MODEL_DIR")
     if default_model_dir:
         default_model_path = os.path.join(default_model_dir, model_name)
         if os.path.exists(default_model_path):
             logger.info(f"Model {model_name} already exists in {default_model_path}")
             return default_model_path
 
-    if model_name in modelscope_id_map:
-        model_id = modelscope_id_map[model_name]
-    else:
-        model_id = model_name
+    model_id = model_name
 
-    pai_model_path = os.path.join(model_dir, model_id)
+    pai_model_path = os.path.join(default_model_dir, model_id)
     logger.info(f"Model {model_id} not found, start downloading to {pai_model_path}.")
 
     if not os.path.exists(pai_model_path):

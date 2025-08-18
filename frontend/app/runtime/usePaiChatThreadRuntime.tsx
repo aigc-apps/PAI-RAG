@@ -6,6 +6,10 @@ import {
   ThreadMessage,
   ChatModelRunResult,
   AssistantRuntimeProvider,
+  useThreadListItem,
+  ThreadHistoryAdapter,
+  ExportedMessageRepository,
+  RuntimeAdapterProvider,
 } from '@assistant-ui/react';
 import { INTERNAL } from '@assistant-ui/react';
 
@@ -17,9 +21,8 @@ import {
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
   type unstable_RemoteThreadListAdapter,
 } from '@assistant-ui/react';
-import { ReactNode } from 'react'; // ✅ 添加这一行以导入 ReactNode
+import { ReactNode, useMemo } from 'react'; // ✅ 添加这一行以导入 ReactNode
 import { useChatOptions } from '../providers/chat';
-import { StableProvider } from './stableProvider';
 import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
 import { TableBody } from '@/components/ui/table';
 
@@ -28,7 +31,12 @@ interface Props {
 }
 
 type HeadersValue = Record<string, string> | Headers;
+let isInitializing = false;
+let initializedThreadId = "";
 
+function delay(ms: any) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 export type EdgeModelAdapterOptions = {
   api: string;
   /**
@@ -125,7 +133,9 @@ export class MyModelAdapter implements ChatModelAdapter {
 
     const reader = result.body.getReader();
     const decoder = new TextDecoder();
-    let content = '';
+    let content = "";
+    let reasoning_content = "";
+    let lastEventType: 'reasoning' | 'text' | 'tool-call' | null = null;
     // let toolCalls: { [key: string]: any } = {};
     let buffer = '';
 
@@ -140,7 +150,7 @@ export class MyModelAdapter implements ChatModelAdapter {
     } = {};
 
     const eventQueue: Array<{
-      type: 'text' | 'tool-call';
+      type: "text" | "tool-call" | "reasoning";
       data: any;
     }> = [];
 
@@ -156,17 +166,34 @@ export class MyModelAdapter implements ChatModelAdapter {
           const chunk = JSON.parse(line.slice(5));
           // 处理单条数据
           const delta = chunk.choices[0]?.delta;
+          if (delta.reasoning_completed) {
+            // 思考完成，清空 reasoning_content
+            reasoning_content = "";
+          }
+
+          if (delta?.role === "assistant" && delta?.reasoning_content) {
+            reasoning_content += delta.reasoning_content;
+            if (lastEventType !== "reasoning") {
+              eventQueue.push({
+                type: "reasoning",
+                data: reasoning_content,
+              })
+              lastEventType = "reasoning";;
+            } else {
+              // 更新最后一条思考内容
+              eventQueue[eventQueue.length - 1].data = reasoning_content;
+            }
+          }
 
           if (delta?.role === 'assistant' && delta?.content) {
             content += delta.content;
-            if (
-              eventQueue.length === 0 ||
-              eventQueue[eventQueue.length - 1].type !== 'text'
+            if (lastEventType !== 'text'
             ) {
               eventQueue.push({
                 type: 'text',
                 data: content,
               });
+              lastEventType = "text";
             } else {
               // 更新最后一条文本内容
               eventQueue[eventQueue.length - 1].data = content;
@@ -224,7 +251,12 @@ export class MyModelAdapter implements ChatModelAdapter {
           yield {
             content: eventQueue
               .map((event) => {
-                if (event.type === 'text') {
+                if (event.type === "reasoning") {
+                  return {
+                    type: "reasoning" as const,
+                    text: event.data,
+                  };
+                } else if (event.type === "text") {
                   return {
                     type: 'text' as const,
                     text: event.data,
@@ -273,6 +305,8 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     }
   },
   async initialize(threadId: string) {
+    isInitializing = true;
+
     try {
       const url = '/v1/agent/threads';
       const now = new Date();
@@ -293,10 +327,13 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
       });
 
       if (!response.ok) {
+        isInitializing = false;
         throw new Error(`Failed to create thread: ${response.statusText}`);
       }
 
       const data = await response.json();
+      initializedThreadId = data.id;
+
       return {
         remoteId: data.id,
         externalId: data.id,
@@ -304,6 +341,9 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     } catch (error) {
       console.error('Error creating thread:', error);
       throw error;
+    }
+    finally {
+      isInitializing = false;
     }
   },
   async rename(remoteId, newTitle) {
@@ -344,17 +384,103 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   },
 };
 
+
+export const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
+  children,
+}) => {
+  // This runs in the context of each thread
+  const threadListItem = useThreadListItem();
+  const remoteId = threadListItem.remoteId;
+  // Create thread-specific history adapter
+  const history = useMemo<ThreadHistoryAdapter>(
+    () => ({
+      async load() {
+        if (!remoteId) return { headId: null, messages: [] };
+        // 模拟从后端获取数据
+        try {
+          const res = await fetch(`/v1/agent/threads/${remoteId}/messages`);
+
+          if (!res.ok) throw new Error('获取配置失败');
+          const messages = await res.json();
+          if (messages.length === 0) {
+            return { headId: null, messages: [] };
+          }
+          const response = ExportedMessageRepository.fromArray(
+            messages.map((m: any) => ({
+              role: m.role as ThreadMessage['role'],
+              content: m.content,
+              attachments: m.attachments,
+              id: m.id,
+              createdAt: new Date(m.createdAt),
+            })),
+          );
+          return response;
+        } catch (error) {
+          console.error('Error fetching threads:', error);
+          return { headId: null, messages: [] };
+        }
+      },
+      async append(message) {
+        if (!remoteId) {
+          console.warn('Cannot save message - thread not initialized');
+          while (isInitializing) {
+            console.log(
+              "thread isInitializing",
+              isInitializing,
+              initializedThreadId,
+            );
+            await delay(50);
+          }
+          console.log("initialized remoteId", initializedThreadId);
+        }
+
+        const remoteThreadId = remoteId ? remoteId : initializedThreadId;
+
+        try {
+          const url = `/v1/agent/threads/${remoteThreadId}/messages`;
+          console.log('append message', message);
+          
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              thread_id: remoteThreadId,
+              role: message.message.role,
+              attachments: message.message.attachments,
+              content: message.message.content,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to create thread: ${response.statusText}`);
+          }
+        } catch (error) {
+          console.error('Error creating thread:', error);
+          throw error;
+        }
+      },
+    }),
+    [remoteId],
+  );
+  const adapters = useMemo(() => ({ history }), [history]);
+  return (
+    <RuntimeAdapterProvider adapters={adapters}>
+      {children}
+    </RuntimeAdapterProvider>
+  );
+};
+
 export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   const { localRuntimeOptions, otherOptions } =
     splitLocalRuntimeOptions(options);
 
   // load chat options
-  const { model, enable_thinking, enable_search, mcp_ids, kb_ids } = useChatOptions();
+  const { model, enable_agent, enable_search, mcp_ids, kb_ids } = useChatOptions();
 
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
       return useLocalThreadRuntime(
-        new MyModelAdapter({...otherOptions, body: { model, enable_thinking, enable_search, mcp_ids, kb_ids }}),
+        new MyModelAdapter({...otherOptions, body: { model, enable_agent, enable_search, mcp_ids, kb_ids }}),
         localRuntimeOptions,
       );
     },

@@ -27,7 +27,7 @@ def parse_chat_request(chat_request: ChatAgentRequest) -> ChatAgentRequest:
             stream=chat_request.stream,
             mcp_ids=chatbot.mcp_ids,
             enable_search=chatbot.enable_search,
-            enable_thinking=chatbot.enable_agent,
+            enable_agent=chatbot.enable_agent,
             enable_attachments=chat_request.enable_attachments,
             kb_ids=chatbot.kb_ids,
             temperature=chat_request.temperature,
@@ -57,9 +57,9 @@ async def chat(chat_request: ChatAgentRequest):
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
         return error_response(code=400, message=f"Chat failed: {ve}")
-    except Exception:
+    except Exception as ex:
         logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
-        return error_response(message="Internal Server Error: {ex}", code=500)
+        return error_response(message=f"Internal Server Error: {ex}", code=500)
 
 
 agent_answer_dump_router = APIRouter()
@@ -86,6 +86,6 @@ async def get_final_answer(chat_request: ChatAgentRequest):
             "run_time": round(run_time, 1),
         }
         return final_answer_dict
-    except Exception:
+    except Exception as ex:
         logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
-        return Response(content="Internal Server Error", status_code=500)
+        return Response(content=f"Internal Server Error: {ex}", status_code=500)

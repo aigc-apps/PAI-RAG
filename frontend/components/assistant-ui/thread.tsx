@@ -19,9 +19,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-import { Button } from '@/components/ui/button';
-import { MarkdownText } from '@/components/assistant-ui/markdown-text';
-import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
+import { Button } from "@/components/ui/button";
+import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+import { CollapsibleReasoning } from "@/components/assistant-ui/reasoning-ui";
+import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 // import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { ToolFallback } from '@/components/ui/custom-tool-fallback';
 import { Brain, Search, Wrench, LibraryBig } from 'lucide-react';
@@ -50,7 +51,7 @@ export const Thread: FC<{
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
   const [kbLoading, setKbLoading] = useState(false);
   const [kbError, setKbError] = useState<string | null>(null);
-  const {kb_ids, mcp_ids, enable_search, enable_thinking, updateEnableSearch, updateEnableThinking, updateKbIds, updateMcpIds} = useChatOptions();
+  const {kb_ids, mcp_ids, enable_search, enable_agent, updateEnableSearch, updateEnablePlanning, updateKbIds, updateMcpIds} = useChatOptions();
 
   // 获取MCP配置
   useEffect(() => {
@@ -115,8 +116,8 @@ export const Thread: FC<{
     if (enable_search) {
       newOptions.push('search');
     }
-    if (enable_thinking) {
-      newOptions.push('thinking');
+    if (enable_agent) {
+      newOptions.push('planning');
     }
     if (kb_ids.length > 0) {
       newOptions.push('kb');
@@ -132,7 +133,7 @@ export const Thread: FC<{
     value: string[]
   ) => {
     updateEnableSearch(value.includes('search'));
-    updateEnableThinking(value.includes('thinking'));
+    updateEnablePlanning(value.includes('planning'));
     setActiveTools(value);
   }
 
@@ -345,8 +346,8 @@ const Composer: FC<ComposerProps> = ({
                   onValueChange={onValueChange}
                 >
                   <ToggleGroupItem
-                    value="thinking"
-                    aria-label="Toggle deep thinking"
+                    value="planning"
+                    aria-label="Toggle deep planning"
                     className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
                   >
                     <Brain /> 深度思考
@@ -475,7 +476,11 @@ const AssistantMessage: FC = () => {
       <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
         {/* <MessagePrimitive.Content components={{ Text: MarkdownText }} /> */}
         <MessagePrimitive.Content
-          components={{ tools: { Fallback: ToolFallback }, Text: MarkdownText }}
+          components={{
+            tools: { Fallback: ToolFallback },
+            Text: MarkdownText,
+            Reasoning: CollapsibleReasoning,
+          }}
         />
       </div>
 

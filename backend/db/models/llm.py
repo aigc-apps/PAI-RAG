@@ -10,6 +10,7 @@ class LlmModel(SQLModel):
     model_id: str = Field(default=None, unique=True)
     enabled: bool = Field(default=True)
     vision_support: bool = Field(default=False)
+    enable_thinking: bool = Field(default=False, description="Whether the LLM supports thinking mode.")
 
 
 class LlmModelCreate(LlmModel):

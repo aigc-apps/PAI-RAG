@@ -44,6 +44,12 @@ class OpenAIChatCompletionChunkConverter:
                                 "content": response.delta,
                                 "role": response.message.role,
                                 "tool_calls": response.message.additional_kwargs.get('tool_calls', []),
+                                "reasoning_content": (
+    response.raw.choices[0].delta.reasoning_content
+    if response.raw and response.raw.choices and hasattr(response.raw.choices[0].delta, 'reasoning_content')
+    else ""
+),
+                                "reasoning_completed": response.additional_kwargs.get("reasoning_completed", False),
                             },
                             "finish_reason": "stop" if response.message.additional_kwargs.get(
                                     "STOP_FLAG") else None,
@@ -83,6 +89,12 @@ class OpenAIChatCompletionChunkConverter:
                                 "tool_calls": response.message.additional_kwargs.get(
                                     "tool_calls", []
                                 ),
+                                "reasoning_content":(
+    response.raw.choices[0].delta.reasoning_content
+    if response.raw and response.raw.choices and hasattr(response.raw.choices[0].delta, 'reasoning_content')
+    else ""
+),
+                                "reasoning_completed": response.additional_kwargs.get("reasoning_completed", False),
                             },
                             "finish_reason": "stop" if response.message.additional_kwargs.get(
                                     "STOP_FLAG") else None,
