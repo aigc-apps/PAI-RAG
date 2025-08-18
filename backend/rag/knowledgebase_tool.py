@@ -389,9 +389,10 @@ class PaiKnowledgebaseClient:
 kb_client = PaiKnowledgebaseClient()
 
 
-async def aget_knowledgebase_result(query: str, kb_id: str) -> str:
+async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str) -> str:
     """Get aliyun search tool"""
-    result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id)
+    logger.info(f"Searching knowledgebase with kb {kb_id} and user {user_id}.")
+    result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id, user_id=user_id)
     records = []
     for score_node in result_nodes:
         images = []
@@ -403,7 +404,8 @@ async def aget_knowledgebase_result(query: str, kb_id: str) -> str:
             "text": score_node.node.get_content(),
             "metadata": {
                 "file_name": score_node.node.metadata.get("file_name", ""),
-                "file_url": score_node.node.metadata.get("file_path", "")
+                "file_url": score_node.node.metadata.get("file_path", ""),
+                "file_source": score_node.node.metadata.get("file_source", "")
             },
             "score": score_node.score,
             "images": images
@@ -411,9 +413,9 @@ async def aget_knowledgebase_result(query: str, kb_id: str) -> str:
     return json.dumps({"result": records}, ensure_ascii=False)
 
 
-async def aget_knowledgebase_tool(kb_id: str):
+async def aget_knowledgebase_tool(kb_id: str, user_id: Optional[str] = None):
     knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
-    aquery_knowledgebase_func = partial(aget_knowledgebase_result, kb_id=kb_id)
+    aquery_knowledgebase_func = partial(aget_knowledgebase_result, kb_id=kb_id, user_id=user_id)
     search_knowledgebase_tool = FunctionTool.from_defaults(
         async_fn=aquery_knowledgebase_func,
         name=f"search-knowledgebase-{kb_id}",

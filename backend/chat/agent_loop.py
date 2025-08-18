@@ -98,7 +98,7 @@ async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
 
     kb_ids = chat_request.kb_ids or []
     for kb_id in kb_ids:
-        kb_tools.append(await aget_knowledgebase_tool(kb_id))
+        kb_tools.append(await aget_knowledgebase_tool(kb_id=kb_id, user_id=chat_request.user_id))
 
     logger.info(f"Resolved {len(kb_tools)} knowledgebase tools.")
     return kb_tools
@@ -108,18 +108,8 @@ async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
 async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
     return await async_fn.acall(**fn_args)
 
-async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
-    """
-    history_memory_without_sys_prompt =  state.memory.get_context()[1:]
-    synthesize_prompt = get_system_prompt()
-    new_messages = []
-    new_messages.append(ChatMessage(role=MessageRole.SYSTEM, content=synthesize_prompt))
-    new_messages.extend(history_memory_without_sys_prompt)
-    sythesize_memory = BaseMemory()
-    sythesize_memory.from_messages(new_messages)
-    state.memory = sythesize_memory
-    """
 
+async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
     async for chunk in astep_gen(
             llm=state.llm,
             memory=state.memory,
@@ -128,9 +118,7 @@ async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, No
         ):
         chunk.message.additional_kwargs["step"] = state.step
         yield chunk
-        if chunk.message.additional_kwargs.get("STOP_FLAG"):
-            state.stop_flag = True
-            break
+
 
 async def step_agent(state: AgentState, attachments: List[dict]) -> AsyncGenerator[ChatResponse, None]:
     async for chunk in astep_gen(
@@ -242,10 +230,10 @@ async def astep_gen(
 
     async for response in response_gen:
         reasoning_content = (
-    response.raw.choices[0].delta.reasoning_content
-    if response.raw and response.raw.choices and hasattr(response.raw.choices[0].delta, 'reasoning_content')
-    else ""
-)
+            response.raw.choices[0].delta.reasoning_content
+            if response.raw and response.raw.choices and hasattr(response.raw.choices[0].delta, 'reasoning_content')
+            else ""
+        )
         tool_calls = response.message.additional_kwargs.get("tool_calls")
         if tool_calls:
             tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
@@ -259,9 +247,14 @@ async def astep_gen(
                 yield ChatResponse(
                     message=tool_call_message,
                     delta="",
+                    additional_kwargs=response.additional_kwargs,
                 )
+                response.additional_kwargs = {} # 重置token usage
+            if not response.delta:
+                continue # continue if no text provided.
+
         if not reasoning_content:
-            if thinking_model and response.delta:
+            if thinking_model:
                 response.message.additional_kwargs.pop("tool_calls", None)
                 if not content_thinking_close_flag:
                     end_pos = response.delta.find(closing_tag)
@@ -281,11 +274,11 @@ async def astep_gen(
                     response.additional_kwargs["reasoning_completed"] = True,
                 response_context += response.delta
                 yield response
-            elif response.delta:
+            else:
                 response.message.additional_kwargs.pop("tool_calls", None)
                 response_context += response.delta
                 yield response
-        else:
+        elif reasoning_content:
             content_thinking_close_flag = True
             response.message.additional_kwargs.pop("tool_calls", None)
             yield response
@@ -299,13 +292,14 @@ async def astep_gen(
             )
         )
     if tool_calls:
-        tool_calls = cast(List[ChoiceDeltaToolCall], tool_calls)
         for tool_call in tool_calls:
             async_tool_fn = tool_name_map[tool_call.function.name]
             if tool_call.function.arguments:
                 fn_args = json.loads(tool_call.function.arguments)
             else:
                 fn_args = {}
+
+            logger.info(f"calling tool '{tool_call.function.name}' with parameter '{fn_args}'")
             tool_result = await call_tool_with_retry(async_tool_fn, fn_args)
 
             tool_content = tool_result.content

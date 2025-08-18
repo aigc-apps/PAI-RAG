@@ -199,8 +199,8 @@ export class MyModelAdapter implements ChatModelAdapter {
               eventQueue[eventQueue.length - 1].data = content;
             }
           }
-          if (delta?.tool_calls) {
-            for (const toolCall of delta.tool_calls) {
+          if (chunk?.actions) {
+            for (const toolCall of chunk.actions) {
               const toolCallId = toolCall.id;
               if (!currentToolCallMap[toolCallId]) {
                 currentToolCallMap[toolCallId] = {
@@ -234,13 +234,13 @@ export class MyModelAdapter implements ChatModelAdapter {
               AddOrMergeToolCall(eventQueue, currentToolCallMap[toolCallId]);
             }
           }
-          if (delta?.role === 'tool') {
+          if (chunk?.observation) {
             // 处理工具调用结果
             const keys = Object.keys(currentToolCallMap);
             const lastKey = keys[keys.length - 1];
             if (currentToolCallMap[lastKey]) {
               currentToolCallMap[lastKey].state = 'complete';
-              currentToolCallMap[lastKey].result = delta.content;
+              currentToolCallMap[lastKey].result = chunk?.observation;
             } else {
               console.warn(`Tool call with ID ${lastKey} not found.`);
             }
@@ -267,6 +267,7 @@ export class MyModelAdapter implements ChatModelAdapter {
                     type: 'tool-call' as const,
                     toolCallId: toolCall.id,
                     toolName: toolCall.function.name,
+                    argsText: JSON.stringify(toolCall.function.arguments),
                     args: toolCall.function.arguments,
                     state: toolCall.state,
                     result: toolCall.result,
