@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Response
-from api.response_model import error_response
 from sse_starlette import EventSourceResponse
 from chat.agent_loop import AgentLoop
 from common.chat.models import ChatAgentRequest
@@ -56,10 +55,10 @@ async def chat(chat_request: ChatAgentRequest):
         )
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
-        return error_response(code=400, message=f"Chat failed: {ve}")
+        raise ValueError(f"Chat failed: {ve}")
     except Exception as ex:
         logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
-        return error_response(message=f"Internal Server Error: {ex}", code=500)
+        raise ValueError(f"Chat failed: {ex}")
 
 
 agent_answer_dump_router = APIRouter()
