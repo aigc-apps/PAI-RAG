@@ -129,6 +129,7 @@ export const Thread: FC<{
     onToggleChange?.(newOptions);
   }, []);
 
+
   const handleToolUpdate = (
     value: string[]
   ) => {
@@ -175,12 +176,27 @@ export const Thread: FC<{
     onToggleChange?.(activeTools);
   };
 
+  const [tempActiveTools, setTempActiveTools] = useState<string[]>([]);
+
   const handleOpenMcpModal = () => {
+    setTempActiveTools([...activeTools]);
     setIsModalOpen(true);
   };
+  const handleCancelMcpModal = () => {
+  // 恢复之前的状态
+  setActiveTools(tempActiveTools);
+  setIsModalOpen(false);
+};
   const handleOpenKbModal = () => {
+    setTempActiveTools([...activeTools]);
     setIsKbModalOpen(true);
   };
+
+  const handleCancelKbModal = () => {
+  // 恢复之前的状态
+  setActiveTools([...tempActiveTools]);
+  setIsKbModalOpen(false);
+};
 
   return (
     <>
@@ -226,7 +242,7 @@ export const Thread: FC<{
           handleMcpUpdate(updatedConfigs);
           setIsModalOpen(false);
         }}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCancelMcpModal}
         isLoading={mcpLoading}
         error={mcpError}
       />
@@ -238,7 +254,7 @@ export const Thread: FC<{
           handleKbUpdate(updatedKbConfigs);
           setIsKbModalOpen(false);
         }}
-        onClose={() => setIsKbModalOpen(false)}
+        onClose={handleCancelKbModal}
         isLoading={kbLoading}
         error={kbError}
       />
