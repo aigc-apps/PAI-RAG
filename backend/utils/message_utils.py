@@ -65,3 +65,8 @@ def convert_to_chat_messages(messages: List[dict]):
         else:
             ret_messages.append(message_dict)
     return ret_messages
+
+
+def get_content_from_messages(contents: List[dict]) -> str:
+    content_str = "\n".join(item["text"] for item in contents if "text" in item)
+    return content_str

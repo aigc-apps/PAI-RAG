@@ -14,7 +14,7 @@ from config.providers.llm_provider import llm_provider
 from db.models.llm import LlmModelEntity
 from api.response_model import success_response, error_response, ResponseModel
 from chat.prompts import DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
-
+from utils.message_utils import get_content_from_messages
 thread_router = APIRouter()
 
 
@@ -120,7 +120,7 @@ async def update_thread_title(
         llm_entities = llm_sql_results.all()
         llm: LLM = llm_provider.get_llm_model(model_id=llm_entities[0].model_id)
         generate_title_prompt = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE.format(
-            chat_history="\n".join([f"{msg.role}: {msg.content[0].get('text', '')}" for msg in messages])
+            chat_history="\n".join([f"{msg.role}: {get_content_from_messages(msg.content)}" for msg in messages])
         )
         chat_response = await llm.acomplete(
             prompt=generate_title_prompt,
@@ -129,7 +129,7 @@ async def update_thread_title(
         thread.title = json.loads(chat_response.text).get("title", "未命名会话")
     except Exception as e:
         logger.error(f"Failed to update conversation {thread_id} title: {e}")
-        thread.title = f"{messages[0].content[0]['text'][:10]}..." if messages else "未命名会话"
+        thread.title = f"{get_content_from_messages(messages[0].content)[:10]}..." if messages else "未命名会话"
 
     session.add(thread)
     await session.commit()
