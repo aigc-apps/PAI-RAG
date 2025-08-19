@@ -38,8 +38,6 @@ export const DatetimeInput: FC<DatetimeProps> = ({
   const [date, setDate] = useState<Date>(initialDate);
   const [time, setTime] = useState(initalTime);
 
-  console.log("##", value === "");
-  console.log("###", date, initialDate, time, initalTime);
   const handleSaveDate = (newDate: Date) => {
     console.log('选择日期: ', newDate);
 
