@@ -64,7 +64,7 @@ async def set_kb_metadata(
 async def list_metadata(
     kb_id: str,
     offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    limit: int = Query(default=20, lte=1000),
     session: AsyncSession = Depends(get_session),
 ):
     metadata_results = await session.exec(

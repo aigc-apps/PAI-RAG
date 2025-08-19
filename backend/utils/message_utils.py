@@ -1,14 +1,9 @@
-import json
 from typing import List
 from llama_index.core.base.llms.types import (
     ChatMessage,
     ImageBlock,
     TextBlock,
     MessageRole,
-)
-from openai.types.chat.chat_completion_chunk import (
-    ChoiceDeltaToolCall,
-    ChoiceDeltaToolCallFunction,
 )
 
 
@@ -23,7 +18,6 @@ def to_chat_messages(
     # NOTE: Azure OpenAI returns function calling messages without a content key
     content = message_dict.get("content")
     blocks = []
-    tool_call_index = 0
     if isinstance(content, str):
         return ChatMessage(role=role, content=content)
     else:
@@ -53,37 +47,12 @@ def to_chat_messages(
                     )
                 )
             elif t == "tool-call":
-                tool_call_id = elem.get("toolCallId")
-                tool_name = elem.get("toolName")
-                tool_argument = json.dumps(elem.get("args"), ensure_ascii=False)
-                tool_calls = [
-                    ChoiceDeltaToolCall(
-                        index=tool_call_index,
-                        id=tool_call_id,
-                        type="function",
-                        function=ChoiceDeltaToolCallFunction(
-                            name=tool_name,
-                            arguments=tool_argument,
-                        ),
-                    )
-                ]
                 chat_messages.append(
                     ChatMessage(
-                        role=role,
-                        blocks=blocks,
-                        additional_kwargs={"tool_calls": tool_calls},
-                    )
-                )
-                chat_messages.append(
-                    ChatMessage(
-                        role=MessageRole.TOOL,
+                        role=MessageRole.USER,
                         content=elem.get("result", ""),
-                        additional_kwargs={
-                            "tool_call_id": tool_call_id,
-                        },
                     )
                 )
-                tool_call_index += 1
         return chat_messages
 
 
