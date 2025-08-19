@@ -13,8 +13,8 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     file: File;
   }): AsyncGenerator<PendingAttachment, void> {
     // Validate file size
-    const fid = crypto.randomUUID();
-
+    const { v4: uuidv4 } = require('uuid');
+    const fid = uuidv4();
     yield {
       id: fid,
       type: file.type.startsWith('image/') ? 'image' : 'document',
