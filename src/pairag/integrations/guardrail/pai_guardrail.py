@@ -80,7 +80,7 @@ class PaiLlmGuardrail:
                 )
 
                 logger.info(
-                    f"Check text {text} success. result:{result}. Elaspsed: {time.time() - start} seconds."
+                    f"Check text {text} success. result:{response}. Elaspsed: {time.time() - start} seconds."
                 )
                 return result
             else:

@@ -353,9 +353,7 @@ class ChatFlow:
         )
 
         if system_role:
-            system_prompt = (
-                f"{system_role}\n\n{self.config.synthesizer.custom_prompt_template}"
-            )
+            system_prompt = f"{system_role}\n\n{system_prompt}"
 
         prompt_messages.append(
             ChatMessage(role=MessageRole.SYSTEM, content=system_prompt)
