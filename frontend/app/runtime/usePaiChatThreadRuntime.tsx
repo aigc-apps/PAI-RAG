@@ -201,12 +201,13 @@ export class MyModelAdapter implements ChatModelAdapter {
           if (chunk?.actions) {
             for (const toolCall of chunk.actions) {
               const toolCallId = toolCall.id;
+              const toolCallName = toolCall.function?.name?.replace(/search-knowledgebase.*/, "search-knowledgebase");
               if (!currentToolCallMap[toolCallId]) {
                 currentToolCallMap[toolCallId] = {
                   id: toolCallId,
                   type: 'function',
                   function: {
-                    name: toolCall.function?.name || '',
+                    name: toolCallName || '',
                     arguments: JSON.parse(
                       jsonrepair(toolCall.function?.arguments || '{}'),
                     ),
@@ -216,9 +217,9 @@ export class MyModelAdapter implements ChatModelAdapter {
                 };
               }
               // 更新 tool call
-              if (toolCall.function?.name) {
+              if (toolCallName) {
                 currentToolCallMap[toolCallId].function.name =
-                  toolCall.function.name;
+                  toolCallName;
               }
               if (toolCall.function?.arguments) {
                 // 使用 jsonrepair 修复 JSON 格式
