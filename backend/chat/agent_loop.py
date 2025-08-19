@@ -22,6 +22,7 @@ from llama_index.core.llms import LLM
 from common.chat.constants import MAX_CHAT_STEPS
 from memory.base_memory import BaseMemory
 from llama_index.core.tools import FunctionTool, ToolOutput
+from llama_index.core.base.llms.types import TextBlock
 from tenacity import retry, stop_after_attempt, wait_fixed
 from llama_index.core.base.llms.types import (
     ChatMessage,
@@ -32,7 +33,6 @@ from llama_index.core.base.llms.types import (
 from llama_index.core.bridge.pydantic import Field, BaseModel, ConfigDict
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from extensions.trace.base import use_current_span
-from chat.prompts import SYNTHESIZE_PROMPT
 from opentelemetry import trace
 
 class AgentState(BaseModel):
@@ -57,8 +57,7 @@ def get_system_prompt(enable_search: bool = False, enable_agent: bool = False, e
         tools_prompt.append(prompt.prompts["attachments_tool_prompt"])
     if kb_ids:
         tools_prompt.append(prompt.prompts["knowledgebase_tool_prompt"])
-    if not tools_prompt:
-        tools_prompt.append(prompt.prompts["without_tools_prompt"])
+
     system_prompt = prompt.prompts["system_prompt"].format(
         tools_prompt="\n\n".join(tools_prompt), current_datetime=get_prompt_current_time_str()
             )
@@ -140,12 +139,52 @@ def get_kb_content(tool_result: str):
         return "知识库中没有找到相关信息。"
 
     text = "\n\n".join([f"""
-    ## chunk {i+1}
+
+    ### 材料 {i+1}
     file_name: {node.get("metadata", {}).get("file_name", "")}
     chunk_content: {node.get("text")}
     """ for i, node in enumerate(node_list)])
 
     return text
+
+
+def merge_chat_messages_by_role(messages: List[ChatMessage]) -> List[ChatMessage]:
+    """
+    Merge consecutive ChatMessage objects that have the same role.
+
+    Args:
+        messages: List of ChatMessage objects
+
+    Returns:
+        List of merged ChatMessage objects where consecutive messages
+        with the same role are combindeed
+    """
+    if not messages:
+        return []
+
+    merged_messages = []
+    current_role = messages[0].role
+    current_msg = messages[0]
+
+    for i in range(1, len(messages)):
+        msg = messages[i]
+
+        if msg.role == current_role:
+            # Same role, append content (with newline separator)
+            current_msg.blocks.append(
+                TextBlock(text="\n\n")
+            )
+            current_msg.blocks.extend(msg.blocks)
+        else:
+            # Different role, save current group and start new one
+            merged_messages.append(current_msg)
+            current_role = msg.role
+            current_msg = msg
+
+    merged_messages.append(current_msg)
+
+    return merged_messages
+
 
 async def astep_gen(
     llm: LLM,
@@ -194,8 +233,6 @@ async def astep_gen(
                         "tool_call_id": file_reader_tool_call.id,
                     },
                 )
-                memory.add(tool_call_message)
-                memory.add(tool_result_message)
 
                 yield ChatResponse(
                     message=tool_call_message,
@@ -205,10 +242,22 @@ async def astep_gen(
                     message=tool_result_message,
                     delta=tool_result.content,
                 )
-    messages = memory.get_context(image_urls)
+
+                user_tool_message = ChatMessage(
+                    role=MessageRole.USER,
+                    content=tool_result.content,
+                )
+                memory.add(user_tool_message)
+
+
     if is_last_step:
+        prompt = prompt_provider.get_prompts()
+        SYNTHESIZE_PROMPT = prompt.prompts["without_tools_prompt"]
         synthesize_content = SYNTHESIZE_PROMPT.format(query_str=user_query)
-        messages.append(ChatMessage(role=MessageRole.USER, content=synthesize_content))
+        memory.add(ChatMessage(role=MessageRole.USER, content=synthesize_content))
+
+    messages = merge_chat_messages_by_role(memory.get_context(image_urls))
+
     if tools:
         response_gen: ChatResponseAsyncGen = await llm.astream_chat(
             messages=messages,
@@ -306,21 +355,19 @@ async def astep_gen(
             if tool_call.function.name.startswith("search-knowledgebase"):
                 tool_content = get_kb_content(tool_result.content)
 
-            tool_call_message = ChatMessage(
-                role=MessageRole.ASSISTANT,
-                content="",
-                additional_kwargs={"tool_calls": [tool_call]},
+            user_tool_msg = ChatMessage(
+                role=MessageRole.USER,
+                content=f"##工具调用结果: \n\n{tool_content}\n",
             )
+            memory.add(user_tool_msg)
+
             tool_result_message = ChatMessage(
                 role=MessageRole.TOOL,
-                content=tool_content,
-                additional_kwargs={
+                content=tool_result.content,
+                addition_kwargs={
                     "tool_call_id": tool_call.id,
-                },
+                }
             )
-            memory.add(tool_call_message)
-            memory.add(tool_result_message)
-
             yield ChatResponse(
                 message=tool_result_message,
                 delta=tool_result.content,

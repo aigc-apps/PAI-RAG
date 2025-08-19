@@ -24,16 +24,22 @@ export const DatetimeInput: FC<DatetimeProps> = ({
   width,
   onValueChange,
 }) => {
-  const initialDate = new Date(value);
+  let initialDate = new Date();
+  if (value !== undefined) {
+    initialDate = new Date(value);
+  }
   initialDate.setHours(0);
   initialDate.setMinutes(0);
   initialDate.setSeconds(0);
+
 
   const initalTime = '00:00:00';
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState<Date>(initialDate);
   const [time, setTime] = useState(initalTime);
 
+  console.log("##", value === "");
+  console.log("###", date, initialDate, time, initalTime);
   const handleSaveDate = (newDate: Date) => {
     console.log('选择日期: ', newDate);
 

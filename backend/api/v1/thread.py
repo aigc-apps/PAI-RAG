@@ -120,7 +120,7 @@ async def update_thread_title(
         llm_entities = llm_sql_results.all()
         llm: LLM = llm_provider.get_llm_model(model_id=llm_entities[0].model_id)
         generate_title_prompt = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE.format(
-            chat_history="\n".join([f"{msg.role}: {msg.content[0]['text']}" for msg in messages])
+            chat_history="\n".join([f"{msg.role}: {msg.content[0].get('text', '')}" for msg in messages])
         )
         chat_response = await llm.acomplete(
             prompt=generate_title_prompt,
@@ -177,6 +177,8 @@ async def get_thread_messages(
     sql_results = await session.exec(
         select(MessageEntity)
         .where(MessageEntity.thread_id == thread_id)
+        .order_by(MessageEntity.created_at)
+        .limit(30)
     )
     message_entities = sql_results.all()
     message_models = [

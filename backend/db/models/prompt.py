@@ -1,7 +1,7 @@
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON
 from chat.prompts import (
-    WITHOUT_TOOLS_PROMPT,
+    SYNTHESIZE_PROMPT,
     SYSTEM_PROMPT,
     SEARCH_WEB_TOOL_PROMPT,
     PLANNING_TOOL_PROMPT,
@@ -15,7 +15,7 @@ DEFAULT_PROMPTS = {
     "planning_tool_prompt": PLANNING_TOOL_PROMPT,
     "attachments_tool_prompt": ATTACHMENTS_TOOL_PROMPT,
     "knowledgebase_tool_prompt": KNOWLEDGEBASE_TOOL_PROMPT,
-    "without_tools_prompt": WITHOUT_TOOLS_PROMPT,
+    "without_tools_prompt": SYNTHESIZE_PROMPT,
 }
 
 
