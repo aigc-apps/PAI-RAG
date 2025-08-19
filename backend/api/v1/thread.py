@@ -177,6 +177,8 @@ async def get_thread_messages(
     sql_results = await session.exec(
         select(MessageEntity)
         .where(MessageEntity.thread_id == thread_id)
+        .order_by(MessageEntity.created_at)
+        .limit(30)
     )
     message_entities = sql_results.all()
     message_models = [

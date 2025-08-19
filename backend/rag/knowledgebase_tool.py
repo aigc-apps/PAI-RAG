@@ -397,7 +397,7 @@ class PaiKnowledgebaseClient:
 kb_client = PaiKnowledgebaseClient()
 
 
-async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str) -> str:
+async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonymous") -> str:
     """Get aliyun search tool"""
     logger.info(f"Searching knowledgebase with kb {kb_id} and user {user_id}.")
     result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id, user_id=user_id)

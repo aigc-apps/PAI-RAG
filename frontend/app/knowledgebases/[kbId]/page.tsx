@@ -420,7 +420,15 @@ export default function KnowledgeBaseDetailPage(
     if (emptyKeys.length > 1) throw new Error('有多于一个新建项。');
     else if (emptyKeys.length === 0) return;
     else {
-      editingMetadata[metadata_key] = editingMetadata[''];
+      if (metadataValueTypes[metadata_key] === "string") {
+        editingMetadata[metadata_key] = "";
+      }
+      else if (metadataValueTypes[metadata_key] === "number") {
+        editingMetadata[metadata_key] = 0;
+      }
+      else {
+        editingMetadata[metadata_key] = new Date();
+      }
       delete editingMetadata[''];
       const updatedUsableKeys = availableMetadataKeys.filter(
         (name) => name !== metadata_key,
@@ -445,7 +453,7 @@ export default function KnowledgeBaseDetailPage(
         .map((metadata) => metadata.name)
         .filter((name) => !(name in file_json.data.file_metadata));
       setAvailableMetadataKeys(usable_metadata_keys);
-      console.log('可用的metadata名称：', availableMetadataKeys);
+      console.log('可用的metadata名称：', usable_metadata_keys);
     } catch (err) {
       console.error('获取文件失败:', err);
     }
@@ -480,7 +488,7 @@ export default function KnowledgeBaseDetailPage(
         .map((metadata) => metadata.name)
         .filter((name) => !(name in editingMetadata));
       setAvailableMetadataKeys(usable_metadata_keys);
-      console.log('可用的metadata名称：', availableMetadataKeys);
+      console.log('可用的metadata名称：', usable_metadata_keys);
 
       setMetadataEditError('');
       console.log('已删除metadata:', name, editingMetadata);
