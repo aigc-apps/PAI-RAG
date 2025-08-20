@@ -126,7 +126,7 @@ export default function KnowledgeBaseFileChunksPage(
     const fetchKbConfigs = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${kbId}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}`,
         );
         if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
@@ -143,7 +143,7 @@ export default function KnowledgeBaseFileChunksPage(
     const fetchKbFile = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${kbId}/files/${fileId}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${fileId}`,
         );
         if (!res.ok) throw new Error('获取知识库文件失败');
         const json_data = await res.json();
@@ -161,7 +161,7 @@ export default function KnowledgeBaseFileChunksPage(
     const fetchKbFileChunks = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取知识库文件切片列表失败');
         const json_data = await res.json();
@@ -190,7 +190,7 @@ export default function KnowledgeBaseFileChunksPage(
 
   const handleActivateToggle = async (chunk: KbFileChunk) => {
     chunk.active = !chunk.active;
-    const url = `/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
+    const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
 
     const res = await fetch(url, {
       method: 'PATCH',
@@ -213,7 +213,7 @@ export default function KnowledgeBaseFileChunksPage(
   const handleSaveEdit = async () => {
     if (!selectedChunk) return;
     selectedChunk.text = editText;
-    const url = `/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks/${selectedChunk.id}`;
+    const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${fileId}/chunks/${selectedChunk.id}`;
 
     try {
       const response = await fetch(url, {

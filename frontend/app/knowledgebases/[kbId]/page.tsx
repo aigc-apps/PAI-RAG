@@ -220,7 +220,7 @@ export default function KnowledgeBaseDetailPage(
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [embRes] = await Promise.all([fetch('/v1/config/embeddings')]);
+        const [embRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/embeddings`)]);
 
         const embData = (await embRes.json())?.data.items || [];
         console.log('embData', embData);
@@ -246,7 +246,7 @@ export default function KnowledgeBaseDetailPage(
   const handleSearchSubmit = async () => {
     setSearching(true);
     console.log('handleSearchSubmit');
-    const search_result = await fetch('/v1/retrieval', {
+    const search_result = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/retrieval`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -275,7 +275,7 @@ export default function KnowledgeBaseDetailPage(
 
   const fetchKbMetadata = async () => {
     const res = await fetch(
-      `/v1/config/knowledgebases/${kbId}/metadata`,
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/metadata`,
     );
     if (!res.ok) throw new Error('获取知识库元数据失败');
     const metadata_json = await res.json();
@@ -291,7 +291,7 @@ export default function KnowledgeBaseDetailPage(
   };
 
   const fetchKbFiles = useCallback(async () => {
-    const url = `/v1/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
+    const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
       const files_res = await fetch(url);
@@ -334,7 +334,7 @@ export default function KnowledgeBaseDetailPage(
     const fetchKbConfigs = async () => {
       try {
         const res = await fetch(
-          `/v1/config/knowledgebases/${kbId}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}`,
         );
         if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
@@ -370,7 +370,7 @@ export default function KnowledgeBaseDetailPage(
     setDeleting(true);
     try {
       const res = await fetch(
-        `/v1/config/knowledgebases/${kbId}/files/${file_id}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${file_id}`,
         {
           method: 'DELETE',
         },
@@ -388,7 +388,7 @@ export default function KnowledgeBaseDetailPage(
   const handleSaveFileSource = async (file_id: string) => {
     try {
       const res = await fetch(
-        `/v1/config/knowledgebases/${kbId}/files/${file_id}/source`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${file_id}/source`,
         {
           method: 'POST',
           headers: {
@@ -444,7 +444,7 @@ export default function KnowledgeBaseDetailPage(
     setIsEditingMetadata(false);
     try {
       const file_res = await fetch(
-        `/v1/config/knowledgebases/${kbId}/files/${file_id}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${file_id}`,
       );
       if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
       const file_json = await file_res.json();
@@ -521,7 +521,7 @@ export default function KnowledgeBaseDetailPage(
   const checkFileRole = async (file_id: string) => {
     try {
       setEditRoleFileId(file_id);
-      const roleRes = await fetch('/v1/config/roles?size=100');
+      const roleRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/roles?size=100`);
       if (!roleRes.ok) {
         alert('查询角色失败');
         return;
@@ -531,7 +531,7 @@ export default function KnowledgeBaseDetailPage(
 
       const permission_name = file_id;
       const res = await fetch(
-        `/v1/config/roles/permissions?name=${permission_name}&size=100`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/roles/permissions?name=${permission_name}&size=100`,
       );
       if (!res.ok) {
         alert('查询文件permission失败');
@@ -558,7 +558,7 @@ export default function KnowledgeBaseDetailPage(
   const saveFilePermission = async () => {
     try {
       const roleRes = await fetch(
-        `/v1/config/roles/permissions/files/${editRoleFileId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/roles/permissions/files/${editRoleFileId}`,
         {
           method: 'POST',
           headers: {
@@ -610,7 +610,7 @@ export default function KnowledgeBaseDetailPage(
 
     try {
       const res = await fetch(
-        `/v1/config/knowledgebases/${kbId}/files`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files`,
         {
           method: 'POST',
           body: formData,
@@ -661,7 +661,7 @@ export default function KnowledgeBaseDetailPage(
         entries: metadata_enties,
       };
       const res = await fetch(
-        `/v1/config/knowledgebases/${kbId}/files/${file_id}/metadata`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${file_id}/metadata`,
         {
           method: 'POST',
           body: JSON.stringify(bodyData),

@@ -71,7 +71,7 @@ export default function McpConfigPage() {
   const fetchConfigs = useCallback(async () => {
     try {
       setMcpLoading(true);
-      const res = await fetch('/v1/config/mcps');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps`);
       if (!res.ok) throw new Error('获取配置失败');
       const data = await res.json();
       setMcpConfigs(data.data.items || []);
@@ -124,7 +124,7 @@ export default function McpConfigPage() {
 
   const handleToggleEnabled = async (id: string, enabled: boolean) => {
     try {
-      const res = await fetch(`/v1/config/mcps/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !enabled }),
@@ -170,7 +170,7 @@ export default function McpConfigPage() {
       enabled: addFormData.enabled,
     };
     
-    const res = await fetch('/v1/config/mcps', {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(mcp_data),
@@ -238,7 +238,7 @@ const updatedMCP = async () => {
       updateData.need_token = false;
     }
 
-    const res = await fetch(`/v1/config/mcps/${editingConfig.id}`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps/${editingConfig.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData),
@@ -274,7 +274,7 @@ const updatedMCP = async () => {
 };
   const removeMCP = async (id: string) => {
     try {
-      const res = await fetch(`/v1/config/mcps/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
