@@ -140,7 +140,7 @@ start_frontend() {
 
   if [[ "$PRODUCTION" == true ]]; then
     echo "👉 启动前端服务 on port $FRONTEND_PORT"
-    npm run start  -- --port $FRONTEND_PORT &
+    NEXT_PUBLIC_BACKEND_URL=http://localhost:$BACKEND_PORT npm run start  -- --port $FRONTEND_PORT &
   else
     npm install || { echo "错误: npm 安装失败"; exit 1; }
     echo "👉 启动前端服务 on port $PORT"
