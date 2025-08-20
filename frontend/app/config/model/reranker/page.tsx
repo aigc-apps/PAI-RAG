@@ -49,7 +49,7 @@ export default function RerankerConfigPage() {
     const fetchModelConfigs = async () => {
       try {
         const res = await fetch(
-          `/v1/config/rerankers?page=${page}&size=${modelSizePerPage}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/rerankers?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取Reranker模型列表失败');
         const json_data = await res.json();
@@ -88,7 +88,7 @@ export default function RerankerConfigPage() {
     setErrorMsg('');
     try {
       console.log('removeModel: id: ', id, 'model_type: ', model_type);
-      const res = await fetch(`/v1/config/${model_type}/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/${model_type}/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

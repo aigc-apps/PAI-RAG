@@ -290,7 +290,7 @@ export class MyModelAdapter implements ChatModelAdapter {
 const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async list() {
     try {
-      const res = await fetch('/v1/agent/threads');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads`);
       if (!res.ok) throw new Error('获取配置失败');
       const response = await res.json();
       return {
@@ -309,7 +309,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
     isInitializing = true;
 
     try {
-      const url = '/v1/agent/threads';
+      const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads`;
       const now = new Date();
       const formattedTime = `${now.getFullYear()}-${String(
         now.getMonth() + 1,
@@ -356,7 +356,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async unarchive(remoteId) {},
   async delete(remoteId) {
     try {
-      const res = await fetch(`/v1/agent/threads/${remoteId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads/${remoteId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -372,7 +372,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   },
   async generateTitle(remoteId, messages) {
     try {
-      const res = await fetch(`/v1/agent/threads/${remoteId}/title`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads/${remoteId}/title`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -404,7 +404,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
         if (!remoteId) return { headId: null, messages: [] };
         // 模拟从后端获取数据
         try {
-          const res = await fetch(`/v1/agent/threads/${remoteId}/messages`);
+          const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads/${remoteId}/messages`);
 
           if (!res.ok) throw new Error('获取配置失败');
           const result = await res.json();
@@ -444,7 +444,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
         const remoteThreadId = remoteId ? remoteId : initializedThreadId;
 
         try {
-          const url = `/v1/agent/threads/${remoteThreadId}/messages`;
+          const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads/${remoteThreadId}/messages`;
           console.log('append message', message);
           
           const response = await fetch(url, {
@@ -503,7 +503,7 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
 
 export function MyChatRuntimeProvider({ children }: { children: ReactNode }) {
   const runtime = usePaiChatThreadRuntime({
-    api: '/v1/chat/completions',
+    api: `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/chat/completions`,
     adapters: {
       attachments: new UploadAttachmentAdapter(),
     },
