@@ -689,7 +689,7 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
                       >
                         <AccordionTrigger>
                           Chunk{index + 1}: {item.metadata["file_name"]}{" "}
-                          <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 shadow-none rounded-full">
+                          <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 shadow-none rounded-full">
                             {parseFloat(item.score).toFixed(4)}
                           </Badge>
                         </AccordionTrigger>

@@ -40,6 +40,8 @@ def get_async_db_angine():
         logger.warning(
             f"Created db engine with sqlite {local_db_url}."
         )
+        if not os.path.exists("./localdata"):
+            os.makedirs("./localdata")
         return create_async_engine(
             local_db_url,
             echo=False,  # 输出执行的 SQL 语句
