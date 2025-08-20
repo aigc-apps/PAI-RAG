@@ -58,6 +58,9 @@ def get_system_prompt(enable_search: bool = False, enable_agent: bool = False, e
     if kb_ids:
         tools_prompt.append(prompt.prompts["knowledgebase_tool_prompt"])
 
+    if not tools_prompt:
+        tools_prompt.append(prompt.prompts["without_tools_prompt"])
+
     system_prompt = prompt.prompts["system_prompt"].format(
         tools_prompt="\n\n".join(tools_prompt), current_datetime=get_prompt_current_time_str()
             )
@@ -109,14 +112,24 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
 
 
 async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, None]:
+    history_memory_without_sys_prompt =  state.memory.get_context()[1:]
+    synthesize_prompt = get_system_prompt()
+    new_messages = []
+    new_messages.append(ChatMessage(role=MessageRole.SYSTEM, content=synthesize_prompt))
+    new_messages.extend(history_memory_without_sys_prompt)
+    sythesize_memory = BaseMemory()
+    sythesize_memory.from_messages(new_messages)
+    state.memory = sythesize_memory
+
     async for chunk in astep_gen(
             llm=state.llm,
             memory=state.memory,
-            is_last_step=True,
-            user_query=state.user_query,
         ):
         chunk.message.additional_kwargs["step"] = state.step
         yield chunk
+        if chunk.message.additional_kwargs.get("STOP_FLAG"):
+            state.stop_flag = True
+            break
 
 
 async def step_agent(state: AgentState, attachments: List[dict]) -> AsyncGenerator[ChatResponse, None]:
@@ -193,8 +206,6 @@ async def astep_gen(
     tool_name_map: Dict[str, FunctionTool]= None,
     memory: BaseMemory = None,
     attachments: List[dict] = None,
-    is_last_step: bool = False,
-    user_query: str = None,
 ):
     image_urls = []
     if attachments and len(attachments) > 0:
@@ -250,13 +261,6 @@ async def astep_gen(
                 )
                 memory.add(tool_call_message)
                 memory.add(user_tool_message)
-
-
-    if is_last_step:
-        prompt = prompt_provider.get_prompts()
-        SYNTHESIZE_PROMPT = prompt.prompts["without_tools_prompt"]
-        synthesize_content = SYNTHESIZE_PROMPT.format(query_str=user_query)
-        memory.add(ChatMessage(role=MessageRole.USER, content=synthesize_content))
 
     messages = merge_chat_messages_by_role(memory.get_context(image_urls))
 
