@@ -243,7 +243,7 @@ async def upload_files(
             else:
                 file_entity.file_md5 = file_item.file_md5
                 file_entity.file_size = file_item.file_size
-                file_entity.updated_at = datetime.now(timezone.utc)
+                file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             session.add(file_entity)
             await session.commit()
             logger.info(f"Saved file {file_entity} successfully.")

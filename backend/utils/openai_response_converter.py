@@ -22,6 +22,10 @@ def tool_has_citation(tool_name: str) -> bool:
     )
 
 
+def get_citation_source(tool_name: str) -> str:
+    return "web" if tool_name == "search-web" else "knowledgebase"
+
+
 class OpenAIChatCompletionChunkConverter:
     def __init__(self, chat_request: ChatAgentRequest):
         """Initialize the converter."""
@@ -120,6 +124,7 @@ class OpenAIChatCompletionChunkConverter:
                         citations = [extract_citation_url(r) for r in tool_call_results]
                         citation_details = [
                             {
+                                "source": get_citation_source(previous_tool_calls[0].function.name),
                                 "text": r["text"],
                                 "name": r["metadata"]["file_name"],
                                 "url": extract_citation_url(r),

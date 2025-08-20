@@ -174,6 +174,7 @@ def merge_chat_messages_by_role(messages: List[ChatMessage]) -> List[ChatMessage
             current_msg.blocks.append(
                 TextBlock(text="\n\n")
             )
+            current_msg.additional_kwargs.update(msg.additional_kwargs)
             current_msg.blocks.extend(msg.blocks)
         else:
             # Different role, save current group and start new one
@@ -244,9 +245,10 @@ async def astep_gen(
                 )
 
                 user_tool_message = ChatMessage(
-                    role=MessageRole.USER,
+                    role=MessageRole.TOOL,
                     content=tool_result.content,
                 )
+                memory.add(tool_call_message)
                 memory.add(user_tool_message)
 
 
@@ -356,9 +358,14 @@ async def astep_gen(
                 tool_content = get_kb_content(tool_result.content)
 
             user_tool_msg = ChatMessage(
-                role=MessageRole.USER,
-                content=f"##工具调用结果: \n\n{tool_content}\n",
+                role=MessageRole.TOOL,
+                content=tool_content,
             )
+            memory.add(ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content="",
+                    additional_kwargs={"tool_calls": [tool_call]},
+            ))
             memory.add(user_tool_msg)
 
             tool_result_message = ChatMessage(
