@@ -40,7 +40,7 @@ export function PreviewButton({
     setLoading(true);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kbId}/files/${fileId}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/files/${fileId}`,
       );
       if (!res.ok) throw new Error('获取知识库文件失败');
       const json_data = await res.json();

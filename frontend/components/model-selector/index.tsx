@@ -47,12 +47,12 @@ export default function ModelSelector({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/llms/groups`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms/groups`);
         if (!res.ok) throw new Error('模型数据加载失败');
         const data = await res.json();
         console.log('model data: ', data);
 
-        const chatbotRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots`);
+        const chatbotRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots`);
         if (!chatbotRes.ok) throw new Error('模型数据加载失败');
         const chatbotData = (await chatbotRes.json()).data.items;
         const chatbotGroup = {

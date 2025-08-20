@@ -76,27 +76,27 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [llmRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/llms`)]);
+        if (!isCreate)
+        {
+          const [llmRes, mcpRes, kbRes, botRes] = await Promise.all([
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms`),
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/mcps`),
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases`),
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots?app_id=${chatbotId}`)]);
+          const llmData = (await llmRes.json())?.data.items || [];
+          console.log('llmData', llmData);
+          setLlms([...llmData]);
 
-        const llmData = (await llmRes.json())?.data.items || [];
-        console.log('llmData', llmData);
-        setLlms([...llmData]);
+          const [] = await Promise.all([]);
 
-        const [mcpRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps`)]);
+          const mcpData =
+            ((await mcpRes.json())?.data.items as McpConfig[]) || [];
+          console.log('mcpData', mcpData);
+          setMcps([...mcpData]);
 
-        const mcpData =
-          ((await mcpRes.json())?.data.items as McpConfig[]) || [];
-        console.log('mcpData', mcpData);
-        setMcps([...mcpData]);
-
-        const [kbRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases`)]);
-
-        const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
-        console.log('kbData', kbData);
-        setKbs([...kbData]);
-
-        if (!isCreate) {
-          const botRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots?app_id=${chatbotId}`);
+          const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
+          console.log('kbData', kbData);
+          setKbs([...kbData]);
           const botData = await botRes.json();
           setBotConfig(botData.data);
           console.log('chatbotData: ', botData.data);
@@ -112,6 +112,29 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             .map((item) => item.name);
           setSelectedMcpNames([...mcpnames]);
           console.log('selectedMcpNames', mcpnames);
+
+        }
+        else
+        {
+          const [llmRes, mcpRes, kbRes] = await Promise.all([
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms`),
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/mcps`),
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases`)]);
+
+          const llmData = (await llmRes.json())?.data.items || [];
+          console.log('llmData', llmData);
+          setLlms([...llmData]);
+
+          const [] = await Promise.all([]);
+
+          const mcpData =
+            ((await mcpRes.json())?.data.items as McpConfig[]) || [];
+          console.log('mcpData', mcpData);
+          setMcps([...mcpData]);
+
+          const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
+          console.log('kbData', kbData);
+          setKbs([...kbData]);
         }
       } catch (err: unknown) {
         console.log(err || '加载失败');
@@ -123,8 +146,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const handleSaveChatConfig = async () => {
     console.log('保存应用结果:', botConfig);
     const submit_url = isCreate
-      ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots`
-      : `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots/${botConfig.id}`;
+      ? `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots`
+      : `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots/${botConfig.id}`;
     const updateMethod = isCreate ? 'POST' : 'PATCH';
     try {
       const res = await fetch(submit_url, {

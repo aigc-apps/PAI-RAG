@@ -20,7 +20,7 @@ export const Assistant = () => {
   useEffect(() => {
     const fetchLLMConfig = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/llms`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms`);
         if (!res.ok) throw new Error('拉取 LLM 配置失败');
         const data = await res.json();
         const llms = data.data.items;
