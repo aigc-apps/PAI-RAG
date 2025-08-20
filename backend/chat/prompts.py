@@ -94,11 +94,7 @@ KNOWLEDGEBASE_TOOL_PROMPT = """
 
 
 SYNTHESIZE_PROMPT = """
-请结合上面的材料直接回答问题，不要尝试使用任何工具。
-
-# 问题
-{query_str}
-
+请结合上面的信息直接回答问题，不要尝试调用任何工具。
 """
 
 DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE = """
