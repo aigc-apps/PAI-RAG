@@ -1,5 +1,4 @@
 from functools import partial
-import traceback
 from typing import Any, List, Optional
 from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
@@ -40,6 +39,7 @@ from llama_index.core.schema import NodeWithScore
 from loguru import logger
 import re
 import json
+from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -96,6 +96,11 @@ class PaiKnowledgebaseClient:
         is_attachment: bool = False,
     ):
         logger.info(f"[WORKER] processing file {file_id} in background. Is attachment: {is_attachment}")
+        # 创建守护器, 初始检查
+        guard = FileExistenceGuard(file_id)
+        if not await guard.check_exists():
+            return
+
         file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
 
         logger.info(f"[WORKER] retrieved file {file_entity} for {file_id}.")
@@ -121,21 +126,23 @@ class PaiKnowledgebaseClient:
         )
         await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
 
-        try:
+        @require_file_exists()
+        async def parse_file(guard_instance):
             multimodal_llm = await get_multimodal_llm_from_db()
             file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
+            return documents, nodes
 
+        @require_file_exists()
+        async def save_chunks(guard_instance, nodes):
             old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
                 kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes
             )
+            return old_chunk_ids, new_chunk_ids
 
-            await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.persisting, is_attachment=is_attachment, documents=documents
-            )
-
+        @require_file_exists()
+        async def update_vector_store(guard_instance):
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
-
             embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
 
             vector_store = self.create_vector_store_from_knowledgebase(knowledgebase, embed_model=embed_model)
@@ -151,23 +158,34 @@ class PaiKnowledgebaseClient:
             await vector_store.async_add(nodes)
 
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
-            await update_chunk_status_async(
-                chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded
-            )
-            await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
-            )
+            return True
 
-            logger.info(
-                f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
-            )
-        except Exception:
-            logger.exception(
-                f"Error adding file {file_item.file_name} to knowledgebase {kb_id}. {traceback.format_exc()}"
-            )
-            await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment
-            )
+        try:
+            result = await parse_file(guard)
+            if result:
+                documents, nodes = result
+                old_chunk_ids, new_chunk_ids = await save_chunks(guard, nodes)
+                await update_file_status_async(
+                    file_id=file_item.id, status=FileStatus.persisting,
+                    is_attachment=is_attachment, documents=documents
+                )
+
+                await update_vector_store(guard)
+
+                if await guard.check_exists():  # 最后检查
+                    await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
+                    await update_file_status_async(
+                        file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
+                    )
+                    logger.info(
+                        f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
+                    )
+        except Exception as e:
+            if await guard.check_exists():  # 只有文件还存在时才更新状态
+                await update_file_status_async(
+                    file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment
+                )
+            logger.exception(f"Error processing file: {e}")
 
     async def adelete_kb(
         self,
