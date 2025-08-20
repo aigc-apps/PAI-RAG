@@ -46,7 +46,7 @@ export default function KnowledgeBasePage() {
     const fetchConfigs = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
@@ -69,7 +69,7 @@ export default function KnowledgeBasePage() {
   };
   const deleteKnowledgebase = async (kb_id: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases/${kb_id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kb_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

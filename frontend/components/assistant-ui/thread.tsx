@@ -58,7 +58,7 @@ export const Thread: FC<{
     const fetchConfigs = async () => {
       try {
         setMcpLoading(true);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/mcps`);
         if (!res.ok) throw new Error('获取配置失败');
         const data = await res.json();
 
@@ -87,7 +87,7 @@ export const Thread: FC<{
 
       try {
         setKbLoading(true);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases`);
         if (!res.ok) throw new Error('获取知识库配置失败');
         const json_res = await res.json();
         console.log('Load kb.', json_res);

@@ -40,7 +40,7 @@ const ChatbotPage = () => {
     const fetchConfigs = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots?page=${page}&size=${pageSize}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots?page=${page}&size=${pageSize}`,
         );
         if (!res.ok) throw new Error('获取应用列表失败');
         const json_data = await res.json();
@@ -61,7 +61,7 @@ const ChatbotPage = () => {
   };
   const deleteChatbot = async (bot_id: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots/${bot_id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots/${bot_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
