@@ -23,7 +23,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
         if (!remoteId) return { headId: null, messages: [] };
         // 模拟从后端获取数据
         try {
-          const res = await fetch(`/v1/agent/threads/${remoteId}/messages`);
+          const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads/${remoteId}/messages`);
 
           if (!res.ok) throw new Error('获取配置失败');
           const messages = await res.json();
@@ -51,7 +51,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           return;
         }
         try {
-          const url = `/v1/agent/threads/${remoteId}/messages`;
+          const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/agent/threads/${remoteId}/messages`;
           console.log('append message', message);
           
           const response = await fetch(url, {

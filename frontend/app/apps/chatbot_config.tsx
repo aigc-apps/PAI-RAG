@@ -76,27 +76,27 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [llmRes] = await Promise.all([fetch('/v1/config/llms')]);
+        const [llmRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/llms`)]);
 
         const llmData = (await llmRes.json())?.data.items || [];
         console.log('llmData', llmData);
         setLlms([...llmData]);
 
-        const [mcpRes] = await Promise.all([fetch('/v1/config/mcps')]);
+        const [mcpRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/mcps`)]);
 
         const mcpData =
           ((await mcpRes.json())?.data.items as McpConfig[]) || [];
         console.log('mcpData', mcpData);
         setMcps([...mcpData]);
 
-        const [kbRes] = await Promise.all([fetch('/v1/config/knowledgebases')]);
+        const [kbRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/knowledgebases`)]);
 
         const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
         console.log('kbData', kbData);
         setKbs([...kbData]);
 
         if (!isCreate) {
-          const botRes = await fetch(`/v1/config/chatbots?app_id=${chatbotId}`);
+          const botRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots?app_id=${chatbotId}`);
           const botData = await botRes.json();
           setBotConfig(botData.data);
           console.log('chatbotData: ', botData.data);
@@ -123,8 +123,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const handleSaveChatConfig = async () => {
     console.log('保存应用结果:', botConfig);
     const submit_url = isCreate
-      ? '/v1/config/chatbots'
-      : `/v1/config/chatbots/${botConfig.id}`;
+      ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots`
+      : `${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/chatbots/${botConfig.id}`;
     const updateMethod = isCreate ? 'POST' : 'PATCH';
     try {
       const res = await fetch(submit_url, {

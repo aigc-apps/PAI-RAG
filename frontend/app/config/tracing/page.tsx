@@ -28,7 +28,7 @@ export default function TracingConfig() {
         setIsLoading(true);
         setError('');
 
-        const res = await fetch('/v1/config/trace', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/trace`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -65,7 +65,7 @@ export default function TracingConfig() {
       setIsLoading(true);
       setError('');
 
-      const res = await fetch('/v1/config/trace', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/config/trace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
