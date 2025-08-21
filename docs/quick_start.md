@@ -30,7 +30,7 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-3. 打开浏览器中的 http://localhost:8680 访问WebUI. 第一次启动服务会下载需要的相关模型文件，需要等待20分钟左右。
+3. 打开浏览器中的 http://localhost:8680 访问WebUI. 第一次启动服务会下载需要的相关模型文件，需要等待5分钟左右。
 
 
 ### 方式二：本地源码启动

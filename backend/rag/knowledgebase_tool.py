@@ -458,9 +458,6 @@ async def aget_knowledgebase_tool(kb_id: str, user_id: Optional[str] = None):
             "用户ID",
         ] = "",
     ):
-        logger.info(
-            "File_retrieve_tool with attachments"
-        )
         return await aquery_knowledgebase_func(
             query=query,
             kb_id=kb_id,
