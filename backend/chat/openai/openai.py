@@ -795,7 +795,7 @@ class OpenAI(FunctionCallingLLM):
                         and response.choices[0].delta.tool_calls is None
                     ):
                         first_chat_chunk = False
-                        continue
+                        # continue
                     delta = response.choices[0].delta
                 else:
                     if isinstance(aclient, AsyncAzureOpenAI):
