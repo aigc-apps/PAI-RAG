@@ -26,8 +26,7 @@ interface ModelGroup {
 
 interface ModelSelectorProps {
   selectedModel: {
-    source: string;
-    model_id: string;
+    model_id: string | undefined;
   };
   onModelChange: (id: string, source: string, model_id: string) => void;
 }
@@ -36,6 +35,7 @@ export default function ModelSelector({
   selectedModel,
   onModelChange,
 }: ModelSelectorProps) {
+  const [currentModel, setCurrentModel] = useState(selectedModel.model_id);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +66,15 @@ export default function ModelSelector({
           }),
         };
         setModelGroups([...data.groups, chatbotGroup]);
+
+        if (!selectedModel.model_id) {
+          // 如果没有选中的模型，默认选择第一个模型
+          const firstModel = data.groups[0]?.models[0];
+          setCurrentModel(firstModel?.model_id);
+          if (firstModel) {
+            onModelChange(firstModel.id, data.groups[0].id, firstModel.model_id);
+          }
+        }
       } catch (err) {
         setError('无法加载模型列表，请检查网络或服务状态');
         console.error(err);
@@ -82,7 +91,7 @@ export default function ModelSelector({
       <PopoverTrigger className="min-w-[180px] w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 h-9 px-3 py-2 text-sm focus:ring-1 focus:ring-ring">
         <div className="flex items-center pr-2 truncate">
           <span className="flex flex-row items-center justify-start gap-2 text-lg font-semibold">
-            {selectedModel.model_id || '请选择模型'}
+            {currentModel || '请选择模型'}
           </span>
           <ChevronsUpDown className="size-4 opacity-50 ml-auto" />
         </div>
@@ -112,6 +121,7 @@ export default function ModelSelector({
                       onSelect={() => {
                         onModelChange(model.id, group.id, model.model_id);
                         setOpen(false);
+                        setCurrentModel(model.model_id);
                       }}
                       className="flex items-center"
                     >
