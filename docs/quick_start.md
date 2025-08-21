@@ -28,9 +28,6 @@
    # 安装项目核心依赖
    pip install poetry
    poetry install
-
-   # 安装前端依赖
-   cd frontend && npm install
    ```
 
 3. 配置环境变量
@@ -45,6 +42,8 @@
    ```bash
    # 1. Broker 配置，留空则使用本地 Redis，默认值为 redis://localhost:6379/0
    PAIRAG_BROKER=
+   # 设置是否使用 CUDA（GPU 加速），USE_CUDA=1 表示启用 CUDA
+   USE_CUDA=
 
    # 2. 文件存储配置，填写OSS相关信息
    FILE_STORE_TYPE=oss
@@ -89,12 +88,12 @@
 4. 启动服务
 
    ```bash
-   ./scripts/start.sh --frontend-port 3001 --backend-port 8680
+   ./scripts/start.sh
    ```
 
 5. 验证安装
    服务启动后：
-   前端可通过 http://localhost:3001 访问，显示如下页面则表示安装部署成功，可以尽情使用了。
+   前端可通过 http://localhost:8680 访问，显示如下页面则表示安装部署成功，可以尽情使用了。
    ![quick_start](images/quick_start.jpg)
 
 ## 常见问题排查
@@ -112,10 +111,12 @@
 3. 端口冲突
 
 - 如遇端口占用，可使用其他端口：
-
-```bash
-./scripts/start.sh --frontend-port 3002 --backend-port 8681
-```
+   - --port 指定应用端口(默认: 8680)
+   - --frontend-port 前端服务端口 (默认: 8681)
+   - --backend-port  后端服务端口 (默认: 8682)
+   ```bash
+   ./scripts/start.sh --port 8688
+   ```
 
 ## 注意事项
 
