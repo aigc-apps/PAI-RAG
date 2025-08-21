@@ -399,7 +399,6 @@ class AgentLoop:
     def __init__(self, max_steps: int = MAX_CHAT_STEPS):
         self.max_steps = max_steps
 
-    @use_current_span(trace.get_current_span())
     async def _arun(self, chat_request: ChatAgentRequest) -> ChatResponseAsyncGen:
         try:
             mcp_tools = await aget_mcp_tools(chat_request)
@@ -547,4 +546,10 @@ class AgentLoop:
 
     @pai_agent_wrapper
     async def arun(self, chat_request: ChatAgentRequest) -> ChatResponseAsyncGen:
-        return self._arun(chat_request=chat_request)
+        # NOTE: this is to pass current span context into _arun for tracing
+        @use_current_span(trace.get_current_span())
+        async def _():
+            async for chunk in self._arun(chat_request=chat_request):
+                yield chunk
+
+        return _()
