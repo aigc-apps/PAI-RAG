@@ -1,4 +1,5 @@
 from typing import List
+from chat.openai.openai_like import OpenAILike
 from loguru import logger
 from sqlalchemy import delete
 from sqlmodel import select, update
@@ -17,7 +18,6 @@ from common.knowledgebase.types import FileStatus, ChunkStatus
 from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.file import KbFileEntity
 from llama_index.core.schema import Document
-from llama_index.llms.openai_like import OpenAILike
 from config.providers.config_change_manager import config_change_manager
 
 
