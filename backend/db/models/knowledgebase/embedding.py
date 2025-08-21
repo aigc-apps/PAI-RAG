@@ -33,8 +33,17 @@ class EmbeddingModel(SQLModel):
         return self
 
 
-class EmbeddingModelCreate(EmbeddingModel):
+class EmbeddingModelCreate(SQLModel):
     api_key: str | None = Field(default=None)  # required for openai_like type
+    model_name: str = Field(default=DEFAULT_EMBEDDING_MODEL)
+    dimension: int | None = Field(default=None)
+    endpoint: str | None = Field(default=None)
+    type: EmbeddingType = Field(default=EmbeddingType.LOCAL)
+    embed_batch_size: int = Field(default=10)
+    model_id: str = Field(default=None, unique=True)
+    is_ready: Optional[bool] = False
+    is_default: Optional[bool] = False
+
 
 
 class EmbeddingModelRead(EmbeddingModel):

@@ -30,6 +30,7 @@ from llama_index.core.base.llms.types import (
     ChatResponseAsyncGen,
     ChatResponse,
 )
+from openai import APIError, AuthenticationError, NotFoundError, APITimeoutError
 from llama_index.core.bridge.pydantic import Field, BaseModel, ConfigDict
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from extensions.trace.base import use_current_span
@@ -464,6 +465,51 @@ class AgentLoop:
                     logger.error(traceback.format_exc())
                     continue
 
+                except AuthenticationError:
+                    logger.exception(f"AuthenticationError: 访问大模型认证失败。{traceback.format_exc()}")
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content="访问大模型身份认证失败，请检查模型配置。\n",
+                        ),
+                        delta="访问大模型身份认证失败，请检查模型配置。\n",
+                        additional_kwargs={"failed": True, "step": state.step},
+                    )
+                    break
+                except APITimeoutError:
+                    logger.exception(f"Timeout: 访问大模型服务超时。{traceback.format_exc()}")
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content="访问大模型服务超时，请检查模型配置。\n",
+                        ),
+                        delta="访问大模型服务超时，请检查模型配置。\n",
+                        additional_kwargs={"failed": True, "step": state.step},
+                    )
+                    break
+                except NotFoundError:
+                    logger.exception(f"Notfound: 访问大模型服务错误。{traceback.format_exc()}")
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content="访问大模型服务出错,请检查模型名称和API地址是否正确。404 Not Found.\n",
+                        ),
+                        delta="访问大模型服务出错,请检查模型名称和API地址是否正确。404 Not Found.\n",
+                        additional_kwargs={"failed": True, "step": state.step},
+                    )
+                    break
+
+                except APIError as ex:
+                    logger.exception(f"访问大模型服务错误。{traceback.format_exc()}")
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content=f"访问大模型服务错误。{ex}\n",
+                        ),
+                        delta=f"访问大模型服务错误。{ex}\n",
+                        additional_kwargs={"failed": True, "step": state.step},
+                    )
+                    break
                 except Exception as e:
                     # 情况2: 其他错误
                     logger.exception("UnhandledError: 工具调用失败")
