@@ -4,6 +4,7 @@ from operator import itemgetter
 import os
 import re
 from typing import List
+from chat.openai.openai_like import OpenAILike
 from rag.file.models.file_item import FileItem
 from rag.file.readers.base import BaseReader
 from rag.file.store.base import BaseFileStore
@@ -18,7 +19,6 @@ from magic_pdf.config.enums import SupportedPdfParseMethod
 from magic_pdf.data.data_reader_writer import FileBasedDataWriter
 from magic_pdf.config.ocr_content_type import BlockType, ContentType
 from llama_index.core.schema import Document
-from llama_index.llms.openai_like import OpenAILike
 import tempfile
 from loguru import logger
 

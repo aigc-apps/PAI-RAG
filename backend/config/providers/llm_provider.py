@@ -1,7 +1,7 @@
 import traceback
 from typing import Dict, Optional, Type
+from chat.openai.openai_like import OpenAILike
 from sqlmodel import Field, SQLModel
-from llama_index.llms.openai_like import OpenAILike
 from loguru import logger
 from db.encrypt_utils import decrypt_key
 from config.providers.base_provider import BaseConfigProvider

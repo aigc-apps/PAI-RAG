@@ -303,7 +303,7 @@ async def astep_gen(
                 yield ChatResponse(
                     message=tool_call_message,
                     delta="",
-                    additional_kwargs=response.additional_kwargs,
+                    additional_kwargs={"reasoning_completed": True, **response.additional_kwargs},
                 )
                 response.additional_kwargs = {} # 重置token usage
             if not response.delta:
@@ -327,7 +327,7 @@ async def astep_gen(
                     response.raw.choices[0].delta.reasoning_content = re.sub(opening_tag, "", reasoning_content, flags=re.DOTALL)
                 if response.delta:
                     response.delta = re.sub(opening_tag, "", response.delta, flags=re.DOTALL)
-                    response.additional_kwargs["reasoning_completed"] = True,
+                    response.additional_kwargs["reasoning_completed"] = True
                 response_context += response.delta
                 yield response
             else:
@@ -399,42 +399,40 @@ class AgentLoop:
     def __init__(self, max_steps: int = MAX_CHAT_STEPS):
         self.max_steps = max_steps
 
-    @pai_agent_wrapper
-    async def arun(self, chat_request: ChatAgentRequest) -> ChatResponseAsyncGen:
-        mcp_tools = await aget_mcp_tools(chat_request)
-        tools = []
-        tool_name_map = {}
+    @use_current_span(trace.get_current_span())
+    async def _arun(self, chat_request: ChatAgentRequest) -> ChatResponseAsyncGen:
+        try:
+            mcp_tools = await aget_mcp_tools(chat_request)
+            tools = []
+            tool_name_map = {}
 
-        for tool in mcp_tools:
-            tools.append(
-                {"type": "function", "function": tool.metadata.to_openai_function()}
+            for tool in mcp_tools:
+                tools.append(
+                    {"type": "function", "function": tool.metadata.to_openai_function()}
+                )
+                tool_name_map[tool.metadata.name] = tool
+
+            llm: LLM = llm_provider.get_llm_model(model_id=chat_request.model)
+
+            system_prompt = get_system_prompt(
+                enable_search=chat_request.enable_search,
+                enable_agent=chat_request.enable_agent,
+                enable_attachments=chat_request.enable_attachments,
+                kb_ids=chat_request.kb_ids,
+
             )
-            tool_name_map[tool.metadata.name] = tool
 
-        llm: LLM = llm_provider.get_llm_model(model_id=chat_request.model)
+            input_messages = [
+                {"role": "system", "content": system_prompt}
+            ] + chat_request.messages
+            messages = convert_to_chat_messages(input_messages)
+            memory = BaseMemory()
+            memory.from_messages(messages)
+            if not chat_request.enable_agent:
+                chat_request.max_steps = 1
 
-        system_prompt = get_system_prompt(
-            enable_search=chat_request.enable_search,
-            enable_agent=chat_request.enable_agent,
-            enable_attachments=chat_request.enable_attachments,
-            kb_ids=chat_request.kb_ids,
+            max_steps = chat_request.max_steps or self.max_steps
 
-        )
-
-
-        input_messages = [
-            {"role": "system", "content": system_prompt}
-        ] + chat_request.messages
-        messages = convert_to_chat_messages(input_messages)
-        memory = BaseMemory()
-        memory.from_messages(messages)
-        if not chat_request.enable_agent:
-            chat_request.max_steps = 1
-
-        max_steps = chat_request.max_steps or self.max_steps
-
-        @use_current_span(trace.get_current_span())
-        async def gen():
             state = AgentState(
                 llm=llm,
                 step=0,
@@ -536,4 +534,17 @@ class AgentLoop:
                 async for chunk in synthesize_agent(state):
                     yield chunk
 
-        return gen()
+        except Exception as ex:
+            logger.error(f"Error in agent loop: {ex}")
+            yield ChatResponse(
+                message=ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content=f"执行失败: \n{ex}",
+                ),
+                delta=f"执行失败: \n{ex}",
+                additional_kwargs={"failed": True},
+            )
+
+    @pai_agent_wrapper
+    async def arun(self, chat_request: ChatAgentRequest) -> ChatResponseAsyncGen:
+        return self._arun(chat_request=chat_request)
