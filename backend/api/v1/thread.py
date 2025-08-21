@@ -1,3 +1,4 @@
+import re
 import json
 from fastapi import APIRouter, Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -125,8 +126,9 @@ async def update_thread_title(
         chat_response = await llm.acomplete(
             prompt=generate_title_prompt,
         )
-        logger.info(f"Generated title: {chat_response.text}")
-        thread.title = json.loads(chat_response.text).get("title", "未命名会话")
+        extracted_content = re.sub(r"<think>.*?</think>", "", chat_response.text, flags=re.DOTALL)
+        logger.info(f"Generated title: {extracted_content}")
+        thread.title = json.loads(extracted_content).get("title", "未命名会话")
     except Exception as e:
         logger.error(f"Failed to update conversation {thread_id} title: {e}")
         thread.title = f"{get_content_from_messages(messages[0].content)[:10]}..." if messages else "未命名会话"

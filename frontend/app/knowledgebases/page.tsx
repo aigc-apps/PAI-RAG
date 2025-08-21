@@ -9,7 +9,7 @@ import {
   CardContent,
   CardFooter,
 } from '@/components/ui/card';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, FileQuestion } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { formatBeijingTime } from './utils/utils';
 
@@ -51,7 +51,9 @@ export default function KnowledgeBasePage() {
         if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
-        setKnowledgeBases(data || []); // 更新状态
+        setKnowledgeBases(() => {
+          return (data || []).filter((item: KnowledgeBase) => item.name !== 'default_attachments');
+      });
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
         setKnowledgeBasesError(err || '加载失败');
@@ -104,76 +106,97 @@ export default function KnowledgeBasePage() {
 
       {/* 卡片容器 */}
       <div className="h-4/5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-          {knowledgebases.map((base) => (
-            <Card
-              onClick={(e) => {
-                // 检查是否点击了交互元素
-                const target = e.target as HTMLElement;
+        {knowledgebases.length > 0 ? (
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+              {knowledgebases.map((base) => (
+                <Card
+                  onClick={(e) => {
+                    // 检查是否点击了交互元素
+                    const target = e.target as HTMLElement;
 
-                if (target instanceof HTMLElement && target.closest('button')) {
-                  console.log('按钮被点击');
-                  return; // 是交互元素，不触发卡片跳转
-                }
+                    if (target instanceof HTMLElement && target.closest('button')) {
+                      console.log('按钮被点击');
+                      return; // 是交互元素，不触发卡片跳转
+                    }
 
-                router.push(`/knowledgebases/${base.id}`);
-              }}
-              key={base.id}
-              className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300"
+                    router.push(`/knowledgebases/${base.id}`);
+                  }}
+                  key={base.id}
+                  className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300"
+                >
+                  <CardHeader>
+                    <CardTitle className="text-md flex pt-4 pb-1">
+                      {base.name}
+                    </CardTitle>
+                  </CardHeader>
+
+                  <CardContent className="pt-0 pb-0">
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {base.description
+                        ? base.description
+                        : '暂时还没有描述，可以去设置页面添加哦。'}
+                    </p>
+                  </CardContent>
+                  <CardFooter className="px-3 pt-0 flex justify-between w-full py-0">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="link" className="text-muted-foreground">
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>是否确认删除?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            请注意，删除知识库无法撤销。请仔细核对之后再确认。
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>取消</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={(e) => deleteKnowledgebase(base.id)}
+                          >
+                            删除
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+
+                    <div className="text-xs text-muted-foreground line-clamp-1 truncate">
+                      {formatBeijingTime(base.updated_at)}
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+            <div className="flex justify-center items-center h-1/10">
+              <PaginationComponent
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          </div>
+        ) : (
+          // 空状态提示
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <div className="text-muted-foreground mb-4">
+              <FileQuestion className="w-16 h-16 mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">暂无知识库</h3>
+              <p className="text-sm mb-4">
+                还没有创建任何知识库，点击下方按钮开始创建吧！
+              </p>
+            </div>
+            <Button 
+              onClick={() => router.push('/knowledgebases/create')}
+              className="gap-2"
             >
-              <CardHeader>
-                <CardTitle className="text-md flex pt-4 pb-1">
-                  {base.name}
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="pt-0 pb-0">
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {base.description
-                    ? base.description
-                    : '暂时还没有描述，可以去设置页面添加哦。'}
-                </p>
-              </CardContent>
-              <CardFooter className="px-3 pt-0 flex justify-between w-full py-0">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="link" className="text-muted-foreground">
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>是否确认删除?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        请注意，删除知识库无法撤销。请仔细核对之后再确认。
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>取消</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={(e) => deleteKnowledgebase(base.id)}
-                      >
-                        删除
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-
-                <div className="text-xs text-muted-foreground line-clamp-1 truncate">
-                  {formatBeijingTime(base.updated_at)}
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      </div>
-      {/* 分页组件 */}
-      <div className="flex justify-center items-center h-1/10">
-        <PaginationComponent
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
+              <Plus className="w-4 h-4" />
+              创建知识库
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
