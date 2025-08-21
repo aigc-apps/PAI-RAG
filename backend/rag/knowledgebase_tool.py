@@ -40,6 +40,7 @@ from loguru import logger
 import re
 import json
 from rag.file_existence_guard import FileExistenceGuard, require_file_exists
+from typing import Annotated
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -442,9 +443,30 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
 async def aget_knowledgebase_tool(kb_id: str, user_id: Optional[str] = None):
     knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
     aquery_knowledgebase_func = partial(aget_knowledgebase_result, kb_id=kb_id, user_id=user_id)
+
+    async def query_knowledgebase_handler(
+        query: Annotated[
+            str,
+            "根据上下文添加必要的背景信息，改写一个新的独立问题，使问题更完整，注意指代消解、完善主语等",
+        ] = "",
+        kb_id: Annotated[
+            str,
+            "知识库ID",
+        ] = "",
+        user_id: Annotated[
+            str,
+            "用户ID",
+        ] = "",
+    ):
+        return await aquery_knowledgebase_func(
+            query=query,
+            kb_id=kb_id,
+            user_id=user_id
+        )
+
     search_knowledgebase_tool = FunctionTool.from_defaults(
-        async_fn=aquery_knowledgebase_func,
+        async_fn=query_knowledgebase_handler,
         name=f"search-knowledgebase-{kb_id}",
-        description=f"从知识库中搜索和用户查询相关的内容。\n知识库名称: {knowledgebase.name}\n知识库描述: {knowledgebase.description}\n",
+        description=f"根据上下文从知识库中搜索和用户查询相关的内容。\n知识库名称: {knowledgebase.name}\n知识库描述: {knowledgebase.description}\n",
     )
     return search_knowledgebase_tool
