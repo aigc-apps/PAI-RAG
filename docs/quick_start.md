@@ -7,7 +7,33 @@
 - Git
 - Conda (推荐Miniconda)
 
-## 方式一：本地开发
+## 快速开始
+
+您可以通过两种方式在本地运行 PAI-RAG：Docker 环境或直接从源代码运行。
+
+
+### 方式一：Docker镜像启动
+
+1. 克隆项目代码并配置环境变量
+拷贝 `.env.example` 为 `.env`，并修改对应的配置。
+编辑.env文件，根据需要参考[环境变量说明](env.md)修改关键配置。
+
+```bash
+git clone https://github.com/aigc-apps/PAI-RAG.git
+cd PAI-RAG/docker
+cp .env.example .env
+```
+
+
+2. 使用docker compose命令启动服务：
+```bash
+docker-compose up -d
+```
+
+3. 打开浏览器中的 http://localhost:8680 访问WebUI. 第一次启动服务会下载需要的相关模型文件，需要等待20分钟左右。
+
+
+### 方式二：本地源码启动
 
 1. 克隆项目代码到本地
 
@@ -37,53 +63,7 @@
    cp .env.example .env
    ```
 
-   编辑.env文件，根据需要修改以下关键配置：
-
-   ```bash
-   # 1. Broker 配置，留空则使用本地 Redis，默认值为 redis://localhost:6379/0
-   PAIRAG_BROKER=
-   # 设置是否使用 CUDA（GPU 加速），USE_CUDA=1 表示启用 CUDA
-   USE_CUDA=
-
-   # 2. 文件存储配置，填写OSS相关信息
-   FILE_STORE_TYPE=oss
-   OSS_ACCESS_KEY_ID=
-   OSS_ACCESS_KEY_SECRET=
-   OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com
-   OSS_BUCKET=
-
-   # 3. 事务数据库配置，支持本地SQLite3和PostgreSQL
-   DB_TYPE=sqlite3 # postgresql, sqlite3
-   DB_HOST=
-   DB_PORT=5432
-   DB_USER=
-   DB_PASSWORD=
-   DB_NAME=
-
-   # 4. 向量数据库配置，支持本地Chroma，以及阿里云相关产品
-   VECTOR_DB_TYPE=local #local, milvus, elasticsearch, postgresql
-
-   # 4.1 使用 Milvus
-   MILVUS_HOST=
-   MILVUS_PORT=19530
-   MILVUS_USER=root
-   MILVUS_PASSWORD=
-   MILVUS_DATABASE=default
-
-
-   # 4.2 使用 Elasticsearch
-   ELASTICSEARCH_URL=
-   ELASTICSEARCH_USER=elastic
-   ELASTICSEARCH_PASSWORD=
-
-
-   # 4.3 使用 使用PostgreSQL
-   POSTGRES_HOST=
-   POSTGRES_PORT=5432
-   POSTGRES_USER=
-   POSTGRES_PASSWORD=
-   POSTGRES_DATABASE=
-   ```
+   编辑.env文件，根据需要参考[环境变量说明](env.md)修改关键配置。
 
 4. 启动服务
 
