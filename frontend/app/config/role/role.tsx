@@ -68,7 +68,7 @@ export default function RolePage() {
     const fetchModelConfigs = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/roles?page=${page}&size=${modelSizePerPage}`,
+          `/api/config/roles?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取角色列表失败');
         const json_data = await res.json();
@@ -86,7 +86,7 @@ export default function RolePage() {
 
   const handleDelete = async (role_id: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/roles/${role_id}`, {
+      const res = await fetch(`/api/config/roles/${role_id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('获取角色列表失败');
@@ -104,7 +104,7 @@ export default function RolePage() {
 
   const handleAddRole = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/roles`, {
+      const res = await fetch(`/api/config/roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editRole), // 包装为数组

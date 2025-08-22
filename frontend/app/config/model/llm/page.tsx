@@ -59,7 +59,7 @@ export default function LlmConfigPage() {
     const fetchModelConfigs = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms?page=${page}&size=${modelSizePerPage}`,
+          `/api/config/llms?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取LLM模型列表失败');
         const json_data = await res.json();
@@ -97,10 +97,10 @@ export default function LlmConfigPage() {
   const handleActivateToggle = async (llm: LlmConfig) => {
     setErrorMsg('');
     llm.enabled = !llm.enabled;
-    const url = `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms/${llm.id}`;
+    const url = `/api/config/llms/${llm.id}`;
 
     const res = await fetch(url, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(llm), // 包装为数组
     });
@@ -118,7 +118,7 @@ export default function LlmConfigPage() {
     setErrorMsg('');
     try {
       console.log('removeModel: id: ', id, 'model_type: ', model_type);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/${model_type}/${id}`, {
+      const res = await fetch(`/api/config/${model_type}/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +176,7 @@ export default function LlmConfigPage() {
             {llmconfigs.map((llm) => (
               <Card
                 key={llm.id}
-                className="flex flex-col border rounded-lg shadow-sm h-full"
+                className="flex flex-col border rounded-lg shadow-sm h-full pt-4 pb-0 gap-2"
               >
                 <CardHeader>
                   <CardTitle className="text-sm font-medium">
@@ -216,13 +216,13 @@ export default function LlmConfigPage() {
                     </div>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 pb-0">
                   <p className="truncate">{llm.model_id}</p>
-                  <p className="truncate text-muted-foreground py-4">
+                  <p className="truncate text-muted-foreground py-2 text-xs line-clamp-1">
                     {llm.base_url}
                   </p>
                 </CardContent>
-                <CardFooter className="mt-auto pt-0 flex justify-end">
+                <CardFooter className="mt-auto pt-0 pb-2 gap-4 flex justify-end">
                   <Button
                     variant="link"
                     onClick={() => removeModel(llm.id, 'llms')}

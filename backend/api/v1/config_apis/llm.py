@@ -127,7 +127,7 @@ async def read_llm(llm_id: str, session: AsyncSession = Depends(get_session)):
     return success_response(data=llm, message="获取LLM模型成功")
 
 
-@llm_router.patch("/{llm_id}", response_model=ResponseModel[LlmModelRead])
+@llm_router.put("/{llm_id}", response_model=ResponseModel[LlmModelRead])
 async def update_llm(
     llm_id: str,
     update_llm: LlmModelCreate,

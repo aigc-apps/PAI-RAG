@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
-    --worker-instances)
+    --worker-instances|-w)
       WORKER_INSTANCE_COUNT="$2"
       if ! [[ "$WORKER_INSTANCE_COUNT" =~ ^[0-9]+$ ]] || [ "$WORKER_INSTANCE_COUNT" -lt 0 ]; then
         echo "错误: --worker-instances 必须是非负整数"

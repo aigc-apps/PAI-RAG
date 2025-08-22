@@ -431,7 +431,7 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
             "text": score_node.node.get_content(),
             "metadata": {
                 "file_name": score_node.node.metadata.get("file_name", ""),
-                "file_url": score_node.node.metadata.get("file_path", ""),
+                "file_url": file_store.get_url(score_node.node.metadata.get("file_path", "")),
                 "file_source": score_node.node.metadata.get("file_source", "")
             },
             "score": score_node.score,

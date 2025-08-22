@@ -40,7 +40,7 @@ const ChatbotPage = () => {
     const fetchConfigs = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots?page=${page}&size=${pageSize}`,
+          `/api/config/apps?page=${page}&size=${pageSize}`,
         );
         if (!res.ok) throw new Error('获取应用列表失败');
         const json_data = await res.json();
@@ -61,7 +61,7 @@ const ChatbotPage = () => {
   };
   const deleteChatbot = async (bot_id: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots/${bot_id}`, {
+      const res = await fetch(`/api/config/apps/${bot_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -83,7 +83,7 @@ const ChatbotPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen p-6 space-y-6">
+    <div className="flex flex-col h-screen px-6 py-0 space-y-6">
       {/* 顶部标题栏 */}
       <div className="flex justify-between items-center h-1/10">
         <h1 className="text-2xl font-bold">Chat应用</h1>

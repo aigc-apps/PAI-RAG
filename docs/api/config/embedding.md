@@ -189,7 +189,7 @@ curl -X GET 'http://{API_ENDPOINT}/v1/config/embeddings?model_name=text-embeddin
 
 ### 请求信息
 
-- **方法**：`PATCH`
+- **方法**：`PUT`
 - **路径**：`/v1/config/embeddings/{id}`
 - **内容类型**：`application/json`
 
@@ -198,7 +198,7 @@ curl -X GET 'http://{API_ENDPOINT}/v1/config/embeddings?model_name=text-embeddin
 ### 示例请求
 
 ```bash
-curl -X PATCH 'http://{API_ENDPOINT}/v1/config/embeddings/c0b58926bfa843e297818f3a55df65dc' \
+curl -X PUT 'http://{API_ENDPOINT}/v1/config/embeddings/c0b58926bfa843e297818f3a55df65dc' \
   -H 'Authorization: Bearer YOUR_BEARER_TOKEN' \
   -H 'Content-Type: application/json' \
   -d '{

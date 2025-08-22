@@ -128,14 +128,13 @@ async def update_thread_title(
         generate_title_prompt = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE.format(
             chat_history="\n".join([f"{msg.role}: {get_content_from_messages(msg.content)}" for msg in messages])
         )
-        messages = [
-            ChatMessage(
-                role=MessageRole.USER,
-                content=generate_title_prompt,
-            )
-        ]
         chat_response_gen = await llm.astream_chat(
-            messages=messages,
+            messages=[
+                ChatMessage(
+                    role=MessageRole.USER,
+                    content=generate_title_prompt,
+                )
+            ]
         )
         response_text = ""
         async for response in chat_response_gen:

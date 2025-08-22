@@ -4,10 +4,6 @@ This is the [assistant-ui](https://github.com/Yonom/assistant-ui) starter projec
 
 First, copy `.env.example` and create `.env.local` file, add your backend API port to `.env.local` file:
 
-```
-BACKEND_PORT=8680
-NEXT_PUBLIC_BACKEND_PORT=8680
-```
 
 Both variables are used to communicate with the backend API.
 

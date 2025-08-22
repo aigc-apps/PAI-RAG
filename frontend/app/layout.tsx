@@ -47,9 +47,9 @@ export default function RootLayout({
             <SidebarProvider>
               <AppSidebar />
               <SidebarInset>
-                  <div className="flex h-screen w-full overflow-hidden">
+                  <div className="h-screen w-full overflow-hidden">
                     <SidebarTrigger className="w-10"/>
-                    <div className="w-full">
+                    <div className="w-full pt-0">
                       <Toast.Provider>{children}</Toast.Provider>
                     </div>
                   </div>
