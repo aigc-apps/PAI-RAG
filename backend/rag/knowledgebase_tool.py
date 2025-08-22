@@ -449,19 +449,9 @@ async def aget_knowledgebase_tool(kb_id: str, user_id: Optional[str] = None):
             str,
             "根据上下文添加必要的背景信息，改写一个新的独立问题，使问题更完整，注意指代消解、完善主语等",
         ] = "",
-        kb_id: Annotated[
-            str,
-            "知识库ID",
-        ] = "",
-        user_id: Annotated[
-            str,
-            "用户ID",
-        ] = "",
     ):
         return await aquery_knowledgebase_func(
             query=query,
-            kb_id=kb_id,
-            user_id=user_id
         )
 
     search_knowledgebase_tool = FunctionTool.from_defaults(
