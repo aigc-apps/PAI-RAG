@@ -62,17 +62,27 @@ export default function ModelSelector({
             return {
               id: item.id,
               model_id: item.app_id,
+              group_id: 'chatbot',
             };
           }),
         };
-        setModelGroups([...data.groups, chatbotGroup]);
+        const modelGroups = [...data.groups, chatbotGroup];
+        setModelGroups(modelGroups);
 
         if (!selectedModel.model_id) {
           // 如果没有选中的模型，默认选择第一个模型
-          const firstModel = data.groups[0]?.models[0];
+          const firstModel = modelGroups[0]?.models[0];
           setCurrentModel(firstModel?.model_id);
           if (firstModel) {
-            onModelChange(firstModel.id, data.groups[0].id, firstModel.model_id);
+            onModelChange(firstModel.id, modelGroups[0].id, firstModel.model_id);
+          }
+        }
+        else {
+          // 如果有选中的模型，根据选中的模型ID查找对应的模型
+          const modelConfig = modelGroups.flatMap((group) => group.models).find((model) => model.model_id === selectedModel.model_id);
+          if (modelConfig) {
+            setCurrentModel(modelConfig.model_id);
+            onModelChange(modelConfig.id, modelConfig.group_id, modelConfig.model_id);
           }
         }
       } catch (err) {
