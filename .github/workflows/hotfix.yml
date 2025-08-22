@@ -29,6 +29,11 @@ jobs:
       - name: Check disk space
         run: df . -h
 
+
+      - name: Copy local models
+        run: |
+          cp -r /home/ecs-user/model_repository ./model_repository
+
       - name: Extract version
         run: |
           pip install poetry
