@@ -17,7 +17,7 @@ from llama_index.core.base.llms.generic_utils import (
     completion_response_to_chat_response,
     stream_completion_response_to_chat_response,
 )
-from llama_index.llms.openai.base import OpenAI, Tokenizer
+from chat.openai.openai import OpenAI, Tokenizer
 from transformers import AutoTokenizer
 
 

@@ -16,6 +16,11 @@ from db.models.llm import LlmModelEntity
 from api.response_model import success_response, error_response, ResponseModel
 from chat.prompts import DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
 from utils.message_utils import get_content_from_messages
+from llama_index.core.base.llms.types import (
+    ChatMessage,
+    MessageRole,
+)
+
 thread_router = APIRouter()
 
 
@@ -123,10 +128,20 @@ async def update_thread_title(
         generate_title_prompt = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE.format(
             chat_history="\n".join([f"{msg.role}: {get_content_from_messages(msg.content)}" for msg in messages])
         )
-        chat_response = await llm.acomplete(
-            prompt=generate_title_prompt,
+        messages = [
+            ChatMessage(
+                role=MessageRole.USER,
+                content=generate_title_prompt,
+            )
+        ]
+        chat_response_gen = await llm.astream_chat(
+            messages=messages,
         )
-        extracted_content = re.sub(r"<think>.*?</think>", "", chat_response.text, flags=re.DOTALL)
+        response_text = ""
+        async for response in chat_response_gen:
+            response_text += response.delta
+
+        extracted_content = re.sub(r"<think>.*?</think>", "", response_text, flags=re.DOTALL)
         logger.info(f"Generated title: {extracted_content}")
         thread.title = json.loads(extracted_content).get("title", "未命名会话")
     except Exception as e:
