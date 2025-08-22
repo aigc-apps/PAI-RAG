@@ -20,7 +20,7 @@ poetry install
 3. Start locally
 
 ```bash
-./scripts/start.sh --frontend-port 8680 --backend-port 8688
+./scripts/start.sh --frontend-port 8680 --backend-port 8688 --dev
 ```
 
 Open http://localhost:8680 in your browser.

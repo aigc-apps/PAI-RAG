@@ -33,7 +33,7 @@ services:
 
     volumes:
       - ../localdata:/app/localdata
-    entrypoint: ["./scripts/start.sh", "--production"]
+    entrypoint: ["./scripts/start.sh"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8680/v1/health"]
       interval: 30s

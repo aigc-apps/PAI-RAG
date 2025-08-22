@@ -1,5 +1,4 @@
 // app/api/proxy/route.js
-import { Header } from '@radix-ui/react-accordion';
 import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8682"; // 你的后端地址
