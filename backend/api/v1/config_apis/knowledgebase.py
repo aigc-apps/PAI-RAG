@@ -125,7 +125,7 @@ async def read_knowledgebase(kb_id: str, session: AsyncSession = Depends(get_ses
     return success_response(data=knowledgebase, message="查询知识库成功。")
 
 
-@knowledgebase_router.patch("/{kb_id}", response_model=ResponseModel[KbEntity])
+@knowledgebase_router.put("/{kb_id}", response_model=ResponseModel[KbEntity])
 async def update_knowledgebase(
     kb_id: str,
     new_kb: KnowledgebaseCreate,
@@ -435,7 +435,7 @@ async def set_file_source(
 
 
 
-@knowledgebase_router.patch("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])
+@knowledgebase_router.put("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])
 async def update_chunk(
     kb_id: str,
     file_id: str,

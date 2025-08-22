@@ -146,7 +146,7 @@ async def change_default_embedding_model_and_update_threads(
     else:
         logger.info("Default attachment knowledgebase not found.")
 
-@embedding_router.patch("/{emb_id}", response_model=ResponseModel[EmbeddingModelRead])
+@embedding_router.put("/{emb_id}", response_model=ResponseModel[EmbeddingModelRead])
 async def update_embedding(
     emb_id: str,
     new_embedding: EmbeddingModelCreate,

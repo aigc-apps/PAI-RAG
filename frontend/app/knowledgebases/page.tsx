@@ -46,7 +46,7 @@ export default function KnowledgeBasePage() {
     const fetchConfigs = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
+          `/api/config/knowledgebases?page=${page}&size=${kbSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取知识库列表失败');
         const json_data = await res.json();
@@ -71,7 +71,7 @@ export default function KnowledgeBasePage() {
   };
   const deleteKnowledgebase = async (kb_id: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kb_id}`, {
+      const res = await fetch(`/api/config/knowledgebases/${kb_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -91,7 +91,7 @@ export default function KnowledgeBasePage() {
   };
 
   return (
-    <div className="flex flex-col h-screen p-6 space-y-6">
+    <div className="flex flex-col h-screen px-6 py-0 space-y-4">
       {/* 顶部标题栏 */}
       <div className="flex justify-between items-center h-1/10">
         <h1 className="text-2xl font-bold">知识库</h1>
@@ -170,7 +170,7 @@ export default function KnowledgeBasePage() {
                 </Card>
               ))}
             </div>
-            <div className="flex justify-center items-center h-1/10">
+            <div className="flex justify-center items-center h-1/10 pt-6">
               <PaginationComponent
                 currentPage={page}
                 totalPages={totalPages}

@@ -17,10 +17,10 @@ from config.providers.chatbot_provider import chatbot_provider
 from api.v1.utils.paginate import get_pagination_meta
 from loguru import logger
 
-chatbot_router = APIRouter()
+app_router = APIRouter()
 
 
-@chatbot_router.post("", response_model=ResponseModel[ChatBotEntity])
+@app_router.post("", response_model=ResponseModel[ChatBotEntity])
 async def create_chatbot(
     chatbot_create: ChatBotCreate, session: AsyncSession = Depends(get_session)
 ):
@@ -62,7 +62,7 @@ async def create_chatbot(
         )
 
 
-@chatbot_router.get("")
+@app_router.get("")
 async def get_chatbots(
     app_id: str = None,
     page: int = Query(default=1, ge=1),
@@ -103,7 +103,7 @@ async def get_chatbots(
 
         return success_response(data=embedding_model, message="查询应用成功。")
 
-@chatbot_router.patch("/{id}", response_model=ResponseModel[ChatBotEntity])
+@app_router.put("/{id}", response_model=ResponseModel[ChatBotEntity])
 async def update_chatbot(
     id: str,
     new_chatbot: ChatBotCreate,
@@ -146,7 +146,7 @@ async def update_chatbot(
     return success_response(data=chatbot, message="应用更新成功。")
 
 
-@chatbot_router.delete("/{id}")
+@app_router.delete("/{id}")
 async def delete_chatbot(
     id: str,
     session: AsyncSession = Depends(get_session),

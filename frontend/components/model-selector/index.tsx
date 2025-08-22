@@ -47,14 +47,16 @@ export default function ModelSelector({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms/groups`);
-        if (!res.ok) throw new Error('模型数据加载失败');
-        const data = await res.json();
+        const [llmRes, appRes] = await Promise.all([
+          fetch(`/api/config/llms/groups`),
+          fetch(`/api/config/apps`),
+        ]);
+        if (!llmRes.ok) throw new Error('模型数据加载失败');
+        const data = await llmRes.json();
         console.log('model data: ', data);
 
-        const chatbotRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots`);
-        if (!chatbotRes.ok) throw new Error('模型数据加载失败');
-        const chatbotData = (await chatbotRes.json()).data.items;
+        if (!appRes.ok) throw new Error('模型数据加载失败');
+        const chatbotData = (await appRes.json()).data.items;
         const chatbotGroup = {
           id: 'chatbot',
           label: '对话应用',
@@ -98,9 +100,9 @@ export default function ModelSelector({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className="min-w-[180px] w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 h-9 px-3 py-2 text-sm focus:ring-1 focus:ring-ring">
-        <div className="flex items-center pr-2 truncate">
-          <span className="flex flex-row items-center justify-start gap-2 text-lg font-semibold">
+      <PopoverTrigger className="absolute top-0 left-18 max-w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 text-sm focus:ring-1 focus:ring-ring">
+        <div className="flex items-center pr-2 truncate gap-2">
+          <span className="flex flex-row items-center justify-start gap-2 text-lg font-medium">
             {currentModel || '请选择模型'}
           </span>
           <ChevronsUpDown className="size-4 opacity-50 ml-auto" />

@@ -58,56 +58,62 @@ export const Thread: FC<{
     const fetchConfigs = async () => {
       try {
         setMcpLoading(true);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/mcps`);
-        if (!res.ok) throw new Error('获取配置失败');
-        const data = await res.json();
-
-        const configs = data.data.items.map(
-          (cfg: any) =>
-            new McpEntry(
-              cfg.id,
-              cfg.name,
-              cfg.url,
-              cfg.type,
-              cfg.enabled ?? true,
-              mcp_ids.includes(cfg.id),
-            ),
-        );
-        const enabledConfigs = configs.filter(
-          (item: { enabled: boolean }) => item.enabled === true,
-        );
-        console.log('all MCP configs: ', configs);
-        console.log('enabled MCP configs: ', enabledConfigs);
-        setMcpConfigs(enabledConfigs);
-      } catch (err: any) {
-        setMcpError(err.message || '加载失败');
-      } finally {
-        setMcpLoading(false);
-      }
-
-      try {
         setKbLoading(true);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases`);
-        if (!res.ok) throw new Error('获取知识库配置失败');
-        const json_res = await res.json();
-        console.log('Load kb.', json_res);
+        
+        const [mcpRes, kbRes] = await Promise.all(
+          [
+            fetch(`/api/config/mcps`),
+            fetch(`/api/config/knowledgebases`),
+          ]
+        )
+        if (!mcpRes.ok) setMcpError('MCP加载失败');
+        else {
+          const data = await mcpRes.json();
 
-        const configs = json_res.data.items.map(
-          (cfg: any) =>
-            new KbSelection(
-              cfg.id,
-              cfg.name,
-              cfg.description,
-              kb_ids.includes(cfg.id),
-              cfg.updated_at,
-            ),
-        );
-        console.log('all kb configs: ', configs);
-        setKbConfigs(configs);
-      } catch (err: any) {
-        setKbError(err.message || '加载知识库失败');
-      } finally {
+          const configs = data.data.items.map(
+            (cfg: any) =>
+              new McpEntry(
+                cfg.id,
+                cfg.name,
+                cfg.url,
+                cfg.type,
+                cfg.enabled ?? true,
+                mcp_ids.includes(cfg.id),
+              ),
+          );
+          const enabledConfigs = configs.filter(
+            (item: { enabled: boolean }) => item.enabled === true,
+          );
+          console.log('all MCP configs: ', configs);
+          console.log('enabled MCP configs: ', enabledConfigs);
+          setMcpConfigs(enabledConfigs);
+          setMcpLoading(false);
+        }
+
+        if (!kbRes.ok) setKbError('知识库加载失败');
+        else {
+          const json_res = await kbRes.json();
+          console.log('Load kb.', json_res);
+
+          const configs = json_res.data.items.map(
+            (cfg: any) =>
+              new KbSelection(
+                cfg.id,
+                cfg.name,
+                cfg.description,
+                kb_ids.includes(cfg.id),
+                cfg.updated_at,
+              ),
+          );
+          console.log('all kb configs: ', configs);
+          setKbConfigs(configs);
+          setKbLoading(false);
+        }
+      }
+      catch (error) {
+        console.error('Error fetching configs:', error);
         setKbLoading(false);
+        setMcpLoading(false);
       }
     };
 

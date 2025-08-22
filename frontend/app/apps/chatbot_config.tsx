@@ -79,10 +79,10 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         if (!isCreate)
         {
           const [llmRes, mcpRes, kbRes, botRes] = await Promise.all([
-            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms`),
-            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/mcps`),
-            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases`),
-            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots?app_id=${chatbotId}`)]);
+            fetch(`/api/config/llms`),
+            fetch(`/api/config/mcps`),
+            fetch(`/api/config/knowledgebases`),
+            fetch(`/api/config/apps?app_id=${chatbotId}`)]);
           const llmData = (await llmRes.json())?.data.items || [];
           console.log('llmData', llmData);
           setLlms([...llmData]);
@@ -117,9 +117,9 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         else
         {
           const [llmRes, mcpRes, kbRes] = await Promise.all([
-            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/llms`),
-            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/mcps`),
-            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases`)]);
+            fetch(`/api/config/llms`),
+            fetch(`/api/config/mcps`),
+            fetch(`/api/config/knowledgebases`)]);
 
           const llmData = (await llmRes.json())?.data.items || [];
           console.log('llmData', llmData);
@@ -146,9 +146,9 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const handleSaveChatConfig = async () => {
     console.log('保存应用结果:', botConfig);
     const submit_url = isCreate
-      ? `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots`
-      : `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/chatbots/${botConfig.id}`;
-    const updateMethod = isCreate ? 'POST' : 'PATCH';
+      ? `/api/config/apps`
+      : `/api/config/apps/${botConfig.id}`;
+    const updateMethod = isCreate ? 'POST' : 'PUT';
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,

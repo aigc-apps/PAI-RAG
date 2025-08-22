@@ -220,7 +220,7 @@ export default function KnowledgeBaseDetailPage(
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [embRes] = await Promise.all([fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/embeddings`)]);
+        const [embRes] = await Promise.all([fetch(`/api/config/embeddings`)]);
 
         const embData = (await embRes.json())?.data.items || [];
         console.log('embData', embData);
@@ -246,7 +246,7 @@ export default function KnowledgeBaseDetailPage(
   const handleSearchSubmit = async () => {
     setSearching(true);
     console.log('handleSearchSubmit');
-    const search_result = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/retrieval`, {
+    const search_result = await fetch(`/api/retrieval`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -273,25 +273,9 @@ export default function KnowledgeBaseDetailPage(
     pageRef.current = page;
   }, [page]);
 
-  const fetchKbMetadata = async () => {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/metadata`,
-    );
-    if (!res.ok) throw new Error('获取知识库元数据失败');
-    const metadata_json = await res.json();
-    const metadata_data = metadata_json.data as MetadataConfig[];
-    const valueTypes = Object.fromEntries(
-      metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
-    ) as { [key: string]: string };
-
-    console.log('知识库元数据: ', metadata_data, valueTypes);
-
-    setMetadataValueTypes({ ...valueTypes, '': 'string' });
-    setMetadataConfigs(metadata_data);
-  };
 
   const fetchKbFiles = useCallback(async () => {
-    const url = `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
+    const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
       const files_res = await fetch(url);
@@ -333,15 +317,29 @@ export default function KnowledgeBaseDetailPage(
   useEffect(() => {
     const fetchKbConfigs = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}`,
-        );
-        if (!res.ok) throw new Error('获取知识库列表失败');
-        const json_data = await res.json();
+        const [kbRes, metaRes] = await Promise.all([
+          fetch(`/api/config/knowledgebases/${kbId}`),
+          fetch(`/api/config/knowledgebases/${kbId}/metadata`),
+        ]);
+
+        if (!kbRes.ok) throw new Error('获取知识库配置失败');
+        const json_data = await kbRes.json();
         const kb_data = json_data.data;
 
         setKnowledgeBase(kb_data); // 更新状态
         console.log('知识库详情数据:', kb_data);
+
+        if (!metaRes.ok) throw new Error('获取知识库元数据失败');
+        const metadata_json = await metaRes.json();
+        const metadata_data = metadata_json.data as MetadataConfig[];
+        const valueTypes = Object.fromEntries(
+          metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
+        ) as { [key: string]: string };
+
+        console.log('知识库元数据: ', metadata_data, valueTypes);
+
+        setMetadataValueTypes({ ...valueTypes, '': 'string' });
+        setMetadataConfigs(metadata_data);
       } catch (err: any) {
         setKnowledgeBasesError(err || '加载失败');
       } finally {
@@ -349,7 +347,6 @@ export default function KnowledgeBaseDetailPage(
       }
     };
     fetchKbConfigs();
-    fetchKbMetadata();
   }, []);
 
   if (!knowledgebase) {
@@ -370,7 +367,7 @@ export default function KnowledgeBaseDetailPage(
     setDeleting(true);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/files/${file_id}`,
+        `/api/config/knowledgebases/${kbId}/files/${file_id}`,
         {
           method: 'DELETE',
         },
@@ -388,7 +385,7 @@ export default function KnowledgeBaseDetailPage(
   const handleSaveFileSource = async (file_id: string) => {
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/files/${file_id}/source`,
+        `/api/config/knowledgebases/${kbId}/files/${file_id}/source`,
         {
           method: 'POST',
           headers: {
@@ -444,7 +441,7 @@ export default function KnowledgeBaseDetailPage(
     setIsEditingMetadata(false);
     try {
       const file_res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/files/${file_id}`,
+        `/api/config/knowledgebases/${kbId}/files/${file_id}`,
       );
       if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
       const file_json = await file_res.json();
@@ -521,7 +518,7 @@ export default function KnowledgeBaseDetailPage(
   const checkFileRole = async (file_id: string) => {
     try {
       setEditRoleFileId(file_id);
-      const roleRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/roles?size=100`);
+      const roleRes = await fetch(`/api/config/roles?size=100`);
       if (!roleRes.ok) {
         alert('查询角色失败');
         return;
@@ -531,7 +528,7 @@ export default function KnowledgeBaseDetailPage(
 
       const permission_name = file_id;
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/roles/permissions?name=${permission_name}&size=100`,
+        `/api/config/roles/permissions?name=${permission_name}&size=100`,
       );
       if (!res.ok) {
         alert('查询文件permission失败');
@@ -558,7 +555,7 @@ export default function KnowledgeBaseDetailPage(
   const saveFilePermission = async () => {
     try {
       const roleRes = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/roles/permissions/files/${editRoleFileId}`,
+        `/api/config/roles/permissions/files/${editRoleFileId}`,
         {
           method: 'POST',
           headers: {
@@ -610,7 +607,7 @@ export default function KnowledgeBaseDetailPage(
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/files`,
+        `/api/config/knowledgebases/${kbId}/files`,
         {
           method: 'POST',
           body: formData,
@@ -661,7 +658,7 @@ export default function KnowledgeBaseDetailPage(
         entries: metadata_enties,
       };
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/knowledgebases/${kbId}/files/${file_id}/metadata`,
+        `/api/config/knowledgebases/${kbId}/files/${file_id}/metadata`,
         {
           method: 'POST',
           body: JSON.stringify(bodyData),
@@ -751,9 +748,9 @@ export default function KnowledgeBaseDetailPage(
   };
 
   return (
-    <div className="flex flex-col h-screen w-full">
+    <div className="flex flex-col h-screen w-full pt-0 space-y-0">
       <div className="flex-none">
-        <div className="p-4 flex">
+        <div className="px-4 py-2 flex">
           <div className="gap-1 flex items-center">
             <Breadcrumb>
               <BreadcrumbList>

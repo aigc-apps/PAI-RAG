@@ -108,7 +108,7 @@ async def read_mcp(mcp_id: str, session: AsyncSession = Depends(get_session)):
     return success_response(data=mcp, message="查询mcp成功。")
 
 
-@mcp_router.patch("/{mcp_id}", response_model=McpServerRead)
+@mcp_router.put("/{mcp_id}", response_model=McpServerRead)
 async def update_mcp(
     mcp_id: str,
     update_mcp: McpServerCreate,

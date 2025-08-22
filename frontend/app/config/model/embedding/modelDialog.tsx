@@ -89,9 +89,9 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       return;
     }
     const submit_url = isAdd
-      ? `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/embeddings`
-      : `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/embeddings/${emb.id}`;
-    const updateMethod = isAdd ? 'POST' : 'PATCH';
+      ? `/api/config/embeddings`
+      : `/api/config/embeddings/${emb.id}`;
+    const updateMethod = isAdd ? 'POST' : 'PUT';
     if (emb.api_key === '******') emb.api_key = '';
     console.log('updateMethod', isAdd, updateMethod, submit_url, emb);
     try {

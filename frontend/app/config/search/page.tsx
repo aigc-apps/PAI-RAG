@@ -29,7 +29,7 @@ export default function SearchConfig() {
         setIsLoading(true);
         setError('');
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/websearch`, {
+        const res = await fetch(`/api/config/websearch`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -68,7 +68,7 @@ export default function SearchConfig() {
       const update_ak = aliyunAK === '******' ? '' : aliyunAK;
       const update_sk = aliyunSK === '******' ? '' : aliyunSK;
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/websearch`, {
+      const res = await fetch(`/api/config/websearch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
 
