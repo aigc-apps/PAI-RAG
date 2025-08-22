@@ -92,8 +92,8 @@ async def get_chatbots(
         statement = select(ChatBotEntity).where(
             ChatBotEntity.app_id == app_id
         )
-        embedding_model = (await session.exec(statement)).first()
-        if not embedding_model:
+        app = (await session.exec(statement)).first()
+        if not app:
             return JSONResponse(
                 content=error_response(
                     code=404, message=f"查询应用失败: '{app_id}'不存在。"
@@ -101,7 +101,7 @@ async def get_chatbots(
                 status_code=404,
             )
 
-        return success_response(data=embedding_model, message="查询应用成功。")
+        return success_response(data=app, message="查询应用成功。")
 
 @app_router.put("/{id}", response_model=ResponseModel[ChatBotEntity])
 async def update_chatbot(

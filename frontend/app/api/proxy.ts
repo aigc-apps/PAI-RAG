@@ -5,9 +5,15 @@ import { NextRequest, NextResponse } from 'next/server';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8682"; // 你的后端地址
 
 export async function proxyRequest(request: NextRequest) {
-  const { pathname } = new URL(request.url);
+  const { pathname, searchParams } = new URL(request.url);
   const path = pathname?.replace(/^\/api\b/, '/v1');
-  const targetUrl = `${BACKEND_URL}${path}`;
+
+  // 3. Build the final upstream URL
+  const upstreamUrl = new URL(path, BACKEND_URL);
+  // 4. Copy all original search params (except maybe 'path')
+  for (const [key, value] of searchParams.entries()) {
+    upstreamUrl.searchParams.append(key, value);
+  }
 
   const method = request.method;
   let headers = new Headers(request.headers);
@@ -59,7 +65,7 @@ export async function proxyRequest(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(targetUrl, {
+    const res = await fetch(upstreamUrl.toString(), {
       method,
       headers,
       body,

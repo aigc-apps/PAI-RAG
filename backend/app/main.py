@@ -1,17 +1,17 @@
 # init trace
 from dotenv import load_dotenv
-
-from rag.vector_store.local_chroma_service import LocalChromaService
-
 load_dotenv()
 
 import os
 import asyncio
 from fastapi import FastAPI
+
 # setup models
 from utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 
+from rag.vector_store.local_chroma_service import LocalChromaService
+from app.log_middleware import CustomLoggingMiddleware
 from config.providers.config_change_manager import config_change_manager
 from contextlib import asynccontextmanager
 from utils.format_logging import format_logging
@@ -46,6 +46,7 @@ def configure(app: FastAPI):
         allow_headers=["*"],
         allow_credentials=False,
     )
+    app.add_middleware(CustomLoggingMiddleware)
 
 
 app = FastAPI(lifespan=lifespan)

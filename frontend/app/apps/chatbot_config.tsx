@@ -327,7 +327,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                   variant="outline"
                   className="text-sm text-muted-foreground"
                 >
-                  已选{botConfig.kb_ids.length}个，可多选 <ChevronDownIcon />
+                  已选{botConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
