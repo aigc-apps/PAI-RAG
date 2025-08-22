@@ -1,0 +1,17 @@
+# .dockerignore
+.git
+node_modules
+npm-debug.log
+.env
+*.log
+__pycache__
+*.pyc
+Dockerfile
+README.md
+localdata
+Makefile
+examples
+docs
+.vscode
+.ruff_cache
+tests

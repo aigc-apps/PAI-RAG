@@ -8,17 +8,18 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_CACHE_DIR=/tmp/poetry_cache
 
 WORKDIR /app
-COPY . .
+COPY backend /app/backend
+COPY poetry.lock pyproject.toml .
 RUN poetry install && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
 
 WORKDIR /app
-COPY model_repository .
+COPY model_repository /app/model_repository
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
 
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential nodejs npm nginx procps redis-server gettext-base
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 libgomp1 curl libgdiplus wget perl build-essential nano nodejs npm nginx procps redis-server gettext-base
 
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH"
@@ -38,8 +39,10 @@ RUN mkdir -p /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
 
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-COPY resources frontend backend scripts magic-pdf.template.json .
-
+COPY resources /app/resources
+COPY scripts /app/scripts
+COPY frontend /app/frontend
+COPY backend /app/backend
 RUN cd frontend && npm install && npm run build
 
-CMD ["./scripts/start.sh", "--production"]
+CMD ["./scripts/start.sh"]

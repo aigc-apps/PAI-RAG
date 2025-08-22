@@ -8,7 +8,7 @@
 #   --backend-port        后端端口 (默认: 8682)
 #   --api-instances       API 实例数量 (默认: 1)
 #   --worker-instances    Worker 实例数量 (默认: 1)
-#   --production          Production模式
+#   --dev                 Develop模式（不开启nginx转发）
 #   --help                显示帮助
 # ===================================================================
 
@@ -18,7 +18,7 @@ FRONTEND_PORT=${FRONTEND_PORT:-8681}
 BACKEND_PORT=${BACKEND_PORT:-8682}
 API_INSTANCE_COUNT=${API_INSTANCE_COUNT:-1}
 WORKER_INSTANCE_COUNT=${WORKER_INSTANCE_COUNT:-2}
-PRODUCTION=${PRODUCTION:-false}
+DEV_MODE=${DEV_MODE:-false}
 
 
 # 解析参数
@@ -64,20 +64,20 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
-    --production)
-      PRODUCTION=true
+    --dev)
+      DEV_MODE=true
       shift 1
       ;;
     --help|-h)
       echo "用法: $0 [选项]"
       echo ""
       echo "选项:"
-      echo "  --port PORT                应用端口    (默认: 8680) PRODUCTION模式为NGINX端口"
+      echo "  --port PORT                应用端口    (默认: 8680) dev模式为前端端口，PRODUCTIoN模式为NGINX端口"
       echo "  --frontend-port PORT       前端服务端口 (默认: 8681), 仅PRODUCTION模式生效"
       echo "  --backend-port PORT        后端服务端口 (默认: 8682)"
       echo "  --api-instances N          启动 N 个 API 实例 (默认: 1)"
       echo "  --worker-instances N       启动 N 个 Worker 实例 (默认: 1)"
-      echo "  --production               使用RODUCTION模式启动web, 将配置nginx"
+      echo "  --dev                      使用dev模式启动web, 将不会配置nginx"
       echo "  --help                     显示此帮助信息"
       echo ""
       echo "示例:"
@@ -101,6 +101,7 @@ echo "   前端端口: $FRONTEND_PORT"
 echo "   后端端口: $BACKEND_PORT"
 echo "   API 实例数: $API_INSTANCE_COUNT"
 echo "   Worker 实例数: $WORKER_INSTANCE_COUNT"
+echo "   开发模式: $DEV_MODE"
 echo
 echo "🚀 启动服务中..."
 
@@ -138,7 +139,7 @@ setup_nginx() {
 start_frontend() {
   cd frontend || { echo "错误: 找不到 frontend 目录"; exit 1; }
 
-  if [[ "$PRODUCTION" == true ]]; then
+  if [[ "$DEV_MODE" == false ]]; then
     echo "👉 启动前端服务 on port $FRONTEND_PORT"
     NEXT_PUBLIC_BACKEND_URL=http://localhost:$BACKEND_PORT npm run start  -- --port $FRONTEND_PORT &
   else
@@ -191,7 +192,7 @@ cleanup() {
 # 捕获信号（SIGTERM, SIGINT, EXIT）
 trap cleanup EXIT TERM INT
 
-if  [[ "$PRODUCTION" == true ]]; then
+if  [[ "$DEV_MODE" == false ]]; then
   setup_nginx
 fi
 
