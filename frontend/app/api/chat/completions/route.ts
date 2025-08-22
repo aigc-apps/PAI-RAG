@@ -4,9 +4,14 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:868
 export async function POST(request: NextRequest) {
   const text = await request.text();
 
+  const headers = new Headers(request.headers);
+  // 删除 Next.js 自动添加的 header，避免冲突
+  headers.delete('host');
+  headers.delete('connection');
+
   const response = await fetch(`${BACKEND_URL}/v1/chat/completions`, {
     method: 'POST',
-    headers: new Headers(request.headers),
+    headers: headers,
     body: text,
   });
 

@@ -9,15 +9,12 @@ ENV POETRY_NO_INTERACTION=1 \
 
 WORKDIR /app
 COPY . .
-
-RUN poetry install \
-  && poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4 \
-  && rm -rf $POETRY_CACHE_DIR
+RUN poetry install && rm -rf $POETRY_CACHE_DIR
 
 FROM python:3.11-slim AS prod
 
 WORKDIR /app
-COPY model_repository /app/
+COPY model_repository .
 
 RUN rm -rf /etc/localtime && ln -s /usr/share/zoneinfo/Asia/Harbin  /etc/localtime
 
@@ -41,8 +38,7 @@ RUN mkdir -p /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
 
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-
-COPY . .
+COPY resources frontend backend scripts magic-pdf.template.json .
 
 RUN cd frontend && npm install && npm run build
 
