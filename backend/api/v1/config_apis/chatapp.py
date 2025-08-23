@@ -120,6 +120,7 @@ async def update_chatbot(
 
     logger.info(f"正在更新应用 {id} to {new_chatbot}.")
     chatbot.app_id = new_chatbot.app_id or chatbot.app_id
+    chatbot.model_id = new_chatbot.model_id or chatbot.model_id
     chatbot.enable_search = new_chatbot.enable_search
     chatbot.enable_agent = new_chatbot.enable_agent
     chatbot.kb_ids = new_chatbot.kb_ids
