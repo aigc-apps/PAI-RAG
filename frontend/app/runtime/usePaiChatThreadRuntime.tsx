@@ -242,6 +242,7 @@ export class MyModelAdapter implements ChatModelAdapter {
               console.warn(`Tool call with ID ${lastKey} not found.`);
             }
             AddOrMergeToolCall(eventQueue, currentToolCallMap[lastKey]);
+            content = ""; // 重置content
           }
 
           // 生成结果
@@ -353,7 +354,7 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
   async unarchive(remoteId) {},
   async delete(remoteId) {
     try {
-      const res = await fetch(`/api/threads`, {
+      const res = await fetch(`/api/threads/${remoteId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
