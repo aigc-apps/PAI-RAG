@@ -25,7 +25,7 @@ jobs:
         run: |
           pip install poetry
           VERSION_TAG=$(poetry version --short)
-          CURRENT_TIME="`date +%Y%m%d%`"
+          CURRENT_TIME="`date +%Y%m%d`"
           echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
           echo "TIME_VERSION_TAG=$VERSION_TAG-$CURRENT_TIME" >> $GITHUB_ENV
 
