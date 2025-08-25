@@ -76,7 +76,8 @@ class EmbeddingProvider(BaseConfigProvider):
         return create_embedding_model(config=config)
 
     def get_embedding_model(self, model_id: str):
-        assert model_id in self.model_id_to_entry_id, f"`{model_id}` not found. {self.model_id_to_entry_id}"
+        if model_id not in self.model_id_to_entry_id:
+            raise ValueError(f"`{model_id}` not found. available model_ids: {self.model_id_to_entry_id}")
         entry_id = self.model_id_to_entry_id[model_id]
         if self.config_map[entry_id].is_ready or self.config_map[entry_id].type == EmbeddingType.OPENAI_LIKE:
             return self.get_instance(entry_id)
@@ -84,7 +85,8 @@ class EmbeddingProvider(BaseConfigProvider):
             raise ValueError(f"Embedding model {model_id} is still downloading.")
 
     def get_embedding_config(self, model_id: str):
-        assert model_id in self.model_id_to_entry_id, f"`{model_id}` not found. {self.model_id_to_entry_id}"
+        if model_id not in self.model_id_to_entry_id:
+            raise ValueError(f"`{model_id}` not found. available model_ids: {self.model_id_to_entry_id}")
         entry_id = self.model_id_to_entry_id[model_id]
         return self.config_map[entry_id]
 
