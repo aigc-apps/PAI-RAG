@@ -70,7 +70,8 @@ async def get_final_answer(chat_request: ChatAgentRequest):
     try:
         start_time = time.time()
         agent_loop = AgentLoop()
-        async_response_gen = await agent_loop.arun(chat_request=chat_request)
+        new_chat_request = parse_chat_request(chat_request) # 利用chatbot信息
+        async_response_gen = await agent_loop.arun(chat_request=new_chat_request)
 
         final_answer_writer = AgentFinalAnswerWriter()
         final_answer, step = await final_answer_writer.astream_text(async_response_gen)
