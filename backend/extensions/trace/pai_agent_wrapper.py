@@ -21,6 +21,7 @@ INPUT_QUERY = "input.query"
 OUTPUT_VALUE = SpanAttributes.OUTPUT_VALUE
 GEN_AI_SPAN_KIND = "gen_ai.span.kind"
 CHAIN = OpenInferenceSpanKindValues.CHAIN.value
+REASONING_CONTENT = "output.reasoning_content"
 
 STATUS_OK = Status(StatusCode.OK)
 
@@ -66,12 +67,18 @@ def pai_agent_wrapper(func):
 
             async def wrapped_generator():
                 final_output = ""
+                final_reasoning_content = ""
                 first_token_time = None
                 try:
                     is_error = False
                     async for response in response_gen:
                         if response.message.role == "assistant":
                             final_output += response.delta
+                        final_reasoning_content += (
+                            response.raw.choices[0].delta.reasoning_content or ""
+                            if response.raw and response.raw.choices and hasattr(response.raw.choices[0].delta, "reasoning_content")
+                            else ""
+                        )
                         first_token_time = first_token_time or time.time_ns()
                         if response.message.additional_kwargs.get("failed"):
                             is_error = True
@@ -86,6 +93,8 @@ def pai_agent_wrapper(func):
                     raise
                 finally:
                     span.set_attribute(OUTPUT_VALUE, final_output)
+                    if final_reasoning_content:
+                        span.set_attribute(REASONING_CONTENT, final_reasoning_content)
                     span.end(end_time=first_token_time or time.time_ns())
 
             return wrapped_generator()
