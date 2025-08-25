@@ -12,7 +12,7 @@ class ThoughtRecord(BaseModel):
 
 
 def record_thought(cache, cache_key: str, thought: str):
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now().isoformat()
     record = ThoughtRecord(timestamp=timestamp, thought=thought)
 
     # 写入缓存

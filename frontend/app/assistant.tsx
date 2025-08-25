@@ -30,25 +30,25 @@ export const Assistant = () => {
   }, [selectedOptions]);
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="flex h-12 border-b">
-        <div className="flex justify-start px-20 border-none">
-          <ModelSelector
-            selectedModel={{
-              model_id: model || undefined,
-            }}
-            onModelChange={handleModelChange}
-          />
-        </div>
+    <div className="flex flex-col h-screen">
+      <header className="flex p-1 border-b">
+        <ModelSelector
+          selectedModel={{
+            model_id: model || undefined,
+          }}
+          onModelChange={handleModelChange}
+        />
       </header>
-      <Thread
-        optionsVisible={optionsVisible}
-        onToggleChange={(options) => {
-          console.log('Received options from Thread:', options); // ✅ 添加日志
-          setSelectedOptions(options); // 更新状态
-        }}
-      />
-      <ToolUIWrapper />
+      <div className="flex flex-col flex-1 justify-end pb-8 overflow-y-auto">
+        <Thread
+          optionsVisible={optionsVisible}
+          onToggleChange={(options) => {
+            console.log('Received options from Thread:', options); // ✅ 添加日志
+            setSelectedOptions(options); // 更新状态
+          }}
+        />
+        <ToolUIWrapper />
+      </div>
     </div>
   );
 };

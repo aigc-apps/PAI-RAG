@@ -9,14 +9,14 @@ import RerankerConfigPage from '@/app/config/model/reranker/page';
 export default function ModelConfigPage() {
   return (
     <div id="model">
-      <div className="flex flex-col h-screen p-6 space-y-6">
+      <div className="flex flex-col h-screen p-2">
         {/* 顶部标题栏 */}
-        <div className="flex justify-between items-center h-1/10">
+        <div className="flex items-center h-1/10">
           <h1 className="text-2xl font-bold">模型</h1>
         </div>
 
         {/* 卡片容器 */}
-        <div className="h-4/5">
+        <div className="flex-1 overflow-y-auto">
           <div className="">
             <Tabs defaultValue="llms">
               <TabsList className="py-4 bg-muted rounded-lg flex-none">

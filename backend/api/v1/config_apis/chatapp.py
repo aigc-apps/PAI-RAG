@@ -17,10 +17,10 @@ from config.providers.chatbot_provider import chatbot_provider
 from api.v1.utils.paginate import get_pagination_meta
 from loguru import logger
 
-chatbot_router = APIRouter()
+app_router = APIRouter()
 
 
-@chatbot_router.post("", response_model=ResponseModel[ChatBotEntity])
+@app_router.post("", response_model=ResponseModel[ChatBotEntity])
 async def create_chatbot(
     chatbot_create: ChatBotCreate, session: AsyncSession = Depends(get_session)
 ):
@@ -62,7 +62,7 @@ async def create_chatbot(
         )
 
 
-@chatbot_router.get("")
+@app_router.get("")
 async def get_chatbots(
     app_id: str = None,
     page: int = Query(default=1, ge=1),
@@ -92,8 +92,8 @@ async def get_chatbots(
         statement = select(ChatBotEntity).where(
             ChatBotEntity.app_id == app_id
         )
-        embedding_model = (await session.exec(statement)).first()
-        if not embedding_model:
+        app = (await session.exec(statement)).first()
+        if not app:
             return JSONResponse(
                 content=error_response(
                     code=404, message=f"查询应用失败: '{app_id}'不存在。"
@@ -101,9 +101,9 @@ async def get_chatbots(
                 status_code=404,
             )
 
-        return success_response(data=embedding_model, message="查询应用成功。")
+        return success_response(data=app, message="查询应用成功。")
 
-@chatbot_router.patch("/{id}", response_model=ResponseModel[ChatBotEntity])
+@app_router.put("/{id}", response_model=ResponseModel[ChatBotEntity])
 async def update_chatbot(
     id: str,
     new_chatbot: ChatBotCreate,
@@ -120,6 +120,7 @@ async def update_chatbot(
 
     logger.info(f"正在更新应用 {id} to {new_chatbot}.")
     chatbot.app_id = new_chatbot.app_id or chatbot.app_id
+    chatbot.model_id = new_chatbot.model_id or chatbot.model_id
     chatbot.enable_search = new_chatbot.enable_search
     chatbot.enable_agent = new_chatbot.enable_agent
     chatbot.kb_ids = new_chatbot.kb_ids
@@ -146,7 +147,7 @@ async def update_chatbot(
     return success_response(data=chatbot, message="应用更新成功。")
 
 
-@chatbot_router.delete("/{id}")
+@app_router.delete("/{id}")
 async def delete_chatbot(
     id: str,
     session: AsyncSession = Depends(get_session),

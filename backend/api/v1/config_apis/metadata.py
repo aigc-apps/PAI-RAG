@@ -76,7 +76,7 @@ async def list_metadata(
     return success_response(data=metadata_list, message="查询元数据成功。")
 
 
-@knowledgebase_router.patch("/{kb_id}/metadata/{metadata_id}", response_model=ResponseModel[List[KbMetadataEntity]])
+@knowledgebase_router.put("/{kb_id}/metadata/{metadata_id}", response_model=ResponseModel[List[KbMetadataEntity]])
 async def update_metadata(
     kb_id: str,
     metadata_id: str,

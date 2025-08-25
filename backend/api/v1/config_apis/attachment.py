@@ -26,8 +26,8 @@ from loguru import logger
 attachments_router = APIRouter()
 
 
-@attachments_router.post("/upload")
-async def upload_attachment_file(
+@attachments_router.post("")
+async def create_attachment_file(
     file_id: str = Form(...), file: UploadFile = File(...), session: AsyncSession = Depends(get_session)
 ):
     knowledgebase = knowledgebase_provider.get_knowledgebase_by_name("default_attachments")

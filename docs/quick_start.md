@@ -68,7 +68,7 @@ docker-compose up -d
 4. 启动服务
 
    ```bash
-   ./scripts/start.sh
+   ./scripts/start.sh --dev
    ```
 
 5. 验证安装
@@ -95,7 +95,7 @@ docker-compose up -d
    - --frontend-port 前端服务端口 (默认: 8681)
    - --backend-port  后端服务端口 (默认: 8682)
    ```bash
-   ./scripts/start.sh --port 8688
+   ./scripts/start.sh --port 8680 --dev
    ```
 
 ## 注意事项

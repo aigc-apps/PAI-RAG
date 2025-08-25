@@ -64,7 +64,7 @@ export default function EmbConfigPage() {
     const fetchModelConfigs = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/embeddings?page=${page}&size=${modelSizePerPage}`,
+          `/api/config/embeddings?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取Embedding模型列表失败');
         const json_data = await res.json();
@@ -104,7 +104,7 @@ export default function EmbConfigPage() {
     try {
       console.log('removeModel: id: ', id, 'model_type: ', model_type);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/${model_type}/${id}`, {
+      const res = await fetch(`/api/config/${model_type}/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -162,7 +162,7 @@ export default function EmbConfigPage() {
             {embconfigs.map((emb) => (
               <Card
                 key={emb.id}
-                className="flex flex-col border rounded-lg shadow-sm h-full"
+                className="flex flex-col border rounded-lg shadow-sm h-full pt-4 pb-2"
               >
                 <CardHeader>
                   <CardTitle className="text-sm font-medium">
@@ -213,13 +213,13 @@ export default function EmbConfigPage() {
                     </div>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 pb-0">
                   <p className="truncate">{emb.model_id}</p>
-                  <p className="truncate text-muted-foreground py-4">
+                  <p className="truncate text-xs text-muted-foreground pt-2">
                     {emb.endpoint}
                   </p>
                 </CardContent>
-                <CardFooter className="mt-auto pt-0 flex justify-end">
+                <CardFooter className="mt-auto pt-0 flex justify-end pb-0">
                   <Button
                     variant="link"
                     onClick={() => removeModel(emb.id, 'embeddings')}

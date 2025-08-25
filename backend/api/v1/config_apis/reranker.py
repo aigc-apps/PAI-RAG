@@ -112,7 +112,7 @@ async def get_rerankers(
         return success_response(data=reranker_model, message="查询reranker模型成功。")
 
 
-@reranker_router.patch("/{reranker_id}", response_model=ResponseModel[RerankerModelRead])
+@reranker_router.put("/{reranker_id}", response_model=ResponseModel[RerankerModelRead])
 async def update_reranker(
     reranker_id: str,
     new_reranker: RerankerModelCreate,

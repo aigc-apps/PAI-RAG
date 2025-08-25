@@ -162,8 +162,8 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
         logger.info("Created local vector db connection.")
         return LocalConnection()
     else:
-        raise ValueError(f"Unknown vector db type: {vector_db_type}")
-
+        logger.info(f"Unknown vector db type: {vector_db_type}. Using local vector db.")
+        return LocalConnection()
 
 
 def create_vector_store(

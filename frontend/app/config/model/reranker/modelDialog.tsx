@@ -63,9 +63,9 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       return;
     }
     const submit_url = isAdd
-      ? `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/rerankers`
-      : `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/v1/config/rerankers/${reranker.id}`;
-    const updateMethod = isAdd ? 'POST' : 'PATCH';
+      ? `/api/config/rerankers`
+      : `/api/config/rerankers/${reranker.id}`;
+    const updateMethod = isAdd ? 'POST' : 'PUT';
     if (reranker.api_key === '******') reranker.api_key = '';
     console.log('updateMethod', isAdd, updateMethod, submit_url, reranker);
     try {
