@@ -64,11 +64,17 @@ PAI-RAG不仅解决了传统RAG系统的固有局限，更通过Agentic能力将
 - [使用示例：多模态附件问答](docs/mm_demo.md)
 
 ## 🛠 深入使用
-
-- [系统配置指南及API调用说明](docs/config.md)
-- [知识库管理（上传文档+元数据过滤）](docs/knowledgebase.md)
+### 项目部署
+- [快速部署到EAS](docs/deploy/eas_deploy.md)
+### API配置指南
+- [Embedding配置指南及API调用说明](docs/config/embedding.md)
+- [llm配置指南及API调用说明](docs/config/llm.md)
+### 知识库管理  
+- [知识库管理API文档（上传文档+元数据过滤）](docs/api/knowledgebase.md)
+### 交互与调用
+- [使用Agentic RAG UI 进行系统配置和调用（复杂查询规划与执行，支持联网搜索和MCP工具调用）](docs/agentic_rag.md)
 - [多模态问答（支持知识库和附件上传）](docs/multimodal.md)
-- [Agentic RAG（复杂查询规划与执行，支持联网搜索和MCP工具调用）](docs/agentic_rag.md)
+- [使用Agentic RAG API 进行调用](docs/api/chat.md)
 
 ## 💬 联系我们
 

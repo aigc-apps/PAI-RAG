@@ -2,7 +2,7 @@
 
 ## 前置条件
 
-- 已成功完成[安装指南](docs/quick_start.md)中的所有步骤，服务正常运行
+- 已成功完成[安装指南](quick_start.md)中的所有步骤，服务正常运行
 - 前端可通过 http://localhost:8680 访问
 - 准备好支持多模态的LLM模型、LLM模型以及Embedding模型的访问权限
 - 准备测试用的图文文件（支持格式：PDF, Markdown, Docx等，建议大小<100MB）
