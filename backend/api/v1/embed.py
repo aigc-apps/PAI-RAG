@@ -73,4 +73,3 @@ async def aembed(
     except Exception as ex:
         logger.error(f"Embedding failed: {traceback.format_exc()}")
         return error_response(code=500, message=f"Embedding失败: {ex}")
-
