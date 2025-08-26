@@ -45,6 +45,7 @@ class ConfigChangeManager:
             from config.providers.trace_provider import trace_provider
             from config.providers.reranker_provider import reranker_provider
             from config.providers.chatbot_provider import chatbot_provider
+            from config.providers.guardrail_provider import guardrail_provider
             await mcp_provider.full_load_from_db_async()
             logger.info("Initialized mcp tools.")
             await websearch_provider.full_load_from_db_async()
@@ -52,8 +53,11 @@ class ConfigChangeManager:
             await reranker_provider.full_load_from_db_async()
             logger.info("Initialized reranker configs.")
             await chatbot_provider.full_load_from_db_async()
-            logger.info("Initialized trace configs.")
+            logger.info("Initialized chatbot configs.")
             await trace_provider.full_load_from_db_async()
+            logger.info("Initialized trace configs.")
+            await guardrail_provider.full_load_from_db_async()
+            logger.info("Initialized guardrail configs.")
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
@@ -191,6 +195,9 @@ class ConfigChangeManager:
             case ChangeEventSource.TRACE:
                 from config.providers.trace_provider import trace_provider
                 return trace_provider
+            case ChangeEventSource.GUARDRAIL:
+                from config.providers.guardrail_provider import guardrail_provider
+                return guardrail_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 

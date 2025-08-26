@@ -167,6 +167,16 @@ async def create_thread_message(
         return error_response(code=404, message=f"Conversation {thread_id} not found.")
 
     message_entity = MessageEntity.model_validate(message)
+    if message.id:
+        message_entity = await session.get(MessageEntity, message.id)
+        if message_entity is None:
+            message_entity = MessageEntity.model_validate(message)
+        else:
+            message_entity.attachments = message.attachments
+            message_entity.content = message.content
+            message_entity.role = message.role
+    else:
+        message_entity = MessageEntity.model_validate(message)
 
     session.add(message_entity)
     await session.commit()

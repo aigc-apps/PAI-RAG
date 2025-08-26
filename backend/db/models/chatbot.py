@@ -16,6 +16,10 @@ class ChatBotCreate(SQLModel):
     enable_search: bool = Field(default=True)
     enable_vision: bool = Field(default=True)
     enable_agent: bool = Field(default=False)
+    enable_input_guardrail: Optional[bool] = Field(default=False)
+    enable_output_guardrail: Optional[bool] = Field(default=False)
+    guardrail_hint: Optional[str] = Field(default=None)
+
 
     @field_validator("app_id")
     def validate_app_id(cls, v):

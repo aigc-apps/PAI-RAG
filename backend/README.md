@@ -20,7 +20,17 @@ poetry install
 3. Start locally
 
 ```bash
-./scripts/start.sh --frontend-port 8680 --backend-port 8688 --dev
+./scripts/start.sh --frontend-port 8680 --backend-port 8682 --dev
 ```
 
 Open http://localhost:8680 in your browser.
+
+## 数据库schema更新
+
+我们使用`alembic`工具管理数据库的schema更新。当有更新时，请执行
+
+```sh
+alembic revision --autogenerate -m "YOUR CHANGE MESSAGE"
+```
+
+然后按上述命令启动服务即可。

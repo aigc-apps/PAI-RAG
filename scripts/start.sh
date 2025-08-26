@@ -97,7 +97,7 @@ done
 # ===================================================================
 
 echo "🚀 启动服务配置："
-echo "   前端端口: $FRONTEND_PORT"
+echo "   应用端口: $PORT 前端端口: $FRONTEND_PORT"
 echo "   后端端口: $BACKEND_PORT"
 echo "   API 实例数: $API_INSTANCE_COUNT"
 echo "   Worker 实例数: $WORKER_INSTANCE_COUNT"
@@ -144,7 +144,7 @@ start_frontend() {
     NEXT_PUBLIC_BACKEND_URL=http://localhost:$BACKEND_PORT npm run start  -- --port $FRONTEND_PORT &
   else
     npm install || { echo "错误: npm 安装失败"; exit 1; }
-    echo "👉 启动前端服务 on port $PORT"
+    echo "👉 开发模式启动前端服务 on port $PORT"
     NEXT_PUBLIC_BACKEND_URL=http://localhost:$BACKEND_PORT npm run dev -- --port $PORT &
   fi
   FRONTEND_PID=$!
@@ -204,6 +204,9 @@ else
    redis-server &
    echo "Starting redis server."
 fi
+
+echo "upgrading db schema.."
+alembic upgrade head
 
 start_frontend
 
