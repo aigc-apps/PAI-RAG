@@ -6,7 +6,6 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:868
 export async function proxyRequest(request: NextRequest) {
   const { pathname, searchParams } = new URL(request.url);
   const path = pathname?.replace(/^\/api\b/, '/v1');
-  console.log("## ", request.url, path)
 
   // 3. Build the final upstream URL
   const upstreamUrl = new URL(path, BACKEND_URL);
