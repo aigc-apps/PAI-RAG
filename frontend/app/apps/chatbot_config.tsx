@@ -30,6 +30,18 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 
+
+interface GuardrailConfig {
+  endpoint: string;
+  region: string;
+  region_name: string;
+  access_key_id: string;
+  access_key_secret: string;
+  enable_input_check: boolean;
+  enable_output_check: boolean;
+  custom_advice: string;
+}
+
 export interface Chatbot {
   id: string;
   app_id: string;
@@ -40,11 +52,15 @@ export interface Chatbot {
   kb_ids: string[];
   model_id: string;
   updated_at: string;
+  enable_input_guardrail: boolean;
+  enable_output_guardrail: boolean;
+  guardrail_hint: string;
 }
 
 interface ChatbotConfigProps {
   chatbotId: string | undefined;
 }
+
 
 const default_chat_config = {
   id: '',
@@ -56,6 +72,9 @@ const default_chat_config = {
   model_id: "",
   updated_at: "",
   enable_agent: false,
+  enable_input_guardrail: false,
+  enable_output_guardrail: false,
+  guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
 };
 
 // 知识库配置卡片
@@ -410,6 +429,61 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             ))}
           </div>
         )}
+      </div>
+      <div className="flex items-center">
+        <Label htmlFor="ai_guardrail" className="w-[90px]">
+          AI安全护栏
+        </Label>
+
+        <div className="flex gap-4 pl-6 text-sm items-center">
+          <div className="space-y-2">
+            <Switch
+              id="enable_input_check"
+              checked={botConfig.enable_input_guardrail || false}
+              onCheckedChange={(checked) => {
+                setBotConfig({
+                  ...botConfig,
+                  enable_input_guardrail: checked,
+                });
+              }}
+            />
+            <Label htmlFor="input_guardrail" className="w-[120px]">
+              输入护栏
+            </Label>
+          </div>
+          <div className="space-y-2">
+            <Switch
+              id="enable_output_check"
+              checked={botConfig.enable_output_guardrail || false}
+              onCheckedChange={(checked) => {
+                setBotConfig({
+                  ...botConfig,
+                  enable_output_guardrail: checked,
+                });
+              }}
+            />
+            <Label htmlFor="output_guardrail" className="w-[120px]">
+              输出护栏
+            </Label>
+          </div>
+
+          <div className="space-y-1">
+            <Input
+              className="w-120"
+              value={botConfig.guardrail_hint || "作为人工智能助手，我无法回应包含不当或敏感信息的内容。"}
+              onChange={(e) => {
+                setBotConfig({
+                  ...botConfig,
+                  guardrail_hint: e.target.value,
+                });
+
+              }}
+            />
+            <Label htmlFor="guardrail_hint" className="w-[120px]">
+              默认护栏提示
+            </Label>
+          </div>
+        </div>
       </div>
       {saveErrorMsg && (
         <Alert variant="destructive">

@@ -1,6 +1,7 @@
 import json
 import traceback
 from typing import Dict, List, cast, AsyncGenerator
+from chat.ai_guardrail import ai_guardrail
 from loguru import logger
 import re
 from common.chat.models import ChatAgentRequest
@@ -36,6 +37,7 @@ from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
 
+
 class AgentState(BaseModel):
     llm: LLM = Field(description="llm")
     step: int = Field(description="step", default=0)
@@ -45,6 +47,7 @@ class AgentState(BaseModel):
     tool_name_map: Dict[str, FunctionTool] = Field(description="tool_name_map", default=None)
     user_query: str = Field(description="user query", default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
 
 def get_system_prompt(enable_search: bool = False, enable_agent: bool = False, enable_attachments: bool = False, kb_ids: List[str] = []):
     tools_prompt = []
@@ -68,17 +71,13 @@ def get_system_prompt(enable_search: bool = False, enable_agent: bool = False, e
     return system_prompt
 
 
-async def aget_mcp_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
+async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]=[]) -> List[FunctionTool]:
     mcp_tools = []
 
-    if chat_request.enable_attachments:
-        # 获取文件搜索工具
-        attachments = []
-        for message in chat_request.messages:
-            if message.get("role") == "user" and len(message.get("attachments", [])) > 0:
-                attachments.extend(message.get("attachments", []))
+    if len(attachments) > 0:
         file_searcher_tool = await aget_file_searcher(attachments=attachments)
         mcp_tools.append(file_searcher_tool)
+
     # 获取思考工具
     think_cache = []
     think_tool = await aget_simple_think_tool(think_cache=think_cache)
@@ -128,7 +127,7 @@ async def synthesize_agent(state: AgentState) -> AsyncGenerator[ChatResponse, No
         ):
         chunk.message.additional_kwargs["step"] = state.step
         yield chunk
-        if chunk.message.additional_kwargs.get("STOP_FLAG"):
+        if chunk.additional_kwargs.get("STOP_FLAG"):
             state.stop_flag = True
             break
 
@@ -143,7 +142,7 @@ async def step_agent(state: AgentState, attachments: List[dict]) -> AsyncGenerat
     ):
         chunk.message.additional_kwargs["step"] = state.step
         yield chunk
-        if chunk.message.additional_kwargs.get("STOP_FLAG"):
+        if chunk.additional_kwargs.get("STOP_FLAG"):
             state.stop_flag = True
             break
 
@@ -389,9 +388,9 @@ async def astep_gen(
             message=ChatMessage(
                 role=MessageRole.ASSISTANT,
                 content="",
-                additional_kwargs={"STOP_FLAG": True},
             ),
             delta="",
+            additional_kwargs={"STOP_FLAG": True},
         )
 
 
@@ -399,9 +398,15 @@ class AgentLoop:
     def __init__(self, max_steps: int = MAX_CHAT_STEPS):
         self.max_steps = max_steps
 
+    @ai_guardrail
     async def _arun(self, chat_request: ChatAgentRequest) -> ChatResponseAsyncGen:
         try:
-            mcp_tools = await aget_mcp_tools(chat_request)
+            attachments = []
+            for message in chat_request.messages:
+                if message.get("role") == "user" and len(message.get("attachments", [])) > 0:
+                    attachments.extend(message.get("attachments", []))
+
+            mcp_tools = await aget_mcp_tools(chat_request, attachments=attachments)
             tools = []
             tool_name_map = {}
 
@@ -416,9 +421,8 @@ class AgentLoop:
             system_prompt = get_system_prompt(
                 enable_search=chat_request.enable_search,
                 enable_agent=chat_request.enable_agent,
-                enable_attachments=chat_request.enable_attachments,
+                enable_attachments=len(attachments)>0,
                 kb_ids=chat_request.kb_ids,
-
             )
 
             input_messages = [
@@ -549,7 +553,8 @@ class AgentLoop:
         # NOTE: this is to pass current span context into _arun for tracing
         @use_current_span(trace.get_current_span())
         async def _():
-            async for chunk in self._arun(chat_request=chat_request):
+            response_gen = await self._arun(chat_request=chat_request)
+            async for chunk in response_gen:
                 yield chunk
 
         return _()

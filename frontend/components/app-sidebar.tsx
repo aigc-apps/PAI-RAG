@@ -106,7 +106,10 @@ export function AppSidebar() {
                   <Link href="/config/tracing"><Wrench /> 链路追踪</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/role"><Wrench /> 权限控制</Link>
+                  <Link href="/config/role"><Wrench /> 权限控制 </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/guardrail"><Wrench /> 安全护栏 </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
