@@ -168,7 +168,9 @@ async def create_thread_message(
 
     message_entity = MessageEntity.model_validate(message)
     if message.id:
-        message_entity = await session.get(MessageEntity, message.id)
+        message_entity = (await session.exec(
+            select(MessageEntity).where(MessageEntity.thread_id == thread_id, MessageEntity.id == message.id)
+        )).first()
         if message_entity is None:
             message_entity = MessageEntity.model_validate(message)
         else:
@@ -179,14 +181,12 @@ async def create_thread_message(
         message_entity = MessageEntity.model_validate(message)
 
     session.add(message_entity)
-    await session.commit()
-    await session.refresh(message_entity)
-
     for attachment in message.attachments:
         attachment_file_entity = await session.get(KbFileEntity, attachment.get("id"))
         attachment_file_entity.message_id = message_entity.id
         session.add(attachment_file_entity)
-        await session.commit()
+
+    await session.commit()
     await session.flush()
 
     return success_response(
