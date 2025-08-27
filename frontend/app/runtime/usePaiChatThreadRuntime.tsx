@@ -33,6 +33,7 @@ interface Props {
 type HeadersValue = Record<string, string> | Headers;
 let isInitializing = false;
 let initializedThreadId = "";
+let msgParentIdMap = new Map<string, string>();
 
 function delay(ms: any) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -403,6 +404,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
   // This runs in the context of each thread
   const threadListItem = useThreadListItem();
   const remoteId = threadListItem.remoteId;
+
   // Create thread-specific history adapter
   const history = useMemo<ThreadHistoryAdapter>(
     () => ({
@@ -418,6 +420,15 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           if (messages.length === 0) {
             return { headId: null, messages: [] };
           }
+          msgParentIdMap.clear();
+
+          let parentId = "";
+          for (let i = 0; i < messages.length; i ++) {
+            msgParentIdMap.set(parentId, messages[i].id);
+            parentId = messages[i].id;
+          }
+          console.log("load messages", messages, msgParentIdMap);
+
           const response = ExportedMessageRepository.fromArray(
             messages.map((m: any) => ({
               role: m.role as ThreadMessage['role'],
@@ -453,6 +464,14 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           const url = `/api/threads/${remoteThreadId}/messages`;
           console.log('append message', message);
           
+          let msgId = message.message.id;
+          const pid = message.parentId || "";
+          if (msgParentIdMap.has(pid)) {
+            msgId = msgParentIdMap.get(pid) || "";
+          }
+          else {
+            msgParentIdMap.set(pid, msgId);
+          }
           const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -461,7 +480,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
               role: message.message.role,
               attachments: message.message.attachments,
               content: message.message.content,
-              id: message.parentId || uuidv4(),
+              id: msgId,
             }),
           });
 
