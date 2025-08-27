@@ -17,7 +17,9 @@ import traceback
 
 try:
     from browser_use import Agent, AgentHistoryList, BrowserProfile
-    from browser_use.llm import ChatOpenAI
+    # # pairag modified
+    # from browser_use.llm import ChatOpenAI
+    from langchain_openai import ChatOpenAI
     from dotenv import load_dotenv
     from pydantic import BaseModel, Field
 

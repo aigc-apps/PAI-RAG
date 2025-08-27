@@ -127,7 +127,7 @@ node_modules/
 
 aworld.db
 .data/
-examples/gaia/GAIA
+# examples/gaia/GAIA
 traces*.json
 trace_data
 
@@ -136,3 +136,8 @@ examples/**/workspaces
 examples/**/data
 examples/**/*.bak
 =**
+
+# pairag
+/tmp
+examples/gaia/*_output*
+output_*.jsonl

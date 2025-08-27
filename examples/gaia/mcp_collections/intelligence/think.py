@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 from pydantic import Field
 from pydantic.fields import FieldInfo
 
-from aworld.config.conf import AgentConfig
+# pairag modified
+from aworld.config.conf import ModelConfig
 from aworld.logs.util import Color
 from aworld.models.llm import call_llm_model, get_llm_model
 from examples.gaia.mcp_collections.base import ActionArguments, ActionCollection, ActionResponse
@@ -28,7 +29,7 @@ class ThinkCollection(ActionCollection):
         super().__init__(arguments)
 
         # Initialize reasoning model configuration
-        self._llm_config = AgentConfig(
+        self._llm_config = ModelConfig(
             llm_provider="openai",
             # llm_model_name="google/gemini-2.5-flash-preview-05-20:thinking",
             llm_model_name=os.getenv("THINK_LLM_MODEL_NAME", "deepseek/deepseek-r1-0528:free"),
