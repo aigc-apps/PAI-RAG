@@ -1,0 +1,3 @@
+env_id: "CartPole-v1"
+render_mode: "human"
+render: True
