@@ -1,9 +1,9 @@
 import traceback
 import dotenv
+dotenv.load_dotenv()
 
 from rag.chunk_helper import set_embedding_model_ready
 from utils.modelscope_utils import download_model_to_directory
-dotenv.load_dotenv()
 # Fix for macOS fork issues (like with ChromaDB)
 # this forces the application to use spawn instead of fork
 import os

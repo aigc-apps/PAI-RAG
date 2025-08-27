@@ -24,6 +24,7 @@ import {
 import { ReactNode, useMemo } from 'react'; // ✅ 添加这一行以导入 ReactNode
 import { useChatOptions } from '../providers/chat';
 import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
   children?: ReactNode;
@@ -117,7 +118,7 @@ export class MyModelAdapter implements ChatModelAdapter {
         ...context.callSettings,
         ...context.config,
         ...this.options.body,
-        enable_attachments: enableAttachments,
+        stream: true,
       }),
       signal: abortSignal,
     });
@@ -164,6 +165,7 @@ export class MyModelAdapter implements ChatModelAdapter {
           const chunk = JSON.parse(line.slice(5));
           // 处理单条数据
           const delta = chunk.choices[0]?.delta;
+
           if (delta.reasoning_completed) {
             // 思考完成，清空 reasoning_content
             reasoning_content = "";
@@ -183,7 +185,13 @@ export class MyModelAdapter implements ChatModelAdapter {
           }
 
           if (delta?.role === 'assistant' && delta?.content) {
-            content += delta.content;
+            if (chunk.safety_violation) {
+              content = delta.content
+            }
+            else {
+              content += delta.content;
+            }
+
             if (eventQueue.length === 0 || eventQueue[eventQueue.length - 1].type !== 'text'
             ) {
               eventQueue.push({
@@ -434,7 +442,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
               isInitializing,
               initializedThreadId,
             );
-            await delay(50);
+            await delay(100);
           }
           console.log("initialized remoteId", initializedThreadId);
         }
@@ -453,6 +461,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
               role: message.message.role,
               attachments: message.message.attachments,
               content: message.message.content,
+              id: message.parentId || uuidv4(),
             }),
           });
 

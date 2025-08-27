@@ -3,6 +3,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, Field
 
 
+DEFAULT_GUARDRAIL_ADVICE = "作为人工智能助手，我无法回应包含不当或敏感信息的内容。"
 SupportedComparisonOperator = Literal[
     # for string or array
     "contains",
@@ -73,7 +74,7 @@ class RetrievalRequest(BaseModel):
 class ChatAgentRequest(BaseModel):
     model: str  # 模型名称
     messages: Union[List[Any], List[ChatCompletionMessageParam]]  # 上下文聊天
-    stream: Optional[bool] = False  # 流式输出
+    stream: Optional[bool] = False  # 默认流式输出
 
     mcp_ids: Optional[List[str]] = []
     kb_ids: Optional[List[str]] = []
@@ -81,8 +82,9 @@ class ChatAgentRequest(BaseModel):
     enable_agent: Optional[bool] = False
     max_steps: Optional[int] = None
     user_id: Optional[str] = None
-
-    enable_attachments: Optional[bool] = False  # 是否启用附件功能
+    enable_input_guardrail: Optional[bool] = False
+    enable_output_guardrail: Optional[bool] = False
+    guardrail_hint: Optional[str] = DEFAULT_GUARDRAIL_ADVICE
 
     # llm args
     temperature: Optional[float] = None

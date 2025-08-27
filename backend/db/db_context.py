@@ -1,3 +1,8 @@
+
+# flake8: noqa: E402
+import dotenv
+dotenv.load_dotenv()
+
 from loguru import logger
 from sqlmodel import SQLModel
 from sqlalchemy.orm import sessionmaker
@@ -7,6 +12,7 @@ from functools import wraps
 
 from urllib.parse import quote_plus
 import os
+
 
 def get_async_db_angine():
     # 从环境变量中读取数据库配置

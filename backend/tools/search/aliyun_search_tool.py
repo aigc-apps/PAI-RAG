@@ -4,9 +4,7 @@ from loguru import logger
 from alibabacloud_tea_openapi import models as open_api_models
 from alibabacloud_iqs20241111 import models
 from alibabacloud_iqs20241111.client import Client
-import json
 import time
-import os
 
 
 DEFAULT_ALIYUN_SEARCH_ENDPOINT = "iqs.cn-zhangjiakou.aliyuncs.com"
@@ -138,13 +136,3 @@ class AliyunSearchTool:
         )
 
         return {"result": [node.to_dict() for node in nodes]}
-
-
-async def aget_aliyun_search_result(query: str):
-    """Get aliyun search tool"""
-    search_client = AliyunSearchTool(
-        access_key_id=os.getenv("WEBSEARCH_ACCESS_KEY_ID"),
-        access_key_secret=os.getenv("WEBSEARCH_ACCESS_KEY_SECRET"),
-    )
-    res = await search_client.aquery(query)
-    return json.dumps(res, ensure_ascii=False)

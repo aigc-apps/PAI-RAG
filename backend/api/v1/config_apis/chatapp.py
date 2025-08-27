@@ -127,7 +127,9 @@ async def update_chatbot(
     chatbot.mcp_ids = new_chatbot.mcp_ids
     chatbot.description = new_chatbot.description
     chatbot.enable_vision = new_chatbot.enable_vision
-
+    chatbot.enable_input_guardrail = new_chatbot.enable_input_guardrail
+    chatbot.enable_output_guardrail = new_chatbot.enable_output_guardrail
+    chatbot.guardrail_hint = new_chatbot.guardrail_hint
 
     session.add(chatbot)
     await session.commit()

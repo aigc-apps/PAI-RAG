@@ -6,6 +6,7 @@ from typing import List
 
 
 class MessageCreate(SQLModel):
+    id: str = Field(default=None)
     thread_id: str = Field(default=None)
     role: str = Field(default=None)
     content: List[dict] = Field(default=[], sa_column=Column("content", JSON))

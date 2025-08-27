@@ -20,6 +20,7 @@ class ChangeEventSource(str, Enum):
     WEBSEARCH = "websearch"
     CHATBOT = "chatbot"
     PROMPT = "prompt"
+    GUARDRAIL = "guardrail"
 
 
 
@@ -27,8 +28,8 @@ class ChangeEvent(SQLModel, table=True):
     __tablename__ = "pai_config_change_event"
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     source_id: str = Field(default=None)
-    event_type: ChangeEventType = Field(default=ChangeEventType.ADD)
-    event_source: ChangeEventSource = Field(default=ChangeEventSource.KNOWLEDGEBASE)
+    event_type: str = Field(default=ChangeEventType.ADD)
+    event_source: str = Field(default=ChangeEventSource.KNOWLEDGEBASE)
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

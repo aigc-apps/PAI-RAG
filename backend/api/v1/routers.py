@@ -13,6 +13,7 @@ def add_config_router(app: FastAPI):
     from api.v1.config_apis.chatapp import app_router
     from api.v1.config_apis.prompt import prompt_router
     from api.v1.config_apis.role.role import role_router
+    from api.v1.config_apis.guardrail import guardrail_router
 
     app.include_router(llm_router, prefix="/v1/config/llms")
     app.include_router(mcp_router, prefix="/v1/config/mcps")
@@ -25,19 +26,18 @@ def add_config_router(app: FastAPI):
     app.include_router(app_router, prefix="/v1/config/apps")
     app.include_router(prompt_router, prefix="/v1/config/prompts")
     app.include_router(role_router, prefix="/v1/config/roles")
+    app.include_router(guardrail_router, prefix="/v1/config/guardrail")
 
 
 def add_chat_router(app: FastAPI):
     from api.v1.chat import chat_agent_router
     from api.v1.thread import thread_router
     from api.v1.retrieval import retrieval_router
-    from api.v1.chat import agent_answer_dump_router
     from api.v1.healthcheck import health_router
     from api.v1.embed import embedding_router
 
     app.include_router(chat_agent_router, prefix="/v1/chat/completions")
     app.include_router(thread_router, prefix="/v1/threads")
     app.include_router(retrieval_router, prefix="/v1/retrieval")
-    app.include_router(agent_answer_dump_router, prefix="/v1/agent/chat_final_answer")
     app.include_router(health_router, prefix="/v1/health")
     app.include_router(embedding_router, prefix="/v1/embeddings")
