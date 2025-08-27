@@ -127,7 +127,7 @@ node_modules/
 
 aworld.db
 .data/
-# examples/gaia/GAIA
+examples/gaia/GAIA
 traces*.json
 trace_data
 

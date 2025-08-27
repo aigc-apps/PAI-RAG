@@ -50,6 +50,18 @@ brew install --cask libreoffice
 apt-get install -y --no-install-recommends libmagic1 libreoffice ffmpeg
 ```
 
+### 2.4. Prepare GAIA Dataset
+
+Download the GAIA dataset from Hugging Face:
+
+```bash
+git clone git@hf.co:datasets/gaia-benchmark/GAIA examples/gaia/GAIA
+```
+
+> **⚠️ Important**: 
+> - You need to configure Hugging Face SSH keys to access the GAIA repository
+> - The dataset path will be used as the `GAIA_DATASET_PATH` variable in your `.env` file
+
 ## 3. 配置环境变量
 
 在PAI-RAG根目录下:
