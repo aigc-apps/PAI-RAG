@@ -431,7 +431,7 @@ class OpenAIProvider(LLMProviderBase):
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "stop": stop
+            # "stop": stop
         }
 
         supported_params = [
