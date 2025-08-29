@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import * as Toast from '@radix-ui/react-toast';
 import {
   Table,
   TableBody,
@@ -30,6 +29,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { v4 as uuidv4 } from 'uuid';
 import { McpConfig } from './mcp';
+import { toast } from 'sonner';
 
 export default function McpConfigPage() {
   const [isOpen, setIsOpen] = useState(false);
@@ -37,13 +37,6 @@ export default function McpConfigPage() {
   const [editingConfig, setEditingConfig] = useState<McpConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditLoading, setIsEditLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [toastState, setToastState] = useState({
-    open: false,
-    title: '',
-    description: '',
-    variant: 'default' as 'default' | 'destructive',
-  });
 
   const [addFormData, setAddFormData] = useState({
     id: '',
@@ -139,26 +132,15 @@ export default function McpConfigPage() {
         )
       );
 
-      setToastState({
-        open: true,
-        title: '状态已更新',
-        description: `MCP 配置已${!enabled ? '启用' : '禁用'}`,
-        variant: 'default',
-      });
+      toast.success(`MCP 配置已${!enabled ? '启用' : '禁用'}`);
     } catch (err: any) {
-      setToastState({
-        open: true,
-        title: '更新失败',
-        description: err.message || '请检查网络或重试',
-        variant: 'destructive',
-      });
+      toast.error(`更新失败: ${err.message}`);
     }
   };
 
   const addMCP = async () => {
   try {
     setIsLoading(true);
-    setError('');
     
     // 直接使用表单数据，不包含ID
     const mcp_data = {
@@ -183,13 +165,8 @@ export default function McpConfigPage() {
 
     // 成功后重新拉取列表，确保ID一致性
     await fetchConfigs();
-    
-    setToastState({
-      open: true,
-      title: 'MCP 配置已添加',
-      description: '新模型配置已成功保存',
-      variant: 'default',
-    });
+    toast.success(`MCP 配置已添加。`);
+
     setIsOpen(false);
 
     // 重置表单数据
@@ -204,13 +181,7 @@ export default function McpConfigPage() {
     });
   } catch (err: any) {
     const errorMessage = err.message || err.toString() || '添加失败，请重试';
-    setError(errorMessage);
-    setToastState({
-      open: true,
-      title: '添加失败',
-      description: errorMessage,
-      variant: 'destructive',
-    });
+    toast.error(`MCP 配置添加失败。`);
   } finally {
     setIsLoading(false);
   }
@@ -220,7 +191,6 @@ const updatedMCP = async () => {
   try {
     if (!editingConfig) return;
     setIsEditLoading(true);
-    setError('');
     
     // 构造干净的请求体
     const updateData: any = {
@@ -252,22 +222,11 @@ const updatedMCP = async () => {
     // 成功后重新拉取列表
     await fetchConfigs();
     
-    setToastState({
-      open: true,
-      title: 'MCP 配置已修改',
-      description: '修改的模型配置已成功保存',
-      variant: 'default',
-    });
+    toast.success(`MCP 配置更新成功。`);
     setIsEditOpen(false);
   } catch (err: any) {
     const errorMessage = err.message || err.toString() || '修改失败，请重试';
-    setError(errorMessage);
-    setToastState({
-      open: true,
-      title: '修改失败',
-      description: errorMessage,
-      variant: 'destructive',
-    });
+    toast.error(`MCP 配置更新失败${errorMessage}`);
   } finally {
     setIsEditLoading(false);
   }
@@ -284,23 +243,14 @@ const updatedMCP = async () => {
       if (!res.ok) {
         throw new Error('删除失败，请检查网络或配置');
       }
+      
+      toast.success(`MCP 配置删除成功。`);
 
-      setToastState({
-        open: true,
-        title: '删除成功',
-        description: 'MCP 配置已移除',
-        variant: 'default',
-      });
 
       // 直接从本地状态中移除
       setMcpConfigs((prev) => prev.filter((config) => config.id !== id));
     } catch (err: any) {
-      setToastState({
-        open: true,
-        title: '删除失败',
-        description: err || '请稍后再试',
-        variant: 'destructive',
-      });
+      toast.error(`MCP 配置删除失败${err.message}`);
     }
   };
 
@@ -564,31 +514,6 @@ const updatedMCP = async () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Toast.Root
-            open={toastState.open}
-            onOpenChange={(open) =>
-              setToastState((prev) => ({ ...prev, open }))
-            }
-            className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-              toastState.variant === 'destructive'
-                ? 'border-red-500 bg-red-50 text-red-900'
-                : 'border-gray-200 bg-white text-gray-900'
-            }`}
-          >
-            <Toast.Description className="pl-4 text-sm font-medium">
-              {toastState.description}
-            </Toast.Description>
-            <Toast.Action
-              altText="关闭"
-              onClick={() =>
-                setToastState((prev) => ({ ...prev, open: false }))
-              }
-            >
-              ×
-            </Toast.Action>
-          </Toast.Root>
-
-          <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
         </div>
       </div>
     </div>

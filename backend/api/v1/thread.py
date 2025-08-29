@@ -142,17 +142,19 @@ async def update_thread_title(
 
         extracted_content = re.sub(r"<think>.*?</think>", "", response_text, flags=re.DOTALL)
         logger.info(f"Generated title: {extracted_content}")
-        thread.title = json.loads(extracted_content).get("title", "未命名会话")
+        title = json.loads(extracted_content).get("title", "未命名会话")
+        thread.title = title
     except Exception as e:
         logger.error(f"Failed to update conversation {thread_id} title: {e}")
-        thread.title = f"{get_content_from_messages(messages[0].content)[:10]}..." if messages else "未命名会话"
+        title = f"{get_content_from_messages(messages[0].content)[:10]}..." if messages else "未命名会话"
+        thread.title = title
 
     session.add(thread)
     await session.commit()
 
-    logger.info(f"Conversation {thread_id} updated.")
+    logger.info(f"Conversation {thread_id} updated title to {title}.")
     return success_response(
-        data=thread,
+        data={"title": title},
         message=f"Conversation {thread_id} title updated successfully."
     )
 
@@ -167,9 +169,9 @@ async def create_thread_message(
         return error_response(code=404, message=f"Conversation {thread_id} not found.")
 
     message_entity = MessageEntity.model_validate(message)
-    if message.id:
+    if message.local_id:
         message_entity = (await session.exec(
-            select(MessageEntity).where(MessageEntity.thread_id == thread_id, MessageEntity.id == message.id)
+            select(MessageEntity).where(MessageEntity.thread_id == thread_id, MessageEntity.local_id == message.local_id)
         )).first()
         if message_entity is None:
             message_entity = MessageEntity.model_validate(message)

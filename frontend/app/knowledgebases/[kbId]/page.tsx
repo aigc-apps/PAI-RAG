@@ -47,6 +47,7 @@ import {
   AlertCircleIcon,
   SearchIcon,
   ChevronDownIcon,
+  RefreshCcwIcon,
 } from 'lucide-react';
 import { PreviewButton } from '@/app/knowledgebases/[kbId]/preview-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -85,6 +86,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DatetimeInput } from '../datetime';
 import { Role } from '@/app/config/role/role';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface KnowledgeBaseFile {
   id: string;
@@ -155,17 +157,7 @@ export default function KnowledgeBaseDetailPage(
   );
   const { kbId } = use(params);
 
-  const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
-  const [knowledgebasesrror, setKnowledgeBasesError] = useState(''); // 错误信息
-  const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
-  const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(''); // 错误信息
-  const [toastState, setToastState] = useState({
-    open: false,
-    title: '',
-    description: '',
-    variant: 'default' as 'default' | 'destructive',
-  });
+  let isRefreshing = false;
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -217,23 +209,6 @@ export default function KnowledgeBaseDetailPage(
     'doc_id',
   ];
 
-  useEffect(() => {
-    const fetchModelConfigs = async () => {
-      try {
-        const [embRes] = await Promise.all([fetch(`/api/config/embeddings`)]);
-
-        const embData = (await embRes.json())?.data.items || [];
-        console.log('embData', embData);
-        setEmbeddingModels([...embData]);
-      } catch (err: any) {
-        setModelError(err || '加载失败');
-      } finally {
-        setModelLoading(false);
-      }
-    };
-    fetchModelConfigs();
-  }, []);
-
   const handleQueryInputChange = (
     e:
       | React.ChangeEvent<HTMLInputElement>
@@ -275,9 +250,15 @@ export default function KnowledgeBaseDetailPage(
 
 
   const fetchKbFiles = useCallback(async () => {
+    if (isRefreshing) {
+      console.log("list already refreshing.")
+      return;
+    }
+    console.log("Refreshing...");
     const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
+      isRefreshing = true;
       const files_res = await fetch(url);
       if (!files_res.ok) throw new Error('获取知识库文件列表失败');
 
@@ -295,13 +276,16 @@ export default function KnowledgeBaseDetailPage(
       if (files_unfinished) {
         console.log('存在未完成的文件，继续检查状态。');
         setTimeout(() => {
+          isRefreshing = false;
           fetchKbFiles(); // 依赖 ref 获取最新 page
         }, 3000);
       } else {
         console.log('文件已上传完成。');
       }
-    } catch (err) {
-      console.error('获取知识库文件失败:', err);
+      isRefreshing=false;
+    } catch (err: any) {
+      isRefreshing = false;
+      toast.error(err.message);
     }
   }, [kbId]);
 
@@ -341,9 +325,7 @@ export default function KnowledgeBaseDetailPage(
         setMetadataValueTypes({ ...valueTypes, '': 'string' });
         setMetadataConfigs(metadata_data);
       } catch (err: any) {
-        setKnowledgeBasesError(err || '加载失败');
-      } finally {
-        setKnowledgeBasesLoading(false);
+        toast.error(err.message);
       }
     };
     fetchKbConfigs();
@@ -354,13 +336,7 @@ export default function KnowledgeBaseDetailPage(
   }
 
   const handleSaveSuccess = (kb: KbConfig) => {
-    setToastState({
-      open: true,
-      title: `知识库${kbId} 配置已修改`,
-      description: '修改的模型配置已成功保存',
-      variant: 'default',
-    });
-    console.log(`update ${kbId}`);
+      toast.success("知识库配置保存成功");
   };
 
   const handleDeleteFile = async (file_id: string) => {
@@ -373,9 +349,9 @@ export default function KnowledgeBaseDetailPage(
         },
       );
       if (!res.ok) throw new Error(`删除 ${file_id} 失败`);
-      console.log('delete file result:', res.text());
-    } catch (error) {
-      console.error('删除失败:', error);
+      toast.success("文件删除成功。");
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setDeleting(false);
       fetchKbFiles();
@@ -396,16 +372,15 @@ export default function KnowledgeBaseDetailPage(
           }),
         },
       );
-      if (!res.ok) throw new Error('Failed to save file source');
+      if (!res.ok) throw new Error('源链接保存失败');
 
       const fileObj = kbfiles.filter((file) => file.id === file_id)[0];
       if (fileObj) {
         fileObj.file_source = fileSource;
       }
       setFileSourceOpen((prev) => ({ ...prev, [file_id]: false }));
-    } catch (error) {
-      console.error('Error fetching file source:', error);
-      throw error;
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -451,8 +426,8 @@ export default function KnowledgeBaseDetailPage(
         .filter((name) => !(name in file_json.data.file_metadata));
       setAvailableMetadataKeys(usable_metadata_keys);
       console.log('可用的metadata名称：', usable_metadata_keys);
-    } catch (err) {
-      console.error('获取文件失败:', err);
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
@@ -547,8 +522,8 @@ export default function KnowledgeBaseDetailPage(
 
       setActiveRoleIds(role_ids);
       setActiveRoleNames(role_names);
-    } catch (error) {
-      console.error('获取文件角色信息失败: ', error);
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -572,8 +547,8 @@ export default function KnowledgeBaseDetailPage(
       }
       console.log('更新文件角色成功：', await roleRes.json());
       setOpenRole(false);
-    } catch (error) {
-      console.error('上传失败:', error);
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -802,24 +777,37 @@ export default function KnowledgeBaseDetailPage(
               <CardHeader>
                 <CardTitle>
                   <div className="flex justify-between items-center">
-                    <Button
-                      onClick={() =>
-                        document.getElementById('file-upload')?.click()
-                      }
-                      disabled={uploading} // 上传时禁用按钮
-                    >
-                      {uploading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          上传中...
-                        </>
-                      ) : (
-                        <>
-                          上传文件
-                          <PlusIcon className="mr-2 h-6 w-6" />
-                        </>
-                      )}
-                    </Button>
+                    <div>
+                      <Button
+                        onClick={() =>
+                          document.getElementById('file-upload')?.click()
+                        }
+                        disabled={uploading} // 上传时禁用按钮
+                      >
+                        {uploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            上传中...
+                          </>
+                        ) : (
+                          <>
+                            上传文件
+                            <PlusIcon className="mr-2 h-6 w-6" />
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="ml-4 h-8"
+                        onClick={() => {
+                          isRefreshing=false;
+                          fetchKbFiles();
+                          toast.success("刷新成功");
+                        }}
+                      >
+                        <RefreshCcwIcon/>
+                      </Button>
+                    </div>
                     <input
                       id="file-upload"
                       type="file"
@@ -1594,28 +1582,6 @@ export default function KnowledgeBaseDetailPage(
             </div>
           </TabsContent>
         </Tabs>
-        <Toast.Root
-          open={toastState.open}
-          onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
-          className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-            toastState.variant === 'destructive'
-              ? 'border-red-500 bg-red-50 text-red-900'
-              : 'border-gray-200 bg-white text-gray-900'
-          }`}
-        >
-          <Toast.Description className="pl-4 text-sm font-medium">
-            {toastState.description}
-          </Toast.Description>
-          <Toast.Action
-            altText="关闭"
-            onClick={() => setToastState((prev) => ({ ...prev, open: false }))}
-          >
-            ×
-          </Toast.Action>
-        </Toast.Root>
-
-        {/* 触发 Toast 的隐藏容器 */}
-        <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
       </div>
     </div>
   );

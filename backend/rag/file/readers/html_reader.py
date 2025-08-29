@@ -10,7 +10,7 @@ from rag.file.utils.markdown_utils import PaiTable, convert_table_to_markdown
 from rag.file.image_caption_tool import ImageCaptionTool
 
 MARKDOWN_IMAGE_PATTERN = re.compile(
-    r"!\[.*?\]\(((?!https?://|www\.)[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))\)",
+    r"!\[.*?\]\((https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))\)",
     re.IGNORECASE,
 )
 

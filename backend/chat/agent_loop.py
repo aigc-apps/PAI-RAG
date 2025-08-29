@@ -538,7 +538,7 @@ class AgentLoop:
                     yield chunk
 
         except Exception as ex:
-            logger.error(f"Error in agent loop: {ex}")
+            logger.error(f"Error in agent loop: {traceback.format_exc()}")
             yield ChatResponse(
                 message=ChatMessage(
                     role=MessageRole.ASSISTANT,

@@ -133,7 +133,7 @@ async def save_chunks_to_db_async(
 ):
     logger.info(f"[KnowledgebaseProvider] Start saving {len(chunk_nodes)} chunks.")
     chunk_records: List[KbChunkEntity] = [
-        create_chunk_from_text_node(kb_id, file_id, chunk) for chunk in chunk_nodes
+        create_chunk_from_text_node(kb_id=kb_id, file_id=file_id, node=chunk, index=i) for (i, chunk) in enumerate(chunk_nodes)
     ]
     select_statement = select(KbChunkEntity).where(
         KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id

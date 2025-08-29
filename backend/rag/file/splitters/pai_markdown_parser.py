@@ -199,12 +199,10 @@ class StructuredNodeParser(BaseModel):
                         nodes_list,
                     )
                 if title_stack:
-                    new_chunk_text = (
-                        f"{self._format_section_header(title_stack)} : {chunk_text}"
+                    chunk_text = (
+                        f"{self._format_section_header(title_stack)}\n\n{chunk_text}"
                     )
-                else:
-                    new_chunk_text = chunk_text
-                node = self._create_text_node(new_chunk_text, doc_node, ref_doc)
+                node = self._create_text_node(chunk_text, doc_node, ref_doc)
                 nodes_list.append(node)
 
 

@@ -9,7 +9,6 @@ import { ArchiveIcon, PlusIcon, TrashIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
 import { useRouter } from 'next/navigation'; // 注意是 next/navigation
-import { routeros } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 export const ThreadList: FC = () => {
   return (

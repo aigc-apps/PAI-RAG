@@ -10,6 +10,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { AppSidebar } from '@/components/app-sidebar';
 import { MyChatRuntimeProvider } from './runtime/usePaiChatThreadRuntime';
 import { ChatProvider } from './providers/chat';
+import { Toaster } from '@/components/ui/sonner';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({
@@ -50,7 +51,8 @@ export default function RootLayout({
                   <div className="h-screen w-full overflow-hidden">
                     <SidebarTrigger className="w-10"/>
                     <div className="w-full pt-0">
-                      <Toast.Provider>{children}</Toast.Provider>
+                        {children}
+                        <Toaster duration={3000} position='top-right'/>
                     </div>
                   </div>
               </SidebarInset>
