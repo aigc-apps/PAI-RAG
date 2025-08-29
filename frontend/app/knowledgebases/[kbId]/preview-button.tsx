@@ -63,7 +63,7 @@ export function PreviewButton({
           className="text-sm text-blue-600 p-0"
           onClick={loadContent}
         >
-          文件预览
+          预览
         </Button>
       </DialogTrigger>
       <DialogContent className="flex flex-col h-[calc(100%-10rem)] !max-w-[calc(100%-20rem)]">

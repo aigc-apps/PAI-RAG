@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import * as Toast from '@radix-ui/react-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import Link from 'next/link';
+import { toast } from 'sonner';
 
 const REGION_NAMES = [
   "上海（公网）",
@@ -62,12 +61,6 @@ export default function GuardrailConfig() {
   const [regionName, setRegionName] = useState('');
   const [isLoading, setIsLoading] = useState(false); // 加载状态
   const [error, setError] = useState(''); // 错误提示
-  const [toastState, setToastState] = useState({
-    open: false,
-    title: '',
-    description: '',
-    variant: 'default' as 'default' | 'destructive',
-  });
 
   // 初始化加载配置
   useEffect(() => {
@@ -87,15 +80,9 @@ export default function GuardrailConfig() {
         setAliyunHasKey(data.length > 0);
         setAliyunAK(data[0]?.encrypted_access_key_id || '');
         setAliyunSK(data[0]?.encrypted_access_key_secret || '');
-        setRegionName(data[0]?.region_name || '杭州（公网）')
+        setRegionName(data[0]?.region_name || '杭州（公网）');
       } catch (err: any) {
-        setError(err.message || '加载失败');
-        setToastState({
-          open: true,
-          title: '配置加载失败',
-          description: err.message || '请检查网络或重试',
-          variant: 'destructive',
-        });
+        toast.error("配置加载失败,请检查网络或重试")
       } finally {
         setIsLoading(false);
       }
@@ -106,12 +93,11 @@ export default function GuardrailConfig() {
   // 保存配置
   const handleSave = async () => {
     if (!aliyunAK || !aliyunSK) {
-      setError('AccessKey ID 和 Secret 不能为空');
+      toast.warning("AK/SK必须填入。")
       return;
     }
     try {
       setIsLoading(true);
-      setError('');
 
       const update_ak = aliyunAK === '******' ? '' : aliyunAK;
       const update_sk = aliyunSK === '******' ? '' : aliyunSK;
@@ -129,22 +115,14 @@ export default function GuardrailConfig() {
         }),
       });
 
-      if (!res.ok) throw new Error('保存失败，请检查网络或配置');
+      if (!res.ok) {
+        toast.error("AI护栏配置保存失败。");
+        throw new Error("保存失败。")
+      }
 
-      setToastState({
-        open: true,
-        title: 'AI护栏配置已成功保存',
-        description: 'AI护栏配置已成功保存',
-        variant: 'default',
-      });
+      toast.success("AK/AI护栏配置已成功保存。")
     } catch (err: any) {
-      setError(err.message || '保存失败，请重试');
-      setToastState({
-        open: true,
-        title: 'AI护栏配置保存失败',
-        description: err.message || '请检查网络或重试',
-        variant: 'destructive',
-      });
+      toast.success(`保存失败: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -227,28 +205,6 @@ export default function GuardrailConfig() {
           </Button>
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>
-        <Toast.Root
-          open={toastState.open}
-          onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
-          className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-            toastState.variant === 'destructive'
-              ? 'border-red-500 bg-red-50 text-red-900'
-              : 'border-gray-200 bg-white text-gray-900'
-          }`}
-        >
-          <Toast.Description className="pl-4 text-sm font-medium">
-            {toastState.description}
-          </Toast.Description>
-          <Toast.Action
-            altText="关闭"
-            onClick={() => setToastState((prev) => ({ ...prev, open: false }))}
-          >
-            ×
-          </Toast.Action>
-        </Toast.Root>
-
-        {/* 触发 Toast 的隐藏容器 */}
-        <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
       </div>
     </div>
   );

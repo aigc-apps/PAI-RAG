@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
@@ -27,6 +28,7 @@ class KbChunkEntity(KbChunkModel, table=True):
     # ref
     file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
     kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
+    index: Optional[int] = Field(default=0) # chunk index
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)
@@ -36,7 +38,7 @@ class KbChunkEntity(KbChunkModel, table=True):
     )
 
 
-def create_chunk_from_text_node(kb_id: str, file_id: str, node: TextNode):
+def create_chunk_from_text_node(kb_id: str, file_id: str, node: TextNode, index: int):
     return KbChunkEntity(
         id=node.id_,
         knowledgebase_id=kb_id,
@@ -44,6 +46,7 @@ def create_chunk_from_text_node(kb_id: str, file_id: str, node: TextNode):
         kb_id=kb_id,
         text=node.text,
         chunk_metadata=node.metadata,
+        index=index,
     )
 
 def create_text_node_from_chunk(chunk: KbChunkEntity):

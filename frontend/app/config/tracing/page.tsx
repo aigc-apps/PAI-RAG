@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import * as Toast from '@radix-ui/react-toast';
 import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
 
 export default function TracingConfig() {
   const [endpoint, setEndpoint] = useState('');
@@ -14,19 +14,12 @@ export default function TracingConfig() {
   const [traceEnabled, setTraceEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // 加载状态
   const [error, setError] = useState(''); // 错误提示
-  const [toastState, setToastState] = useState({
-    open: false,
-    title: '',
-    description: '',
-    variant: 'default' as 'default' | 'destructive',
-  });
 
   // 初始化加载配置
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         setIsLoading(true);
-        setError('');
 
         const res = await fetch(`/api/config/trace`, {
           method: 'GET',
@@ -41,13 +34,7 @@ export default function TracingConfig() {
         setServiceName(data['service_name'] || '');
         setTraceEnabled(data['enabled'] || false);
       } catch (err: any) {
-        setError(err.message || '加载失败');
-        setToastState({
-          open: true,
-          title: '配置加载失败',
-          description: err.message || '请检查网络或重试',
-          variant: 'destructive',
-        });
+        toast.error(err.message);
       } finally {
         setIsLoading(false);
       }
@@ -78,20 +65,9 @@ export default function TracingConfig() {
 
       if (!res.ok) throw new Error('保存失败，请检查网络或配置');
 
-      setToastState({
-        open: true,
-        title: '阿里云链路追踪配置已成功保存',
-        description: '阿里云链路追踪配置已成功保存',
-        variant: 'default',
-      });
+      toast.success('链路追踪保存成功');
     } catch (err: any) {
-      setError(err.message || '保存失败，请重试');
-      setToastState({
-        open: true,
-        title: '阿里云链路追踪配置保存失败',
-        description: err.message || '请检查网络或重试',
-        variant: 'destructive',
-      });
+        toast.error(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -176,28 +152,6 @@ export default function TracingConfig() {
           </Button>
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>
-        <Toast.Root
-          open={toastState.open}
-          onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
-          className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-            toastState.variant === 'destructive'
-              ? 'border-red-500 bg-red-50 text-red-900'
-              : 'border-gray-200 bg-white text-gray-900'
-          }`}
-        >
-          <Toast.Description className="pl-4 text-sm font-medium">
-            {toastState.description}
-          </Toast.Description>
-          <Toast.Action
-            altText="关闭"
-            onClick={() => setToastState((prev) => ({ ...prev, open: false }))}
-          >
-            ×
-          </Toast.Action>
-        </Toast.Root>
-
-        {/* 触发 Toast 的隐藏容器 */}
-        <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
       </div>
     </div>
   );

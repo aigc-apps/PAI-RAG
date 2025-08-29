@@ -47,6 +47,7 @@ import {
   AlertCircleIcon,
   SearchIcon,
   ChevronDownIcon,
+  RefreshCcwIcon,
 } from 'lucide-react';
 import { PreviewButton } from '@/app/knowledgebases/[kbId]/preview-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -85,6 +86,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DatetimeInput } from '../datetime';
 import { Role } from '@/app/config/role/role';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface KnowledgeBaseFile {
   id: string;
@@ -155,17 +157,7 @@ export default function KnowledgeBaseDetailPage(
   );
   const { kbId } = use(params);
 
-  const [knowledgebasesloading, setKnowledgeBasesLoading] = useState(true); // 加载状态
-  const [knowledgebasesrror, setKnowledgeBasesError] = useState(''); // 错误信息
-  const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
-  const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(''); // 错误信息
-  const [toastState, setToastState] = useState({
-    open: false,
-    title: '',
-    description: '',
-    variant: 'default' as 'default' | 'destructive',
-  });
+  let isRefreshing = false;
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -217,23 +209,6 @@ export default function KnowledgeBaseDetailPage(
     'doc_id',
   ];
 
-  useEffect(() => {
-    const fetchModelConfigs = async () => {
-      try {
-        const [embRes] = await Promise.all([fetch(`/api/config/embeddings`)]);
-
-        const embData = (await embRes.json())?.data.items || [];
-        console.log('embData', embData);
-        setEmbeddingModels([...embData]);
-      } catch (err: any) {
-        setModelError(err || '加载失败');
-      } finally {
-        setModelLoading(false);
-      }
-    };
-    fetchModelConfigs();
-  }, []);
-
   const handleQueryInputChange = (
     e:
       | React.ChangeEvent<HTMLInputElement>
@@ -275,9 +250,15 @@ export default function KnowledgeBaseDetailPage(
 
 
   const fetchKbFiles = useCallback(async () => {
+    if (isRefreshing) {
+      console.log("list already refreshing.")
+      return;
+    }
+    console.log("Refreshing...");
     const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
 
     try {
+      isRefreshing = true;
       const files_res = await fetch(url);
       if (!files_res.ok) throw new Error('获取知识库文件列表失败');
 
@@ -295,13 +276,16 @@ export default function KnowledgeBaseDetailPage(
       if (files_unfinished) {
         console.log('存在未完成的文件，继续检查状态。');
         setTimeout(() => {
+          isRefreshing = false;
           fetchKbFiles(); // 依赖 ref 获取最新 page
         }, 3000);
       } else {
         console.log('文件已上传完成。');
       }
-    } catch (err) {
-      console.error('获取知识库文件失败:', err);
+      isRefreshing=false;
+    } catch (err: any) {
+      isRefreshing = false;
+      toast.error(err.message);
     }
   }, [kbId]);
 
@@ -341,9 +325,7 @@ export default function KnowledgeBaseDetailPage(
         setMetadataValueTypes({ ...valueTypes, '': 'string' });
         setMetadataConfigs(metadata_data);
       } catch (err: any) {
-        setKnowledgeBasesError(err || '加载失败');
-      } finally {
-        setKnowledgeBasesLoading(false);
+        toast.error(err.message);
       }
     };
     fetchKbConfigs();
@@ -354,13 +336,7 @@ export default function KnowledgeBaseDetailPage(
   }
 
   const handleSaveSuccess = (kb: KbConfig) => {
-    setToastState({
-      open: true,
-      title: `知识库${kbId} 配置已修改`,
-      description: '修改的模型配置已成功保存',
-      variant: 'default',
-    });
-    console.log(`update ${kbId}`);
+      toast.success("知识库配置保存成功");
   };
 
   const handleDeleteFile = async (file_id: string) => {
@@ -373,9 +349,9 @@ export default function KnowledgeBaseDetailPage(
         },
       );
       if (!res.ok) throw new Error(`删除 ${file_id} 失败`);
-      console.log('delete file result:', res.text());
-    } catch (error) {
-      console.error('删除失败:', error);
+      toast.success("文件删除成功。");
+    } catch (error: any) {
+      toast.error(error.message);
     } finally {
       setDeleting(false);
       fetchKbFiles();
@@ -396,16 +372,15 @@ export default function KnowledgeBaseDetailPage(
           }),
         },
       );
-      if (!res.ok) throw new Error('Failed to save file source');
+      if (!res.ok) throw new Error('源链接保存失败');
 
       const fileObj = kbfiles.filter((file) => file.id === file_id)[0];
       if (fileObj) {
         fileObj.file_source = fileSource;
       }
       setFileSourceOpen((prev) => ({ ...prev, [file_id]: false }));
-    } catch (error) {
-      console.error('Error fetching file source:', error);
-      throw error;
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -451,8 +426,8 @@ export default function KnowledgeBaseDetailPage(
         .filter((name) => !(name in file_json.data.file_metadata));
       setAvailableMetadataKeys(usable_metadata_keys);
       console.log('可用的metadata名称：', usable_metadata_keys);
-    } catch (err) {
-      console.error('获取文件失败:', err);
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
@@ -547,8 +522,8 @@ export default function KnowledgeBaseDetailPage(
 
       setActiveRoleIds(role_ids);
       setActiveRoleNames(role_names);
-    } catch (error) {
-      console.error('获取文件角色信息失败: ', error);
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -572,8 +547,8 @@ export default function KnowledgeBaseDetailPage(
       }
       console.log('更新文件角色成功：', await roleRes.json());
       setOpenRole(false);
-    } catch (error) {
-      console.error('上传失败:', error);
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -748,39 +723,37 @@ export default function KnowledgeBaseDetailPage(
   };
 
   return (
-    <div className="flex flex-col h-screen w-full pt-0 space-y-0">
-      <div className="flex-none">
-        <div className="px-4 py-2 flex">
-          <div className="gap-1 flex items-center">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => router.push('/knowledgebases')}
-                    >
-                      知识库
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{knowledgebase.name}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+    <div className="flex flex-col h-screen pt-0 space-y-0">
+      <div className="px-4 py-2 flex">
+        <div className="gap-1 flex items-center">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Button
+                    variant="link"
+                    className="px-0"
+                    onClick={() => router.push('/knowledgebases')}
+                  >
+                    知识库
+                  </Button>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{knowledgebase.name}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+        <div className="max-w-120 ml-auto ">
+          <div className="gap-3 text-xs">
+            <span className="font-medium">ID: </span>
+            {knowledgebase.id}
           </div>
-          <div className="max-w-120 ml-auto ">
-            <div className="gap-3 text-xs">
-              <span className="font-medium">ID: </span>
-              {knowledgebase.id}
-            </div>
-            <div className="gap-3 text-xs truncate">
-              <span className="font-medium">描述: </span>
-              {knowledgebase.description}
-            </div>
+          <div className="gap-3 text-xs truncate">
+            <span className="font-medium">描述: </span>
+            {knowledgebase.description}
           </div>
         </div>
       </div>
@@ -797,40 +770,56 @@ export default function KnowledgeBaseDetailPage(
               检索测试
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="details" className="py-4">
-            <Card className="mb-6">
+          <TabsContent value="details" className="py-3">
+            <Card className="mb-4">
               <CardHeader>
                 <CardTitle>
-                  <div className="flex justify-between items-center">
-                    <Button
-                      onClick={() =>
-                        document.getElementById('file-upload')?.click()
-                      }
-                      disabled={uploading} // 上传时禁用按钮
-                    >
-                      {uploading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          上传中...
-                        </>
-                      ) : (
-                        <>
-                          上传文件
-                          <PlusIcon className="mr-2 h-6 w-6" />
-                        </>
-                      )}
-                    </Button>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      className="hidden"
-                      ref={fileInputRef}
-                      onChange={(e) => handleFileUpload(e.target.files)}
-                      multiple
-                    />
-                    <div className="text-xs text-muted-foreground">
-                      支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
-                      jsonl, jpg, jpeg, png{' '}
+                  <div className="flex items-center">
+                    <div className="flex items-center justify-between w-full">
+                      <Button
+                        onClick={() =>
+                          document.getElementById('file-upload')?.click()
+                        }
+                        disabled={uploading} // 上传时禁用按钮
+                      >
+                        {uploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            上传中...
+                          </>
+                        ) : (
+                          <>
+                            上传文件
+                            <PlusIcon className="mr-2 h-6 w-6" />
+                          </>
+                        )}
+                      </Button>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          id="file-upload"
+                          type="file"
+                          className="hidden"
+                          ref={fileInputRef}
+                          onChange={(e) => handleFileUpload(e.target.files)}
+                          multiple
+                        />
+
+                        <Button
+                          variant="outline"
+                          className="ml-4 h-8"
+                          onClick={() => {
+                            isRefreshing=false;
+                            fetchKbFiles();
+                            toast.success("刷新成功");
+                          }}
+                        > 刷新
+                          <RefreshCcwIcon/>
+                        </Button>
+                        <div className="text-xs text-muted-foreground ">
+                          支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
+                          jsonl, jpg, jpeg, png{' '}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardTitle>
@@ -838,7 +827,7 @@ export default function KnowledgeBaseDetailPage(
               <CardContent>
                 {kbfiles && kbfiles.length > 0 ? (
                   <div>
-                    <Table className="min-w-full">
+                    <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>文件名</TableHead>
@@ -865,16 +854,16 @@ export default function KnowledgeBaseDetailPage(
                                 {file.file_name}
                               </Button>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {formatFileSize(Number(file.file_size))}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {formatBeijingTime(file.created_at)}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {formatBeijingTime(file.updated_at)}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {file.status === 'pending' ? (
                                 <div className="flex items-center text-yellow-500">
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -904,7 +893,7 @@ export default function KnowledgeBaseDetailPage(
                                 <span>{file.status}</span> // 兜底显示原始状态
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="gap-1">
                               <PreviewButton
                                 kbId={kbId}
                                 fileId={file.id}
@@ -925,9 +914,9 @@ export default function KnowledgeBaseDetailPage(
                                 <PopoverTrigger asChild>
                                   <Button
                                     variant="link"
-                                    className="text-sm text-blue-600"
+                                    className="text-sm text-blue-600 pl-3 pr-0"
                                   >
-                                    源连接
+                                    源链接
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-160">
@@ -956,14 +945,14 @@ export default function KnowledgeBaseDetailPage(
 
                               <Button
                                 variant="link"
-                                className="text-sm text-blue-600"
+                                className="text-sm text-blue-600 pl-3 pr-0"
                                 onClick={() =>
                                   router.push(
                                     `/knowledgebases/${kbId}/files/${file.id}`,
                                   )
                                 }
                               >
-                                查看切片
+                                切片
                               </Button>
 
                               <Sheet open={openRole} onOpenChange={setOpenRole}>
@@ -973,7 +962,7 @@ export default function KnowledgeBaseDetailPage(
                                     onClick={() => {
                                       checkFileRole(file.id);
                                     }}
-                                    className="text-sm text-blue-600"
+                                    className="text-sm text-blue-600 pl-3 pr-0"
                                   >
                                     权限
                                   </Button>
@@ -1089,7 +1078,7 @@ export default function KnowledgeBaseDetailPage(
                                 <SheetTrigger asChild>
                                   <Button
                                     variant="link"
-                                    className="text-sm text-blue-600"
+                                    className="text-sm text-blue-600 pl-3 pr-0"
                                     onClick={() => handleOpenMetadata(file.id)}
                                   >
                                     元数据
@@ -1209,7 +1198,7 @@ export default function KnowledgeBaseDetailPage(
                                                   )}
                                                 <Button
                                                   variant="outline"
-                                                  className="w-3 h-3"
+                                                  className="w-3 h-3 pl-3 pr-0"
                                                   onClick={() =>
                                                     handleDeleteMetadata(key)
                                                   }
@@ -1314,14 +1303,7 @@ export default function KnowledgeBaseDetailPage(
                                 className="text-sm text-blue-600"
                                 onClick={() => handleDeleteFile(file.id)}
                               >
-                                {deleting ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    删除中...
-                                  </>
-                                ) : (
-                                  <>删除</>
-                                )}
+                                  删除
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -1594,28 +1576,6 @@ export default function KnowledgeBaseDetailPage(
             </div>
           </TabsContent>
         </Tabs>
-        <Toast.Root
-          open={toastState.open}
-          onOpenChange={(open) => setToastState((prev) => ({ ...prev, open }))}
-          className={`grid grid-cols-[auto_1fr] items-center gap-x-4 rounded-md border px-4 py-6 shadow-lg transition-all data-[state=open]:animate-slideIn data-[state=closed]:animate-fadeOut ${
-            toastState.variant === 'destructive'
-              ? 'border-red-500 bg-red-50 text-red-900'
-              : 'border-gray-200 bg-white text-gray-900'
-          }`}
-        >
-          <Toast.Description className="pl-4 text-sm font-medium">
-            {toastState.description}
-          </Toast.Description>
-          <Toast.Action
-            altText="关闭"
-            onClick={() => setToastState((prev) => ({ ...prev, open: false }))}
-          >
-            ×
-          </Toast.Action>
-        </Toast.Root>
-
-        {/* 触发 Toast 的隐藏容器 */}
-        <Toast.Viewport className="fixed bottom-0 right-0 z-[100] m-0 flex w-96 flex-col gap-2 p-6" />
       </div>
     </div>
   );
