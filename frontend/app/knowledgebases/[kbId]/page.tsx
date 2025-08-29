@@ -723,39 +723,37 @@ export default function KnowledgeBaseDetailPage(
   };
 
   return (
-    <div className="flex flex-col h-screen w-full pt-0 space-y-0">
-      <div className="flex-none">
-        <div className="px-4 py-2 flex">
-          <div className="gap-1 flex items-center">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => router.push('/knowledgebases')}
-                    >
-                      知识库
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{knowledgebase.name}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+    <div className="flex flex-col h-screen pt-0 space-y-0">
+      <div className="px-4 py-2 flex">
+        <div className="gap-1 flex items-center">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Button
+                    variant="link"
+                    className="px-0"
+                    onClick={() => router.push('/knowledgebases')}
+                  >
+                    知识库
+                  </Button>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{knowledgebase.name}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+        <div className="max-w-120 ml-auto ">
+          <div className="gap-3 text-xs">
+            <span className="font-medium">ID: </span>
+            {knowledgebase.id}
           </div>
-          <div className="max-w-120 ml-auto ">
-            <div className="gap-3 text-xs">
-              <span className="font-medium">ID: </span>
-              {knowledgebase.id}
-            </div>
-            <div className="gap-3 text-xs truncate">
-              <span className="font-medium">描述: </span>
-              {knowledgebase.description}
-            </div>
+          <div className="gap-3 text-xs truncate">
+            <span className="font-medium">描述: </span>
+            {knowledgebase.description}
           </div>
         </div>
       </div>
@@ -772,12 +770,12 @@ export default function KnowledgeBaseDetailPage(
               检索测试
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="details" className="py-4">
-            <Card className="mb-6">
+          <TabsContent value="details" className="py-3">
+            <Card className="mb-4">
               <CardHeader>
                 <CardTitle>
-                  <div className="flex justify-between items-center">
-                    <div>
+                  <div className="flex items-center">
+                    <div className="flex items-center justify-between w-full">
                       <Button
                         onClick={() =>
                           document.getElementById('file-upload')?.click()
@@ -796,29 +794,32 @@ export default function KnowledgeBaseDetailPage(
                           </>
                         )}
                       </Button>
-                      <Button
-                        variant="outline"
-                        className="ml-4 h-8"
-                        onClick={() => {
-                          isRefreshing=false;
-                          fetchKbFiles();
-                          toast.success("刷新成功");
-                        }}
-                      >
-                        <RefreshCcwIcon/>
-                      </Button>
-                    </div>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      className="hidden"
-                      ref={fileInputRef}
-                      onChange={(e) => handleFileUpload(e.target.files)}
-                      multiple
-                    />
-                    <div className="text-xs text-muted-foreground">
-                      支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
-                      jsonl, jpg, jpeg, png{' '}
+                      <div className="flex gap-2 items-center">
+                        <input
+                          id="file-upload"
+                          type="file"
+                          className="hidden"
+                          ref={fileInputRef}
+                          onChange={(e) => handleFileUpload(e.target.files)}
+                          multiple
+                        />
+
+                        <Button
+                          variant="outline"
+                          className="ml-4 h-8"
+                          onClick={() => {
+                            isRefreshing=false;
+                            fetchKbFiles();
+                            toast.success("刷新成功");
+                          }}
+                        > 刷新
+                          <RefreshCcwIcon/>
+                        </Button>
+                        <div className="text-xs text-muted-foreground ">
+                          支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
+                          jsonl, jpg, jpeg, png{' '}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardTitle>
@@ -826,7 +827,7 @@ export default function KnowledgeBaseDetailPage(
               <CardContent>
                 {kbfiles && kbfiles.length > 0 ? (
                   <div>
-                    <Table className="min-w-full">
+                    <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>文件名</TableHead>
@@ -853,16 +854,16 @@ export default function KnowledgeBaseDetailPage(
                                 {file.file_name}
                               </Button>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {formatFileSize(Number(file.file_size))}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {formatBeijingTime(file.created_at)}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {formatBeijingTime(file.updated_at)}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs">
                               {file.status === 'pending' ? (
                                 <div className="flex items-center text-yellow-500">
                                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -892,7 +893,7 @@ export default function KnowledgeBaseDetailPage(
                                 <span>{file.status}</span> // 兜底显示原始状态
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="gap-1">
                               <PreviewButton
                                 kbId={kbId}
                                 fileId={file.id}
@@ -913,9 +914,9 @@ export default function KnowledgeBaseDetailPage(
                                 <PopoverTrigger asChild>
                                   <Button
                                     variant="link"
-                                    className="text-sm text-blue-600"
+                                    className="text-sm text-blue-600 pl-3 pr-0"
                                   >
-                                    源连接
+                                    源链接
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-160">
@@ -944,14 +945,14 @@ export default function KnowledgeBaseDetailPage(
 
                               <Button
                                 variant="link"
-                                className="text-sm text-blue-600"
+                                className="text-sm text-blue-600 pl-3 pr-0"
                                 onClick={() =>
                                   router.push(
                                     `/knowledgebases/${kbId}/files/${file.id}`,
                                   )
                                 }
                               >
-                                查看切片
+                                切片
                               </Button>
 
                               <Sheet open={openRole} onOpenChange={setOpenRole}>
@@ -961,7 +962,7 @@ export default function KnowledgeBaseDetailPage(
                                     onClick={() => {
                                       checkFileRole(file.id);
                                     }}
-                                    className="text-sm text-blue-600"
+                                    className="text-sm text-blue-600 pl-3 pr-0"
                                   >
                                     权限
                                   </Button>
@@ -1077,7 +1078,7 @@ export default function KnowledgeBaseDetailPage(
                                 <SheetTrigger asChild>
                                   <Button
                                     variant="link"
-                                    className="text-sm text-blue-600"
+                                    className="text-sm text-blue-600 pl-3 pr-0"
                                     onClick={() => handleOpenMetadata(file.id)}
                                   >
                                     元数据
@@ -1197,7 +1198,7 @@ export default function KnowledgeBaseDetailPage(
                                                   )}
                                                 <Button
                                                   variant="outline"
-                                                  className="w-3 h-3"
+                                                  className="w-3 h-3 pl-3 pr-0"
                                                   onClick={() =>
                                                     handleDeleteMetadata(key)
                                                   }
@@ -1302,14 +1303,7 @@ export default function KnowledgeBaseDetailPage(
                                 className="text-sm text-blue-600"
                                 onClick={() => handleDeleteFile(file.id)}
                               >
-                                {deleting ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    删除中...
-                                  </>
-                                ) : (
-                                  <>删除</>
-                                )}
+                                  删除
                               </Button>
                             </TableCell>
                           </TableRow>

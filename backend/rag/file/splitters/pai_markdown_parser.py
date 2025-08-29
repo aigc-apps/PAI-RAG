@@ -192,12 +192,12 @@ class StructuredNodeParser(BaseModel):
             else:
                 chunk_text = ""
                 for child in node_group:
-                    chunk_text += "\n" + self._format_tree_nodes(
+                    chunk_text += self._format_tree_nodes(
                         child,
                         doc_node,
                         ref_doc,
                         nodes_list,
-                    )
+                    ) + "\n"
                 if title_stack:
                     chunk_text = (
                         f"{self._format_section_header(title_stack)}\n\n{chunk_text}"

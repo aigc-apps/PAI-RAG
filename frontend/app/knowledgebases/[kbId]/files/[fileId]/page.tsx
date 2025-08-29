@@ -295,7 +295,7 @@ export default function KnowledgeBaseFileChunksPage(
       </div>
       {/* 可滚动内容区域 */}
       <div className="overflow-y-auto h-4/5">
-        <div className="flex py-2 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
+        <div className="flex border-dashed border-gray-200 rounded-xl p-0">
           {kbfilechunksloading ? (
             <div className="py-12 text-center">
               <p className="text-gray-500">加载中...</p>
@@ -305,12 +305,14 @@ export default function KnowledgeBaseFileChunksPage(
               <p>切片列表加载失败</p>
             </div>
           ) : kbfilechunks.length === 0 ? (
-            <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
+            <div className="py-12 text-center text-red-500">
+              <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
+            </div>
           ) : (
-            <div className="gap-4 p-4 w-full">
-              <div className="grid grid-cols-4 items-center gap-6">
+            <div className="gap-3 px-3 py-0 w-full">
+              <div className="grid grid-cols-4 items-center gap-4">
                 {kbfilechunks.map((chunk) => (
-                  <Card key={chunk.id} className="h-80 p-4 gap-4">
+                  <Card key={chunk.id} className="h-70 px-2 pt-3 pb-1 gap-2">
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
                         <Badge className={activeMap[String(chunk.active)]}>
@@ -329,7 +331,7 @@ export default function KnowledgeBaseFileChunksPage(
                         </button>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-3 pb-2 mt-1 mb-1">
+                    <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-2 pb-2">
                       <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
                         {htmlRender(chunk.text)}
                       </div>
@@ -360,7 +362,7 @@ export default function KnowledgeBaseFileChunksPage(
           )}
         </div>
       </div>
-      <div className="pt-4">
+      <div className="absolute left-0 bottom-0 w-full min-h-[24px] text-sm">
         <PaginationComponent
           currentPage={page}
           totalPages={totalPages}
