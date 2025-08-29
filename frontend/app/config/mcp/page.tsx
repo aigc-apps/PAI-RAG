@@ -58,18 +58,17 @@ export default function McpConfigPage() {
     enabled: boolean;
   }>>([]);
   const [mcploading, setMcpLoading] = useState(true);
-  const [mcperror, setMcpError] = useState('');
 
   // 提取 fetchConfigs 为可复用函数
   const fetchConfigs = useCallback(async () => {
     try {
       setMcpLoading(true);
       const res = await fetch(`/api/config/mcps`);
-      if (!res.ok) throw new Error('获取配置失败');
+      if (!res.ok) throw new Error('获取MCP配置失败');
       const data = await res.json();
       setMcpConfigs(data.data.items || []);
     } catch (err: any) {
-      setMcpError(err || '加载失败');
+      toast.error(err.message);
     } finally {
       setMcpLoading(false);
     }
@@ -181,7 +180,7 @@ export default function McpConfigPage() {
     });
   } catch (err: any) {
     const errorMessage = err.message || err.toString() || '添加失败，请重试';
-    toast.error(`MCP 配置添加失败。`);
+    toast.error(errorMessage);
   } finally {
     setIsLoading(false);
   }
@@ -262,10 +261,6 @@ const updatedMCP = async () => {
             <div className="py-12 text-center">
               <p className="text-gray-500">加载中...</p>
             </div>
-          ) : error ? (
-            <div className="py-12 text-center text-red-500">
-              <p>{error}</p>
-            </div>
           ) : mcpconfigs.length === 0 ? (
             <h3 className="text-lg font-medium text-gray-700 py-6">暂无 MCP</h3>
           ) : (
@@ -306,9 +301,6 @@ const updatedMCP = async () => {
                             </button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[425px]">
-                            {error && (
-                              <div className="text-red-500 mb-4">{error}</div>
-                            )}
                             <DialogHeader>
                               <DialogTitle>编辑MCP配置</DialogTitle>
                               <DialogDescription>
@@ -430,7 +422,6 @@ const updatedMCP = async () => {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              {error && <div className="text-red-500 mb-4">{error}</div>}
               <DialogHeader>
                 <DialogTitle>添加MCP</DialogTitle>
                 <DialogDescription>
