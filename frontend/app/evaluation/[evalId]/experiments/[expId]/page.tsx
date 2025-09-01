@@ -238,6 +238,18 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
+                  <BreadcrumbLink asChild>
+                    <Button
+                      variant="link"
+                      className="px-0"
+                      onClick={() => router.push(`/evaluation/${evalId}/experiments`)}
+                    >
+                      experiments
+                    </Button>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
                   <BreadcrumbPage>{expId}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
