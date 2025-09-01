@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ChevronDownIcon, Terminal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import {
   Select,
@@ -71,18 +72,18 @@ export const EvalConfigCard: FC<EvalConfigProps> = ({
   eval_id,
 }) => {
   const [botConfig, setBotConfig] = useState<Chatbot>(default_chat_config);
-    const [llms, setLlms] = useState<LlmConfig[]>([]);
-    const [mcps, setMcps] = useState<McpConfig[]>([]);
-    const [kbs, setKbs] = useState<KbConfig[]>([]);
-    const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
-    const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
-    const [saveErrorMsg, setSaveErrorMsg] = useState('');
-    const isCreate: boolean = eval_id === undefined || eval_id === '';
-    const router = useRouter();
+  const [llms, setLlms] = useState<LlmConfig[]>([]);
+  const [mcps, setMcps] = useState<McpConfig[]>([]);
+  const [kbs, setKbs] = useState<KbConfig[]>([]);
+  const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
+  const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
+  const isCreate: boolean = eval_id === undefined || eval_id === '';
+  const router = useRouter();
   console.log("isCreate", isCreate)
   return (
     <div className="grid gap-4 py-6 px-6">
-      
+
       <div className="space-y-2">
         <Label htmlFor="app-id">
           实验名称 <span className="text-destructive">*</span>
@@ -113,191 +114,243 @@ export const EvalConfigCard: FC<EvalConfigProps> = ({
           rows={3}
         />
       </div>
-      <div className="flex">
-        <Label htmlFor="basemodel" className="w-[90px]">
-          基模型选择 <span className="text-destructive">*</span>{' '}
-        </Label>
-        <div className="px-6">
-          {llms.length > 0 ? (
-            <Select
-              value={botConfig.model_id}
-              onValueChange={(value) =>
-                setBotConfig((prev) => ({
-                  ...prev,
-                  model_id: value,
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="请选择基模型" />
-              </SelectTrigger>
-              <SelectContent>
-                {llms.map((llm) => (
-                  <SelectItem key={llm.id} value={llm.model_id}>
-                    {llm.model_id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div>
-              <p className="text-sm text-muted-foreground">尚未配置大模型，</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  router.push('/config/model/llm');
-                }}
-              >
-                前往添加
-              </Button>
+      <div className="space-y-2">
+        <Label htmlFor="description">实验设置</Label>
+        <Tabs defaultValue="from-apps" className='space-y-2'>
+          <TabsList className="py-4 bg-muted rounded-lg flex-none">
+            <TabsTrigger value="from-apps" className="p-4">
+              从已有应用选择
+            </TabsTrigger>
+            <TabsTrigger value="customized" className="p-4">
+              自定义
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="from-apps" className="py-4">
+            <div className="grid gap-4 py-1 px-6">
+              <div className="flex">
+                <Label htmlFor="kb_selection" className="w-[90px]">
+                  应用选择
+                </Label>
+                <div className="pl-6 pr-6">
+                  {kbs.length > 0 ? (
+                    <DropdownMenu modal={true}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="text-sm text-muted-foreground"
+                        >
+                          已选{botConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56">
+                        <DropdownMenuLabel>应用</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {kbs.map((kb) => (
+                          <DropdownMenuCheckboxItem
+                            key={kb.id}
+                            checked={botConfig.kb_ids.includes(kb.id)}
+                            // onCheckedChange={(checked) =>
+                            //   handleKbSelect(kb.id, kb.name, checked)
+                            // }
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            {kb.name}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-muted-foreground">尚未配置应用</p>
+                    </div>
+                  )}
+                </div>
+                {selectedKbNames.length > 0 && (
+                  <div className="flex gap-1.5 items-center">
+                    {selectedKbNames.map((name) => (
+                      <Badge variant="secondary" className="h-6" key={name}>
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      </div>
-      <div className="flex gap-6">
-        <Label htmlFor="enable_search" className="w-[90px]">
-          启用联网搜索
-        </Label>
-        <Switch
-          id="enable_search"
-          checked={botConfig.enable_search}
-          onCheckedChange={(checked) => {
-            setBotConfig({
-              ...botConfig,
-              enable_search: checked,
-            });
-          }}
-        />
-      </div>
-      <div className="flex gap-6">
-        <Label htmlFor="enable_agent" className="w-[90px]">
-          Agentic模式
-        </Label>
-        <Switch
-          id="enable_agent"
-          checked={botConfig.enable_agent}
-          onCheckedChange={(checked) => {
-            setBotConfig({
-              ...botConfig,
-              enable_agent: checked,
-            });
-          }}
-        />
-      </div>
-      <div className="flex">
-        <Label htmlFor="kb_selection" className="w-[90px]">
-          知识库选择
-        </Label>
-        <div className="pl-6 pr-6">
-          {kbs.length > 0 ? (
-            <DropdownMenu modal={true}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="text-sm text-muted-foreground"
-                >
-                  已选{botConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>知识库</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {kbs.map((kb) => (
-                  <DropdownMenuCheckboxItem
-                    key={kb.id}
-                    checked={botConfig.kb_ids.includes(kb.id)}
-                    // onCheckedChange={(checked) =>
-                    //   handleKbSelect(kb.id, kb.name, checked)
-                    // }
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    {kb.name}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div>
-              <p className="text-sm text-muted-foreground">尚未配置知识库</p>
+          </TabsContent>
+          <TabsContent value="customized" className="py-4">
+            <div className="grid gap-4 py-1 px-6">
+              <div className="flex">
+                <Label htmlFor="basemodel" className="w-[90px]">
+                  基模型选择 <span className="text-destructive">*</span>{' '}
+                </Label>
+                <div className="px-6">
+                  {llms.length > 0 ? (
+                    <Select
+                      value={botConfig.model_id}
+                      onValueChange={(value) =>
+                        setBotConfig((prev) => ({
+                          ...prev,
+                          model_id: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="请选择基模型" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {llms.map((llm) => (
+                          <SelectItem key={llm.id} value={llm.model_id}>
+                            {llm.model_id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-muted-foreground">尚未配置大模型</p>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          router.push('/config/model/llm');
+                        }}
+                      >
+                        前往添加
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-6">
+                <Label htmlFor="enable_search" className="w-[90px]">
+                  启用联网搜索
+                </Label>
+                <Switch
+                  id="enable_search"
+                  checked={botConfig.enable_search}
+                  onCheckedChange={(checked) => {
+                    setBotConfig({
+                      ...botConfig,
+                      enable_search: checked,
+                    });
+                  }}
+                />
+              </div>
+              <div className="flex gap-6">
+                <Label htmlFor="enable_agent" className="w-[90px]">
+                  Agentic模式
+                </Label>
+                <Switch
+                  id="enable_agent"
+                  checked={botConfig.enable_agent}
+                  onCheckedChange={(checked) => {
+                    setBotConfig({
+                      ...botConfig,
+                      enable_agent: checked,
+                    });
+                  }}
+                />
+              </div>
+              <div className="flex">
+                <Label htmlFor="kb_selection" className="w-[90px]">
+                  知识库选择
+                </Label>
+                <div className="pl-6 pr-6">
+                  {kbs.length > 0 ? (
+                    <DropdownMenu modal={true}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="text-sm text-muted-foreground"
+                        >
+                          已选{botConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56">
+                        <DropdownMenuLabel>知识库</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {kbs.map((kb) => (
+                          <DropdownMenuCheckboxItem
+                            key={kb.id}
+                            checked={botConfig.kb_ids.includes(kb.id)}
+                            // onCheckedChange={(checked) =>
+                            //   handleKbSelect(kb.id, kb.name, checked)
+                            // }
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            {kb.name}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-muted-foreground">尚未配置知识库</p>
+                    </div>
+                  )}
+                </div>
+                {selectedKbNames.length > 0 && (
+                  <div className="flex gap-1.5 items-center">
+                    {selectedKbNames.map((name) => (
+                      <Badge variant="secondary" className="h-6" key={name}>
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex">
+                <Label htmlFor="mcp_selection" className="w-[90px]">
+                  MCP选择
+                </Label>
+                <div className="pl-6 pr-6">
+                  {mcps.length > 0 ? (
+                    <DropdownMenu modal={true}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="text-sm text-muted-foreground"
+                        >
+                          已选{botConfig.mcp_ids.length}个，可多选 <ChevronDownIcon />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56">
+                        <DropdownMenuLabel>MCP</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {mcps.map((mcp) => (
+                          <DropdownMenuCheckboxItem
+                            key={mcp.id}
+                            checked={botConfig.mcp_ids.includes(mcp.id)}
+                            // onCheckedChange={(checked) =>
+                            //   handleMcpSelect(mcp.id, mcp.name, checked)
+                            // }
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            {mcp.name}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-muted-foreground">尚未配置MCP</p>
+                    </div>
+                  )}
+                </div>
+                {selectedMcpNames.length > 0 && (
+                  <div className="flex gap-1.5 items-center">
+                    {selectedMcpNames.map((name) => (
+                      <Badge variant="secondary" className="h-6" key={name}>
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-        {selectedKbNames.length > 0 && (
-          <div className="flex gap-1.5 items-center">
-            {selectedKbNames.map((name) => (
-              <Badge variant="secondary" className="h-6" key={name}>
-                {name}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="flex">
-        <Label htmlFor="mcp_selection" className="w-[90px]">
-          MCP选择
-        </Label>
-        <div className="pl-6 pr-6">
-          {mcps.length > 0 ? (
-            <DropdownMenu modal={true}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="text-sm text-muted-foreground"
-                >
-                  已选{botConfig.mcp_ids.length}个，可多选 <ChevronDownIcon />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>MCP</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {mcps.map((mcp) => (
-                  <DropdownMenuCheckboxItem
-                    key={mcp.id}
-                    checked={botConfig.mcp_ids.includes(mcp.id)}
-                    // onCheckedChange={(checked) =>
-                    //   handleMcpSelect(mcp.id, mcp.name, checked)
-                    // }
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    {mcp.name}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div>
-              <p className="text-sm text-muted-foreground">尚未配置MCP</p>
-            </div>
-          )}
-        </div>
-        {selectedMcpNames.length > 0 && (
-          <div className="flex gap-1.5 items-center">
-            {selectedMcpNames.map((name) => (
-              <Badge variant="secondary" className="h-6" key={name}>
-                {name}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="flex">
-        <Label htmlFor="mcp_selection" className="w-[120px]">
-          上传评估数据集
-        </Label>
-        <div className="pl-6 pr-6">
-          <div>
-            <p className="text-sm text-muted-foreground">尚未上传数据集</p>
-          </div>
-        </div>
-        {selectedMcpNames.length > 0 && (
-          <div className="flex gap-1.5 items-center">
-            {selectedMcpNames.map((name) => (
-              <Badge variant="secondary" className="h-6" key={name}>
-                {name}
-              </Badge>
-            ))}
-          </div>
-        )}
+
+          </TabsContent>
+
+        </Tabs>
       </div>
       {saveErrorMsg && (
         <Alert variant="destructive">
@@ -319,9 +372,9 @@ export const EvalConfigCard: FC<EvalConfigProps> = ({
 
         <Button
           className="w-20"
-          // onClick={() => {
-          //   handleSaveChatConfig();
-          // }}
+        // onClick={() => {
+        //   handleSaveChatConfig();
+        // }}
         >
           {isCreate ? '创建' : '保存'}
         </Button>

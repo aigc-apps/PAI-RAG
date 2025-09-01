@@ -291,7 +291,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             </Select>
           ) : (
             <div>
-              <p className="text-sm text-muted-foreground">尚未配置大模型，</p>
+              <p className="text-sm text-muted-foreground">尚未配置大模型</p>
               <Button
                 variant="outline"
                 onClick={() => {
