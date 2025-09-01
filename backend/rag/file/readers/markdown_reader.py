@@ -14,13 +14,12 @@ from rag.file.image_caption_tool import ImageCaptionTool
 
 REGEX_H1 = "===+"
 REGEX_H2 = "---+"
-REGEX_USELESS_PHRASE = "\{#[0-9a-z]+\}"  # Only for aliyun docs
 MARKDOWN_IMAGE_PATTERN = re.compile(
-    r"!\[.*?\]\(((?!https?://|www\.)[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))\)",
+    r"!\[.*?\]\((https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))\)",
     re.IGNORECASE,
 )
 HTML_IMAGE_PATTERN = re.compile(
-    r'<img[^>]*src=["\']((?!https?://|www\.)[^"\']+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))["\'][^>]*>',
+    r'<img[^>]*src=["\'](https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))["\'][^>]*>',
     re.IGNORECASE,
 )
 
@@ -65,34 +64,9 @@ class MarkdownReader(BaseReader):
         return content, saved_images
 
     def read(self, file_item: FileItem) -> List[Document]:
-        md_content = ""
-        pre_line = ""
         file_item.file.seek(0)
-        while True:
-            line = file_item.file.readline().decode("utf-8")
-            if not line:
-                break
-            is_code = False
-            striped_line = re.sub(REGEX_USELESS_PHRASE, "", line)
-            if striped_line.startswith("```"):
-                is_code = not is_code
 
-            if not striped_line:
-                md_content += pre_line
-                pre_line = "\n"
-            elif re.match(REGEX_H1, striped_line):
-                md_content += f"# {pre_line}"
-                pre_line = ""
-            elif re.match(REGEX_H2, striped_line):
-                md_content += f"## {pre_line}"
-                pre_line = ""
-            else:
-                md_content += pre_line
-                pre_line = striped_line
-                if is_code or line.startswith("#") or line.endswith("  \n"):
-                    pre_line = f"{striped_line}\n"
-
-        md_content += pre_line
+        md_content = file_item.file.read().decode("utf-8")
 
         if isinstance(self.file_store, OssFileStore) and self.image_caption_tool:
             md_content, _ = self.replace_image_by_pattern(

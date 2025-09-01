@@ -86,22 +86,18 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 
-def get_engine_url():
-    engine = get_sync_db_engine()
-    return engine.url.render_as_string(hide_password=False).replace("%", "%%")
+engine = get_sync_db_engine()
+engine_url = engine.url.render_as_string(hide_password=False).replace("%", "%%")
 
 
-config.set_main_option("sqlalchemy.url", get_engine_url())
+config.set_main_option("sqlalchemy.url", engine_url)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
-
 # Set target_metadata to SQLModel's metadata
 target_metadata = SQLModel.metadata
-
+target_metadata.create_all(engine)
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")

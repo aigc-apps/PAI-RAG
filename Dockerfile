@@ -43,6 +43,9 @@ COPY resources /app/resources
 COPY scripts /app/scripts
 COPY frontend /app/frontend
 COPY backend /app/backend
+COPY alembic /app/alembic
+COPY alembic.ini /app/alembic.ini
+
 RUN cd frontend && npm install && npm run build
 
 CMD ["./scripts/start.sh"]

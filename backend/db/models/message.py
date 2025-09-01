@@ -2,11 +2,11 @@ import uuid
 from sqlmodel import Field, SQLModel
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, JSON
-from typing import List
+from typing import List, Optional
 
 
 class MessageCreate(SQLModel):
-    id: str = Field(default=None)
+    local_id: Optional[str] = Field(default=None)
     thread_id: str = Field(default=None)
     role: str = Field(default=None)
     content: List[dict] = Field(default=[], sa_column=Column("content", JSON))
@@ -28,6 +28,8 @@ class MessageEntity(SQLModel, table=True):
     thread_id: str = Field(
         default=None, foreign_key="pai_thread.id", ondelete="CASCADE", nullable=False
     )
+    local_id: Optional[str] = Field(default=None) # 记录当前message的local_id信息，避免重新生成时的重复
+
 
     role: str = Field(default=None)  # e.g., "user", "assistant", "system"
     content: List[dict] = Field(default=[], sa_column=Column("content", JSON))

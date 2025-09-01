@@ -229,7 +229,7 @@ class ASTTreeBuilder:
     def handle_code_fence(self, node: CodeFence):
         language = node.language or ""
         content = node.children[0].content.rstrip() if node.children else ""
-        code_content = f"{language}:\n{content}" if language else content
+        code_content = f"\n```{language}\n{content}\n```\n"
         new_node = TreeNode(
             level=self.stack[-1].level + 1, category="code", content=code_content
         )

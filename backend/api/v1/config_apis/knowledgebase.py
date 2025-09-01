@@ -386,6 +386,7 @@ async def list_chunks(
     chunk_results = await session.exec(
         select(KbChunkEntity)
         .where(KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id)
+        .order_by(KbChunkEntity.index)
         .offset(pagination.offset)
         .limit(size)
     )

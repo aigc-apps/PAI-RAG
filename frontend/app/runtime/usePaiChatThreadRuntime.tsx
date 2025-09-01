@@ -25,6 +25,7 @@ import { ReactNode, useMemo } from 'react'; // ✅ 添加这一行以导入 Reac
 import { useChatOptions } from '../providers/chat';
 import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
 import { v4 as uuidv4 } from 'uuid';
+import { AssistantStream, PlainTextDecoder } from "assistant-stream";
 
 interface Props {
   children?: ReactNode;
@@ -33,6 +34,25 @@ interface Props {
 type HeadersValue = Record<string, string> | Headers;
 let isInitializing = false;
 let initializedThreadId = "";
+let msgParentIdMap = new Map<string, string>();
+
+
+function toByteStream(data: string | Buffer): ReadableStream<Uint8Array> {
+  let uint8: Uint8Array;
+
+  if (typeof data === 'string') {
+    uint8 = new TextEncoder().encode(data);
+  } else {
+    uint8 = data; // Buffer is Uint8Array
+  }
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(uint8);
+      controller.close();
+    }
+  });
+}
 
 function delay(ms: any) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -388,7 +408,9 @@ const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
       if (!res.ok) {
         throw new Error('生成标题失败，请检查网络或配置');
       }
-      return new ReadableStream(); // 返回空流
+      const data = await res.json();
+      return AssistantStream.fromByteStream(toByteStream(data.data.title) as ReadableStream<Uint8Array<ArrayBuffer>>, new PlainTextDecoder());
+
     } catch (err: any) {
       // 显示错误提示
       throw new Error('生成标题失败，请检查网络或配置');
@@ -403,6 +425,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
   // This runs in the context of each thread
   const threadListItem = useThreadListItem();
   const remoteId = threadListItem.remoteId;
+
   // Create thread-specific history adapter
   const history = useMemo<ThreadHistoryAdapter>(
     () => ({
@@ -418,6 +441,18 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           if (messages.length === 0) {
             return { headId: null, messages: [] };
           }
+          msgParentIdMap.clear();
+
+          let parentId = "";
+          for (let i = 0; i < messages.length; i ++) {
+            if (messages[i].local_id !== undefined && messages[i].local_id !== '')
+            {
+              msgParentIdMap.set(parentId, messages[i].local_id);
+            } 
+            parentId = messages[i].id;
+          }
+          console.log("load messages", messages, msgParentIdMap);
+
           const response = ExportedMessageRepository.fromArray(
             messages.map((m: any) => ({
               role: m.role as ThreadMessage['role'],
@@ -453,6 +488,14 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           const url = `/api/threads/${remoteThreadId}/messages`;
           console.log('append message', message);
           
+          let msgId = message.message.id;
+          const pid = message.parentId || "";
+          if (msgParentIdMap.has(pid)) {
+            msgId = msgParentIdMap.get(pid) || "";
+          }
+          else {
+            msgParentIdMap.set(pid, msgId);
+          }
           const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -461,7 +504,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
               role: message.message.role,
               attachments: message.message.attachments,
               content: message.message.content,
-              id: message.parentId || uuidv4(),
+              local_id: msgId,
             }),
           });
 
