@@ -157,8 +157,14 @@ start_frontend() {
 start_api() {
   echo "👉 启动 API 实例 on port $BACKEND_PORT"
   # 示例：uvicorn app:app --port $port
-  gunicorn -w $API_INSTANCE_COUNT -b "0.0.0.0:${BACKEND_PORT}" -c scripts/gunicorn.conf.py app.main:app --timeout 600
-  API_PIDS[$instance]=$!
+  gunicorn -w $API_INSTANCE_COUNT -b "0.0.0.0:${BACKEND_PORT}" -c scripts/gunicorn.conf.py app.main:app --timeout 600 &
+  API_PID=$!
+  wait $API_PID
+
+  # Exit with the same code as Gunicorn
+  EXIT_STATUS=$?
+  echo "Gunicorn stopped with exit code $EXIT_STATUS"
+  exit $EXIT_STATUS
 }
 
 # 启动 Worker 实例
@@ -177,9 +183,6 @@ cleanup() {
     pkill -9 -f 'celery -A app.worker'
     echo "celery job stopped."
 
-    echo "Script exited with code $exit_code."
-    exit "$exit_code"
-
    echo "Cleaning up frontend process..."
     if kill -0 $FRONTEND_PID 2>/dev/null; then
         kill $FRONTEND_PID
@@ -188,7 +191,11 @@ cleanup() {
         echo "frontend process already stopped"
     fi
 
+    echo "Cleaning up API process..."
+    kill $API_PID
+    echo "API process killed"
 }
+
 # 捕获信号（SIGTERM, SIGINT, EXIT）
 trap cleanup EXIT TERM INT
 
