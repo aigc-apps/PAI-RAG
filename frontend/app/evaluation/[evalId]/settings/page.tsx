@@ -35,32 +35,30 @@ import {
 import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
+import { EvalConfig } from '@/app/evaluation/[evalId]/page';
+import { Chatbot } from "@/app/apps/chatbot_config";
 import { ChevronDownIcon, Terminal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 
-export interface Chatbot {
-  id: string;
-  app_id: string;
-  description: string;
-  enable_search: boolean;
-  enable_agent: boolean;
-  mcp_ids: string[];
-  kb_ids: string[];
-  model_id: string;
-  updated_at: string;
-}
 
-const default_chat_config = {
+const default_eval_config = {
   id: '',
-  app_id: '',
+  name: '',
   description: '',
-  enable_search: false,
-  mcp_ids: [],
-  kb_ids: [],
-  model_id: "",
-  updated_at: "",
-  enable_agent: false,
+  chatbot_id: '',
+  chatbot_config: {
+    model_id: "",
+    mcp_ids: [],
+    kb_ids: [],
+    enable_search: false,
+    enable_vision: false,
+    enable_agent: false,
+    enable_input_guardrail: false,
+    enable_output_guardrail: false,
+    guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+  }
 };
 
 export default function EvalExpDetailsPage(
@@ -68,7 +66,8 @@ export default function EvalExpDetailsPage(
 ) {
     const { evalId } = use(params);
     const router = useRouter();
-    const [botConfig, setBotConfig] = useState<Chatbot>(default_chat_config);
+    const [evalConfig, setEvalConfig] = useState<EvalConfig>(default_eval_config);
+    const [chatbots, setChatbots] = useState<Chatbot[]>([]);
     const [llms, setLlms] = useState<LlmConfig[]>([]);
     const [mcps, setMcps] = useState<McpConfig[]>([]);
     const [kbs, setKbs] = useState<KbConfig[]>([]);
@@ -78,16 +77,86 @@ export default function EvalExpDetailsPage(
     const isCreate: boolean = evalId === undefined || evalId === '';
     console.log("isCreate", isCreate)
 
-    const taskInfo = {
-        id: evalId || "undefined",
-        app_id: 'gaia',
-        description: 'gaia实验设置',
-        enable_search: false,
-        mcp_ids: ['search', 'browser-use'],
-        kb_ids: [],
-        model_id: "qwen-max",
-        updated_at: "2025-09-01 10:00",
-        enable_agent: true,
+    useEffect(() => {
+        const fetchEvalConfigs = async () => {
+          try {
+            const [evalRes, chatbotRes, llmRes, mcpRes, kbRes] = await Promise.all([
+                fetch(`/api/config/evaluation/${evalId}`),
+                fetch(`/api/config/apps`),
+                fetch(`/api/config/llms`),
+                fetch(`/api/config/mcps`),
+                fetch(`/api/config/knowledgebases`),
+            ]);
+    
+            if (!evalRes.ok) throw new Error('获取评估任务详情失败');
+            const json_data = await evalRes.json();
+            const evalData = json_data.data;
+            console.log('evalData:', evalData);
+            setEvalConfig(evalData);
+
+            const chatbotData = (await chatbotRes.json())?.data.items || [];
+            console.log('chatbotData', chatbotData);
+            setChatbots([...chatbotData]);
+
+            const llmData = (await llmRes.json())?.data.items || [];
+            console.log('llmData', llmData);
+            setLlms([...llmData]);
+
+            const mcpData =
+            ((await mcpRes.json())?.data.items as McpConfig[]) || [];
+            console.log('mcpData', mcpData);
+            setMcps([...mcpData]);
+
+            const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
+            console.log('kbData', kbData);
+            setKbs([...kbData]);
+
+            // const kbnames = kbData
+            //     .filter((item) => evalData.chatbot_config.kb_ids.includes(item.id))
+            //     .map((item) => item.name);
+            // setSelectedKbNames([...kbnames]);
+            // console.log('selectedKbNames', kbnames);
+
+            // const mcpnames = mcpData
+            //     .filter((item) => evalData.chatbot_config.mcp_ids.includes(item.id))
+            //     .map((item) => item.name);
+            // setSelectedMcpNames([...mcpnames]);
+            // console.log('selectedMcpNames', mcpnames);
+
+            // console.log('selectedKbNames', kbnames);
+            // console.log('selectedMcpNames', mcpnames);
+    
+          } catch (err: any) {
+            toast.error(err.message);
+          }
+        };
+        fetchEvalConfigs();
+      }, []);
+
+    if(!evalConfig){
+        return <div className="p-6">加载中...</div>;
+    }
+
+    const handleSaveEvalConfig = async () => {
+        console.log('保存评估设置:', evalConfig);
+        const submit_url = isCreate
+        ? `/api/config/evaluation`
+        : `/api/config/evaluation/${evalConfig.id}`;
+        const updateMethod = isCreate ? 'POST' : 'PUT';
+        try {
+        const res = await fetch(submit_url, {
+            method: updateMethod,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(evalConfig), // 包装为数组
+        });
+
+        if (!res.ok) throw new Error(`保存评估任务失败: ${await res.text()}`);
+        router.push(`/evaluation/${evalConfig.id}`);
+        setSaveErrorMsg('');
+        } catch (err: any) {
+        console.log('保存评估任务失败', err.message);
+        setSaveErrorMsg(err.message);
+        }
     };
 
     return (
@@ -116,7 +185,7 @@ export default function EvalExpDetailsPage(
                                         className="px-0"
                                         onClick={() => router.push(`/evaluation/${evalId}`)}
                                     >
-                                        {evalId}
+                                        {evalConfig.name}
                                     </Button>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator />
@@ -140,14 +209,14 @@ export default function EvalExpDetailsPage(
             <div className="px-2 max-w-6xl">
                 <div className="grid gap-4 py-6 px-6">
                     <div className="space-y-2">
-                        <Label htmlFor="app-id">
+                        <Label htmlFor="eval-id">
                         实验名称 <span className="text-destructive">*</span>
                         </Label>
                         <Input
-                        id="appid"
-                        value={botConfig.app_id}
+                        id="evalid"
+                        value={evalConfig.name}
                         onChange={(e) =>
-                            setBotConfig((prev) => ({ ...prev, app_id: e.target.value }))
+                            setEvalConfig((prev) => ({ ...prev, name: e.target.value }))
                         }
                         placeholder="请输入实验名称, 如GAIA"
                         required
@@ -158,9 +227,9 @@ export default function EvalExpDetailsPage(
                         <Label htmlFor="description">描述</Label>
                         <Textarea
                         id="description"
-                        value={botConfig.description}
+                        value={evalConfig.description}
                         onChange={(e) =>
-                            setBotConfig((prev) => ({
+                            setEvalConfig((prev) => ({
                             ...prev,
                             description: e.target.value,
                             }))
@@ -183,56 +252,49 @@ export default function EvalExpDetailsPage(
                         <TabsContent value="from-apps" className="py-4">
                             <div className="grid gap-4 py-1 px-6">
                             <div className="flex">
-                                <Label htmlFor="kb_selection" className="w-[90px]">
-                                应用选择
-                                </Label>
-                                <div className="pl-6 pr-6">
-                                {kbs.length > 0 ? (
-                                    <DropdownMenu modal={true}>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                        variant="outline"
-                                        className="text-sm text-muted-foreground"
+                                    <Label htmlFor="basemodel" className="w-[90px]">
+                                      应用选择 <span className="text-destructive">*</span>{' '}
+                                    </Label>
+                                    <div className="px-6">
+                                      {chatbots.length > 0 ? (
+                                        <Select
+                                          value={evalConfig.chatbot_id}
+                                          onValueChange={(value) =>
+                                            setEvalConfig((prev) => ({
+                                              ...prev,
+                                              chatbot_id: value,
+                                            }))
+                                          }
                                         >
-                                        已选{botConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="w-56">
-                                        <DropdownMenuLabel>应用</DropdownMenuLabel>
-                                        <DropdownMenuSeparator />
-                                        {kbs.map((kb) => (
-                                        <DropdownMenuCheckboxItem
-                                            key={kb.id}
-                                            checked={botConfig.kb_ids.includes(kb.id)}
-                                            // onCheckedChange={(checked) =>
-                                            //   handleKbSelect(kb.id, kb.name, checked)
-                                            // }
-                                            onSelect={(e) => e.preventDefault()}
-                                        >
-                                            {kb.name}
-                                        </DropdownMenuCheckboxItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                    </DropdownMenu>
-                                ) : (
-                                    <div>
-                                    <p className="text-sm text-muted-foreground">尚未配置应用</p>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="请选择应用" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {chatbots.map((cb) => (
+                                              <SelectItem key={cb.id} value={cb.app_id}>
+                                                {cb.app_id}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div>
+                                          <p className="text-sm text-muted-foreground">尚未配置应用</p>
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                              router.push('/apps/create');
+                                            }}
+                                          >
+                                            前往添加
+                                          </Button>
+                                        </div>
+                                      )}
                                     </div>
-                                )}
-                                </div>
-                                {selectedKbNames.length > 0 && (
-                                <div className="flex gap-1.5 items-center">
-                                    {selectedKbNames.map((name) => (
-                                    <Badge variant="secondary" className="h-6" key={name}>
-                                        {name}
-                                    </Badge>
-                                    ))}
-                                </div>
-                                )}
-                            </div>
+                                  </div>
                             </div>
                         </TabsContent>
-                        <TabsContent value="customized" className="py-4">
+                        {/* <TabsContent value="customized" className="py-4">
                             <div className="grid gap-4 py-1 px-6">
                             <div className="flex">
                                 <Label htmlFor="basemodel" className="w-[90px]">
@@ -241,9 +303,9 @@ export default function EvalExpDetailsPage(
                                 <div className="px-6">
                                 {llms.length > 0 ? (
                                     <Select
-                                    value={botConfig.model_id}
+                                    value={evalConfig?.chatbot_config?.model_id}
                                     onValueChange={(value) =>
-                                        setBotConfig((prev) => ({
+                                        setEvalConfig((prev) => ({
                                         ...prev,
                                         model_id: value,
                                         }))
@@ -281,12 +343,15 @@ export default function EvalExpDetailsPage(
                                 </Label>
                                 <Switch
                                 id="enable_search"
-                                checked={botConfig.enable_search}
+                                checked={evalConfig?.chatbot_config?.enable_search}
                                 onCheckedChange={(checked) => {
-                                    setBotConfig({
-                                    ...botConfig,
-                                    enable_search: checked,
-                                    });
+                                    setEvalConfig((prev) => ({
+                                        ...prev,
+                                        chatbot_config: {
+                                        ...prev.chatbot_config,
+                                        enable_search: Boolean(checked),
+                                        },
+                                    }));
                                 }}
                                 />
                             </div>
@@ -296,12 +361,15 @@ export default function EvalExpDetailsPage(
                                 </Label>
                                 <Switch
                                 id="enable_agent"
-                                checked={botConfig.enable_agent}
+                                checked={evalConfig?.chatbot_config?.enable_agent}
                                 onCheckedChange={(checked) => {
-                                    setBotConfig({
-                                    ...botConfig,
-                                    enable_agent: checked,
-                                    });
+                                    setEvalConfig((prev) => ({
+                                        ...prev,
+                                        chatbot_config: {
+                                        ...prev.chatbot_config,
+                                        enable_agent: Boolean(checked),
+                                        },
+                                    }));
                                 }}
                                 />
                             </div>
@@ -317,7 +385,7 @@ export default function EvalExpDetailsPage(
                                         variant="outline"
                                         className="text-sm text-muted-foreground"
                                         >
-                                        已选{botConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
+                                        已选{evalConfig?.chatbot_config?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent className="w-56">
@@ -326,7 +394,7 @@ export default function EvalExpDetailsPage(
                                         {kbs.map((kb) => (
                                         <DropdownMenuCheckboxItem
                                             key={kb.id}
-                                            checked={botConfig.kb_ids.includes(kb.id)}
+                                            checked={evalConfig.chatbot_config.kb_ids.includes(kb.id)}
                                             // onCheckedChange={(checked) =>
                                             //   handleKbSelect(kb.id, kb.name, checked)
                                             // }
@@ -365,7 +433,7 @@ export default function EvalExpDetailsPage(
                                         variant="outline"
                                         className="text-sm text-muted-foreground"
                                         >
-                                        已选{botConfig.mcp_ids.length}个，可多选 <ChevronDownIcon />
+                                        已选{evalConfig?.chatbot_config?.mcp_ids.length}个，可多选 <ChevronDownIcon />
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent className="w-56">
@@ -374,7 +442,7 @@ export default function EvalExpDetailsPage(
                                         {mcps.map((mcp) => (
                                         <DropdownMenuCheckboxItem
                                             key={mcp.id}
-                                            checked={botConfig.mcp_ids.includes(mcp.id)}
+                                            checked={evalConfig.chatbot_config.mcp_ids.includes(mcp.id)}
                                             // onCheckedChange={(checked) =>
                                             //   handleMcpSelect(mcp.id, mcp.name, checked)
                                             // }
@@ -403,7 +471,7 @@ export default function EvalExpDetailsPage(
                             </div>
                             </div>
 
-                        </TabsContent>
+                        </TabsContent> */}
 
                         </Tabs>
                     </div>
@@ -419,7 +487,7 @@ export default function EvalExpDetailsPage(
                         variant="secondary"
                         className="w-20"
                         onClick={() => {
-                            router.push('/apps');
+                            router.push(`/evaluation/${evalConfig.id}`);
                         }}
                         >
                         取消
@@ -427,9 +495,9 @@ export default function EvalExpDetailsPage(
 
                         <Button
                         className="w-20"
-                        // onClick={() => {
-                        //   handleSaveChatConfig();
-                        // }}
+                        onClick={() => {
+                          handleSaveEvalConfig();
+                        }}
                         >
                         {isCreate ? '创建' : '保存'}
                         </Button>

@@ -92,7 +92,7 @@ repos:
         args:
           [
             "--skip",
-            "*.json,*.txt",
+            "*.json,*.txt,*.jsonl",
             "--ignore-words-list",
             "astroid,gallary,momento,narl,ot,rouge,nin,gere",
           ]

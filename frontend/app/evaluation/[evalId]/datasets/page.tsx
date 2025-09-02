@@ -29,6 +29,7 @@ import {
     UploadIcon,
     Eye,
     Trash2Icon,
+    Loader2
 } from "lucide-react";
 import {
     Dialog,
@@ -40,13 +41,16 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from '@/components/ui/badge';
+import { EvalConfig } from '@/app/evaluation/[evalId]/page';
 
-interface SampleItem {
+export interface SampleItem {
     id: string;
-    question: string;
-    answer: string;
-    level?: number;
-    tools?: string[];
+    input: string;
+    expected_output: string;
+    eval_metadata?: {
+        Steps?: string;
+        Tools?: string;
+    };
 }
 
 export default function EvalExpDetailsPage(
@@ -58,7 +62,7 @@ export default function EvalExpDetailsPage(
     const [totalPages, setTotalPages] = useState(1);
     const [datasets, setDatasets] = useState<SampleItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const pageSize = 3;
+    const pageSize = 10;
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -69,65 +73,39 @@ export default function EvalExpDetailsPage(
     const [totalItems, setTotalItems] = useState(0);
     const [selectedSample, setSelectedSample] = useState<SampleItem | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [dataseterror, setDatasetError] = useState(''); 
+    const [evalConfig, setEvalConfig] = useState<EvalConfig>();
 
     useEffect(() => {
         const fetchConfigs = async () => {
             setIsLoading(true);
+            try {
+                const [evalRes, allDatasetRes,datasetRes] = await Promise.all([
+                    fetch(`/api/config/evaluation/${evalId}`),
+                    fetch(`/api/config/evaluation/${evalId}/dataset`),
+                    fetch(`/api/config/evaluation/${evalId}/dataset?page=${page}&size=${pageSize}`),
+                ]);
+                
+                const eval_data = await evalRes.json();
+                const evalData = eval_data.data;
+                console.log('evalData:', evalData);
+                setEvalConfig(evalData);
 
-            // 模拟API调用获取评估数据
-            const mockData: SampleItem[] = [
-                {
-                    id: "e1fc63a2-da7a-432f-be78-7c4a95598703",
-                    question: "If Eliud Kipchoge could maintain his record-making marathon pace indefinitely, how many thousand hours would it take him to run the distance between the Earth and the Moon its closest approach? Please use the minimum perigee value on the Wikipedia page for the Moon when carrying out your calculation. Round your result to the nearest 1000 hours and do not use any comma separators if necessary.",
-                    answer: "17",
-                    level: 1,
-                    tools: ["Calculator", "Astronomy Database"]
-                },
-                {
-                    id: "46719c30-f4c3-4cad-be07-d5cb21eee6bb",
-                    question: "Of the authors (First M. Last) that worked on the paper \"Pie Menus or Linear Menus, Which Is Better?\" in 2015, what was the title of the first paper authored by the one that had authored prior papers?",
-                    answer: "Mapping Human Oriented Information to Software Agents for Online Systems Usage",
-                    level: 1,
-                    tools: ["Search", "Browser Use", "Calculator"]
-                },
-                {
-                    id: "b816bfce-3d80-4913-a07d-69b752ce6377",
-                    question: "In Emily Midkiff's June 2014 article in a journal named for the one of Hreidmar's sons that guarded his house, what word was quoted from two different authors in distaste for the nature of dragon depictions?",
-                    answer: "fluffy",
-                    level: 2,
-                    tools: ["Search", "Calculator"]
-                },
-                {
-                    id: "72e110e7-464c-453c-a309-90a95aed6538",
-                    question: "Under DDC 633 on Bielefeld University Library's BASE, as of 2020, from what country was the unknown language article with a flag unique from the others?",
-                    answer: "Guatemala",
-                    level: 2,
-                    tools: ["Search"]
-                },
-                {
-                    id: "9d5a0b4c-8f3a-4e7b-9c1d-3e6a2b1c0d9e",
-                    question: "What is the capital of France and what is the square root of 144? Please provide both answers separated by a comma.",
-                    answer: "Paris, 12",
-                    level: 1,
-                    tools: ["Browser Use", "Search"]
-                },
-                {
-                    id: "a1b2c3d4-e5f6-4g7h-8i9j-0k1l2m3n4o5p",
-                    question: "If a train leaves station A at 9:00 AM traveling at 60 km/h and another train leaves station B at 10:00 AM traveling at 80 km/h, when will they meet if the distance between stations is 420 km?",
-                    answer: "12:00 PM",
-                    level: 1,
-                    tools: ["Browser Use"]
-                }
-            ];
-
-            const startIndex = (page - 1) * pageSize;
-            const paginatedData = mockData.slice(startIndex, startIndex + pageSize);
-
-            setDatasets(paginatedData);
-            setAllItems(mockData);
-            setTotalItems(mockData.length);
-            setTotalPages(Math.ceil(mockData.length / pageSize));
-            setIsLoading(false);
+                if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
+                const json_data = await datasetRes.json();
+                console.log("evaluation dataset json_data", json_data)
+                const data = json_data.data.items;
+                
+                setDatasets(data);
+                setAllItems(allDatasetRes.ok ? await allDatasetRes.json().then(res => res.data.items) : []);
+                setTotalItems(json_data.data.total);
+                setTotalPages(json_data.data.pages);
+            } catch (err: any) {
+                setDatasetError(err || '加载数据集失败');
+            } finally {
+                setIsLoading(false);
+            }
         };
 
         fetchConfigs();
@@ -142,8 +120,8 @@ export default function EvalExpDetailsPage(
     const filteredData = useMemo(() => {
         return datasets.filter(item => {
             const matchesSearch = item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.answer.toLowerCase().includes(searchTerm.toLowerCase());
+                item.input.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.expected_output.toLowerCase().includes(searchTerm.toLowerCase());
 
             return matchesSearch;
         });
@@ -242,6 +220,56 @@ export default function EvalExpDetailsPage(
         }
     };
 
+    const handleFileUpload = async (files: FileList | null) => {
+        console.log('##handleFileUpload', files);
+        if (!files) {
+        alert('文件列表为空！');
+        return;
+        }
+        setUploading(true);
+
+        // 文件校验 (Demo功能，后续调整优化)
+        const validFiles = Array.from(files).filter((file) => {
+            const isValidSize = file.size <= 100 * 1024 * 1024;
+            return isValidSize;
+        });
+
+        if (validFiles.length === 0) {
+            alert("请选择有效的文件（如 PDF 或 Word，且小于 100MB）");
+            setUploading(false);
+            return;
+        }
+
+        // 上传文件
+        const formData = new FormData();
+        formData.append('file', validFiles[0]); // 目前仅上传第一个文件，后续支持多文件
+
+        try {
+        const res = await fetch(
+            `/api/config/evaluation/${evalId}/dataset`,
+            {
+            method: 'POST',
+            body: formData,
+            },
+        );
+        if (!res.ok) {
+            alert('上传失败');
+            return;
+        }
+        const upload_result = await res.json();
+            console.log('上传成功:', upload_result);
+        } catch (error) {
+            console.error('上传失败:', error);
+        } finally {
+        setUploading(false);
+        // 清空文件选择框
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''; // 清空 input 的值
+        }
+        setPage(1);
+        }
+    };
+
     return (
         <div className="flex flex-col h-screen px-6 py-4 space-y-6">
             <div className="flex-none">
@@ -268,7 +296,7 @@ export default function EvalExpDetailsPage(
                                         className="px-0"
                                         onClick={() => router.push(`/evaluation/${evalId}`)}
                                     >
-                                        {evalId}
+                                        {evalConfig?.name}
                                     </Button>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator />
@@ -318,9 +346,35 @@ export default function EvalExpDetailsPage(
                                         <PlayIcon className="mr-2 h-4 w-4" />
                                         {isAllSelected ? `批量运行(所有${totalItems}项)` : `批量运行(${selectedItems.size}项)`}
                                     </Button>
-                                    <Button variant="outline">
+                                    {/* <Button variant="outline">
                                         <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
+                                    </Button> */}
+                                    <Button
+                                        onClick={() =>
+                                        document.getElementById('file-upload')?.click()
+                                        }
+                                        disabled={uploading} // 上传时禁用按钮
+                                    >
+                                        {uploading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            上传中...
+                                        </>
+                                        ) : (
+                                        <>
+                                            <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
+                                        </>
+                                        )}
                                     </Button>
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                        id="file-upload"
+                                        type="file"
+                                        className="hidden"
+                                        ref={fileInputRef}
+                                        onChange={(e) => handleFileUpload(e.target.files)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </CardHeader>
@@ -344,8 +398,8 @@ export default function EvalExpDetailsPage(
                                                     aria-label="Select all"
                                                 />
                                             </TableHead>
-                                            <TableHead className="w-[15%]">样本ID</TableHead>
-                                            <TableHead className="w-[40%]">问题</TableHead>
+                                            <TableHead className="w-[10%]">样本ID</TableHead>
+                                            <TableHead className="w-[45%]">问题</TableHead>
                                             <TableHead className="w-[30%]">答案</TableHead>
                                             <TableHead className="w-[100px] text-center">操作</TableHead>
                                         </TableRow>
@@ -370,9 +424,13 @@ export default function EvalExpDetailsPage(
                                                     </TableCell>
                                                     <TableCell className="font-medium">
                                                         <div className="flex items-center">
-                                                            <span className="truncate max-w-[120px]" title={item.id}>
+                                                            <Button
+                                                                variant="link"
+                                                                className="truncate max-w-[120px] text-blue-600"
+                                                                onClick={() => handleEyeClick(item)}
+                                                            >
                                                                 {item.id.substring(0, 20)}...
-                                                            </span>
+                                                            </Button>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
@@ -393,12 +451,12 @@ export default function EvalExpDetailsPage(
                                                             textOverflow: 'ellipsis'
                                                         }}
                                                     >
-                                                        {item.question}
+                                                        {item.input}
                                                     </TableCell>
 
                                                     <TableCell className="whitespace-normal break-words min-w-[150px] max-w-[250px] py-2">
-                                                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100">
-                                                            {item.answer}
+                                                        <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap">
+                                                            {item.expected_output}
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell className="text-right">
@@ -440,22 +498,22 @@ export default function EvalExpDetailsPage(
                                                                         </div>
                                                                         <div>
                                                                             <h4 className="text-sm font-medium text-muted-foreground">问题</h4>
-                                                                            <p className="mt-1 whitespace-pre-wrap">{selectedSample.question}</p>
+                                                                            <p className="mt-1 whitespace-pre-wrap">{selectedSample.input}</p>
                                                                         </div>
                                                                         <div>
                                                                             <h4 className="text-sm font-medium text-muted-foreground">答案</h4>
                                                                             <Badge variant="secondary" className="mt-1 bg-blue-50 text-blue-700 hover:bg-blue-100 whitespace-pre-wrap">
-                                                                                {selectedSample.answer}
+                                                                                {selectedSample.expected_output}
                                                                             </Badge>
                                                                         </div>
 
                                                                         {/* New fields */}
                                                                         <div>
-                                                                            <h4 className="text-sm font-medium text-muted-foreground">难度等级</h4>
+                                                                            <h4 className="text-sm font-medium text-muted-foreground">步骤</h4>
                                                                             <p className="mt-1">
-                                                                                {selectedSample.level ? (
-                                                                                    <Badge>
-                                                                                        {selectedSample.level}
+                                                                                {selectedSample.eval_metadata?.Steps ? (
+                                                                                    <Badge className='bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap'>
+                                                                                        {selectedSample.eval_metadata.Steps}
                                                                                     </Badge>
                                                                                 ) : "未指定"}
                                                                             </p>
@@ -464,12 +522,10 @@ export default function EvalExpDetailsPage(
                                                                         <div>
                                                                             <h4 className="text-sm font-medium text-muted-foreground">使用工具</h4>
                                                                             <div className="mt-1 flex flex-wrap gap-2">
-                                                                                {selectedSample.tools && selectedSample.tools.length > 0 ? (
-                                                                                    selectedSample.tools.map((tool, index) => (
-                                                                                        <Badge key={index} variant="outline">
-                                                                                            {tool}
-                                                                                        </Badge>
-                                                                                    ))
+                                                                                {selectedSample.eval_metadata?.Tools? (
+                                                                                    <Badge className='bg-yellow-50 text-yellow-700 hover:bg-yellow-100 whitespace-pre-wrap'>
+                                                                                        {selectedSample.eval_metadata?.Tools}
+                                                                                    </Badge>
                                                                                 ) : (
                                                                                     <span className="text-muted-foreground">无</span>
                                                                                 )}

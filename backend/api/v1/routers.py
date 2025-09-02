@@ -14,6 +14,7 @@ def add_config_router(app: FastAPI):
     from api.v1.config_apis.prompt import prompt_router
     from api.v1.config_apis.role.role import role_router
     from api.v1.config_apis.guardrail import guardrail_router
+    from api.v1.config_apis.evaluation import evaluation_router
 
     app.include_router(llm_router, prefix="/v1/config/llms")
     app.include_router(mcp_router, prefix="/v1/config/mcps")
@@ -27,6 +28,7 @@ def add_config_router(app: FastAPI):
     app.include_router(prompt_router, prefix="/v1/config/prompts")
     app.include_router(role_router, prefix="/v1/config/roles")
     app.include_router(guardrail_router, prefix="/v1/config/guardrail")
+    app.include_router(evaluation_router, prefix="/v1/config/evaluation")
 
 
 def add_chat_router(app: FastAPI):

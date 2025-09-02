@@ -2,7 +2,7 @@ import hashlib
 from typing import Any, BinaryIO, Dict, List
 import os
 import uuid
-
+import json
 from db.models.knowledgebase.file import KbFileEntity
 from rag.file.file_utils import ensure_file_type_is_supported
 
@@ -97,3 +97,13 @@ class FileItem:
             file_content="",
             file_content_length=0,
         )
+
+    def get_eval_dataset_from_jsonl_file(self) -> List[dict]:
+        results = []
+        self.file.seek(0)
+        for line in self.file:
+            entry_data = json.loads(line)
+            results.append(entry_data)
+            if "input" not in entry_data:
+                continue  # Skip invalid entries
+        return results

@@ -26,32 +26,33 @@ const EvaluationPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [evaluations, setEvaluations] = useState(Array<EvalExperiment>);
   const [isLoading, setIsLoading] = useState(true);
+  const [evaluationerror, setEvaluationError] = useState(''); 
   const pageSize = 6;
   const router = useRouter();
 
+
   useEffect(() => {
-    const fetchConfigs = async () => {
-      setIsLoading(true);
-      const mockData: EvalExperiment[] = [
-        {
-          id: "eval_exp_1",
-          name: "GAIA",
-          description: "评测GAIA数据集"
-        },
-        {
-          id: "eval_exp_2",
-          name: "自定义1",
-          description: "评测用户自定义上传的数据集"
+      const fetchConfigs = async () => {
+        setIsLoading(true);
+        try {
+          const res = await fetch(
+            `/api/config/evaluation?page=${page}&size=${pageSize}`,
+          );
+          if (!res.ok) throw new Error('获取评估任务列表失败');
+          const json_data = await res.json();
+          console.log("evaluation json_data", json_data)
+          const data = json_data.data.items;
+          setEvaluations(data);
+          setTotalPages(json_data.data.pages);
+        } catch (err: any) {
+          setEvaluationError(err || '加载失败');
+        } finally {
+          setIsLoading(false);
         }
-      ];
-
-      setEvaluations(mockData);
-      setTotalPages(Math.ceil(mockData.length / pageSize));
-      setIsLoading(false);
-    };
-
-    fetchConfigs();
-  }, [page]);
+      };
+  
+      fetchConfigs();
+    }, [page]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;

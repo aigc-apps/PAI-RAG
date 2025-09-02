@@ -21,6 +21,7 @@ class ChangeEventSource(str, Enum):
     CHATBOT = "chatbot"
     PROMPT = "prompt"
     GUARDRAIL = "guardrail"
+    EVALUATION = "evaluation"
 
 
 

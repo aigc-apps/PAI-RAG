@@ -116,6 +116,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
           console.log('kbData', kbData);
           setKbs([...kbData]);
+          
           const botData = await botRes.json();
           setBotConfig(botData.data);
           console.log('chatbotData: ', botData.data);
