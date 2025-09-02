@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from db.models.knowledgebase.metadata import KbMetadataEntity, FileMetadataEntity
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
@@ -182,6 +183,35 @@ async def delete_knowledgebase(
         )
 
     knowledgebase_provider.delete(kb_id)
+
+    # delete related chunks
+    kb_chunks = await session.exec(
+        select(KbChunkEntity).where(KbChunkEntity.kb_id == kb_id)
+    )
+    for chunk in kb_chunks:
+        await session.delete(chunk)
+
+    # delete related files
+    kb_files = await session.exec(
+        select(KbFileEntity).where(KbFileEntity.kb_id == kb_id)
+    )
+    for file in kb_files:
+        await session.delete(file)
+
+    # delete related metadata
+    kb_metadatas = await session.exec(
+        select(KbMetadataEntity).where(KbMetadataEntity.kb_id == kb_id)
+    )
+    for metadata in kb_metadatas:
+        await session.delete(metadata)
+
+
+    file_metadatas = await session.exec(
+        select(FileMetadataEntity).where(FileMetadataEntity.kb_id == kb_id)
+    )
+    for metadata in file_metadatas:
+        await session.delete(metadata)
+
     await session.delete(knowledgebase)
     await session.commit()
 
