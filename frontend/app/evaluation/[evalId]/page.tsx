@@ -16,7 +16,6 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { toast } from 'sonner';
 import { CheckCircle, CircleXIcon} from 'lucide-react';
-import { SampleItem } from "@/app/evaluation/[evalId]/datasets/page"
 
 export interface EvalConfig {
   id: string;
@@ -42,7 +41,7 @@ export default function EvalExpDetailsPage(
     const { evalId } = use(params);
     const router = useRouter();
     const [evaluation, setEvaluationConfig] = useState<EvalConfig>(); // 知识库列表
-    const [datasets, setDatasets] = useState<SampleItem[]>([]);
+    const [datasetLen, setDatasetLen] = useState<number>(0); // 数据集条目数量
 
     useEffect(() => {
         const fetchKbConfigs = async () => {
@@ -59,7 +58,7 @@ export default function EvalExpDetailsPage(
             setEvaluationConfig(kb_data); // 更新状态
             console.log('评估任务详情数据:', kb_data);
 
-            setDatasets(allDatasetRes.ok ? await allDatasetRes.json().then(res => res.data.items) : []);
+            setDatasetLen(allDatasetRes.ok ? await allDatasetRes.json().then(res => res.data.total) : 0);
     
             // if (!metaRes.ok) throw new Error('获取知识库元数据失败');
             // const metadata_json = await metaRes.json();
@@ -184,11 +183,11 @@ export default function EvalExpDetailsPage(
                         <CardTitle>数据集信息</CardTitle>
                     </CardHeader>
                     <CardContent className="flex-grow">
-                        {datasets.length > 0 ? (
+                        {datasetLen > 0 ? (
                             <div className="space-y-3">
                                 <div>
                                     <h3 className="font-semibold mb-1">条目数量</h3>
-                                    <p className="text-muted-foreground">{datasets.length} 条</p>
+                                    <p className="text-muted-foreground">{datasetLen} 条</p>
                                 </div>
                             </div>
                         ) : (
@@ -200,7 +199,7 @@ export default function EvalExpDetailsPage(
                     </CardContent>
                     <CardFooter>
                         <Button variant="outline" className="w-full" onClick={() => router.push(`/evaluation/${evaluation.id}/datasets`)}>
-                            {datasets.length > 0 ? ("查看数据集详情") : ("添加数据") } 
+                            {datasetLen > 0 ? ("查看数据集详情") : ("添加数据") } 
                         </Button>
                     </CardFooter>
                     </Card>

@@ -15,8 +15,10 @@ if os.name != "nt":
 from celery import Celery
 import os
 from rag.knowledgebase_tool import kb_client
+from rag.evaluation_tool import eval_client
 import asyncio
 from loguru import logger
+from typing import List
 
 
 
@@ -53,3 +55,11 @@ def download_model(
         logger.info(f"Downloaded embedding model {model_id} {model_name} successfully.")
     else:
         logger.info(f"Model {model_name} is not a embedding model,skip processing.")
+
+
+@app.task(name="execute_evaluation_task")
+def execute_evaluation_task(eval_id: str, experiment_id: str, exp_run_ids: List[str]):
+    loop = asyncio.get_event_loop()
+    logger.info(f"execute_evaluation_task exp_run_ids {exp_run_ids} eval_id {eval_id}.")
+    loop.run_until_complete(eval_client.create_evaluation_task(eval_id, experiment_id, exp_run_ids))
+    logger.info(f"execute_evaluation_task successfully.")

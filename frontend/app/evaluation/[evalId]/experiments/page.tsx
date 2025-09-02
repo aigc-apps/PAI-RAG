@@ -46,136 +46,82 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { EvalConfig } from '@/app/evaluation/[evalId]/page';
+import { formatBeijingTime } from '@/app/knowledgebases/utils/utils';
 
-interface ExperimentItem {
-    id: string;
-    count: number;
-    settings: {
-        llm: string;
-        mcp: string[];
-        search: boolean;
-    };
-    status: "pending" | "running" | "success" | "failed";
-    avg_score: number;
-    create_time: string;
-    finished_time: string;
+
+type ExperimentItem = {
+  id: string
+  samples_count: number
+  name: string
+  description: string
+  status: string
+  avg_score: number
+  created_at: string
+  updated_at: string
 }
 
 export default function EvalExpDetailsPage(
     { params }: { params: Promise<{ evalId: string }> }
 ) {
     const { evalId } = use(params);
+    const [evalConfig, setEvalConfig] = useState<EvalConfig>();
     const router = useRouter();
     const [experiments, setExperimentData] = useState<ExperimentItem[]>([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
+    const [dataseterror, setDatasetError] = useState(''); 
     const pageSize = 3;
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
 
-    console.log("evalId", evalId);
     useEffect(() => {
-        const fetchConfigs = async () => {
-            setIsLoading(true);
-
-            // 模拟API调用获取评估数据
-            const mockData: ExperimentItem[] = [
-                {
-                    id: "exp-f4c3-4cad-be07",
-                    count: 2,
-                    settings: {
-                        llm: "qwen-max",
-                        mcp: ["amap", "browser-use"],
-                        search: false,
-                    },
-                    status: "running",
-                    avg_score: 0.0,
-                    create_time: "2025-08-28 17:09",
-                    finished_time: ""
-                },
-                {
-                    id: "exp-3d80-4913-a07d",
-                    count: 1,
-                    settings: {
-                        llm: "qwen-max",
-                        mcp: ["browser-use"],
-                        search: true,
-                    },
-                    status: "success",
-                    avg_score: 0.7,
-                    create_time: "2025-08-28 16:21",
-                    finished_time: "2025-08-28 16:40"
-                },
-                {
-                    id: "exp-72e1-453c-a309",
-                    count: 3,
-                    settings: {
-                        llm: "gpt-4-turbo",
-                        mcp: ["calculator", "browser-use", "amap"],
-                        search: true,
-                    },
-                    status: "success",
-                    avg_score: 0.85,
-                    create_time: "2025-08-27 14:30",
-                    finished_time: "2025-08-27 15:15"
-                },
-                {
-                    id: "exp-b816-bfce-3d80",
-                    count: 1,
-                    settings: {
-                        llm: "claude-3-opus",
-                        mcp: ["browser-use"],
-                        search: false,
-                    },
-                    status: "failed",
-                    avg_score: 0.0,
-                    create_time: "2025-08-27 10:15",
-                    finished_time: "2025-08-27 10:20"
-                },
-                {
-                    id: "exp-e1fc-63a2-da7a",
-                    count: 4,
-                    settings: {
-                        llm: "qwen-max",
-                        mcp: ["calculator", "amap"],
-                        search: true,
-                    },
-                    status: "pending",
-                    avg_score: 0.0,
-                    create_time: "2025-08-26 09:45",
-                    finished_time: ""
-                }
-            ];
-
-            // 计算分页 [[7]]
-            const startIndex = (page - 1) * pageSize;
-            const paginatedData = mockData.slice(startIndex, startIndex + pageSize);
-
-            setExperimentData(paginatedData);
-            setTotalPages(Math.ceil(mockData.length / pageSize));
-            setIsLoading(false);
-        };
-
-        fetchConfigs();
-    }, [page]);
+          const fetchConfigs = async () => {
+              setIsLoading(true);
+              try {
+                  const [evalRes, datasetRes] = await Promise.all([
+                      fetch(`/api/config/evaluation/${evalId}`),
+                      fetch(`/api/config/evaluation/${evalId}/experiments?page=${page}&size=${pageSize}`),
+                  ]);
+                  
+                  const eval_data = await evalRes.json();
+                  const evalData = eval_data.data;
+                  console.log('evalData:', evalData);
+                  setEvalConfig(evalData);
+  
+                  if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
+                  const json_data = await datasetRes.json();
+                  console.log("evaluation dataset json_data", json_data)
+                  const data = json_data.data.items;
+                  
+                  setExperimentData(data);
+                  setTotalPages(json_data.data.pages);
+              } catch (err: any) {
+                  setDatasetError(err || '加载数据集失败');
+              } finally {
+                  setIsLoading(false);
+              }
+          };
+          fetchConfigs();
+      }, [page]);
 
     const handlePageChange = (newPage: number) => {
         if (newPage < 1 || newPage > totalPages) return;
         setPage(newPage);
     };
 
-    // 过滤和搜索数据
-    const filteredData = useMemo(() => {
-        return experiments.filter(item => {
-            const matchesSearch = item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.settings.llm.toLowerCase().includes(searchTerm.toLowerCase());
+    // // 过滤和搜索数据
+    // const filteredData = useMemo(() => {
+    //     return experiments.filter(item => {
+    //         const matchesSearch = item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    //             item.settings.llm.toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+    //         const matchesStatus = statusFilter === "all" || item.status === statusFilter;
 
-            return matchesSearch && matchesStatus;
-        });
-    }, [experiments, searchTerm, statusFilter]);
+    //         return matchesSearch && matchesStatus;
+    //     });
+    // }, [experiments, searchTerm, statusFilter]);
 
     // 状态标签样式
     const getStatusBadge = (status: string) => {
@@ -213,26 +159,26 @@ export default function EvalExpDetailsPage(
     };
 
     // 格式化设置信息
-    const formatSettings = (settings: ExperimentItem["settings"]) => (
-        <div className="space-y-1">
-            <div className="flex">
-                <span className="font-medium w-16">LLM:</span>
-                <span className="text-muted-foreground">{settings.llm}</span>
-            </div>
-            <div className="flex">
-                <span className="font-medium w-16">MCP:</span>
-                <span className="text-muted-foreground">
-                    {settings.mcp.join(", ")}
-                </span>
-            </div>
-            <div className="flex">
-                <span className="font-medium w-16">搜索:</span>
-                <span className="text-muted-foreground">
-                    {settings.search ? "启用" : "禁用"}
-                </span>
-            </div>
-        </div>
-    );
+    // const formatSettings = (settings: ExperimentItem["settings"]) => (
+    //     <div className="space-y-1">
+    //         <div className="flex">
+    //             <span className="font-medium w-16">LLM:</span>
+    //             <span className="text-muted-foreground">{settings.llm}</span>
+    //         </div>
+    //         <div className="flex">
+    //             <span className="font-medium w-16">MCP:</span>
+    //             <span className="text-muted-foreground">
+    //                 {settings.mcp.join(", ")}
+    //             </span>
+    //         </div>
+    //         <div className="flex">
+    //             <span className="font-medium w-16">搜索:</span>
+    //             <span className="text-muted-foreground">
+    //                 {settings.search ? "启用" : "禁用"}
+    //             </span>
+    //         </div>
+    //     </div>
+    // );
 
     // 复制实验ID
     const copyExperimentId = (id: string) => {
@@ -276,12 +222,12 @@ export default function EvalExpDetailsPage(
                                         className="px-0"
                                         onClick={() => router.push(`/evaluation/${evalId}`)}
                                     >
-                                        {evalId}
+                                        {evalConfig?.name}
                                     </Button>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>datasets</BreadcrumbPage>
+                                    <BreadcrumbPage>experiments</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
@@ -358,8 +304,10 @@ export default function EvalExpDetailsPage(
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead className="w-[180px]">实验ID</TableHead>
+                                            <TableHead className="w-[180px]">实验名称</TableHead>
+                                            <TableHead className="w-[180px]">实验描述</TableHead>
                                             <TableHead className="w-[100px]">样本数</TableHead>
-                                            <TableHead className="w-[200px]">模型设置</TableHead>
+                                            {/* <TableHead className="w-[200px]">模型设置</TableHead> */}
                                             <TableHead className="w-[120px]">状态</TableHead>
                                             <TableHead className="w-[100px]">平均得分</TableHead>
                                             <TableHead className="w-[160px]">创建时间</TableHead>
@@ -397,12 +345,18 @@ export default function EvalExpDetailsPage(
 
                                                     <TableCell>
                                                         <Badge variant="outline" className="font-mono">
-                                                            {item.count}
+                                                            {item.name}
                                                         </Badge>
                                                     </TableCell>
 
-                                                    <TableCell className="whitespace-normal break-words">
-                                                        {formatSettings(item.settings)}
+                                                    <TableCell>
+                                                        {item.description.substring(0, 20)}...
+                                                    </TableCell>
+
+                                                    <TableCell>
+                                                        <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-100">
+                                                            {item.samples_count}
+                                                        </Badge>
                                                     </TableCell>
 
                                                     <TableCell>
@@ -416,11 +370,11 @@ export default function EvalExpDetailsPage(
                                                     </TableCell>
 
                                                     <TableCell>
-                                                        {item.create_time}
+                                                        {formatBeijingTime(item.created_at)}
                                                     </TableCell>
 
                                                     <TableCell>
-                                                        {item.finished_time || "-"}
+                                                        {['success', 'failed'].includes(item.status) ? formatBeijingTime(item.updated_at) : "-"}
                                                     </TableCell>
 
                                                     <TableCell className="text-right">

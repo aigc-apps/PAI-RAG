@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.evaluation.evaluation import EvalEntity, EvalCreate, EvalChatBotConfig
 from db.models.evaluation.dataset import EvalDatasetEntity
+from db.models.evaluation.experiment import ExperimentEntity, ExperimentRunResultEntity, ExperimentCreate
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
@@ -17,6 +18,7 @@ from rag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
 from config.providers.evaluation_provider import evaluation_provider
 from db.models.chatbot import ChatBotEntity
+
 
 evaluation_router = APIRouter()
 
@@ -264,3 +266,88 @@ async def list_dataset(
             size=pagination.size,
         ),
         message="获取评估数据集列表成功")
+
+
+
+@evaluation_router.post("/{eval_id}/experiments")
+async def create_experiment(
+    eval_id: str,
+    experiment_create: ExperimentCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Create experiment for {eval_id}.")
+    if len(experiment_create.dataset_ids) == 0:
+        return error_response(code=400, message="没有选择任何数据集。")
+
+    try:
+        import app.worker as background_worker
+        dataset_results = await session.exec(
+            select(EvalDatasetEntity)
+            .where(EvalDatasetEntity.id.in_(experiment_create.dataset_ids))
+            .where(EvalDatasetEntity.eval_id == eval_id)
+        )
+        dataset_entities = dataset_results.all()
+        if len(dataset_entities) == 0:
+            return error_response(code=400, message=f"没有找到评估任务 {eval_id} 的数据集。")
+        assert len(dataset_entities) == len(experiment_create.dataset_ids), "Some dataset IDs not found in the evaluation."
+        experiment_entity = ExperimentEntity(
+            eval_id=eval_id,
+            name=experiment_create.name,
+            samples_count=len(dataset_entities),
+            description=experiment_create.description or "Experiment created via API",
+            status="pending"
+        )
+        session.add(experiment_entity)
+        await session.commit()
+        logger.info(f"创建实验 {experiment_entity} 成功.")
+        exp_run_ids = []
+        for dataset_id in experiment_create.dataset_ids:
+            exp_run_entity = ExperimentRunResultEntity(
+                experiment_id=experiment_entity.id,
+                dataset_id=dataset_id,
+                status="pending"
+            )
+            session.add(exp_run_entity)
+            await session.commit()
+            exp_run_ids.append(exp_run_entity.id)
+        background_worker.execute_evaluation_task.delay(eval_id, experiment_entity.id, exp_run_ids)
+
+        return success_response(data=experiment_entity, message="创建实验成功")
+    except Exception as e:
+        logger.error(f"Failed to create experiment: {traceback.format_exc()}")
+        await session.rollback()
+        return error_response(message=f"Failed to create experiment: {e}")
+
+
+@evaluation_router.get("/{eval_id}/experiments")
+async def get_experiments(
+    eval_id: str,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Get experiments for {eval_id}.")
+    total_results = await session.exec(
+        select(func.count())
+        .select_from(select(ExperimentEntity).where(ExperimentEntity.eval_id == eval_id))
+    )
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
+    experiment_results = await session.exec(
+        select(ExperimentEntity)
+        .where(ExperimentEntity.eval_id == eval_id)
+        .order_by(ExperimentEntity.created_at.desc())
+        .offset(pagination.offset)
+        .limit(size)
+    )
+    experiment_entities = experiment_results.all()
+
+    return success_response(
+        data=PagedResult(
+            items=experiment_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取评估实验列表成功")

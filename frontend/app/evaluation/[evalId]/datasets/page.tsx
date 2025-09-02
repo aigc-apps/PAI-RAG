@@ -36,8 +36,12 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogTrigger
+    DialogTrigger,
+    DialogDescription,
+    DialogFooter
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from '@/components/ui/badge';
@@ -73,9 +77,15 @@ export default function EvalExpDetailsPage(
     const [totalItems, setTotalItems] = useState(0);
     const [selectedSample, setSelectedSample] = useState<SampleItem | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [isRunSingleDetailOpen, setIsRunSingleDetailOpen] = useState(false);
+    const [isRunBatchDetailOpen, setIsRunBatchDetailOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [singleRuning, setSingleRuning] = useState(false);
+    const [batchRuning, setBatchRuning] = useState(false);
     const [dataseterror, setDatasetError] = useState(''); 
     const [evalConfig, setEvalConfig] = useState<EvalConfig>();
+    const [experimentName, setExperimentName] = useState("");
+    const [experimentDescription, setExperimentDescription] = useState("");
 
     useEffect(() => {
         const fetchConfigs = async () => {
@@ -146,12 +156,6 @@ export default function EvalExpDetailsPage(
         // 这里可以添加一个toast通知
     };
 
-    // 运行单条数据
-    const runSingleSample = (id: string) => {
-        console.log(`正在运行样本: ${id}`);
-        // 这里可以添加实际运行逻辑
-    };
-
     // 检查项目是否被选中（考虑两种选择模式）
     const isItemSelected = (id: string) => {
         return selectedItems.has(id);
@@ -166,6 +170,38 @@ export default function EvalExpDetailsPage(
             newSelected.add(id);
         }
         setSelectedItems(newSelected);
+    };
+
+    // 运行单条数据
+    const runSingleSample = async (id: string) => {
+        console.log(`正在运行样本: ${id}`);
+        console.log(`实验名称: ${experimentName}, 描述: ${experimentDescription}`);
+        setSingleRuning(true);
+        const data = {
+            name: experimentName,
+            description: experimentDescription,
+            dataset_ids: [id],
+        };
+        try {
+            const res = await fetch(`/api/config/evaluation/${evalId}/experiments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) {
+                alert('实验创建失败');
+                return;
+            }
+            const upload_result = await res.json();
+            console.log('实验创建成功:', upload_result);
+        } catch (error) {
+            console.error('实验创建失败:', error);
+        } finally {
+            setSingleRuning(false);
+            setIsRunSingleDetailOpen(false);
+            setExperimentName("");
+            setExperimentDescription("");
+        }
     };
 
     // 批量运行处理
@@ -194,9 +230,32 @@ export default function EvalExpDetailsPage(
     const runSelectedSamples = async (sampleIds: string[]) => {
         // 这里添加实际逻辑
         console.log("正在运行选中样本:", sampleIds);
-
-        // 示例：调用API
-        // await api.runSamplesByIds(sampleIds);
+        setBatchRuning(true);
+        const data = {
+            name: experimentName,
+            description: experimentDescription,
+            dataset_ids: sampleIds,
+        };
+        try {
+            const res = await fetch(`/api/config/evaluation/${evalId}/experiments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) {
+                alert('实验创建失败');
+                return;
+            }
+            const upload_result = await res.json();
+            console.log('实验创建成功:', upload_result);
+        } catch (error) {
+            console.error('实验创建失败:', error);
+        } finally {
+            setBatchRuning(false);
+            setIsRunBatchDetailOpen(false);
+            setExperimentName("");
+            setExperimentDescription("");
+        }
     };
 
     const handleEyeClick = (sample: SampleItem) => {
@@ -245,18 +304,18 @@ export default function EvalExpDetailsPage(
         formData.append('file', validFiles[0]); // 目前仅上传第一个文件，后续支持多文件
 
         try {
-        const res = await fetch(
-            `/api/config/evaluation/${evalId}/dataset`,
-            {
-            method: 'POST',
-            body: formData,
-            },
-        );
-        if (!res.ok) {
-            alert('上传失败');
-            return;
-        }
-        const upload_result = await res.json();
+            const res = await fetch(
+                `/api/config/evaluation/${evalId}/dataset`,
+                {
+                method: 'POST',
+                body: formData,
+                },
+            );
+            if (!res.ok) {
+                alert('上传失败');
+                return;
+            }
+            const upload_result = await res.json();
             console.log('上传成功:', upload_result);
         } catch (error) {
             console.error('上传失败:', error);
@@ -339,16 +398,85 @@ export default function EvalExpDetailsPage(
                                 </div>
 
                                 <div className="flex gap-2">
-                                    <Button
+                                    {/* <Button
                                         disabled={selectedItems.size === 0 && !isAllSelected}
                                         onClick={handleBatchRun}
                                     >
                                         <PlayIcon className="mr-2 h-4 w-4" />
                                         {isAllSelected ? `批量运行(所有${totalItems}项)` : `批量运行(${selectedItems.size}项)`}
-                                    </Button>
-                                    {/* <Button variant="outline">
-                                        <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
                                     </Button> */}
+                                    <Dialog open={isRunBatchDetailOpen} onOpenChange={setIsRunBatchDetailOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                disabled={selectedItems.size === 0 && !isAllSelected}
+                                            >
+                                                <PlayIcon className="mr-2 h-4 w-4" />
+                                                {isAllSelected ? `批量运行(所有${totalItems}项)` : `批量运行(${selectedItems.size}项)`}
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-[425px]">
+                                            <DialogHeader>
+                                            <DialogTitle>创建新实验</DialogTitle>
+                                            <DialogDescription>
+                                                请输入此次实验名称和描述，然后运行试验。
+                                            </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="grid gap-4 py-4">
+                                            <div className="grid grid-cols-4 items-center gap-4">
+                                                <Label htmlFor="name" className="text-right">
+                                                名称
+                                                </Label>
+                                                <Input
+                                                id="name"
+                                                value={experimentName}
+                                                onChange={(e) => setExperimentName(e.target.value)}
+                                                className="col-span-3"
+                                                placeholder="请输入实验名称"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-4 items-center gap-4">
+                                                <Label htmlFor="description" className="text-right">
+                                                描述
+                                                </Label>
+                                                <Textarea
+                                                id="description"
+                                                value={experimentDescription}
+                                                onChange={(e) => setExperimentDescription(e.target.value)}
+                                                className="col-span-3"
+                                                placeholder="请输入实验描述"
+                                                rows={3}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-4 items-center gap-4">
+                                                <Label htmlFor="description" className="text-right">
+                                                数据样本ID
+                                                </Label>
+                                                <div className="col-span-2">
+                                                    {[...selectedItems].map((select_id: string) => (
+                                                        <Badge key={select_id} variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap mr-1 mb-1">
+                                                            {select_id}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            </div>
+                                            <DialogFooter>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => setIsRunBatchDetailOpen(false)}
+                                                disabled={batchRuning}
+                                            >
+                                                取消
+                                            </Button>
+                                            <Button 
+                                                onClick={handleBatchRun}
+                                                disabled={!experimentName.trim()}
+                                            >
+                                                运行 {batchRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                            </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
                                     <Button
                                         onClick={() =>
                                         document.getElementById('file-upload')?.click()
@@ -535,15 +663,78 @@ export default function EvalExpDetailsPage(
                                                                 )}
                                                             </DialogContent>
                                                         </Dialog>
-                                                        <Button
-                                                            variant="link"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            onClick={() => runSingleSample(item.id)}
-                                                            title="运行单条"
-                                                        >
-                                                            <PlayIcon className="mr-2 h-4 w-4" />
-                                                        </Button>
+                                                        <Dialog open={isRunSingleDetailOpen} onOpenChange={setIsRunSingleDetailOpen}>
+                                                            <DialogTrigger asChild>
+                                                                <Button
+                                                                    variant="link"
+                                                                    size="icon"
+                                                                    className="text-black-500 hover:text-black-700 px-1 py-1"
+                                                                    title="运行单条"
+                                                                >
+                                                                    <PlayIcon className="mr-2 h-4 w-4" />
+                                                                </Button>
+                                                            </DialogTrigger>
+                                                            <DialogContent className="sm:max-w-[425px]">
+                                                                <DialogHeader>
+                                                                <DialogTitle>创建新实验</DialogTitle>
+                                                                <DialogDescription>
+                                                                    请输入此次实验名称和描述，然后运行试验。
+                                                                </DialogDescription>
+                                                                </DialogHeader>
+                                                                <div className="grid gap-4 py-4">
+                                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                                    <Label htmlFor="name" className="text-right">
+                                                                    名称
+                                                                    </Label>
+                                                                    <Input
+                                                                    id="name"
+                                                                    value={experimentName}
+                                                                    onChange={(e) => setExperimentName(e.target.value)}
+                                                                    className="col-span-3"
+                                                                    placeholder="请输入实验名称"
+                                                                    />
+                                                                </div>
+                                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                                    <Label htmlFor="description" className="text-right">
+                                                                    描述
+                                                                    </Label>
+                                                                    <Textarea
+                                                                    id="description"
+                                                                    value={experimentDescription}
+                                                                    onChange={(e) => setExperimentDescription(e.target.value)}
+                                                                    className="col-span-3"
+                                                                    placeholder="请输入实验描述"
+                                                                    rows={3}
+                                                                    />
+                                                                </div>
+                                                                <div className="grid grid-cols-4 items-center gap-4">
+                                                                    <Label htmlFor="description" className="text-right">
+                                                                    数据样本ID
+                                                                    </Label>
+                                                                    <div className="col-span-2">
+                                                                        <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap">
+                                                                        {item.id}
+                                                                        </Badge>
+                                                                    </div>
+                                                                </div>
+                                                                </div>
+                                                                <DialogFooter>
+                                                                <Button 
+                                                                    variant="outline" 
+                                                                    onClick={() => setIsRunSingleDetailOpen(false)}
+                                                                    disabled={singleRuning}
+                                                                >
+                                                                    取消
+                                                                </Button>
+                                                                <Button 
+                                                                    onClick={() => runSingleSample(item.id)}
+                                                                    disabled={!experimentName.trim()}
+                                                                >
+                                                                    运行 {singleRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                                                </Button>
+                                                                </DialogFooter>
+                                                            </DialogContent>
+                                                        </Dialog>
                                                         <Button
                                                             variant="link"
                                                             size="icon"
@@ -552,26 +743,6 @@ export default function EvalExpDetailsPage(
                                                         >
                                                             <Trash2Icon className="mr-2 h-4 w-4" />
                                                         </Button>
-                                                        {/* <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" className="h-8 w-8 p-0">
-                                                            <span className="sr-only">打开菜单</span>
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => runSingleSample(item.id)}>
-                                                            <PlayIcon className="mr-2 h-4 w-4" />
-                                                            运行单条
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            className="text-red-600 focus:bg-red-100"
-                                                            onClick={() => handleAction('delete', item.id)}
-                                                        >
-                                                            <Trash2Icon /> 删除
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu> */}
                                                     </TableCell>
                                                 </TableRow>
                                             ))
