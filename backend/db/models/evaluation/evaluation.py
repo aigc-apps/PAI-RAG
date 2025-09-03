@@ -4,7 +4,7 @@ from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
 from typing import List, Optional
 
-class EvalChatBotConfig(SQLModel):
+class EvalRunConfig(SQLModel):
     model_id: str = Field(default="")
     mcp_ids: List[str] = Field(default=[])
     kb_ids: List[str] = Field(default=[])
@@ -18,9 +18,10 @@ class EvalChatBotConfig(SQLModel):
 class EvalCreate(SQLModel):
     name: str = Field(default=None)
     description: str = Field(default=None)
-    chatbot_id: str = Field(default="")
-    chatbot_config: dict = Field(
-        default=lambda: EvalChatBotConfig(), sa_column=Column("chatbot_config", JSON)
+    run_type: str = Field(default="") # "chatbot" or "custom"
+    chatbot_id: str = Field(default="") # if run_type == "chatbot"
+    default_run_config: dict = Field(
+        default=lambda: EvalRunConfig(), sa_column=Column("default_run_config", JSON)
     )
 
 
@@ -31,11 +32,10 @@ class EvalEntity(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     name: str = Field(default=None, unique=True)
     description: str = Field(default=None)
-
+    run_type: str = Field(default="") # "chatbot" or "custom"
     chatbot_id: str = Field(default=None)
-
-    chatbot_config: dict = Field(
-        default=lambda: EvalChatBotConfig(), sa_column=Column("chatbot_config", JSON)
+    default_run_config: dict = Field(
+        default=lambda: EvalRunConfig(), sa_column=Column("default_run_config", JSON)
     )
 
     created_at: datetime = Field(

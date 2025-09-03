@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
-from db.models.evaluation.evaluation import EvalEntity, EvalCreate, EvalChatBotConfig
+from db.models.evaluation.evaluation import EvalEntity, EvalCreate, EvalRunConfig
 from db.models.evaluation.dataset import EvalDatasetEntity
 from db.models.evaluation.experiment import ExperimentEntity, ExperimentRunResultEntity, ExperimentCreate
 from db.db_context import get_session
@@ -27,13 +27,12 @@ async def create_evaluation(
     eval_create: EvalCreate, session: AsyncSession = Depends(get_session)
 ):
     try:
-        eval_create.chatbot_config = (eval_create.chatbot_config or EvalChatBotConfig()).model_dump()
-        if eval_create.chatbot_id and eval_create.chatbot_id!="":
+        if eval_create.run_type and eval_create.run_type == "chatbot":
             statement = select(ChatBotEntity).where(
                 ChatBotEntity.app_id == eval_create.chatbot_id
             )
             chatbot = (await session.exec(statement)).first()
-            eval_create.chatbot_config = {
+            eval_create.default_run_config = {
                 "model_id": chatbot.model_id,
                 "mcp_ids": chatbot.mcp_ids,
                 "kb_ids": chatbot.kb_ids,
@@ -44,6 +43,8 @@ async def create_evaluation(
                 "enable_output_guardrail": chatbot.enable_output_guardrail,
                 "guardrail_hint": chatbot.guardrail_hint,
             }
+        else:
+            eval_create.default_run_config = eval_create.default_run_config or EvalRunConfig().model_dump()
         evaluation = EvalEntity.model_validate(eval_create)
         evaluation_provider.add(evaluation)
         session.add(evaluation)
@@ -138,21 +139,15 @@ async def update_evaluation(
     try:
         evaluation.name = new_eval.name or evaluation.name
         evaluation.description = new_eval.description or evaluation.description
+        evaluation.run_type = new_eval.run_type or evaluation.run_type
 
-
-        evaluation.chatbot_id = (
-            new_eval.chatbot_id or evaluation.chatbot_id
-        )
-
-        if new_eval.chatbot_config:
-            evaluation.chatbot_config = new_eval.chatbot_config
-
-        if evaluation.chatbot_id and evaluation.chatbot_id!="":
+        if evaluation.run_type == "chatbot":
+            evaluation.chatbot_id = new_eval.chatbot_id
             statement = select(ChatBotEntity).where(
-            ChatBotEntity.app_id == evaluation.chatbot_id
-        )
+                ChatBotEntity.app_id == evaluation.chatbot_id
+            )
             chatbot = (await session.exec(statement)).first()
-            evaluation.chatbot_config = {
+            evaluation.default_run_config = {
                 "model_id": chatbot.model_id,
                 "mcp_ids": chatbot.mcp_ids,
                 "kb_ids": chatbot.kb_ids,
@@ -163,6 +158,9 @@ async def update_evaluation(
                 "enable_output_guardrail": chatbot.enable_output_guardrail,
                 "guardrail_hint": chatbot.guardrail_hint,
             }
+        else:
+            evaluation.chatbot_id = ""
+            evaluation.default_run_config = new_eval.default_run_config
 
         evaluation_provider.update(evaluation)
         session.add(evaluation)
@@ -294,6 +292,7 @@ async def create_experiment(
             eval_id=eval_id,
             name=experiment_create.name,
             samples_count=len(dataset_entities),
+            run_config=experiment_create.run_config or EvalRunConfig().model_dump(),
             description=experiment_create.description or "Experiment created via API",
             status="pending"
         )
@@ -336,7 +335,7 @@ async def get_experiments(
     experiment_results = await session.exec(
         select(ExperimentEntity)
         .where(ExperimentEntity.eval_id == eval_id)
-        .order_by(ExperimentEntity.created_at.desc())
+        .order_by(ExperimentEntity.created_at.asc())
         .offset(pagination.offset)
         .limit(size)
     )
@@ -351,3 +350,88 @@ async def get_experiments(
             size=pagination.size,
         ),
         message="获取评估实验列表成功")
+
+@evaluation_router.get("/{eval_id}/experiments/{exp_id}")
+async def get_experiment(
+    eval_id: str,
+    exp_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Get experiment for eval_id {eval_id} and exp_id {exp_id}.")
+    experiment_results = await session.exec(
+        select(ExperimentEntity)
+        .where(ExperimentEntity.eval_id == eval_id)
+        .where(ExperimentEntity.id == exp_id)
+    )
+    experiment_entity = experiment_results.all()[0]
+
+    return success_response(
+        data=experiment_entity,
+        message="获取评估实验详情成功")
+
+@evaluation_router.get("/{eval_id}/experiments/{exp_id}/details")
+async def get_experiment_details(
+    eval_id: str,
+    exp_id: str,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Get experiment details for eval_id {eval_id}, exp_id {exp_id}.")
+    total_results = await session.exec(
+        select(func.count())
+        .select_from(select(ExperimentRunResultEntity).where(ExperimentRunResultEntity.experiment_id == exp_id))
+    )
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
+    experiment_results = await session.exec(
+        select(
+            ExperimentRunResultEntity,
+            EvalDatasetEntity.input,
+            EvalDatasetEntity.expected_output,
+            EvalDatasetEntity.eval_metadata.label("dataset_metadata"),
+        )
+        .join(EvalDatasetEntity, ExperimentRunResultEntity.dataset_id == EvalDatasetEntity.id)
+        .where(ExperimentRunResultEntity.experiment_id == exp_id)
+        .order_by(ExperimentRunResultEntity.created_at.desc())
+        .offset(pagination.offset)
+        .limit(size)
+    )
+    transformed_results = []
+    for row in experiment_results.all():
+        result_entity = row[0]
+        result_dict = result_entity.model_dump()
+        result_dict["input"] = row[1]
+        result_dict["expected_output"] = row[2]
+        result_dict["dataset_metadata"] = row[3]
+        transformed_results.append(result_dict)
+
+    return success_response(
+        data=PagedResult(
+            items=transformed_results,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取评估实验执行详情信息成功")
+
+@evaluation_router.delete("/{eval_id}/experiments/{exp_id}")
+async def delete_experiment(
+    eval_id: str,
+    exp_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Delete experiment for eval_id {eval_id} and exp_id {exp_id}.")
+    experiment = await session.get(ExperimentEntity, exp_id)
+    if not experiment:
+        return JSONResponse(
+            content=error_response(code=404, message=f"删除实验失败: 实验'{exp_id}'不存在。"),
+            status_code=404,
+        )
+
+    await session.delete(experiment)
+    await session.commit()
+
+    logger.info(f"Experiment {exp_id} has been deleted.")
+    return success_response(message=f"实验'{exp_id}'删除成功。")

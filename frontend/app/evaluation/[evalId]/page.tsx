@@ -21,8 +21,9 @@ export interface EvalConfig {
   id: string;
   name: string;
   description: string;
+  run_type: string;
   chatbot_id: string;
-  chatbot_config: {
+  default_run_config: {
     model_id: string;
     mcp_ids: string[];
     kb_ids: string[];
@@ -42,13 +43,15 @@ export default function EvalExpDetailsPage(
     const router = useRouter();
     const [evaluation, setEvaluationConfig] = useState<EvalConfig>(); // 知识库列表
     const [datasetLen, setDatasetLen] = useState<number>(0); // 数据集条目数量
+    const [experimentLen, setExperimentLen] = useState<number>(0); // 实验条目数量
 
     useEffect(() => {
         const fetchKbConfigs = async () => {
           try {
-            const [evalRes, allDatasetRes] = await Promise.all([
+            const [evalRes, allDatasetRes, experimentRes] = await Promise.all([
               fetch(`/api/config/evaluation/${evalId}`),
               fetch(`/api/config/evaluation/${evalId}/dataset`),
+              fetch(`/api/config/evaluation/${evalId}/experiments`),
             ]);
     
             if (!evalRes.ok) throw new Error('获取评估任务配置失败');
@@ -59,18 +62,8 @@ export default function EvalExpDetailsPage(
             console.log('评估任务详情数据:', kb_data);
 
             setDatasetLen(allDatasetRes.ok ? await allDatasetRes.json().then(res => res.data.total) : 0);
-    
-            // if (!metaRes.ok) throw new Error('获取知识库元数据失败');
-            // const metadata_json = await metaRes.json();
-            // const metadata_data = metadata_json.data as MetadataConfig[];
-            // const valueTypes = Object.fromEntries(
-            //   metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
-            // ) as { [key: string]: string };
-    
-            // console.log('知识库元数据: ', metadata_data, valueTypes);
-    
-            // setMetadataValueTypes({ ...valueTypes, '': 'string' });
-            // setMetadataConfigs(metadata_data);
+            setExperimentLen(experimentRes.ok ? await experimentRes.json().then(res => res.data.total) : 0);
+
           } catch (err: any) {
             toast.error(err.message);
           }
@@ -129,38 +122,64 @@ export default function EvalExpDetailsPage(
                     </CardHeader>
                     <CardContent className="flex-grow">
                         {
-                            (evaluation.chatbot_id || evaluation.chatbot_config.model_id) ? (
+                            (evaluation?.chatbot_id || evaluation?.default_run_config?.model_id) ? (
                                 <div className="space-y-3">
-                                    {evaluation.chatbot_id && (
-                                        <div>
-                                            <h3 className="font-semibold mb-1">ChatBot ID</h3>
-                                            <p className="text-muted-foreground">{evaluation.chatbot_id}</p>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <h3 className="font-semibold mb-1">模型</h3>
-                                        <p className="text-muted-foreground">{evaluation.chatbot_config.model_id}</p>
+                                    <div className="flex items-center">
+                                        <h3 className="font-semibold">任务类型</h3>
+                                        {evaluation.run_type === "chatbot" ? (
+                                            <Badge className="ml-2">{evaluation?.chatbot_id}</Badge>
+                                        ) : (
+                                            <Badge className="ml-2">自定义评估</Badge>
+                                        )}
                                     </div>
-                                    <div>
+                                    <div className="flex items-center">
+                                        <h3 className="font-semibold mb-1">基模型</h3>
+                                        <Badge variant="outline" className="ml-2">{evaluation.default_run_config.model_id}</Badge>
+                                    </div>
+                                    <div className="flex items-center">
+                                        <h3 className="font-semibold">联网搜索</h3>
+                                        {evaluation.default_run_config.enable_search ? (
+                                            <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                                        ) : (
+                                            <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                                        )}
+                                    </div>
+                                    <div className="flex items-center">
+                                        <h3 className="font-semibold">Agentic模式</h3>
+                                        {evaluation.default_run_config.enable_agent ? (
+                                            <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                                        ) : (
+                                            <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                                        )}
+                                    </div>
+                                    <div className="flex items-center">
                                         <h3 className="font-semibold mb-1">MCP Server</h3>
-                                        <p className="text-muted-foreground">{evaluation.chatbot_config.mcp_ids}</p>
-                                    </div>
-                                    <div className="flex items-center">
-                                        <h3 className="font-semibold">Search</h3>
-                                        {evaluation.chatbot_config.enable_search ? (
-                                            <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                                        {Array.isArray(evaluation.default_run_config.mcp_ids) && evaluation.default_run_config.mcp_ids.length === 0 ? (
+                                            <p className="text-muted-foreground pl-2">尚未配置MCP</p>
                                         ) : (
-                                            <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                                            Array.isArray(evaluation.default_run_config.mcp_ids) && evaluation.default_run_config.mcp_ids.map((mcp, idx) => (
+                                                <Badge key={mcp || idx}>{mcp}</Badge>
+                                            ))
                                         )}
                                     </div>
                                     <div className="flex items-center">
-                                        <h3 className="font-semibold">Agentic</h3>
-                                        {evaluation.chatbot_config.enable_agent ? (
-                                            <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                                        <h3 className="font-semibold mb-1">知识库</h3>
+                                        {Array.isArray(evaluation.default_run_config.kb_ids) && evaluation.default_run_config.kb_ids.length === 0 ? (
+                                            <p className="text-muted-foreground pl-2">尚未配置知识库</p>
                                         ) : (
-                                            <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                                            Array.isArray(evaluation.default_run_config.kb_ids) && evaluation.default_run_config.kb_ids.map((kb, idx) => (
+                                                <Badge key={kb || idx}>{kb}</Badge>
+                                            ))
                                         )}
                                     </div>
+                                    <div className="flex items-center">
+                                        <h3 className="font-semibold">安全护栏</h3>
+                                        <div className="pl-4">
+                                            {evaluation.default_run_config.enable_input_guardrail ? (<Badge>输入护栏已启用</Badge>) : (<Badge variant="outline">输入护栏未启用</Badge>)}
+                                            {evaluation.default_run_config.enable_output_guardrail ? (<Badge>输出护栏已启用</Badge>) : (<Badge variant="outline">输出护栏未启用</Badge>)}
+                                        </div>
+                                    </div>
+
                                 </div>
                             ): (
                                 <div>
@@ -172,7 +191,7 @@ export default function EvalExpDetailsPage(
                     </CardContent>
                     <CardFooter>
                         <Button variant="outline" className="w-full" onClick={() => router.push(`/evaluation/${evaluation.id}/settings`)}>
-                            {(evaluation.chatbot_id || evaluation.chatbot_config.model_id) ? ("查看/修改任务设置"):("进行任务设置")}
+                            {(evaluation.chatbot_id || evaluation.default_run_config.model_id) ? ("查看/修改任务设置"):("进行任务设置")}
                         </Button>
                     </CardFooter>
                     </Card>
@@ -185,9 +204,9 @@ export default function EvalExpDetailsPage(
                     <CardContent className="flex-grow">
                         {datasetLen > 0 ? (
                             <div className="space-y-3">
-                                <div>
-                                    <h3 className="font-semibold mb-1">条目数量</h3>
-                                    <p className="text-muted-foreground">{datasetLen} 条</p>
+                                <div className="text-center p-3 bg-muted rounded-lg">
+                                    <div className="text-2xl font-bold">{datasetLen}</div>
+                                    <div className="text-sm text-muted-foreground">数据集条数</div>
                                 </div>
                             </div>
                         ) : (
@@ -213,7 +232,7 @@ export default function EvalExpDetailsPage(
                         <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="text-center p-3 bg-muted rounded-lg">
-                            {/* <div className="text-2xl font-bold">{totalExperiments}</div> */}
+                            <div className="text-2xl font-bold">{experimentLen}</div>
                             <div className="text-sm text-muted-foreground">总实验数</div>
                             </div>
                             <div className="text-center p-3 bg-muted rounded-lg">

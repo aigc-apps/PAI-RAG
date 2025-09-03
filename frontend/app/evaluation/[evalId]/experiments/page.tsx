@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { useState, useEffect, use, useMemo } from "react";
+import { useState, useEffect, use, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
     Breadcrumb,
@@ -30,6 +30,7 @@ import {
     XCircle,
     Clock,
     Trash2Icon,
+    Play,
 } from "lucide-react";
 import {
     Select,
@@ -48,27 +49,64 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EvalConfig } from '@/app/evaluation/[evalId]/page';
 import { formatBeijingTime } from '@/app/knowledgebases/utils/utils';
+import { toast } from 'sonner';
 
-
-type ExperimentItem = {
-  id: string
-  samples_count: number
-  name: string
-  description: string
-  status: string
-  avg_score: number
-  created_at: string
-  updated_at: string
+export interface ExperimentItem {
+  id: string;
+  samples_count: number;
+  name: string;
+  description: string;
+  status: string;
+  run_config: {
+    model_id: string;
+    mcp_ids: string[];
+    kb_ids: string[];
+    enable_search: boolean;
+    enable_vision: boolean;
+    enable_agent: boolean;
+    enable_input_guardrail?: boolean;
+    enable_output_guardrail?: boolean;
+    guardrail_hint?: string;
+  };
+  avg_score: number;
+  created_at: string;
+  updated_at: string;
 }
+
+// 状态标签样式
+export const getStatusBadge = (status: string) => {
+    switch (status) {
+        case "running":
+            return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+                <RefreshCw className="mr-1 h-3 w-3 animate-spin" /> 运行中
+            </Badge>;
+        case "success":
+            return <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-200">
+                <CheckCircle className="mr-1 h-3 w-3" /> 成功
+            </Badge>;
+        case "failed":
+            return <Badge variant="secondary" className="bg-red-100 text-red-800 hover:bg-red-200">
+                <XCircle className="mr-1 h-3 w-3" /> 失败
+            </Badge>;
+        case "pending":
+            return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
+                <Clock className="mr-1 h-3 w-3 animate-spin" /> 等待中
+            </Badge>;
+        default:
+            return <Badge>{status}</Badge>;
+    }
+};
 
 export default function EvalExpDetailsPage(
     { params }: { params: Promise<{ evalId: string }> }
 ) {
     const { evalId } = use(params);
+    let isRefreshing = false;
     const [evalConfig, setEvalConfig] = useState<EvalConfig>();
     const router = useRouter();
     const [experiments, setExperimentData] = useState<ExperimentItem[]>([]);
     const [page, setPage] = useState(1);
+    const pageRef = useRef(page);
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [dataseterror, setDatasetError] = useState(''); 
@@ -76,27 +114,67 @@ export default function EvalExpDetailsPage(
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
 
+    const fetchExperiments = useCallback(async () => {
+        if (isRefreshing) {
+          console.log("list already refreshing.")
+          return;
+        }
+        console.log("Refreshing...");
+        const url = `/api/config/evaluation/${evalId}/experiments?page=${pageRef.current}&size=${pageSize}`
+    
+        try {
+          isRefreshing = true;
+          const files_res = await fetch(url);
+          if (!files_res.ok) throw new Error('获取实验列表失败');
+    
+          const exp_json_data = await files_res.json();
+          console.log('获取实验reponse:', exp_json_data);
+          const data = exp_json_data.data.items;
+          setExperimentData(data || []);
+          setTotalPages(exp_json_data.data.pages);
+    
+          const kb_files = data as ExperimentItem[];
+          const files_unfinished = kb_files.some(
+            (file) => file.status !== 'success' && file.status !== 'failed',
+          );
+    
+          if (files_unfinished) {
+            console.log('存在未完成的实验，继续检查状态。');
+            setTimeout(() => {
+              isRefreshing = false;
+              fetchExperiments(); // 依赖 ref 获取最新 page
+            }, 3000);
+          } else {
+            console.log('实验已完成。');
+          }
+          isRefreshing=false;
+        } catch (err: any) {
+          isRefreshing = false;
+          toast.error(err.message);
+        }
+    }, [evalId]);
+
+    useEffect(() => {
+        pageRef.current = page;
+      }, [page]);
+
+    useEffect(() => {
+        fetchExperiments();
+    }, [fetchExperiments, page, experiments.length]);
+
     useEffect(() => {
           const fetchConfigs = async () => {
               setIsLoading(true);
               try {
-                  const [evalRes, datasetRes] = await Promise.all([
+                  const [evalRes] = await Promise.all([
                       fetch(`/api/config/evaluation/${evalId}`),
-                      fetch(`/api/config/evaluation/${evalId}/experiments?page=${page}&size=${pageSize}`),
+                    //   fetch(`/api/config/evaluation/${evalId}/experiments?page=${page}&size=${pageSize}`),
                   ]);
                   
                   const eval_data = await evalRes.json();
                   const evalData = eval_data.data;
                   console.log('evalData:', evalData);
                   setEvalConfig(evalData);
-  
-                  if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
-                  const json_data = await datasetRes.json();
-                  console.log("evaluation dataset json_data", json_data)
-                  const data = json_data.data.items;
-                  
-                  setExperimentData(data);
-                  setTotalPages(json_data.data.pages);
               } catch (err: any) {
                   setDatasetError(err || '加载数据集失败');
               } finally {
@@ -104,48 +182,14 @@ export default function EvalExpDetailsPage(
               }
           };
           fetchConfigs();
-      }, [page]);
+      }, []);
 
     const handlePageChange = (newPage: number) => {
         if (newPage < 1 || newPage > totalPages) return;
         setPage(newPage);
     };
 
-    // // 过滤和搜索数据
-    // const filteredData = useMemo(() => {
-    //     return experiments.filter(item => {
-    //         const matchesSearch = item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    //             item.settings.llm.toLowerCase().includes(searchTerm.toLowerCase());
-
-    //         const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-
-    //         return matchesSearch && matchesStatus;
-    //     });
-    // }, [experiments, searchTerm, statusFilter]);
-
-    // 状态标签样式
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case "running":
-                return <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-                    <Clock className="mr-1 h-3 w-3" /> 运行中
-                </Badge>;
-            case "success":
-                return <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-200">
-                    <CheckCircle className="mr-1 h-3 w-3" /> 成功
-                </Badge>;
-            case "failed":
-                return <Badge variant="secondary" className="bg-red-100 text-red-800 hover:bg-red-200">
-                    <XCircle className="mr-1 h-3 w-3" /> 失败
-                </Badge>;
-            case "pending":
-                return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
-                    <RefreshCw className="mr-1 h-3 w-3" /> 等待中
-                </Badge>;
-            default:
-                return <Badge>{status}</Badge>;
-        }
-    };
+    
 
     // 格式化平均得分
     const formatScore = (score: number, status: string) => {
@@ -157,28 +201,6 @@ export default function EvalExpDetailsPage(
         }
         return (score * 100).toFixed(0) + "%";
     };
-
-    // 格式化设置信息
-    // const formatSettings = (settings: ExperimentItem["settings"]) => (
-    //     <div className="space-y-1">
-    //         <div className="flex">
-    //             <span className="font-medium w-16">LLM:</span>
-    //             <span className="text-muted-foreground">{settings.llm}</span>
-    //         </div>
-    //         <div className="flex">
-    //             <span className="font-medium w-16">MCP:</span>
-    //             <span className="text-muted-foreground">
-    //                 {settings.mcp.join(", ")}
-    //             </span>
-    //         </div>
-    //         <div className="flex">
-    //             <span className="font-medium w-16">搜索:</span>
-    //             <span className="text-muted-foreground">
-    //                 {settings.search ? "启用" : "禁用"}
-    //             </span>
-    //         </div>
-    //     </div>
-    // );
 
     // 复制实验ID
     const copyExperimentId = (id: string) => {
@@ -195,6 +217,26 @@ export default function EvalExpDetailsPage(
         }
     };
 
+    const handleDeleteAction = async (id: string) => {
+        console.log(`Deleting experiment ${id}`);
+        try {
+            const res = await fetch(`/api/config/evaluation/${evalId}/experiments/${id}`, {
+                method: 'DELETE',
+                headers: {
+                'Content-Type': 'application/json',
+                },
+            });
+
+            if (!res.ok) {
+                throw new Error('删除失败，请检查网络或配置');
+            }
+
+            // 删除成功后更新本地状态
+            setExperimentData((prev) => prev.filter((experiment) => experiment.id !== id));
+        } catch (err: any) {
+            console.log('删除实验出错: ', err);
+        }
+    }
 
     return (
         <div className="flex flex-col h-screen px-6 py-4 space-y-6">
@@ -255,7 +297,7 @@ export default function EvalExpDetailsPage(
                             </div>
 
                             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                                <div className="relative flex-1">
+                                {/* <div className="relative flex-1">
                                     <Input
                                         placeholder="搜索实验ID或模型..."
                                         value={searchTerm}
@@ -275,10 +317,10 @@ export default function EvalExpDetailsPage(
                                         <circle cx="11" cy="11" r="8" />
                                         <path d="m21 21-4.3-4.3" />
                                     </svg>
-                                </div>
+                                </div> */}
 
                                 <div className="flex gap-2">
-                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                    {/* <Select value={statusFilter} onValueChange={setStatusFilter}>
                                         <SelectTrigger className="w-[160px]">
                                             <SelectValue placeholder="状态筛选" />
                                         </SelectTrigger>
@@ -289,11 +331,11 @@ export default function EvalExpDetailsPage(
                                             <SelectItem value="failed">失败</SelectItem>
                                             <SelectItem value="pending">等待中</SelectItem>
                                         </SelectContent>
-                                    </Select>
+                                    </Select> */}
 
-                                    {/* <Button>
-                                <Play className="mr-2 h-4 w-4" /> 新建实验
-                            </Button> */}
+                                    <Button onClick={() => router.push(`/evaluation/${evalId}/datasets`)}>
+                                        <Play className="mr-2 h-4 w-4" /> 新建实验
+                                    </Button>
                                 </div>
                             </div>
                         </CardHeader>
@@ -328,9 +370,17 @@ export default function EvalExpDetailsPage(
                                                 <TableRow key={item.id} className="hover:bg-muted/50 transition-colors">
                                                     <TableCell className="font-medium">
                                                         <div className="flex items-center">
-                                                            <div className="truncate max-w-[120px]" title={item.id}>
+                                                            <Button
+                                                                variant="link"
+                                                                className="truncate max-w-[120px] font-medium text-blue-600"
+                                                                onClick={() =>
+                                                                    router.push(
+                                                                        `/evaluation/${evalId}/experiments/${item.id}`,
+                                                                    )
+                                                                }
+                                                            >
                                                                 {item.id}
-                                                            </div>
+                                                            </Button>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
@@ -386,7 +436,13 @@ export default function EvalExpDetailsPage(
                                                                 </Button>
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end">
-                                                                <DropdownMenuItem onClick={() => handleAction('view', item.id)}>
+                                                                <DropdownMenuItem 
+                                                                    onClick={() =>
+                                                                        router.push(
+                                                                            `/evaluation/${evalId}/experiments/${item.id}`,
+                                                                        )
+                                                                    }
+                                                                >
                                                                     <Eye className="mr-2 h-4 w-4" />
                                                                     查看详情
                                                                 </DropdownMenuItem>
@@ -396,7 +452,7 @@ export default function EvalExpDetailsPage(
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuItem
                                                                     className="text-red-600 focus:bg-red-100"
-                                                                    onClick={() => handleAction('delete', item.id)}
+                                                                    onClick={() => handleDeleteAction(item.id)}
                                                                 >
                                                                     <Trash2Icon /> 删除
                                                                 </DropdownMenuItem>

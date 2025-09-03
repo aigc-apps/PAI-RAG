@@ -23,3 +23,16 @@ export function formatBeijingTime(utcTime: string): string {
     .format('YYYY-MM-DD HH:mm:ss');
   return beijingTime;
 }
+
+export function calculateTimeDifference(startTime: string, endTime: string): string {
+  const formatUTC = (str: string) => 
+          str.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z';
+
+  const start = new Date(formatUTC(startTime));
+  const end = new Date(formatUTC(endTime));
+
+  if (isNaN(Number(start)) || isNaN(Number(end))) return "-";
+
+  const diffSeconds = Math.floor((Number(end) - Number(start)) / 1000);
+  return `${diffSeconds}s`;
+}

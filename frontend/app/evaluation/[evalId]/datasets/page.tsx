@@ -29,7 +29,8 @@ import {
     UploadIcon,
     Eye,
     Trash2Icon,
-    Loader2
+    Loader2,
+    ChevronDownIcon
 } from "lucide-react";
 import {
     Dialog,
@@ -40,12 +41,31 @@ import {
     DialogDescription,
     DialogFooter
 } from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from '@/components/ui/badge';
 import { EvalConfig } from '@/app/evaluation/[evalId]/page';
+import { McpConfig } from '@/app/config/mcp/mcp';
+import { LlmConfig } from '@/app/config/model/llm/page';
+import { KbConfig } from '@/app/knowledgebases/kbconfig';
 
 export interface SampleItem {
     id: string;
@@ -56,6 +76,30 @@ export interface SampleItem {
         Tools?: string;
     };
 }
+
+interface EvalRunConfig {
+    model_id: string;
+    mcp_ids: string[];
+    kb_ids: string[];
+    enable_search: boolean;
+    enable_vision: boolean;
+    enable_agent: boolean;
+    enable_input_guardrail?: boolean;
+    enable_output_guardrail?: boolean;
+    guardrail_hint?: string;
+}
+
+const default_eval_run_config = {
+    model_id: "",
+    mcp_ids: [],
+    kb_ids: [],
+    enable_search: false,
+    enable_vision: false,
+    enable_agent: false,
+    enable_input_guardrail: false,
+    enable_output_guardrail: false,
+    guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+};
 
 export default function EvalExpDetailsPage(
     { params }: { params: Promise<{ evalId: string }> }
@@ -82,42 +126,89 @@ export default function EvalExpDetailsPage(
     const [uploading, setUploading] = useState(false);
     const [singleRuning, setSingleRuning] = useState(false);
     const [batchRuning, setBatchRuning] = useState(false);
-    const [dataseterror, setDatasetError] = useState(''); 
+    const [dataseterror, setDatasetError] = useState('');
     const [evalConfig, setEvalConfig] = useState<EvalConfig>();
+    const [evalRunConfig, setEvalRunConfig] = useState<EvalRunConfig>(default_eval_run_config);
     const [experimentName, setExperimentName] = useState("");
     const [experimentDescription, setExperimentDescription] = useState("");
+    const [llms, setLlms] = useState<LlmConfig[]>([]);
+    const [mcps, setMcps] = useState<McpConfig[]>([]);
+    const [kbs, setKbs] = useState<KbConfig[]>([]);
+    const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
+    const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchBasicConfigs = async () => {
+            setIsLoading(true);
+            try {
+                const [llmRes, mcpRes, kbRes] = await Promise.all([
+                    fetch(`/api/config/llms`),
+                    fetch(`/api/config/mcps`),
+                    fetch(`/api/config/knowledgebases`),
+                ]);
+
+                const llmData = (await llmRes.json())?.data.items || [];
+                console.log('llmData', llmData);
+                setLlms([...llmData]);
+
+                const mcpData =
+                    ((await mcpRes.json())?.data.items as McpConfig[]) || [];
+                console.log('mcpData', mcpData);
+                setMcps([...mcpData]);
+
+                const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
+                console.log('kbData', kbData);
+                setKbs([...kbData]);
+            } catch (err: any) {
+                setDatasetError(err || '加载数据失败');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchBasicConfigs();
+    }, []);
 
     useEffect(() => {
         const fetchConfigs = async () => {
             setIsLoading(true);
             try {
-                const [evalRes, allDatasetRes,datasetRes] = await Promise.all([
+                const [evalRes, datasetRes] = await Promise.all([
                     fetch(`/api/config/evaluation/${evalId}`),
-                    fetch(`/api/config/evaluation/${evalId}/dataset`),
                     fetch(`/api/config/evaluation/${evalId}/dataset?page=${page}&size=${pageSize}`),
                 ]);
-                
+
                 const eval_data = await evalRes.json();
                 const evalData = eval_data.data;
                 console.log('evalData:', evalData);
                 setEvalConfig(evalData);
+                setEvalRunConfig(evalData.default_run_config);
 
                 if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
                 const json_data = await datasetRes.json();
                 console.log("evaluation dataset json_data", json_data)
                 const data = json_data.data.items;
-                
+
                 setDatasets(data);
-                setAllItems(allDatasetRes.ok ? await allDatasetRes.json().then(res => res.data.items) : []);
                 setTotalItems(json_data.data.total);
                 setTotalPages(json_data.data.pages);
+
+                const tmpAllItems = [];
+                for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
+                    console.log("start loading all items for page ", curPage)
+                    const response = await fetch(`/api/config/evaluation/${evalId}/dataset?page=${curPage}&size=${pageSize}`);
+                    const data = await response.json();
+                    tmpAllItems.push(...data.data.items);
+                }
+                setAllItems(tmpAllItems);
+                console.log("finish loading all items", tmpAllItems.length)
+
             } catch (err: any) {
                 setDatasetError(err || '加载数据集失败');
             } finally {
                 setIsLoading(false);
             }
         };
-
         fetchConfigs();
     }, [searchTerm, page]);
 
@@ -172,15 +263,13 @@ export default function EvalExpDetailsPage(
         setSelectedItems(newSelected);
     };
 
-    // 运行单条数据
-    const runSingleSample = async (id: string) => {
-        console.log(`正在运行样本: ${id}`);
-        console.log(`实验名称: ${experimentName}, 描述: ${experimentDescription}`);
-        setSingleRuning(true);
+    const runSamples = async (ids: string[]) => {
+        console.log(`Start running ${ids.length} samples`)
         const data = {
             name: experimentName,
             description: experimentDescription,
-            dataset_ids: [id],
+            dataset_ids: ids,
+            run_config: evalRunConfig
         };
         try {
             const res = await fetch(`/api/config/evaluation/${evalId}/experiments`, {
@@ -194,67 +283,39 @@ export default function EvalExpDetailsPage(
             }
             const upload_result = await res.json();
             console.log('实验创建成功:', upload_result);
+            router.push(`/evaluation/${evalId}/experiments`);
         } catch (error) {
             console.error('实验创建失败:', error);
         } finally {
-            setSingleRuning(false);
-            setIsRunSingleDetailOpen(false);
             setExperimentName("");
             setExperimentDescription("");
         }
+    }
+    // 运行单条数据
+    const runSingleSample = async (id: string) => {
+        console.log(`正在运行单条数据: ${id}`);
+        setSingleRuning(true);
+        runSamples([id]);
+        setSingleRuning(false);
+        setIsRunSingleDetailOpen(false);
     };
 
     // 批量运行处理
     const handleBatchRun = () => {
         if (isAllSelected) {
             console.log(`正在运行所有 ${totalItems} 个匹配样本`);
-            runAllMatchingSamples();
-        } else {
-            const selectedIds = Array.from(selectedItems);
-            console.log(`正在运行 ${selectedIds.length} 个样本:`, selectedIds);
-            runSelectedSamples(selectedIds);
-        }
-    };
-
-    // 模拟运行所有匹配样本
-    const runAllMatchingSamples = async () => {
-        // 这里添加实际逻辑
-        // 可能需要使用当前的搜索条件和过滤条件来获取所有匹配项
-        console.log("正在运行所有匹配样本...");
-
-        // 示例：调用API
-        // await api.runSamples({ search: searchTerm, filter: currentFilter });
-    };
-
-    // 模拟运行选中样本
-    const runSelectedSamples = async (sampleIds: string[]) => {
-        // 这里添加实际逻辑
-        console.log("正在运行选中样本:", sampleIds);
-        setBatchRuning(true);
-        const data = {
-            name: experimentName,
-            description: experimentDescription,
-            dataset_ids: sampleIds,
-        };
-        try {
-            const res = await fetch(`/api/config/evaluation/${evalId}/experiments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            });
-            if (!res.ok) {
-                alert('实验创建失败');
-                return;
-            }
-            const upload_result = await res.json();
-            console.log('实验创建成功:', upload_result);
-        } catch (error) {
-            console.error('实验创建失败:', error);
-        } finally {
+            const allSelectedIds = allItems.map(item => item.id);
+            setBatchRuning(true);
+            runSamples(allSelectedIds);
             setBatchRuning(false);
             setIsRunBatchDetailOpen(false);
-            setExperimentName("");
-            setExperimentDescription("");
+        } else {
+            const selectedIds = Array.from(selectedItems);
+            console.log(`正在运行 ${selectedIds.length} 个样本:`);
+            setBatchRuning(true);
+            runSamples(selectedIds);
+            setBatchRuning(false);
+            setIsRunBatchDetailOpen(false);
         }
     };
 
@@ -263,27 +324,11 @@ export default function EvalExpDetailsPage(
         setIsDetailOpen(true);
     };
 
-    // 表格操作
-    const handleAction = (action: string, id: string) => {
-        console.log(`执行操作: ${action} - ${id}`);
-        // 这里可以添加实际操作逻辑
-        if (action === 'view') {
-            const sample = datasets.find(s => s.id === id)
-            if (sample) {
-                setSelectedSample(sample)
-                setIsDetailOpen(true)
-            }
-        } else if (action === 'delete') {
-            // 处理删除操作
-            // handleDelete(id)
-        }
-    };
-
     const handleFileUpload = async (files: FileList | null) => {
         console.log('##handleFileUpload', files);
         if (!files) {
-        alert('文件列表为空！');
-        return;
+            alert('文件列表为空！');
+            return;
         }
         setUploading(true);
 
@@ -307,8 +352,8 @@ export default function EvalExpDetailsPage(
             const res = await fetch(
                 `/api/config/evaluation/${evalId}/dataset`,
                 {
-                method: 'POST',
-                body: formData,
+                    method: 'POST',
+                    body: formData,
                 },
             );
             if (!res.ok) {
@@ -320,13 +365,346 @@ export default function EvalExpDetailsPage(
         } catch (error) {
             console.error('上传失败:', error);
         } finally {
-        setUploading(false);
-        // 清空文件选择框
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ''; // 清空 input 的值
+            setUploading(false);
+            // 清空文件选择框
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ''; // 清空 input 的值
+            }
+            setPage(1);
         }
-        setPage(1);
+    };
+
+    const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
+        console.log('handleKbSelect', kb_id, kb_name, checked);
+        if (checked) {
+            const kb_ids = evalRunConfig.kb_ids.includes(kb_id)
+                ? evalRunConfig.kb_ids
+                : [...evalRunConfig.kb_ids, kb_id];
+            setEvalRunConfig((prev) => ({
+                ...prev,
+                kb_ids: kb_ids,
+            }));
+            if (!selectedKbNames.includes(kb_name)) {
+                setSelectedKbNames((prev) => [...prev, kb_name]);
+            }
+        } else {
+            const kb_ids = evalRunConfig.kb_ids.filter((id) => id !== kb_id);
+            setEvalRunConfig((prev) => ({
+                ...prev,
+                kb_ids: kb_ids,
+            }));
+            if (selectedKbNames.includes(kb_name)) {
+                setSelectedKbNames((prev) => prev.filter((name) => name !== kb_name));
+            }
         }
+    };
+    const handleMcpSelect = (
+        mcp_id: string,
+        mcp_name: string,
+        checked: boolean,
+    ) => {
+        if (checked) {
+            const mcp_ids = evalRunConfig.mcp_ids.includes(mcp_id)
+                ? evalRunConfig.mcp_ids
+                : [...evalRunConfig.mcp_ids, mcp_id];
+            setEvalRunConfig((prev) => ({
+                ...prev,
+                mcp_ids: mcp_ids,
+            }));
+
+            if (!selectedMcpNames.includes(mcp_name)) {
+                setSelectedMcpNames((prev) => [...prev, mcp_name]);
+            }
+        } else {
+            const mcp_ids = evalRunConfig.mcp_ids.filter((id) => id !== mcp_id);
+            setEvalRunConfig((prev) => ({
+                ...prev,
+                mcp_ids: mcp_ids,
+            }));
+            if (selectedMcpNames.includes(mcp_name)) {
+                setSelectedMcpNames((prev) => prev.filter((name) => name !== mcp_name));
+            }
+        }
+    };
+
+    const modifyEvalRunConfig = (selected_ids: Set<string>) => {
+        return (
+            <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                        名称
+                    </Label>
+                    <Input
+                        id="name"
+                        value={experimentName}
+                        onChange={(e) => setExperimentName(e.target.value)}
+                        className="col-span-3"
+                        placeholder="请输入实验名称"
+                    />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="description" className="text-right">
+                        描述
+                    </Label>
+                    <Textarea
+                        id="description"
+                        value={experimentDescription}
+                        onChange={(e) => setExperimentDescription(e.target.value)}
+                        className="col-span-3"
+                        placeholder="请输入实验描述"
+                        rows={3}
+                    />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="description" className="text-right">
+                        数据样本ID
+                    </Label>
+                    <div className="col-span-2">
+                        <div className="max-h-40 overflow-y-auto rounded-md border p-2 bg-muted/20">
+                            <div className="flex flex-wrap gap-1.5">
+                                {[...selected_ids].map((select_id: string) => (
+                                    <Badge key={select_id} variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap mr-1 mb-1">
+                                        {select_id}
+                                    </Badge>
+                                ))}
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="description" className="text-right">
+                        实验设置
+                    </Label>
+                    <div className="grid gap-4 py-1">
+                        <div className="flex">
+                            <Label htmlFor="basemodel" className="w-[90px]">
+                                基模型选择 <span className="text-destructive">*</span>{' '}
+                            </Label>
+                            <div className="px-6">
+                                {llms.length > 0 ? (
+                                    <Select
+                                        value={evalRunConfig?.model_id}
+                                        onValueChange={(value) =>
+                                            setEvalRunConfig((prev) => ({
+                                                ...prev,
+                                                model_id: value,
+                                            }))
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="请选择基模型" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {llms.map((llm) => (
+                                                <SelectItem key={llm.id} value={llm.model_id}>
+                                                    {llm.model_id}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">尚未配置大模型</p>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                                router.push('/config/model/llm');
+                                            }}
+                                        >
+                                            前往添加
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-6">
+                            <Label htmlFor="enable_search" className="w-[90px]">
+                                启用联网搜索
+                            </Label>
+                            <Switch
+                                id="enable_search"
+                                checked={evalRunConfig?.enable_search}
+                                onCheckedChange={(checked) => {
+                                    setEvalRunConfig((prev) => ({
+                                        ...prev,
+                                        enable_search: checked,
+                                    }));
+                                }}
+                            />
+                        </div>
+                        <div className="flex gap-6">
+                            <Label htmlFor="enable_agent" className="w-[90px]">
+                                Agentic模式
+                            </Label>
+                            <Switch
+                                id="enable_agent"
+                                checked={evalRunConfig?.enable_agent}
+                                onCheckedChange={(checked) => {
+                                    setEvalRunConfig((prev) => ({
+                                        ...prev,
+                                        enable_agent: checked,
+                                    }));
+                                }}
+                            />
+                        </div>
+                        <div className="flex">
+                            <Label htmlFor="kb_selection" className="w-[90px]">
+                                知识库选择
+                            </Label>
+                            <div className="pl-6 pr-6">
+                                {kbs.length > 0 ? (
+                                    <DropdownMenu modal={true}>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className="text-sm text-muted-foreground"
+                                            >
+                                                已选{evalRunConfig?.kb_ids?.length || 0}个，可多选 <ChevronDownIcon />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className="w-56">
+                                            <DropdownMenuLabel>知识库</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            {kbs.map((kb) => (
+                                                <DropdownMenuCheckboxItem
+                                                    key={kb.id}
+                                                    checked={evalRunConfig?.kb_ids?.includes(kb.id)}
+                                                    onCheckedChange={(checked) =>
+                                                        handleKbSelect(kb.id, kb.name, checked)
+                                                    }
+                                                    onSelect={(e) => e.preventDefault()}
+                                                >
+                                                    {kb.name}
+                                                </DropdownMenuCheckboxItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">尚未配置知识库</p>
+                                    </div>
+                                )}
+                            </div>
+                            {selectedKbNames.length > 0 && (
+                                <div className="flex gap-1.5 items-center">
+                                    {selectedKbNames.map((name) => (
+                                        <Badge variant="secondary" className="h-6" key={name}>
+                                            {name}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex">
+                            <Label htmlFor="mcp_selection" className="w-[90px]">
+                                MCP选择
+                            </Label>
+                            <div className="pl-6 pr-6">
+                                {mcps.length > 0 ? (
+                                    <DropdownMenu modal={true}>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className="text-sm text-muted-foreground"
+                                            >
+                                                已选{evalRunConfig?.mcp_ids?.length}个，可多选 <ChevronDownIcon />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className="w-56">
+                                            <DropdownMenuLabel>MCP</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            {mcps.map((mcp) => (
+                                                <DropdownMenuCheckboxItem
+                                                    key={mcp.id}
+                                                    checked={evalRunConfig?.mcp_ids?.includes(mcp.id)}
+                                                    onCheckedChange={(checked) =>
+                                                        handleMcpSelect(mcp.id, mcp.name, checked)
+                                                    }
+                                                    onSelect={(e) => e.preventDefault()}
+                                                >
+                                                    {mcp.name}
+                                                </DropdownMenuCheckboxItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">尚未配置MCP</p>
+                                    </div>
+                                )}
+                            </div>
+                            {selectedMcpNames.length > 0 && (
+                                <div className="flex gap-1.5 items-center">
+                                    {selectedMcpNames.map((name) => (
+                                        <Badge variant="secondary" className="h-6" key={name}>
+                                            {name}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center">
+                            <Label htmlFor="ai_guardrail" className="w-[90px]">
+                                AI安全护栏
+                            </Label>
+
+                            <div className="gap-4 pl-6 text-sm items-center space-y-2">
+                                <div className="flex space-y-4">
+                                    <Label htmlFor="input_guardrail" className="w-[120px]">
+                                        输入护栏
+                                    </Label>
+                                    <Switch
+                                        id="enable_input_check"
+                                        checked={evalRunConfig?.enable_input_guardrail || false}
+                                        onCheckedChange={(checked) => {
+                                            setEvalRunConfig((prev) => ({
+                                                ...prev,
+                                                enable_input_guardrail: checked,
+                                            }));
+                                        }}
+                                    />
+                                </div>
+                                <div className="flex space-y-4">
+                                    <Label htmlFor="output_guardrail" className="w-[120px]">
+                                        输出护栏
+                                    </Label>
+                                    <Switch
+                                        id="enable_output_check"
+                                        checked={evalRunConfig?.enable_output_guardrail || false}
+                                        onCheckedChange={(checked) => {
+                                            setEvalRunConfig((prev) => ({
+                                                ...prev,
+                                                enable_output_guardrail: checked,
+                                            }));
+                                        }}
+                                    />
+                                    
+                                </div>
+
+                                <div className="space-y-4">
+                                    <Label htmlFor="guardrail_hint" className="w-[100px]">
+                                        默认护栏提示
+                                    </Label>
+                                    <Input
+                                        className="w-100"
+                                        value={evalRunConfig?.guardrail_hint || "作为人工智能助手，我无法回应包含不当或敏感信息的内容。"}
+                                        onChange={(e) => {
+                                            setEvalRunConfig((prev) => ({
+                                                ...prev,
+                                                guardrail_hint: e.target.value,
+                                            }));
+
+                                        }}
+                                    />
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -414,95 +792,60 @@ export default function EvalExpDetailsPage(
                                                 {isAllSelected ? `批量运行(所有${totalItems}项)` : `批量运行(${selectedItems.size}项)`}
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="sm:max-w-[425px]">
+                                        <DialogContent className="sm:max-w-[750px]">
                                             <DialogHeader>
-                                            <DialogTitle>创建新实验</DialogTitle>
-                                            <DialogDescription>
-                                                请输入此次实验名称和描述，然后运行试验。
-                                            </DialogDescription>
+                                                <DialogTitle>创建新实验（批量）</DialogTitle>
+                                                <DialogDescription>
+                                                    请输入此次实验名称和描述，然后运行试验。
+                                                </DialogDescription>
                                             </DialogHeader>
-                                            <div className="grid gap-4 py-4">
-                                            <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="name" className="text-right">
-                                                名称
-                                                </Label>
-                                                <Input
-                                                id="name"
-                                                value={experimentName}
-                                                onChange={(e) => setExperimentName(e.target.value)}
-                                                className="col-span-3"
-                                                placeholder="请输入实验名称"
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="description" className="text-right">
-                                                描述
-                                                </Label>
-                                                <Textarea
-                                                id="description"
-                                                value={experimentDescription}
-                                                onChange={(e) => setExperimentDescription(e.target.value)}
-                                                className="col-span-3"
-                                                placeholder="请输入实验描述"
-                                                rows={3}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-4 items-center gap-4">
-                                                <Label htmlFor="description" className="text-right">
-                                                数据样本ID
-                                                </Label>
-                                                <div className="col-span-2">
-                                                    {[...selectedItems].map((select_id: string) => (
-                                                        <Badge key={select_id} variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap mr-1 mb-1">
-                                                            {select_id}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            </div>
+                                            {modifyEvalRunConfig(selectedItems)}
                                             <DialogFooter>
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => setIsRunBatchDetailOpen(false)}
-                                                disabled={batchRuning}
-                                            >
-                                                取消
-                                            </Button>
-                                            <Button 
-                                                onClick={handleBatchRun}
-                                                disabled={!experimentName.trim()}
-                                            >
-                                                运行 {batchRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                                            </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={() => setIsRunBatchDetailOpen(false)}
+                                                    disabled={batchRuning}
+                                                >
+                                                    取消
+                                                </Button>
+                                                <Button
+                                                    onClick={handleBatchRun}
+                                                    disabled={!experimentName.trim()}
+                                                >
+                                                    运行 {batchRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                                </Button>
                                             </DialogFooter>
                                         </DialogContent>
                                     </Dialog>
                                     <Button
                                         onClick={() =>
-                                        document.getElementById('file-upload')?.click()
+                                            document.getElementById('file-upload')?.click()
                                         }
                                         disabled={uploading} // 上传时禁用按钮
                                     >
                                         {uploading ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            上传中...
-                                        </>
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                上传中...
+                                            </>
                                         ) : (
-                                        <>
-                                            <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
-                                        </>
+                                            <>
+                                                <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
+                                            </>
                                         )}
                                     </Button>
                                     <div className="flex gap-2 items-center">
                                         <input
-                                        id="file-upload"
-                                        type="file"
-                                        className="hidden"
-                                        ref={fileInputRef}
-                                        onChange={(e) => handleFileUpload(e.target.files)}
+                                            id="file-upload"
+                                            type="file"
+                                            className="hidden"
+                                            ref={fileInputRef}
+                                            onChange={(e) => handleFileUpload(e.target.files)}
                                         />
                                     </div>
+                                    <Button onClick={() => router.push(`/evaluation/${evalId}/experiments`)}>
+                                        <Eye className="mr-2 h-4 w-4" /> 查看实验
+                                    </Button>
                                 </div>
                             </div>
                         </CardHeader>
@@ -650,7 +993,7 @@ export default function EvalExpDetailsPage(
                                                                         <div>
                                                                             <h4 className="text-sm font-medium text-muted-foreground">使用工具</h4>
                                                                             <div className="mt-1 flex flex-wrap gap-2">
-                                                                                {selectedSample.eval_metadata?.Tools? (
+                                                                                {selectedSample.eval_metadata?.Tools ? (
                                                                                     <Badge className='bg-yellow-50 text-yellow-700 hover:bg-yellow-100 whitespace-pre-wrap'>
                                                                                         {selectedSample.eval_metadata?.Tools}
                                                                                     </Badge>
@@ -674,64 +1017,28 @@ export default function EvalExpDetailsPage(
                                                                     <PlayIcon className="mr-2 h-4 w-4" />
                                                                 </Button>
                                                             </DialogTrigger>
-                                                            <DialogContent className="sm:max-w-[425px]">
+                                                            <DialogContent className="sm:max-w-[750px]">
                                                                 <DialogHeader>
-                                                                <DialogTitle>创建新实验</DialogTitle>
-                                                                <DialogDescription>
-                                                                    请输入此次实验名称和描述，然后运行试验。
-                                                                </DialogDescription>
+                                                                    <DialogTitle>创建新实验（单条）</DialogTitle>
+                                                                    <DialogDescription>
+                                                                        请输入此次实验名称和描述，然后运行试验。
+                                                                    </DialogDescription>
                                                                 </DialogHeader>
-                                                                <div className="grid gap-4 py-4">
-                                                                <div className="grid grid-cols-4 items-center gap-4">
-                                                                    <Label htmlFor="name" className="text-right">
-                                                                    名称
-                                                                    </Label>
-                                                                    <Input
-                                                                    id="name"
-                                                                    value={experimentName}
-                                                                    onChange={(e) => setExperimentName(e.target.value)}
-                                                                    className="col-span-3"
-                                                                    placeholder="请输入实验名称"
-                                                                    />
-                                                                </div>
-                                                                <div className="grid grid-cols-4 items-center gap-4">
-                                                                    <Label htmlFor="description" className="text-right">
-                                                                    描述
-                                                                    </Label>
-                                                                    <Textarea
-                                                                    id="description"
-                                                                    value={experimentDescription}
-                                                                    onChange={(e) => setExperimentDescription(e.target.value)}
-                                                                    className="col-span-3"
-                                                                    placeholder="请输入实验描述"
-                                                                    rows={3}
-                                                                    />
-                                                                </div>
-                                                                <div className="grid grid-cols-4 items-center gap-4">
-                                                                    <Label htmlFor="description" className="text-right">
-                                                                    数据样本ID
-                                                                    </Label>
-                                                                    <div className="col-span-2">
-                                                                        <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap">
-                                                                        {item.id}
-                                                                        </Badge>
-                                                                    </div>
-                                                                </div>
-                                                                </div>
+                                                                {modifyEvalRunConfig(new Set([item.id]))}
                                                                 <DialogFooter>
-                                                                <Button 
-                                                                    variant="outline" 
-                                                                    onClick={() => setIsRunSingleDetailOpen(false)}
-                                                                    disabled={singleRuning}
-                                                                >
-                                                                    取消
-                                                                </Button>
-                                                                <Button 
-                                                                    onClick={() => runSingleSample(item.id)}
-                                                                    disabled={!experimentName.trim()}
-                                                                >
-                                                                    运行 {singleRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                                                                </Button>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        onClick={() => setIsRunSingleDetailOpen(false)}
+                                                                        disabled={singleRuning}
+                                                                    >
+                                                                        取消
+                                                                    </Button>
+                                                                    <Button
+                                                                        onClick={() => runSingleSample(item.id)}
+                                                                        disabled={!experimentName.trim()}
+                                                                    >
+                                                                        运行 {singleRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                                                    </Button>
                                                                 </DialogFooter>
                                                             </DialogContent>
                                                         </Dialog>

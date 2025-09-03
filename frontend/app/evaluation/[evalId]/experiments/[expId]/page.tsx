@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useState, useEffect, use, useRef } from "react";
+import { useState, useEffect, use, useRef, useCallback } from "react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,88 +14,131 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Clock, Terminal, MessageSquare, CheckCircle, Bot } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Terminal, MessageSquare, CheckCircle, Bot, CircleXIcon } from "lucide-react";
 import { Fragment } from "react";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+import { EvalConfig } from '@/app/evaluation/[evalId]/page';
+import { ExperimentItem, getStatusBadge } from "@/app/evaluation/[evalId]/experiments/page";
+import { formatBeijingTime, calculateTimeDifference } from '@/app/knowledgebases/utils/utils';
+import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 
-// 定义样本类型
-interface Sample {
+type ExperimentDetailsItem = {
   id: string
-  question: string
-  answer: string
-  response: string
-  status: "success" | "failed" | "running"
+  input: string
+  expected_output: string
+  actual_output: string
+  status: string
   score: number
-  reason: string
-  start_time: string
-  end_time: string
-  logs?: string
+  dataset_metadata?: {
+    Steps?: string
+    Tools?: string
+  }
+  execution_metadata?: {}
+  created_at: string
+  updated_at: string
 }
 
-// 实验数据类型（与您提供的mockData一致）
-type ExperimentItem = {
-  id: string
-  count: number
-  settings: {
-    llm: string
-    mcp: string[]
-    search: boolean
-  }
-  status: "running" | "success" | "failed"
-  avg_score: number
-  create_time: string
-  finished_time: string
-}
-
-// 模拟实验数据（您可以从您的数据源导入）
-const mockData: ExperimentItem[] = [
-  {
-    id: "exp-f4c3-4cad-be07",
-    count: 2,
-    settings: {
-      llm: "qwen-max",
-      mcp: ["amap", "browser-use"],
-      search: false,
-    },
-    status: "running",
-    avg_score: 0.0,
-    create_time: "2025-08-28 17:09",
-    finished_time: ""
-  },
-  {
-    id: "exp-3d80-4913-a07d",
-    count: 1,
-    settings: {
-      llm: "qwen-max",
-      mcp: ["browser-use"],
-      search: true,
-    },
-    status: "success",
-    avg_score: 0.7,
-    create_time: "2025-08-28 16:21",
-    finished_time: "2025-08-28 16:40"
-  }
-]
 
 export default function ExperimentDetailPage({ params }: { params: Promise<{ evalId: string, expId: string }> }) {
   const { evalId, expId } = use(params);
-  const experiment = mockData.find(exp => exp.id === expId)
   const router = useRouter();
-  // 修改状态管理，支持多行同时展开
+  const [evalConfig, setEvalConfig] = useState<EvalConfig>();
+  const [experiment, setExperiment] = useState<ExperimentItem>();
+  const [runDetailItems, setRunDetailItems] = useState<ExperimentDetailsItem[]>([]);
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
-  const [samples, setSamples] = useState<Sample[]>([]);
+  
   const [page, setPage] = useState(1);
+  const pageRef = useRef(page);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const pageSize = 3;
+  const pageSize = 6;
+  let isRefreshing = false;
+
+  const fetchExperimentDetails = useCallback(async () => {
+        if (isRefreshing) {
+          console.log("list already refreshing.")
+          return;
+        }
+        console.log("Refreshing...");
+        const url = `/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${pageRef.current}&size=${pageSize}`
+
+        try {
+          isRefreshing = true;
+          const files_res = await fetch(url);
+          if (!files_res.ok) throw new Error('获取实验列表失败');
+    
+          const exp_json_data = await files_res.json();
+          console.log('获取实验reponse:', exp_json_data);
+          const data = exp_json_data.data.items;
+          setRunDetailItems(data || []);
+          setTotalPages(exp_json_data.data.pages);
+    
+          const kb_files = data as ExperimentDetailsItem[];
+          const files_unfinished = kb_files.some(
+            (file) => file.status !== 'success' && file.status !== 'failed',
+          );
+    
+          if (files_unfinished) {
+            console.log('存在未完成的实验，继续检查状态。');
+            setTimeout(() => {
+              isRefreshing = false;
+              fetchExperimentDetails(); // 依赖 ref 获取最新 page
+            }, 3000);
+          } else {
+            console.log('实验已完成。');
+          }
+          isRefreshing=false;
+        } catch (err: any) {
+          isRefreshing = false;
+          toast.error(err.message);
+        }
+    }, [expId]);
+
+    useEffect(() => {
+        pageRef.current = page;
+      }, [page]);
+
+    useEffect(() => {
+        fetchExperimentDetails();
+    }, [fetchExperimentDetails, page]);
+
+    useEffect(() => {
+          const fetchConfigs = async () => {
+              setIsLoading(true);
+              try {
+                  const [evalRes, expDataRes] = await Promise.all([
+                    fetch(`/api/config/evaluation/${evalId}`),
+                    fetch(`/api/config/evaluation/${evalId}/experiments/${expId}`),
+                  ]);
+                  
+                  const eval_data = await evalRes.json();
+                  const evalData = eval_data.data;
+                  console.log('evalData:', evalData);
+                  setEvalConfig(evalData);
+
+                  const exp_data = await expDataRes.json();
+                  const expData = exp_data.data;
+                  console.log('expData:', expData);
+                  setExperiment(expData);
+              } catch (err: any) {
+                  toast.error(err.message);
+              } finally {
+                  setIsLoading(false);
+              }
+          };
+          fetchConfigs();
+      }, []);
 
   // 切换行的展开状态
   const toggleRow = (id: string) => {
-    setExpandedRows(prev =>
-      prev.includes(id)
-        ? prev.filter(rowId => rowId !== id)
-        : [...prev, id]
-    )
+    if (expandedRows.includes(id)) {
+      setExpandedRows([]);
+    } else {
+      setExpandedRows([id]);
+    }
   }
 
   // 检查行是否展开
@@ -114,85 +157,6 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
     )
   }
 
-  useEffect(() => {
-    const fetchConfigs = async () => {
-      setIsLoading(true);
-
-      // 模拟API调用获取评估数据
-      const mockData: Sample[] = [
-        {
-          id: "sample-9863-ijhg-01",
-          question: "If Eliud Kipchoge could maintain his record-making marathon pace indefinitely, how many thousand hours would it take him to run the distance between the Earth and the Moon its closest approach? Please use the minimum perigee value on the Wikipedia page for the Moon when carrying out your calculation. Round your result to the nearest 1000 hours and do not use any comma separators if necessary.",
-          answer: "17",
-          response: "17",
-          status: "success",
-          score: 1.0,
-          reason: "Generated correct response within time limit",
-          start_time: "2025-08-29 08:50",
-          end_time: "2025-08-29 08:59",
-          logs: "Successfully processed request\nUsed browser-use MCP\nReturned valid response"
-        },
-        {
-          id: "sample-9863-ijhg-02",
-          question: "Of the authors (First M. Last) that worked on the paper \"Pie Menus or Linear Menus, Which Is Better?\" in 2015, what was the title of the first paper authored by the one that had authored prior papers?",
-          answer: "Mapping Human Oriented Information to Software Agents for Online Systems Usage",
-          response: "Online Systems Usage",
-          status: "failed",
-          score: 0.1,
-          reason: "Wrong",
-          start_time: "2025-08-29 08:53",
-          end_time: "2025-08-29 08:56",
-          logs: "Error: Timeout after 30 seconds\nAPI call failed\nRetrying..."
-        },
-        {
-          id: "sample-9863-ijhg-03",
-          question: "In Emily Midkiff's June 2014 article in a journal named for the one of Hreidmar's sons that guarded his house, what word was quoted from two different authors in distaste for the nature of dragon depictions?",
-          answer: "fluffy",
-          response: "",
-          status: "running",
-          score: 0.0,
-          reason: "Execution still in progress",
-          start_time: "2025-08-29 09:10",
-          end_time: "2025-08-29 09:29",
-          logs: "Processing request...\nWaiting for browser-use MCP response"
-        },
-        {
-          id: "sample-9863-ijhg-04",
-          question: "Under DDC 633 on Bielefeld University Library's BASE, as of 2020, from what country was the unknown language article with a flag unique from the others?",
-          answer: "Guatemala",
-          response: "",
-          status: "running",
-          score: 0.0,
-          reason: "Execution still in progress",
-          start_time: "2025-08-29 09:50",
-          end_time: "2025-08-29 09:55",
-          logs: "Processing request...\nWaiting for browser-use MCP response"
-        },
-        {
-          id: "sample-9863-ijhg-05",
-          question: "What is the capital of France and what is the square root of 144? Please provide both answers separated by a comma.",
-          answer: "Paris, 12",
-          response: "Paris 12",
-          status: "success",
-          score: 0.9,
-          reason: "Generated correct response within time limit",
-          start_time: "2025-08-29 08:50",
-          end_time: "2025-08-29 08:59",
-          logs: "Successfully processed request\nUsed browser-use MCP\nReturned valid response"
-        }
-      ];
-
-      // 计算分页 [[7]]
-      const startIndex = (page - 1) * pageSize;
-      const paginatedData = mockData.slice(startIndex, startIndex + pageSize);
-
-      setSamples(paginatedData);
-      setTotalPages(Math.ceil(mockData.length / pageSize));
-      setIsLoading(false);
-    };
-
-    fetchConfigs();
-  }, [page]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -232,7 +196,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                       className="px-0"
                       onClick={() => router.push(`/evaluation/${evalId}`)}
                     >
-                      {evalId}
+                      {evalConfig?.name}
                     </Button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
@@ -250,7 +214,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>{expId}</BreadcrumbPage>
+                  <BreadcrumbPage>{experiment.name}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -261,81 +225,117 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
         <Card className="mb-6">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <CardTitle className="text-2xl">实验: {experiment.id}</CardTitle>
-              <Badge variant={getStatusVariant(experiment.status)} className="w-fit">
-                {experiment.status.charAt(0).toUpperCase() + experiment.status.slice(1)}
-              </Badge>
+              <CardTitle className="text-2xl">实验: {experiment.name}</CardTitle>
+              <div className="flex items-center gap-2">
+                {getStatusBadge(experiment.status)}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
+            <div className="grid  grid-cols-2 flex gap-6">
+                <div className="col-span-1">
                   <h3 className="font-semibold mb-2">详情</h3>
                   <div className="space-y-2">
-                    <p><span className="text-gray-500">状态:</span> {experiment.status}</p>
-                    <p><span className="text-gray-500">所有样本数:</span> {experiment.count}</p>
+                    <p><span className="text-gray-500">ID:</span> {experiment.id}</p>
+                    <p><span className="text-gray-500">描述:</span> {experiment.description}</p>
+                    <p><span className="text-gray-500">状态:</span> {getStatusBadge(experiment.status)} </p>
+                    <p><span className="text-gray-500">所有样本数:</span> {experiment.samples_count}</p>
                     <p><span className="text-gray-500">平均得分:</span>
-                      <Badge variant="secondary" className="ml-2">
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
                         {experiment.avg_score.toFixed(2)}
                       </Badge>
                     </p>
-                    <p><span className="text-gray-500">创建时间:</span> {experiment.create_time}</p>
-                    {experiment.finished_time && (
-                      <p><span className="text-gray-500">完成时间:</span> {experiment.finished_time}</p>
+                    <p><span className="text-gray-500">创建时间:</span> {formatBeijingTime(experiment.created_at)}</p>
+                    {['success', 'failed'].includes(experiment.status) && (
+                      <p><span className="text-gray-500">完成时间:</span> {formatBeijingTime(experiment.updated_at)}</p>
                     )}
                   </div>
                 </div>
-
-                
-              </div>
-              <div className="space-y-4">
-                  <h3 className="font-semibold mb-2">设置</h3>
+                <div className="col-span-1">
+                  <h3 className="font-semibold mb-2">实验设置</h3>
                   <div className="space-y-2">
-                    <p><span className="text-gray-500">LLM:</span> {experiment.settings.llm}</p>
-                    <p><span className="text-gray-500">MCP:</span>
-                      {experiment.settings.mcp.map((mcp, index) => (
-                        <Badge key={index} variant="outline" className="ml-1">
-                          {mcp}
-                        </Badge>
-                      ))}
-                    </p>
-                    <p><span className="text-gray-500">搜索:</span>
-                      <Badge variant={experiment.settings.search ? "secondary" : "destructive"} className="ml-2">
-                        {experiment.settings.search ? "Yes" : "No"}
-                      </Badge>
-                    </p>
-                  </div>
-                </div>
+                    <div className="flex">
+                      <span className="text-gray-500">基模型:</span> {experiment.run_config.model_id}
+                    </div>
+                    <div className="flex">
+                      <span className="text-gray-500">联网搜索:</span> 
+                      {experiment.run_config.enable_search ? (
+                          <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                      ) : (
+                          <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                      )}
+                    </div>
+                    <div className="flex">
+                      <span className="text-gray-500">Agentic模式:</span> 
+                       {experiment.run_config.enable_agent ? (
+                          <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                      ) : (
+                          <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                      )}
+                    </div>
+                    <div className="flex">
+                      <span className="text-gray-500">MCP Server:</span> 
+                      {Array.isArray(experiment.run_config.mcp_ids) && experiment.run_config.mcp_ids.length === 0 ? (
+                          <p className="text-muted-foreground pl-2">尚未配置MCP</p>
+                      ) : (
+                          Array.isArray(experiment.run_config.mcp_ids) && experiment.run_config.mcp_ids.map((mcp, idx) => (
+                              <Badge key={mcp || idx}>{mcp}</Badge>
+                          ))
+                      )}
+                    </div>
+                    <div className="flex">
+                      <span className="text-gray-500">知识库:</span>
+                      {Array.isArray(experiment.run_config.kb_ids) && experiment.run_config.kb_ids.length === 0 ? (
+                          <p className="text-muted-foreground pl-2">尚未配置知识库</p>
+                      ) : (
+                          Array.isArray(experiment.run_config.kb_ids) && experiment.run_config.kb_ids.map((kb, idx) => (
+                              <Badge key={kb || idx}>{kb}</Badge>
+                          ))
+                      )}
+                    </div>
+                    <div className="flex">
+                      <span className="text-gray-500">安全护栏:</span>
+                      <div className="flex gap-4 pl-6 text-sm items-center">
+                        <div className="space-y-2">
+                            <Switch
+                                id="enable_input_check"
+                                checked={experiment.run_config.enable_input_guardrail || false}
+                            />
+                            <Label htmlFor="input_guardrail" className="w-[120px]">
+                                输入护栏
+                            </Label>
+                        </div>
+                        <div className="space-y-2">
+                            <Switch
+                                id="enable_output_check"
+                                checked={experiment.run_config.enable_output_guardrail || false}
+                            />
+                            <Label htmlFor="output_guardrail" className="w-[120px]">
+                                输出护栏
+                            </Label>
+                        </div>
 
-              {/* <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold mb-2">性能指标</h3>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-500">所有样本数:</span>
-                      <span className="font-medium">{experiment.count}</span>
+                        <div className="space-y-1">
+                            <Input
+                                className="w-120"
+                                value={experiment.run_config.guardrail_hint}
+                                disabled
+                            />
+                            <Label htmlFor="guardrail_hint" className="w-[120px]">
+                                默认护栏提示
+                            </Label>
+                        </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                      <div
-                        className="bg-blue-600 h-2.5 rounded-full"
-                        style={{ width: `${Math.min(100, experiment.avg_score * 100)}%` }}
-                      ></div>
-                    </div>
-                    <div className="flex justify-between mt-1 text-xs text-gray-500">
-                      <span>0.0</span>
-                      <span>1.0</span>
                     </div>
                   </div>
                 </div>
-              </div> */}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>样本执行详情 ({samples.length})</CardTitle>
+            <CardTitle>执行详情 ({runDetailItems.length})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border overflow-hidden">
@@ -343,24 +343,24 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]"></TableHead>
-                    <TableHead>样本ID</TableHead>
-                    <TableHead>问题</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>得分</TableHead>
-                    <TableHead>原因</TableHead>
+                    <TableHead className="w-[15%]">样本ID</TableHead>
+                    <TableHead className="w-[40%]">问题</TableHead>
+                    <TableHead className="w-[10%]">状态</TableHead>
+                    <TableHead className="w-[10%]">得分</TableHead>
+                    {/* <TableHead>原因</TableHead> */}
                     <TableHead>耗时</TableHead>
                     <TableHead className="w-[100px]">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {samples.length === 0 ? (
+                  {runDetailItems.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="h-24 text-center">
                         暂无数据
                       </TableCell>
                     </TableRow>
                   ) : (
-                    samples.map((sample) => (
+                    runDetailItems.map((sample) => (
                       <Fragment key={sample.id}>
                         <TableRow
                           className={isRowExpanded(sample.id) ? "bg-muted/50" : ""}
@@ -382,11 +382,13 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                             </Button>
                           </TableCell>
                           <TableCell className="font-medium">{sample.id}</TableCell>
-                          <TableCell className="font-medium">{sample.question.substring(0, 30)}...</TableCell>
+                          <TableCell
+                              className="whitespace-normal break-words min-w-[250px] max-w-[400px] py-2"
+                          >
+                              {sample.input.substring(0,200)}...
+                          </TableCell>
                           <TableCell>
-                            <Badge variant={getStatusVariant(sample.status)}>
-                              {sample.status.charAt(0).toUpperCase() + sample.status.slice(1)}
-                            </Badge>
+                            {getStatusBadge(sample.status)}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center">
@@ -396,15 +398,15 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                   style={{ width: `${Math.min(100, sample.score * 100)}%` }}
                                 ></div>
                               </div>
-                              <span>{sample.score.toFixed(2)}</span>
+                              <span>{sample.score}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="max-w-xs truncate" title={sample.reason}>
+                          {/* <TableCell className="max-w-xs truncate" title={sample.reason}>
                             {sample.reason}
-                          </TableCell>
+                          </TableCell> */}
                           <TableCell>
-                            {sample.start_time && sample.end_time
-                              ? `${Math.floor((new Date(sample.end_time).getTime() - new Date(sample.start_time).getTime()) / 1000)}s`
+                            {sample.created_at && sample.updated_at
+                              ? calculateTimeDifference(sample.created_at, sample.updated_at)
                               : "-"}
                           </TableCell>
                           <TableCell>
@@ -441,7 +443,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                           <span className="text-muted-foreground text-sm">用户输入的问题</span>
                                         </div>
                                         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border min-h-[80px]">
-                                          <p className="whitespace-pre-wrap leading-relaxed">{sample.question}</p>
+                                          <p className="whitespace-pre-wrap leading-relaxed">{sample.input}</p>
                                         </div>
                                       </div>
 
@@ -455,7 +457,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                           <span className="text-muted-foreground text-sm">预期的标准答案</span>
                                         </div>
                                         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border min-h-[120px] overflow-y-auto">
-                                          <p className="whitespace-pre-wrap leading-relaxed">{sample.answer}</p>
+                                          <p className="whitespace-pre-wrap leading-relaxed">{sample.expected_output}</p>
                                         </div>
                                       </div>
 
@@ -469,7 +471,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                           <span className="text-muted-foreground text-sm">LLM生成的响应</span>
                                         </div>
                                         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border min-h-[120px] overflow-y-auto">
-                                          <p className="whitespace-pre-wrap leading-relaxed">{sample.response}</p>
+                                          <p className="whitespace-pre-wrap leading-relaxed">{sample.actual_output}</p>
                                         </div>
                                       </div>
                                     </div>
@@ -488,14 +490,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                           <div className="w-3 h-3 rounded-full bg-primary mt-1 mr-3"></div>
                                           <div>
                                             <span className="text-muted-foreground font-medium">开始: </span>
-                                            <span className="ml-2">{sample.start_time || "N/A"}</span>
+                                            <span className="ml-2">{formatBeijingTime(sample.created_at) || "N/A"}</span>
                                           </div>
                                         </div>
                                         <div className="flex items-start">
                                           <div className="w-3 h-3 rounded-full bg-success mt-1 mr-3"></div>
                                           <div>
                                             <span className="text-muted-foreground font-medium">完成: </span>
-                                            <span className="ml-2">{sample.end_time || "进行中..."}</span>
+                                            <span className="ml-2">{formatBeijingTime(sample.updated_at) || "进行中..."}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -508,12 +510,13 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                         <h4 className="font-medium text-lg">执行日志</h4>
                                       </div>
                                       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border h-[200px] overflow-y-auto font-mono text-sm">
-                                        {sample.logs || "暂无日志信息"}
+                                        {/* {sample.logs || "暂无日志信息"} */}
+                                        暂无日志信息
                                       </div>
                                     </div>
 
                                     {/* 得分原因 */}
-                                    <div className="space-y-3">
+                                    {/* <div className="space-y-3">
                                       <div className="flex items-center gap-2">
                                         <MessageSquare className="h-5 w-5 text-primary" />
                                         <h4 className="font-medium text-lg">得分原因</h4>
@@ -521,7 +524,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                       <div className="p-4 bg-muted rounded-lg">
                                         <p className="text-muted-foreground leading-relaxed">{sample.reason}</p>
                                       </div>
-                                    </div>
+                                    </div> */}
                                   </div>
                                 </div>
                               </div>

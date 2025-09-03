@@ -6,6 +6,7 @@ from db.models.evaluation.dataset import EvalDatasetEntity
 from db.models.evaluation.experiment import ExperimentRunResultEntity, ExperimentEntity
 from typing import List
 import random
+from datetime import datetime, timezone
 
 
 @with_async_db_session
@@ -47,6 +48,7 @@ async def update_experiment_run_result(
     exp_run_entity.actual_output = actual_output
     exp_run_entity.status = status
     exp_run_entity.score = score
+    exp_run_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(exp_run_entity)
     await session.commit()
     await session.refresh(exp_run_entity)
@@ -61,6 +63,7 @@ async def update_experiment_status(
     exp_entity = await session.get(ExperimentEntity, experiment_id)
     exp_entity.status = status
     exp_entity.avg_score = avg_score
+    exp_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(exp_entity)
     await session.commit()
     await session.refresh(exp_entity)
@@ -84,6 +87,12 @@ class PaiEvaluationClient:
 
             logger.info(f"[WORKER] get exp_run_entity {exp_run_entity} and dataset_entity {dataset_entity}.")
             logger.info("[WORKER] mock processing evaluation task...")
+            await update_experiment_run_result(
+                exp_run_id=exp_run_id,
+                actual_output="",
+                status="running",
+                score=0.0
+            )
 
             import asyncio
             await asyncio.sleep(20)

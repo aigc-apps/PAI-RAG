@@ -3,11 +3,15 @@ import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
 from typing import Optional
+from db.models.evaluation.evaluation import EvalRunConfig
 
 class ExperimentCreate(SQLModel):
     name: Optional[str] = None
     description: Optional[str] = None
     dataset_ids: Optional[list[str]] = None  # List of dataset IDs to run the experiment on
+    run_config: dict = Field(
+        default=lambda: EvalRunConfig(), sa_column=Column("run_config", JSON)
+    )
 
 class ExperimentEntity(SQLModel, table=True):
     __tablename__ = "pai_experiment"
@@ -29,6 +33,9 @@ class ExperimentEntity(SQLModel, table=True):
         default=0,
         description="Number of samples in the experiment"
     )
+    run_config: dict = Field(
+        default=lambda: EvalRunConfig(), sa_column=Column("run_config", JSON)
+    )
     avg_score: Optional[float] = Field(
         default=None,
         description="Average score of the experiment"
@@ -43,7 +50,7 @@ class ExperimentEntity(SQLModel, table=True):
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
-        sa_column=Column(DateTime),
+        sa_column=Column(DateTime)
     )
 
 class ExperimentRunResultEntity(SQLModel, table=True):
@@ -85,5 +92,5 @@ class ExperimentRunResultEntity(SQLModel, table=True):
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
-        sa_column=Column(DateTime),
+        sa_column=Column(DateTime)
     )
