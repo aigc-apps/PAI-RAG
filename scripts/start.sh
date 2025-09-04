@@ -159,12 +159,6 @@ start_api() {
   # 示例：uvicorn app:app --port $port
   gunicorn -w $API_INSTANCE_COUNT -b "0.0.0.0:${BACKEND_PORT}" -c scripts/gunicorn.conf.py app.main:app --timeout 600 &
   API_PID=$!
-  wait $API_PID
-
-  # Exit with the same code as Gunicorn
-  EXIT_STATUS=$?
-  echo "Gunicorn stopped with exit code $EXIT_STATUS"
-  exit $EXIT_STATUS
 }
 
 # 启动 Worker 实例
@@ -215,8 +209,15 @@ fi
 echo "upgrading db schema.."
 alembic upgrade head
 
+start_api
+
 start_frontend
 
 start_worker
 
-start_api
+wait $API_PID
+
+# Exit with the same code as Gunicorn
+EXIT_STATUS=$?
+echo "Gunicorn stopped with exit code $EXIT_STATUS"
+exit $EXIT_STATUS
