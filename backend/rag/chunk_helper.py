@@ -66,8 +66,7 @@ async def set_embedding_model_ready(
     embedding_model = await session.get(EmbeddingModelEntity, model_id)
     if embedding_model is None:
         raise ValueError(
-            status_code=404,
-            detail=f"Embedding model {model_id} not found.",
+            detail=f"Embedding model {model_id} not found."
         )
 
     embedding_model.is_ready = True

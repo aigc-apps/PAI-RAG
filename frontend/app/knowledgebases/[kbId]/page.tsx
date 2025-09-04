@@ -87,6 +87,7 @@ import { DatetimeInput } from '../datetime';
 import { Role } from '@/app/config/role/role';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 
 interface KnowledgeBaseFile {
   id: string;
@@ -96,6 +97,7 @@ interface KnowledgeBaseFile {
   file_source: string;
   created_at: string;
   updated_at: string;
+  failed_reason: string;
   file_metadata: {
     [key: string]: any;
   };
@@ -338,6 +340,25 @@ export default function KnowledgeBaseDetailPage(
   const handleSaveSuccess = (kb: KbConfig) => {
       toast.success("知识库配置保存成功");
   };
+
+
+  const handleReprocessFile = async (file_id: string) => {
+    try {
+      const res = await fetch(
+        `/api/config/knowledgebases/${kbId}/files/${file_id}`,
+        {
+          method: 'PUT',
+        },
+      );
+      if (!res.ok) throw new Error(`重新解析 ${file_id} 失败`);
+      toast.success("文件入队成功。");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      fetchKbFiles();
+    }
+  };
+
 
   const handleDeleteFile = async (file_id: string) => {
     setDeleting(true);
@@ -885,10 +906,18 @@ export default function KnowledgeBaseDetailPage(
                                   解析成功
                                 </div>
                               ) : file.status === 'failed' ? (
-                                <div className="flex items-center text-red-500">
-                                  <XCircle className="mr-1 h-4 w-4" />
-                                  解析失败
-                                </div>
+                                    <HoverCard>
+                                      <HoverCardTrigger asChild>
+                                        <div className="flex items-center text-red-500">
+                                          <XCircle className="mr-1 h-4 w-4" />
+                                          解析失败
+                                        </div>
+                                      </HoverCardTrigger>
+                                      <HoverCardContent className="w-80">
+                                        错误原因: {file.failed_reason}
+                                      </HoverCardContent>
+                                    </HoverCard>
+
                               ) : (
                                 <span>{file.status}</span> // 兜底显示原始状态
                               )}
@@ -911,38 +940,6 @@ export default function KnowledgeBaseDetailPage(
                                   }));
                                 }}
                               >
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="link"
-                                    className="text-sm text-blue-600 pl-3 pr-0"
-                                  >
-                                    源链接
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-160">
-                                  <div className="flex gap-3">
-                                    <Label>{file.file_name}</Label>
-                                    <Input
-                                      type="text"
-                                      className="w-130"
-                                      placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
-                                      value={fileSource || ''}
-                                      onChange={(e) => {
-                                        setFileSource(e.target.value);
-                                      }}
-                                    />
-                                    <Button
-                                      onClick={() =>
-                                        handleSaveFileSource(file.id)
-                                      }
-                                    >
-                                      {' '}
-                                      保存{' '}
-                                    </Button>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-
                               <Button
                                 variant="link"
                                 className="text-sm text-blue-600 pl-3 pr-0"
@@ -1298,6 +1295,47 @@ export default function KnowledgeBaseDetailPage(
                                   </SheetFooter>
                                 </SheetContent>
                               </Sheet>
+
+                                                              <PopoverTrigger asChild>
+                                  <Button
+                                    variant="link"
+                                    className="text-sm text-blue-600 pl-3 pr-0"
+                                  >
+                                    源链接
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-160">
+                                  <div className="flex gap-3">
+                                    <Label>{file.file_name}</Label>
+                                    <Input
+                                      type="text"
+                                      className="w-130"
+                                      placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
+                                      value={fileSource || ''}
+                                      onChange={(e) => {
+                                        setFileSource(e.target.value);
+                                      }}
+                                    />
+                                    <Button
+                                      onClick={() =>
+                                        handleSaveFileSource(file.id)
+                                      }
+                                    >
+                                      {' '}
+                                      保存{' '}
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+
+                              <Button
+                                variant="link"
+                                className="text-sm text-blue-600 pr-0"
+                                onClick={() => handleReprocessFile(file.id)}
+                              >
+                                  重新解析
+                              </Button>
+
                               <Button
                                 variant="link"
                                 className="text-sm text-blue-600"
