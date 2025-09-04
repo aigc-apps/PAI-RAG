@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import traceback
 from typing import List, Optional
+from common.knowledgebase.types import FileStatus
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -330,6 +331,32 @@ async def list_files(
                 size=pagination.size,
             ),
             message="获取文件列表成功")
+
+@knowledgebase_router.put(
+    "/{kb_id}/files/{file_id}", response_model=ResponseModel[KbFileEntity]
+)
+async def reprocess_file(
+    kb_id: str,
+    file_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    import app.worker as background_worker
+    file_res = await session.exec(
+        select(KbFileEntity).where(
+            KbFileEntity.id == file_id, KbFileEntity.kb_id == kb_id
+        )
+    )
+    file_entity = file_res.first()
+    if file_entity is None:
+        return error_response(code=404, message=f"没有在知识库{kb_id}中找到文件{file_id}。")
+
+    file_entity.status = FileStatus.pending
+    session.add(file_entity)
+    await session.commit()
+    logger.info(f"Re-process file {file_entity} successfully.")
+    background_worker.process_file.delay(file_entity.id)
+
+    return success_response(data=file_entity, message="文件入队成功。")
 
 
 @knowledgebase_router.get(
