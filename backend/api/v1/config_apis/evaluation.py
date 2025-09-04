@@ -335,7 +335,7 @@ async def get_experiments(
     experiment_results = await session.exec(
         select(ExperimentEntity)
         .where(ExperimentEntity.eval_id == eval_id)
-        .order_by(ExperimentEntity.created_at.asc())
+        .order_by(ExperimentEntity.created_at.desc())
         .offset(pagination.offset)
         .limit(size)
     )

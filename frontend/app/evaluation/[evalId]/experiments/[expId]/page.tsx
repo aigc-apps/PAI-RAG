@@ -32,12 +32,23 @@ type ExperimentDetailsItem = {
   actual_output: string
   status: string
   score: number
+  reason: string
   dataset_metadata?: {
     Steps?: string
     Tools?: string
   }
-  execution_metadata?: {}
+  execution_metadata?: {
+    id: string
+    index: number
+    function: {
+      name: string
+      arguments: string // JSON stringified
+    }
+    type: string
+    observation: string | null // JSON stringified
+  }[]
   created_at: string
+  started_at: string | null
   updated_at: string
 }
 
@@ -63,16 +74,25 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
           return;
         }
         console.log("Refreshing...");
-        const url = `/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${pageRef.current}&size=${pageSize}`
+        
 
         try {
           isRefreshing = true;
-          const files_res = await fetch(url);
-          if (!files_res.ok) throw new Error('获取实验列表失败');
-    
-          const exp_json_data = await files_res.json();
-          console.log('获取实验reponse:', exp_json_data);
+          const [expDataRes, detailsRes] = await Promise.all([
+            fetch(`/api/config/evaluation/${evalId}/experiments/${expId}`),
+            fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${pageRef.current}&size=${pageSize}`),
+          ]);
+          
+          if (!expDataRes.ok) throw new Error('获取实验失败');
+
+          const exp_data = await expDataRes.json();
+          const expData = exp_data.data;
+          console.log('expData:', expData);
+          setExperiment(expData);
+
+          const exp_json_data = await detailsRes.json();
           const data = exp_json_data.data.items;
+          console.log('detailsRes:', exp_json_data);
           setRunDetailItems(data || []);
           setTotalPages(exp_json_data.data.pages);
     
@@ -109,20 +129,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
           const fetchConfigs = async () => {
               setIsLoading(true);
               try {
-                  const [evalRes, expDataRes] = await Promise.all([
+                  const [evalRes] = await Promise.all([
                     fetch(`/api/config/evaluation/${evalId}`),
-                    fetch(`/api/config/evaluation/${evalId}/experiments/${expId}`),
                   ]);
-                  
+                  if (!evalRes.ok) throw new Error('获取实验失败');
                   const eval_data = await evalRes.json();
                   const evalData = eval_data.data;
                   console.log('evalData:', evalData);
                   setEvalConfig(evalData);
-
-                  const exp_data = await expDataRes.json();
-                  const expData = exp_data.data;
-                  console.log('expData:', expData);
-                  setExperiment(expData);
               } catch (err: any) {
                   toast.error(err.message);
               } finally {
@@ -130,7 +144,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
               }
           };
           fetchConfigs();
-      }, []);
+      }, [isRefreshing]);
 
   // 切换行的展开状态
   const toggleRow = (id: string) => {
@@ -149,26 +163,18 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
       <div className="container mx-auto p-6">
         <Card>
           <CardContent className="p-6 text-center">
-            <h2 className="text-2xl font-bold">Experiment Not Found</h2>
-            <p className="text-gray-500 mt-2">The experiment with the specified ID does not exist.</p>
+            <h2 className="text-2xl font-bold">Loading Experiment</h2>
+            <p className="text-gray-500 mt-2">Please wait while we load the experiment data.</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
   };
-
-  // 获取状态徽章的变体
-  const getStatusVariant = (status: string) => {
-    if (status === "success") return "secondary"
-    if (status === "failed") return "destructive"
-    return "default"
-  }
 
   return (
     <div className="flex flex-col h-screen px-6 py-4 space-y-6">
@@ -318,7 +324,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                         <div className="space-y-1">
                             <Input
                                 className="w-120"
-                                value={experiment.run_config.guardrail_hint}
+                                value={experiment.run_config.guardrail_hint ?? ''}
                                 disabled
                             />
                             <Label htmlFor="guardrail_hint" className="w-[120px]">
@@ -394,7 +400,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                             <div className="flex items-center">
                               <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                                 <div
-                                  className={`h-2 rounded-full ${sample.status === 'success' ? 'bg-green-500' : sample.status === 'failed' ? 'bg-red-500' : 'bg-blue-500'}`}
+                                  className={`h-2 rounded-full ${sample.status === 'success' ? 'bg-green-500' : (sample.status === 'failed') ? 'bg-red-500' : 'bg-blue-500'}`}
                                   style={{ width: `${Math.min(100, sample.score * 100)}%` }}
                                 ></div>
                               </div>
@@ -405,8 +411,8 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                             {sample.reason}
                           </TableCell> */}
                           <TableCell>
-                            {sample.created_at && sample.updated_at
-                              ? calculateTimeDifference(sample.created_at, sample.updated_at)
+                            {sample.started_at && sample.updated_at
+                              ? calculateTimeDifference(sample.started_at, sample.updated_at)
                               : "-"}
                           </TableCell>
                           <TableCell>
@@ -470,7 +476,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                           </div>
                                           <span className="text-muted-foreground text-sm">LLM生成的响应</span>
                                         </div>
-                                        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border min-h-[120px] overflow-y-auto">
+                                        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border h-[400px] overflow-y-auto ">
                                           <p className="whitespace-pre-wrap leading-relaxed">{sample.actual_output}</p>
                                         </div>
                                       </div>
@@ -479,6 +485,17 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
 
                                   {/* 右侧：执行信息 */}
                                   <div className="space-y-6">
+                                    {/* 得分原因 */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2">
+                                        <MessageSquare className="h-5 w-5 text-primary" />
+                                        <h4 className="font-medium text-lg">得分原因</h4>
+                                      </div>
+                                      <div className="p-4 bg-muted rounded-lg">
+                                        <p className="text-muted-foreground leading-relaxed">{sample.reason}</p>
+                                      </div>
+                                    </div>
+                                    
                                     {/* 执行时间线 */}
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2">
@@ -489,42 +506,154 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                         <div className="flex items-start">
                                           <div className="w-3 h-3 rounded-full bg-primary mt-1 mr-3"></div>
                                           <div>
-                                            <span className="text-muted-foreground font-medium">开始: </span>
+                                            <span className="text-muted-foreground font-medium">创建: </span>
                                             <span className="ml-2">{formatBeijingTime(sample.created_at) || "N/A"}</span>
                                           </div>
                                         </div>
                                         <div className="flex items-start">
-                                          <div className="w-3 h-3 rounded-full bg-success mt-1 mr-3"></div>
+                                          <div className="w-3 h-3 rounded-full bg-primary mt-1 mr-3"></div>
+                                          <div>
+                                            <span className="text-muted-foreground font-medium">开始: </span>
+                                            <span className="ml-2">{sample.started_at ? formatBeijingTime(sample.started_at) : "N/A"} </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-start">
+                                          {['success', 'failed'].includes(sample.status) ? (
+                                            <div className="w-3 h-3 rounded-full bg-primary mt-1 mr-3"></div>
+                                          ):(
+                                            <div className="w-3 h-3 rounded-full bg-success mt-1 mr-3"></div>
+                                          )}
                                           <div>
                                             <span className="text-muted-foreground font-medium">完成: </span>
-                                            <span className="ml-2">{formatBeijingTime(sample.updated_at) || "进行中..."}</span>
+                                            <span className="ml-2">{['success', 'failed'].includes(sample.status) ? formatBeijingTime(sample.updated_at) : "进行中..."}</span>
                                           </div>
                                         </div>
                                       </div>
                                     </div>
 
                                     {/* 执行日志 */}
-                                    <div className="space-y-3">
+                                    {/* <div className="space-y-3">
                                       <div className="flex items-center gap-2">
                                         <Terminal className="h-5 w-5 text-muted-foreground" />
                                         <h4 className="font-medium text-lg">执行日志</h4>
                                       </div>
                                       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border h-[200px] overflow-y-auto font-mono text-sm">
-                                        {/* {sample.logs || "暂无日志信息"} */}
                                         暂无日志信息
+                                      </div>
+                                    </div> */}
+                                    {/* 执行日志 */}
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2">
+                                        <Terminal className="h-5 w-5 text-muted-foreground" />
+                                        <h4 className="font-medium text-lg">执行日志</h4>
+                                      </div>
+                                      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-border h-[500px] overflow-y-auto font-mono text-sm">
+                                        {sample.execution_metadata && sample.execution_metadata?.length > 0 ? (
+                                          <div className="space-y-4">
+                                            {sample.execution_metadata.map((item, index) => {
+                                              try {
+                                                // 解析函数参数
+                                                const args = JSON.parse(item.function.arguments);
+                                                console.log("Parsed args:", args);
+                                                // 解析观察结果
+                                                const observation = item.observation ? JSON.parse(item.observation) : null;
+                                                console.log("Parsed observation:", observation);
+                                                return (
+                                                  <div key={index} className="border-l-2 border-blue-500 pl-3 py-1">
+                                                    <div className="flex items-start gap-2 mb-2">
+                                                      <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded text-xs font-medium">{index}</Badge>
+                                                      <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded text-xs font-medium">
+                                                        {item.function.name}
+                                                      </span>
+                                                    </div>
+                                                    
+                                                    {/* 参数展示 */}
+                                                    <div className="ml-2 mb-2">
+                                                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">参数:</span>
+                                                      {/* <p>{args}</p> */}
+                                                      <div className="ml-2 mt-1 text-xs bg-white dark:bg-gray-700 rounded p-1 border border-border">
+                                                        {Object.entries(args).map(([key, value]) => (
+                                                          <div key={key} className="flex">
+                                                            <span className="text-blue-600 dark:text-blue-400">{key}:</span>
+                                                            <span className="ml-1 truncate max-w-[200px]">{value}</span>
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    </div>
+                                                    
+                                                    {/* 结果展示 */}
+                                                    <div className="ml-2 mb-2">
+                                                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400">观察结果:</span>
+                                                       <div className="ml-2 mt-1 text-xs bg-white dark:bg-gray-700 rounded p-1 border border-border whitespace-pre-wrap h-[100px] overflow-y-auto">
+                                                      <p>{item.observation}</p>
+                                                      </div>
+                                                    </div>
+                                                    {/* {observation && (
+                                                      <div className="ml-2">
+                                                        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">结果:</span>
+                                                        <p>{observation}</p>
+                                                        {observation.result && observation.result.length > 0 ? (
+                                                          <div className="ml-2 mt-1 space-y-2">
+                                                            
+                                                            {observation.result.slice(0, 3).map((result:string, resultIndex:number) => (
+                                                              <div 
+                                                                key={resultIndex} 
+                                                                className="text-xs bg-white dark:bg-gray-700 rounded p-2 border border-border hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                                                              >
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                  <span className="text-blue-600 dark:text-blue-400 font-medium">结果 #{resultIndex + 1}</span>
+                                                                  <span className="text-xs bg-gray-100 dark:bg-gray-600 px-1 rounded">
+                                                                    相关度: {(result.score * 100).toFixed(1)}%
+                                                                  </span>
+                                                                </div>
+                                                                <div className="text-gray-700 dark:text-gray-300 line-clamp-2">
+                                                                  {result.text}
+                                                                </div>
+                                                                {result.metadata && (
+                                                                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                                                    <span>来源: {result.metadata.host_name}</span>
+                                                                    {result.metadata.publish_time && (
+                                                                      <span>· {new Date(result.metadata.publish_time).toLocaleDateString()}</span>
+                                                                    )}
+                                                                  </div>
+                                                                )}
+                                                              </div>
+                                                            ))}
+                                                            {observation.result.length > 3 && (
+                                                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                                ... 还有 {observation.result.length - 3} 条结果
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        ) : (
+                                                          <div className="ml-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                            无结果
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    )} */}
+                                                  </div>
+                                                );
+                                              } catch (e) {
+                                                console.error("Error parsing execution metadata:", e);
+                                                return (
+                                                  <div key={index} className="border-l-2 border-red-500 pl-3 py-1 text-red-600 dark:text-red-400 text-xs">
+                                                    <div className="font-medium">解析错误</div>
+                                                    <div>无法解析执行元数据: {item.id}</div>
+                                                  </div>
+                                                );
+                                              }
+                                            })}
+                                          </div>
+                                        ) : (
+                                          <div className="text-gray-500 dark:text-gray-400 flex items-center justify-center h-full">
+                                            暂无日志信息
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
 
-                                    {/* 得分原因 */}
-                                    {/* <div className="space-y-3">
-                                      <div className="flex items-center gap-2">
-                                        <MessageSquare className="h-5 w-5 text-primary" />
-                                        <h4 className="font-medium text-lg">得分原因</h4>
-                                      </div>
-                                      <div className="p-4 bg-muted rounded-lg">
-                                        <p className="text-muted-foreground leading-relaxed">{sample.reason}</p>
-                                      </div>
-                                    </div> */}
+                                    
                                   </div>
                                 </div>
                               </div>

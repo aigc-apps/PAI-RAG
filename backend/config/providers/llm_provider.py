@@ -50,6 +50,7 @@ class LlmProvider(BaseConfigProvider):
             )
 
     def get_llm_model(self, model_id: str) -> OpenAILike:
+        print("self.model_id_to_entry_id", self.model_id_to_entry_id)
         assert model_id in self.model_id_to_entry_id, f"Model {model_id} not found."
         return self.get_instance(self.model_id_to_entry_id[model_id])
 

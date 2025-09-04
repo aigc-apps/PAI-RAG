@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
-from typing import Optional
+from typing import Optional, List
 from db.models.evaluation.evaluation import EvalRunConfig
 
 class ExperimentCreate(SQLModel):
@@ -69,26 +69,34 @@ class ExperimentRunResultEntity(SQLModel, table=True):
         default=None,
         description="The actual output from model during experiment"
     )
+    status: str = Field(
+        default="pending",
+        description="Execution status (pending, running, success, error)"
+    )
     score: Optional[float] = Field(
         default=None,
         description="Score of the experiment run"
     )
-    status: str = Field(
-        default="pending",
-        description="Execution status (pending, running, success, error)"
+    reason: Optional[str] = Field(
+        default=None,
+        description="Reason for the evaluation score (if applicable)"
     )
     error_message: Optional[str] = Field(
         default=None,
         description="Error details if status is error"
     )
-    execution_metadata: Optional[dict] = Field(
-        default={},
+    execution_metadata: Optional[List[dict]] = Field(
+        default=[],
         sa_column=Column("execution_metadata", JSON),
-        description="Additional execution metadata (latency, tokens, etc.)"
+        description="Additional execution metadata (function_call, observations, etc.)"
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime),
+    )
+    started_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column=Column(DateTime)
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
