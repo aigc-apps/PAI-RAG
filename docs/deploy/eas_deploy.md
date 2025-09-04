@@ -2,7 +2,7 @@
 [PAI-EAS](https://www.aliyun.com/product/bigdata/learn/eas)是阿里云机器学习PAI的模型在线服务平台，将模型一键部署为在线推理服务或AI-Web应用。
 
 ## 镜像repo
-EAS上选择官方镜像pai-rag，版本**0.4.0**及以上，如`eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.4.0-pre`
+EAS上选择官方镜像pai-rag，版本**0.4.0**及以上，如`eas-registry-vpc.cn-hangzhou.cr.aliyuncs.com/pai-eas/pai-rag:0.4.0-20250903`
 
 ## 环境变量
 #### 1. 使用CUDA加速
