@@ -1,6 +1,7 @@
 import dotenv
 dotenv.load_dotenv()
 
+from db.sqlite_store import init_sqlite_store
 import os
 from urllib.parse import quote_plus
 from logging.config import fileConfig
@@ -37,7 +38,6 @@ from db.models import (
 
 def get_sync_db_engine():
     # 从环境变量中读取数据库配置
-    local_db_url = os.getenv("SQLITE_URL", "sqlite:///./localdata/local.db")
     if not os.path.exists("./localdata"):
         os.makedirs("./localdata")
     db_type= os.getenv("DB_TYPE", "sqlite")
@@ -66,6 +66,9 @@ def get_sync_db_engine():
 
         return engine
     else:
+        init_sqlite_store()
+        local_db_url = os.getenv("SQLITE_URL", "sqlite:///./tmp/sqlite/local.db")
+
         logger.warning(
             f"Created db engine with sqlite {local_db_url}."
         )
