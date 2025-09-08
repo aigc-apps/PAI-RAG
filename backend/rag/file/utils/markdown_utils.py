@@ -10,11 +10,14 @@ from mistletoe.block_token import (
     Quote,
     HTMLBlock,
 )
-from mistletoe.span_token import RawText, Emphasis, Strong, InlineCode, Link, Image
+from mistletoe.span_token import RawText, Emphasis, Strong, InlineCode, Link, Image, LineBreak
 from mistletoe import Document
 
 START_HTML_TAG = "<html><body><table>"
 END_HTML_TAG = "</table></body></html>"
+START_SIMPLE_TABLE_TAG = "<table>"
+END_SIMPLE_TABLE_TAG = "</table>"
+
 
 class PaiTable(BaseModel):
     data: TList[TList[str]] = Field(description="The table data.", default=[])
@@ -120,6 +123,8 @@ class TreeNode:
         self.content = content  # 节点内容
         self.content_token_count = len(content)  # 本节点内容和本节点所有子节点token数
         self.children: TList["TreeNode"] = []  # 子节点列表
+        self.page_idx = None # 页码
+        self.bbox = None # 位置坐标
 
     def add_child(self, node: "TreeNode"):
         self.children.append(node)
@@ -204,7 +209,7 @@ class ASTTreeBuilder:
         移除HTML标签，保留表格内容。
         """
         if START_HTML_TAG in content and END_HTML_TAG in content:
-            content = content.replace(START_HTML_TAG, "<table>").replace(END_HTML_TAG, "</table>")
+            content = content.replace(START_HTML_TAG, START_SIMPLE_TABLE_TAG).replace(END_HTML_TAG, END_SIMPLE_TABLE_TAG)
         return content
 
     def handle_paragraph(self, node: Paragraph):
@@ -212,7 +217,7 @@ class ASTTreeBuilder:
         if not content:
             return  # 忽略空段落
 
-        if content.startswith(START_HTML_TAG) and content.endswith(END_HTML_TAG):
+        if (content.startswith(START_HTML_TAG) and content.endswith(END_HTML_TAG)) or (content.startswith(START_SIMPLE_TABLE_TAG) and content.endswith(END_SIMPLE_TABLE_TAG)):
             new_node = TreeNode(
                 level=self.stack[-1].level + 1, category="html_table", content=self._remove_html_table_tags(content)
             )
@@ -222,7 +227,7 @@ class ASTTreeBuilder:
             )
         else:
             new_node = TreeNode(
-                level=self.stack[-1].level, category="paragraph", content=self._remove_html_table_tags(content)
+                level=self.stack[-1].level + 1, category="paragraph", content=self._remove_html_table_tags(content)
             )
         self.stack[-1].add_child(new_node)
 
@@ -257,7 +262,7 @@ class ASTTreeBuilder:
             leader = node.leader
         else:
             leader = ""
-        content = f"{leader}{content}"
+        content = f"{leader}{content}  \n"
         new_node = TreeNode(
             level=self.stack[-1].level + 1, category="list_item", content=content
         )
@@ -353,13 +358,17 @@ class ASTTreeBuilder:
             if isinstance(token, Image):
                 self.handle_image(token)
             else:
-                result += self.process_span_node(token)
+                processed = self.process_span_node(token)
+                if processed is not None:
+                    result += processed
         # for token in tokens:
         #     result += self.process_span_node(token)
         return result
 
     def process_span_node(self, node) -> str:
-        if isinstance(node, RawText):
+        if isinstance(node, LineBreak):  # 处理硬换行
+            return "  \n"
+        elif isinstance(node, RawText):
             return node.content
         elif isinstance(node, Emphasis):
             content = self.render_span_tokens(node.children)

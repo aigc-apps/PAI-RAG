@@ -5,6 +5,8 @@ load_dotenv()
 import os
 import asyncio
 from fastapi import FastAPI
+import threading
+from db.sqlite_store import sync_sqlite_store_task, stop_event, sync_sqlite_store
 
 # setup models
 from utils.constants import DEFAULT_MODEL_DIR
@@ -23,13 +25,24 @@ format_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
-    chroma_service = LocalChromaService()
-    chroma_service.start()
     await config_change_manager.init_configuration()
     asyncio.create_task(config_change_manager.monitor_changes_async())
+
+    sqlite_thread = None
+    if os.getenv("DB_TYPE", "sqlite") != "postgresql":
+        sqlite_thread = threading.Thread(target=sync_sqlite_store_task, daemon=False)
+        sqlite_thread.start()
+
+    chroma_service = LocalChromaService()
+    chroma_service.start()
     yield
 
     chroma_service.stop()
+
+    if sqlite_thread:
+        stop_event.set()
+        sync_sqlite_store()
+        sqlite_thread.join(timeout=10)
     logger.info("Application shutting down...")
 
 
