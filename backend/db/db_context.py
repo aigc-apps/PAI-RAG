@@ -3,14 +3,12 @@
 import dotenv
 dotenv.load_dotenv()
 
-from db.sqlite_store import init_sqlite_store
 from loguru import logger
 from sqlmodel import SQLModel
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 from functools import wraps
-from sqlalchemy import event
 
 from urllib.parse import quote_plus
 import os
@@ -46,7 +44,6 @@ def get_async_db_angine():
 
         return async_engine
     else:
-        init_sqlite_store()
         local_db_url = os.getenv("SQLITE_URL", "sqlite+aiosqlite:///./tmp/sqlite/local.db")
         logger.warning(
             f"Created db engine with sqlite {local_db_url}."
@@ -56,21 +53,6 @@ def get_async_db_angine():
             echo=False,  # 输出执行的 SQL 语句
             connect_args={"check_same_thread": False},  # SQLite 特有参数
         )
-
-        @event.listens_for(async_engine.sync_engine, "connect")
-        def set_sqlite_pragma(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            try:
-                # 启用 WAL 模式
-                cursor.execute("PRAGMA journal_mode=WAL")
-                cursor.execute("PRAGMA busy_timeout=5000")
-                cursor.execute("PRAGMA foreign_keys=ON")
-                cursor.execute("PRAGMA synchronous=NORMAL")  # 平衡性能与安全
-                logger.info("Set WAL rules for SQLITE connection.")
-                # 可选：自动检查点
-                # cursor.execute("PRAGMA wal_autocheckpoint=1000")
-            finally:
-                cursor.close()
 
         return async_engine
 

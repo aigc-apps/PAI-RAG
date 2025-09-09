@@ -37,19 +37,20 @@ def process_file(file_id: str, is_attachment: bool = False):
     loop.run_until_complete(kb_client.process_file_async(file_id, is_attachment))
     logger.info(f"Processed file {file_id} successfully.")
 
+
 @app.task(name="download_model")
 def download_model(
-    model_id: str,
+    id: str,
     model_name: str,
     model_type: str="embedding"):
-    logger.info(f"Downloading {model_type} model {model_id} {model_name}.")
+    logger.info(f"Downloading {model_type} model {id} {model_name}.")
     if model_type == "embedding":
         loop = asyncio.get_event_loop()
         try:
             download_model_to_directory(model_name)
         except Exception:
             logger.error(f"Failed to download embedding model, error: {traceback.format_exc()}")
-        loop.run_until_complete(set_embedding_model_ready(model_id=model_id))
-        logger.info(f"Downloaded embedding model {model_id} {model_name} successfully.")
+        loop.run_until_complete(set_embedding_model_ready(id=id))
+        logger.info(f"Downloaded embedding model {id} {model_name} successfully.")
     else:
         logger.info(f"Model {model_name} is not a embedding model,skip processing.")

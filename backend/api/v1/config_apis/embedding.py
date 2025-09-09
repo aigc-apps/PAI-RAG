@@ -45,7 +45,7 @@ async def create_embedding(
         )
         if embedding.type == EmbeddingType.LOCAL:
             import app.worker as background_worker
-            background_worker.download_model.delay(model_id=embedding.id, model_name=embedding.model_name)
+            background_worker.download_model.delay(id=embedding.id, model_name=embedding.model_name)
         return success_response(data=embedding, message="创建embedding模型成功。")
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add embedding: {e.orig}")
