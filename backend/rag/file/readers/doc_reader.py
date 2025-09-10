@@ -179,8 +179,9 @@ class DocxReader(BaseReader):
                                                         )
                                                     )
                                                 )
-                                                image_text = f'<img src="{save_image_name}" alt="{image_alt_text}">'
-                                                markdown.append(f"{image_text}\n\n")
+                                                cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                                                image_text = f'\n![{cleaned_alt}]({save_image_name})\n'
+                                                markdown.append(f"{image_text}\n")
                                                 images.append(save_image_name)
 
                                                 logger.info(

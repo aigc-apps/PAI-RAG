@@ -17,6 +17,7 @@ START_HTML_TAG = "<html><body><table>"
 END_HTML_TAG = "</table></body></html>"
 START_SIMPLE_TABLE_TAG = "<table>"
 END_SIMPLE_TABLE_TAG = "</table>"
+HARD_LINE_BREAK = "  \n"
 
 
 class PaiTable(BaseModel):
@@ -221,7 +222,7 @@ class ASTTreeBuilder:
             new_node = TreeNode(
                 level=self.stack[-1].level + 1, category="html_table", content=self._remove_html_table_tags(content)
             )
-        elif content.startswith("<img") and content.endswith("/>"):
+        elif content.startswith("<img") and (content.endswith(">") or content.endswith("/>")):
             new_node = TreeNode(
                 level=self.stack[-1].level + 1, category="image_caption", content=content
             )
@@ -300,7 +301,9 @@ class ASTTreeBuilder:
         self.stack[-1].add_child(new_node)
 
     def handle_image(self, node: Image):
-        content = node.src
+        image_url = node.src
+        alt_text = self.render_span_tokens(node.children)
+        content = f"图片链接: {image_url}\n图片描述: {alt_text}"
         new_node = TreeNode(
             level=self.stack[-1].level + 1, category="image", content=content
         )
@@ -367,7 +370,7 @@ class ASTTreeBuilder:
 
     def process_span_node(self, node) -> str:
         if isinstance(node, LineBreak):  # 处理硬换行
-            return "  \n"
+            return HARD_LINE_BREAK
         elif isinstance(node, RawText):
             return node.content
         elif isinstance(node, Emphasis):

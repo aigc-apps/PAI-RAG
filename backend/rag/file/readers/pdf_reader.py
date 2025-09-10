@@ -11,12 +11,12 @@ from rag.file.store.oss_store import OssFileStore
 from rag.file.utils.image_utils import compress_image_if_needed
 from rag.file.image_caption_tool import ImageCaptionTool
 from utils.modelscope_utils import init_mineru_config
-from mineru.cli.common import convert_pdf_bytes_to_bytes_by_pypdfium2
 from mineru.backend.pipeline.pipeline_analyze import doc_analyze as pipeline_doc_analyze
 from mineru.backend.pipeline.model_json_to_middle_json import result_to_middle_json as pipeline_result_to_middle_json
 from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru.utils.enum_class import BlockType, ContentType
 from mineru.backend.pipeline.pipeline_middle_json_mkcontent import merge_para_with_text
+from rag.file.utils.markdown_utils import HARD_LINE_BREAK
 from dataclasses import dataclass
 import json
 from llama_index.core.schema import Document
@@ -55,9 +55,8 @@ class MineruPdfReader(BaseReader):
             os.makedirs(local_image_dir, exist_ok=True)
 
             pdf_bytes = file_item.get_data()
-            new_pdf_bytes = convert_pdf_bytes_to_bytes_by_pypdfium2(pdf_bytes, start_page_id=0, end_page_id=None)
             infer_results, all_image_lists, all_pdf_docs, lang_list, ocr_enabled_list = (
-            pipeline_doc_analyze(pdf_bytes_list=[new_pdf_bytes],lang_list=['ch','en'])
+            pipeline_doc_analyze(pdf_bytes_list=[pdf_bytes],lang_list=['ch','en'])
             )
             model_list = infer_results[0]
             # model_json = copy.deepcopy(model_list)
@@ -174,7 +173,7 @@ class MineruPdfReader(BaseReader):
             if para_type in [BlockType.TEXT, BlockType.LIST, BlockType.INDEX]:
                 para_text = merge_para_with_text(para_block)
             elif para_type == BlockType.TITLE:
-                title_text = merge_para_with_text(para_block)
+                title_text = merge_para_with_text(para_block).replace('\r', '').replace('\n', '')
                 para_text = f"# {title_text}"
                 md_title_index.append(index_count)
                 title_level = para_block.get('level', None)
@@ -207,17 +206,18 @@ class MineruPdfReader(BaseReader):
                                                 self.file_store.get_url(real_image_path)
                                             )
                                         )
-                                        para_text += f'\n<img src="{real_image_path}" alt="{image_alt_text}">\n'
+                                        cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                                        para_text += f'\n![{cleaned_alt}]({real_image_path})\n'
                 for block in para_block["blocks"]:  # 2nd.拼image_caption
                     if block["type"] == BlockType.IMAGE_CAPTION:
-                        para_text += merge_para_with_text(block) + "  \n"
+                        para_text += merge_para_with_text(block) + HARD_LINE_BREAK
                 for block in para_block["blocks"]:  # 3rd.拼image_footnote
                     if block["type"] == BlockType.IMAGE_FOOTNOTE:
-                        para_text += merge_para_with_text(block) + "  \n"
+                        para_text += merge_para_with_text(block) + HARD_LINE_BREAK
             elif para_type == BlockType.TABLE:
                 for block in para_block["blocks"]:  # 1st.拼table_caption
                     if block["type"] == BlockType.TABLE_CAPTION:
-                        para_text += merge_para_with_text(block) + "  \n"
+                        para_text += merge_para_with_text(block) + HARD_LINE_BREAK
                 for block in para_block["blocks"]:  # 2nd.拼table_body
                     if block["type"] == BlockType.TABLE_BODY:
                         for line in block["lines"]:
@@ -239,10 +239,11 @@ class MineruPdfReader(BaseReader):
                                                 self.file_store.get_url(real_image_path)
                                             )
                                         )
-                                        para_text += f'\n<img src="{real_image_path}" alt="{image_alt_text}">\n'
+                                        cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                                        para_text += f'\n![{cleaned_alt}]({real_image_path})\n'
                 for block in para_block["blocks"]:  # 3rd.拼table_footnote
                     if block["type"] == BlockType.TABLE_FOOTNOTE:
-                        para_text += merge_para_with_text(block) + "  \n"
+                        para_text += merge_para_with_text(block) + HARD_LINE_BREAK
 
             if para_text.strip() == "":
                 continue
@@ -300,7 +301,8 @@ class MineruPdfReader(BaseReader):
             cur_index = slice_index.pop()
         for index, (idx, title_info) in enumerate(sorted_list):
             if index > cur_index:
-                rank += 1
+                if rank < 6:
+                    rank += 1
                 if len(slice_index) > 0:
                     cur_index = slice_index.pop()
                 else:

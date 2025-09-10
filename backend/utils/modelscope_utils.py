@@ -11,13 +11,16 @@ import os
 import json
 from loguru import logger
 
+
+
 INTERNAL_MODEL_DIR = "./model_repository"
-INTERNAL_MODELS = ["BAAI/bge-m3", "OpenDataLab/PDF-Extract-Kit-1.0"] #必须的模型文件，提前下载
+PDF_EXTRACT_KIT_MODEL = "OpenDataLab/PDF-Extract-Kit-1.0"
+INTERNAL_MODELS = ["BAAI/bge-m3", PDF_EXTRACT_KIT_MODEL] #必须的模型文件，提前下载
 
 
 def init_mineru_config(model_dir: str = INTERNAL_MODEL_DIR):
     # 获取配置文件目录
-    download_model_to_directory("OpenDataLab/PDF-Extract-Kit-1.0")
+    download_model_to_directory(PDF_EXTRACT_KIT_MODEL)
 
     current_dir_path = Path(__file__).parent.parent
     source_path = os.path.join(current_dir_path, "mineru.template.json")

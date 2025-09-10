@@ -50,7 +50,8 @@ class MarkdownReader(BaseReader):
                     image_alt_text = self.image_caption_tool.extract_url(
                         self.file_store.get_url(save_image_name)
                     )
-                    image_text = f'<img src="{save_image_name}" alt="{image_alt_text}">'
+                    cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                    image_text = f'\n![{cleaned_alt}]({save_image_name})\n'
                     content = content.replace(full_match, image_text)
                     saved_images.append(save_image_name)
 

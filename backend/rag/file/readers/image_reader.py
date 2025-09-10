@@ -4,6 +4,7 @@ from rag.file.store.oss_store import OssFileStore
 from rag.file.utils.image_utils import compress_image_if_needed
 from rag.file.image_caption_tool import ImageCaptionTool
 from loguru import logger
+import re
 
 
 class ImageReader(BaseReader):
@@ -35,7 +36,8 @@ class ImageReader(BaseReader):
             image_alt_text = self.image_caption_tool.extract_url(
                 self.file_store.get_url(save_image_name)
             )
-            image_text = f'<img src="{save_image_name}" alt="{image_alt_text}">'
+            cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+            image_text = f'\n![{cleaned_alt}]({save_image_name})\n'
 
             metadata = file_item.metadata()
 

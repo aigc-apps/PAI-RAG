@@ -21,6 +21,7 @@ from rag.file.utils.markdown_utils import (
 from rag.file.splitters.utils import fuzzy_match_content
 from mineru.utils.enum_class import BlockType
 from fuzzywuzzy import fuzz
+from rag.file.utils.markdown_utils import HARD_LINE_BREAK
 import json
 
 
@@ -95,7 +96,7 @@ class StructuredNodeParser(BaseModel):
 
         # 处理当前节点自身的pages_bbox
 
-        self_pages_bbox, pointer = self.find_node_bbox_in_content_list( node.content, content_list, pointer)
+        self_pages_bbox, pointer = self.find_node_bbox_in_content_list(node.content, content_list, pointer)
 
         # 将当前节点的pages_bbox加入集合
         all_pages_bbox.extend(self_pages_bbox)
@@ -134,7 +135,7 @@ class StructuredNodeParser(BaseModel):
     ) -> TextNode:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
         doc_node.extra_info['pages_bbox'] = json.dumps(pages_bbox, ensure_ascii=False)
-        doc_node.extra_info['hierarchical_titles'] = "\n".join([h.content for h in title_stack])
+        doc_node.extra_info['chapter_name'] = "\n".join([h.content for h in title_stack])
         if "content_list" in doc_node.extra_info:
             doc_node.extra_info.pop("content_list")
         text_node = TextNode(
@@ -161,19 +162,7 @@ class StructuredNodeParser(BaseModel):
         nearest_title_stack = []
         # 初始化指针
         pointer = {"page_idx": 0, "block_idx": 0}
-
-        # 判断是否可以将整个树节点作为一个chunk
-        if root.content_token_count <= self.chunk_size:
-            new_chunk_text, pages_bbox, pointer = self._format_tree_nodes(
-                root, doc_node, ref_doc, nodes_list, title_stack, content_list, pointer
-            )
-
-            # 避免插入内容为空的节点
-            if len(new_chunk_text) > 0:
-                node = self._create_text_node(new_chunk_text, doc_node, ref_doc, pages_bbox, title_stack)
-                nodes_list.append(node)
-        else:
-            pointer = self.traverse_tree(root, doc_node, ref_doc, nodes_list, title_stack, nearest_title_stack, content_list, pointer)
+        pointer = self.traverse_tree(root, doc_node, ref_doc, nodes_list, title_stack, nearest_title_stack, content_list, pointer)
 
         return nodes_list.copy()
 
@@ -181,7 +170,7 @@ class StructuredNodeParser(BaseModel):
         tree_nodes_group = []
         tree_tokens = 0
         for tree_node in tree_nodes:
-            if tree_node.category == "image":
+            if tree_node.category in ["image", "image_caption"]:
                 if tree_nodes_group:
                     tree_nodes_group[-1].append(tree_node)
                 else:
@@ -223,7 +212,7 @@ class StructuredNodeParser(BaseModel):
 
         # 单个节点token数大于chunk_size，则需要将节点进行拆分。拆分元素里不会含有image。
         if not tree_node.children:
-            if tree_node.category == "image_caption":
+            if tree_node.category == "image":
                 # 图片描述，不进行切割, 在原文中也没有bbox
                 node = self._create_text_node(tree_node.content, doc_node, ref_doc)
                 nodes_list.append(node)
@@ -316,12 +305,29 @@ class StructuredNodeParser(BaseModel):
 
             for j in range(block_start, len(para_blocks)):
                 para_block = para_blocks[j]
-                if para_block.get('type') in [BlockType.TABLE, BlockType.IMAGE]:
+                if para_block.get('type')  == BlockType.TABLE:
                     ratio = fuzzy_match_content(node_content, para_block, para_block["type"])
                     if ratio > 0.7:
                         pages_bbox.append({
                             "page_idx": content.get("page_idx", -1),
                             'bbox': para_block['bbox']
+                        })
+                        # 更新指针到下一个位置
+                        pointer = {"page_idx": i, "block_idx": j + 1}
+                        return pages_bbox, pointer
+                elif para_block.get('type') == BlockType.IMAGE:
+                    para_text = ""
+                    for block in para_block["blocks"]:
+                        if block["type"] == BlockType.IMAGE_CAPTION:
+                            para_text += merge_para_with_text(block) + HARD_LINE_BREAK
+                        elif block["type"] == BlockType.IMAGE_FOOTNOTE:
+                            para_text += merge_para_with_text(block) + HARD_LINE_BREAK
+                    ratio = fuzz.token_sort_ratio(node_content, para_text.strip()) / 100.0
+                    if ratio > 0.9:
+                        para_text_bbox = para_block.get('bbox')
+                        pages_bbox.append({
+                            "page_idx": content.get("page_idx", -1),
+                            'bbox': para_text_bbox
                         })
                         # 更新指针到下一个位置
                         pointer = {"page_idx": i, "block_idx": j + 1}
@@ -386,5 +392,6 @@ class MarkdownNodeParser(NodeParser):
 
             chunks = parser.get_nodes_from_tree(ast_root, node, content_list)
             all_chunks.extend(chunks)
+
 
         return all_chunks

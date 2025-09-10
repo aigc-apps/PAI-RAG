@@ -42,7 +42,7 @@ async def get_multimodal_llm_from_db(
     session: AsyncSession,
 ) -> OpenAILike:
     config = (await session.exec(
-        select(LlmModelEntity).where(LlmModelEntity.vision_support)
+        select(LlmModelEntity).where(LlmModelEntity.vision_support and LlmModelEntity.enabled)
     )).first()
 
     if not config:
