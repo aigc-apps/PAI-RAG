@@ -5,9 +5,10 @@ from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
-from db.models.evaluation.evaluation import EvalEntity, EvalCreate, EvalRunConfig
+from db.models.evaluation.evaluation import EvalEntity, EvalCreate
 from db.models.evaluation.dataset import EvalDatasetEntity
 from db.models.evaluation.experiment import ExperimentEntity, ExperimentRunResultEntity, ExperimentCreate
+from db.models.evaluation.run_config import EvalRunConfigEntity, EvalRunConfigCreate
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
@@ -17,7 +18,6 @@ from loguru import logger
 from rag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
 from config.providers.evaluation_provider import evaluation_provider
-from db.models.chatbot import ChatBotEntity
 
 
 evaluation_router = APIRouter()
@@ -27,24 +27,6 @@ async def create_evaluation(
     eval_create: EvalCreate, session: AsyncSession = Depends(get_session)
 ):
     try:
-        if eval_create.run_type and eval_create.run_type == "chatbot":
-            statement = select(ChatBotEntity).where(
-                ChatBotEntity.app_id == eval_create.chatbot_id
-            )
-            chatbot = (await session.exec(statement)).first()
-            eval_create.default_run_config = {
-                "model_id": chatbot.model_id,
-                "mcp_ids": chatbot.mcp_ids,
-                "kb_ids": chatbot.kb_ids,
-                "enable_search": chatbot.enable_search,
-                "enable_vision": chatbot.enable_vision,
-                "enable_agent": chatbot.enable_agent,
-                "enable_input_guardrail": chatbot.enable_input_guardrail,
-                "enable_output_guardrail": chatbot.enable_output_guardrail,
-                "guardrail_hint": chatbot.guardrail_hint,
-            }
-        else:
-            eval_create.default_run_config = eval_create.default_run_config or EvalRunConfig().model_dump()
         evaluation = EvalEntity.model_validate(eval_create)
         evaluation_provider.add(evaluation)
         session.add(evaluation)
@@ -86,22 +68,69 @@ async def list_evaluations(
     size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
 ):
+    # 子查询 1：统计每个 eval_id 对应的数据集数量
+    dataset_count_subq = (
+        select(
+            EvalDatasetEntity.eval_id,
+            func.count(EvalDatasetEntity.id).label("dataset_count")
+        )
+        .group_by(EvalDatasetEntity.eval_id)
+        .subquery()
+    )
+
+    # 子查询 2：统计每个 eval_id 对应的实验数量
+    experiment_count_subq = (
+        select(
+            ExperimentEntity.eval_id,
+            func.count(ExperimentEntity.id).label("experiments_count")
+        )
+        .group_by(ExperimentEntity.eval_id)
+        .subquery()
+    )
+
+    # 主查询：左连接两个子查询
+    query = (
+        select(
+            EvalEntity,
+            func.coalesce(dataset_count_subq.c.dataset_count, 0).label("dataset_count"),
+            func.coalesce(experiment_count_subq.c.experiments_count, 0).label("experiments_count"),
+        )
+        .outerjoin(
+            dataset_count_subq,
+            EvalEntity.id == dataset_count_subq.c.eval_id
+        )
+        .outerjoin(
+            experiment_count_subq,
+            EvalEntity.id == experiment_count_subq.c.eval_id
+        )
+        .order_by(EvalEntity.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
+    # 获取总数（不变）
     total_results = await session.exec(
         select(func.count()).select_from(EvalEntity)
     )
     total_num = total_results.one_or_none()
+
+    # 执行主查询
+    results = await session.exec(query)
+    eval_entities_with_counts = results.all()
+
+    # 构造返回数据（包含两个统计字段）
+    items = []
+    for eval_entity, dataset_count, experiments_count in eval_entities_with_counts:
+        item = eval_entity.model_dump()
+        item["dataset_count"] = dataset_count
+        item["experiments_count"] = experiments_count  # 👈 新增
+        items.append(item)
+
     pagination = get_pagination_meta(page, size, total_num)
-    eval_results = await session.exec(
-        select(EvalEntity)
-        .order_by(EvalEntity.created_at.desc())
-        .offset(pagination.offset)
-        .limit(size)
-    )
-    eval_entities = eval_results.all()
 
     return success_response(
         data=PagedResult(
-            items=eval_entities,
+            items=items,
             total=pagination.total,
             pages=pagination.pages,
             page=pagination.page,
@@ -139,28 +168,6 @@ async def update_evaluation(
     try:
         evaluation.name = new_eval.name or evaluation.name
         evaluation.description = new_eval.description or evaluation.description
-        evaluation.run_type = new_eval.run_type or evaluation.run_type
-
-        if evaluation.run_type == "chatbot":
-            evaluation.chatbot_id = new_eval.chatbot_id
-            statement = select(ChatBotEntity).where(
-                ChatBotEntity.app_id == evaluation.chatbot_id
-            )
-            chatbot = (await session.exec(statement)).first()
-            evaluation.default_run_config = {
-                "model_id": chatbot.model_id,
-                "mcp_ids": chatbot.mcp_ids,
-                "kb_ids": chatbot.kb_ids,
-                "enable_search": chatbot.enable_search,
-                "enable_vision": chatbot.enable_vision,
-                "enable_agent": chatbot.enable_agent,
-                "enable_input_guardrail": chatbot.enable_input_guardrail,
-                "enable_output_guardrail": chatbot.enable_output_guardrail,
-                "guardrail_hint": chatbot.guardrail_hint,
-            }
-        else:
-            evaluation.chatbot_id = ""
-            evaluation.default_run_config = new_eval.default_run_config
 
         evaluation_provider.update(evaluation)
         session.add(evaluation)
@@ -181,6 +188,32 @@ async def update_evaluation(
         return error_response(message=f"更新评估任务失败：{traceback.format_exc()}")
 
 
+@evaluation_router.delete("/{eval_id}")
+async def delete_evaluation(
+    eval_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    evaluation = await session.get(EvalEntity, eval_id)
+
+    if not evaluation:
+        return JSONResponse(
+            content=error_response(code=404, message=f"删除评估任务失败: 知识库'{eval_id}'不存在。"),
+            status_code=404,
+        )
+
+    evaluation_provider.delete(eval_id)
+    await session.delete(evaluation)
+    await session.commit()
+
+    await config_change_manager.notify_change_async(
+        event_source=ChangeEventSource.EVALUATION,
+        event_type=ChangeEventType.DELETE,
+        source_id=evaluation.id,
+    )
+
+    logger.info(f"Evaluation {eval_id} has been deleted.")
+
+    return success_response(message=f"评估任务'{eval_id}'删除成功。")
 
 @evaluation_router.post("/{eval_id}/dataset")
 async def upload_dataset(
@@ -292,7 +325,7 @@ async def create_experiment(
             eval_id=eval_id,
             name=experiment_create.name,
             samples_count=len(dataset_entities),
-            run_config=experiment_create.run_config or EvalRunConfig().model_dump(),
+            run_config_id=experiment_create.run_config_id,
             description=experiment_create.description or "Experiment created via API",
             status="pending"
         )
@@ -435,3 +468,153 @@ async def delete_experiment(
 
     logger.info(f"Experiment {exp_id} has been deleted.")
     return success_response(message=f"实验'{exp_id}'删除成功。")
+
+# evaluation run config
+@evaluation_router.post("/{eval_id}/configs")
+async def create_run_config(
+    eval_id: str,
+    run_config: EvalRunConfigCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Create run_config for {eval_id}.")
+    try:
+        run_config_entity = EvalRunConfigEntity(
+            eval_id=eval_id,
+            name=run_config.name,
+            model_id=run_config.model_id,
+            mcp_ids=run_config.mcp_ids,
+            kb_ids=run_config.kb_ids,
+            enable_search=run_config.enable_search,
+            enable_vision=run_config.enable_vision,
+            enable_agent=run_config.enable_agent,
+            enable_input_guardrail=run_config.enable_input_guardrail,
+            enable_output_guardrail=run_config.enable_output_guardrail,
+            guardrail_hint=run_config.guardrail_hint,
+            evaluator_config=run_config.evaluator_config.model_dump()
+        )
+
+        session.add(run_config_entity)
+        await session.commit()
+        logger.info(f"创建实验设置 {run_config_entity} 成功.")
+        return success_response(data=run_config_entity, message="创建实验设置成功")
+    except Exception as e:
+        logger.error(f"Failed to create run_config: {traceback.format_exc()}")
+        await session.rollback()
+        return error_response(message=f"Failed to create run_config: {e}")
+
+
+@evaluation_router.put("/{eval_id}/configs/{config_id}", response_model=ResponseModel[EvalRunConfigEntity])
+async def update_run_config(
+    eval_id: str,
+    config_id: str,
+    new_run_config: EvalRunConfigCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    run_config = await session.get(EvalRunConfigEntity, config_id)
+    if not run_config:
+        return JSONResponse(
+            content=error_response(code=404, message=f"更新实验设置失败: '{config_id}'不存在。"),
+            status_code=404,
+        )
+
+    try:
+        run_config.name = new_run_config.name
+        run_config.model_id = new_run_config.model_id
+        run_config.mcp_ids = new_run_config.mcp_ids
+        run_config.kb_ids = new_run_config.kb_ids
+        run_config.enable_search = new_run_config.enable_search
+        run_config.enable_vision = new_run_config.enable_vision
+        run_config.enable_agent = new_run_config.enable_agent
+        run_config.enable_input_guardrail = new_run_config.enable_input_guardrail
+        run_config.enable_output_guardrail = new_run_config.enable_output_guardrail
+        run_config.guardrail_hint = new_run_config.guardrail_hint
+        run_config.evaluator_config = new_run_config.evaluator_config.model_dump()
+
+
+        evaluation_provider.update(run_config)
+        session.add(run_config)
+        await session.commit()
+        await session.refresh(run_config)
+
+        logger.info(f"Evaluation {eval_id} run config  {config_id} updated to {run_config}.")
+
+        return success_response(data=run_config, message="更新实验设置成功。")
+    except Exception:
+        logger.error(f"Failed to update run config {config_id}: {traceback.format_exc()}")
+        return error_response(message=f"更新实验设置失败：{traceback.format_exc()}")
+
+@evaluation_router.get("/{eval_id}/configs")
+async def list_run_configs(
+    eval_id: str,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, le=1000),
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Get run_configs for {eval_id}.")
+    total_results = await session.exec(
+        select(func.count())
+        .select_from(select(EvalRunConfigEntity).where(EvalRunConfigEntity.eval_id == eval_id))
+    )
+    total_num = total_results.one_or_none()
+    pagination = get_pagination_meta(page, size, total_num)
+    run_config_results = await session.exec(
+        select(EvalRunConfigEntity)
+        .where(EvalRunConfigEntity.eval_id == eval_id)
+        .order_by(EvalRunConfigEntity.created_at.desc())
+        .offset(pagination.offset)
+        .limit(size)
+    )
+    run_config_entities = run_config_results.all()
+
+    return success_response(
+        data=PagedResult(
+            items=run_config_entities,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
+        ),
+        message="获取实验设置列表成功")
+
+
+@evaluation_router.get("/{eval_id}/configs/{config_id}")
+async def get_configs(
+    eval_id: str,
+    config_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Get experiment for eval_id {eval_id} and config_id {config_id}.")
+    run_config_results = await session.exec(
+        select(EvalRunConfigEntity)
+        .where(EvalRunConfigEntity.eval_id == eval_id)
+        .where(EvalRunConfigEntity.id == config_id)
+    )
+    run_config_entities = run_config_results.all()
+    if len(run_config_entities) > 0:
+        return success_response(
+            data=run_config_entities[0],
+            message="获取实验设置详情成功")
+    else:
+        return success_response(
+            data=[],
+            message="获取实验设置详情成功")
+
+@evaluation_router.delete("/{eval_id}/configs/{config_id}")
+async def delete_config(
+    eval_id: str,
+    config_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    logger.info(f"Delete experiment for eval_id {eval_id} and config_id {config_id}.")
+    Run_config = await session.get(EvalRunConfigEntity, config_id)
+    if not Run_config:
+        return JSONResponse(
+            content=error_response(code=404, message=f"删除实验设置失败: '{config_id}'不存在。"),
+            status_code=404,
+        )
+
+    await session.delete(Run_config)
+    await session.commit()
+
+    logger.info(f"Run_config {config_id} has been deleted.")
+    return success_response(message=f"实验设置'{config_id}'删除成功。")

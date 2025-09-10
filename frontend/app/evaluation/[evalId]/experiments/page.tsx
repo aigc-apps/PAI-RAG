@@ -57,17 +57,7 @@ export interface ExperimentItem {
   name: string;
   description: string;
   status: string;
-  run_config: {
-    model_id: string;
-    mcp_ids: string[];
-    kb_ids: string[];
-    enable_search: boolean;
-    enable_vision: boolean;
-    enable_agent: boolean;
-    enable_input_guardrail?: boolean;
-    enable_output_guardrail?: boolean;
-    guardrail_hint?: string;
-  };
+  run_config_id: string;
   avg_score: number;
   created_at: string;
   updated_at: string;
@@ -97,7 +87,7 @@ export const getStatusBadge = (status: string) => {
     }
 };
 
-export default function EvalExpDetailsPage(
+export default function EvalExperimentsDetailsPage(
     { params }: { params: Promise<{ evalId: string }> }
 ) {
     const { evalId } = use(params);
@@ -110,7 +100,7 @@ export default function EvalExpDetailsPage(
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [dataseterror, setDatasetError] = useState(''); 
-    const pageSize = 3;
+    const pageSize = 8;
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
 
@@ -213,7 +203,7 @@ export default function EvalExpDetailsPage(
         console.log(`执行操作: ${action} - ${id}`);
         // 这里可以添加实际操作逻辑
         if (action === "view") {
-            router.push(`/evaluation/${evalId}/experiments/${id}`)
+            router.push(`/evaluation/${evalId}/${id}`)
         }
     };
 
@@ -239,11 +229,10 @@ export default function EvalExpDetailsPage(
     }
 
     return (
-        <div className="flex flex-col h-screen px-6 py-4 space-y-6">
-            <div className="flex-none">
+        <div className="flex flex-col h-screen py-4 space-y-6">
+            {/* <div className="flex-none">
                 <div className="p-2 space-y-2">
                     <div className="mb-2 flex items-center gap-2">
-                        {/* 面包屑导航 */}
                         <Breadcrumb>
                             <BreadcrumbList>
                                 <BreadcrumbItem>
@@ -283,10 +272,9 @@ export default function EvalExpDetailsPage(
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> */}
 
-            <div className="px-2 w-full">
-                <div>
+            <div className="w-full">
                     <Card className="w-full">
                         <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                             <div>
@@ -333,7 +321,7 @@ export default function EvalExpDetailsPage(
                                         </SelectContent>
                                     </Select> */}
 
-                                    <Button onClick={() => router.push(`/evaluation/${evalId}/datasets`)}>
+                                    <Button onClick={() => router.push(`/evaluation/${evalId}`)}>
                                         <Play className="mr-2 h-4 w-4" /> 新建实验
                                     </Button>
                                 </div>
@@ -375,7 +363,7 @@ export default function EvalExpDetailsPage(
                                                                 className="truncate max-w-[120px] font-medium text-blue-600"
                                                                 onClick={() =>
                                                                     router.push(
-                                                                        `/evaluation/${evalId}/experiments/${item.id}`,
+                                                                        `/evaluation/${evalId}/${item.id}`,
                                                                     )
                                                                 }
                                                             >
@@ -439,7 +427,7 @@ export default function EvalExpDetailsPage(
                                                                 <DropdownMenuItem 
                                                                     onClick={() =>
                                                                         router.push(
-                                                                            `/evaluation/${evalId}/experiments/${item.id}`,
+                                                                            `/evaluation/${evalId}/${item.id}`,
                                                                         )
                                                                     }
                                                                 >
@@ -479,7 +467,6 @@ export default function EvalExpDetailsPage(
                             </div>
                         </CardFooter>
                     </Card>
-                </div>
             </div>
         </div>
     );

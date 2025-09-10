@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { EvalRunConfig } from '@/app/evaluation/[evalId]/settings/page';
 
 type ExperimentDetailsItem = {
   id: string
@@ -60,6 +61,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
   const [experiment, setExperiment] = useState<ExperimentItem>();
   const [runDetailItems, setRunDetailItems] = useState<ExperimentDetailsItem[]>([]);
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
+  const [evalRunConfig, setEvalRunConfig] = useState<EvalRunConfig>();
   
   const [page, setPage] = useState(1);
   const pageRef = useRef(page);
@@ -78,17 +80,37 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
 
         try {
           isRefreshing = true;
-          const [expDataRes, detailsRes] = await Promise.all([
+          const [evalRes, expDataRes, detailsRes] = await Promise.all([
+            fetch(`/api/config/evaluation/${evalId}`),
             fetch(`/api/config/evaluation/${evalId}/experiments/${expId}`),
             fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${pageRef.current}&size=${pageSize}`),
           ]);
           
+          if (!evalRes.ok) throw new Error('获取实验失败');
+            const eval_data = await evalRes.json();
+            const evalData = eval_data.data;
+            console.log('evalData:', evalData);
+            setEvalConfig(evalData);
+
           if (!expDataRes.ok) throw new Error('获取实验失败');
 
           const exp_data = await expDataRes.json();
           const expData = exp_data.data;
           console.log('expData:', expData);
           setExperiment(expData);
+
+          try {
+              const [evalRes] = await Promise.all([
+                fetch(`/api/config/evaluation/${evalId}/configs/${expData?.run_config_id}`),
+              ]);
+              if (!evalRes.ok) throw new Error('获取run_config失败');
+              const eval_data = await evalRes.json();
+              const evalData = eval_data.data;
+              console.log('setEvalRunConfig:', evalData);
+              setEvalRunConfig(evalData);
+          } catch (err: any) {
+              toast.error(err.message);
+          }
 
           const exp_json_data = await detailsRes.json();
           const data = exp_json_data.data.items;
@@ -100,7 +122,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
           const files_unfinished = kb_files.some(
             (file) => file.status !== 'success' && file.status !== 'failed',
           );
-    
+          
           if (files_unfinished) {
             console.log('存在未完成的实验，继续检查状态。');
             setTimeout(() => {
@@ -125,26 +147,6 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
         fetchExperimentDetails();
     }, [fetchExperimentDetails, page]);
 
-    useEffect(() => {
-          const fetchConfigs = async () => {
-              setIsLoading(true);
-              try {
-                  const [evalRes] = await Promise.all([
-                    fetch(`/api/config/evaluation/${evalId}`),
-                  ]);
-                  if (!evalRes.ok) throw new Error('获取实验失败');
-                  const eval_data = await evalRes.json();
-                  const evalData = eval_data.data;
-                  console.log('evalData:', evalData);
-                  setEvalConfig(evalData);
-              } catch (err: any) {
-                  toast.error(err.message);
-              } finally {
-                  setIsLoading(false);
-              }
-          };
-          fetchConfigs();
-      }, [isRefreshing]);
 
   // 切换行的展开状态
   const toggleRow = (id: string) => {
@@ -208,19 +210,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => router.push(`/evaluation/${evalId}/experiments`)}
-                    >
-                      experiments
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{experiment.name}</BreadcrumbPage>
+                  <BreadcrumbPage>实验：{experiment.name}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -238,7 +228,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid  grid-cols-2 flex gap-6">
+            <div className="grid  grid-cols-3 flex gap-6">
                 <div className="col-span-1">
                   <h3 className="font-semibold mb-2">详情</h3>
                   <div className="space-y-2">
@@ -248,7 +238,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                     <p><span className="text-gray-500">所有样本数:</span> {experiment.samples_count}</p>
                     <p><span className="text-gray-500">平均得分:</span>
                       <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-                        {experiment.avg_score.toFixed(2)}
+                        {experiment.avg_score?(experiment.avg_score.toFixed(2)):("0.0")}
                       </Badge>
                     </p>
                     <p><span className="text-gray-500">创建时间:</span> {formatBeijingTime(experiment.created_at)}</p>
@@ -258,14 +248,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                   </div>
                 </div>
                 <div className="col-span-1">
-                  <h3 className="font-semibold mb-2">实验设置</h3>
+                  <h3 className="font-semibold mb-2">应用设置</h3>
                   <div className="space-y-2">
                     <div className="flex">
-                      <span className="text-gray-500">基模型:</span> {experiment.run_config.model_id}
+                      <span className="text-gray-500">基模型:</span> {evalRunConfig?.model_id}
                     </div>
                     <div className="flex">
                       <span className="text-gray-500">联网搜索:</span> 
-                      {experiment.run_config.enable_search ? (
+                      {evalRunConfig?.enable_search ? (
                           <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
                       ) : (
                           <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
@@ -273,7 +263,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                     </div>
                     <div className="flex">
                       <span className="text-gray-500">Agentic模式:</span> 
-                       {experiment.run_config.enable_agent ? (
+                       {evalRunConfig?.enable_agent ? (
                           <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
                       ) : (
                           <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
@@ -281,58 +271,95 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                     </div>
                     <div className="flex">
                       <span className="text-gray-500">MCP Server:</span> 
-                      {Array.isArray(experiment.run_config.mcp_ids) && experiment.run_config.mcp_ids.length === 0 ? (
+                      {Array.isArray(evalRunConfig?.mcp_ids) && evalRunConfig?.mcp_ids.length === 0 ? (
                           <p className="text-muted-foreground pl-2">尚未配置MCP</p>
                       ) : (
-                          Array.isArray(experiment.run_config.mcp_ids) && experiment.run_config.mcp_ids.map((mcp, idx) => (
+                          Array.isArray(evalRunConfig?.mcp_ids) && evalRunConfig?.mcp_ids.map((mcp, idx) => (
                               <Badge key={mcp || idx}>{mcp}</Badge>
                           ))
                       )}
                     </div>
                     <div className="flex">
                       <span className="text-gray-500">知识库:</span>
-                      {Array.isArray(experiment.run_config.kb_ids) && experiment.run_config.kb_ids.length === 0 ? (
+                      {Array.isArray(evalRunConfig?.kb_ids) && evalRunConfig?.kb_ids.length === 0 ? (
                           <p className="text-muted-foreground pl-2">尚未配置知识库</p>
                       ) : (
-                          Array.isArray(experiment.run_config.kb_ids) && experiment.run_config.kb_ids.map((kb, idx) => (
+                          Array.isArray(evalRunConfig?.kb_ids) && evalRunConfig?.kb_ids.map((kb, idx) => (
                               <Badge key={kb || idx}>{kb}</Badge>
                           ))
                       )}
                     </div>
                     <div className="flex">
                       <span className="text-gray-500">安全护栏:</span>
-                      <div className="flex gap-4 pl-6 text-sm items-center">
-                        <div className="space-y-2">
-                            <Switch
-                                id="enable_input_check"
-                                checked={experiment.run_config.enable_input_guardrail || false}
-                            />
+                      <div className="gap-4 pl-6 text-sm items-center">
+                        <div className="flex space-y-2">
                             <Label htmlFor="input_guardrail" className="w-[120px]">
                                 输入护栏
                             </Label>
-                        </div>
-                        <div className="space-y-2">
+
                             <Switch
-                                id="enable_output_check"
-                                checked={experiment.run_config.enable_output_guardrail || false}
+                                id="enable_input_check"
+                                checked={evalRunConfig?.enable_input_guardrail || false}
                             />
+                            
+                        </div>
+                        <div className="flex space-y-2">
                             <Label htmlFor="output_guardrail" className="w-[120px]">
                                 输出护栏
                             </Label>
+
+                            <Switch
+                                id="enable_output_check"
+                                checked={evalRunConfig?.enable_output_guardrail || false}
+                            />
+                            
                         </div>
 
-                        <div className="space-y-1">
-                            <Input
-                                className="w-120"
-                                value={experiment.run_config.guardrail_hint ?? ''}
-                                disabled
-                            />
+                        <div className="flex space-y-1">
                             <Label htmlFor="guardrail_hint" className="w-[120px]">
                                 默认护栏提示
                             </Label>
+                            <span>{evalRunConfig?.guardrail_hint ?? ''}</span>
                         </div>
                     </div>
                     </div>
+                  </div>
+                </div>
+                <div className="col-span-1">
+                  <h3 className="font-semibold mb-2">评估设置</h3>
+                  <div className="space-y-2">
+                    <div className="flex space-y-2">
+                      <span className="text-gray-500 pr-6">评估器类型:</span>
+                      <Badge variant="outline">
+                          {evalRunConfig?.evaluator_config?.name === "ExactMatch" ? "精确匹配" : "LLM 评判"}
+                      </Badge>
+                    </div>
+                    {evalRunConfig?.evaluator_config?.name === "ExactMatch" && (
+                      <div>
+                        <div className="flex space-y-2">
+                          <span className="text-gray-500">区分大小写:</span> 
+                          {evalRunConfig?.evaluator_config.case_sensitive ? (
+                              <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                          ) : (
+                              <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                          )}
+                        </div>
+                        <div className="flex space-y-2">
+                          <span className="text-gray-500">忽略标点:</span> 
+                          {evalRunConfig?.evaluator_config.ignore_punctuation ? (
+                              <CheckCircle className="text-green-500 h-4 w-4 ml-2" />
+                          ) : (
+                              <CircleXIcon className="text-red-500 h-4 w-4 ml-2" />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {evalRunConfig?.evaluator_config?.name === "LLMJudge" && (
+                      <div className="flex">
+                        <span className="text-gray-500">评估模型:</span> 
+                        {evalRunConfig?.evaluator_config.model_id || "未指定"}
+                      </div>
+                    )}
                   </div>
                 </div>
             </div>
@@ -575,7 +602,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                                         {Object.entries(args).map(([key, value]) => (
                                                           <div key={key} className="flex">
                                                             <span className="text-blue-600 dark:text-blue-400">{key}:</span>
-                                                            <span className="ml-1 truncate max-w-[200px]">{value}</span>
+                                                            <span className="ml-1 truncate max-w-[200px]">{String(value)}</span>
                                                           </div>
                                                         ))}
                                                       </div>
@@ -588,50 +615,6 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                                       <p>{item.observation}</p>
                                                       </div>
                                                     </div>
-                                                    {/* {observation && (
-                                                      <div className="ml-2">
-                                                        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">结果:</span>
-                                                        <p>{observation}</p>
-                                                        {observation.result && observation.result.length > 0 ? (
-                                                          <div className="ml-2 mt-1 space-y-2">
-                                                            
-                                                            {observation.result.slice(0, 3).map((result:string, resultIndex:number) => (
-                                                              <div 
-                                                                key={resultIndex} 
-                                                                className="text-xs bg-white dark:bg-gray-700 rounded p-2 border border-border hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-                                                              >
-                                                                <div className="flex items-center justify-between mb-1">
-                                                                  <span className="text-blue-600 dark:text-blue-400 font-medium">结果 #{resultIndex + 1}</span>
-                                                                  <span className="text-xs bg-gray-100 dark:bg-gray-600 px-1 rounded">
-                                                                    相关度: {(result.score * 100).toFixed(1)}%
-                                                                  </span>
-                                                                </div>
-                                                                <div className="text-gray-700 dark:text-gray-300 line-clamp-2">
-                                                                  {result.text}
-                                                                </div>
-                                                                {result.metadata && (
-                                                                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                                                    <span>来源: {result.metadata.host_name}</span>
-                                                                    {result.metadata.publish_time && (
-                                                                      <span>· {new Date(result.metadata.publish_time).toLocaleDateString()}</span>
-                                                                    )}
-                                                                  </div>
-                                                                )}
-                                                              </div>
-                                                            ))}
-                                                            {observation.result.length > 3 && (
-                                                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                                ... 还有 {observation.result.length - 3} 条结果
-                                                              </div>
-                                                            )}
-                                                          </div>
-                                                        ) : (
-                                                          <div className="ml-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                            无结果
-                                                          </div>
-                                                        )}
-                                                      </div>
-                                                    )} */}
                                                   </div>
                                                 );
                                               } catch (e) {

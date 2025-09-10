@@ -21,7 +21,7 @@ from db.models.knowledgebase.embedding import (
     EmbeddingModelEntity,
     EmbeddingType,
 )
-from db.models.evaluation.evaluation import EvalCreate, EvalEntity, EvalRunConfig
+from db.models.evaluation.evaluation import EvalCreate, EvalEntity
 from db.models.evaluation.dataset import EvalDatasetEntity
 from sqlalchemy.exc import IntegrityError
 from rag.file.models.file_item import FileItem
@@ -132,7 +132,7 @@ class ConfigChangeManager:
         gaia_evaluation = EvalCreate(
             name="GAIA",
             description="GAIA评估",
-            default_run_config=EvalRunConfig().model_dump()
+            type="built-in"
         )
         gaia_evaluation = EvalEntity.model_validate(gaia_evaluation)
         try:

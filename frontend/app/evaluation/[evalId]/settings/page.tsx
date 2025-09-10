@@ -1,103 +1,134 @@
 'use client';
 import React from 'react';
-import { useState, useEffect, use, useRef } from "react";
+import { useState, useEffect, use} from "react";
 import { useRouter } from "next/navigation";
 import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow
+} from "@/components/ui/table";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
-    DropdownMenu,
-    DropdownMenuCheckboxItem,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+    Dialog,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
-import { EvalConfig } from '@/app/evaluation/[evalId]/page';
-import { Chatbot } from "@/app/apps/chatbot_config";
-import { ChevronDownIcon, Terminal } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Settings, Pencil, Trash2, Settings2, BarChart2 } from "lucide-react";
+import { EvalConfigFormDialog } from "@/app/evaluation/[evalId]/settings/evalConfigFormDialog";
 
+export interface SampleItem {
+    id: string;
+    input: string;
+    expected_output: string;
+    eval_metadata?: {
+        Steps?: string;
+        Tools?: string;
+    };
+}
 
-const default_eval_config = {
-    id: '',
-    name: '',
-    description: '',
-    run_type: 'custom',
-    chatbot_id: '',
-    default_run_config: {
-        model_id: "",
-        mcp_ids: [],
-        kb_ids: [],
-        enable_search: false,
-        enable_vision: false,
-        enable_agent: false,
-        enable_input_guardrail: false,
-        enable_output_guardrail: false,
-        guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+export interface EvalRunConfig {
+    id: string;
+    name: string;
+    model_id: string;
+    mcp_ids: string[];
+    kb_ids: string[];
+    enable_search: boolean;
+    enable_vision: boolean;
+    enable_agent: boolean;
+    enable_input_guardrail?: boolean;
+    enable_output_guardrail?: boolean;
+    guardrail_hint?: string;
+    evaluator_config: {
+      name: string;
+      model_id?: string;
+      case_sensitive?: boolean;
+      ignore_punctuation?: boolean;
+    }
+}
+
+const default_eval_run_config = {
+    id: "",
+    name: "",
+    model_id: "",
+    mcp_ids: [],
+    kb_ids: [],
+    enable_search: false,
+    enable_vision: false,
+    enable_agent: false,
+    enable_input_guardrail: false,
+    enable_output_guardrail: false,
+    guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+    evaluator_config: {
+      name: "",
+      model_id: "",
+      case_sensitive: false,
+      ignore_punctuation: false
     }
 };
 
-export default function EvalExpDetailsPage(
+
+
+export default function EvalSettingsDetailsPage(
     { params }: { params: Promise<{ evalId: string }> }
 ) {
     const { evalId } = use(params);
     const router = useRouter();
-    const [evalConfig, setEvalConfig] = useState<EvalConfig>(default_eval_config);
-    const [chatbots, setChatbots] = useState<Chatbot[]>([]);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [evalRunConfigs, setEvalRunConfigs] = useState<EvalRunConfig[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const pageSize = 8;
+    // 用于跟踪选中的行
+    const [totalItems, setTotalItems] = useState(0);
+    const [dataseterror, setDatasetError] = useState('');
     const [llms, setLlms] = useState<LlmConfig[]>([]);
     const [mcps, setMcps] = useState<McpConfig[]>([]);
     const [kbs, setKbs] = useState<KbConfig[]>([]);
-    const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
-    const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
-    const [saveErrorMsg, setSaveErrorMsg] = useState('');
-    const isCreate: boolean = evalId === undefined || evalId === '';
-    console.log("isCreate", isCreate)
+
+    const [isNewSettingsOpen, setIsNewSettingsOpen] = useState(false);
+    const [isCreateLoading, setIsCreateLoading] = useState(false);
+    const [isEditSetting, setIsEditSetting] = useState(false);
+    const [editConfig, setEditConfig] = useState<EvalRunConfig>(default_eval_run_config);
 
     useEffect(() => {
-        const fetchEvalConfigs = async () => {
+        const fetchConfigs = async () => {
+            setIsLoading(true);
             try {
-                const [evalRes, chatbotRes, llmRes, mcpRes, kbRes] = await Promise.all([
+                const [evalRes, datasetRes, llmRes, mcpRes, kbRes] = await Promise.all([
                     fetch(`/api/config/evaluation/${evalId}`),
-                    fetch(`/api/config/apps`),
+                    fetch(`/api/config/evaluation/${evalId}/configs?page=${page}&size=${pageSize}`),
                     fetch(`/api/config/llms`),
                     fetch(`/api/config/mcps`),
                     fetch(`/api/config/knowledgebases`),
                 ]);
 
-                if (!evalRes.ok) throw new Error('获取评估任务详情失败');
-                const json_data = await evalRes.json();
-                const evalData = json_data.data;
+                const eval_data = await evalRes.json();
+                const evalData = eval_data.data;
                 console.log('evalData:', evalData);
-                setEvalConfig(evalData);
 
-                const chatbotData = (await chatbotRes.json())?.data.items || [];
-                console.log('chatbotData', chatbotData);
-                setChatbots([...chatbotData]);
+                if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
+                const json_data = await datasetRes.json();
+                console.log("evaluation dataset json_data", json_data)
+                const data = json_data.data.items;
+
+                setEvalRunConfigs(data);
+                setTotalItems(json_data.data.total);
+                setTotalPages(json_data.data.pages);
 
                 const llmData = (await llmRes.json())?.data.items || [];
                 console.log('llmData', llmData);
@@ -113,520 +144,437 @@ export default function EvalExpDetailsPage(
                 setKbs([...kbData]);
 
             } catch (err: any) {
-                toast.error(err.message);
+                setDatasetError(err || '加载数据集失败');
+            } finally {
+                setIsLoading(false);
             }
         };
-        fetchEvalConfigs();
-    }, []);
+        fetchConfigs();
+    }, [page]);
 
-    if (!evalConfig) {
-        return <div className="p-6">加载中...</div>;
-    }
-
-    const handleSaveEvalConfig = async () => {
-        console.log('保存评估设置:', evalConfig);
-        const submit_url = isCreate
-            ? `/api/config/evaluation`
-            : `/api/config/evaluation/${evalConfig.id}`;
-        const updateMethod = isCreate ? 'POST' : 'PUT';
-        try {
-            const res = await fetch(submit_url, {
-                method: updateMethod,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(evalConfig), // 包装为数组
-            });
-
-            if (!res.ok) throw new Error(`保存评估任务失败: ${await res.text()}`);
-            router.push(`/evaluation/${evalConfig.id}`);
-            setSaveErrorMsg('');
-        } catch (err: any) {
-            console.log('保存评估任务失败', err.message);
-            setSaveErrorMsg(err.message);
-        }
+    const handlePageChange = (newPage: number) => {
+        if (newPage < 1 || newPage > totalPages) return;
+        setPage(newPage);
     };
 
-    const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
-    console.log('handleKbSelect', kb_id, kb_name, checked);
-    if (checked) {
-      const kb_ids = evalConfig.default_run_config.kb_ids.includes(kb_id)
-        ? evalConfig.default_run_config.kb_ids
-        : [...evalConfig.default_run_config.kb_ids, kb_id];
-      setEvalConfig((prev) => ({
-            ...prev,
-            default_run_config: {
-                ...prev.default_run_config,
-                kb_ids: kb_ids,
-            },
-        }));
-      if (!selectedKbNames.includes(kb_name)) {
-        setSelectedKbNames((prev) => [...prev, kb_name]);
-      }
-    } else {
-      const kb_ids = evalConfig.default_run_config.kb_ids.filter((id) => id !== kb_id);
-      setEvalConfig((prev) => ({
-            ...prev,
-            default_run_config: {
-                ...prev.default_run_config,
-                kb_ids: kb_ids,
-            },
-        }));
-      if (selectedKbNames.includes(kb_name)) {
-        setSelectedKbNames((prev) => prev.filter((name) => name !== kb_name));
-      }
-    }
-  };
-  const handleMcpSelect = (
-    mcp_id: string,
-    mcp_name: string,
-    checked: boolean,
-  ) => {
-    if (checked) {
-      const mcp_ids = evalConfig.default_run_config.mcp_ids.includes(mcp_id)
-        ? evalConfig.default_run_config.mcp_ids
-        : [...evalConfig.default_run_config.mcp_ids, mcp_id];
-        setEvalConfig((prev) => ({
-            ...prev,
-            default_run_config: {
-                ...prev.default_run_config,
-                mcp_ids: mcp_ids,
-            },
-        }));
 
-      if (!selectedMcpNames.includes(mcp_name)) {
-        setSelectedMcpNames((prev) => [...prev, mcp_name]);
-      }
-    } else {
-      const mcp_ids = evalConfig.default_run_config.mcp_ids.filter((id) => id !== mcp_id);
-      setEvalConfig((prev) => ({
-            ...prev,
-            default_run_config: {
-                ...prev.default_run_config,
-                mcp_ids: mcp_ids,
-            },
-        }));
-      if (selectedMcpNames.includes(mcp_name)) {
-        setSelectedMcpNames((prev) => prev.filter((name) => name !== mcp_name));
-      }
+    const createNewEvalDataset = async (data: EvalRunConfig) => {
+        console.log("createNewEvalDataset", data)
+        try {
+            if(!isEditSetting){
+                const res = await fetch(
+                    `/api/config/evaluation/${evalId}/configs`,
+                    {
+                        method: "POST",
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                    },
+                );
+                if (!res.ok) {
+                    alert('创建失败');
+                    return;
+                }
+                const result = await res.json();
+                console.log('创建成功:', result);
+                setEvalRunConfigs((prev) => [...prev, result.data]); // 追加新配置
+            }else{
+                const res = await fetch(
+                    `/api/config/evaluation/${evalId}/configs/${data.id}`,
+                    {
+                        method: "PUT",
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                    },
+                );
+                if (!res.ok) {
+                    alert('更新失败');
+                    return;
+                }
+                const result = await res.json();
+                setEvalRunConfigs((prev) =>
+                    prev.map((config) => (config.id === result.data.id ? result.data : config)),
+                );
+                console.log('更新成功:', result.data);
+            }
+            // const updateMethod = isEditSetting ? 'PUT' : 'POST';
+            // const res = await fetch(
+            //     `/api/config/evaluation/${evalId}/configs`,
+            //     {
+            //         method: updateMethod,
+            //         headers: { 'Content-Type': 'application/json' },
+            //         body: JSON.stringify(data),
+            //     },
+            // );
+            // if (!res.ok) {
+            //     alert('创建失败');
+            //     return;
+            // }
+            // const result = await res.json();
+            // console.log('创建成功:', result);
+            // setEvalRunConfigs((prev) => [...prev, result.data]); // 追加新配置
+        } catch (error) {
+            console.error('创建失败:', error);
+        } finally {
+            setIsCreateLoading(false);
+            setIsNewSettingsOpen(false);
+        }
     }
-  };
+
+    const renderBadges = (ids: string[], configs: McpConfig[] | KbConfig[], maxShow = 2) => {
+        if (ids.length === 0) return <span className="text-muted-foreground">—</span>;
+        
+        // 创建 id → name 映射
+        const idToNameMap = Object.fromEntries(
+            configs.map(config => [config.id, config.name])
+        );
+
+        // 获取所有名称（保留原始顺序）
+        const names = ids.map(id => idToNameMap[id] || id); // 如果没找到，fallback 到 ID
+
+        const visible = names.slice(0, maxShow);
+        const hidden = names.slice(maxShow);
+
+
+        return (
+            <div className="flex flex-wrap items-center gap-1">
+            {visible.map((name, idx) => (
+                <Badge key={idx} variant="secondary" className="text-xs">
+                {name}
+                </Badge>
+            ))}
+            {hidden.length > 0 && (
+                <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger>
+                    <Badge variant="outline" className="text-xs">
+                        +{hidden.length}
+                    </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                    <div className="space-y-1">
+                        {hidden.map((name, i) => (
+                        <div key={i} className="text-sm">
+                            {name}
+                        </div>
+                        ))}
+                    </div>
+                    </TooltipContent>
+                </Tooltip>
+                </TooltipProvider>
+            )}
+            </div>
+        );
+    };
+
+    const renderGuardrailStatus = (config: EvalRunConfig) => {
+        const hasInput = config.enable_input_guardrail;
+        const hasOutput = config.enable_output_guardrail;
+        const hint = config.guardrail_hint;
+
+        if (!hasInput && !hasOutput && !hint) {
+            return <span className="text-muted-foreground">未启用</span>;
+        }
+
+        return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-auto p-1">
+                            <span className="text-xs text-blue-600">详情</span>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm p-3">
+                        <div className="space-y-1 text-sm">
+                            <div>
+                                <strong>输入护栏：</strong>
+                                {hasInput ? "✅ 启用" : "❌ 未启用"}
+                            </div>
+                            <div>
+                                <strong>输出护栏：</strong>
+                                {hasOutput ? "✅ 启用" : "❌ 未启用"}
+                            </div>
+                            {hint && (
+                                <div>
+                                    <strong>提示语：</strong>
+                                    <div className="mt-1 text-xs bg-muted p-2 rounded break-all text-black">
+                                        {hint}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    };
+
+
+    const onDelete = async (config_id: string) => {
+        try {
+            const res = await fetch(`/api/config/evaluation/${evalId}/configs/${config_id}`, {
+                method: 'DELETE',
+                headers: {
+                'Content-Type': 'application/json',
+                },
+            });
+
+            if (!res.ok) {
+                throw new Error('删除失败，请检查网络或配置');
+            }
+            setEvalRunConfigs((prev) => prev.filter((config) => config.id !== config_id));
+        } 
+        catch (err: any) {console.log('删除实验设置任务出错: ', err);}
+    }
+
+    
 
     return (
-        <div className="flex flex-col h-screen px-6 py-4 space-y-6">
-            <div className="flex-none">
-                <div className="p-2 space-y-2">
-                    <div className="mb-2 flex items-center gap-2">
-                        {/* 面包屑导航 */}
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbLink asChild>
-                                        <Button
-                                            variant="link"
-                                            className="px-0"
-                                            onClick={() => router.push('/evaluation')}
-                                        >
-                                            评估
-                                        </Button>
-                                    </BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator />
-                                <BreadcrumbItem>
-                                    <Button
-                                        variant="link"
-                                        className="px-0"
-                                        onClick={() => router.push(`/evaluation/${evalId}`)}
-                                    >
-                                        {evalConfig.name}
-                                    </Button>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator />
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage>settings</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                    <div className="flex justify-between items-center px-2">
+        <div className="flex flex-col h-screen py-4 space-y-6">
+            <div className="w-full">
+                <Card className="w-full">
+                    <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                         <div>
-                            <h1 className="text-2xl font-bold">任务设置</h1>
-                            <div className="text-sm text-muted-foreground mt-1">
-                                评估任务设置
+                            <CardTitle>实验设置</CardTitle>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                管理实验设置
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+
+                            <div className="flex gap-2">
+                                {/* {runConfigDialog("new", "")}; */}
+                                <EvalConfigFormDialog
+                                    mode={isEditSetting ? "edit" : "new"}
+                                    config={isEditSetting ? editConfig : undefined}
+                                    llms={llms}
+                                    mcps={mcps}
+                                    kbs={kbs}
+                                    evalId={evalId}
+                                    isOpen={isNewSettingsOpen}
+                                    onOpenChange={setIsNewSettingsOpen}
+                                    onSave={createNewEvalDataset}
+                                    isSaving={isCreateLoading}
+                                    />
+                                <Dialog open={isNewSettingsOpen} onOpenChange={setIsNewSettingsOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button>
+                                            <Settings className="mr-2 h-4 w-4" /> 新建配置
+                                        </Button>
+                                    </DialogTrigger>
+                                </Dialog>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="rounded-md border">
+                            {/* <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>名称</TableHead>
+                                        <TableHead>基模型</TableHead>
+                                        <TableHead>MCP</TableHead>
+                                        <TableHead>知识库</TableHead>
+                                        <TableHead className="text-center">联网搜索</TableHead>
+                                        <TableHead className="text-center">Agentic</TableHead>
+                                        <TableHead className="text-center">护栏状态</TableHead>
+                                        <TableHead className="text-right">操作</TableHead>
+                                    </TableRow>
+                                </TableHeader>
 
-            <div className="px-2 max-w-6xl">
-                <div className="grid gap-4 py-6 px-6">
-                    <div className="space-y-2">
-                        <Label htmlFor="eval-id">
-                            实验名称 <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                            id="evalid"
-                            value={evalConfig.name}
-                            onChange={(e) =>
-                                setEvalConfig((prev) => ({ ...prev, name: e.target.value }))
-                            }
-                            placeholder="请输入实验名称, 如GAIA"
-                            required
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="description">描述</Label>
-                        <Textarea
-                            id="description"
-                            value={evalConfig.description}
-                            onChange={(e) =>
-                                setEvalConfig((prev) => ({
-                                    ...prev,
-                                    description: e.target.value,
-                                }))
-                            }
-                            placeholder="评估实验描述（可选）"
-                            rows={3}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="description">实验设置</Label>
-                        <Tabs
-                            value={evalConfig.run_type==="chatbot" ? "chatbot" : "custom"}  // Handles null/undefined
-                            className="space-y-2"
-                            onValueChange={(value) => setEvalConfig(prev => ({
-                                ...prev,
-                                run_type: value  // Always store the value (will be "custom" or other valid tab value)
-                            }))}
-                        >
-                            <TabsList className="py-4 bg-muted rounded-lg flex-none">
-                                <TabsTrigger value="chatbot" className="p-4">
-                                    从已有应用选择
-                                </TabsTrigger>
-                                <TabsTrigger value="custom" className="p-4">
-                                    自定义
-                                </TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="chatbot" className="py-4">
-                                <div className="grid gap-4 py-1 px-6">
-                                    <div className="flex">
-                                        <Label htmlFor="basemodel" className="w-[90px]">
-                                            应用选择 <span className="text-destructive">*</span>{' '}
-                                        </Label>
-                                        <div className="px-6">
-                                            {chatbots.length > 0 ? (
-                                                <Select
-                                                    value={evalConfig.chatbot_id}
-                                                    onValueChange={(value) =>
-                                                        setEvalConfig((prev) => ({
-                                                            ...prev,
-                                                            chatbot_id: value,
-                                                        }))
-                                                    }
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="请选择应用" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {chatbots.map((cb) => (
-                                                            <SelectItem key={cb.id} value={cb.app_id}>
-                                                                {cb.app_id}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            ) : (
-                                                <div>
-                                                    <p className="text-sm text-muted-foreground">尚未配置应用</p>
-                                                    <Button
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            router.push('/apps/create');
-                                                        }}
-                                                    >
-                                                        前往添加
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </TabsContent>
-                            <TabsContent value="custom" className="py-4">
-                                <div className="grid gap-4 py-1 px-6">
-                                    <div className="flex">
-                                        <Label htmlFor="basemodel" className="w-[90px]">
-                                            基模型选择 <span className="text-destructive">*</span>{' '}
-                                        </Label>
-                                        <div className="px-6">
-                                            {llms.length > 0 ? (
-                                                <Select
-                                                    value={evalConfig.default_run_config.model_id}
-                                                    onValueChange={(value) =>
-                                                        setEvalConfig((prev) => ({
-                                                            ...prev,
-                                                            default_run_config: {
-                                                                ...prev.default_run_config,
-                                                                model_id: value,
-                                                            },
-                                                        }))
-                                                    }
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="请选择基模型" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {llms.map((llm) => (
-                                                            <SelectItem key={llm.id} value={llm.model_id}>
-                                                                {llm.model_id}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            ) : (
-                                                <div>
-                                                    <p className="text-sm text-muted-foreground">尚未配置大模型</p>
-                                                    <Button
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            router.push('/config/model/llm');
-                                                        }}
-                                                    >
-                                                        前往添加
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-6">
-                                        <Label htmlFor="enable_search" className="w-[90px]">
-                                            启用联网搜索
-                                        </Label>
-                                        <Switch
-                                            id="enable_search"
-                                            checked={evalConfig.default_run_config.enable_search}
-                                            onCheckedChange={(checked) => {
-                                                setEvalConfig((prev) => ({
-                                                    ...prev,
-                                                    default_run_config: {
-                                                        ...prev.default_run_config,
-                                                        enable_search: checked,
-                                                    },
-                                                }));
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="flex gap-6">
-                                        <Label htmlFor="enable_agent" className="w-[90px]">
-                                            Agentic模式
-                                        </Label>
-                                        <Switch
-                                            id="enable_agent"
-                                            checked={evalConfig.default_run_config.enable_agent}
-                                            onCheckedChange={(checked) => {
-                                                setEvalConfig((prev) => ({
-                                                    ...prev,
-                                                    default_run_config: {
-                                                        ...prev.default_run_config,
-                                                        enable_agent: checked,
-                                                    },
-                                                }));
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="flex">
-                                        <Label htmlFor="kb_selection" className="w-[90px]">
-                                            知识库选择
-                                        </Label>
-                                        <div className="pl-6 pr-6">
-                                            {kbs.length > 0 ? (
-                                                <DropdownMenu modal={true}>
-                                                    <DropdownMenuTrigger asChild>
+                                <TableBody>
+                                    {evalRunConfigs.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="h-24 text-center">
+                                                暂无数据
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        evalRunConfigs.map((config) => (
+                                            <TableRow key={config.id} className="hover:bg-muted/50">
+                                                <TableCell>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium">{config.name}</span>
+                                                        <span className="text-xs text-muted-foreground">ID: {config.id.slice(0, 8)}...</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="font-mono text-sm">{config.model_id || "—"}</TableCell>
+                                                <TableCell>{renderBadges(config.mcp_ids, mcps)}</TableCell>
+                                                <TableCell>{renderBadges(config.kb_ids, kbs)}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Switch checked={config.enable_search} disabled />
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Switch checked={config.enable_agent} disabled />
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    {renderGuardrailStatus(config)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex justify-end gap-1">
                                                         <Button
-                                                            variant="outline"
-                                                            className="text-sm text-muted-foreground"
-                                                        >
-                                                            已选{evalConfig.default_run_config?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-56">
-                                                        <DropdownMenuLabel>知识库</DropdownMenuLabel>
-                                                        <DropdownMenuSeparator />
-                                                        {kbs.map((kb) => (
-                                                            <DropdownMenuCheckboxItem
-                                                                key={kb.id}
-                                                                checked={evalConfig.default_run_config.kb_ids.includes(kb.id)}
-                                                                onCheckedChange={(checked) =>
-                                                                    handleKbSelect(kb.id, kb.name, checked)
-                                                                }
-                                                                onSelect={(e) => e.preventDefault()}
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => {
+                                                                setEditConfig(config);
+                                                                setIsEditSetting(true);
+                                                                setIsNewSettingsOpen(true); // 复用同一个 Dialog
+                                                            }}
                                                             >
-                                                                {kb.name}
-                                                            </DropdownMenuCheckboxItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            ) : (
-                                                <div>
-                                                    <p className="text-sm text-muted-foreground">尚未配置知识库</p>
-                                                </div>
-                                            )}
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => onDelete(config.id)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table> */}
+                            <Table>
+                            <TableHeader>
+                                <TableRow className="border-b-2 border-border">
+                                    {/* 空单元格占位（对应“名称”列） */}
+                                    <TableHead className="w-0 p-0 bg-transparent border-r"></TableHead>
+
+                                    {/* 应用设置分组 */}
+                                    <TableHead colSpan={6} className="bg-muted/20 border-r border-r-border">
+                                        <div className="flex items-center gap-2 px-4 py-2">
+                                        <div className="w-2 h-8 bg-primary/20 rounded"></div>
+                                        <div>
+                                            <div className="font-semibold text-sm text-primary flex items-center gap-1">
+                                            <Settings2 className="h-4 w-4" /> 应用设置
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">运行时参数、模型、插件等</div>
                                         </div>
-                                        {selectedKbNames.length > 0 && (
-                                            <div className="flex gap-1.5 items-center">
-                                                {selectedKbNames.map((name) => (
-                                                    <Badge variant="secondary" className="h-6" key={name}>
-                                                        {name}
-                                                    </Badge>
-                                                ))}
+                                        </div>
+                                    </TableHead>
+
+                                    {/* 评估设置分组 */}
+                                    <TableHead colSpan={1} className="bg-muted/20 border-r border-r-border">
+                                        <div className="flex items-center gap-2 px-4 py-2">
+                                        <div className="w-2 h-8 bg-primary/40 rounded"></div>
+                                        <div>
+                                            <div className="font-semibold text-sm text-primary flex items-center gap-1">
+                                            <BarChart2 className="h-4 w-4" /> 评估设置
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">评分标准、评估器配置</div>
+                                        </div>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="w-0 p-0 bg-transparent border-r"></TableHead>
+                                    </TableRow>
+                                <TableRow>
+                                <TableHead className='border-r border-r-border'>名称</TableHead>
+                                <TableHead>基模型</TableHead>
+                                <TableHead>MCP</TableHead>
+                                <TableHead>知识库</TableHead>
+                                <TableHead className="text-center">联网搜索</TableHead>
+                                <TableHead className="text-center">Agentic</TableHead>
+                                <TableHead className="text-center border-r border-r-border">护栏状态</TableHead>
+
+                                {/* 评估设置列 */}
+                                <TableHead className='border-r border-r-border'>评估器</TableHead>
+                                <TableHead className="text-center">操作</TableHead>
+                                </TableRow>
+                            </TableHeader>
+
+                            <TableBody>
+                                {evalRunConfigs.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={9} className="h-24 text-center">
+                                    暂无数据
+                                    </TableCell>
+                                </TableRow>
+                                ) : (
+                                evalRunConfigs.map((config) => (
+                                    <TableRow key={config.id} className="hover:bg-muted/50">
+                                    <TableCell className='border-r border-r-border'>
+                                        <div className="flex flex-col">
+                                        <span className="font-medium">{config.name}</span>
+                                        <span className="text-xs text-muted-foreground">ID: {config.id.slice(0, 8)}...</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="font-mono text-sm">{config.model_id || "—"}</TableCell>
+                                    <TableCell>{renderBadges(config.mcp_ids, mcps)}</TableCell>
+                                    <TableCell>{renderBadges(config.kb_ids, kbs)}</TableCell>
+                                    <TableCell className="text-center">
+                                        <Switch checked={config.enable_search} disabled />
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <Switch checked={config.enable_agent} disabled />
+                                    </TableCell>
+                                    <TableCell className="text-center border-r border-r-border">
+                                        {renderGuardrailStatus(config)}
+                                    </TableCell>
+
+                                    {/* 评估器配置 */}
+                                    <TableCell className='border-r border-r-border'>
+                                        <div className="space-y-1">
+                                        <div className="font-medium text-sm">
+                                            <Badge variant={config.evaluator_config?.name === "ExactMatch" ? "secondary" : "outline"}>
+                                                {config.evaluator_config?.name === "ExactMatch" ? "精确匹配" : "LLM 评判"}
+                                            </Badge>
+                                        </div>
+                                        {config.evaluator_config?.name === "ExactMatch" && (
+                                            <div className="text-xs text-muted-foreground space-y-0.5">
+                                            <div>区分大小写: {config.evaluator_config.case_sensitive ? "是" : "否"}</div>
+                                            <div>忽略标点: {config.evaluator_config.ignore_punctuation ? "是" : "否"}</div>
                                             </div>
                                         )}
-                                    </div>
-                                    <div className="flex">
-                                        <Label htmlFor="mcp_selection" className="w-[90px]">
-                                            MCP选择
-                                        </Label>
-                                        <div className="pl-6 pr-6">
-                                            {mcps.length > 0 ? (
-                                                <DropdownMenu modal={true}>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button
-                                                            variant="outline"
-                                                            className="text-sm text-muted-foreground"
-                                                        >
-                                                            已选{evalConfig.default_run_config.mcp_ids.length}个，可多选 <ChevronDownIcon />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-56">
-                                                        <DropdownMenuLabel>MCP</DropdownMenuLabel>
-                                                        <DropdownMenuSeparator />
-                                                        {mcps.map((mcp) => (
-                                                            <DropdownMenuCheckboxItem
-                                                                key={mcp.id}
-                                                                checked={evalConfig.default_run_config.mcp_ids.includes(mcp.id)}
-                                                                onCheckedChange={(checked) =>
-                                                                    handleMcpSelect(mcp.id, mcp.name, checked)
-                                                                }
-                                                                onSelect={(e) => e.preventDefault()}
-                                                            >
-                                                                {mcp.name}
-                                                            </DropdownMenuCheckboxItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            ) : (
-                                                <div>
-                                                    <p className="text-sm text-muted-foreground">尚未配置MCP</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                        {selectedMcpNames.length > 0 && (
-                                            <div className="flex gap-1.5 items-center">
-                                                {selectedMcpNames.map((name) => (
-                                                    <Badge variant="secondary" className="h-6" key={name}>
-                                                        {name}
-                                                    </Badge>
-                                                ))}
+                                        {config.evaluator_config?.name === "LLMJudge" && (
+                                            <div className="text-xs text-muted-foreground">
+                                            模型: {config.evaluator_config.model_id || "未指定"}
                                             </div>
                                         )}
-                                    </div>
-                                    <div className="flex items-center">
-                                        <Label htmlFor="ai_guardrail" className="w-[90px]">
-                                            AI安全护栏
-                                        </Label>
-
-                                        <div className="flex gap-4 pl-6 text-sm items-center">
-                                            <div className="space-y-2">
-                                                <Switch
-                                                    id="enable_input_check"
-                                                    checked={evalConfig.default_run_config.enable_input_guardrail || false}
-                                                    onCheckedChange={(checked) => {
-                                                        setEvalConfig((prev) => ({
-                                                            ...prev,
-                                                            default_run_config: {
-                                                                ...prev.default_run_config,
-                                                                enable_input_guardrail: checked,
-                                                            },
-                                                        })) ;
-                                                    }}
-                                                />
-                                                <Label htmlFor="input_guardrail" className="w-[120px]">
-                                                    输入护栏
-                                                </Label>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Switch
-                                                    id="enable_output_check"
-                                                    checked={evalConfig.default_run_config.enable_output_guardrail || false}
-                                                    onCheckedChange={(checked) => {
-                                                        setEvalConfig((prev) => ({
-                                                            ...prev,
-                                                            default_run_config: {
-                                                                ...prev.default_run_config,
-                                                                enable_output_guardrail: checked,
-                                                            },
-                                                        }));
-                                                    }}
-                                                />
-                                                <Label htmlFor="output_guardrail" className="w-[120px]">
-                                                    输出护栏
-                                                </Label>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Input
-                                                    className="w-120"
-                                                    value={evalConfig.default_run_config.guardrail_hint || "作为人工智能助手，我无法回应包含不当或敏感信息的内容。"}
-                                                    onChange={(e) => {
-                                                        setEvalConfig((prev) => ({
-                                                            ...prev,
-                                                            default_run_config: {
-                                                                ...prev.default_run_config,
-                                                                guardrail_hint: e.target.value,
-                                                            },
-                                                        }));
-
-                                                    }}
-                                                />
-                                                <Label htmlFor="guardrail_hint" className="w-[120px]">
-                                                    默认护栏提示
-                                                </Label>
-                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                            </TabsContent>
+                                    </TableCell>
 
-                        </Tabs>
-                    </div>
-                    {saveErrorMsg && (
-                        <Alert variant="destructive">
-                            <Terminal />
-                            <AlertTitle>{isCreate ? '创建应用失败' : '保存应用失败'}</AlertTitle>
-                            <AlertDescription>{saveErrorMsg}</AlertDescription>
-                        </Alert>
-                    )}
-                    <div className="pt-8 flex gap-6">
-                        <Button
-                            variant="secondary"
-                            className="w-20"
-                            onClick={() => {
-                                router.push(`/evaluation/${evalConfig.id}`);
-                            }}
-                        >
-                            取消
-                        </Button>
-
-                        <Button
-                            className="w-20"
-                            onClick={() => {
-                                handleSaveEvalConfig();
-                            }}
-                        >
-                            {isCreate ? '创建' : '保存'}
-                        </Button>
-                    </div>
-                </div>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                            setEditConfig(config);
+                                            setIsEditSetting(true);
+                                            setIsNewSettingsOpen(true);
+                                            }}
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onDelete(config.id)}
+                                        >
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                        </div>
+                                    </TableCell>
+                                    </TableRow>
+                                ))
+                                )}
+                            </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-center">
+                        <div className="py-6">
+                            <PaginationComponent
+                                currentPage={page}
+                                totalPages={totalPages}
+                                onPageChange={handlePageChange}
+                            />
+                        </div>
+                    </CardFooter>
+                </Card>
             </div>
         </div>
     );

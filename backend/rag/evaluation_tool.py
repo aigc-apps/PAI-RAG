@@ -4,10 +4,15 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.evaluation.evaluation import EvalEntity
 from db.models.evaluation.dataset import EvalDatasetEntity
 from db.models.evaluation.experiment import ExperimentRunResultEntity, ExperimentEntity
+from db.models.evaluation.run_config import EvalRunConfigEntity
+from db.models.llm import LlmModelEntity
 from typing import List
 from datetime import datetime, timezone
-from common.chat.models import DEFAULT_GUARDRAIL_ADVICE, ChatAgentRequest
-from evaluation.gaia.run import run_gaia_agent
+from common.chat.models import ChatAgentRequest
+from evaluation.run import run_agent, run_evaluator
+from chat.openai.openai_like import OpenAILike
+from sqlmodel import select
+from db.encrypt_utils import decrypt_key
 
 @with_async_db_session
 async def get_exp_run_entity(
@@ -44,6 +49,37 @@ async def get_experiment_entity(
     exp_entity = await session.get(ExperimentEntity, experiment_id)
     assert exp_entity is not None, f"Experiment {experiment_id} not found."
     return exp_entity
+
+@with_async_db_session
+async def get_run_config_entity(
+    session: AsyncSession,
+    run_config_id: str,
+) -> EvalRunConfigEntity:
+    run_config_entity = await session.get(EvalRunConfigEntity, run_config_id)
+    assert run_config_entity is not None, f"EvalRunConfig {run_config_id} not found."
+    return run_config_entity
+
+@with_async_db_session
+async def get_llm_model(
+    session: AsyncSession,
+    model_id: str,
+) -> OpenAILike:
+    model_entity = (await session.exec(
+        select(LlmModelEntity).where(LlmModelEntity.model_id == model_id)
+    )).first()
+
+    assert model_entity is not None, f"Model ID {model_id} not found."
+    return OpenAILike(
+        model=model_entity.model,
+        api_base=model_entity.base_url,
+        api_key=decrypt_key(model_entity.encrypted_api_key),
+        temperature=model_entity.temperature,
+        context_window=model_entity.context_window,
+        max_tokens=4000,
+        is_chat_model=True,
+        is_function_calling_model=True,
+        additional_kwargs={"extra_body":{"chat_template_kwargs":{"enable_thinking": model_entity.enable_thinking}}},
+    )
 
 @with_async_db_session
 async def update_experiment_run_result(
@@ -99,6 +135,11 @@ class PaiEvaluationClient:
         )
         run_scores = []
         experiment_entity: ExperimentEntity = await get_experiment_entity(experiment_id=experiment_id)
+        run_config_entity: EvalRunConfigEntity = await get_run_config_entity(run_config_id=experiment_entity.run_config_id)
+        print("run_config_entity.evaluator_config", run_config_entity.evaluator_config)
+        eval_llm = None
+        if run_config_entity.evaluator_config.get("name") == "LLMJudge":
+            eval_llm = await get_llm_model(model_id=run_config_entity.evaluator_config.get("model_id"))
         for exp_run_id in exp_run_ids:
             exp_run_entity: ExperimentRunResultEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
             dataset_entity: EvalDatasetEntity = await get_dataset_entity(dataset_id=exp_run_entity.dataset_id)
@@ -115,26 +156,26 @@ class PaiEvaluationClient:
                 {"role": "user", "content": dataset_entity.input}
             ]
             chat_request = ChatAgentRequest(
-                model=experiment_entity.run_config.get("model_id", "unknown-model"),
+                model=run_config_entity.model_id,
                 messages=input_messages,
                 stream=True,
-                mcp_ids=experiment_entity.run_config.get("mcp_ids", []),
-                enable_search=experiment_entity.run_config.get("enable_search", False),
-                enable_agent=experiment_entity.run_config.get("enable_agent", False),
-                kb_ids=experiment_entity.run_config.get("kb_ids", []),
-                temperature=experiment_entity.run_config.get("temperature", 0.7),
-                max_tokens=experiment_entity.run_config.get("max_tokens", 1024),
-                enable_input_guardrail=experiment_entity.run_config.get("enable_input_guardrail", False),
-                enable_output_guardrail=experiment_entity.run_config.get("enable_output_guardrail", False),
-                guardrail_hint=experiment_entity.run_config.get("guardrail_hint", DEFAULT_GUARDRAIL_ADVICE),
+                mcp_ids=run_config_entity.mcp_ids,
+                enable_search=run_config_entity.enable_search,
+                enable_agent=run_config_entity.enable_agent,
+                kb_ids=run_config_entity.kb_ids,
+                enable_input_guardrail=run_config_entity.enable_input_guardrail,
+                enable_output_guardrail=run_config_entity.enable_output_guardrail,
+                guardrail_hint=run_config_entity.guardrail_hint,
             )
             try:
-                output, execution_metadata, status = await run_gaia_agent(chat_request)
-                print(f"=== GAIA Agent output: {output} ===")
-                if status:
+                output, execution_metadata, status = await run_agent(chat_request)
+                print(f"=== Agent output: {output} ===")
+                eval_res = await run_evaluator(output, dataset_entity.expected_output, run_config_entity.evaluator_config, eval_llm)
+                print(f"=== Evaluation output: {output} === evaluator_config: {run_config_entity.evaluator_config}")
+                if status and eval_res:
                     logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")
-                    score = 1.0 if output == dataset_entity.expected_output else 0.0
-                    reason = "Matched" if score == 1.0 else "Not matched"
+                    score = eval_res.get("score", 0.0)
+                    reason = eval_res.get("reason", "Empty Reason")
                     await update_experiment_run_result(
                         exp_run_id=exp_run_id,
                         actual_output=output,
