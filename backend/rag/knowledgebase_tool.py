@@ -1,4 +1,5 @@
 from functools import partial
+import traceback
 from typing import Any, List, Optional
 from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
@@ -105,27 +106,31 @@ class PaiKnowledgebaseClient:
         file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
 
         logger.info(f"[WORKER] retrieved file {file_entity} for {file_id}.")
+        try:
+            file = file_store.load(file_entity.file_path)
+            file_item = FileItem(
+                id=file_entity.id,
+                file_path=file_entity.file_path,
+                file=file,
+                kb_id=file_entity.kb_id,
+                file_extension=file_entity.file_extension,
+                file_name=file_entity.file_name,
+                file_md5=file_entity.file_md5,
+                file_size=file_entity.file_size,
+            )
 
-        file = file_store.load(file_entity.file_path)
-        file_item = FileItem(
-            id=file_entity.id,
-            file_path=file_entity.file_path,
-            file=file,
-            kb_id=file_entity.kb_id,
-            file_extension=file_entity.file_extension,
-            file_name=file_entity.file_name,
-            file_md5=file_entity.file_md5,
-            file_size=file_entity.file_size,
-        )
+            kb_id = file_item.kb_id
+            knowledgebase: KbEntity = await fetch_knowledgebases_by_id(
+                kb_id=kb_id
+            )
+            logger.info(
+                f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
+            )
+            await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
+        except Exception as ex:
+            logger.error(f"处理文件失败：{traceback.format_exc()}")
+            await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(ex), is_attachment=is_attachment)
 
-        kb_id = file_item.kb_id
-        knowledgebase: KbEntity = await fetch_knowledgebases_by_id(
-            kb_id=kb_id
-        )
-        logger.info(
-            f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
-        )
-        await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
 
         @require_file_exists()
         async def parse_file(guard_instance):
@@ -184,9 +189,9 @@ class PaiKnowledgebaseClient:
         except Exception as e:
             if await guard.check_exists():  # 只有文件还存在时才更新状态
                 await update_file_status_async(
-                    file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment
+                    file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment, failed_reason=str(e),
                 )
-            logger.exception(f"Error processing file: {e}")
+            logger.error(f"Error processing file: {traceback.format_exc()}")
 
     async def adelete_kb(
         self,

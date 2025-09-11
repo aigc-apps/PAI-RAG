@@ -118,6 +118,17 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           setKbs([...kbData]);
           
           const botData = await botRes.json();
+          botData.data.kb_ids = botData.data.kb_ids.filter(
+            (kb_id: string) => {
+              return kbData.some((kb: any) => kb.id === kb_id);
+            }
+          )
+          botData.data.mcp_ids = botData.data.mcp_ids.filter(
+            (mcp_id: string) => {
+              return mcpData.some((mcp: any) => mcp.id === mcp_id);
+            }
+          )
+
           setBotConfig(botData.data);
           console.log('chatbotData: ', botData.data);
 

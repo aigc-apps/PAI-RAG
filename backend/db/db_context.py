@@ -16,7 +16,6 @@ import os
 
 def get_async_db_angine():
     # 从环境变量中读取数据库配置
-    local_db_url = os.getenv("SQLITE_URL", "sqlite+aiosqlite:///./localdata/local.db")
     if not os.path.exists("./localdata"):
         os.makedirs("./localdata")
     db_type= os.getenv("DB_TYPE", "sqlite")
@@ -45,14 +44,17 @@ def get_async_db_angine():
 
         return async_engine
     else:
+        local_db_url = os.getenv("SQLITE_URL", "sqlite+aiosqlite:///./tmp/sqlite/local.db")
         logger.warning(
             f"Created db engine with sqlite {local_db_url}."
         )
-        return create_async_engine(
+        async_engine = create_async_engine(
             local_db_url,
             echo=False,  # 输出执行的 SQL 语句
             connect_args={"check_same_thread": False},  # SQLite 特有参数
         )
+
+        return async_engine
 
 
 async_engine = get_async_db_angine()

@@ -61,13 +61,12 @@ async def get_multimodal_llm_from_db(
 @with_async_db_session
 async def set_embedding_model_ready(
     session: AsyncSession,
-    model_id: str,
+    id: str,
 ):
-    embedding_model = await session.get(EmbeddingModelEntity, model_id)
+    embedding_model = await session.get(EmbeddingModelEntity, id)
     if embedding_model is None:
         raise ValueError(
-            status_code=404,
-            detail=f"Embedding model {model_id} not found.",
+            f"Embedding model {id} not found."
         )
 
     embedding_model.is_ready = True
@@ -77,7 +76,7 @@ async def set_embedding_model_ready(
 
     await config_change_manager.notify_change_async(
         event_source=ChangeEventSource.EMBEDDING,
-        source_id=model_id,
+        source_id=id,
         event_type=ChangeEventType.UPDATE
     )
 
