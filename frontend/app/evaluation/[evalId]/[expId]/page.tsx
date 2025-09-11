@@ -301,6 +301,17 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
     return Math.max(...times).toFixed(2);
   };
 
+  const getAverageScore = () => {
+    const scores = allExpItems
+      .map(item => {
+        return item.score;
+      });
+
+    if (scores.length === 0) return "N/A";
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    return avg.toFixed(2);
+  };
+
   if (!experiment) {
     return (
       <div className="container mx-auto p-6">
@@ -525,7 +536,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                 <div className="flex items-center gap-1">
                   <span className="text-gray-500 font-medium">平均得分:</span>
                   <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs py-0.5 px-2">
-                    {experiment.avg_score ? experiment.avg_score.toFixed(2) : "0.0"}
+                    {getAverageScore()}
                   </Badge>
                 </div>
               </div>
