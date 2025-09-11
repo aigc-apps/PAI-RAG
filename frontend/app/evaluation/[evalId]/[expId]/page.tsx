@@ -879,7 +879,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                                         <h4 className="font-medium text-lg">得分原因</h4>
                                       </div>
                                       <div className="p-4 bg-muted rounded-lg">
-                                        <p className="text-muted-foreground leading-relaxed">{sample.reason}</p>
+                                        <p className="whitespace-pre-wrap leading-relaxed">{sample.reason}</p>
                                       </div>
                                     </div>
 
