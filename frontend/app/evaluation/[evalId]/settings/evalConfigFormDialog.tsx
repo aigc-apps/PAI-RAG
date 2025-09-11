@@ -8,7 +8,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -38,23 +37,23 @@ import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { useRouter } from 'next/navigation';
 
 interface EvalRunConfig {
-    id: string;
+  id: string;
+  name: string;
+  model_id: string;
+  mcp_ids: string[];
+  kb_ids: string[];
+  enable_search: boolean;
+  enable_vision: boolean;
+  enable_agent: boolean;
+  enable_input_guardrail?: boolean;
+  enable_output_guardrail?: boolean;
+  guardrail_hint?: string;
+  evaluator_config: {
     name: string;
-    model_id: string;
-    mcp_ids: string[];
-    kb_ids: string[];
-    enable_search: boolean;
-    enable_vision: boolean;
-    enable_agent: boolean;
-    enable_input_guardrail?: boolean;
-    enable_output_guardrail?: boolean;
-    guardrail_hint?: string;
-    evaluator_config: {
-      name: string;
-      model_id?: string;
-      case_sensitive?: boolean;
-      ignore_punctuation?: boolean;
-    }
+    model_id?: string;
+    case_sensitive?: boolean;
+    ignore_punctuation?: boolean;
+  }
 }
 
 interface EvalConfigFormDialogProps {
@@ -87,24 +86,24 @@ export function EvalConfigFormDialog({
     mode === 'edit' && config
       ? { ...config }
       : {
-          id: "",
+        id: "",
+        name: "",
+        model_id: "",
+        mcp_ids: [],
+        kb_ids: [],
+        enable_search: false,
+        enable_vision: false,
+        enable_agent: false,
+        enable_input_guardrail: false,
+        enable_output_guardrail: false,
+        guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+        evaluator_config: {
           name: "",
           model_id: "",
-          mcp_ids: [],
-          kb_ids: [],
-          enable_search: false,
-          enable_vision: false,
-          enable_agent: false,
-          enable_input_guardrail: false,
-          enable_output_guardrail: false,
-          guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
-          evaluator_config: {
-            name: "",
-            model_id: "",
-            case_sensitive: false,
-            ignore_punctuation: false,
-          }
+          case_sensitive: false,
+          ignore_punctuation: false,
         }
+      }
   );
 
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>(
@@ -138,11 +137,11 @@ export function EvalConfigFormDialog({
         enable_output_guardrail: false,
         guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
         evaluator_config: {
-            name: "",
-            model_id: "",
-            case_sensitive: false,
-            ignore_punctuation: false,
-          }
+          name: "",
+          model_id: "",
+          case_sensitive: false,
+          ignore_punctuation: false,
+        }
       });
       setSelectedKbNames([]);
       setSelectedMcpNames([]);

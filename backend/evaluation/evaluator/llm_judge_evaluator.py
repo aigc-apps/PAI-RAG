@@ -1,10 +1,10 @@
 # evaluator/llm_judge_evaluator.py
 from typing import Dict, Any, Optional
-from .base import BaseEvaluator
+from evaluation.evaluator.base import BaseEvaluator
 from llama_index.core.llms import LLM
+from evaluation.evaluator.prompts.correctness import CORRECTNESS_PROMPT
 
-# 假设你有一个 LLM 客户端（如 OpenAI、本地模型等）
-# 你可以替换为你自己的 LLM 调用逻辑
+# 基于openevals的CORRECTNESS_PROMPT进行评估
 class LLMJudgeEvaluator(BaseEvaluator):
     """
     基于大语言模型的评估器
@@ -26,25 +26,7 @@ class LLMJudgeEvaluator(BaseEvaluator):
         self.temperature = temperature
 
     def _default_prompt(self) -> str:
-        return """你是一个严谨的评估专家。请根据参考答案，评估模型预测结果的质量。
-
-【评分标准】
-- 5分：完全正确，语义一致，表达清晰
-- 4分：基本正确，有轻微表达差异
-- 3分：部分正确，但有明显错误或遗漏
-- 2分：大部分错误，仅少量正确
-- 1分：完全错误或无关
-
-【输出格式】
-请严格按照以下 JSON 格式输出：
-{{
-  "score": 1~5之间的整数,
-  "reason": "评分理由（50字以内）"
-}}
-
-参考答案：{reference}
-模型预测：{prediction}
-"""
+        return CORRECTNESS_PROMPT
 
     async def _call_llm(self, prompt: str) -> str:
         """调用 LLM，返回原始响应文本"""
@@ -57,70 +39,49 @@ class LLMJudgeEvaluator(BaseEvaluator):
     def _parse_response(self, response_text: str) -> Dict[str, Any]:
         """解析 LLM 返回的 JSON"""
         import json
+        import re
         try:
-            # 尝试提取 JSON 块（兼容 ```json ... ``` 格式）
-            if "```json" in response_text:
-                start = response_text.find("```json") + 7
-                end = response_text.rfind("```")
-                json_str = response_text[start:end].strip()
-            elif "```" in response_text:
-                start = response_text.find("```") + 3
-                end = response_text.rfind("```")
-                json_str = response_text[start:end].strip()
-            else:
-                json_str = response_text.strip()
+            pattern = r'(?s)\{.*?\}'
+            match = re.search(pattern, response_text)
 
+            if not match:
+                raise ValueError("未找到 JSON 对象")
+
+            json_str = match.group(0)
             result = json.loads(json_str)
-            score = float(result.get("score", 0))
-            reason = str(result.get("reason", ""))
 
-            # 标准化 score 到 0~1
-            normalized_score = min(max(score, 1), 5) / 5.0  # 1~5 → 0.2~1.0
+            if not all(key in result for key in ["score", "reason", "correctness_issues"]):
+                raise ValueError("JSON 缺少必要字段")
 
             return {
-                "score": normalized_score,
-                "raw_score": score,
-                "reason": reason,
-                "raw_response": response_text,
+                "score": result.get("score", 0.0),
+                "reason": result.get("reason", 0.0),
                 "evaluator": self.name,
             }
 
+        except json.JSONDecodeError as e:
+            return {
+                    "score": 0.0,
+                    "reason": f"JSON 解析失败: {str(e)}\n原始文本: {response_text[:200]}...",
+                    "evaluator": self.name,
+                    "error": str(e),
+                }
         except Exception as e:
             return {
-                "score": 0.0,
-                "reason": f"解析失败: {str(e)[:50]}",
-                "raw_response": response_text,
-                "evaluator": self.name,
-                "error": str(e),
-            }
+                    "score": 0.0,
+                    "reason": f"提取失败: {str(e)}",
+                    "evaluator": self.name,
+                    "error": str(e),
+                }
 
-    async def evaluate_async(self, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
+
+
+    async def evaluate_async(self, input:str, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
         prompt = self.prompt_template.format(
-            prediction=prediction,
-            reference=reference,
+            inputs=input,
+            outputs=prediction,
+            reference_outputs=reference,
         )
-
         llm_response = await self._call_llm(prompt)
         result = self._parse_response(llm_response)
         return result
-
-    # def evaluate(self, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
-    #     """同步接口，内部调用异步方法"""
-    #     try:
-    #         loop = asyncio.get_event_loop()
-    #         if loop.is_running():
-    #             import nest_asyncio
-    #             nest_asyncio.apply()
-    #             future = asyncio.ensure_future(self.evaluate_async(prediction, reference, **kwargs))
-    #             result = asyncio.get_event_loop().run_until_complete(future)
-    #         else:
-    #             # 新事件循环
-    #             result = asyncio.run(self.evaluate_async(prediction, reference, **kwargs))
-    #         return result
-    #     except Exception as e:
-    #         return {
-    #             "score": 0.0,
-    #             "reason": f"评估失败: {str(e)}",
-    #             "evaluator": self.name,
-    #             "error": str(e),
-    #         }

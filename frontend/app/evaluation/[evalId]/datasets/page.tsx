@@ -1,15 +1,7 @@
 'use client';
 import React from 'react';
-import { useState, useEffect, use, useRef, useMemo } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import { useRouter } from "next/navigation";
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import {
     Table,
     TableBody,
@@ -30,7 +22,6 @@ import {
     Eye,
     Trash2Icon,
     Loader2,
-    ChevronDownIcon
 } from "lucide-react";
 import {
     Dialog,
@@ -48,24 +39,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    DropdownMenu,
-    DropdownMenuCheckboxItem,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from '@/components/ui/badge';
-import { EvalConfig } from '@/app/evaluation/[evalId]/page';
-import { McpConfig } from '@/app/config/mcp/mcp';
-import { LlmConfig } from '@/app/config/model/llm/page';
-import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { EvalRunConfig } from '@/app/evaluation/[evalId]/settings/page';
 export interface SampleItem {
     id: string;
@@ -347,7 +325,7 @@ export default function EvalDatasetsDetailsPage(
                                 ))}
                             </div>
                         </div>
-                        
+
                     </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -358,350 +336,352 @@ export default function EvalDatasetsDetailsPage(
                         {evalRunConfigs.length > 0 ? (
                             <Select
                                 onValueChange={(value) =>
-                                setEvalRunConfigId(value)
-                            }>
-                            <SelectTrigger>
-                                <SelectValue placeholder="请选择实验设置" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {evalRunConfigs.map((config) => (
-                                <SelectItem key={config.id} value={config.id}>
-                                    {config.name}
-                                </SelectItem>
-                                ))}
-                            </SelectContent>
+                                    setEvalRunConfigId(value)
+                                }>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="请选择实验设置" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {evalRunConfigs.map((config) => (
+                                        <SelectItem key={config.id} value={config.id}>
+                                            {config.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
                             </Select>
                         ) : (
                             <div className="flex flex-col gap-2">
-                            <p className="text-sm text-muted-foreground">尚未进行实验配置</p>
+                                <p className="text-sm text-muted-foreground">尚未进行实验配置</p>
                             </div>
                         )}
                     </div>
-                    </div>
                 </div>
+            </div>
         );
     };
 
     return (
-        <Card className="w-full">
-            <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between md:space-y-0">
-                <div>
-                    <CardTitle>数据集管理</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        管理您的问题/答案数据集
-                    </p>
-                </div>
+        <div className="flex flex-col py-4 space-y-6">
+            <div className="w-full">
+                <Card className="w-full">
+                    <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between md:space-y-0">
+                        <div>
+                            <CardTitle>数据集管理</CardTitle>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                管理您的问题/答案数据集
+                            </p>
+                        </div>
 
-                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                    <div className="flex flex-col gap-2">
-                    <div className="flex gap-2 justify-end">
-                        <Dialog open={isRunBatchDetailOpen} onOpenChange={setIsRunBatchDetailOpen}>
-                            <DialogTrigger asChild>
-                                <Button
-                                    disabled={selectedItems.size === 0 && !isAllSelected}
-                                >
-                                    <PlayIcon className="mr-2 h-4 w-4" />
-                                    {isAllSelected ? `批量运行(所有${totalItems}项)` : `批量运行(${selectedItems.size}项)`}
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[750px]">
-                                <DialogHeader>
-                                    <DialogTitle>创建新实验（批量）</DialogTitle>
-                                    <DialogDescription>
-                                        请输入此次实验名称和描述，然后运行试验。
-                                    </DialogDescription>
-                                </DialogHeader>
-                                {modifyEvalRunConfig(selectedItems)}
-                                <DialogFooter>
+                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                            <div className="flex flex-col gap-2">
+                                <div className="flex gap-2 justify-end">
+                                    <Dialog open={isRunBatchDetailOpen} onOpenChange={setIsRunBatchDetailOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button
+                                                disabled={selectedItems.size === 0 && !isAllSelected}
+                                            >
+                                                <PlayIcon className="mr-2 h-4 w-4" />
+                                                {isAllSelected ? `运行实验(所有${totalItems}项)` : `运行实验(${selectedItems.size}项)`}
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="sm:max-w-[750px]">
+                                            <DialogHeader>
+                                                <DialogTitle>创建新实验（批量）</DialogTitle>
+                                                <DialogDescription>
+                                                    请输入此次实验名称和描述，然后运行试验。
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            {modifyEvalRunConfig(selectedItems)}
+                                            <DialogFooter>
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={() => setIsRunBatchDetailOpen(false)}
+                                                    disabled={batchRuning}
+                                                >
+                                                    取消
+                                                </Button>
+                                                <Button
+                                                    onClick={handleBatchRun}
+                                                    disabled={!experimentName.trim()}
+                                                >
+                                                    运行 {batchRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
                                     <Button
-                                        variant="outline"
-                                        onClick={() => setIsRunBatchDetailOpen(false)}
-                                        disabled={batchRuning}
+                                        onClick={() =>
+                                            document.getElementById('file-upload')?.click()
+                                        }
+                                        disabled={uploading} // 上传时禁用按钮
                                     >
-                                        取消
+                                        {uploading ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                上传中...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
+                                            </>
+                                        )}
                                     </Button>
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            id="file-upload"
+                                            type="file"
+                                            className="hidden"
+                                            ref={fileInputRef}
+                                            onChange={(e) => handleFileUpload(e.target.files)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground ml-2">
+                                    数据要求为JSONL文件，每行需要包含 input(string), expected_output(string) 和 metadata(dict, 可选)
+                                </p>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="rounded-md border overflow-y-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[50px]">
+                                            <Checkbox
+                                                checked={isAllSelected}
+                                                onCheckedChange={(checked) => {
+                                                    if (checked) {
+                                                        setSelectedItems(new Set(allItems.map(item => item.id)));
+                                                    } else {
+                                                        setSelectedItems(new Set());
+                                                    }
+                                                }}
+                                                aria-label="Select all"
+                                            />
+                                        </TableHead>
+                                        <TableHead className="w-[10%]">样本ID</TableHead>
+                                        <TableHead className="w-[45%]">问题</TableHead>
+                                        <TableHead className="w-[30%]">答案</TableHead>
+                                        <TableHead className="w-[100px] text-center">操作</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+
+                                <TableBody>
+                                    {datasets.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="h-24 text-center">
+                                                暂无数据
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        datasets.map((item) => (
+                                            <TableRow key={item.id} className="hover:bg-muted/50 transition-colors">
+                                                <TableCell className="w-[50px]">
+                                                    <Checkbox
+                                                        checked={isItemSelected(item.id)}
+                                                        onCheckedChange={() => handleSelectItem(item.id)}
+                                                        aria-label="Select row"
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    <div className="flex items-center">
+                                                        <Button
+                                                            variant="link"
+                                                            className="truncate max-w-[120px] text-blue-600"
+                                                            onClick={() => handleEyeClick(item)}
+                                                        >
+                                                            {item.id.substring(0, 20)}...
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 ml-1"
+                                                            onClick={() => copyId(item.id)}
+                                                            title="复制样本ID"
+                                                        >
+                                                            <CopyIcon className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+
+                                                <TableCell
+                                                    className="whitespace-normal break-words min-w-[250px] max-w-[400px] py-2"
+                                                    style={{
+                                                        whiteSpace: expandedRows.has(item.id) ? 'normal' : 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis'
+                                                    }}
+                                                >
+                                                    {item.input}
+                                                </TableCell>
+
+                                                <TableCell className="whitespace-normal break-words min-w-[150px] max-w-[250px] py-2">
+                                                    <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap">
+                                                        {item.expected_output}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        variant="link"
+                                                        size="icon"
+                                                        className="h-8 w-8"
+                                                        onClick={() => toggleRowExpansion(item.id)}
+                                                        title={expandedRows.has(item.id) ? "收起问题" : "展开问题"}
+                                                    >
+                                                        {expandedRows.has(item.id) ? (
+                                                            <ChevronUp className="h-4 w-4" />
+                                                        ) : (
+                                                            <ChevronDown className="h-4 w-4" />
+                                                        )}
+                                                    </Button>
+                                                    <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+                                                        <DialogTrigger asChild>
+                                                            <Button
+                                                                variant="link"
+                                                                size="icon"
+                                                                className="text-black-500 hover:text-black-700 px-1 py-1"
+                                                                onClick={() => handleEyeClick(item)}
+                                                                title="查看详情"
+                                                            >
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                            </Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="max-w-2xl">
+                                                            <DialogHeader>
+                                                                <DialogTitle>样本详情</DialogTitle>
+                                                            </DialogHeader>
+                                                            {selectedSample && (
+                                                                <div className="space-y-4">
+                                                                    {/* Existing fields */}
+                                                                    <div>
+                                                                        <h4 className="text-sm font-medium text-muted-foreground">样本ID</h4>
+                                                                        <p className="mt-1">{selectedSample.id}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="text-sm font-medium text-muted-foreground">问题</h4>
+                                                                        <p className="mt-1 whitespace-pre-wrap">{selectedSample.input}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="text-sm font-medium text-muted-foreground">答案</h4>
+                                                                        <Badge variant="secondary" className="mt-1 bg-blue-50 text-blue-700 hover:bg-blue-100 whitespace-pre-wrap">
+                                                                            {selectedSample.expected_output}
+                                                                        </Badge>
+                                                                    </div>
+
+                                                                    {/* New fields */}
+                                                                    <div>
+                                                                        <h4 className="text-sm font-medium text-muted-foreground">步骤</h4>
+                                                                        <p className="mt-1">
+                                                                            {selectedSample.eval_metadata?.Steps ? (
+                                                                                <Badge className='bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap'>
+                                                                                    {selectedSample.eval_metadata.Steps}
+                                                                                </Badge>
+                                                                            ) : "未指定"}
+                                                                        </p>
+                                                                    </div>
+
+                                                                    <div>
+                                                                        <h4 className="text-sm font-medium text-muted-foreground">使用工具</h4>
+                                                                        <div className="mt-1 flex flex-wrap gap-2">
+                                                                            {selectedSample.eval_metadata?.Tools ? (
+                                                                                <Badge className='bg-yellow-50 text-yellow-700 hover:bg-yellow-100 whitespace-pre-wrap'>
+                                                                                    {selectedSample.eval_metadata?.Tools}
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <span className="text-muted-foreground">无</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                    <Dialog open={isRunSingleDetailOpen} onOpenChange={setIsRunSingleDetailOpen}>
+                                                        <DialogTrigger asChild>
+                                                            <Button
+                                                                variant="link"
+                                                                size="icon"
+                                                                className="text-black-500 hover:text-black-700 px-1 py-1"
+                                                                title="运行单条"
+                                                            >
+                                                                <PlayIcon className="mr-2 h-4 w-4" />
+                                                            </Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="sm:max-w-[750px]">
+                                                            <DialogHeader>
+                                                                <DialogTitle>创建新实验（单条）</DialogTitle>
+                                                                <DialogDescription>
+                                                                    请输入此次实验名称和描述，然后运行试验。
+                                                                </DialogDescription>
+                                                            </DialogHeader>
+                                                            {modifyEvalRunConfig(new Set([item.id]))}
+                                                            <DialogFooter>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    onClick={() => setIsRunSingleDetailOpen(false)}
+                                                                    disabled={singleRuning}
+                                                                >
+                                                                    取消
+                                                                </Button>
+                                                                <Button
+                                                                    onClick={() => runSingleSample(item.id)}
+                                                                    disabled={!experimentName.trim()}
+                                                                >
+                                                                    运行 {singleRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                                                </Button>
+                                                            </DialogFooter>
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                    <Button
+                                                        variant="link"
+                                                        size="icon"
+                                                        className="h-8 w-8"
+                                                        title="删除"
+                                                    >
+                                                        <Trash2Icon className="mr-2 h-4 w-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {/* 选中项状态提示 */}
+                        {(selectedItems.size > 0 || isAllSelected) && (
+                            <div className="p-2 border-t bg-muted/50 mt-2 rounded-b-md">
+                                <div className="text-sm flex items-center justify-between">
+                                    <span>
+                                        {isAllSelected ? (
+                                            `已选择所有匹配的 ${totalItems} 项`
+                                        ) : (
+                                            `已选择 ${selectedItems.size} 项`
+                                        )}
+                                    </span>
                                     <Button
-                                        onClick={handleBatchRun}
-                                        disabled={!experimentName.trim()}
+                                        variant="link"
+                                        className="p-0 h-auto font-normal text-muted-foreground hover:text-foreground"
+                                        onClick={() => setSelectedItems(new Set())}
                                     >
-                                        运行 {batchRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                        清除选择
                                     </Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-                        <Button
-                            onClick={() =>
-                                document.getElementById('file-upload')?.click()
-                            }
-                            disabled={uploading} // 上传时禁用按钮
-                        >
-                            {uploading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    上传中...
-                                </>
-                            ) : (
-                                <>
-                                    <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
-                                </>
-                            )}
-                        </Button>
-                        <div className="flex gap-2 items-center">
-                            <input
-                                id="file-upload"
-                                type="file"
-                                className="hidden"
-                                ref={fileInputRef}
-                                onChange={(e) => handleFileUpload(e.target.files)}
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                    <CardFooter className="flex justify-center">
+                        <div className="">
+                            <PaginationComponent
+                                currentPage={page}
+                                totalPages={totalPages}
+                                onPageChange={handlePageChange}
                             />
                         </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground ml-2">
-                        数据要求为JSONL文件，每行需要包含 input(string), expected_output(string) 和 metadata(dict, 可选)
-                    </p>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <div className="rounded-md border overflow-y-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[50px]">
-                                    <Checkbox
-                                        checked={isAllSelected}
-                                        onCheckedChange={(checked) => {
-                                            if (checked) {
-                                                // When selecting all, populate selectedItems with all item IDs
-                                                setSelectedItems(new Set(allItems.map(item => item.id)));
-                                            } else {
-                                                // When deselecting all, clear selectedItems
-                                                setSelectedItems(new Set());
-                                            }
-                                        }}
-                                        aria-label="Select all"
-                                    />
-                                </TableHead>
-                                <TableHead className="w-[10%]">样本ID</TableHead>
-                                <TableHead className="w-[45%]">问题</TableHead>
-                                <TableHead className="w-[30%]">答案</TableHead>
-                                <TableHead className="w-[100px] text-center">操作</TableHead>
-                            </TableRow>
-                        </TableHeader>
-
-                        <TableBody>
-                            {datasets.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
-                                        暂无数据
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                datasets.map((item) => (
-                                    <TableRow key={item.id} className="hover:bg-muted/50 transition-colors">
-                                        <TableCell className="w-[50px]">
-                                            <Checkbox
-                                                checked={isItemSelected(item.id)}
-                                                onCheckedChange={() => handleSelectItem(item.id)}
-                                                aria-label="Select row"
-                                            />
-                                        </TableCell>
-                                        <TableCell className="font-medium">
-                                            <div className="flex items-center">
-                                                <Button
-                                                    variant="link"
-                                                    className="truncate max-w-[120px] text-blue-600"
-                                                    onClick={() => handleEyeClick(item)}
-                                                >
-                                                    {item.id.substring(0, 20)}...
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6 ml-1"
-                                                    onClick={() => copyId(item.id)}
-                                                    title="复制样本ID"
-                                                >
-                                                    <CopyIcon className="h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="whitespace-normal break-words min-w-[250px] max-w-[400px] py-2"
-                                            style={{
-                                                whiteSpace: expandedRows.has(item.id) ? 'normal' : 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis'
-                                            }}
-                                        >
-                                            {item.input}
-                                        </TableCell>
-
-                                        <TableCell className="whitespace-normal break-words min-w-[150px] max-w-[250px] py-2">
-                                            <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap">
-                                                {item.expected_output}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button
-                                                variant="link"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() => toggleRowExpansion(item.id)}
-                                                title={expandedRows.has(item.id) ? "收起问题" : "展开问题"}
-                                            >
-                                                {expandedRows.has(item.id) ? (
-                                                    <ChevronUp className="h-4 w-4" />
-                                                ) : (
-                                                    <ChevronDown className="h-4 w-4" />
-                                                )}
-                                            </Button>
-                                            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-                                                <DialogTrigger asChild>
-                                                    <Button
-                                                        variant="link"
-                                                        size="icon"
-                                                        className="text-black-500 hover:text-black-700 px-1 py-1"
-                                                        onClick={() => handleEyeClick(item)}
-                                                        title="查看详情"
-                                                    >
-                                                        <Eye className="mr-2 h-4 w-4" />
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-2xl">
-                                                    <DialogHeader>
-                                                        <DialogTitle>样本详情</DialogTitle>
-                                                    </DialogHeader>
-                                                    {selectedSample && (
-                                                        <div className="space-y-4">
-                                                            {/* Existing fields */}
-                                                            <div>
-                                                                <h4 className="text-sm font-medium text-muted-foreground">样本ID</h4>
-                                                                <p className="mt-1">{selectedSample.id}</p>
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="text-sm font-medium text-muted-foreground">问题</h4>
-                                                                <p className="mt-1 whitespace-pre-wrap">{selectedSample.input}</p>
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="text-sm font-medium text-muted-foreground">答案</h4>
-                                                                <Badge variant="secondary" className="mt-1 bg-blue-50 text-blue-700 hover:bg-blue-100 whitespace-pre-wrap">
-                                                                    {selectedSample.expected_output}
-                                                                </Badge>
-                                                            </div>
-
-                                                            {/* New fields */}
-                                                            <div>
-                                                                <h4 className="text-sm font-medium text-muted-foreground">步骤</h4>
-                                                                <p className="mt-1">
-                                                                    {selectedSample.eval_metadata?.Steps ? (
-                                                                        <Badge className='bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap'>
-                                                                            {selectedSample.eval_metadata.Steps}
-                                                                        </Badge>
-                                                                    ) : "未指定"}
-                                                                </p>
-                                                            </div>
-
-                                                            <div>
-                                                                <h4 className="text-sm font-medium text-muted-foreground">使用工具</h4>
-                                                                <div className="mt-1 flex flex-wrap gap-2">
-                                                                    {selectedSample.eval_metadata?.Tools ? (
-                                                                        <Badge className='bg-yellow-50 text-yellow-700 hover:bg-yellow-100 whitespace-pre-wrap'>
-                                                                            {selectedSample.eval_metadata?.Tools}
-                                                                        </Badge>
-                                                                    ) : (
-                                                                        <span className="text-muted-foreground">无</span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </DialogContent>
-                                            </Dialog>
-                                            <Dialog open={isRunSingleDetailOpen} onOpenChange={setIsRunSingleDetailOpen}>
-                                                <DialogTrigger asChild>
-                                                    <Button
-                                                        variant="link"
-                                                        size="icon"
-                                                        className="text-black-500 hover:text-black-700 px-1 py-1"
-                                                        title="运行单条"
-                                                    >
-                                                        <PlayIcon className="mr-2 h-4 w-4" />
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="sm:max-w-[750px]">
-                                                    <DialogHeader>
-                                                        <DialogTitle>创建新实验（单条）</DialogTitle>
-                                                        <DialogDescription>
-                                                            请输入此次实验名称和描述，然后运行试验。
-                                                        </DialogDescription>
-                                                    </DialogHeader>
-                                                    {modifyEvalRunConfig(new Set([item.id]))}
-                                                    <DialogFooter>
-                                                        <Button
-                                                            variant="outline"
-                                                            onClick={() => setIsRunSingleDetailOpen(false)}
-                                                            disabled={singleRuning}
-                                                        >
-                                                            取消
-                                                        </Button>
-                                                        <Button
-                                                            onClick={() => runSingleSample(item.id)}
-                                                            disabled={!experimentName.trim()}
-                                                        >
-                                                            运行 {singleRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                                                        </Button>
-                                                    </DialogFooter>
-                                                </DialogContent>
-                                            </Dialog>
-                                            <Button
-                                                variant="link"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                title="删除"
-                                            >
-                                                <Trash2Icon className="mr-2 h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-
-                {/* 选中项状态提示 */}
-                {(selectedItems.size > 0 || isAllSelected) && (
-                    <div className="p-2 border-t bg-muted/50 mt-2 rounded-b-md">
-                        <div className="text-sm flex items-center justify-between">
-                            <span>
-                                {isAllSelected ? (
-                                    `已选择所有匹配的 ${totalItems} 项`
-                                ) : (
-                                    `已选择 ${selectedItems.size} 项`
-                                )}
-                            </span>
-                            <Button
-                                variant="link"
-                                className="p-0 h-auto font-normal text-muted-foreground hover:text-foreground"
-                                onClick={() => setSelectedItems(new Set())}
-                            >
-                                清除选择
-                            </Button>
-                        </div>
-                    </div>
-                )}
-            </CardContent>
-            <CardFooter className="flex justify-center">
-                <div className="">
-                    <PaginationComponent
-                        currentPage={page}
-                        totalPages={totalPages}
-                        onPageChange={handlePageChange}
-                    />
-                </div>
-            </CardFooter>
-        </Card>
+                    </CardFooter>
+                </Card>
+            </div>
+        </div>
     );
 }

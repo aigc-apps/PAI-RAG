@@ -152,8 +152,8 @@ class ConfigChangeManager:
 
         # Add dataset entries
         file_item = FileItem.from_file(
-            file_path="./data/gaia_level_1.jsonl",
-            file=open("./data/gaia_level_1.jsonl", "rb"),
+            file_path="./data/gaia_level_1_validation_metadata.jsonl",
+            file=open("./data/gaia_level_1_validation_metadata.jsonl", "rb"),
             kb_id=gaia_evaluation.id
         )
         file_results = file_item.get_eval_dataset_from_jsonl_file()

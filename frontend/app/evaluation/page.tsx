@@ -1,14 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -26,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Loader2, Trash2, UploadIcon } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
@@ -50,7 +43,7 @@ const EvaluationPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [evaluations, setEvaluations] = useState(Array<EvalData>);
   const [isLoading, setIsLoading] = useState(true);
-  const [evaluationerror, setEvaluationError] = useState(''); 
+  const [evaluationerror, setEvaluationError] = useState('');
   const pageSize = 6;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreateLoading, setIsCreateLoading] = useState(false);
@@ -60,27 +53,27 @@ const EvaluationPage = () => {
 
 
   useEffect(() => {
-      const fetchConfigs = async () => {
-        setIsLoading(true);
-        try {
-          const res = await fetch(
-            `/api/config/evaluation?page=${page}&size=${pageSize}`,
-          );
-          if (!res.ok) throw new Error('获取评估任务列表失败');
-          const json_data = await res.json();
-          console.log("evaluation json_data", json_data)
-          const data = json_data.data.items;
-          setEvaluations(data);
-          setTotalPages(json_data.data.pages);
-        } catch (err: any) {
-          setEvaluationError(err || '加载失败');
-        } finally {
-          setIsLoading(false);
-        }
-      };
+    const fetchConfigs = async () => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/config/evaluation?page=${page}&size=${pageSize}`,
+        );
+        if (!res.ok) throw new Error('获取评估任务列表失败');
+        const json_data = await res.json();
+        console.log("evaluation json_data", json_data)
+        const data = json_data.data.items;
+        setEvaluations(data);
+        setTotalPages(json_data.data.pages);
+      } catch (err: any) {
+        setEvaluationError(err || '加载失败');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-      fetchConfigs();
-    }, [page]);
+    fetchConfigs();
+  }, [page]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -93,28 +86,28 @@ const EvaluationPage = () => {
       description: evalTaskDesc || "默认评估任务描述",
       type: "custom"
     };
-    
+
     try {
-          const res = await fetch(
-              `/api/config/evaluation`,
-              {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(data),
-              },
-          );
-          if (!res.ok) {
-              alert('创建失败');
-              return;
-          }
-          const upload_result = await res.json();
-          console.log('创建成功:', upload_result);
-          setEvaluations((prev) => [...prev, upload_result.data]); // 追加新 LLM 配置
-      } catch (error) {
-          console.error('创建失败:', error);
-      } finally {
-        setIsCreateLoading(false);
-        setIsCreateOpen(false);
+      const res = await fetch(
+        `/api/config/evaluation`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        },
+      );
+      if (!res.ok) {
+        alert('创建失败');
+        return;
+      }
+      const upload_result = await res.json();
+      console.log('创建成功:', upload_result);
+      setEvaluations((prev) => [...prev, upload_result.data]); // 追加新 LLM 配置
+    } catch (error) {
+      console.error('创建失败:', error);
+    } finally {
+      setIsCreateLoading(false);
+      setIsCreateOpen(false);
     }
   }
 
@@ -130,12 +123,9 @@ const EvaluationPage = () => {
       if (!res.ok) {
         throw new Error('删除失败，请检查网络或配置');
       }
-
-      // 显示成功提示（可选）
-
       // 删除成功后更新本地状态
       setEvaluations((prev) => prev.filter((config) => config.id !== eval_id));
-    } catch (err: any) {console.log('删除评估任务出错: ', err);}
+    } catch (err: any) { console.log('删除评估任务出错: ', err); }
     // 显示错误提示
   }
 
@@ -147,7 +137,7 @@ const EvaluationPage = () => {
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button>
-                <Plus className="mr-2 h-4 w-4" /> 新建数据集
+              <Plus className="mr-2 h-4 w-4" /> 新建数据集
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
@@ -186,11 +176,11 @@ const EvaluationPage = () => {
               </div>
             </div>
             <DialogFooter>
-               <Button
-                  variant="outline"
-                  onClick={() => setIsCreateOpen(false)}
+              <Button
+                variant="outline"
+                onClick={() => setIsCreateOpen(false)}
               >
-                  取消
+                取消
               </Button>
               <Button
                 onClick={createNewEvalDataset}

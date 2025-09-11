@@ -30,7 +30,7 @@ class ExactMatchEvaluator(BaseEvaluator):
 
         return text
 
-    async def evaluate_async(self, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
+    async def evaluate_async(self, input:str, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
         pred_norm = self._normalize(prediction)
         ref_norm = self._normalize(reference)
 

@@ -170,8 +170,8 @@ class PaiEvaluationClient:
             try:
                 output, execution_metadata, status = await run_agent(chat_request)
                 print(f"=== Agent output: {output} ===")
-                eval_res = await run_evaluator(output, dataset_entity.expected_output, run_config_entity.evaluator_config, eval_llm)
-                print(f"=== Evaluation output: {output} === evaluator_config: {run_config_entity.evaluator_config}")
+                eval_res = await run_evaluator(dataset_entity.input, output, dataset_entity.expected_output, run_config_entity.evaluator_config, eval_llm)
+                print(f"=== Evaluation output: {eval_res} === evaluator_config: {run_config_entity.evaluator_config}")
                 if status and eval_res:
                     logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")
                     score = eval_res.get("score", 0.0)

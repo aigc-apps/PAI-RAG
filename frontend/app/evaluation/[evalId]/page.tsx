@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use, useRef } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import {
     Breadcrumb,
@@ -12,10 +12,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { toast } from 'sonner';
-import { CheckCircle, CircleXIcon} from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { BookOpen, Settings, FlaskConical } from "lucide-react";
@@ -64,9 +61,6 @@ export default function EvalExpDetailsPage(
         fetchKbConfigs();
       }, []);
 
-    // const totalExperiments = evaluation.experiments.length;
-    // const completedExperiments = evaluation.experiments.filter(e => e.status === 'completed').length;
-     
     if (!evaluation) {
         return <div className="p-6">加载中...</div>;
     }
@@ -122,14 +116,14 @@ export default function EvalExpDetailsPage(
                             value="experiments"
                             className="px-4"
                         >
-                            <FlaskConical className="h-3.5 w-3.5" />实验
+                            <FlaskConical className="h-3.5 w-3.5" />运行历史
                         </TabsTrigger>
                         <TabsTrigger
                             key="settings"
                             value="settings"
                             className="px-4"
                         >
-                            <Settings className="h-3.5 w-3.5"/>实验设置
+                            <Settings className="h-3.5 w-3.5"/>运行设置
                         </TabsTrigger>
                     </TabsList>
                     <TabsContent key="datasets" value="datasets">

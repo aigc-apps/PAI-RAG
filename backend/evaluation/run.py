@@ -38,9 +38,9 @@ async def run_agent(chat_request: ChatAgentRequest):
                 logger.error(f"Request failed with status {response.status}, body: {error_text}")
                 return f"Request failed: {error_text}", [], False
 
-async def run_evaluator(prediction: str, reference: str, eval_config: dict, eval_llm: LLM = None):
+async def run_evaluator(input: str, prediction: str, reference: str, eval_config: dict, eval_llm: LLM = None):
     evaluator = create_evaluator(eval_config, eval_llm)
-    result = await evaluator.evaluate_async(prediction, reference)
+    result = await evaluator.evaluate_async(input, prediction, reference)
     return result
 
 if __name__ == '__main__':

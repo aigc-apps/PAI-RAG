@@ -12,7 +12,7 @@ class BaseEvaluator(ABC):
         self.name = name
 
     @abstractmethod
-    async def evaluate_async(self, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
+    async def evaluate_async(self, input:str, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
         """
         评估预测结果与参考答案的匹配程度
 
