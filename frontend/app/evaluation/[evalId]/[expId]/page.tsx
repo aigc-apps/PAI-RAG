@@ -15,14 +15,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { useRouter } from "next/navigation";
 import {
-  ChevronDown, 
-  ChevronRight, 
-  Clock, 
+  ChevronDown,
+  ChevronRight,
+  Clock,
   Terminal,
-  MessageSquare, 
-  CheckCircle, 
-  Bot, 
-  CircleXIcon, 
+  MessageSquare,
+  CheckCircle,
+  Bot,
+  CircleXIcon,
   ChevronUp,
   Settings2,
   BarChart2,
@@ -100,32 +100,32 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
 
   const fetchAllItems = async () => {
     try {
+      const tmpPageSize = 1000;
+      const [datasetRes] = await Promise.all([
+        fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=1&size=${tmpPageSize}`),
+      ]);
+
+
+      if (!datasetRes.ok) throw new Error('获取评估实验列表失败');
+      const json_data = await datasetRes.json();
+      console.log("evaluation dataset json_data", json_data)
+
+      const tmpAllItems = [];
+      for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
+        console.log("start loading all items for page ", curPage)
         const tmpPageSize = 1000;
-        const [datasetRes] = await Promise.all([
-            fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=1&size=${tmpPageSize}`),
-        ]);
-
-
-        if (!datasetRes.ok) throw new Error('获取评估实验列表失败');
-        const json_data = await datasetRes.json();
-        console.log("evaluation dataset json_data", json_data)
-
-        const tmpAllItems = [];
-        for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
-            console.log("start loading all items for page ", curPage)
-            const tmpPageSize = 1000;
-            const response = await fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${curPage}&size=${tmpPageSize}`);
-            const data = await response.json();
-            tmpAllItems.push(...data.data.items);
-        }
-        setAllItems(tmpAllItems);
+        const response = await fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${curPage}&size=${tmpPageSize}`);
+        const data = await response.json();
+        tmpAllItems.push(...data.data.items);
+      }
+      setAllItems(tmpAllItems);
       console.log("finish loading all items", tmpAllItems.length)
 
     } catch (err: any) {
-        console.error(err); 
+      console.error(err);
     } finally {
     }
-};
+  };
 
   const fetchExperimentDetails = useCallback(async () => {
     if (isRefreshing) {
@@ -332,7 +332,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
     const validScores = allExpItems
       .filter(item => item.status !== 'pending' && item.status !== 'running')
       .map(item => item.score)
-      .filter(score => typeof score === 'number'); 
+      .filter(score => typeof score === 'number');
 
     if (validScores.length === 0) return "N/A";
 
@@ -360,42 +360,38 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
 
   return (
     <div className="flex flex-col h-screen px-6 py-4 space-y-6">
-      <div className="flex-none">
-        <div className="p-2 space-y-2">
-          <div className="mb-2 flex items-center gap-2">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => router.push('/evaluation')}
-                    >
-                      评估
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => router.push(`/evaluation/${evalId}`)}
-                    >
-                      {evalConfig?.name}
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>实验：{experiment.name}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </div>
+      <div className="flex-none mb-2 flex items-center gap-2">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Button
+                  variant="link"
+                  className="px-0"
+                  onClick={() => router.push('/evaluation')}
+                >
+                  评估
+                </Button>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Button
+                  variant="link"
+                  className="px-0"
+                  onClick={() => router.push(`/evaluation/${evalId}`)}
+                >
+                  {evalConfig?.name}
+                </Button>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>实验：{experiment.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
       <div className="flex-1 overflow-y-auto px-2">
         <Card className="mb-4">
@@ -449,7 +445,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                 </h3>
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                    <PieChart width={400} height={400}>
                       <Pie
                         data={getStatusDistributionData()}
                         cx="50%"
@@ -457,13 +453,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                         labelLine={false}
                         label={({ name, value }) => `${name} ${value}`}
                         outerRadius={60}
+                        paddingAngle={1}
                         fill="#8884d8"
                         dataKey="value"
-                        paddingAngle={1}
                       >
                         {getStatusDistributionData().map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as StatusKey] || "#8884d8"} />
                         ))}
+
                       </Pie>
                       <Tooltip
                         contentStyle={{
