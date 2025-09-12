@@ -299,7 +299,57 @@ async def list_dataset(
         message="获取评估数据集列表成功")
 
 
+@evaluation_router.put("/{eval_id}/dataset/{sample_id}", response_model=ResponseModel[EvalDatasetEntity])
+async def update_dataset_sample(
+    eval_id: str,
+    sample_id: str,
+    new_sample: EvalDatasetEntity,
+    session: AsyncSession = Depends(get_session),
+):
+    sample_entity = await session.get(EvalDatasetEntity, sample_id)
+    if not sample_entity:
+        return JSONResponse(
+            content=error_response(code=404, message=f"更新数据集样本失败: 样本'{sample_id}'不存在。"),
+            status_code=404,
+        )
 
+    try:
+        sample_entity.input = new_sample.input
+        sample_entity.expected_output = new_sample.expected_output
+        sample_entity.eval_metadata = new_sample.eval_metadata
+
+        session.add(sample_entity)
+        await session.commit()
+        await session.refresh(sample_entity)
+
+        logger.info(f"Dataset Sample {sample_id} for eval_id {eval_id} updated to {sample_entity}.")
+
+        return success_response(data=sample_entity, message="更新数据集样本成功。")
+    except Exception:
+        logger.error(f"Failed to update Dataset Sample {sample_id} for evaluation {eval_id}: {traceback.format_exc()}")
+        return error_response(message=f"更新数据集样本失败：{traceback.format_exc()}")
+
+
+@evaluation_router.delete("/{eval_id}/dataset/{sample_id}")
+async def delete_dataset_sample(
+    eval_id: str,
+    sample_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    sample_entity = await session.get(EvalDatasetEntity, sample_id)
+
+    if not sample_entity:
+        return JSONResponse(
+            content=error_response(code=404, message=f"删除数据样本失败: 数据集 {eval_id} 样本 '{sample_id}'不存在。"),
+            status_code=404,
+        )
+
+    await session.delete(sample_entity)
+    await session.commit()
+
+    logger.info(f"Dataset Sample {sample_id} has been deleted.")
+
+    return success_response(message=f"数据样本'{eval_id}'删除成功。")
 @evaluation_router.post("/{eval_id}/experiments")
 async def create_experiment(
     eval_id: str,

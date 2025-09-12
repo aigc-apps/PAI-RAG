@@ -23,6 +23,7 @@ import {
     Clock,
     Trash2Icon,
     Play,
+    BarChart2
 } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
 import {
@@ -84,7 +85,7 @@ export default function EvalExperimentsDetailsPage(
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [dataseterror, setDatasetError] = useState('');
-    const pageSize = 8;
+    const pageSize = 10;
 
     const fetchExperiments = useCallback(async () => {
         if (isRefreshing) {
@@ -171,7 +172,7 @@ export default function EvalExperimentsDetailsPage(
         if (status === "failed") {
             return <span className="text-red-500">- -</span>;
         }
-        return (score * 100).toFixed(0) + "%";
+        return score.toFixed(2);
     };
 
     // 复制实验ID
@@ -211,165 +212,166 @@ export default function EvalExperimentsDetailsPage(
     }
 
     return (
-        <div className="flex flex-col py-4 space-y-6">
-            <div className="w-full">
-                <Card className="w-full">
-                    <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-                        <div>
-                            <CardTitle>运行历史</CardTitle>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                管理您的AI评估实验
-                            </p>
-                        </div>
+        <div className="flex flex-col h-full min-h-0">
+            <Card className="flex flex-col h-full min-h-0 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                <CardHeader className="shrink-0 flex md:items-center md:justify-between">
+                    <div>
+                        <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                            <BarChart2 className="h-5 w-5" /> 运行历史
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            查看运行历史及详情
+                        </p>
+                    </div>
+                </CardHeader>
 
-                        {/* <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">                         
-                                <div className="flex gap-2">
-                                    <Button onClick={() => router.push(`/evaluation/${evalId}`)}>
-                                        <Play className="mr-2 h-4 w-4" /> 新建实验
-                                    </Button>
-                                </div>
-                            </div> */}
-                    </CardHeader>
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-0">
+                    <div className="rounded-md h-full min-h-0">
+                        <Table className='rounded-md border'>
+                            <TableHeader>
+                                <TableRow className="transition-colors">
+                                    <TableHead className="w-[180px]">实验ID</TableHead>
+                                    <TableHead className="w-[180px]">实验名称</TableHead>
+                                    <TableHead className="w-[180px]">实验描述</TableHead>
+                                    <TableHead className="w-[100px]">样本数</TableHead>
+                                    <TableHead className="w-[120px]">状态</TableHead>
+                                    <TableHead className="w-[100px]">平均得分</TableHead>
+                                    <TableHead className="w-[160px]">创建时间</TableHead>
+                                    <TableHead className="w-[160px]">完成时间</TableHead>
+                                    <TableHead className="w-[50px] text-right">操作</TableHead>
+                                </TableRow>
+                            </TableHeader>
 
-                    <CardContent>
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
+                            <TableBody>
+                                {experiments.length === 0 ? (
                                     <TableRow>
-                                        <TableHead className="w-[180px]">实验ID</TableHead>
-                                        <TableHead className="w-[180px]">实验名称</TableHead>
-                                        <TableHead className="w-[180px]">实验描述</TableHead>
-                                        <TableHead className="w-[100px]">样本数</TableHead>
-                                        <TableHead className="w-[120px]">状态</TableHead>
-                                        <TableHead className="w-[100px]">平均得分</TableHead>
-                                        <TableHead className="w-[160px]">创建时间</TableHead>
-                                        <TableHead className="w-[160px]">完成时间</TableHead>
-                                        <TableHead className="w-[50px] text-right">操作</TableHead>
+                                        <TableCell colSpan={9} className="h-32 text-center">
+                                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                <BarChart2 className="h-8 w-8" />
+                                                <span>暂无实验记录，请前往样本页面下选中样本进行实验</span>
+                                                {/* <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => router.push(`/evaluation/${evalId}`)}
+                                                            className="hover:bg-blue-50"
+                                                        >
+                                                            <Play className="mr-1 h-3 w-3" /> 新建实验
+                                                        </Button> */}
+                                            </div>
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
+                                ) : (
+                                    experiments.map((item) => (
+                                        <TableRow key={item.id} className="transition-colors group">
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        variant="link"
+                                                        className="truncate max-w-[120px] font-medium group-hover:underline"
+                                                        onClick={() => router.push(`/evaluation/${evalId}/${item.id}`)}
+                                                    >
+                                                        {item.id.substring(0, 8)}...
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => copyExperimentId(item.id)}
+                                                        title="复制实验ID"
+                                                    >
+                                                        <Copy className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
 
-                                <TableBody>
-                                    {experiments.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={8} className="h-24 text-center">
-                                                暂无数据
+                                            <TableCell>
+                                                <Badge variant="outline" className="font-mono bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
+                                                    {item.name}
+                                                </Badge>
+                                            </TableCell>
+
+                                            <TableCell className="text-sm">
+                                                {item.description ? item.description.substring(0, 20) + "..." : "无描述"}
+                                            </TableCell>
+
+                                            <TableCell>
+                                                <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
+                                                    {item.samples_count}
+                                                </Badge>
+                                            </TableCell>
+
+                                            <TableCell>
+                                                {getStatusBadge(item.status)}
+                                            </TableCell>
+
+                                            <TableCell>
+                                                <div className={`font-bold text-lg ${item.status === 'success'
+                                                    ? item.avg_score && item.avg_score >= 0.8
+                                                        ? 'text-green-600'
+                                                        : item.avg_score && item.avg_score >= 0.6
+                                                            ? 'text-yellow-600'
+                                                            : 'text-red-600'
+                                                    : 'text-muted-foreground'
+                                                    }`}>
+                                                    {formatScore(item.avg_score, item.status)}
+                                                </div>
+                                            </TableCell>
+
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {formatBeijingTime(item.created_at)}
+                                            </TableCell>
+
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {['success', 'failed'].includes(item.status) ? formatBeijingTime(item.updated_at) : "-"}
+                                            </TableCell>
+
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">打开菜单</span>
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem
+                                                            onClick={() => router.push(`/evaluation/${evalId}/${item.id}`)}
+                                                        >
+                                                            <Eye className="mr-2 h-4 w-4" />
+                                                            <span>查看详情</span>
+                                                        </DropdownMenuItem>
+                                                        {/* <DropdownMenuItem 
+                            onClick={() => handleAction('rerun', item.id)}
+                          >
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            <span>重新运行</span>
+                          </DropdownMenuItem> */}
+                                                        <DropdownMenuItem
+                                                            className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                                                            onClick={() => handleDeleteAction(item.id)}
+                                                        >
+                                                            <Trash2Icon className="mr-2 h-4 w-4" />
+                                                            <span>删除</span>
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
-                                    ) : (
-                                        experiments.map((item) => (
-                                            <TableRow key={item.id} className="hover:bg-muted/50 transition-colors">
-                                                <TableCell className="font-medium">
-                                                    <div className="flex items-center">
-                                                        <Button
-                                                            variant="link"
-                                                            className="truncate max-w-[120px] font-medium text-blue-600"
-                                                            onClick={() =>
-                                                                router.push(
-                                                                    `/evaluation/${evalId}/${item.id}`,
-                                                                )
-                                                            }
-                                                        >
-                                                            {item.id}
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6 ml-1"
-                                                            onClick={() => copyExperimentId(item.id)}
-                                                            title="复制实验ID"
-                                                        >
-                                                            <Copy className="h-3 w-3" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
 
-                                                <TableCell>
-                                                    <Badge variant="outline" className="font-mono">
-                                                        {item.name}
-                                                    </Badge>
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    {item.description.substring(0, 20)}...
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-100">
-                                                        {item.samples_count}
-                                                    </Badge>
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    {getStatusBadge(item.status)}
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <div className={`font-medium ${item.status === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}>
-                                                        {formatScore(item.avg_score, item.status)}
-                                                    </div>
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    {formatBeijingTime(item.created_at)}
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    {['success', 'failed'].includes(item.status) ? formatBeijingTime(item.updated_at) : "-"}
-                                                </TableCell>
-
-                                                <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                                                <span className="sr-only">打开菜单</span>
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem
-                                                                onClick={() =>
-                                                                    router.push(
-                                                                        `/evaluation/${evalId}/${item.id}`,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Eye className="mr-2 h-4 w-4" />
-                                                                查看详情
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleAction('rerun', item.id)}>
-                                                                <RefreshCw className="mr-2 h-4 w-4" />
-                                                                重新运行
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                className="text-red-600 focus:bg-red-100"
-                                                                onClick={() => handleDeleteAction(item.id)}
-                                                            >
-                                                                <Trash2Icon /> 删除
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-
-
-                    </CardContent>
-
-                    <CardFooter className="flex justify-center">
-                        <div className="py-6">
-                            <PaginationComponent
-                                currentPage={page}
-                                totalPages={totalPages}
-                                onPageChange={handlePageChange}
-                            />
-                        </div>
-                    </CardFooter>
-                </Card>
-            </div>
+                <CardFooter className="shrink-0 border-t pb-2">
+                    <PaginationComponent
+                        currentPage={page}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                    />
+                </CardFooter>
+            </Card>
         </div>
     );
 }

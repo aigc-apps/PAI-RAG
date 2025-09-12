@@ -22,6 +22,13 @@ import {
     Eye,
     Trash2Icon,
     Loader2,
+    Pencil,
+    FileText,
+    Info,
+    MessageSquare,
+    CheckCircle,
+    Tag,
+    Plus
 } from "lucide-react";
 import {
     Dialog,
@@ -45,14 +52,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from '@/components/ui/badge';
 import { EvalRunConfig } from '@/app/evaluation/[evalId]/settings/page';
+import { toast } from 'sonner';
+
 export interface SampleItem {
     id: string;
     input: string;
     expected_output: string;
-    eval_metadata?: {
-        Steps?: string;
-        Tools?: string;
-    };
+    eval_metadata?: Record<string, any>;
 }
 
 export default function EvalDatasetsDetailsPage(
@@ -64,17 +70,14 @@ export default function EvalDatasetsDetailsPage(
     const [totalPages, setTotalPages] = useState(1);
     const [datasets, setDatasets] = useState<SampleItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const pageSize = 8;
+    const pageSize = 10;
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [searchTerm, setSearchTerm] = useState("");
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     // 用于跟踪选中的行
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [allItems, setAllItems] = useState<SampleItem[]>([]);
     const isAllSelected = selectedItems.size === allItems.length && allItems.length > 0;
     const [totalItems, setTotalItems] = useState(0);
-    const [selectedSample, setSelectedSample] = useState<SampleItem | null>(null);
-    const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [isRunSingleDetailOpen, setIsRunSingleDetailOpen] = useState(false);
     const [isRunBatchDetailOpen, setIsRunBatchDetailOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -85,7 +88,12 @@ export default function EvalDatasetsDetailsPage(
     const [experimentName, setExperimentName] = useState("");
     const [experimentDescription, setExperimentDescription] = useState("");
     const [evalRunConfigId, setEvalRunConfigId] = useState<string>("");
-
+    const [dialogMode, setDialogMode] = useState<'view' | 'edit'>('view'); // 新增状态
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editingSample, setEditingSample] = useState<SampleItem | null>(null);
+    const [editedInput, setEditedInput] = useState("");
+    const [editedOutput, setEditedOutput] = useState("");
+    const [editedMetadata, setEditedMetadata] = useState<Record<string, any>>({});
 
     useEffect(() => {
         const fetchConfigs = async () => {
@@ -106,17 +114,6 @@ export default function EvalDatasetsDetailsPage(
                 setTotalItems(json_data.data.total);
                 setTotalPages(json_data.data.pages);
 
-                const tmpAllItems = [];
-                for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
-                    console.log("start loading all items for page ", curPage)
-                    const response = await fetch(`/api/config/evaluation/${evalId}/dataset?page=${curPage}&size=${pageSize}`);
-                    const data = await response.json();
-                    tmpAllItems.push(...data.data.items);
-                }
-                setAllItems(tmpAllItems);
-                console.log("finish loading all items", tmpAllItems.length)
-
-
                 if (!configDataRes.ok) throw new Error('获取评估任务列表失败');
                 const config_json_data = await configDataRes.json();
                 console.log("evaluation run_config json_data", config_json_data)
@@ -128,8 +125,41 @@ export default function EvalDatasetsDetailsPage(
                 setIsLoading(false);
             }
         };
+
+        const fetchAllItems = async () => {
+            setIsLoading(true);
+            try {
+                const tmpPageSize = 1000;
+                const [datasetRes] = await Promise.all([
+                    fetch(`/api/config/evaluation/${evalId}/dataset?page=1&size=${tmpPageSize}`),
+                ]);
+
+
+                if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
+                const json_data = await datasetRes.json();
+                console.log("evaluation dataset json_data", json_data)
+
+                const tmpAllItems = [];
+                for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
+                    console.log("start loading all items for page ", curPage)
+                    const tmpPageSize = 1000;
+                    const response = await fetch(`/api/config/evaluation/${evalId}/dataset?page=${curPage}&size=${tmpPageSize}`);
+                    const data = await response.json();
+                    tmpAllItems.push(...data.data.items);
+                }
+                setAllItems(tmpAllItems);
+                console.log("finish loading all items", tmpAllItems.length)
+
+            } catch (err: any) {
+                setDatasetError(err || '加载数据集失败');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
         fetchConfigs();
-    }, [searchTerm, page, datasets.length]);
+        fetchAllItems();
+    }, [page, datasets.length]);
 
     const handlePageChange = (newPage: number) => {
         if (newPage < 1 || newPage > totalPages) return;
@@ -191,9 +221,11 @@ export default function EvalDatasetsDetailsPage(
             }
             const upload_result = await res.json();
             console.log('实验创建成功:', upload_result);
+            toast.success('实验创建成功');
             router.push(`/evaluation/${evalId}/${upload_result.data.id}`);
         } catch (error) {
             console.error('实验创建失败:', error);
+            toast.error('实验创建失败');
         } finally {
             setExperimentName("");
             setExperimentDescription("");
@@ -225,11 +257,6 @@ export default function EvalDatasetsDetailsPage(
             setBatchRuning(false);
             setIsRunBatchDetailOpen(false);
         }
-    };
-
-    const handleEyeClick = (sample: SampleItem) => {
-        setSelectedSample(sample);
-        setIsDetailOpen(true);
     };
 
     const handleFileUpload = async (files: FileList | null) => {
@@ -270,18 +297,98 @@ export default function EvalDatasetsDetailsPage(
             }
             const upload_result = await res.json();
             console.log('上传成功:', upload_result);
-            setDatasets((prev) => [...prev, ...upload_result.data]); // 追加新配置
+            setDatasets((prev) => [...prev, ...upload_result.data]);
+            toast.success('文件上传成功');
         } catch (error) {
             console.error('上传失败:', error);
+            toast.error(`上传失败 ${error}`);
         } finally {
             setUploading(false);
             // 清空文件选择框
             if (fileInputRef.current) {
-                fileInputRef.current.value = ''; // 清空 input 的值
+                fileInputRef.current.value = '';
             }
         }
     };
 
+    // 删除样本 
+    const handleDeleteClick = async (item: SampleItem) => {
+        try {
+            const res = await fetch(`/api/config/evaluation/${evalId}/dataset/${item.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!res.ok) {
+                throw new Error('删除样本失败，请检查网络或配置');
+            }
+            // 删除成功后更新本地状态
+            setDatasets((prev) => prev.filter((dataset) => dataset.id !== item.id));
+            toast.success('删除样本成功');
+        } catch (err: any) {
+            console.log('删除评估任务出错: ', err);
+            toast.error('删除样本失败');
+        }
+    };
+    // 查看样本
+    const handleEyeClick = (item: SampleItem) => {
+        setEditingSample(item);
+        setEditedInput(item.input);
+        setEditedOutput(item.expected_output);
+        setEditedMetadata(item.eval_metadata || {}); // 初始化 metadata
+        setDialogMode('view');
+        setIsEditOpen(true);
+    };
+    // 编辑样本
+    const handleEditClick = (item: SampleItem) => {
+        setEditingSample(item);
+        setEditedInput(item.input);
+        setEditedOutput(item.expected_output);
+        setEditedMetadata(item.eval_metadata || {}); // 初始化 metadata
+        setDialogMode('edit');
+        setIsEditOpen(true);
+    };
+
+    // 保存编辑
+    const handleSaveEdit = async () => {
+        if (!editingSample) return;
+
+        try {
+            const updatedSample = {
+                ...editingSample,
+                input: editedInput,
+                expected_output: editedOutput,
+                eval_metadata: Object.keys(editedMetadata).length > 0 ? editedMetadata : undefined,
+            };
+
+            // 调用 API 更新样本
+            const response = await fetch(`/api/config/evaluation/${evalId}/dataset/${editingSample.id}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(updatedSample),
+            });
+
+            if (!response.ok) {
+                throw new Error("更新失败");
+            }
+
+            // 更新本地状态
+            setDatasets(prev =>
+                prev.map(item =>
+                    item.id === editingSample.id ? updatedSample : item
+                )
+            );
+            toast.success('样本信息更新成功');
+            setIsEditOpen(false);
+        } catch (error) {
+            console.error("更新失败:", error);
+            toast.error(`样本信息更新失败 ${error}`);
+        }
+    };
 
     const modifyEvalRunConfig = (selected_ids: Set<string>) => {
         return (
@@ -361,169 +468,189 @@ export default function EvalDatasetsDetailsPage(
     };
 
     return (
-        <div className="flex flex-col py-4 space-y-6">
-            <div className="w-full">
-                <Card className="w-full">
-                    <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between md:space-y-0">
-                        <div>
-                            <CardTitle>数据集管理</CardTitle>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                管理您的问题/答案数据集
-                            </p>
-                        </div>
+        <div className="flex flex-col h-full min-h-0">
+            <Card className="flex flex-col h-full min-h-0 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                <CardHeader className="shrink-0 flex md:items-center md:justify-between">
+                    <div>
+                        <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                            <FileText className="h-5 w-5" /> 样本管理
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            管理您的问题/答案数据集。 请选中样本运行实验。
+                        </p>
+                    </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                            <div className="flex flex-col gap-2">
-                                <div className="flex gap-2 justify-end">
-                                    <Dialog open={isRunBatchDetailOpen} onOpenChange={setIsRunBatchDetailOpen}>
-                                        <DialogTrigger asChild>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <div className="flex flex-col gap-2">
+                            <div className="flex gap-2 justify-end">
+                                <Dialog open={isRunBatchDetailOpen} onOpenChange={setIsRunBatchDetailOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            disabled={selectedItems.size === 0 && !isAllSelected}
+                                            className="text-white shadow-md hover:shadow-lg transition-all"
+                                        >
+                                            <PlayIcon className="mr-2 h-4 w-4" />
+                                            {isAllSelected ? `运行实验(所有${totalItems}项)` : `运行实验(${selectedItems.size}项)`}
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[750px]">
+                                        <DialogHeader>
+                                            <DialogTitle>创建新实验（批量）</DialogTitle>
+                                            <DialogDescription>
+                                                请输入此次实验名称和描述，然后运行试验。
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        {modifyEvalRunConfig(selectedItems)}
+                                        <DialogFooter>
                                             <Button
-                                                disabled={selectedItems.size === 0 && !isAllSelected}
+                                                variant="outline"
+                                                onClick={() => setIsRunBatchDetailOpen(false)}
+                                                disabled={batchRuning}
                                             >
-                                                <PlayIcon className="mr-2 h-4 w-4" />
-                                                {isAllSelected ? `运行实验(所有${totalItems}项)` : `运行实验(${selectedItems.size}项)`}
+                                                取消
                                             </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="sm:max-w-[750px]">
-                                            <DialogHeader>
-                                                <DialogTitle>创建新实验（批量）</DialogTitle>
-                                                <DialogDescription>
-                                                    请输入此次实验名称和描述，然后运行试验。
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                            {modifyEvalRunConfig(selectedItems)}
-                                            <DialogFooter>
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() => setIsRunBatchDetailOpen(false)}
-                                                    disabled={batchRuning}
-                                                >
-                                                    取消
-                                                </Button>
-                                                <Button
-                                                    onClick={handleBatchRun}
-                                                    disabled={!experimentName.trim()}
-                                                >
-                                                    运行 {batchRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                                                </Button>
-                                            </DialogFooter>
-                                        </DialogContent>
-                                    </Dialog>
-                                    <Button
-                                        onClick={() =>
-                                            document.getElementById('file-upload')?.click()
-                                        }
-                                        disabled={uploading} // 上传时禁用按钮
-                                    >
-                                        {uploading ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                上传中...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
-                                            </>
-                                        )}
-                                    </Button>
-                                    <div className="flex gap-2 items-center">
-                                        <input
-                                            id="file-upload"
-                                            type="file"
-                                            className="hidden"
-                                            ref={fileInputRef}
-                                            onChange={(e) => handleFileUpload(e.target.files)}
-                                        />
-                                    </div>
+                                            <Button
+                                                onClick={handleBatchRun}
+                                                disabled={!experimentName.trim()}
+                                                className="text-white"
+                                            >
+                                                运行 {batchRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+                                <Button
+                                    onClick={() => document.getElementById('file-upload')?.click()}
+                                    disabled={uploading}
+                                    className="text-white shadow-md hover:shadow-lg transition-all"
+                                >
+                                    {uploading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            上传中...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <UploadIcon className="mr-2 h-4 w-4" /> 导入数据
+                                        </>
+                                    )}
+                                </Button>
+                                <div className="flex gap-2 items-center">
+                                    <input
+                                        id="file-upload"
+                                        type="file"
+                                        className="hidden"
+                                        ref={fileInputRef}
+                                        onChange={(e) => handleFileUpload(e.target.files)}
+                                    />
                                 </div>
-                                <p className="text-xs text-muted-foreground ml-2">
-                                    数据要求为JSONL文件，每行需要包含 input(string), expected_output(string) 和 metadata(dict, 可选)
-                                </p>
+                            </div>
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                <div className="flex items-start gap-2">
+                                    <Info className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs text-gray-800">
+                                        <span className="font-medium">数据要求：</span>
+                                        JSONL文件，每行需包含 input(string), expected_output(string) 和 metadata(dict, 可选)
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border overflow-y-auto">
-                            <Table>
-                                <TableHeader>
+                    </div>
+                </CardHeader>
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-0">
+                    <div className="rounded-md h-full min-h-0">
+                        <Table className='rounded-md border'>
+                            <TableHeader>
+                                <TableRow className="transition-colors">
+                                    <TableHead className="w-[50px]">
+                                        <Checkbox
+                                            checked={isAllSelected}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                    setSelectedItems(new Set(allItems.map(item => item.id)));
+                                                } else {
+                                                    setSelectedItems(new Set());
+                                                }
+                                            }}
+                                            aria-label="Select all"
+                                        />
+                                    </TableHead>
+                                    <TableHead className="w-[10%]">样本ID</TableHead>
+                                    <TableHead className="w-[45%]">问题</TableHead>
+                                    <TableHead className="w-[30%]">答案</TableHead>
+                                    <TableHead className="w-[100px] text-center">操作</TableHead>
+                                </TableRow>
+                            </TableHeader>
+
+                            <TableBody>
+                                {datasets.length === 0 ? (
                                     <TableRow>
-                                        <TableHead className="w-[50px]">
-                                            <Checkbox
-                                                checked={isAllSelected}
-                                                onCheckedChange={(checked) => {
-                                                    if (checked) {
-                                                        setSelectedItems(new Set(allItems.map(item => item.id)));
-                                                    } else {
-                                                        setSelectedItems(new Set());
-                                                    }
-                                                }}
-                                                aria-label="Select all"
-                                            />
-                                        </TableHead>
-                                        <TableHead className="w-[10%]">样本ID</TableHead>
-                                        <TableHead className="w-[45%]">问题</TableHead>
-                                        <TableHead className="w-[30%]">答案</TableHead>
-                                        <TableHead className="w-[100px] text-center">操作</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-
-                                <TableBody>
-                                    {datasets.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="h-24 text-center">
-                                                暂无数据
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        datasets.map((item) => (
-                                            <TableRow key={item.id} className="hover:bg-muted/50 transition-colors">
-                                                <TableCell className="w-[50px]">
-                                                    <Checkbox
-                                                        checked={isItemSelected(item.id)}
-                                                        onCheckedChange={() => handleSelectItem(item.id)}
-                                                        aria-label="Select row"
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="font-medium">
-                                                    <div className="flex items-center">
-                                                        <Button
-                                                            variant="link"
-                                                            className="truncate max-w-[120px] text-blue-600"
-                                                            onClick={() => handleEyeClick(item)}
-                                                        >
-                                                            {item.id.substring(0, 20)}...
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6 ml-1"
-                                                            onClick={() => copyId(item.id)}
-                                                            title="复制样本ID"
-                                                        >
-                                                            <CopyIcon className="h-3 w-3" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-
-                                                <TableCell
-                                                    className="whitespace-normal break-words min-w-[250px] max-w-[400px] py-2"
-                                                    style={{
-                                                        whiteSpace: expandedRows.has(item.id) ? 'normal' : 'nowrap',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis'
-                                                    }}
+                                        <TableCell colSpan={5} className="h-32 text-center">
+                                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                <FileText className="h-8 w-8" />
+                                                <span>暂无数据</span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => document.getElementById('file-upload')?.click()}
+                                                    className="mt-2"
                                                 >
-                                                    {item.input}
-                                                </TableCell>
-
-                                                <TableCell className="whitespace-normal break-words min-w-[150px] max-w-[250px] py-2">
-                                                    <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap">
-                                                        {item.expected_output}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-right">
+                                                    <UploadIcon className="mr-1 h-3 w-3" /> 导入数据
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    datasets.map((item) => (
+                                        <TableRow key={item.id} className="transition-colors group">
+                                            <TableCell className="w-[50px]">
+                                                <Checkbox
+                                                    checked={isItemSelected(item.id)}
+                                                    onCheckedChange={() => handleSelectItem(item.id)}
+                                                    aria-label="Select row"
+                                                />
+                                            </TableCell>
+                                            <TableCell className="font-medium">
+                                                <div className="flex">
                                                     <Button
                                                         variant="link"
+                                                        className="truncate max-w-[120px] font-medium group-hover:underline"
+                                                        onClick={() => handleEyeClick(item)}
+                                                    >
+                                                        {item.id.substring(0, 12)}...
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => copyId(item.id)}
+                                                        title="复制样本ID"
+                                                    >
+                                                        <CopyIcon className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+
+                                            <TableCell
+                                                className="whitespace-normal break-words min-w-[250px] max-w-[400px] py-2"
+                                                style={{
+                                                    whiteSpace: expandedRows.has(item.id) ? 'normal' : 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis'
+                                                }}
+                                            >
+                                                {item.input}
+                                            </TableCell>
+
+                                            <TableCell className="whitespace-normal break-words min-w-[150px] max-w-[250px] py-2">
+                                                <Badge variant="secondary" className="bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap border-green-200">
+                                                    {item.expected_output}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
                                                         size="icon"
                                                         className="h-8 w-8"
                                                         onClick={() => toggleRowExpansion(item.id)}
@@ -535,77 +662,38 @@ export default function EvalDatasetsDetailsPage(
                                                             <ChevronDown className="h-4 w-4" />
                                                         )}
                                                     </Button>
-                                                    <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-                                                        <DialogTrigger asChild>
-                                                            <Button
-                                                                variant="link"
-                                                                size="icon"
-                                                                className="text-black-500 hover:text-black-700 px-1 py-1"
-                                                                onClick={() => handleEyeClick(item)}
-                                                                title="查看详情"
-                                                            >
-                                                                <Eye className="mr-2 h-4 w-4" />
-                                                            </Button>
-                                                        </DialogTrigger>
-                                                        <DialogContent className="max-w-2xl">
-                                                            <DialogHeader>
-                                                                <DialogTitle>样本详情</DialogTitle>
-                                                            </DialogHeader>
-                                                            {selectedSample && (
-                                                                <div className="space-y-4">
-                                                                    {/* Existing fields */}
-                                                                    <div>
-                                                                        <h4 className="text-sm font-medium text-muted-foreground">样本ID</h4>
-                                                                        <p className="mt-1">{selectedSample.id}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <h4 className="text-sm font-medium text-muted-foreground">问题</h4>
-                                                                        <p className="mt-1 whitespace-pre-wrap">{selectedSample.input}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <h4 className="text-sm font-medium text-muted-foreground">答案</h4>
-                                                                        <Badge variant="secondary" className="mt-1 bg-blue-50 text-blue-700 hover:bg-blue-100 whitespace-pre-wrap">
-                                                                            {selectedSample.expected_output}
-                                                                        </Badge>
-                                                                    </div>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleEyeClick(item);
+                                                        }}
+                                                        title="查看详情"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-100"
+                                                        title="编辑"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleEditClick(item);
+                                                        }}
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
 
-                                                                    {/* New fields */}
-                                                                    <div>
-                                                                        <h4 className="text-sm font-medium text-muted-foreground">步骤</h4>
-                                                                        <p className="mt-1">
-                                                                            {selectedSample.eval_metadata?.Steps ? (
-                                                                                <Badge className='bg-green-50 text-green-700 hover:bg-green-100 whitespace-pre-wrap'>
-                                                                                    {selectedSample.eval_metadata.Steps}
-                                                                                </Badge>
-                                                                            ) : "未指定"}
-                                                                        </p>
-                                                                    </div>
-
-                                                                    <div>
-                                                                        <h4 className="text-sm font-medium text-muted-foreground">使用工具</h4>
-                                                                        <div className="mt-1 flex flex-wrap gap-2">
-                                                                            {selectedSample.eval_metadata?.Tools ? (
-                                                                                <Badge className='bg-yellow-50 text-yellow-700 hover:bg-yellow-100 whitespace-pre-wrap'>
-                                                                                    {selectedSample.eval_metadata?.Tools}
-                                                                                </Badge>
-                                                                            ) : (
-                                                                                <span className="text-muted-foreground">无</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </DialogContent>
-                                                    </Dialog>
                                                     <Dialog open={isRunSingleDetailOpen} onOpenChange={setIsRunSingleDetailOpen}>
                                                         <DialogTrigger asChild>
                                                             <Button
-                                                                variant="link"
+                                                                variant="ghost"
                                                                 size="icon"
-                                                                className="text-black-500 hover:text-black-700 px-1 py-1"
                                                                 title="运行单条"
                                                             >
-                                                                <PlayIcon className="mr-2 h-4 w-4" />
+                                                                <PlayIcon className="h-4 w-4" />
                                                             </Button>
                                                         </DialogTrigger>
                                                         <DialogContent className="sm:max-w-[750px]">
@@ -627,6 +715,7 @@ export default function EvalDatasetsDetailsPage(
                                                                 <Button
                                                                     onClick={() => runSingleSample(item.id)}
                                                                     disabled={!experimentName.trim()}
+                                                                    className="text-white"
                                                                 >
                                                                     运行 {singleRuning && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                                                                 </Button>
@@ -634,54 +723,229 @@ export default function EvalDatasetsDetailsPage(
                                                         </DialogContent>
                                                     </Dialog>
                                                     <Button
-                                                        variant="link"
+                                                        variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8"
+                                                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteClick(item);
+                                                        }}
                                                         title="删除"
                                                     >
-                                                        <Trash2Icon className="mr-2 h-4 w-4" />
+                                                        <Trash2Icon className="h-4 w-4" />
                                                     </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                                    <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                                                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                                                            <DialogHeader>
+                                                                <DialogTitle className="flex items-center gap-2">
+                                                                    {dialogMode === 'view' ? (
+                                                                        <>
+                                                                            <Eye className="h-5 w-5 text-blue-500" /> 查看样本
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Pencil className="h-5 w-5 text-green-500" /> 编辑样本
+                                                                        </>
+                                                                    )}
+                                                                </DialogTitle>
+                                                            </DialogHeader>
 
-                        {/* 选中项状态提示 */}
-                        {(selectedItems.size > 0 || isAllSelected) && (
-                            <div className="p-2 border-t bg-muted/50 mt-2 rounded-b-md">
-                                <div className="text-sm flex items-center justify-between">
-                                    <span>
-                                        {isAllSelected ? (
-                                            `已选择所有匹配的 ${totalItems} 项`
-                                        ) : (
-                                            `已选择 ${selectedItems.size} 项`
-                                        )}
-                                    </span>
-                                    <Button
-                                        variant="link"
-                                        className="p-0 h-auto font-normal text-muted-foreground hover:text-foreground"
-                                        onClick={() => setSelectedItems(new Set())}
-                                    >
-                                        清除选择
-                                    </Button>
-                                </div>
+                                                            {editingSample && (
+                                                                <div className="space-y-4 py-4">
+                                                                    {/* 问题 */}
+                                                                    <div className="space-y-2">
+                                                                        <Label htmlFor="edit-input" className="flex items-center gap-1">
+                                                                            <MessageSquare className="h-4 w-4 text-blue-500" />
+                                                                            问题
+                                                                        </Label>
+                                                                        {dialogMode === 'view' ? (
+                                                                            <div className="p-3 bg-muted rounded-md border">
+                                                                                <p className="whitespace-pre-wrap">{editedInput}</p>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <Textarea
+                                                                                id="edit-input"
+                                                                                value={editedInput}
+                                                                                onChange={(e) => setEditedInput(e.target.value)}
+                                                                                placeholder="请输入问题"
+                                                                                className="min-h-[80px]"
+                                                                            />
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* 答案 */}
+                                                                    <div className="space-y-2">
+                                                                        <Label htmlFor="edit-output" className="flex items-center gap-1">
+                                                                            <CheckCircle className="h-4 w-4 text-green-500" />
+                                                                            答案
+                                                                        </Label>
+                                                                        {dialogMode === 'view' ? (
+                                                                            <div className="p-3 bg-green-50 rounded-md border border-green-200">
+                                                                                <p className="whitespace-pre-wrap text-green-800">{editedOutput}</p>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <Textarea
+                                                                                id="edit-output"
+                                                                                value={editedOutput}
+                                                                                onChange={(e) => setEditedOutput(e.target.value)}
+                                                                                placeholder="请输入预期答案"
+                                                                                className="min-h-[80px]"
+                                                                            />
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* 动态 Metadata */}
+                                                                    <div className="space-y-4">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Tag className="h-4 w-4 text-purple-500" />
+                                                                            <h3 className="text-sm font-medium">元数据</h3>
+                                                                            {dialogMode === 'edit' && (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    onClick={() => {
+                                                                                        // 添加新字段
+                                                                                        setEditedMetadata(prev => ({
+                                                                                            ...prev,
+                                                                                            [`新字段${Object.keys(prev).length + 1}`]: ""
+                                                                                        }));
+                                                                                    }}
+                                                                                    className="ml-auto"
+                                                                                >
+                                                                                    <Plus className="h-3 w-3 mr-1" /> 添加字段
+                                                                                </Button>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {dialogMode === 'view' ? (
+                                                                            // 查看模式：展示所有 metadata
+                                                                            editingSample.eval_metadata && Object.keys(editingSample.eval_metadata).length > 0 ? (
+                                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                                    {Object.entries(editingSample.eval_metadata).map(([key, value]) => (
+                                                                                        <div key={key} className="p-3 bg-purple-50 rounded-md border border-purple-200">
+                                                                                            <div className="text-xs font-medium text-purple-600 mb-1">{key}</div>
+                                                                                            <div className="text-sm text-purple-800 break-words">
+                                                                                                {value !== null && value !== undefined ? String(value) : '空值'}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="p-3 bg-muted rounded-md border text-center text-muted-foreground">
+                                                                                    无元数据
+                                                                                </div>
+                                                                            )
+                                                                        ) : (
+                                                                            // 编辑模式：可编辑所有 metadata
+                                                                            editedMetadata && Object.keys(editedMetadata).length > 0 ? (
+                                                                                <div className="space-y-3">
+                                                                                    {Object.entries(editedMetadata).map(([key, value]) => (
+                                                                                        <div key={key} className="flex gap-2 items-start p-2 bg-muted/50 rounded-md">
+                                                                                            <Input
+                                                                                                value={key}
+                                                                                                onChange={(e) => {
+                                                                                                    const newMetadata = { ...editedMetadata };
+                                                                                                    delete newMetadata[key];
+                                                                                                    newMetadata[e.target.value] = value;
+                                                                                                    setEditedMetadata(newMetadata);
+                                                                                                }}
+                                                                                                placeholder="字段名"
+                                                                                                className="w-1/3 text-sm"
+                                                                                            />
+                                                                                            <Input
+                                                                                                value={value !== null && value !== undefined ? String(value) : ''}
+                                                                                                onChange={(e) => {
+                                                                                                    const newMetadata = { ...editedMetadata };
+                                                                                                    newMetadata[key] = e.target.value;
+                                                                                                    setEditedMetadata(newMetadata);
+                                                                                                }}
+                                                                                                placeholder="字段值"
+                                                                                                className="flex-1 text-sm"
+                                                                                            />
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="ghost"
+                                                                                                size="icon"
+                                                                                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                                                                onClick={() => {
+                                                                                                    const newMetadata = { ...editedMetadata };
+                                                                                                    delete newMetadata[key];
+                                                                                                    setEditedMetadata(newMetadata);
+                                                                                                }}
+                                                                                            >
+                                                                                                <Trash2Icon className="h-4 w-4" />
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="p-3 bg-muted/50 rounded-md border-dashed border text-center text-muted-foreground">
+                                                                                    点击“添加字段”按钮添加元数据
+                                                                                </div>
+                                                                            )
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            <DialogFooter>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    onClick={() => setIsEditOpen(false)}
+                                                                >
+                                                                    关闭
+                                                                </Button>
+                                                                {dialogMode === 'edit' && (
+                                                                    <Button
+                                                                        onClick={handleSaveEdit}
+                                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                                    >
+                                                                        保存
+                                                                    </Button>
+                                                                )}
+                                                            </DialogFooter>
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {/* 选中项状态提示 */}
+                    {(selectedItems.size > 0 || isAllSelected) && (
+                        <div className="p-3 border-t mt-2 rounded-b-md">
+                            <div className="text-sm flex items-center justify-between">
+                                <span className="font-medium">
+                                    {isAllSelected ? (
+                                        `已选择所有匹配的 ${totalItems} 项`
+                                    ) : (
+                                        `已选择 ${selectedItems.size} 项`
+                                    )}
+                                </span>
+                                <Button
+                                    variant="link"
+                                    className="p-0 h-auto font-normal"
+                                    onClick={() => setSelectedItems(new Set())}
+                                >
+                                    清除选择
+                                </Button>
                             </div>
-                        )}
-                    </CardContent>
-                    <CardFooter className="flex justify-center">
-                        <div className="">
-                            <PaginationComponent
-                                currentPage={page}
-                                totalPages={totalPages}
-                                onPageChange={handlePageChange}
-                            />
                         </div>
-                    </CardFooter>
-                </Card>
-            </div>
+                    )}
+                </CardContent>
+                <CardFooter className="shrink-0 border-t pb-2">
+                    <PaginationComponent
+                        currentPage={page}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                    />
+                </CardFooter>
+            </Card>
         </div>
     );
 }

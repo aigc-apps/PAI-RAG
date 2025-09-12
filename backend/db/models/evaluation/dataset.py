@@ -4,6 +4,16 @@ from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
 from typing import Optional
 
+class EvalDatasetSample(SQLModel):
+    input: str = Field(
+        description="The user input/query for evaluation"
+    )
+    expected_output: Optional[str] = Field(
+        default=None,
+        description="The expected/correct response for this input"
+    )
+    eval_metadata: Optional[dict] = Field(default={}, sa_column=Column("eval_metadata", JSON))
+
 class EvalDatasetEntity(SQLModel, table=True):
     __tablename__ = "pai_evaluation_dataset"
 

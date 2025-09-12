@@ -98,6 +98,34 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
   let isRefreshing = false;
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
 
+  const fetchAllItems = async () => {
+    try {
+        const tmpPageSize = 1000;
+        const [datasetRes] = await Promise.all([
+            fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=1&size=${tmpPageSize}`),
+        ]);
+
+
+        if (!datasetRes.ok) throw new Error('获取评估实验列表失败');
+        const json_data = await datasetRes.json();
+        console.log("evaluation dataset json_data", json_data)
+
+        const tmpAllItems = [];
+        for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
+            console.log("start loading all items for page ", curPage)
+            const tmpPageSize = 1000;
+            const response = await fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${curPage}&size=${tmpPageSize}`);
+            const data = await response.json();
+            tmpAllItems.push(...data.data.items);
+        }
+        setAllItems(tmpAllItems);
+      console.log("finish loading all items", tmpAllItems.length)
+
+    } catch (err: any) {
+        console.error(err); 
+    } finally {
+    }
+};
 
   const fetchExperimentDetails = useCallback(async () => {
     if (isRefreshing) {
@@ -146,17 +174,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
       setRunDetailItems(data || []);
       setTotalPages(exp_json_data.data.pages);
 
-      const tmpAllItems = [];
-      for (let curPage = 1; curPage <= exp_json_data.data.pages; curPage++) {
-          console.log("start loading all items for page ", curPage)
-          const tmpPageSize = 1000;
-          const response = await fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/details?page=${curPage}&size=${tmpPageSize}`);
-          const data = await response.json();
-          tmpAllItems.push(...data.data.items);
-      }
-      setAllItems(tmpAllItems);
-      console.log("finish loading all items", tmpAllItems.length)
-
+      fetchAllItems();
 
       const kb_files = data as ExperimentDetailsItem[];
       const files_unfinished = kb_files.some(
@@ -209,16 +227,15 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
       { range: "0.8-1.0", min: 0.8, max: 1.0, count: 0 },
     ];
 
-    allExpItems.forEach((item) => {
-      if (item.score !== undefined) {
-        const range = ranges.find(r => item.score >= r.min && item.score < r.max);
-        if (range) {
-          range.count++;
-        } else if (item.score === 1.0) {
-          ranges[ranges.length - 1].count++;
-        }
+    for (const item of allExpItems) {
+      if (item.status === 'pending' || item.status === 'running') continue;
+      if (item.score == null || typeof item.score !== 'number') continue;
+
+      const range = ranges.find(r => item.score >= r.min && item.score <= r.max);
+      if (range) {
+        range.count++;
       }
-    });
+    }
 
     return ranges.map(r => ({ range: r.range, count: r.count }));
   };
@@ -258,32 +275,42 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
   const getAverageTime = () => {
     const formatUTC = (str: string | null) =>
       str ? str.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z' : '';
-    const times = allExpItems
-      .filter(item => item.started_at && item.updated_at)
+
+    const validDurations = allExpItems
+      .filter(item => item.status !== 'pending' && item.status !== 'running') // ✅ 跳过 pending 和 running
+      .filter(item => item.started_at && item.updated_at)                      // ✅ 确保时间字段存在
       .map(item => {
         const start = new Date(formatUTC(item.started_at)).getTime();
         const end = new Date(formatUTC(item.updated_at)).getTime();
-        return (end - start) / 1000;
-      });
+        const duration = (end - start) / 1000; // 转为秒
+        return isFinite(duration) && duration > 0 ? duration : null;         // ✅ 过滤无效/负值
+      })
+      .filter((duration): duration is number => duration !== null);          // ✅ 类型守卫
 
-    if (times.length === 0) return "N/A";
-    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    if (validDurations.length === 0) return "N/A";
+
+    const avg = validDurations.reduce((sum, time) => sum + time, 0) / validDurations.length;
     return avg.toFixed(2);
   };
 
   const getMinTime = () => {
     const formatUTC = (str: string | null) =>
       str ? str.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z' : '';
-    const times = allExpItems
-      .filter(item => item.started_at && item.updated_at)
+
+    const validDurations = allExpItems
+      .filter(item => item.status !== 'pending' && item.status !== 'running') // ✅ 跳过 pending running
+      .filter(item => item.started_at && item.updated_at) // ✅ 确保时间字段存在
       .map(item => {
         const start = new Date(formatUTC(item.started_at)).getTime();
         const end = new Date(formatUTC(item.updated_at)).getTime();
-        return (end - start) / 1000;
-      });
+        const duration = (end - start) / 1000; // 秒
+        return isFinite(duration) && duration > 0 ? duration : null; // ✅ 过滤无效/负值
+      })
+      .filter((duration): duration is number => duration !== null); // ✅ 类型守卫 + 过滤无效值
 
-    if (times.length === 0) return "N/A";
-    return Math.min(...times).toFixed(2);
+    if (validDurations.length === 0) return "N/A";
+
+    return Math.min(...validDurations).toFixed(2);
   };
 
   const getMaxTime = () => {
@@ -302,13 +329,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
   };
 
   const getAverageScore = () => {
-    const scores = allExpItems
-      .map(item => {
-        return item.score;
-      });
+    const validScores = allExpItems
+      .filter(item => item.status !== 'pending' && item.status !== 'running')
+      .map(item => item.score)
+      .filter(score => typeof score === 'number'); 
 
-    if (scores.length === 0) return "N/A";
-    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    if (validScores.length === 0) return "N/A";
+
+    const avg = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
     return avg.toFixed(2);
   };
 
@@ -408,7 +436,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                         wrapperStyle={{ fontSize: '14px' }}
                         height={25}
                       />
-                      <Bar dataKey="count" fill="#8884d8" name="样本" />
+                      <Bar dataKey="count" fill="#8884d8" name="样本数" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -427,7 +455,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, value }) => `${name} ${value}`}
                         outerRadius={60}
                         fill="#8884d8"
                         dataKey="value"

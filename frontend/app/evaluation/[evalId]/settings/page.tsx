@@ -92,7 +92,7 @@ export default function EvalSettingsDetailsPage(
     const [totalPages, setTotalPages] = useState(1);
     const [evalRunConfigs, setEvalRunConfigs] = useState<EvalRunConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const pageSize = 8;
+    const pageSize = 10;
     // 用于跟踪选中的行
     const [totalItems, setTotalItems] = useState(0);
     const [dataseterror, setDatasetError] = useState('');
@@ -196,22 +196,6 @@ export default function EvalSettingsDetailsPage(
                 );
                 console.log('更新成功:', result.data);
             }
-            // const updateMethod = isEditSetting ? 'PUT' : 'POST';
-            // const res = await fetch(
-            //     `/api/config/evaluation/${evalId}/configs`,
-            //     {
-            //         method: updateMethod,
-            //         headers: { 'Content-Type': 'application/json' },
-            //         body: JSON.stringify(data),
-            //     },
-            // );
-            // if (!res.ok) {
-            //     alert('创建失败');
-            //     return;
-            // }
-            // const result = await res.json();
-            // console.log('创建成功:', result);
-            // setEvalRunConfigs((prev) => [...prev, result.data]); // 追加新配置
         } catch (error) {
             console.error('创建失败:', error);
         } finally {
@@ -329,182 +313,180 @@ export default function EvalSettingsDetailsPage(
 
 
     return (
-        <div className="flex flex-col py-4 space-y-6">
-            <div className="w-full">
-                <Card className="w-full">
-                    <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-                        <div>
-                            <CardTitle>运行设置</CardTitle>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                进行评估实验的运行设置
-                            </p>
+        <div className="flex flex-col h-full min-h-0">
+            <Card className="flex flex-col h-full min-h-0 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                <CardHeader className="shrink-0 flex md:items-center md:justify-between">
+                    <div>
+                        <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                            <Settings2 className="h-5 w-5" /> 运行设置
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            进行评估实验的运行设置
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+
+                        <div className="flex gap-2">
+                            <EvalConfigFormDialog
+                                mode={isEditSetting ? "edit" : "new"}
+                                config={isEditSetting ? editConfig : undefined}
+                                llms={llms}
+                                mcps={mcps}
+                                kbs={kbs}
+                                evalId={evalId}
+                                isOpen={isNewSettingsOpen}
+                                onOpenChange={setIsNewSettingsOpen}
+                                onSave={createNewEvalDataset}
+                                isSaving={isCreateLoading}
+                            />
+                            <Dialog open={isNewSettingsOpen} onOpenChange={setIsNewSettingsOpen}>
+                                <DialogTrigger asChild>
+                                    <Button>
+                                        <Settings className="mr-2 h-4 w-4" /> 新建配置
+                                    </Button>
+                                </DialogTrigger>
+                            </Dialog>
                         </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-0">
+                    <div className="rounded-md h-full min-h-0">
+                        <Table className='rounded-md border'>
+                            <TableHeader>
+                                <TableRow className="border-b-2 border-border">
+                                    <TableHead className="w-0 p-0 bg-transparent border-r"></TableHead>
 
-                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-
-                            <div className="flex gap-2">
-                                <EvalConfigFormDialog
-                                    mode={isEditSetting ? "edit" : "new"}
-                                    config={isEditSetting ? editConfig : undefined}
-                                    llms={llms}
-                                    mcps={mcps}
-                                    kbs={kbs}
-                                    evalId={evalId}
-                                    isOpen={isNewSettingsOpen}
-                                    onOpenChange={setIsNewSettingsOpen}
-                                    onSave={createNewEvalDataset}
-                                    isSaving={isCreateLoading}
-                                />
-                                <Dialog open={isNewSettingsOpen} onOpenChange={setIsNewSettingsOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button>
-                                            <Settings className="mr-2 h-4 w-4" /> 新建配置
-                                        </Button>
-                                    </DialogTrigger>
-                                </Dialog>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="border-b-2 border-border">
-                                        <TableHead className="w-0 p-0 bg-transparent border-r"></TableHead>
-
-                                        {/* 应用设置分组 */}
-                                        <TableHead colSpan={6} className="bg-muted/20 border-r border-r-border">
-                                            <div className="flex items-center gap-2 px-4 py-2">
-                                                <div className="w-2 h-8 bg-primary/20 rounded"></div>
-                                                <div>
-                                                    <div className="font-semibold text-sm text-primary flex items-center gap-1">
-                                                        <Settings2 className="h-4 w-4" /> 应用设置
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">运行时参数、模型、插件等</div>
+                                    {/* 应用设置分组 */}
+                                    <TableHead colSpan={6} className="bg-muted/20 border-r border-r-border">
+                                        <div className="flex items-center gap-2 px-4 py-2">
+                                            <div className="w-2 h-8 bg-primary/20 rounded"></div>
+                                            <div>
+                                                <div className="font-semibold text-sm text-primary flex items-center gap-1">
+                                                    <Settings2 className="h-4 w-4" /> 应用设置
                                                 </div>
+                                                <div className="text-xs text-muted-foreground">运行时参数、模型、插件等</div>
                                             </div>
-                                        </TableHead>
+                                        </div>
+                                    </TableHead>
 
-                                        {/* 评估设置分组 */}
-                                        <TableHead colSpan={1} className="bg-muted/20 border-r border-r-border">
-                                            <div className="flex items-center gap-2 px-4 py-2">
-                                                <div className="w-2 h-8 bg-primary/40 rounded"></div>
-                                                <div>
-                                                    <div className="font-semibold text-sm text-primary flex items-center gap-1">
-                                                        <BarChart2 className="h-4 w-4" /> 评估设置
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">评分标准、评估器配置</div>
+                                    {/* 评估设置分组 */}
+                                    <TableHead colSpan={1} className="bg-muted/20 border-r border-r-border">
+                                        <div className="flex items-center gap-2 px-4 py-2">
+                                            <div className="w-2 h-8 bg-primary/40 rounded"></div>
+                                            <div>
+                                                <div className="font-semibold text-sm text-primary flex items-center gap-1">
+                                                    <BarChart2 className="h-4 w-4" /> 评估设置
                                                 </div>
+                                                <div className="text-xs text-muted-foreground">评分标准、评估器配置</div>
                                             </div>
-                                        </TableHead>
-                                        <TableHead className="w-0 p-0 bg-transparent border-r"></TableHead>
-                                    </TableRow>
+                                        </div>
+                                    </TableHead>
+                                    <TableHead className="w-0 p-0 bg-transparent border-r"></TableHead>
+                                </TableRow>
+                                <TableRow>
+                                    <TableHead className='border-r border-r-border'>名称</TableHead>
+                                    <TableHead>基模型</TableHead>
+                                    <TableHead>MCP</TableHead>
+                                    <TableHead>知识库</TableHead>
+                                    <TableHead className="text-center">联网搜索</TableHead>
+                                    <TableHead className="text-center">Agentic</TableHead>
+                                    <TableHead className="text-center border-r border-r-border">护栏状态</TableHead>
+
+                                    {/* 评估设置列 */}
+                                    <TableHead className='border-r border-r-border'>评估器</TableHead>
+                                    <TableHead className="text-center">操作</TableHead>
+                                </TableRow>
+                            </TableHeader>
+
+                            <TableBody>
+                                {evalRunConfigs.length === 0 ? (
                                     <TableRow>
-                                        <TableHead className='border-r border-r-border'>名称</TableHead>
-                                        <TableHead>基模型</TableHead>
-                                        <TableHead>MCP</TableHead>
-                                        <TableHead>知识库</TableHead>
-                                        <TableHead className="text-center">联网搜索</TableHead>
-                                        <TableHead className="text-center">Agentic</TableHead>
-                                        <TableHead className="text-center border-r border-r-border">护栏状态</TableHead>
-
-                                        {/* 评估设置列 */}
-                                        <TableHead className='border-r border-r-border'>评估器</TableHead>
-                                        <TableHead className="text-center">操作</TableHead>
+                                        <TableCell colSpan={9} className="h-24 text-center">
+                                            暂无数据
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
+                                ) : (
+                                    evalRunConfigs.map((config) => (
+                                        <TableRow key={config.id} className="hover:bg-muted/50">
+                                            <TableCell className='border-r border-r-border'>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{config.name}</span>
+                                                    <span className="text-xs text-muted-foreground">ID: {config.id.slice(0, 8)}...</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="font-mono text-sm">{config.model_id || "—"}</TableCell>
+                                            <TableCell>{renderBadges(config.mcp_ids, mcps)}</TableCell>
+                                            <TableCell>{renderBadges(config.kb_ids, kbs)}</TableCell>
+                                            <TableCell className="text-center">
+                                                <Switch checked={config.enable_search} disabled />
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Switch checked={config.enable_agent} disabled />
+                                            </TableCell>
+                                            <TableCell className="text-center border-r border-r-border">
+                                                {renderGuardrailStatus(config)}
+                                            </TableCell>
 
-                                <TableBody>
-                                    {evalRunConfigs.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={9} className="h-24 text-center">
-                                                暂无数据
+                                            {/* 评估器配置 */}
+                                            <TableCell className='border-r border-r-border'>
+                                                <div className="space-y-1">
+                                                    <div className="font-medium text-sm">
+                                                        <Badge variant={config.evaluator_config?.name === "ExactMatch" ? "secondary" : "outline"}>
+                                                            {config.evaluator_config?.name === "ExactMatch" ? "精确匹配" : "LLM 评判"}
+                                                        </Badge>
+                                                    </div>
+                                                    {config.evaluator_config?.name === "ExactMatch" && (
+                                                        <div className="text-xs text-muted-foreground space-y-0.5">
+                                                            <div>区分大小写: {config.evaluator_config.case_sensitive ? "是" : "否"}</div>
+                                                            <div>忽略标点: {config.evaluator_config.ignore_punctuation ? "是" : "否"}</div>
+                                                        </div>
+                                                    )}
+                                                    {config.evaluator_config?.name === "LLMJudge" && (
+                                                        <div className="text-xs text-muted-foreground">
+                                                            模型: {config.evaluator_config.model_id || "未指定"}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => {
+                                                            setEditConfig(config);
+                                                            setIsEditSetting(true);
+                                                            setIsNewSettingsOpen(true);
+                                                        }}
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => onDelete(config.id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
-                                    ) : (
-                                        evalRunConfigs.map((config) => (
-                                            <TableRow key={config.id} className="hover:bg-muted/50">
-                                                <TableCell className='border-r border-r-border'>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium">{config.name}</span>
-                                                        <span className="text-xs text-muted-foreground">ID: {config.id.slice(0, 8)}...</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="font-mono text-sm">{config.model_id || "—"}</TableCell>
-                                                <TableCell>{renderBadges(config.mcp_ids, mcps)}</TableCell>
-                                                <TableCell>{renderBadges(config.kb_ids, kbs)}</TableCell>
-                                                <TableCell className="text-center">
-                                                    <Switch checked={config.enable_search} disabled />
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <Switch checked={config.enable_agent} disabled />
-                                                </TableCell>
-                                                <TableCell className="text-center border-r border-r-border">
-                                                    {renderGuardrailStatus(config)}
-                                                </TableCell>
-
-                                                {/* 评估器配置 */}
-                                                <TableCell className='border-r border-r-border'>
-                                                    <div className="space-y-1">
-                                                        <div className="font-medium text-sm">
-                                                            <Badge variant={config.evaluator_config?.name === "ExactMatch" ? "secondary" : "outline"}>
-                                                                {config.evaluator_config?.name === "ExactMatch" ? "精确匹配" : "LLM 评判"}
-                                                            </Badge>
-                                                        </div>
-                                                        {config.evaluator_config?.name === "ExactMatch" && (
-                                                            <div className="text-xs text-muted-foreground space-y-0.5">
-                                                                <div>区分大小写: {config.evaluator_config.case_sensitive ? "是" : "否"}</div>
-                                                                <div>忽略标点: {config.evaluator_config.ignore_punctuation ? "是" : "否"}</div>
-                                                            </div>
-                                                        )}
-                                                        {config.evaluator_config?.name === "LLMJudge" && (
-                                                            <div className="text-xs text-muted-foreground">
-                                                                模型: {config.evaluator_config.model_id || "未指定"}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-1">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => {
-                                                                setEditConfig(config);
-                                                                setIsEditSetting(true);
-                                                                setIsNewSettingsOpen(true);
-                                                            }}
-                                                        >
-                                                            <Pencil className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => onDelete(config.id)}
-                                                        >
-                                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </CardContent>
-                    <CardFooter className="flex justify-center">
-                        <div className="py-6">
-                            <PaginationComponent
-                                currentPage={page}
-                                totalPages={totalPages}
-                                onPageChange={handlePageChange}
-                            />
-                        </div>
-                    </CardFooter>
-                </Card>
-            </div>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+                <CardFooter className="shrink-0 border-t pb-2">
+                    <PaginationComponent
+                        currentPage={page}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                    />
+                </CardFooter>
+            </Card>
         </div>
     );
 }

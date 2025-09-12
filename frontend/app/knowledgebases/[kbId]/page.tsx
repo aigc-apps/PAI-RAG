@@ -145,7 +145,7 @@ export default function KnowledgeBaseDetailPage(
   const [page, setPage] = useState(1);
   const pageRef = useRef(page);
   const [totalPages, setTotalPages] = useState(1);
-  const fileSizePerPage = 8;
+  const fileSizePerPage = 10;
   const [kbquery, setKbQuery] = useState(''); //查询
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [searching, setSearching] = useState(false);
