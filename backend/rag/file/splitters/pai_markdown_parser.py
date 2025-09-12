@@ -22,6 +22,10 @@ from rag.file.splitters.utils import fuzzy_match_content
 from mineru.utils.enum_class import BlockType
 from fuzzywuzzy import fuzz
 from rag.file.utils.markdown_utils import HARD_LINE_BREAK
+from common.knowledgebase.constants import (
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_CHUNK_OVERLAP,
+)
 import json
 
 
@@ -44,8 +48,8 @@ class StructuredNodeParser(BaseModel):
 
     """
 
-    chunk_size: int = Field(default=800, description="chunk size.")
-    chunk_overlap: int = Field(default=50, description="Chunk overlap size.")
+    chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE, description="chunk size.")
+    chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP, description="Chunk overlap size.")
     base_parser: NodeParser = Field(
         default=None,
         description="base parser",
@@ -349,14 +353,14 @@ class StructuredNodeParser(BaseModel):
 
 
 class MarkdownNodeParser(NodeParser):
-    chunk_size: int = Field(default=800, description="chunk size.")
-    chunk_overlap: int = Field(default=50, description="Chunk overlap size.")
+    chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE, description="chunk size.")
+    chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP, description="Chunk overlap size.")
     base_parser: Any = None
 
     def __init__(
         self,
-        chunk_size: int = 800,
-        chunk_overlap: int = 50,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         id_func: Callable[[int, BaseNode], str] = None,
     ):
         super().__init__(
@@ -392,6 +396,8 @@ class MarkdownNodeParser(NodeParser):
 
             chunks = parser.get_nodes_from_tree(ast_root, node, content_list)
             all_chunks.extend(chunks)
+
+        return all_chunks
 
 
         return all_chunks

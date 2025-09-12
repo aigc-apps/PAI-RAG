@@ -7,6 +7,7 @@ SUPPORTED_FILE_EXT = [
     ".pdf",
     ".docx",
     ".pptx",
+    ".csv",
     ".xlsx",
     ".xls",
     ".html",

@@ -2,7 +2,7 @@ import hashlib
 from typing import Any, BinaryIO, Dict, List
 import os
 import uuid
-
+import io
 from db.models.knowledgebase.file import KbFileEntity
 from rag.file.file_utils import ensure_file_type_is_supported
 
@@ -63,12 +63,16 @@ class FileItem:
         file_path,
         kb_id: str,
     ):
-        with open(file_path, "rb") as file:
-            return FileItem.from_file(
-                file_path=file_path,
-                file=file,
-                kb_id=kb_id,
-            )
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+
+        file = io.BytesIO(file_content)
+
+        return FileItem.from_file(
+            file_path=file_path,
+            file=file,
+            kb_id=kb_id,
+        )
 
     def metadata(self) -> Dict[str, Any]:
         # TODO: maybe create time / modified time?
