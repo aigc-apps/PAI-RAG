@@ -6,7 +6,7 @@ from llama_index.core.tools import FunctionTool
 
 from common.chat.models import RetrievalSetting
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
+from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig, ChunkConfig
 from common.knowledgebase.types import (
     ChunkStatus,
     FileStatus,
@@ -22,9 +22,9 @@ from rag.chunk_helper import (
     update_chunk_status_async,
     update_file_status_async,
 )
-from rag.file.models.file_item import FileItem
-from rag.file.file_parser import FileParser
-from rag.file.image_caption_tool import ImageCaptionTool
+from pairag.file.models.file_item import FileItem
+from pairag.file.nodeparsers.file_parser import FileParser
+from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
     create_vector_db_connection_from_env,
     create_vector_store,
@@ -35,7 +35,7 @@ from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from config.providers.knowledgebase_provider import fetch_knowledgebases_by_id, knowledgebase_provider
 from config.providers.embedding_provider import embedding_provider
 from config.providers.reranker_provider import reranker_provider
-from rag.file.store.file_store_helper import file_store
+from pairag.file.store.file_store_helper import file_store
 from llama_index.core.schema import NodeWithScore
 from loguru import logger
 import re
@@ -82,10 +82,11 @@ class PaiKnowledgebaseClient:
         image_caption_tool = None
         if multimodal_llm:
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+        chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
         file_parser = FileParser(
             file_store=file_store,
             image_caption_tool=image_caption_tool,
-            knowledgebase=knowledgebase,
+            chunk_config=chunk_config,
         )
         return file_parser
 
