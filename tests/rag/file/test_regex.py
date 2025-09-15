@@ -1,4 +1,4 @@
-from rag.file.readers.markdown_reader import MARKDOWN_IMAGE_PATTERN, HTML_IMAGE_PATTERN
+from pairag.file.readers.markdown_reader import MARKDOWN_IMAGE_PATTERN, HTML_IMAGE_PATTERN
 
 
 TEST_MARKDOWN_CONTENT = """
