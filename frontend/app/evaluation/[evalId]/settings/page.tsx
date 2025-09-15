@@ -28,38 +28,9 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Settings, Pencil, Trash2, Settings2, BarChart2 } from "lucide-react";
-import { EvalConfigFormDialog } from "@/app/evaluation/[evalId]/settings/evalConfigFormDialog";
-
-export interface SampleItem {
-    id: string;
-    input: string;
-    expected_output: string;
-    eval_metadata?: {
-        Steps?: string;
-        Tools?: string;
-    };
-}
-
-export interface EvalRunConfig {
-    id: string;
-    name: string;
-    model_id: string;
-    mcp_ids: string[];
-    kb_ids: string[];
-    enable_search: boolean;
-    enable_vision: boolean;
-    enable_agent: boolean;
-    enable_input_guardrail?: boolean;
-    enable_output_guardrail?: boolean;
-    guardrail_hint?: string;
-    evaluator_config: {
-        name: string;
-        model_id?: string;
-        case_sensitive?: boolean;
-        ignore_punctuation?: boolean;
-    }
-}
+import { Settings, Pencil, Trash2, Settings2, BarChart2, Loader2 } from "lucide-react";
+import { EvalConfigFormDialog } from "@/app/evaluation/components/evalConfigFormDialog";
+import { EvalRunConfig } from '@/app/evaluation/[evalId]/types';
 
 const default_eval_run_config = {
     id: "",
@@ -400,7 +371,16 @@ export default function EvalSettingsDetailsPage(
                             </TableHeader>
 
                             <TableBody>
-                                {evalRunConfigs.length === 0 ? (
+                                {isLoading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={9} className="h-32 text-center">
+                                            <div className="flex items-center justify-center space-x-4">
+                                                <Loader2 className="h-6 w-6 animate-spin" />
+                                                <h4 className="font-bold">Loading Configs</h4>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : evalRunConfigs.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={9} className="h-24 text-center">
                                             暂无数据

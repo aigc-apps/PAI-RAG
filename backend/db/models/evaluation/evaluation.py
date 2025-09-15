@@ -3,39 +3,17 @@ import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, DateTime
 
-# class EvalRunConfig(SQLModel):
-#     model_id: str = Field(default="")
-#     mcp_ids: List[str] = Field(default=[])
-#     kb_ids: List[str] = Field(default=[])
-#     enable_search: bool = Field(default=True)
-#     enable_vision: bool = Field(default=True)
-#     enable_agent: bool = Field(default=False)
-#     enable_input_guardrail: Optional[bool] = Field(default=False)
-#     enable_output_guardrail: Optional[bool] = Field(default=False)
-#     guardrail_hint: Optional[str] = Field(default=None)
-
-class EvalCreate(SQLModel):
+class EvaluationCreate(SQLModel):
     name: str = Field(default=None)
     description: str = Field(default=None)
     type: str = Field(default="") # "built-in" or "custom"
-    # chatbot_id: str = Field(default="") # if run_type == "chatbot"
-    # default_run_config: dict = Field(
-    #     default={}, sa_column=Column("default_run_config", JSON)
-    # )
 
 
 # table entity
-class EvalEntity(EvalCreate, table=True):
+class EvaluationEntity(EvaluationCreate, table=True):
     __tablename__ = "pai_evaluation"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
-    # name: str = Field(default=None, unique=True)
-    # description: str = Field(default=None)
-    # type: str = Field(default="") # "built-in" or "custom"
-    # chatbot_id: str = Field(default=None)
-    # default_run_config: dict = Field(
-    #     default=lambda: EvalRunConfig(), sa_column=Column("default_run_config", JSON)
-    # )
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

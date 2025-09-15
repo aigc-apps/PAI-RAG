@@ -35,7 +35,6 @@ interface EvalData {
   created_at: string;
   dataset_count: number;
   experiments_count: number;
-
 }
 
 
@@ -124,7 +123,6 @@ const EvaluationPage = () => {
       if (!res.ok) {
         throw new Error('删除失败，请检查网络或配置');
       }
-      // 删除成功后更新本地状态
       setEvaluations((prev) => prev.filter((config) => config.id !== eval_id));
     } catch (err: any) { console.log('删除评估任务出错: ', err); }
     // 显示错误提示
@@ -132,7 +130,6 @@ const EvaluationPage = () => {
 
   return (
     <div className="flex flex-col h-screen px-6 py-6">
-      {/* 顶部信息区 —— 卡片式设计 */}
       <div className="mb-6">
         <div className="p-6 rounded-2xl border border-primary/20">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

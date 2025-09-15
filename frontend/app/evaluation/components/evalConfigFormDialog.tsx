@@ -35,26 +35,8 @@ import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { useRouter } from 'next/navigation';
+import { EvalRunConfig } from '@/app/evaluation/[evalId]/types';
 
-interface EvalRunConfig {
-  id: string;
-  name: string;
-  model_id: string;
-  mcp_ids: string[];
-  kb_ids: string[];
-  enable_search: boolean;
-  enable_vision: boolean;
-  enable_agent: boolean;
-  enable_input_guardrail?: boolean;
-  enable_output_guardrail?: boolean;
-  guardrail_hint?: string;
-  evaluator_config: {
-    name: string;
-    model_id?: string;
-    case_sensitive?: boolean;
-    ignore_punctuation?: boolean;
-  }
-}
 
 interface EvalConfigFormDialogProps {
   mode: 'new' | 'edit';

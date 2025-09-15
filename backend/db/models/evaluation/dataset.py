@@ -14,7 +14,7 @@ class EvalDatasetSample(SQLModel):
     )
     eval_metadata: Optional[dict] = Field(default={}, sa_column=Column("eval_metadata", JSON))
 
-class EvalDatasetEntity(SQLModel, table=True):
+class EvaluationDatasetEntity(SQLModel, table=True):
     __tablename__ = "pai_evaluation_dataset"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)

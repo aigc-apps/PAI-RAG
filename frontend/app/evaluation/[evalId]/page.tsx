@@ -19,21 +19,13 @@ import { BookOpen, Settings, FlaskConical } from "lucide-react";
 import EvalDatasetsDetailsPage from '@/app/evaluation/[evalId]/datasets/page';
 import EvalExperimentsDetailsPage from '@/app/evaluation/[evalId]/experiments/page';
 import EvalSettingsDetailsPage from '@/app/evaluation/[evalId]/settings/page';
-export interface EvalConfig {
-    id: string;
-    name: string;
-    description: string;
-    type: string;
-}
-
+import { EvalConfig } from "@/app/evaluation/[evalId]/types";
 export default function EvalExpDetailsPage(
     { params }: { params: Promise<{ evalId: string }> }
 ) {
     const { evalId } = use(params);
     const router = useRouter();
     const [evaluation, setEvaluationConfig] = useState<EvalConfig>(); // 知识库列表
-    const [datasetLen, setDatasetLen] = useState<number>(0); // 数据集条目数量
-    const [experimentLen, setExperimentLen] = useState<number>(0); // 实验条目数量
 
     useEffect(() => {
         const fetchKbConfigs = async () => {
@@ -47,13 +39,8 @@ export default function EvalExpDetailsPage(
                 if (!evalRes.ok) throw new Error('获取评估任务配置失败');
                 const json_data = await evalRes.json();
                 const kb_data = json_data.data;
-
-                setEvaluationConfig(kb_data); // 更新状态
                 console.log('评估任务详情数据:', kb_data);
-
-                setDatasetLen(allDatasetRes.ok ? await allDatasetRes.json().then(res => res.data.total) : 0);
-                setExperimentLen(experimentRes.ok ? await experimentRes.json().then(res => res.data.total) : 0);
-
+                setEvaluationConfig(kb_data); // 更新状态
             } catch (err: any) {
                 toast.error(err.message);
             }

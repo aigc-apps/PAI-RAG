@@ -1,9 +1,9 @@
 from loguru import logger
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.models.evaluation.evaluation import EvalEntity
-from db.models.evaluation.dataset import EvalDatasetEntity
-from db.models.evaluation.experiment import ExperimentRunResultEntity, ExperimentEntity
+from db.models.evaluation.evaluation import EvaluationEntity
+from db.models.evaluation.dataset import EvaluationDatasetEntity
+from db.models.evaluation.experiment import ExperimentRunEntity, ExperimentEntity
 from db.models.evaluation.run_config import EvalRunConfigEntity
 from db.models.llm import LlmModelEntity
 from typing import List
@@ -18,8 +18,8 @@ from db.encrypt_utils import decrypt_key
 async def get_exp_run_entity(
     session: AsyncSession,
     exp_run_id: str,
-) -> ExperimentRunResultEntity:
-    exp_run_entity = await session.get(ExperimentRunResultEntity, exp_run_id)
+) -> ExperimentRunEntity:
+    exp_run_entity = await session.get(ExperimentRunEntity, exp_run_id)
     assert exp_run_entity is not None, f"Evaluation experiment run entity {exp_run_id} not found."
     return exp_run_entity
 
@@ -27,8 +27,8 @@ async def get_exp_run_entity(
 async def get_evaluation_entity(
     session: AsyncSession,
     eval_id: str,
-) -> EvalEntity:
-    eval_entity = await session.get(EvalEntity, eval_id)
+) -> EvaluationEntity:
+    eval_entity = await session.get(EvaluationEntity, eval_id)
     assert eval_entity is not None, f"Evaluation {eval_id} not found."
     return eval_entity
 
@@ -36,8 +36,8 @@ async def get_evaluation_entity(
 async def get_dataset_entity(
     session: AsyncSession,
     dataset_id: str,
-) -> EvalDatasetEntity:
-    dataset_entity = await session.get(EvalDatasetEntity, dataset_id)
+) -> EvaluationDatasetEntity:
+    dataset_entity = await session.get(EvaluationDatasetEntity, dataset_id)
     assert dataset_entity is not None, f"Evaluation dataset {dataset_id} not found."
     return dataset_entity
 
@@ -91,7 +91,7 @@ async def update_experiment_run_result(
     reason: str = "",
     execution_metadata: List[dict] = []
 ):
-    exp_run_entity = await session.get(ExperimentRunResultEntity, exp_run_id)
+    exp_run_entity = await session.get(ExperimentRunEntity, exp_run_id)
     if exp_run_entity.status == "pending" and status == "running":
         exp_run_entity.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
     exp_run_entity.actual_output = actual_output
@@ -127,7 +127,7 @@ class PaiEvaluationClient:
 
     async def create_evaluation_task(self, eval_id: str, experiment_id: str, exp_run_ids: List[str]):
         logger.info(f"[WORKER] creating evaluation task for eval_id {eval_id} in background.")
-        eval_entity: EvalEntity = await get_evaluation_entity(eval_id=eval_id)
+        eval_entity: EvaluationEntity = await get_evaluation_entity(eval_id=eval_id)
         logger.info(f"[WORKER] get eval_entity {eval_entity}.")
         await update_experiment_status(
             experiment_id=experiment_id,
@@ -141,8 +141,8 @@ class PaiEvaluationClient:
         if run_config_entity.evaluator_config.get("name") == "LLMJudge":
             eval_llm = await get_llm_model(model_id=run_config_entity.evaluator_config.get("model_id"))
         for exp_run_id in exp_run_ids:
-            exp_run_entity: ExperimentRunResultEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
-            dataset_entity: EvalDatasetEntity = await get_dataset_entity(dataset_id=exp_run_entity.dataset_id)
+            exp_run_entity: ExperimentRunEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
+            dataset_entity: EvaluationDatasetEntity = await get_dataset_entity(dataset_id=exp_run_entity.dataset_id)
 
             logger.info(f"[WORKER] get exp_run_entity {exp_run_entity} and dataset_entity {dataset_entity}.")
             logger.info("[WORKER] processing evaluation task...")

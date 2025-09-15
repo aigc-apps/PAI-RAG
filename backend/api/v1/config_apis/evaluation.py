@@ -5,15 +5,24 @@ from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
-from db.models.evaluation.evaluation import EvalEntity, EvalCreate
-from db.models.evaluation.dataset import EvalDatasetEntity
-from db.models.evaluation.experiment import ExperimentEntity, ExperimentRunResultEntity, ExperimentCreate
+from db.models.evaluation.evaluation import EvaluationEntity, EvaluationCreate
+from db.models.evaluation.dataset import EvaluationDatasetEntity
+from db.models.evaluation.experiment import (
+    ExperimentEntity,
+    ExperimentRunEntity,
+    ExperimentCreate,
+)
 from db.models.evaluation.run_config import EvalRunConfigEntity, EvalRunConfigCreate
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
 from rag.file.store.file_store_helper import file_store
-from api.response_model import ResponseModel, PagedResult, success_response, error_response
+from api.response_model import (
+    ResponseModel,
+    PagedResult,
+    success_response,
+    error_response,
+)
 from loguru import logger
 from rag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
@@ -22,12 +31,12 @@ from config.providers.evaluation_provider import evaluation_provider
 
 evaluation_router = APIRouter()
 
-@evaluation_router.post("", response_model=ResponseModel[EvalEntity])
+@evaluation_router.post("", response_model=ResponseModel[EvaluationEntity])
 async def create_evaluation(
-    eval_create: EvalCreate, session: AsyncSession = Depends(get_session)
+    eval_create: EvaluationCreate, session: AsyncSession = Depends(get_session)
 ):
     try:
-        evaluation = EvalEntity.model_validate(eval_create)
+        evaluation = EvaluationEntity.model_validate(eval_create)
         evaluation_provider.add(evaluation)
         session.add(evaluation)
         await session.commit()
@@ -46,7 +55,9 @@ async def create_evaluation(
 
         if "UniqueViolationError" in str(e.orig):
             return JSONResponse(
-                content=error_response(code=400, message="创建评估任务失败: 评估任务名称已存在。"),
+                content=error_response(
+                    code=400, message="创建评估任务失败: 评估任务名称已存在。"
+                ),
                 status_code=400,
             )
         else:
@@ -58,9 +69,12 @@ async def create_evaluation(
         logger.exception(f"创建评估任务失败。\nException:{traceback.format_exc()}")
         await session.rollback()
         return JSONResponse(
-            content=error_response(code=400, message=f"创建评估任务失败: {traceback.format_exc()}."),
+            content=error_response(
+                code=400, message=f"创建评估任务失败: {traceback.format_exc()}."
+            ),
             status_code=400,
         )
+
 
 @evaluation_router.get("")
 async def list_evaluations(
@@ -71,10 +85,10 @@ async def list_evaluations(
     # 子查询 1：统计每个 eval_id 对应的数据集数量
     dataset_count_subq = (
         select(
-            EvalDatasetEntity.eval_id,
-            func.count(EvalDatasetEntity.id).label("dataset_count")
+            EvaluationDatasetEntity.eval_id,
+            func.count(EvaluationDatasetEntity.id).label("dataset_count"),
         )
-        .group_by(EvalDatasetEntity.eval_id)
+        .group_by(EvaluationDatasetEntity.eval_id)
         .subquery()
     )
 
@@ -82,7 +96,7 @@ async def list_evaluations(
     experiment_count_subq = (
         select(
             ExperimentEntity.eval_id,
-            func.count(ExperimentEntity.id).label("experiments_count")
+            func.count(ExperimentEntity.id).label("experiments_count"),
         )
         .group_by(ExperimentEntity.eval_id)
         .subquery()
@@ -91,26 +105,27 @@ async def list_evaluations(
     # 主查询：左连接两个子查询
     query = (
         select(
-            EvalEntity,
+            EvaluationEntity,
             func.coalesce(dataset_count_subq.c.dataset_count, 0).label("dataset_count"),
-            func.coalesce(experiment_count_subq.c.experiments_count, 0).label("experiments_count"),
+            func.coalesce(experiment_count_subq.c.experiments_count, 0).label(
+                "experiments_count"
+            ),
         )
         .outerjoin(
-            dataset_count_subq,
-            EvalEntity.id == dataset_count_subq.c.eval_id
+            dataset_count_subq, EvaluationEntity.id == dataset_count_subq.c.eval_id
         )
         .outerjoin(
             experiment_count_subq,
-            EvalEntity.id == experiment_count_subq.c.eval_id
+            EvaluationEntity.id == experiment_count_subq.c.eval_id,
         )
-        .order_by(EvalEntity.created_at.desc())
+        .order_by(EvaluationEntity.created_at.desc())
         .offset((page - 1) * size)
         .limit(size)
     )
 
     # 获取总数（不变）
     total_results = await session.exec(
-        select(func.count()).select_from(EvalEntity)
+        select(func.count()).select_from(EvaluationEntity)
     )
     total_num = total_results.one_or_none()
 
@@ -139,29 +154,34 @@ async def list_evaluations(
         message="获取评估任务列表成功",
     )
 
-@evaluation_router.get("/{eval_id}", response_model=ResponseModel[EvalEntity])
+
+@evaluation_router.get("/{eval_id}", response_model=ResponseModel[EvaluationEntity])
 async def read_evaluation(eval_id: str, session: AsyncSession = Depends(get_session)):
-    evaluation = await session.get(EvalEntity, eval_id)
+    evaluation = await session.get(EvaluationEntity, eval_id)
 
     if not evaluation:
         return JSONResponse(
-            content=error_response(code=404, message=f"查询评估任务失败: 评估任务'{eval_id}'不存在。"),
+            content=error_response(
+                code=404, message=f"查询评估任务失败: 评估任务'{eval_id}'不存在。"
+            ),
             status_code=404,
         )
 
     return success_response(data=evaluation, message="查询评估任务成功。")
 
 
-@evaluation_router.put("/{eval_id}", response_model=ResponseModel[EvalEntity])
+@evaluation_router.put("/{eval_id}", response_model=ResponseModel[EvaluationEntity])
 async def update_evaluation(
     eval_id: str,
-    new_eval: EvalCreate,
+    new_eval: EvaluationCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    evaluation = await session.get(EvalEntity, eval_id)
+    evaluation = await session.get(EvaluationEntity, eval_id)
     if not evaluation:
         return JSONResponse(
-            content=error_response(code=404, message=f"更新评估任务失败: 评估任务'{eval_id}'不存在。"),
+            content=error_response(
+                code=404, message=f"更新评估任务失败: 评估任务'{eval_id}'不存在。"
+            ),
             status_code=404,
         )
 
@@ -185,7 +205,12 @@ async def update_evaluation(
         return success_response(data=evaluation, message="更新评估任务成功。")
     except Exception:
         logger.error(f"Failed to update evaluation {eval_id}: {traceback.format_exc()}")
-        return error_response(message=f"更新评估任务失败：{traceback.format_exc()}")
+        return JSONResponse(
+            content=error_response(
+                code=404, message=f"更新评估任务失败：{traceback.format_exc()}"
+            ),
+            status_code=404,
+        )
 
 
 @evaluation_router.delete("/{eval_id}")
@@ -193,11 +218,13 @@ async def delete_evaluation(
     eval_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    evaluation = await session.get(EvalEntity, eval_id)
+    evaluation = await session.get(EvaluationEntity, eval_id)
 
     if not evaluation:
         return JSONResponse(
-            content=error_response(code=404, message=f"删除评估任务失败: 知识库'{eval_id}'不存在。"),
+            content=error_response(
+                code=404, message=f"删除评估任务失败: 知识库'{eval_id}'不存在。"
+            ),
             status_code=404,
         )
 
@@ -215,6 +242,7 @@ async def delete_evaluation(
 
     return success_response(message=f"评估任务'{eval_id}'删除成功。")
 
+
 @evaluation_router.post("/{eval_id}/dataset")
 async def upload_dataset(
     eval_id: str,
@@ -223,15 +251,22 @@ async def upload_dataset(
 ):
     logger.info(f"Uploading dataset to {eval_id}.")
     if not file:
-        return error_response(code=400, message="没有上传任何文件。")
+        return JSONResponse(
+            content=error_response(code=404, message="没有上传任何文件。"),
+            status_code=400,
+        )
 
     try:
         try:
             _ = await evaluation_provider.aget_evaluation(eval_id)
         except ValueError:
             logger.error(f"没找到评估任务{eval_id}")
-            return error_response(code=400, message=f"没有找到评估任务 {eval_id}。")
-
+            return JSONResponse(
+                content=error_response(
+                    code=404, message=f"没有找到评估任务 {eval_id}。"
+                ),
+                status_code=400,
+            )
 
         file_name = file.filename
         destination_file_path = f"{eval_id}/datasets/{file_name}"
@@ -248,22 +283,26 @@ async def upload_dataset(
         file_results = file_item.get_eval_dataset_from_jsonl_file()
         dataset_entities = []
         for line in file_results:
-            dataset_entity = EvalDatasetEntity(
+            dataset_entity = EvaluationDatasetEntity(
                 eval_id=eval_id,
                 input=line["input"],
                 expected_output=line.get("expected_output"),
-                eval_metadata=line.get("metadata")
+                eval_metadata=line.get("metadata"),
             )
             session.add(dataset_entity)
-            await session.commit()
-            logger.info(f"Saved file {dataset_entity} successfully.")
             dataset_entities.append(dataset_entity)
-
+            logger.info(f"Saved file {dataset_entity} successfully.")
+        await session.commit()
         return success_response(data=dataset_entities, message="文件上传成功")
     except Exception as e:
         logger.error(f"Failed to upload eval dataset: {traceback.format_exc()}")
         await session.rollback()
-        return error_response(message=f"Failed to save eval dataset to database: {e}")
+        return JSONResponse(
+            content=error_response(
+                code=404, message=f"Failed to save eval dataset to database: {e}"
+            ),
+            status_code=404,
+        )
 
 
 @evaluation_router.get("/{eval_id}/dataset")
@@ -272,17 +311,20 @@ async def list_dataset(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
-) :
+):
     total_results = await session.exec(
-        select(func.count())
-        .select_from(select(EvalDatasetEntity).where(EvalDatasetEntity.eval_id == eval_id))
+        select(func.count()).select_from(
+            select(EvaluationDatasetEntity).where(
+                EvaluationDatasetEntity.eval_id == eval_id
+            )
+        )
     )
     total_num = total_results.one_or_none()
     pagination = get_pagination_meta(page, size, total_num)
     file_results = await session.exec(
-        select(EvalDatasetEntity)
-        .where(EvalDatasetEntity.eval_id == eval_id)
-        .order_by(EvalDatasetEntity.created_at.desc())
+        select(EvaluationDatasetEntity)
+        .where(EvaluationDatasetEntity.eval_id == eval_id)
+        .order_by(EvaluationDatasetEntity.created_at.desc())
         .offset(pagination.offset)
         .limit(size)
     )
@@ -296,20 +338,26 @@ async def list_dataset(
             page=pagination.page,
             size=pagination.size,
         ),
-        message="获取评估数据集列表成功")
+        message="获取评估数据集列表成功",
+    )
 
 
-@evaluation_router.put("/{eval_id}/dataset/{sample_id}", response_model=ResponseModel[EvalDatasetEntity])
+@evaluation_router.put(
+    "/{eval_id}/dataset/{sample_id}",
+    response_model=ResponseModel[EvaluationDatasetEntity],
+)
 async def update_dataset_sample(
     eval_id: str,
     sample_id: str,
-    new_sample: EvalDatasetEntity,
+    new_sample: EvaluationDatasetEntity,
     session: AsyncSession = Depends(get_session),
 ):
-    sample_entity = await session.get(EvalDatasetEntity, sample_id)
+    sample_entity = await session.get(EvaluationDatasetEntity, sample_id)
     if not sample_entity:
         return JSONResponse(
-            content=error_response(code=404, message=f"更新数据集样本失败: 样本'{sample_id}'不存在。"),
+            content=error_response(
+                code=404, message=f"更新数据集样本失败: 样本'{sample_id}'不存在。"
+            ),
             status_code=404,
         )
 
@@ -322,12 +370,42 @@ async def update_dataset_sample(
         await session.commit()
         await session.refresh(sample_entity)
 
-        logger.info(f"Dataset Sample {sample_id} for eval_id {eval_id} updated to {sample_entity}.")
+        logger.info(
+            f"Dataset Sample {sample_id} for eval_id {eval_id} updated to {sample_entity}."
+        )
 
         return success_response(data=sample_entity, message="更新数据集样本成功。")
     except Exception:
-        logger.error(f"Failed to update Dataset Sample {sample_id} for evaluation {eval_id}: {traceback.format_exc()}")
-        return error_response(message=f"更新数据集样本失败：{traceback.format_exc()}")
+        logger.error(
+            f"Failed to update Dataset Sample {sample_id} for evaluation {eval_id}: {traceback.format_exc()}"
+        )
+        return JSONResponse(
+            content=error_response(
+                code=404, message=f"更新数据集样本失败：{traceback.format_exc()}"
+            ),
+            status_code=404,
+        )
+
+
+@evaluation_router.get(
+    "/{eval_id}/dataset/{sample_id}",
+    response_model=ResponseModel[EvaluationDatasetEntity],
+)
+async def get_dataset_sample(
+    eval_id: str,
+    sample_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    sample_entity = await session.get(EvaluationDatasetEntity, sample_id)
+    if not sample_entity:
+        return JSONResponse(
+            content=error_response(
+                code=404, message=f"获取数据集样本信息失败: 样本'{sample_id}'不存在。"
+            ),
+            status_code=404,
+        )
+
+    return success_response(data=sample_entity, message="获取数据集样本信息成功。")
 
 
 @evaluation_router.delete("/{eval_id}/dataset/{sample_id}")
@@ -336,11 +414,14 @@ async def delete_dataset_sample(
     sample_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    sample_entity = await session.get(EvalDatasetEntity, sample_id)
+    sample_entity = await session.get(EvaluationDatasetEntity, sample_id)
 
     if not sample_entity:
         return JSONResponse(
-            content=error_response(code=404, message=f"删除数据样本失败: 数据集 {eval_id} 样本 '{sample_id}'不存在。"),
+            content=error_response(
+                code=404,
+                message=f"删除数据样本失败: 数据集 {eval_id} 样本 '{sample_id}'不存在。",
+            ),
             status_code=404,
         )
 
@@ -350,6 +431,8 @@ async def delete_dataset_sample(
     logger.info(f"Dataset Sample {sample_id} has been deleted.")
 
     return success_response(message=f"数据样本'{eval_id}'删除成功。")
+
+
 @evaluation_router.post("/{eval_id}/experiments")
 async def create_experiment(
     eval_id: str,
@@ -358,47 +441,70 @@ async def create_experiment(
 ):
     logger.info(f"Create experiment for {eval_id}.")
     if len(experiment_create.dataset_ids) == 0:
-        return error_response(code=400, message="没有选择任何数据集。")
+        return JSONResponse(
+            content=error_response(code=400, message="没有选择任何数据集。"),
+            status_code=400,
+        )
 
     try:
         import app.worker as background_worker
+
         dataset_results = await session.exec(
-            select(EvalDatasetEntity)
-            .where(EvalDatasetEntity.id.in_(experiment_create.dataset_ids))
-            .where(EvalDatasetEntity.eval_id == eval_id)
+            select(EvaluationDatasetEntity)
+            .where(EvaluationDatasetEntity.id.in_(experiment_create.dataset_ids))
+            .where(EvaluationDatasetEntity.eval_id == eval_id)
         )
         dataset_entities = dataset_results.all()
         if len(dataset_entities) == 0:
-            return error_response(code=400, message=f"没有找到评估任务 {eval_id} 的数据集。")
-        assert len(dataset_entities) == len(experiment_create.dataset_ids), "Some dataset IDs not found in the evaluation."
+            return JSONResponse(
+                content=error_response(
+                    code=400, message=f"没有找到评估任务 {eval_id} 的数据集。"
+                ),
+                status_code=400,
+            )
+        if len(dataset_entities) != len(experiment_create.dataset_ids):
+            missing_ids = set(experiment_create.dataset_ids) - {
+                d.id for d in dataset_entities
+            }
+            return JSONResponse(
+                content=error_response(
+                    code=400, message=f"以下样本ID不存在: {missing_ids}"
+                ),
+                status_code=400,
+            )
         experiment_entity = ExperimentEntity(
             eval_id=eval_id,
             name=experiment_create.name,
             samples_count=len(dataset_entities),
             run_config_id=experiment_create.run_config_id,
             description=experiment_create.description or "Experiment created via API",
-            status="pending"
+            status="pending",
         )
         session.add(experiment_entity)
         await session.commit()
         logger.info(f"创建实验 {experiment_entity} 成功.")
         exp_run_ids = []
         for dataset_id in experiment_create.dataset_ids:
-            exp_run_entity = ExperimentRunResultEntity(
+            exp_run_entity = ExperimentRunEntity(
                 experiment_id=experiment_entity.id,
                 dataset_id=dataset_id,
-                status="pending"
+                status="pending",
             )
             session.add(exp_run_entity)
             await session.commit()
             exp_run_ids.append(exp_run_entity.id)
-        background_worker.execute_evaluation_task.delay(eval_id, experiment_entity.id, exp_run_ids)
+        background_worker.execute_evaluation_task.delay(
+            eval_id, experiment_entity.id, exp_run_ids
+        )
 
         return success_response(data=experiment_entity, message="创建实验成功")
     except Exception as e:
-        logger.error(f"Failed to create experiment: {traceback.format_exc()}")
+        logger.error(f"创建实验失败: {traceback.format_exc()}")
         await session.rollback()
-        return error_response(message=f"Failed to create experiment: {e}")
+        return JSONResponse(
+            content=error_response(code=400, message=f"创建实验失败: {e}"),
+            status_code=400,
+        )
 
 
 @evaluation_router.get("/{eval_id}/experiments")
@@ -410,8 +516,9 @@ async def get_experiments(
 ):
     logger.info(f"Get experiments for {eval_id}.")
     total_results = await session.exec(
-        select(func.count())
-        .select_from(select(ExperimentEntity).where(ExperimentEntity.eval_id == eval_id))
+        select(func.count()).select_from(
+            select(ExperimentEntity).where(ExperimentEntity.eval_id == eval_id)
+        )
     )
     total_num = total_results.one_or_none()
     pagination = get_pagination_meta(page, size, total_num)
@@ -432,7 +539,9 @@ async def get_experiments(
             page=pagination.page,
             size=pagination.size,
         ),
-        message="获取评估实验列表成功")
+        message="获取评估实验列表成功",
+    )
+
 
 @evaluation_router.get("/{eval_id}/experiments/{exp_id}")
 async def get_experiment(
@@ -448,12 +557,11 @@ async def get_experiment(
     )
     experiment_entity = experiment_results.all()[0]
 
-    return success_response(
-        data=experiment_entity,
-        message="获取评估实验详情成功")
+    return success_response(data=experiment_entity, message="获取评估实验详情成功")
 
-@evaluation_router.get("/{eval_id}/experiments/{exp_id}/details")
-async def get_experiment_details(
+
+@evaluation_router.get("/{eval_id}/experiments/{exp_id}/runs")
+async def get_experiment_runs(
     eval_id: str,
     exp_id: str,
     page: int = Query(default=1, ge=1),
@@ -462,21 +570,27 @@ async def get_experiment_details(
 ):
     logger.info(f"Get experiment details for eval_id {eval_id}, exp_id {exp_id}.")
     total_results = await session.exec(
-        select(func.count())
-        .select_from(select(ExperimentRunResultEntity).where(ExperimentRunResultEntity.experiment_id == exp_id))
+        select(func.count()).select_from(
+            select(ExperimentRunEntity).where(
+                ExperimentRunEntity.experiment_id == exp_id
+            )
+        )
     )
     total_num = total_results.one_or_none()
     pagination = get_pagination_meta(page, size, total_num)
     experiment_results = await session.exec(
         select(
-            ExperimentRunResultEntity,
-            EvalDatasetEntity.input,
-            EvalDatasetEntity.expected_output,
-            EvalDatasetEntity.eval_metadata.label("dataset_metadata"),
+            ExperimentRunEntity,
+            EvaluationDatasetEntity.input,
+            EvaluationDatasetEntity.expected_output,
+            EvaluationDatasetEntity.eval_metadata.label("dataset_metadata"),
         )
-        .join(EvalDatasetEntity, ExperimentRunResultEntity.dataset_id == EvalDatasetEntity.id)
-        .where(ExperimentRunResultEntity.experiment_id == exp_id)
-        .order_by(ExperimentRunResultEntity.created_at.desc())
+        .join(
+            EvaluationDatasetEntity,
+            ExperimentRunEntity.dataset_id == EvaluationDatasetEntity.id,
+        )
+        .where(ExperimentRunEntity.experiment_id == exp_id)
+        .order_by(ExperimentRunEntity.created_at.desc())
         .offset(pagination.offset)
         .limit(size)
     )
@@ -497,7 +611,9 @@ async def get_experiment_details(
             page=pagination.page,
             size=pagination.size,
         ),
-        message="获取评估实验执行详情信息成功")
+        message="获取评估实验执行详情信息成功",
+    )
+
 
 @evaluation_router.delete("/{eval_id}/experiments/{exp_id}")
 async def delete_experiment(
@@ -509,7 +625,9 @@ async def delete_experiment(
     experiment = await session.get(ExperimentEntity, exp_id)
     if not experiment:
         return JSONResponse(
-            content=error_response(code=404, message=f"删除实验失败: 实验'{exp_id}'不存在。"),
+            content=error_response(
+                code=404, message=f"删除实验失败: 实验'{exp_id}'不存在。"
+            ),
             status_code=404,
         )
 
@@ -518,6 +636,7 @@ async def delete_experiment(
 
     logger.info(f"Experiment {exp_id} has been deleted.")
     return success_response(message=f"实验'{exp_id}'删除成功。")
+
 
 # evaluation run config
 @evaluation_router.post("/{eval_id}/configs")
@@ -540,7 +659,7 @@ async def create_run_config(
             enable_input_guardrail=run_config.enable_input_guardrail,
             enable_output_guardrail=run_config.enable_output_guardrail,
             guardrail_hint=run_config.guardrail_hint,
-            evaluator_config=run_config.evaluator_config.model_dump()
+            evaluator_config=run_config.evaluator_config.model_dump(),
         )
 
         session.add(run_config_entity)
@@ -548,12 +667,17 @@ async def create_run_config(
         logger.info(f"创建实验设置 {run_config_entity} 成功.")
         return success_response(data=run_config_entity, message="创建实验设置成功")
     except Exception as e:
-        logger.error(f"Failed to create run_config: {traceback.format_exc()}")
+        logger.error(f"创建实验设置失败: {traceback.format_exc()}")
         await session.rollback()
-        return error_response(message=f"Failed to create run_config: {e}")
+        return JSONResponse(
+            content=error_response(code=400, message=f"创建实验设置失败: {e}"),
+            status_code=400,
+        )
 
 
-@evaluation_router.put("/{eval_id}/configs/{config_id}", response_model=ResponseModel[EvalRunConfigEntity])
+@evaluation_router.put(
+    "/{eval_id}/configs/{config_id}", response_model=ResponseModel[EvalRunConfigEntity]
+)
 async def update_run_config(
     eval_id: str,
     config_id: str,
@@ -563,7 +687,9 @@ async def update_run_config(
     run_config = await session.get(EvalRunConfigEntity, config_id)
     if not run_config:
         return JSONResponse(
-            content=error_response(code=404, message=f"更新实验设置失败: '{config_id}'不存在。"),
+            content=error_response(
+                code=404, message=f"更新实验设置失败: '{config_id}'不存在。"
+            ),
             status_code=404,
         )
 
@@ -580,18 +706,27 @@ async def update_run_config(
         run_config.guardrail_hint = new_run_config.guardrail_hint
         run_config.evaluator_config = new_run_config.evaluator_config.model_dump()
 
-
         evaluation_provider.update(run_config)
         session.add(run_config)
         await session.commit()
         await session.refresh(run_config)
 
-        logger.info(f"Evaluation {eval_id} run config  {config_id} updated to {run_config}.")
+        logger.info(
+            f"Evaluation {eval_id} run config  {config_id} updated to {run_config}."
+        )
 
         return success_response(data=run_config, message="更新实验设置成功。")
     except Exception:
-        logger.error(f"Failed to update run config {config_id}: {traceback.format_exc()}")
-        return error_response(message=f"更新实验设置失败：{traceback.format_exc()}")
+        logger.error(
+            f"Failed to update run config {config_id}: {traceback.format_exc()}"
+        )
+        return JSONResponse(
+            content=error_response(
+                code=404, message=f"更新实验设置失败：{traceback.format_exc()}"
+            ),
+            status_code=404,
+        )
+
 
 @evaluation_router.get("/{eval_id}/configs")
 async def list_run_configs(
@@ -602,8 +737,9 @@ async def list_run_configs(
 ):
     logger.info(f"Get run_configs for {eval_id}.")
     total_results = await session.exec(
-        select(func.count())
-        .select_from(select(EvalRunConfigEntity).where(EvalRunConfigEntity.eval_id == eval_id))
+        select(func.count()).select_from(
+            select(EvalRunConfigEntity).where(EvalRunConfigEntity.eval_id == eval_id)
+        )
     )
     total_num = total_results.one_or_none()
     pagination = get_pagination_meta(page, size, total_num)
@@ -624,7 +760,8 @@ async def list_run_configs(
             page=pagination.page,
             size=pagination.size,
         ),
-        message="获取实验设置列表成功")
+        message="获取实验设置列表成功",
+    )
 
 
 @evaluation_router.get("/{eval_id}/configs/{config_id}")
@@ -642,12 +779,11 @@ async def get_configs(
     run_config_entities = run_config_results.all()
     if len(run_config_entities) > 0:
         return success_response(
-            data=run_config_entities[0],
-            message="获取实验设置详情成功")
+            data=run_config_entities[0], message="获取实验设置详情成功"
+        )
     else:
-        return success_response(
-            data=[],
-            message="获取实验设置详情成功")
+        return success_response(data=[], message="获取实验设置详情成功")
+
 
 @evaluation_router.delete("/{eval_id}/configs/{config_id}")
 async def delete_config(
@@ -659,7 +795,9 @@ async def delete_config(
     Run_config = await session.get(EvalRunConfigEntity, config_id)
     if not Run_config:
         return JSONResponse(
-            content=error_response(code=404, message=f"删除实验设置失败: '{config_id}'不存在。"),
+            content=error_response(
+                code=404, message=f"删除实验设置失败: '{config_id}'不存在。"
+            ),
             status_code=404,
         )
 

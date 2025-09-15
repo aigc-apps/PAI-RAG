@@ -54,8 +54,8 @@ class ExperimentEntity(SQLModel, table=True):
         sa_column=Column(DateTime)
     )
 
-class ExperimentRunResultEntity(SQLModel, table=True):
-    __tablename__ = "pai_experiment_run_result"
+class ExperimentRunEntity(SQLModel, table=True):
+    __tablename__ = "pai_experiment_run"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     experiment_id: str = Field(

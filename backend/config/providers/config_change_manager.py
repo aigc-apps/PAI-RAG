@@ -21,8 +21,8 @@ from db.models.knowledgebase.embedding import (
     EmbeddingModelEntity,
     EmbeddingType,
 )
-from db.models.evaluation.evaluation import EvalCreate, EvalEntity
-from db.models.evaluation.dataset import EvalDatasetEntity
+from db.models.evaluation.evaluation import EvaluationCreate, EvaluationEntity
+from db.models.evaluation.dataset import EvaluationDatasetEntity
 from sqlalchemy.exc import IntegrityError
 from rag.file.models.file_item import FileItem
 
@@ -123,18 +123,18 @@ class ConfigChangeManager:
     @with_async_db_session
     async def create_builtin_gaia_evaluation(self, session: AsyncSession):
         # create builtin GAIA evaluation entity if not exists
-        sql_results = await session.exec(select(EvalEntity).where(EvalEntity.name == "GAIA"))
-        evaluation_entities: List[EvalEntity] = sql_results.all()
+        sql_results = await session.exec(select(EvaluationEntity).where(EvaluationEntity.name == "GAIA"))
+        evaluation_entities: List[EvaluationEntity] = sql_results.all()
         if len(evaluation_entities) > 0:
             logger.info("Builtin GAIA evaluation already exists.")
             return
         logger.info("Creating builtin GAIA evaluation.")
-        gaia_evaluation = EvalCreate(
+        gaia_evaluation = EvaluationCreate(
             name="GAIA",
             description="GAIA评估",
             type="built-in"
         )
-        gaia_evaluation = EvalEntity.model_validate(gaia_evaluation)
+        gaia_evaluation = EvaluationEntity.model_validate(gaia_evaluation)
         try:
             evaluation_provider.add(gaia_evaluation)
             session.add(gaia_evaluation)
@@ -158,7 +158,7 @@ class ConfigChangeManager:
         )
         file_results = file_item.get_eval_dataset_from_jsonl_file()
         for line in file_results:
-            dataset_entity = EvalDatasetEntity(
+            dataset_entity = EvaluationDatasetEntity(
                 eval_id=gaia_evaluation.id,
                 input=line["input"],
                 expected_output=line.get("expected_output"),
