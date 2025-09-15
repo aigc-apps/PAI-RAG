@@ -157,7 +157,7 @@ class PaiKnowledgebaseClient:
                 await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
 
-            texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}\n\nchapter_name: {node.metadata['chapter_name']}" for node in nodes]
+            texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}\n\nchapter_name: {node.metadata.get('chapter_name', '')}" for node in nodes]
             embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
             for i in range(len(nodes)):
                 nodes[i].embedding = embeddings[i]
@@ -230,7 +230,7 @@ class PaiKnowledgebaseClient:
         embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
         )
-        texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}\n\nchapter_name: {node.metadata['chapter_name']}" for node in nodes]
+        texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}\n\nchapter_name: {node.metadata.get('chapter_name', '')}" for node in nodes]
         embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
         for i in range(len(nodes)):
             nodes[i].embedding = embeddings[i]
