@@ -141,6 +141,7 @@ start_frontend() {
 
   if [[ "$DEV_MODE" == false ]]; then
     echo "👉 启动前端服务 on port $FRONTEND_PORT"
+    export FRONTEND_PORT=$FRONTEND_PORT
     NEXT_PUBLIC_BACKEND_URL=http://localhost:$BACKEND_PORT npm run start  -- --port $FRONTEND_PORT &
   else
     npm install || { echo "错误: npm 安装失败"; exit 1; }
@@ -157,6 +158,7 @@ start_frontend() {
 start_api() {
   echo "👉 启动 API 实例 on port $BACKEND_PORT"
   # 示例：uvicorn app:app --port $port
+  export BACKEND_PORT=$BACKEND_PORT
   gunicorn -w $API_INSTANCE_COUNT -b "0.0.0.0:${BACKEND_PORT}" -c scripts/gunicorn.conf.py app.main:app --timeout 600 &
   API_PID=$!
 }
