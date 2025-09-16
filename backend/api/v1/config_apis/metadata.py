@@ -2,7 +2,6 @@
 import traceback
 from typing import List
 from fastapi import Depends, Query
-from fastapi.responses import JSONResponse
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.knowledgebase.file import KbFileEntity, MetadataEntryData
@@ -43,22 +42,13 @@ async def set_kb_metadata(
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            return JSONResponse(
-                content=error_response(code=400, message="创建元数据失败: 元数据名称已存在。"),
-                status_code=400,
-            )
+            return error_response(code=400, message="创建元数据失败: 元数据名称已存在。")
         else:
-            return JSONResponse(
-                content=error_response(code=400, message=f"创建元数据失败: {e}."),
-                status_code=400,
-            )
+            return error_response(code=400, message=f"创建元数据失败: {e}.")
     except Exception as e:
         logger.exception(f"创建元数据失败。\nException:{e}")
         await session.rollback()
-        return JSONResponse(
-            content=error_response(code=400, message=f"创建元数据失败: {e}."),
-            status_code=400,
-        )
+        return error_response(code=400, message=f"创建元数据失败: {e}.")
 
 @knowledgebase_router.get("/{kb_id}/metadata", response_model=ResponseModel[List[KbMetadataEntity]])
 async def list_metadata(
@@ -89,11 +79,7 @@ async def update_metadata(
         .where(KbMetadataEntity.kb_id == kb_id)
     )).first()
     if metadata_entity is None:
-        return JSONResponse(
-            content=error_response(code=400, message=f"更新元数据失败: 元数据'{metadata_id}'不存在。"),
-            status_code=400,
-        )
-
+        return error_response(code=400, message=f"更新元数据失败: 元数据'{metadata_id}'不存在。")
 
     metadata_entity.name = new_metadata_entity.name
     metadata_entity.value_type = new_metadata_entity.value_type
@@ -120,10 +106,7 @@ async def delete_metadata(
         .where(KbMetadataEntity.kb_id == kb_id)
     )).first()
     if metadata_entity is None:
-        return JSONResponse(
-            content=error_response(code=400, message=f"删除元数据失败: 元数据'{metadata_entity.id}'不存在。"),
-            status_code=400,
-        )
+        return error_response(code=400, message=f"删除元数据失败: 元数据'{metadata_entity.id}'不存在。")
 
     try:
         # TODO: 删除对应文件中的元数据
@@ -133,11 +116,7 @@ async def delete_metadata(
         return success_response(data=metadata_entity, message="删除元数据成功.")
     except Exception:
         logger.exception(f"删除元数据 {metadata_id} 失败: {traceback.format_exc()}.")
-        return JSONResponse(
-            content=error_response(code=500, message=f"删除元数据失败: {traceback.format_exc()}."),
-            status_code=500,
-        )
-
+        return error_response(code=500, message=f"删除元数据失败: {traceback.format_exc()}.")
 
 @knowledgebase_router.post("/{kb_id}/files/{file_id}/metadata", response_model=ResponseModel[KbFileEntity])
 async def set_file_metadata(
@@ -216,19 +195,10 @@ async def set_file_metadata(
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            return JSONResponse(
-                content=error_response(code=400, message="创建元数据失败: 元数据名称已存在。"),
-                status_code=400,
-            )
+            return error_response(code=400, message="创建元数据失败: 元数据名称已存在。")
         else:
-            return JSONResponse(
-                content=error_response(code=400, message=f"创建元数据失败: {e}."),
-                status_code=400,
-            )
+            return error_response(code=400, message=f"创建元数据失败: {e}.")
     except Exception as e:
         logger.exception(f"创建元数据失败。\nException:{e}")
         await session.rollback()
-        return JSONResponse(
-            content=error_response(code=400, message=f"创建元数据失败: {e}."),
-            status_code=400,
-        )
+        return error_response(code=400, message=f"创建元数据失败: {e}.")

@@ -286,21 +286,182 @@ export type SearchWebArgs = {
 
 type SearchWebResult = {
   result: {
-    text: string;
-    metadata: {
-      source: string;
-      file_url: string;
-      file_name: string;
-      host_name: string;
-      host_logo: string;
-      publish_time: string;
-    };
+    title: string;
+    content: string;
+    url: string;
+    favicon: string;
+    hostname: string;
+    publish_time: string;
     score: string;
   }[];
 };
 
+
+export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
+  toolName: 'tavily-websearch',
+  render: ({ args, status, result }) => {
+    console.log('TavilySearchTool 参数:', args);
+    console.log('TavilySearchTool 状态:', status);
+
+    if (status.type === 'running') {
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <Search className="size-4" /> 正在搜索网页中: {args.query}{' '}
+          </Button>
+        </div>
+      );
+    } else if (status.type === 'complete') {
+      if (!result) {
+        return (
+          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+            <GlobeIcon className="h-4 w-4" />
+            <span>未能获取搜索结果</span>
+          </div>
+        );
+      }
+      const search_result = JSON.parse(result) as SearchWebResult;
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                {' '}
+                <Search className="size-4" /> 完成网页搜索: {args.query}{' '}
+                (点击查看结果){' '}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>
+                  网页搜索结果 · {search_result?.result.length}
+                </SheetTitle>
+                <SheetDescription>{args.query}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="pl-6 pr-2">
+                  {search_result?.result.map((item, index) => (
+                    <div
+                      key={index}
+                      className="text-sm p-3 hover:bg-muted/50 rounded-md transition-colors"
+                    >
+                      <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 rounded-md transition-colors">
+                        {/* Logo与标题行 */}
+                        <div className="flex items-center gap-1">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+                            <img
+                              src={item.favicon}
+                              alt={item.hostname || ''}
+                              className="w-5 h-5 object-cover rounded-sm"
+                            />
+                          </div>
+
+                          {/* 标题链接 */}
+                          <a
+                            href={item.url}
+                            className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
+                          >
+                            {item.title}
+                          </a>
+                        </div>
+
+                        {/* 内容区域 */}
+                        <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
+                          {item.content}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
+  },
+});
+
+
+
+export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
+  toolName: 'planning-tool',
+  render: ({ args, status, result }) => {
+
+    if (status.type === 'running') {
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Button
+            variant="link"
+            className="flex items-center gap-2 px-4 text-blue-800"
+          >
+            <Search className="size-4" /> 正在制定执行计划
+          </Button>
+        </div>
+      );
+    } else if (status.type === 'complete') {
+      if (!result) {
+        return (
+          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+            <GlobeIcon className="h-4 w-4" />
+            <span>制定计划失败</span>
+          </div>
+        );
+      }
+      const plan_result = JSON.parse(result);
+      return (
+        <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="link"
+                className="flex items-center gap-2 px-4 text-blue-800"
+              >
+                {' '}
+                <Search className="size-4" /> 执行计划完成
+                (点击查看结果){' '}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>
+                  执行计划 - 共{plan_result?.steps.length}步 
+                </SheetTitle>
+                <SheetDescription>{args.query}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="pl-3 pr-2">
+                  {plan_result?.steps.map((item, index) => (
+                    <div
+                      key={index}
+                      className="text-sm p-1 hover:bg-muted/50 rounded-md transition-colors py-3"
+                    >
+                        {/* 标题 */}
+                        <div
+                          className="font-medium text-foreground hover:text-primary transition-colors bg-gray-50 p-1 rounded"
+                        >
+                          {index + 1}. {item}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
+  },
+});
+
 export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
-  toolName: 'search-web',
+  toolName: 'aliyun-websearch',
   render: ({ args, status, result }) => {
     console.log('SearchWebToolUI 参数:', args);
     console.log('SearchWebToolUI 状态:', status);
@@ -358,24 +519,24 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
                         <div className="flex items-center gap-1">
                           <div className="flex-shrink-0 w-8 h-8 rounded-md bg-muted flex items-center justify-center">
                             <img
-                              src={item.metadata['host_logo']}
-                              alt={item.metadata['host_name']}
+                              src={item.favicon}
+                              alt={item.hostname || ''}
                               className="w-5 h-5 object-cover rounded-sm"
                             />
                           </div>
 
                           {/* 标题链接 */}
                           <a
-                            href={item.metadata['file_url']}
+                            href={item.url}
                             className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
                           >
-                            {item.metadata['file_name']}
+                            {item.title}
                           </a>
                         </div>
 
                         {/* 内容区域 */}
                         <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
-                          {item.text}
+                          {item.content}
                         </p>
                       </div>
                     </div>
@@ -616,16 +777,18 @@ export type SearchKbArgs = {
 
 type SearchKbResult = {
   result: {
-    text: string;
+    title: string;
+    content: string;
+    url: string;
+    favicon: string;
+    hostname: string;
+    publish_time: string;
     score: string;
-    metadata: {
-      file_url: string;
-      file_name: string;
-    };
     images: {
       url: string;
       desc: string;
     }[];
+
   }[];
 };
 
@@ -688,13 +851,15 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
                         className="border rounded-md px-4"
                       >
                         <AccordionTrigger>
-                          Chunk{index + 1}: {item.metadata["file_name"]}{" "}
+                          Chunk{index + 1}: {item.title}{" "} 
                           <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 shadow-none rounded-full">
                             {parseFloat(item.score).toFixed(4)}
                           </Badge>
                         </AccordionTrigger>
                         <AccordionContent>
-                          <div>{item.text}</div>
+                          <a href={item.url} className='text-blue-600 hover:underline'>document link</a>
+                          <div>{item.content}</div>
+                          
                           {item?.images.map((meta, index) => (
                             <PhotoProvider
                               key={index}
@@ -731,6 +896,8 @@ const ToolUIWrapper: FC = () => {
     <>
       {/* <MapsGeoToolUI /> */}
       {/* <MapsDirectionDrivingToolUI /> */}
+      <PlanningToolUI />
+      <TavilySearchToolUI />
       <SearchWebToolUI />
       <ThinkToolUI />
       <ReadFileToollUI />

@@ -1,7 +1,7 @@
 from typing import Optional
 import uuid
 from pydantic import model_validator
-from sqlmodel import Field, SQLModel, Column, Boolean
+from sqlmodel import Field, SQLModel
 from common.knowledgebase.constants import DEFAULT_EMBEDDING_MODEL
 from enum import Enum
 
@@ -19,18 +19,8 @@ class EmbeddingModel(SQLModel):
     type: EmbeddingType = Field(default=EmbeddingType.LOCAL)
     embed_batch_size: int = Field(default=10)
     model_id: str = Field(default=None, unique=True)
-    is_ready: Optional[bool] = Field(
-        sa_column=Column(Boolean, default=False),
-    ) # 是否已经加载完成，用于本地模型下载
-    is_default: Optional[bool] = Field(
-        sa_column=Column(Boolean, default=False),
-    )
-
-    @model_validator(mode='after')
-    def set_is_ready(self) -> 'EmbeddingModel':
-        if self.embed_batch_size <= 0:
-            self.embed_batch_size = 10
-        return self
+    is_ready: Optional[bool] = Field(default=False) # 是否已经加载完成，用于本地模型下载
+    is_default: Optional[bool] = Field(default=False)
 
 
 class EmbeddingModelCreate(SQLModel):
@@ -44,6 +34,16 @@ class EmbeddingModelCreate(SQLModel):
     is_ready: Optional[bool] = False
     is_default: Optional[bool] = False
 
+
+    @model_validator(mode='after')
+    def set_is_ready(self) -> 'EmbeddingModelCreate':
+        if self.embed_batch_size <= 0:
+            self.embed_batch_size = 10
+
+        if self.dimension is not None and self.dimension < 0:
+            self.dimension = None
+
+        return self
 
 
 class EmbeddingModelRead(EmbeddingModel):

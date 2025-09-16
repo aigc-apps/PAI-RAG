@@ -1,5 +1,6 @@
 import re
 import json
+from chat.llm.llm_model import PaiLlm
 from fastapi import APIRouter, Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.db_context import get_session
@@ -10,14 +11,12 @@ from sqlalchemy.exc import IntegrityError
 from typing import List
 from sqlmodel import select
 from db.models.knowledgebase.file import KbFileEntity
-from llama_index.core.llms import LLM
 from config.providers.llm_provider import llm_provider
 from db.models.llm import LlmModelEntity
 from api.response_model import success_response, error_response, ResponseModel
 from chat.prompts import DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
 from utils.message_utils import get_content_from_messages
 from llama_index.core.base.llms.types import (
-    ChatMessage,
     MessageRole,
 )
 
@@ -124,21 +123,19 @@ async def update_thread_title(
     try:
         llm_sql_results = await session.exec(select(LlmModelEntity))
         llm_entities = llm_sql_results.all()
-        llm: LLM = llm_provider.get_llm_model(model_id=llm_entities[0].model_id)
+        llm: PaiLlm = llm_provider.get_llm_model(model_id=llm_entities[0].model_id)
         generate_title_prompt = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE.format(
             chat_history="\n".join([f"{msg.role}: {get_content_from_messages(msg.content)}" for msg in messages])
         )
-        chat_response_gen = await llm.astream_chat(
-            messages=[
-                ChatMessage(
-                    role=MessageRole.USER,
-                    content=generate_title_prompt,
-                )
-            ]
+        chat_response_gen = await llm.astream(
+            messages=[{
+                "role": MessageRole.USER,
+                "content": generate_title_prompt,
+            }]
         )
         response_text = ""
-        async for response in chat_response_gen:
-            response_text += response.delta
+        async for chunk in chat_response_gen:
+            response_text += chunk.delta
 
         extracted_content = re.sub(r"<think>.*?</think>", "", response_text, flags=re.DOTALL)
         logger.info(f"Generated title: {extracted_content}")

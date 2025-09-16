@@ -1,7 +1,6 @@
 ### Embedding configuration API ###
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
@@ -33,7 +32,7 @@ async def create_chatbot(
 
         chatbot_provider.add(chatbot)
         await config_change_manager.notify_change_async(
-            event_source=ChangeEventSource.EMBEDDING,
+            event_source=ChangeEventSource.CHATBOT,
             source_id=chatbot.id,
             event_type=ChangeEventType.ADD
         )
@@ -43,23 +42,14 @@ async def create_chatbot(
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            return JSONResponse(
-                status_code=400,
-                content=error_response(
+            return error_response(
                     code=400, message=f"创建应用失败: '{chatbot.app_id}'已存在."
-                ),
-            )
+                )
         else:
-            return JSONResponse(
-                status_code=400,
-                content=error_response(code=400, message=f"创建应用失败: '{e}'."),
-            )
+            return error_response(code=400, message=f"创建应用失败: '{e}'.")
     except Exception as e:
         await session.rollback()
-        return JSONResponse(
-            status_code=400,
-            content=error_response(code=400, message=f"创建应用失败: '{e}'."),
-        )
+        return error_response(code=400, message=f"创建应用失败: '{e}'.")
 
 
 @app_router.get("")
@@ -94,13 +84,9 @@ async def get_chatbots(
         )
         app = (await session.exec(statement)).first()
         if not app:
-            return JSONResponse(
-                content=error_response(
+            return error_response(
                     code=404, message=f"查询应用失败: '{app_id}'不存在。"
-                ),
-                status_code=404,
-            )
-
+                )
         return success_response(data=app, message="查询应用成功。")
 
 @app_router.put("/{id}", response_model=ResponseModel[ChatBotEntity])
@@ -111,12 +97,9 @@ async def update_chatbot(
 ):
     chatbot = await session.get(ChatBotEntity, id)
     if not chatbot:
-        return JSONResponse(
-            content=error_response(
+        return error_response(
                 code=404, message=f"查询应用失败: '{id}'不存在。"
-            ),
-            status_code=404,
-        )
+            )
 
     logger.info(f"正在更新应用 {id} to {new_chatbot}.")
     chatbot.app_id = new_chatbot.app_id or chatbot.app_id
@@ -130,6 +113,7 @@ async def update_chatbot(
     chatbot.enable_input_guardrail = new_chatbot.enable_input_guardrail
     chatbot.enable_output_guardrail = new_chatbot.enable_output_guardrail
     chatbot.guardrail_hint = new_chatbot.guardrail_hint
+    chatbot.prompts = new_chatbot.prompts or chatbot.prompts
 
     session.add(chatbot)
     await session.commit()
@@ -139,7 +123,7 @@ async def update_chatbot(
     chatbot_provider.update(chatbot)
 
     await config_change_manager.notify_change_async(
-        event_source=ChangeEventSource.EMBEDDING,
+        event_source=ChangeEventSource.CHATBOT,
         source_id=chatbot.id,
         event_type=ChangeEventType.UPDATE,
     )
@@ -156,18 +140,15 @@ async def delete_chatbot(
 ):
     chatbot = await session.get(ChatBotEntity, id)
     if not chatbot:
-        return JSONResponse(
-            content=error_response(
+        return error_response(
                 code=404, message=f"删除应用失败: 应用'{id}'不存在。"
-            ),
-            status_code=404,
-        )
+            )
 
     await session.delete(chatbot)
     await session.commit()
     chatbot_provider.delete(id)
     await config_change_manager.notify_change_async(
-        event_source=ChangeEventSource.EMBEDDING,
+        event_source=ChangeEventSource.CHATBOT,
         source_id=id,
         event_type=ChangeEventType.DELETE,
     )

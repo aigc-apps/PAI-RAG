@@ -224,6 +224,7 @@ export class MyModelAdapter implements ChatModelAdapter {
             }
           }
           if (chunk?.actions) {
+            reasoning_content = ""; // 清空思考内容
             for (const toolCall of chunk.actions) {
               const toolCallId = toolCall.id;
               const toolCallName = toolCall.function?.name?.replace(/search-knowledgebase.*/, "search-knowledgebase");

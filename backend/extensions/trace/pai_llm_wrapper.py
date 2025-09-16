@@ -9,8 +9,8 @@ from opentelemetry.trace import set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 
-from extensions.trace import context as trace_context
 from extensions.trace.utils import pydantic_to_dict
+from extensions.trace import context as trace_context
 
 from loguru import logger
 from extensions.trace.tracer import get_tracer
@@ -37,8 +37,7 @@ REASONING_CONTENT = "output.reasoning_content"
 STATUS_OK = Status(StatusCode.OK)
 
 
-
-def pai_agent_wrapper(func):
+def pai_llm_wrapper(func):
     """decorator to capture input & output string of entry point (handle_chat in our case)."""
 
     @wraps(func)
@@ -47,12 +46,9 @@ def pai_agent_wrapper(func):
         if os.getenv("TRACING_ENABLED", "false") != "true":
             return await func(self, *args, **kwargs)
 
-
         try:
             request_text = "[unknown]"
-            state = kwargs.get("state")
-            messages = state.messages if state else []
-            # extract user input text
+            messages = kwargs.get("messages")
             for message in reversed(messages):
                 if message["role"] == "user":
                     request_text = ""
@@ -69,14 +65,16 @@ def pai_agent_wrapper(func):
             logger.warning(f"Failed to extract request text: {e}")
 
         span = get_tracer().start_span(func.__qualname__)
+        span.set_attribute(GEN_AI_MODEL, self.model)
         span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
 
         tools = kwargs.get("tools")
         if tools:
             span.set_attribute(TOOLS, json.dumps(pydantic_to_dict(tools), ensure_ascii=False))
 
+        span.set_attribute(TEMPERATURE, self.temperature)
         span.set_attribute(INPUT_VALUE, request_text)
-        span.set_attribute(GEN_AI_SPAN_KIND, OpenInferenceSpanKindValues.CHAIN.value)
+        span.set_attribute(GEN_AI_SPAN_KIND, OpenInferenceSpanKindValues.LLM.value)
         for k, v in trace_context.get_context_vars():
             if v:
                 span.set_attribute(k, v)
@@ -87,6 +85,7 @@ def pai_agent_wrapper(func):
         try:
             response_gen = await func(self, *args, **kwargs)
             response_gen = cast(ChatResponseGenerator, response_gen)
+
             async def wrapped_generator():
                 usage = None
                 final_output = ""
