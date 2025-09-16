@@ -1,5 +1,3 @@
-
-
 import json
 from typing import Any, Dict
 from chat.agent.actor import Actor

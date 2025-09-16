@@ -1,5 +1,3 @@
-
-
 from typing import List
 from chat.llm.llm_model import PaiLlm, ChatResponseGenerator, ChatCompletionToolParam
 from chat.agent.state import AgentState
