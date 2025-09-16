@@ -303,7 +303,7 @@ class ASTTreeBuilder:
     def handle_image(self, node: Image):
         image_url = node.src
         alt_text = self.render_span_tokens(node.children)
-        content = f"图片链接: {image_url}\n图片描述: {alt_text}"
+        content = f"![]({image_url})\n上面图片的描述: {alt_text}"
         new_node = TreeNode(
             level=self.stack[-1].level + 1, category="image", content=content
         )
