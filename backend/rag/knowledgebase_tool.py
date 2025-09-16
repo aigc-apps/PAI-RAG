@@ -157,7 +157,7 @@ class PaiKnowledgebaseClient:
                 await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
 
-            texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}\n\nchapter_name: {node.metadata.get('chapter_name', '')}" for node in nodes]
+            texts_to_embed = self.get_node_texts_for_embedding(nodes)
             embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
             for i in range(len(nodes)):
                 nodes[i].embedding = embeddings[i]
@@ -219,6 +219,18 @@ class PaiKnowledgebaseClient:
         )
 
 
+    def get_node_texts_for_embedding(self, nodes) -> list[str]:
+        texts = []
+        for node in nodes:
+            base_text = f"{node.text}\n\nfile_name: {node.metadata['file_name']}"
+            chapter_name = node.metadata.get('chapter_name', '').strip()
+            if chapter_name:
+                base_text += f"\n\nchapter_name: {chapter_name}"
+
+            texts.append(base_text)
+        return texts
+
+
     async def ainsert_chunks_to_vectordb(
         self,
         kb_id: str,
@@ -230,7 +242,7 @@ class PaiKnowledgebaseClient:
         embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
         )
-        texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}\n\nchapter_name: {node.metadata.get('chapter_name', '')}" for node in nodes]
+        texts_to_embed = self.get_node_texts_for_embedding(nodes)
         embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
         for i in range(len(nodes)):
             nodes[i].embedding = embeddings[i]

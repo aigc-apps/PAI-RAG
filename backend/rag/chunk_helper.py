@@ -2,7 +2,7 @@ from typing import List
 from chat.openai.openai_like import OpenAILike
 from loguru import logger
 from sqlalchemy import delete
-from sqlmodel import select, update
+from sqlmodel import select, update, and_
 from db.encrypt_utils import decrypt_key
 from config.providers.embedding_provider import create_embedding_model
 from db.models.llm import LlmModelEntity
@@ -42,7 +42,10 @@ async def get_multimodal_llm_from_db(
     session: AsyncSession,
 ) -> OpenAILike:
     config = (await session.exec(
-        select(LlmModelEntity).where(LlmModelEntity.vision_support and LlmModelEntity.enabled)
+        select(LlmModelEntity).where(and_(
+                LlmModelEntity.vision_support,
+                LlmModelEntity.enabled
+            ))
     )).first()
 
     if not config:
