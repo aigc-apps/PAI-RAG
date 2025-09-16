@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from db.models.knowledgebase.metadata import KbMetadataEntity, FileMetadataEntity
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
+from rag.file_item_utils import to_file_entity
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.knowledgebase.chunk import KbChunkEntity, KbChunkModel, create_text_node_from_chunk
 from db.models.knowledgebase.file import KbFileEntity
@@ -23,12 +24,12 @@ from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
 from config.providers.embedding_provider import embedding_provider
 from config.providers.knowledgebase_provider import knowledgebase_provider
-from rag.file.store.file_store_helper import file_store
+from pairag.file.store.file_store_helper import file_store
 from api.response_model import ResponseModel, PagedResult, success_response, error_response
 from rag.knowledgebase_tool import kb_client
 from loguru import logger
 import re
-from rag.file.models.file_item import FileItem
+from pairag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
 
 knowledgebase_router = APIRouter()
@@ -270,7 +271,7 @@ async def upload_files(
                 )
             ).first()
             if not file_entity:
-                file_entity = file_item.to_file_entity()
+                file_entity = to_file_entity(file_item)
             else:
                 file_entity.file_md5 = file_item.file_md5
                 file_entity.file_size = file_item.file_size

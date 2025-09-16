@@ -9,8 +9,9 @@ from db.models.knowledgebase.knowledgebase import (
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.db_context import get_session
 from config.providers.knowledgebase_provider import knowledgebase_provider
-from rag.file.store.file_store_helper import file_store
-from rag.file.models.file_item import FileItem
+from pairag.file.store.file_store_helper import file_store
+from pairag.file.models.file_item import FileItem
+from rag.file_item_utils import to_file_entity
 from db.models.knowledgebase.file import KbFileEntity
 from api.response_model import success_response, error_response
 from common.knowledgebase.types import FileStatus
@@ -71,7 +72,7 @@ async def create_attachment_file(
         file_path=destination_file_path,
         kb_id=knowledgebase.id,
     )
-    file_entity : KbFileEntity = file_item.to_file_entity(file_id)
+    file_entity : KbFileEntity = to_file_entity(file_item)
     session.add(file_entity)
     await session.commit()
     await kb_client.process_file_async(file_entity.id, True)
