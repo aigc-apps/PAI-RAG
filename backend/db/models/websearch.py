@@ -3,18 +3,21 @@ from sqlmodel import Field, SQLModel
 
 
 class WebSearchConfig(SQLModel):
-    type: str = Field(default=None)
+    type: str = Field(default=None) # tavily, aliyun
     search_count: int = Field(default=10)
     endpoint: str = Field(default=None)
 
 
 class WebSearchConfigRead(WebSearchConfig):
     id: str = Field(default=None)
+    is_aliyun_empty: bool = Field(default=False)
+    is_tavily_empty: bool = Field(default=False)
 
 
 class WebSearchConfigCreate(WebSearchConfig):
     access_key_id: str = Field(default=None)
     access_key_secret: str = Field(default=None)
+    tavily_api_key: str = Field(default=None)
 
 
 class WebSearchConfigEntity(WebSearchConfig, table=True):
@@ -23,3 +26,4 @@ class WebSearchConfigEntity(WebSearchConfig, table=True):
     id: str = Field(default_factory=lambda x: str(uuid.uuid4().hex), primary_key=True)
     encrypted_access_key_id: str = Field(default=None)
     encrypted_access_key_secret: str = Field(default=None)
+    encrypted_tavily_api_key: str = Field(default=None)

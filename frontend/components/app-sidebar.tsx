@@ -100,9 +100,6 @@ export function AppSidebar() {
                   <Link href="/config/search"><Search /> 搜索</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/prompt"><UserCog /> Prompt</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
                   <Link href="/config/tracing"><Wrench /> 链路追踪</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>

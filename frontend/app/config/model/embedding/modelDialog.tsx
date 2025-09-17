@@ -43,7 +43,7 @@ interface EmbConfig {
   type: string;
   api_key: string;
   endpoint: string;
-  dimension: number;
+  dimension: number | undefined;
   embed_batch_size: number;
   is_ready: boolean;
   is_default: boolean;
@@ -71,6 +71,10 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
   const handleSubmit = async () => {
     setSaveErrorMsg('');
     const is_api_model = emb.type != 'local';
+    if (emb.dimension === 0) emb.dimension = undefined;
+
+    console.log('handleSubmit', emb, is_api_model);
+
     if (
       is_api_model &&
       (!emb.model_id ||
@@ -261,7 +265,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 id="dimension"
                 type="number"
                 placeholder="向量维度"
-                defaultValue={emb?.dimension || 'null'}
+                defaultValue={emb?.dimension}
                 onChange={(e) =>
                   setEmb({
                     ...emb,

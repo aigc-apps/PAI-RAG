@@ -1,7 +1,6 @@
 ### Reranker configuration API ###
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
@@ -47,23 +46,14 @@ async def create_reranker(
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            return JSONResponse(
-                status_code=400,
-                content=error_response(
+            return error_response(
                     code=400, message=f"创建reranker模型失败: '{reranker.model_name}'已存在."
-                ),
-            )
+                )
         else:
-            return JSONResponse(
-                status_code=400,
-                content=error_response(code=400, message=f"创建reranker模型失败: '{e}'."),
-            )
+            return error_response(code=400, message=f"创建reranker模型失败: '{e}'.")
     except Exception as e:
         await session.rollback()
-        return JSONResponse(
-            status_code=400,
-            content=error_response(code=400, message=f"创建reranker模型失败: '{e}'."),
-        )
+        return error_response(code=400, message=f"创建reranker模型失败: '{e}'.")
 
 
 @reranker_router.get("")
@@ -102,12 +92,9 @@ async def get_rerankers(
         )
         reranker_model = (await session.exec(statement)).first()
         if not reranker_model:
-            return JSONResponse(
-                content=error_response(
+            return error_response(
                     code=404, message=f"查询reranker模型失败: 模型'{model_name}'不存在。"
-                ),
-                status_code=404,
-            )
+                )
 
         return success_response(data=reranker_model, message="查询reranker模型成功。")
 
@@ -121,12 +108,9 @@ async def update_reranker(
     reranker_model = await session.get(RerankerModelEntity, reranker_id)
 
     if not reranker_model:
-        return JSONResponse(
-            content=error_response(
+        return error_response(
                 code=404, message=f"查询reranker失败: 模型'{reranker_id}'不存在。"
-            ),
-            status_code=404,
-        )
+            )
 
     logger.info(f"Updating Reranker {reranker_id} to {new_reranker}.")
     reranker_model.model_id = new_reranker.model_id or reranker_model.model_id
@@ -159,12 +143,9 @@ async def delete_reranker(
 ):
     reranker_model = await session.get(RerankerModelEntity, reranker_id)
     if not reranker_model:
-        return JSONResponse(
-            content=error_response(
+        return error_response(
                 code=404, message=f"删除reranker失败: 模型'{reranker_id}'不存在。"
-            ),
-            status_code=404,
-        )
+            )
     await session.delete(reranker_model)
     await session.commit()
     await config_change_manager.notify_change_async(
