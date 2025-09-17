@@ -1,9 +1,9 @@
 // chartUtils.ts
-import { ExperimentDetailsItem } from '@/app/evaluation/[datasetId]/types';
+import { ExperimentSampleDetails } from '@/app/evaluation/[datasetId]/types';
 
 export type StatusKey = 'success' | 'failed' | 'running' | 'pending';
 
-export const getScoreDistributionData = (allExpItems: ExperimentDetailsItem[]) => {
+export const getScoreDistributionData = (allExpItems: ExperimentSampleDetails[]) => {
   const ranges = [
     { range: "0-0.2", min: 0, max: 0.2, count: 0 },
     { range: "0.2-0.4", min: 0.2, max: 0.4, count: 0 },
@@ -22,7 +22,7 @@ export const getScoreDistributionData = (allExpItems: ExperimentDetailsItem[]) =
   return ranges.map(r => ({ range: r.range, count: r.count }));
 };
 
-export const getStatusDistributionData = (allExpItems: ExperimentDetailsItem[]) => {
+export const getStatusDistributionData = (allExpItems: ExperimentSampleDetails[]) => {
   const statusCount: Record<StatusKey, number> = {
     success: 0,
     failed: 0,
@@ -46,11 +46,11 @@ export const STATUS_COLORS: Record<StatusKey, string> = {
   pending: "#f59e0b", // amber-500
 };
 
-export const hasTimingData = (allExpItems: ExperimentDetailsItem[]) => {
+export const hasTimingData = (allExpItems: ExperimentSampleDetails[]) => {
   return allExpItems.some(item => item.started_at && item.updated_at);
 };
 
-export const getAverageTime = (allExpItems: ExperimentDetailsItem[]) => {
+export const getAverageTime = (allExpItems: ExperimentSampleDetails[]) => {
   const formatUTC = (str: string | null) =>
     str ? str.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z' : '';
   const validDurations = allExpItems
@@ -68,7 +68,7 @@ export const getAverageTime = (allExpItems: ExperimentDetailsItem[]) => {
   return avg.toFixed(2);
 };
 
-export const getMinTime = (allExpItems: ExperimentDetailsItem[]) => {
+export const getMinTime = (allExpItems: ExperimentSampleDetails[]) => {
   const formatUTC = (str: string | null) =>
     str ? str.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z' : '';
   const validDurations = allExpItems
@@ -85,7 +85,7 @@ export const getMinTime = (allExpItems: ExperimentDetailsItem[]) => {
   return Math.min(...validDurations).toFixed(2);
 };
 
-export const getMaxTime = (allExpItems: ExperimentDetailsItem[]) => {
+export const getMaxTime = (allExpItems: ExperimentSampleDetails[]) => {
   const formatUTC = (str: string | null) =>
     str ? str.replace(' ', 'T').replace(/\.\d+$/, '') + 'Z' : '';
   const times = allExpItems
@@ -99,7 +99,7 @@ export const getMaxTime = (allExpItems: ExperimentDetailsItem[]) => {
   return Math.max(...times).toFixed(2);
 };
 
-export const getAverageScore = (allExpItems: ExperimentDetailsItem[]) => {
+export const getAverageScore = (allExpItems: ExperimentSampleDetails[]) => {
   const validScores = allExpItems
     .filter(item => item.status !== 'pending' && item.status !== 'running')
     .map(item => item.score)

@@ -53,9 +53,11 @@ export interface ExperimentItem {
   updated_at: string;
 }
 
-export interface ExperimentDetailsItem {
+export interface ExperimentSampleDetails {
   id: string
+  experiment_id: string
   dataset_id: string
+  sample_id: string
   input: string
   expected_output: string
   actual_output: string

@@ -89,7 +89,7 @@ import {
   getAverageScore,
   type StatusKey
 } from '@/app/evaluation/components/chart-utils';
-import { ExperimentDetailsItem } from '@/app/evaluation/[datasetId]/types';
+import { ExperimentSampleDetails } from '@/app/evaluation/[datasetId]/types';
 import { SampleDetailDialog } from '@/app/evaluation/components/sample-detail-dialog';
 import { SampleItem } from '@/app/evaluation/[datasetId]/types';
 
@@ -116,7 +116,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   const [evaluatorConfig, setEvaluatorConfig] = useState<EvaluatorConfig>();
 
   // 数据状态
-  const [allExpItems, setAllItems] = useState<ExperimentDetailsItem[]>([]);
+  const [allExpItems, setAllItems] = useState<ExperimentSampleDetails[]>([]);
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
 
@@ -187,7 +187,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
       const firstPageRes = await fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=1&size=${tmpPageSize}`);
       if (!firstPageRes.ok) throw new Error('获取评估实验列表失败');
       const json_data = await firstPageRes.json();
-      const tmpAllItems: ExperimentDetailsItem[] = [];
+      const tmpAllItems: ExperimentSampleDetails[] = [];
 
       for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
         console.log("加载所有数据，第", curPage, "页");
@@ -767,9 +767,9 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                           <TableCell className="font-medium">
                             <Button
                               variant="link"
-                              onClick={() => handleViewSample(sample.dataset_id)}
+                              onClick={() => handleViewSample(sample.sample_id)}
                             >
-                               {sample.dataset_id.substring(0,10)}...
+                               {sample.sample_id.substring(0,10)}...
                             </Button>
                             </TableCell>
                           <TableCell className="whitespace-normal break-words min-w-[250px] max-w-[400px] py-2">
