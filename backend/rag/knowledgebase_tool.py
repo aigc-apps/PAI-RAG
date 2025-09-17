@@ -343,6 +343,7 @@ class PaiKnowledgebaseClient:
         file_ids = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
+                images = []
                 file_ids.append(node.metadata["doc_id"])
                 origin_text = node.text
                 pattern = MARKDOWN_IMAGE_PATTERN
@@ -350,7 +351,9 @@ class PaiKnowledgebaseClient:
                 for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
+                    images.append({"url": src, "desc": origin_text})
                 node.text = origin_text
+                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
 
         file_source_map = await get_file_id_source_map(kb_id=knowledge_id, file_ids=file_ids)
@@ -420,13 +423,16 @@ class PaiKnowledgebaseClient:
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
+                images = []
                 origin_text = node.text
                 pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text)
                 for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
+                    images.append({"url": src, "desc": origin_text})
                 node.text = origin_text
+                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
         logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
         return result_nodes
@@ -441,11 +447,6 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
     result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id, user_id=user_id)
     records = []
     for score_node in result_nodes:
-        images = []
-        origin_text = score_node.node.get_content()
-        pattern = MARKDOWN_IMAGE_PATTERN
-        matches = re.findall(pattern, origin_text)
-        images = [{"url": src, "desc": alt} for alt, src in matches]
         records.append({
             "text": score_node.node.get_content(),
             "metadata": {
@@ -454,7 +455,7 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
                 "file_source": score_node.node.metadata.get("file_source", "")
             },
             "score": score_node.score,
-            "images": images
+            "images": json.loads(score_node.node.metadata.get("images_info", []))
         })
     return json.dumps({"result": records}, ensure_ascii=False)
 
