@@ -43,6 +43,7 @@ import json
 from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 from typing import Annotated
 MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
+from chat.tools.search_result import SearchResult
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -447,16 +448,17 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
     result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id, user_id=user_id)
     records = []
     for score_node in result_nodes:
-        records.append({
-            "text": score_node.node.get_content(),
-            "metadata": {
-                "file_name": score_node.node.metadata.get("file_name", ""),
-                "file_url": file_store.get_url(score_node.node.metadata.get("file_path", "")),
-                "file_source": score_node.node.metadata.get("file_source", "")
-            },
-            "score": score_node.score,
-            "images": json.loads(score_node.node.metadata.get("images_info", []))
-        })
+        file_url = score_node.node.metadata.get("file_source")
+        if not file_url:
+            file_url = file_store.get_url(score_node.node.metadata.get("file_path", ""))
+        records.append(
+            SearchResult(
+                score=score_node.score,
+                content=score_node.node.get_content(),
+                images=json.loads(score_node.node.metadata.get("images_info", [])),
+                url=file_url,
+                title=score_node.node.metadata.get("file_name", ""),
+            ).model_dump())
     return json.dumps({"result": records}, ensure_ascii=False)
 
 

@@ -19,6 +19,7 @@ class ChatBotCreate(SQLModel):
     enable_input_guardrail: Optional[bool] = Field(default=False)
     enable_output_guardrail: Optional[bool] = Field(default=False)
     guardrail_hint: Optional[str] = Field(default=None)
+    prompts: Optional[dict] = Field(default={})
 
 
     @field_validator("app_id")
@@ -42,6 +43,7 @@ class ChatBotEntity(ChatBotCreate, table=True):
     id: str = Field(primary_key=True, default_factory=lambda: str(uuid.uuid4().hex))
     mcp_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     kb_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    prompts: Optional[dict] = Field(default_factory=dict, sa_column=Column(JSON))
 
 
     updated_at: datetime = Field(
