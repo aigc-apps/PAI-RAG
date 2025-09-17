@@ -78,7 +78,7 @@ class ConfigChangeManager:
             logger.info("Default embedding model already exists.")
             if not embedding_entities[0].is_ready:
                 import app.worker as background_worker
-                background_worker.download_model.delay(model_id=embedding_entities[0].id, model_name=embedding_entities[0].model_name)
+                background_worker.download_model.delay(id=embedding_entities[0].id, model_name=embedding_entities[0].model_name)
             return
         logger.info("Creating default embedding model.")
         embedding_model = EmbeddingModelCreate(
@@ -102,7 +102,7 @@ class ConfigChangeManager:
             )
             logger.info("Default embedding model added to database. Starting worker to download model...")
             import app.worker as worker
-            worker.download_model.delay(model_id=default_embedding_model.id, model_name=default_embedding_model.model_name)
+            worker.download_model.delay(id=default_embedding_model.id, model_name=default_embedding_model.model_name)
         except IntegrityError as e:
             logger.error(f"IntegrityError occurred when add embedding: {e.orig}")
             await session.rollback()

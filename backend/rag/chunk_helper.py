@@ -2,7 +2,7 @@ from typing import List
 from chat.openai.openai_like import OpenAILike
 from loguru import logger
 from sqlalchemy import delete
-from sqlmodel import select, update
+from sqlmodel import select, update, and_
 from db.encrypt_utils import decrypt_key
 from config.providers.embedding_provider import create_embedding_model
 from db.models.llm import LlmModelEntity
@@ -42,7 +42,10 @@ async def get_multimodal_llm_from_db(
     session: AsyncSession,
 ) -> OpenAILike:
     config = (await session.exec(
-        select(LlmModelEntity).where(LlmModelEntity.vision_support)
+        select(LlmModelEntity).where(and_(
+                LlmModelEntity.vision_support,
+                LlmModelEntity.enabled
+            ))
     )).first()
 
     if not config:
@@ -61,12 +64,12 @@ async def get_multimodal_llm_from_db(
 @with_async_db_session
 async def set_embedding_model_ready(
     session: AsyncSession,
-    model_id: str,
+    id: str,
 ):
-    embedding_model = await session.get(EmbeddingModelEntity, model_id)
+    embedding_model = await session.get(EmbeddingModelEntity, id)
     if embedding_model is None:
         raise ValueError(
-            detail=f"Embedding model {model_id} not found."
+            f"Embedding model {id} not found."
         )
 
     embedding_model.is_ready = True
@@ -76,7 +79,7 @@ async def set_embedding_model_ready(
 
     await config_change_manager.notify_change_async(
         event_source=ChangeEventSource.EMBEDDING,
-        source_id=model_id,
+        source_id=id,
         event_type=ChangeEventType.UPDATE
     )
 

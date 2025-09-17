@@ -1,3 +1,5 @@
+from datetime import datetime
+import json
 import os
 import shutil
 import threading
@@ -7,14 +9,19 @@ import traceback
 from loguru import logger
 
 
-MOUNT_PATH = "./localdata"
+OLD_MOUNT_PATH = "./localdata"
+MOUNT_PATH = "./localdata/sqlite"
 RUNTIME_PATH = "./tmp/sqlite"
 LOCAL_DB_FILE = "local.db"
 LOCAL_CHROMA_FOLDER = "chroma"
 
+SQLITE_CACHE_FILE = os.path.join(MOUNT_PATH, "cache_version.json")
+SQLITE_CACHE_PATH = os.path.join(MOUNT_PATH, "cache")
+
+
 os.makedirs(RUNTIME_PATH, exist_ok=True)
-mount_db_file = os.path.join(MOUNT_PATH, LOCAL_DB_FILE)
-mount_chroma_dir = os.path.join(MOUNT_PATH, LOCAL_CHROMA_FOLDER)
+old_mount_db_file = os.path.join(OLD_MOUNT_PATH, LOCAL_DB_FILE)
+old_mount_chroma_dir = os.path.join(OLD_MOUNT_PATH, LOCAL_CHROMA_FOLDER)
 
 runtime_db_file = os.path.join(RUNTIME_PATH, LOCAL_DB_FILE)
 runtime_chroma_dir = os.path.join(RUNTIME_PATH, LOCAL_CHROMA_FOLDER)
@@ -24,18 +31,50 @@ stop_event = threading.Event()
 
 
 def init_sqlite_store():
-    if os.path.exists(mount_db_file):
-        shutil.copy2(mount_db_file, runtime_db_file)
-    if os.path.exists(mount_chroma_dir):
-        shutil.copytree(mount_chroma_dir, runtime_chroma_dir ,dirs_exist_ok=True)
-    logger.info("Successfully copied sqlite store from mount path.")
+    if not os.path.exists(SQLITE_CACHE_FILE):
+        if os.path.exists(old_mount_db_file) and not os.path.exists(runtime_db_file):
+            shutil.copy2(old_mount_db_file, runtime_db_file)
+            logger.info(f"Copied data from {old_mount_db_file} to {runtime_db_file}")
+        if os.path.exists(old_mount_chroma_dir) and not os.path.exists(runtime_chroma_dir):
+            shutil.copytree(old_mount_chroma_dir, runtime_chroma_dir, dirs_exist_ok=True)
+            logger.info(f"Copied data from {old_mount_chroma_dir} to {runtime_chroma_dir}")
+    elif not os.path.exists(runtime_db_file):
+        try:
+            cache_version = None
+            with open(SQLITE_CACHE_FILE, "r") as rf:
+                cache_obj = json.loads(rf.read())
+                cache_version = cache_obj.get("version", None)
+
+            if cache_version:
+                local_cache_dir = os.path.join(SQLITE_CACHE_PATH, cache_version)
+                if os.path.exists(local_cache_dir):
+                    shutil.copytree(local_cache_dir, RUNTIME_PATH, dirs_exist_ok=True)
+                    logger.info(f"Copied data from {local_cache_dir} to {RUNTIME_PATH}")
+        except Exception:
+            logger.error(f"同步sqlite缓存出错: {traceback.format_exc()}")
+
+    logger.info("Successfully inited sqlite store.")
+
 
 
 def sync_sqlite_store():
-    if os.path.exists(runtime_db_file):
-        shutil.copy2(runtime_db_file, mount_db_file)
-    if os.path.exists(runtime_chroma_dir):
-        shutil.copytree(runtime_chroma_dir, mount_chroma_dir, dirs_exist_ok=True)
+    logger.info("Starting persist sqlite data.")
+    current_date_key = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    local_cache_dir = os.path.join(SQLITE_CACHE_PATH, current_date_key)
+    os.makedirs(local_cache_dir, exist_ok=True)
+    shutil.copytree(RUNTIME_PATH, local_cache_dir, dirs_exist_ok=True)
+
+    cache_version_text = json.dumps({"version": current_date_key})
+    with open(SQLITE_CACHE_FILE, 'w') as wf:
+        wf.write(cache_version_text)
+
+    logger.info("Persist sqlite data success.")
+    for dir_name in os.listdir(SQLITE_CACHE_PATH):
+        if dir_name < current_date_key:
+            cache_dir_to_remove = os.path.join(SQLITE_CACHE_PATH, dir_name)
+            shutil.rmtree(cache_dir_to_remove)
+            logger.info(f"Removed cache dir {cache_dir_to_remove}.")
+
 
 
 def sync_sqlite_store_task():

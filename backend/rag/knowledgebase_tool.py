@@ -6,7 +6,7 @@ from llama_index.core.tools import FunctionTool
 
 from common.chat.models import RetrievalSetting
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
+from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig, ChunkConfig
 from common.knowledgebase.types import (
     ChunkStatus,
     FileStatus,
@@ -22,9 +22,9 @@ from rag.chunk_helper import (
     update_chunk_status_async,
     update_file_status_async,
 )
-from rag.file.models.file_item import FileItem
-from rag.file.file_parser import FileParser
-from rag.file.image_caption_tool import ImageCaptionTool
+from pairag.file.models.file_item import FileItem
+from pairag.file.nodeparsers.file_parser import FileParser
+from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
     create_vector_db_connection_from_env,
     create_vector_store,
@@ -35,7 +35,7 @@ from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from config.providers.knowledgebase_provider import fetch_knowledgebases_by_id, knowledgebase_provider
 from config.providers.embedding_provider import embedding_provider
 from config.providers.reranker_provider import reranker_provider
-from rag.file.store.file_store_helper import file_store
+from pairag.file.store.file_store_helper import file_store
 from llama_index.core.schema import NodeWithScore
 from loguru import logger
 import re
@@ -83,10 +83,11 @@ class PaiKnowledgebaseClient:
         image_caption_tool = None
         if multimodal_llm:
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+        chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
         file_parser = FileParser(
             file_store=file_store,
             image_caption_tool=image_caption_tool,
-            knowledgebase=knowledgebase,
+            chunk_config=chunk_config,
         )
         return file_parser
 
@@ -157,7 +158,7 @@ class PaiKnowledgebaseClient:
                 await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
 
-            texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}" for node in nodes]
+            texts_to_embed = self.get_node_texts_for_embedding(nodes)
             embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
             for i in range(len(nodes)):
                 nodes[i].embedding = embeddings[i]
@@ -219,6 +220,18 @@ class PaiKnowledgebaseClient:
         )
 
 
+    def get_node_texts_for_embedding(self, nodes) -> list[str]:
+        texts = []
+        for node in nodes:
+            base_text = f"{node.text}\n\nfile_name: {node.metadata['file_name']}"
+            chapter_name = node.metadata.get('chapter_name', '').strip()
+            if chapter_name:
+                base_text += f"\n\nchapter_name: {chapter_name}"
+
+            texts.append(base_text)
+        return texts
+
+
     async def ainsert_chunks_to_vectordb(
         self,
         kb_id: str,
@@ -230,7 +243,7 @@ class PaiKnowledgebaseClient:
         embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
         )
-        texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}" for node in nodes]
+        texts_to_embed = self.get_node_texts_for_embedding(nodes)
         embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
         for i in range(len(nodes)):
             nodes[i].embedding = embeddings[i]
