@@ -67,7 +67,7 @@ class McpToolProvider(BaseConfigProvider):
         all_tools = []
         for mcp_id in mcp_ids:
             tools = self.instance_map.get(mcp_id)
-            if tools is None:
+            if not tools:
                 tools = await self._create_instance_async(self.config_map[mcp_id])
                 self.instance_map.put(mcp_id, tools)
             all_tools.extend(tools)
@@ -75,6 +75,7 @@ class McpToolProvider(BaseConfigProvider):
         return all_tools
 
     async def _create_instance_async(self, config: McpServerEntity):
+        print("Fetching mcp tools for config: ", config)
         if config.enabled:
             mcp_headers = {}
             auth_token = decrypt_key(config.encrypted_auth_token)
@@ -94,6 +95,7 @@ class McpToolProvider(BaseConfigProvider):
             # TODO: can retrieve in parallel with asyncio.gather
             try:
                 tools: List[FunctionTool] = await mcp_tool_spec.to_tool_list_async()
+                print("mcp tools: ", tools)
                 for tool in tools:
                     # transform tool name to server_name-tool_name
                     # 尽管存在mcp server为a,tool name 为b-c和server为a-b, tool为c的小概率撞车情形

@@ -89,6 +89,7 @@ class ChatAgentRequest(BaseModel):
     # llm args
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    prompts: Optional[Dict[str, str]] = None
 
     class Config:
         extra = "allow"  # allow extra fields

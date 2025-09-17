@@ -1,6 +1,6 @@
 import traceback
 from typing import Dict, Optional, Type
-from chat.openai.openai_like import OpenAILike
+from chat.llm.llm_model import PaiLlm
 from sqlmodel import Field, SQLModel
 from loguru import logger
 from db.encrypt_utils import decrypt_key
@@ -37,25 +37,23 @@ class LlmProvider(BaseConfigProvider):
 
 
     def _create_instance(self, config: LlmModelEntity):
-        return OpenAILike(
-                model=config.model,
-                api_base=config.base_url,
-                api_key=decrypt_key(config.encrypted_api_key),
-                temperature=config.temperature,
-                context_window=config.context_window,
-                max_tokens=4000,
-                is_chat_model=True,
-                is_function_calling_model=True,
-                additional_kwargs={"extra_body":{"chat_template_kwargs":{"enable_thinking": config.enable_thinking}}},
-            )
+        return PaiLlm(
+            api_base=config.base_url,
+            api_key=decrypt_key(config.encrypted_api_key),
+            model=config.model,
+            enable_thinking=config.enable_thinking,
+            vision_support=config.vision_support,
+            temperature=config.temperature,
+            context_window=config.context_window,
+        )
 
-    def get_llm_model(self, model_id: str) -> OpenAILike:
-        print("self.model_id_to_entry_id", self.model_id_to_entry_id)
+
+    def get_llm_model(self, model_id: str) -> PaiLlm:
         assert model_id in self.model_id_to_entry_id, f"Model {model_id} not found."
         return self.get_instance(self.model_id_to_entry_id[model_id])
 
     # 获取多模态大模型，如果没找到，直接返回None
-    def get_multimodal_llm(self, model_id: str | None = None) -> Optional[OpenAILike]:
+    def get_multimodal_llm(self, model_id: str | None = None) -> Optional[PaiLlm]:
         if model_id is None:
             for llm in self.config_map.values():
                 if llm.vision_support:

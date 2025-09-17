@@ -6,7 +6,7 @@ from llama_index.core.tools import FunctionTool
 
 from common.chat.models import RetrievalSetting
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
+from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig, ChunkConfig
 from common.knowledgebase.types import (
     ChunkStatus,
     FileStatus,
@@ -22,9 +22,9 @@ from rag.chunk_helper import (
     update_chunk_status_async,
     update_file_status_async,
 )
-from rag.file.models.file_item import FileItem
-from rag.file.file_parser import FileParser
-from rag.file.image_caption_tool import ImageCaptionTool
+from pairag.file.models.file_item import FileItem
+from pairag.file.nodeparsers.file_parser import FileParser
+from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
     create_vector_db_connection_from_env,
     create_vector_store,
@@ -35,13 +35,15 @@ from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from config.providers.knowledgebase_provider import fetch_knowledgebases_by_id, knowledgebase_provider
 from config.providers.embedding_provider import embedding_provider
 from config.providers.reranker_provider import reranker_provider
-from rag.file.store.file_store_helper import file_store
+from pairag.file.store.file_store_helper import file_store
 from llama_index.core.schema import NodeWithScore
 from loguru import logger
 import re
 import json
 from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 from typing import Annotated
+from chat.tools.search_result import SearchResult
+MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -82,10 +84,11 @@ class PaiKnowledgebaseClient:
         image_caption_tool = None
         if multimodal_llm:
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+        chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
         file_parser = FileParser(
             file_store=file_store,
             image_caption_tool=image_caption_tool,
-            knowledgebase=knowledgebase,
+            chunk_config=chunk_config,
         )
         return file_parser
 
@@ -156,7 +159,7 @@ class PaiKnowledgebaseClient:
                 await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
 
-            texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}" for node in nodes]
+            texts_to_embed = self.get_node_texts_for_embedding(nodes)
             embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
             for i in range(len(nodes)):
                 nodes[i].embedding = embeddings[i]
@@ -218,6 +221,18 @@ class PaiKnowledgebaseClient:
         )
 
 
+    def get_node_texts_for_embedding(self, nodes) -> list[str]:
+        texts = []
+        for node in nodes:
+            base_text = f"{node.text}\n\nfile_name: {node.metadata['file_name']}"
+            chapter_name = node.metadata.get('chapter_name', '').strip()
+            if chapter_name:
+                base_text += f"\n\nchapter_name: {chapter_name}"
+
+            texts.append(base_text)
+        return texts
+
+
     async def ainsert_chunks_to_vectordb(
         self,
         kb_id: str,
@@ -229,7 +244,7 @@ class PaiKnowledgebaseClient:
         embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
         )
-        texts_to_embed = [f"{node.text}\n\nfile_name: {node.metadata['file_name']}" for node in nodes]
+        texts_to_embed = self.get_node_texts_for_embedding(nodes)
         embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
         for i in range(len(nodes)):
             nodes[i].embedding = embeddings[i]
@@ -329,14 +344,17 @@ class PaiKnowledgebaseClient:
         file_ids = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
+                images = []
                 file_ids.append(node.metadata["doc_id"])
                 origin_text = node.text
-                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text)
-                for src, _ in matches:
+                for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
+                    images.append({"url": src, "desc": origin_text})
                 node.text = origin_text
+                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
 
         file_source_map = await get_file_id_source_map(kb_id=knowledge_id, file_ids=file_ids)
@@ -406,13 +424,16 @@ class PaiKnowledgebaseClient:
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
+                images = []
                 origin_text = node.text
-                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text)
-                for src, _ in matches:
+                for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
+                    images.append({"url": src, "desc": origin_text})
                 node.text = origin_text
+                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
         logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
         return result_nodes
@@ -427,21 +448,17 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
     result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id, user_id=user_id)
     records = []
     for score_node in result_nodes:
-        images = []
-        origin_text = score_node.node.get_content()
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
-        matches = re.findall(pattern, origin_text)
-        images = [{"url": src, "desc": alt} for src, alt in matches]
-        records.append({
-            "text": score_node.node.get_content(),
-            "metadata": {
-                "file_name": score_node.node.metadata.get("file_name", ""),
-                "file_url": file_store.get_url(score_node.node.metadata.get("file_path", "")),
-                "file_source": score_node.node.metadata.get("file_source", "")
-            },
-            "score": score_node.score,
-            "images": images
-        })
+        file_url = score_node.node.metadata.get("file_source")
+        if not file_url:
+            file_url = file_store.get_url(score_node.node.metadata.get("file_path", ""))
+        records.append(
+            SearchResult(
+                score=score_node.score,
+                content=score_node.node.get_content(),
+                images=json.loads(score_node.node.metadata.get("images_info", [])),
+                url=file_url,
+                title=score_node.node.metadata.get("file_name", ""),
+            ).model_dump())
     return json.dumps({"result": records}, ensure_ascii=False)
 
 

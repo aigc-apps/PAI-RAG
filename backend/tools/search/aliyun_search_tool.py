@@ -1,4 +1,6 @@
 import asyncio
+from typing import List
+from chat.tools.search_result import SearchResult
 from loguru import logger
 
 from alibabacloud_tea_openapi import models as open_api_models
@@ -80,7 +82,7 @@ class AliyunSearchTool:
     async def _asearch(
         self,
         query: str,
-    ):
+    ) -> List[SearchResult]:
         search_tasks = []
         for i in range(0, 1 + int((self.search_count - 1) / 10), 1):
             search_tasks.append(
@@ -88,7 +90,7 @@ class AliyunSearchTool:
             )
 
         search_results = await asyncio.gather(*search_tasks)
-        nodes = []
+        results = []
         for result in search_results:
             items = result.get("pageItems")
             for item in items:
@@ -106,28 +108,26 @@ class AliyunSearchTool:
                 host_logo = "https://cdn.pixabay.com/photo/2020/09/17/22/52/website-5580513_1280.png"
                 if item.get("hostLogo") and item.get("hostLogo") != "":
                     host_logo = item.get("hostLogo")
-                nodes.append(
-                    NodeWithScore(
-                        text=text[:800],
-                        metadata={
-                            "source": "web_search",
-                            "file_url": item.get("link"),
-                            "file_name": item.get("title") or item.get("htmlTitle"),
-                            "host_name": item.get("hostname"),
-                            "host_logo": host_logo,
-                            "publish_time": item.get("publishTime"),
-                        },
+                results.append(
+                    SearchResult(
+                        content=text[:800],
+                        url=item.get("link"),
+                        title=item.get("title") or item.get("htmlTitle"),
+                        hostname=item.get("hostname"),
+                        favicon=host_logo,
+                        publish_time=str(item.get("publishTime")),
                         score=score,
                     )
                 )
-                if len(nodes) >= self.search_count:
+                if len(results) >= self.search_count:
                     break
-        return nodes
+        return results
+
 
     async def aquery(
         self,
         query: str,
-    ):
+    ) -> List[dict]:
         start = time.time()
         logger.info(f"Aliyun Search with query {query}.")
         nodes = await self._asearch(query=query)
@@ -135,4 +135,4 @@ class AliyunSearchTool:
             f"[WebSearch]-Aliyun: Get {len(nodes)} docs from url. Elapsed time: {time.time() - start}seconds."
         )
 
-        return {"result": [node.to_dict() for node in nodes]}
+        return {"result": [node.model_dump() for node in nodes]}

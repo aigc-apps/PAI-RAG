@@ -4,11 +4,11 @@ import traceback
 from typing import List, Optional
 from common.knowledgebase.types import FileStatus
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from db.models.knowledgebase.metadata import KbMetadataEntity, FileMetadataEntity
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
+from rag.file_item_utils import to_file_entity
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.knowledgebase.chunk import KbChunkEntity, KbChunkModel, create_text_node_from_chunk
 from db.models.knowledgebase.file import KbFileEntity
@@ -23,13 +23,14 @@ from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
 from config.providers.embedding_provider import embedding_provider
 from config.providers.knowledgebase_provider import knowledgebase_provider
-from rag.file.store.file_store_helper import file_store
+from pairag.file.store.file_store_helper import file_store
 from api.response_model import ResponseModel, PagedResult, success_response, error_response
 from rag.knowledgebase_tool import kb_client
 from loguru import logger
 import re
-from rag.file.models.file_item import FileItem
+from pairag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
+from rag.knowledgebase_tool import MARKDOWN_IMAGE_PATTERN
 
 knowledgebase_router = APIRouter()
 
@@ -65,22 +66,13 @@ async def create_knowledgebase(
         await session.rollback()
 
         if "UniqueViolationError" in str(e.orig):
-            return JSONResponse(
-                content=error_response(code=400, message="创建知识库失败: 知识库名称已存在。"),
-                status_code=400,
-            )
+            return error_response(code=400, message="创建知识库失败: 知识库名称已存在。")
         else:
-            return JSONResponse(
-                content=error_response(code=400, message=f"创建知识库失败: {e}."),
-                status_code=400,
-            )
+            return error_response(code=400, message=f"创建知识库失败: {e}.")
     except Exception:
         logger.exception(f"创建知识库失败。\nException:{traceback.format_exc()}")
         await session.rollback()
-        return JSONResponse(
-            content=error_response(code=400, message=f"创建知识库失败: {traceback.format_exc()}."),
-            status_code=400,
-        )
+        return error_response(code=400, message=f"创建知识库失败: {traceback.format_exc()}.")
 
 
 @knowledgebase_router.get("")
@@ -95,7 +87,9 @@ async def list_knowledgebases(
     total_num = total_results.one_or_none()
     pagination = get_pagination_meta(page, size, total_num)
     kb_results = await session.exec(
-        select(KbEntity)
+        select(KbEntity).where(
+            KbEntity.name != "default_attachments"
+        )
         .order_by(KbEntity.created_at.desc())
         .offset(pagination.offset)
         .limit(size)
@@ -119,10 +113,7 @@ async def read_knowledgebase(kb_id: str, session: AsyncSession = Depends(get_ses
     knowledgebase = await session.get(KbEntity, kb_id)
 
     if not knowledgebase:
-        return JSONResponse(
-            content=error_response(code=404, message=f"查询知识库失败: 知识库'{kb_id}'不存在。"),
-            status_code=404,
-        )
+        return error_response(code=404, message=f"查询知识库失败: 知识库'{kb_id}'不存在。")
 
     return success_response(data=knowledgebase, message="查询知识库成功。")
 
@@ -135,10 +126,7 @@ async def update_knowledgebase(
 ):
     knowledgebase = await session.get(KbEntity, kb_id)
     if not knowledgebase:
-        return JSONResponse(
-            content=error_response(code=404, message=f"更新知识库失败: 知识库'{kb_id}'不存在。"),
-            status_code=404,
-        )
+        return error_response(code=404, message=f"更新知识库失败: 知识库'{kb_id}'不存在。")
 
     try:
         knowledgebase.name = new_kb.name or knowledgebase.name
@@ -178,10 +166,8 @@ async def delete_knowledgebase(
     knowledgebase = await session.get(KbEntity, kb_id)
 
     if not knowledgebase:
-        return JSONResponse(
-            content=error_response(code=404, message=f"删除知识库失败: 知识库'{kb_id}'不存在。"),
-            status_code=404,
-        )
+        return error_response(code=404, message=f"删除知识库失败: 知识库'{kb_id}'不存在。")
+
 
     knowledgebase_provider.delete(kb_id)
 
@@ -270,7 +256,7 @@ async def upload_files(
                 )
             ).first()
             if not file_entity:
-                file_entity = file_item.to_file_entity()
+                file_entity = to_file_entity(file_item)
             else:
                 file_entity.file_md5 = file_item.file_md5
                 file_entity.file_size = file_item.file_size
@@ -450,9 +436,9 @@ async def list_chunks(
     chunk_entities = chunk_results.all()
     for chunk_entity in chunk_entities:
         origin_text = chunk_entity.text
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+        pattern = MARKDOWN_IMAGE_PATTERN
         matches = re.findall(pattern, origin_text)
-        chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for src, alt in matches]
+        chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for alt, src in matches]
     return success_response(
         data=PagedResult(
             items=chunk_entities,
@@ -510,10 +496,8 @@ async def update_chunk(
         ))
     kb_chunk_entities = sql_results.all()
     if len(kb_chunk_entities) != 1:
-        return JSONResponse(
-            content=error_response(code=404, message=f"更新知识库切片失败: 切片'{chunk_id}'不存在 或 有误。"),
-            status_code=404,
-        )
+        return error_response(code=404, message=f"更新知识库切片失败: 切片'{chunk_id}'不存在 或 有误。")
+
     try:
         kb_chunk = kb_chunk_entities[0]
         # 更新chunk text

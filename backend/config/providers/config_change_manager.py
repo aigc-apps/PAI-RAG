@@ -14,7 +14,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from config.providers.embedding_provider import embedding_provider
 from config.providers.llm_provider import llm_provider
 from config.providers.knowledgebase_provider import knowledgebase_provider
-from config.providers.prompt_provider import prompt_provider
 from config.providers.evaluation_provider import evaluation_provider
 from db.models.knowledgebase.embedding import (
     EmbeddingModelCreate,
@@ -71,8 +70,6 @@ class ConfigChangeManager:
         logger.info("Initialized embedding models.")
         await knowledgebase_provider.full_load_from_db_async()
         logger.info("Initialized knowledgebases.")
-        await prompt_provider.full_load_from_db_async()
-        logger.info("Initialized prompt configs.")
 
 
         await self.create_builtin_gaia_dataset()
@@ -244,9 +241,6 @@ class ConfigChangeManager:
             case ChangeEventSource.CHATBOT:
                 from config.providers.chatbot_provider import chatbot_provider
                 return chatbot_provider
-            case ChangeEventSource.PROMPT:
-                from config.providers.prompt_provider import prompt_provider
-                return prompt_provider
             case ChangeEventSource.TRACE:
                 from config.providers.trace_provider import trace_provider
                 return trace_provider

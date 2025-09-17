@@ -21,6 +21,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { Button } from '@/components/ui/button';
 import { McpConfig } from '@/app/config/mcp/mcp';
@@ -29,18 +40,19 @@ import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
+import {PLAN_PROMPT, ACT_PROMPT, SUMMARY_PROMPT} from '../common/prompts';
+
+// Add import for ResettableTextarea
+import { ResettableTextarea } from '@/app/apps/resetable_textarea';
+import { toast } from 'sonner';
 
 
-interface GuardrailConfig {
-  endpoint: string;
-  region: string;
-  region_name: string;
-  access_key_id: string;
-  access_key_secret: string;
-  enable_input_check: boolean;
-  enable_output_check: boolean;
-  custom_advice: string;
-}
+interface PromptConfig {
+  plan: string;
+  act: string;
+  summary: string;
+};
+
 
 export interface Chatbot {
   id: string;
@@ -55,7 +67,9 @@ export interface Chatbot {
   enable_input_guardrail: boolean;
   enable_output_guardrail: boolean;
   guardrail_hint: string;
+  prompts: PromptConfig;
 }
+
 
 interface ChatbotConfigProps {
   chatbotId: string | undefined;
@@ -75,6 +89,11 @@ const default_chat_config = {
   enable_input_guardrail: false,
   enable_output_guardrail: false,
   guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+  prompts: {
+    plan: PLAN_PROMPT,
+    act: ACT_PROMPT,
+    summary: SUMMARY_PROMPT,
+  }
 };
 
 // 知识库配置卡片
@@ -89,6 +108,10 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const isCreate: boolean = chatbotId === undefined || chatbotId === '';
+  const [planPrompt, setPlanPrompt] = useState('');
+  const [actPrompt, setActPrompt] = useState('');
+  const [summarizePrompt, setSummarizePrompt] = useState('');
+
   const router = useRouter();
   // const [isLoading, setIsLoading] = useState(false);
 
@@ -144,6 +167,9 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           setSelectedMcpNames([...mcpnames]);
           console.log('selectedMcpNames', mcpnames);
 
+          setPlanPrompt(botData.data.prompts?.plan || PLAN_PROMPT);
+          setActPrompt(botData.data.prompts?.act || ACT_PROMPT);
+          setSummarizePrompt(botData.data.prompts?.summary || SUMMARY_PROMPT);
         }
         else
         {
@@ -166,6 +192,10 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
           console.log('kbData', kbData);
           setKbs([...kbData]);
+
+          setPlanPrompt(PLAN_PROMPT);
+          setActPrompt(ACT_PROMPT);
+          setSummarizePrompt(SUMMARY_PROMPT);
         }
       } catch (err: unknown) {
         console.log(err || '加载失败');
@@ -314,6 +344,86 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               </Button>
             </div>
           )}
+        </div>
+        <div className="px-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="text-xs">编辑提示词</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>编辑提示词</DialogTitle>
+                <DialogDescription>
+                  自定义 AI Agent 在不同阶段的行为提示词
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-hidden">
+                <Tabs defaultValue="plan" className="h-full flex flex-col">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="plan">规划提示词</TabsTrigger>
+                    <TabsTrigger value="act">行动提示词</TabsTrigger>
+                    <TabsTrigger value="summarize">总结提示词</TabsTrigger>
+                  </TabsList>
+
+                  <div className="flex-1 overflow-hidden mt-4">
+                    <TabsContent value="plan" className="h-full flex flex-col">
+                      <ResettableTextarea
+                        value={planPrompt}
+                        onChange={(e) => setPlanPrompt(e.target.value)}
+                        defaultValue={PLAN_PROMPT}
+                        placeholder="输入规划阶段的提示词..."
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="act" className="h-full flex flex-col">
+                      <ResettableTextarea
+                        value={actPrompt}
+                        onChange={(e) => setActPrompt(e.target.value)}
+                        defaultValue={ACT_PROMPT}
+                        placeholder="输入行动阶段的提示词..."
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="summarize" className="h-full flex flex-col">
+                      <ResettableTextarea
+                        value={summarizePrompt}
+                        onChange={(e) => setSummarizePrompt(e.target.value)}
+                        defaultValue={SUMMARY_PROMPT}
+                        placeholder="输入总结阶段的提示词..."
+                      />
+                    </TabsContent>
+                  </div>
+                </Tabs>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <DialogClose asChild>
+                  <Button variant="outline" onClick={
+                    () => {
+                      setActPrompt(botConfig.prompts.act);
+                      setPlanPrompt(botConfig.prompts.plan);
+                      setSummarizePrompt(botConfig.prompts.summary);
+                    }
+                  }>取消</Button>
+                </DialogClose>
+                <Button type="button" onClick={() => {
+                  setBotConfig({
+                    ...botConfig,
+                    prompts: {
+                      plan: planPrompt,
+                      act: actPrompt,
+                      summary: summarizePrompt,
+                    }
+                  });
+                  // 关闭对话框
+                  toast('success', { description: '提示词已保存' });
+                }}>
+                  保存更改
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       <div className="flex gap-6">
@@ -504,7 +614,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           <AlertDescription>{saveErrorMsg}</AlertDescription>
         </Alert>
       )}
-      <div className="pt-8 flex gap-6">
+      <div className="pt-6 flex gap-6">
         <Button
           variant="secondary"
           className="w-20"
@@ -521,7 +631,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             handleSaveChatConfig();
           }}
         >
-          {isCreate ? '创建' : '保存'}
+          {isCreate ? '创建应用' : '保存应用'}
         </Button>
       </div>
     </div>
