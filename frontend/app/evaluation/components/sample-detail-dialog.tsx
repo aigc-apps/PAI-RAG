@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
-import { SampleItem } from '@/app/evaluation/[evalId]/types';
+import { SampleItem } from '@/app/evaluation/[datasetId]/types';
 
 interface SampleDetailDialogProps {
     open: boolean;

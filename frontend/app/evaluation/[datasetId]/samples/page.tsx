@@ -48,19 +48,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from '@/components/ui/badge';
-import { EvalRunConfig } from '@/app/evaluation/[evalId]/types';
+import { RunConfig } from '@/app/evaluation/[datasetId]/types';
+import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
+
 import { toast } from 'sonner';
 
-import { SampleDetailDialog } from '@/app/evaluation/components/SampleDetailDialog';
-import { useDatasetActions } from '@/app/evaluation/[evalId]/datasets/useDatasetActions';
-import { SampleItem } from '@/app/evaluation/[evalId]/types';
+import { SampleDetailDialog } from '@/app/evaluation/components/sample-detail-dialog';
+import { useDatasetActions } from '@/app/evaluation/[datasetId]/samples/useDatasetActions';
+import { SampleItem } from '@/app/evaluation/[datasetId]/types';
 
 export default function EvalDatasetsDetailsPage({
     params,
 }: {
-    params: Promise<{ evalId: string }>;
+    params: Promise<{ datasetId: string }>;
 }) {
-    const { evalId } = use(params);
+    const { datasetId } = use(params);
     const router = useRouter();
 
     // === 状态管理 ===
@@ -85,23 +87,27 @@ export default function EvalDatasetsDetailsPage({
     // 实验配置相关
     const [experimentName, setExperimentName] = useState("");
     const [experimentDescription, setExperimentDescription] = useState("");
-    const [evalRunConfigId, setEvalRunConfigId] = useState<string>("");
-    const [evalRunConfigs, setEvalRunConfigs] = useState<EvalRunConfig[]>([]);
+    const [runConfigId, setRunConfigId] = useState<string>("");
+    const [runConfigs, setRunConfigs] = useState<RunConfig[]>([]);
+    const [evaluatorConfigId, setEvaluatorConfigId] = useState<string>("");
+    const [evaluatorConfigs, setEvaluatorConfigs] = useState<EvaluatorConfig[]>([]);
+
 
     // 上传状态
     const [uploading, setUploading] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-    const { runSamples, deleteSample, uploadFile } = useDatasetActions({ evalId });
+    const { runSamples, deleteSample, uploadFile } = useDatasetActions({ datasetId });
 
     // === 数据加载 ===
     useEffect(() => {
         const loadData = async () => {
             setIsLoading(true);
             try {
-                const [datasetRes, configsRes] = await Promise.all([
-                    fetch(`/api/config/evaluation/${evalId}/dataset?page=${page}&size=${pageSize}`),
-                    fetch(`/api/config/evaluation/${evalId}/configs`),
+                const [datasetRes, runConfigsRes, evalConfigsRes] = await Promise.all([
+                    fetch(`/api/config/evaluation/${datasetId}/samples?page=${page}&size=${pageSize}`),
+                    fetch(`/api/config/evaluation/${datasetId}/runconfigs`),
+                    fetch(`/api/config/evaluation/${datasetId}/evalconfigs`),
                 ]);
 
                 // 加载分页数据
@@ -113,21 +119,26 @@ export default function EvalDatasetsDetailsPage({
                 }
 
                 // 加载配置
-                if (configsRes.ok) {
-                    const configData = await configsRes.json();
-                    setEvalRunConfigs(configData.data.items);
+                if (runConfigsRes.ok) {
+                    const configData = await runConfigsRes.json();
+                    setRunConfigs(configData.data.items);
+                }
+
+                if (evalConfigsRes.ok) {
+                    const evalConfigData = await evalConfigsRes.json();
+                    setEvaluatorConfigs(evalConfigData.data.items);
                 }
 
                 // 加载所有数据（用于全选）
                 const tmpPageSize = 1000;
-                const firstPageRes = await fetch(`/api/config/evaluation/${evalId}/dataset?page=1&size=${tmpPageSize}`);
+                const firstPageRes = await fetch(`/api/config/evaluation/${datasetId}/samples?page=1&size=${tmpPageSize}`);
                 if (!firstPageRes.ok) throw new Error('获取数据样本列表失败');
                 const json_data = await firstPageRes.json();
                 const tmpAllItems: SampleItem[] = [];
 
                 for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
                     console.log("加载所有数据，第", curPage, "页");
-                    const response = await fetch(`/api/config/evaluation/${evalId}/dataset?page=${curPage}&size=${tmpPageSize}`);
+                    const response = await fetch(`/api/config/evaluation/${datasetId}/samples?page=${curPage}&size=${tmpPageSize}`);
                     const data = await response.json();
                     tmpAllItems.push(...data.data.items);
                 }
@@ -143,7 +154,7 @@ export default function EvalDatasetsDetailsPage({
         };
 
         loadData();
-    }, [page, evalId, datasets.length]);
+    }, [page, datasetId, datasets.length]);
 
     // === 交互函数 ===
     const handlePageChange = (newPage: number) => {
@@ -185,8 +196,9 @@ export default function EvalDatasetsDetailsPage({
         await runSamples({
             name: experimentName,
             description: experimentDescription,
-            dataset_ids: ids,
-            run_config_id: evalRunConfigId,
+            sample_ids: ids,
+            run_config_id: runConfigId,
+            evaluator_config_id: evaluatorConfigId
         });
 
         setIsRunBatchDetailOpen(false);
@@ -198,8 +210,9 @@ export default function EvalDatasetsDetailsPage({
         await runSamples({
             name: experimentName,
             description: experimentDescription,
-            dataset_ids: [id],
-            run_config_id: evalRunConfigId,
+            sample_ids: [id],
+            run_config_id: runConfigId,
+            evaluator_config_id: evaluatorConfigId
         });
         setIsRunSingleDetailOpen(false);
         setExperimentName("");
@@ -242,7 +255,7 @@ export default function EvalDatasetsDetailsPage({
 
     const handleSaveEdit = async (updatedSample: SampleItem) => {
         try {
-            const response = await fetch(`/api/config/evaluation/${evalId}/dataset/${updatedSample.id}`, {
+            const response = await fetch(`/api/config/evaluation/${datasetId}/dataset/${updatedSample.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(updatedSample),
@@ -259,7 +272,7 @@ export default function EvalDatasetsDetailsPage({
     };
 
     // === 渲染辅助函数 ===
-    const modifyEvalRunConfig = (selected_ids: Set<string>) => (
+    const modifyRunConfig = (selected_ids: Set<string>) => (
         <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">名称</Label>
@@ -297,15 +310,15 @@ export default function EvalDatasetsDetailsPage({
                 </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">实验设置</Label>
+                <Label className="text-right">运行设置</Label>
                 <div className="grid gap-4 py-1">
-                    {evalRunConfigs.length > 0 ? (
-                        <Select onValueChange={setEvalRunConfigId}>
+                    {runConfigs.length > 0 ? (
+                        <Select onValueChange={setRunConfigId}>
                             <SelectTrigger>
-                                <SelectValue placeholder="请选择实验设置" />
+                                <SelectValue placeholder="请选择运行设置" />
                             </SelectTrigger>
                             <SelectContent>
-                                {evalRunConfigs.map(config => (
+                                {runConfigs.map(config => (
                                     <SelectItem key={config.id} value={config.id}>
                                         {config.name}
                                     </SelectItem>
@@ -313,7 +326,28 @@ export default function EvalDatasetsDetailsPage({
                             </SelectContent>
                         </Select>
                     ) : (
-                        <p className="text-sm text-muted-foreground">尚未进行实验配置</p>
+                        <p className="text-sm text-muted-foreground">尚未进行运行配置</p>
+                    )}
+                </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">评估器设置</Label>
+                <div className="grid gap-4 py-1">
+                    {evaluatorConfigs.length > 0 ? (
+                        <Select onValueChange={setEvaluatorConfigId}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="请选择评估设置" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {evaluatorConfigs.map(config => (
+                                    <SelectItem key={config.id} value={config.id}>
+                                        {config.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">尚未进行评估器配置</p>
                     )}
                 </div>
             </div>
@@ -366,7 +400,7 @@ export default function EvalDatasetsDetailsPage({
                                             <DialogTitle>创建新实验（批量）</DialogTitle>
                                             <DialogDescription>请输入此次实验名称和描述，然后运行试验。</DialogDescription>
                                         </DialogHeader>
-                                        {modifyEvalRunConfig(selectedItems)}
+                                        {modifyRunConfig(selectedItems)}
                                         <DialogFooter>
                                             <Button variant="outline" onClick={() => setIsRunBatchDetailOpen(false)}>
                                                 取消
@@ -542,7 +576,7 @@ export default function EvalDatasetsDetailsPage({
                                                                 <DialogTitle>创建新实验（单条）</DialogTitle>
                                                                 <DialogDescription>请输入此次实验名称和描述，然后运行试验。</DialogDescription>
                                                             </DialogHeader>
-                                                            {modifyEvalRunConfig(new Set([item.id]))}
+                                                            {modifyRunConfig(new Set([item.id]))}
                                                             <DialogFooter>
                                                                 <Button variant="outline" onClick={() => setIsRunSingleDetailOpen(false)}>
                                                                     取消

@@ -28,7 +28,7 @@ import { formatBeijingTime } from '@/app/knowledgebases/utils/utils';
 import { Badge } from '@/components/ui/badge';
 
 // 评估数据类型定义
-interface EvalData {
+interface Dataset {
   id: string;
   name: string;
   description: string;
@@ -41,14 +41,14 @@ interface EvalData {
 const EvaluationPage = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [evaluations, setEvaluations] = useState(Array<EvalData>);
+  const [datasets, setDatasets] = useState(Array<Dataset>);
   const [isLoading, setIsLoading] = useState(true);
   const [evaluationerror, setEvaluationError] = useState('');
   const pageSize = 6;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreateLoading, setIsCreateLoading] = useState(false);
-  const [evalTaskName, setEvalTaskName] = useState("");
-  const [evalTaskDesc, setEvalTaskDesc] = useState("");
+  const [datasetName, setEvalTaskName] = useState("");
+  const [datasetDesc, setEvalTaskDesc] = useState("");
   const router = useRouter();
 
 
@@ -63,7 +63,7 @@ const EvaluationPage = () => {
         const json_data = await res.json();
         console.log("evaluation json_data", json_data)
         const data = json_data.data.items;
-        setEvaluations(data);
+        setDatasets(data);
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
         setEvaluationError(err || '加载失败');
@@ -82,8 +82,8 @@ const EvaluationPage = () => {
 
   const createNewEvalDataset = async () => {
     const data = {
-      name: evalTaskName,
-      description: evalTaskDesc || "默认评估任务描述",
+      name: datasetName,
+      description: datasetDesc || "默认评估任务描述",
       type: "custom"
     };
 
@@ -102,7 +102,7 @@ const EvaluationPage = () => {
       }
       const upload_result = await res.json();
       console.log('创建成功:', upload_result);
-      setEvaluations((prev) => [...prev, upload_result.data]); // 追加新 LLM 配置
+      setDatasets((prev) => [...prev, upload_result.data]); // 追加新 LLM 配置
     } catch (error) {
       console.error('创建失败:', error);
     } finally {
@@ -123,7 +123,7 @@ const EvaluationPage = () => {
       if (!res.ok) {
         throw new Error('删除失败，请检查网络或配置');
       }
-      setEvaluations((prev) => prev.filter((config) => config.id !== eval_id));
+      setDatasets((prev) => prev.filter((config) => config.id !== eval_id));
     } catch (err: any) { console.log('删除评估任务出错: ', err); }
     // 显示错误提示
   }
@@ -220,7 +220,7 @@ const EvaluationPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {evaluations.length === 0 ? (
+              {datasets.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
@@ -238,9 +238,9 @@ const EvaluationPage = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                evaluations.map((evalTask) => (
+                datasets.map((dataset) => (
                   <TableRow
-                    key={evalTask.id}
+                    key={dataset.id}
                     className="cursor-pointer hover:bg-muted/30 transition-colors group border-b"
                     onClick={(e) => {
                       const target = e.target as HTMLElement;
@@ -248,27 +248,27 @@ const EvaluationPage = () => {
                         console.log('按钮被点击');
                         return;
                       }
-                      router.push(`/evaluation/${evalTask.id}`);
+                      router.push(`/evaluation/${dataset.id}`);
                     }}
                   >
                     <TableCell className="font-medium pl-8 group-hover:text-primary transition-colors">
-                      {evalTask.name}
+                      {dataset.name}
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={evalTask.name === "GAIA" ? "default" : "secondary"}
-                        className={evalTask.name === "GAIA" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}
+                        variant={dataset.name === "GAIA" ? "default" : "secondary"}
+                        className={dataset.name === "GAIA" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}
                       >
-                        {evalTask.name === "GAIA" ? "内置" : "自定义"}
+                        {dataset.name === "GAIA" ? "内置" : "自定义"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-md">
-                      {evalTask.description || '暂时还没有描述，可以去设置页面添加哦。'}
+                      {dataset.description || '暂时还没有描述，可以去设置页面添加哦。'}
                     </TableCell>
-                    <TableCell className="font-medium">{evalTask.dataset_count}</TableCell>
-                    <TableCell className="font-medium">{evalTask.experiments_count}</TableCell>
+                    <TableCell className="font-medium">{dataset.dataset_count}</TableCell>
+                    <TableCell className="font-medium">{dataset.experiments_count}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatBeijingTime(evalTask.created_at)}
+                      {formatBeijingTime(dataset.created_at)}
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <Button
@@ -277,7 +277,7 @@ const EvaluationPage = () => {
                         className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-red-50"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteEval(evalTask.id);
+                          deleteEval(dataset.id);
                         }}
                       >
                         <Trash2 className="w-4 h-4" />

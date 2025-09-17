@@ -7,9 +7,13 @@ from typing import Optional, List
 class ExperimentCreate(SQLModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    dataset_ids: Optional[list[str]] = None  # List of dataset IDs to run the experiment on
+    sample_ids: Optional[list[str]] = None  # List of dataset IDs to run the experiment on
     run_config_id: str = Field(
-        foreign_key="pai_evaluation_run_config.id",
+        foreign_key="pai_run_config.id",
+        description="Reference to the run task"
+    )
+    evaluator_config_id: str = Field(
+        foreign_key="pai_evaluator_config.id",
         description="Reference to the evaluation task"
     )
 
@@ -17,8 +21,8 @@ class ExperimentEntity(SQLModel, table=True):
     __tablename__ = "pai_experiment"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
-    eval_id: str = Field(
-        foreign_key="pai_evaluation.id",
+    dataset_id: str = Field(
+        foreign_key="pai_dataset.id",
         description="Reference to the evaluation task"
     )
     name: Optional[str] = Field(
@@ -34,7 +38,11 @@ class ExperimentEntity(SQLModel, table=True):
         description="Number of samples in the experiment"
     )
     run_config_id: str = Field(
-        foreign_key="pai_evaluation_run_config.id",
+        foreign_key="pai_run_config.id",
+        description="Reference to the run task"
+    )
+    evaluator_config_id: str = Field(
+        foreign_key="pai_evaluator_config.id",
         description="Reference to the evaluation task"
     )
     avg_score: Optional[float] = Field(
@@ -54,8 +62,8 @@ class ExperimentEntity(SQLModel, table=True):
         sa_column=Column(DateTime)
     )
 
-class ExperimentRunEntity(SQLModel, table=True):
-    __tablename__ = "pai_experiment_run"
+class ExperimentSampleEntity(SQLModel, table=True):
+    __tablename__ = "pai_experiment_sample_entity"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     experiment_id: str = Field(
@@ -63,8 +71,12 @@ class ExperimentRunEntity(SQLModel, table=True):
         description="Reference to the experiment"
     )
     dataset_id: str = Field(
-        foreign_key="pai_evaluation_dataset.id",
+        foreign_key="pai_dataset.id",
         description="Reference to the dataset entry used"
+    )
+    sample_id: str = Field(
+        foreign_key="pai_dataset_sample.id",
+        description="Reference to the dataset sample entry used"
     )
     actual_output: Optional[str] = Field(
         default=None,

@@ -33,14 +33,14 @@ import {
 import { formatBeijingTime } from '@/app/knowledgebases/utils/utils';
 import { toast } from 'sonner';
 
-import { EvalConfig } from '@/app/evaluation/[evalId]/types';
-import { StatusBadge } from '@/app/evaluation/components/StatusBadge';
-import { useExperiments } from '@/app/evaluation/[evalId]/experiments/useExperiments';
+import { EvalConfig } from '@/app/evaluation/[datasetId]/types';
+import { StatusBadge } from '@/app/evaluation/components/status-badge';
+import { useExperiments } from '@/app/evaluation/[datasetId]/experiments/useExperiments';
 
 export default function EvalExperimentsDetailsPage(
-  { params }: { params: Promise<{ evalId: string }> }
+  { params }: { params: Promise<{ datasetId: string }> }
 ) {
-  const { evalId } = use(params);
+  const { datasetId } = use(params);
   const router = useRouter();
 
   // 页面状态
@@ -54,13 +54,13 @@ export default function EvalExperimentsDetailsPage(
     totalPages,
     isLoading,
     deleteExperiment
-  } = useExperiments({ evalId, page, pageSize });
+  } = useExperiments({ datasetId, page, pageSize });
 
   // 加载评估配置
   useEffect(() => {
     const fetchEvalConfig = async () => {
       try {
-        const response = await fetch(`/api/config/evaluation/${evalId}`);
+        const response = await fetch(`/api/config/evaluation/${datasetId}`);
         if (!response.ok) throw new Error('获取评估配置失败');
         const data = await response.json();
         setEvalConfig(data.data);
@@ -71,7 +71,7 @@ export default function EvalExperimentsDetailsPage(
     };
 
     fetchEvalConfig();
-  }, [evalId]);
+  }, [datasetId]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -119,8 +119,9 @@ export default function EvalExperimentsDetailsPage(
                 <TableRow className="transition-colors">
                   <TableHead className="w-[180px]">实验ID</TableHead>
                   <TableHead className="w-[180px]">实验名称</TableHead>
-                  <TableHead className="w-[180px]">实验描述</TableHead>
                   <TableHead className="w-[100px]">样本数</TableHead>
+                  {/* <TableHead className="w-[100px]">运行配置</TableHead>
+                  <TableHead className="w-[100px]">评估配置</TableHead> */}
                   <TableHead className="w-[120px]">状态</TableHead>
                   <TableHead className="w-[100px]">平均得分</TableHead>
                   <TableHead className="w-[160px]">创建时间</TableHead>
@@ -156,7 +157,7 @@ export default function EvalExperimentsDetailsPage(
                           <Button
                             variant="link"
                             className="truncate max-w-[120px] font-medium group-hover:underline"
-                            onClick={() => router.push(`/evaluation/${evalId}/${item.id}`)}
+                            onClick={() => router.push(`/evaluation/${datasetId}/${item.id}`)}
                           >
                             {item.id.substring(0, 8)}...
                           </Button>
@@ -178,15 +179,23 @@ export default function EvalExperimentsDetailsPage(
                         </Badge>
                       </TableCell>
 
-                      <TableCell className="text-sm">
-                        {item.description ? item.description.substring(0, 20) + "..." : "无描述"}
-                      </TableCell>
-
                       <TableCell>
                         <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
                           {item.samples_count}
                         </Badge>
                       </TableCell>
+
+                      {/* <TableCell>
+                        <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
+                          {item.run_config_id}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
+                          {item.evaluator_config_id}
+                        </Badge>
+                      </TableCell> */}
 
                       <TableCell>
                         <StatusBadge status={item.status} />
@@ -223,7 +232,7 @@ export default function EvalExperimentsDetailsPage(
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => router.push(`/evaluation/${evalId}/${item.id}`)}
+                              onClick={() => router.push(`/evaluation/${datasetId}/${item.id}`)}
                             >
                               <Eye className="mr-2 h-4 w-4" />
                               <span>查看详情</span>

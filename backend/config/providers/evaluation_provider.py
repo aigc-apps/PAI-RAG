@@ -2,26 +2,26 @@ import traceback
 from typing import Dict, Type
 from loguru import logger
 from sqlmodel import Field, SQLModel
-from db.models.evaluation.evaluation import EvaluationEntity
+from db.models.evaluation.dataset import DatasetEntity
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
 from config.providers.base_provider import BaseConfigProvider
 
 @with_async_db_session
-async def fetch_evaluation_by_id(session: AsyncSession, eval_id: str) -> EvaluationEntity:
-    eval = await session.get(EvaluationEntity, eval_id)
+async def fetch_evaluation_by_id(session: AsyncSession, eval_id: str) -> DatasetEntity:
+    eval = await session.get(DatasetEntity, eval_id)
     return eval
 
 
 class EvaluationProvider(BaseConfigProvider):
     name_to_entry_id: Dict[str, str] = Field(default={})
-    entity_class: Type[SQLModel] = EvaluationEntity
+    entity_class: Type[SQLModel] = DatasetEntity
 
-    def add(self, entry: EvaluationEntity):
+    def add(self, entry: DatasetEntity):
         super().add(entry)
         self.name_to_entry_id[entry.name] = entry.id
 
-    def update(self, entry: EvaluationEntity):
+    def update(self, entry: DatasetEntity):
         super().update(entry)
         self.name_to_entry_id[entry.name] = entry.id
 
@@ -40,7 +40,7 @@ class EvaluationProvider(BaseConfigProvider):
         for entry_id, entry in self.config_map.items():
             self.name_to_entry_id[entry.name] = entry_id
 
-    async def aget_evaluation(self, evaluation_id: str) -> EvaluationEntity:
+    async def aget_evaluation(self, evaluation_id: str) -> DatasetEntity:
         if evaluation_id not in self.config_map:
             eval = await fetch_evaluation_by_id(eval_id=evaluation_id)
             if eval is None:
@@ -50,7 +50,7 @@ class EvaluationProvider(BaseConfigProvider):
             return eval
         return self.config_map[evaluation_id]
 
-    def get_evaluation_by_name(self, evaluation_name: str) -> EvaluationEntity:
+    def get_evaluation_by_name(self, evaluation_name: str) -> DatasetEntity:
         if evaluation_name not in self.name_to_entry_id:
             logger.info(f"Knowledgebase '{evaluation_name}' not found.")
             return None

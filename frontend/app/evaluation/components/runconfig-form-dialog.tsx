@@ -35,19 +35,19 @@ import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { useRouter } from 'next/navigation';
-import { EvalRunConfig } from '@/app/evaluation/[evalId]/types';
+import { RunConfig } from '@/app/evaluation/[datasetId]/types';
 
 
-interface EvalConfigFormDialogProps {
+interface RunConfigFormDialogProps {
   mode: 'new' | 'edit';
-  config?: EvalRunConfig; // edit 时传入
+  config?: RunConfig; // edit 时传入
   llms: LlmConfig[];
   mcps: McpConfig[];
   kbs: KbConfig[];
-  evalId: string;
+  datasetId: string;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (config: EvalRunConfig) => void;
+  onSave: (config: RunConfig) => void;
   isSaving: boolean;
 }
 
@@ -57,14 +57,14 @@ export function EvalConfigFormDialog({
   llms,
   mcps,
   kbs,
-  evalId,
+  datasetId,
   isOpen,
   onOpenChange,
   onSave,
   isSaving,
-}: EvalConfigFormDialogProps) {
+}: RunConfigFormDialogProps) {
   const router = useRouter();
-  const [localConfig, setLocalConfig] = useState<EvalRunConfig>(
+  const [localConfig, setLocalConfig] = useState<RunConfig>(
     mode === 'edit' && config
       ? { ...config }
       : {
@@ -79,12 +79,6 @@ export function EvalConfigFormDialog({
         enable_input_guardrail: false,
         enable_output_guardrail: false,
         guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
-        evaluator_config: {
-          name: "",
-          model_id: "",
-          case_sensitive: false,
-          ignore_punctuation: false,
-        }
       }
   );
 
@@ -118,12 +112,6 @@ export function EvalConfigFormDialog({
         enable_input_guardrail: false,
         enable_output_guardrail: false,
         guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
-        evaluator_config: {
-          name: "",
-          model_id: "",
-          case_sensitive: false,
-          ignore_punctuation: false,
-        }
       });
       setSelectedKbNames([]);
       setSelectedMcpNames([]);
@@ -174,8 +162,8 @@ export function EvalConfigFormDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{mode_str}评估配置</DialogTitle>
-          <DialogDescription>{mode_str}一个评估配置后，点击保存。</DialogDescription>
+          <DialogTitle>{mode_str}运行配置</DialogTitle>
+          <DialogDescription>{mode_str}一个运行配置后，点击保存。</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6 py-4">
@@ -417,107 +405,6 @@ export function EvalConfigFormDialog({
                   默认护栏提示
                 </Label>
               </div>
-            </div>
-          </div>
-
-          {/* 评估器选择 */}
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4 border-t  pt-3">
-            <Label htmlFor="enable_agent">评估器选择</Label>
-            <div className="space-y-4 w-full">
-              {/* 评估器类型选择 */}
-              <Select
-                value={localConfig.evaluator_config?.name || ""}
-                onValueChange={(value) => {
-                  setLocalConfig((prev) => ({
-                    ...prev,
-                    evaluator_config: {
-                      ...prev.evaluator_config,
-                      name: value,
-                    },
-                  }));
-                }}
-              >
-                <SelectTrigger id="evaluator_name">
-                  <SelectValue placeholder="选择评估器" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ExactMatch">精确匹配</SelectItem>
-                  <SelectItem value="LLMJudge">LLM 评判</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* 动态配置区域 */}
-              {localConfig.evaluator_config?.name === "ExactMatch" && (
-                <div className="space-y-3 pt-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="case_sensitive" className="text-sm">
-                      区分大小写
-                    </Label>
-                    <Switch
-                      id="case_sensitive"
-                      checked={localConfig.evaluator_config.case_sensitive || false}
-                      onCheckedChange={(checked) => {
-                        setLocalConfig((prev) => ({
-                          ...prev,
-                          evaluator_config: {
-                            ...prev.evaluator_config!,
-                            case_sensitive: checked,
-                          },
-                        }));
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="ignore_punctuation" className="text-sm">
-                      忽略标点符号
-                    </Label>
-                    <Switch
-                      id="ignore_punctuation"
-                      checked={localConfig.evaluator_config.ignore_punctuation ?? true}
-                      onCheckedChange={(checked) => {
-                        setLocalConfig((prev) => ({
-                          ...prev,
-                          evaluator_config: {
-                            ...prev.evaluator_config!,
-                            ignore_punctuation: checked,
-                          },
-                        }));
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {localConfig.evaluator_config?.name === "LLMJudge" && (
-                <div className="pt-3">
-                  <Label htmlFor="model_id" className="block text-sm mb-2">
-                    选择评估器模型
-                  </Label>
-                  <Select
-                    value={localConfig.evaluator_config.model_id || ""}
-                    onValueChange={(value) => {
-                      setLocalConfig((prev) => ({
-                        ...prev,
-                        evaluator_config: {
-                          ...prev.evaluator_config!,
-                          model_id: value,
-                        },
-                      }));
-                    }}
-                  >
-                    <SelectTrigger id="model_id">
-                      <SelectValue placeholder="请选择评估模型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {llms.map((llm) => (
-                        <SelectItem key={llm.model_id} value={llm.model_id}>
-                          {llm.model_id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
             </div>
           </div>
         </div>

@@ -17,7 +17,7 @@ export interface SampleItem {
     };
 }
 
-export interface EvalRunConfig {
+export interface RunConfig {
     id: string;
     name: string;
     model_id: string;
@@ -29,12 +29,15 @@ export interface EvalRunConfig {
     enable_input_guardrail?: boolean;
     enable_output_guardrail?: boolean;
     guardrail_hint?: string;
-    evaluator_config: {
-        name: string;
-        model_id?: string;
-        case_sensitive?: boolean;
-        ignore_punctuation?: boolean;
-    }
+}
+
+export interface EvaluatorConfig {
+    id: string;
+    name: string;
+    type: string;
+    model_id: string;    
+    case_sensitive?: boolean;
+    ignore_punctuation?: boolean;
 }
 
 export interface ExperimentItem {
@@ -44,6 +47,7 @@ export interface ExperimentItem {
   description: string;
   status: string;
   run_config_id: string;
+  evaluator_config_id: string;
   avg_score: number;
   created_at: string;
   updated_at: string;

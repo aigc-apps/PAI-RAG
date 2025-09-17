@@ -4,23 +4,24 @@ import { useRouter } from "next/navigation";
 import { toast } from 'sonner';
 
 interface UseDatasetActionsProps {
-  evalId: string;
+  datasetId: string;
 }
 
-interface RunExperimentData {
+interface ExperimentData {
   name: string;
   description: string;
-  dataset_ids: string[];
+  sample_ids: string[];
   run_config_id: string;
+  evaluator_config_id: string;
 }
 
-export function useDatasetActions({ evalId }: UseDatasetActionsProps) {
+export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
   const router = useRouter();
 
   // 运行样本（单条或批量）
-  const runSamples = async (data: RunExperimentData) => {
+  const runSamples = async (data: ExperimentData) => {
     try {
-      const res = await fetch(`/api/config/evaluation/${evalId}/experiments`, {
+      const res = await fetch(`/api/config/evaluation/${datasetId}/experiments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -30,7 +31,7 @@ export function useDatasetActions({ evalId }: UseDatasetActionsProps) {
 
       const result = await res.json();
       toast.success('实验创建成功');
-      router.push(`/evaluation/${evalId}/${result.data.id}`);
+      router.push(`/evaluation/${datasetId}/${result.data.id}`);
       return result.data.id;
     } catch (error) {
       console.error('实验创建失败:', error);
@@ -42,7 +43,7 @@ export function useDatasetActions({ evalId }: UseDatasetActionsProps) {
   // 删除样本
   const deleteSample = async (sampleId: string) => {
     try {
-      const res = await fetch(`/api/config/evaluation/${evalId}/dataset/${sampleId}`, {
+      const res = await fetch(`/api/config/evaluation/${datasetId}/dataset/${sampleId}`, {
         method: 'DELETE',
       });
 
@@ -62,7 +63,7 @@ export function useDatasetActions({ evalId }: UseDatasetActionsProps) {
     formData.append('file', file);
 
     try {
-      const res = await fetch(`/api/config/evaluation/${evalId}/dataset`, {
+      const res = await fetch(`/api/config/evaluation/${datasetId}/upload`, {
         method: 'POST',
         body: formData,
       });

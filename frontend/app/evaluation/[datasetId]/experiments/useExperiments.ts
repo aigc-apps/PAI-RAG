@@ -1,19 +1,19 @@
-// app/evaluation/[evalId]/experiments/useExperiments.ts
+// app/evaluation/[datasetId]/experiments/useExperiments.ts
 
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
-import { ExperimentItem } from '@/app/evaluation/[evalId]/types';
+import { ExperimentItem } from '@/app/evaluation/[datasetId]/types';
 
 
 interface UseExperimentsProps {
-  evalId: string;
+  datasetId: string;
   page: number;
   pageSize: number;
 }
 
-export function useExperiments({ evalId, page, pageSize }: UseExperimentsProps) {
+export function useExperiments({ datasetId, page, pageSize }: UseExperimentsProps) {
   const [experiments, setExperiments] = useState<ExperimentItem[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,7 +29,7 @@ export function useExperiments({ evalId, page, pageSize }: UseExperimentsProps) 
     isRefreshing.current = true;
 
     try {
-      const url = `/api/config/evaluation/${evalId}/experiments?page=${page}&size=${pageSize}`;
+      const url = `/api/config/evaluation/${datasetId}/experiments?page=${page}&size=${pageSize}`;
       const response = await fetch(url);
 
       if (!response.ok) throw new Error('获取实验列表失败');
@@ -60,7 +60,7 @@ export function useExperiments({ evalId, page, pageSize }: UseExperimentsProps) 
     } finally {
       setIsLoading(false);
     }
-  }, [evalId, page, pageSize]);
+  }, [datasetId, page, pageSize]);
 
   // 首次加载 + 页码变化时刷新
   useEffect(() => {
@@ -71,7 +71,7 @@ export function useExperiments({ evalId, page, pageSize }: UseExperimentsProps) 
   // 删除实验
   const deleteExperiment = async (id: string) => {
     try {
-      const response = await fetch(`/api/config/evaluation/${evalId}/experiments/${id}`, {
+      const response = await fetch(`/api/config/evaluation/${datasetId}/experiments/${id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });

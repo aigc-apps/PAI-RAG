@@ -16,24 +16,23 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { BookOpen, Settings, FlaskConical } from "lucide-react";
-import EvalDatasetsDetailsPage from '@/app/evaluation/[evalId]/datasets/page';
-import EvalExperimentsDetailsPage from '@/app/evaluation/[evalId]/experiments/page';
-import EvalSettingsDetailsPage from '@/app/evaluation/[evalId]/settings/page';
-import { EvalConfig } from "@/app/evaluation/[evalId]/types";
+import EvalDatasetsDetailsPage from '@/app/evaluation/[datasetId]/samples/page';
+import EvalExperimentsDetailsPage from '@/app/evaluation/[datasetId]/experiments/page';
+import RunConfigsPage from '@/app/evaluation/[datasetId]/runconfigs/page';
+import EvaluatorConfigsPage from '@/app/evaluation/[datasetId]/evalconfigs/page';
+import { EvalConfig } from "@/app/evaluation/[datasetId]/types";
 export default function EvalExpDetailsPage(
-    { params }: { params: Promise<{ evalId: string }> }
+    { params }: { params: Promise<{ datasetId: string }> }
 ) {
-    const { evalId } = use(params);
+    const { datasetId } = use(params);
     const router = useRouter();
     const [evaluation, setEvaluationConfig] = useState<EvalConfig>(); // 知识库列表
 
     useEffect(() => {
         const fetchKbConfigs = async () => {
             try {
-                const [evalRes, allDatasetRes, experimentRes] = await Promise.all([
-                    fetch(`/api/config/evaluation/${evalId}`),
-                    fetch(`/api/config/evaluation/${evalId}/dataset`),
-                    fetch(`/api/config/evaluation/${evalId}/experiments`),
+                const [evalRes] = await Promise.all([
+                    fetch(`/api/config/evaluation/${datasetId}`)
                 ]);
 
                 if (!evalRes.ok) throw new Error('获取评估任务配置失败');
@@ -106,11 +105,18 @@ export default function EvalExpDetailsPage(
                             <FlaskConical className="h-3.5 w-3.5" />运行历史
                         </TabsTrigger>
                         <TabsTrigger
-                            key="settings"
-                            value="settings"
+                            key="runconfigs"
+                            value="runconfigs"
                             className="px-4"
                         >
                             <Settings className="h-3.5 w-3.5" />运行设置
+                        </TabsTrigger>
+                        <TabsTrigger
+                            key="evalconfigs"
+                            value="evalconfigs"
+                            className="px-4"
+                        >
+                            <Settings className="h-3.5 w-3.5" />评估器设置
                         </TabsTrigger>
                     </TabsList>
                     <div className="flex-1 min-h-0 overflow-hidden">
@@ -120,8 +126,11 @@ export default function EvalExpDetailsPage(
                         <TabsContent key="experiments" value="experiments" className="h-full flex flex-col min-h-0">
                             <EvalExperimentsDetailsPage params={params} />
                         </TabsContent>
-                        <TabsContent key="settings" value="settings" className="h-full flex flex-col min-h-0">
-                            <EvalSettingsDetailsPage params={params} />
+                        <TabsContent key="runconfigs" value="runconfigs" className="h-full flex flex-col min-h-0">
+                            <RunConfigsPage params={params} />
+                        </TabsContent>
+                        <TabsContent key="evalconfigs" value="evalconfigs" className="h-full flex flex-col min-h-0">
+                            <EvaluatorConfigsPage params={params} />
                         </TabsContent>
                     </div>
                 </Tabs>

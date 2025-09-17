@@ -21,8 +21,8 @@ from db.models.knowledgebase.embedding import (
     EmbeddingModelEntity,
     EmbeddingType,
 )
-from db.models.evaluation.evaluation import EvaluationCreate, EvaluationEntity
-from db.models.evaluation.dataset import EvaluationDatasetEntity
+from db.models.evaluation.dataset import DatasetCreate, DatasetEntity
+from db.models.evaluation.dataset import DatasetSampleEntity
 from sqlalchemy.exc import IntegrityError
 from rag.file.models.file_item import FileItem
 
@@ -75,7 +75,7 @@ class ConfigChangeManager:
         logger.info("Initialized prompt configs.")
 
 
-        await self.create_builtin_gaia_evaluation()
+        await self.create_builtin_gaia_dataset()
         await evaluation_provider.full_load_from_db_async()
         logger.info("Initialized evaluation tasks.")
 
@@ -121,28 +121,28 @@ class ConfigChangeManager:
             await session.rollback()
 
     @with_async_db_session
-    async def create_builtin_gaia_evaluation(self, session: AsyncSession):
+    async def create_builtin_gaia_dataset(self, session: AsyncSession):
         # create builtin GAIA evaluation entity if not exists
-        sql_results = await session.exec(select(EvaluationEntity).where(EvaluationEntity.name == "GAIA"))
-        evaluation_entities: List[EvaluationEntity] = sql_results.all()
+        sql_results = await session.exec(select(DatasetEntity).where(DatasetEntity.name == "GAIA"))
+        evaluation_entities: List[DatasetEntity] = sql_results.all()
         if len(evaluation_entities) > 0:
-            logger.info("Builtin GAIA evaluation already exists.")
+            logger.info("Builtin GAIA dataset already exists.")
             return
-        logger.info("Creating builtin GAIA evaluation.")
-        gaia_evaluation = EvaluationCreate(
+        logger.info("Creating builtin GAIA dataset.")
+        gaia_dataset = DatasetCreate(
             name="GAIA",
             description="GAIA评估",
             type="built-in"
         )
-        gaia_evaluation = EvaluationEntity.model_validate(gaia_evaluation)
+        gaia_dataset = DatasetEntity.model_validate(gaia_dataset)
         try:
-            evaluation_provider.add(gaia_evaluation)
-            session.add(gaia_evaluation)
+            evaluation_provider.add(gaia_dataset)
+            session.add(gaia_dataset)
             await session.commit()
-            await session.refresh(gaia_evaluation)
+            await session.refresh(gaia_dataset)
             await self.notify_change_async(
                 event_source=ChangeEventSource.EVALUATION,
-                source_id=gaia_evaluation.id,
+                source_id=gaia_dataset.id,
                 event_type=ChangeEventType.ADD
             )
             logger.info("Builtin GAIA evaluation added to database.")
@@ -154,12 +154,12 @@ class ConfigChangeManager:
         file_item = FileItem.from_file(
             file_path="./data/gaia_level_1_validation_metadata.jsonl",
             file=open("./data/gaia_level_1_validation_metadata.jsonl", "rb"),
-            kb_id=gaia_evaluation.id
+            kb_id=gaia_dataset.id
         )
         file_results = file_item.get_eval_dataset_from_jsonl_file()
         for line in file_results:
-            dataset_entity = EvaluationDatasetEntity(
-                eval_id=gaia_evaluation.id,
+            dataset_entity = DatasetSampleEntity(
+                dataset_id=gaia_dataset.id,
                 input=line["input"],
                 expected_output=line.get("expected_output"),
                 eval_metadata=line.get("metadata")
@@ -167,6 +167,7 @@ class ConfigChangeManager:
             session.add(dataset_entity)
             await session.commit()
             logger.info(f"Saved file {dataset_entity} successfully.")
+
 
 
     @with_async_db_session

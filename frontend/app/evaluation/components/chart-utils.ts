@@ -1,5 +1,5 @@
 // chartUtils.ts
-import { ExperimentDetailsItem } from '@/app/evaluation/[evalId]/types';
+import { ExperimentDetailsItem } from '@/app/evaluation/[datasetId]/types';
 
 export type StatusKey = 'success' | 'failed' | 'running' | 'pending';
 

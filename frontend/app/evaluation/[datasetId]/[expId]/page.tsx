@@ -54,14 +54,16 @@ import {
 } from "lucide-react";
 import { Fragment } from "react";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
-import { EvalConfig } from "@/app/evaluation/[evalId]/types";
-import { ExperimentItem } from '@/app/evaluation/[evalId]/types';
-import { StatusBadge } from '@/app/evaluation/components/StatusBadge';
+import { EvalConfig } from "@/app/evaluation/[datasetId]/types";
+import { ExperimentItem } from '@/app/evaluation/[datasetId]/types';
+import { StatusBadge } from '@/app/evaluation/components/status-badge';
 
 import { formatBeijingTime, calculateTimeDifference } from '@/app/knowledgebases/utils/utils';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
-import { EvalRunConfig } from '@/app/evaluation/[evalId]/types';
+import { RunConfig } from '@/app/evaluation/[datasetId]/types';
+import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
+
 import {
   BarChart,
   Bar,
@@ -86,10 +88,10 @@ import {
   getMaxTime,
   getAverageScore,
   type StatusKey
-} from '@/app/evaluation/components/chartUtils';
-import { ExperimentDetailsItem } from '@/app/evaluation/[evalId]/types';
-import { SampleDetailDialog } from '@/app/evaluation/components/SampleDetailDialog';
-import { SampleItem } from '@/app/evaluation/[evalId]/types';
+} from '@/app/evaluation/components/chart-utils';
+import { ExperimentDetailsItem } from '@/app/evaluation/[datasetId]/types';
+import { SampleDetailDialog } from '@/app/evaluation/components/sample-detail-dialog';
+import { SampleItem } from '@/app/evaluation/[datasetId]/types';
 
 const STATUS_OPTIONS = [
   { value: "running", label: "运行中" },
@@ -100,8 +102,8 @@ const STATUS_OPTIONS = [
 
 type StatusType = (typeof STATUS_OPTIONS)[number]["value"];
 
-export default function ExperimentDetailPage({ params }: { params: Promise<{ evalId: string, expId: string }> }) {
-  const { evalId, expId } = use(params);
+export default function ExperimentDetailPage({ params }: { params: Promise<{ datasetId: string, expId: string }> }) {
+  const { datasetId, expId } = use(params);
   const router = useRouter();
 
   // ========================
@@ -110,7 +112,8 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
 
   const [evalConfig, setEvalConfig] = useState<EvalConfig>();
   const [experiment, setExperiment] = useState<ExperimentItem>();
-  const [evalRunConfig, setEvalRunConfig] = useState<EvalRunConfig>();
+  const [runConfig, setRunConfig] = useState<RunConfig>();
+  const [evaluatorConfig, setEvaluatorConfig] = useState<EvaluatorConfig>();
 
   // 数据状态
   const [allExpItems, setAllItems] = useState<ExperimentDetailsItem[]>([]);
@@ -130,7 +133,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
 
   const handleViewSample = async (sample_id: string) => {
     try {
-        const response = await fetch(`/api/config/evaluation/${evalId}/dataset/${sample_id}`, {
+        const response = await fetch(`/api/config/evaluation/${datasetId}/dataset/${sample_id}`, {
             method: "GET",
             headers: { "Content-Type": "application/json" },
         });
@@ -181,14 +184,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
   const fetchAllItems = async () => {
     try {
       const tmpPageSize = 1000;
-      const firstPageRes = await fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/runs?page=1&size=${tmpPageSize}`);
+      const firstPageRes = await fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=1&size=${tmpPageSize}`);
       if (!firstPageRes.ok) throw new Error('获取评估实验列表失败');
       const json_data = await firstPageRes.json();
       const tmpAllItems: ExperimentDetailsItem[] = [];
 
       for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
         console.log("加载所有数据，第", curPage, "页");
-        const response = await fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/runs?page=${curPage}&size=${tmpPageSize}`);
+        const response = await fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${curPage}&size=${tmpPageSize}`);
         const data = await response.json();
         tmpAllItems.push(...data.data.items);
       }
@@ -205,9 +208,9 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
   const fetchExperimentDetails = useCallback(async () => {
     try {
       const [evalRes, expDataRes, detailsRes] = await Promise.all([
-        fetch(`/api/config/evaluation/${evalId}`),
-        fetch(`/api/config/evaluation/${evalId}/experiments/${expId}`),
-        fetch(`/api/config/evaluation/${evalId}/experiments/${expId}/runs?page=${pageRef.current}&size=${pageSize}`),
+        fetch(`/api/config/evaluation/${datasetId}`),
+        fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}`),
+        fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${pageRef.current}&size=${pageSize}`),
       ]);
 
       // 获取评估配置
@@ -222,10 +225,18 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
 
       // 获取运行配置
       if (exp_data.data?.run_config_id) {
-        const runConfigRes = await fetch(`/api/config/evaluation/${evalId}/configs/${exp_data.data.run_config_id}`);
+        const runConfigRes = await fetch(`/api/config/evaluation/${datasetId}/runconfigs/${exp_data.data.run_config_id}`);
         if (runConfigRes.ok) {
           const runConfigData = await runConfigRes.json();
-          setEvalRunConfig(runConfigData.data);
+          setRunConfig(runConfigData.data);
+        }
+      }
+
+      if (exp_data.data?.evaluator_config_id) {
+        const evaluatorConfigRes = await fetch(`/api/config/evaluation/${datasetId}/evalconfigs/${exp_data.data.evaluator_config_id}`);
+        if (evaluatorConfigRes.ok) {
+          const evaluatorConfigData = await evaluatorConfigRes.json();
+          setEvaluatorConfig(evaluatorConfigData.data);
         }
       }
 
@@ -240,7 +251,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
       console.error("fetchExperimentDetails 错误:", err);
       toast.error(err.message || "加载实验详情失败");
     }
-  }, [evalId, expId, pageSize]);
+  }, [datasetId, expId, pageSize]);
 
   // ========================
   // 轮询优化（使用 useEffect + clearTimeout）
@@ -334,7 +345,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Button variant="link" className="px-0" onClick={() => router.push(`/evaluation/${evalId}`)}>
+                <Button variant="link" className="px-0" onClick={() => router.push(`/evaluation/${datasetId}`)}>
                   {evalConfig?.name}
                 </Button>
               </BreadcrumbLink>
@@ -525,11 +536,11 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">基模型</span>
-                      <span className="font-medium">{evalRunConfig?.model_id || "—"}</span>
+                      <span className="font-medium">{runConfig?.model_id || "—"}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">联网搜索</span>
-                      {evalRunConfig?.enable_search ? (
+                      {runConfig?.enable_search ? (
                         <CheckCircle className="text-green-500 h-3.5 w-3.5" />
                       ) : (
                         <CircleXIcon className="text-red-500 h-3.5 w-3.5" />
@@ -537,7 +548,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Agentic</span>
-                      {evalRunConfig?.enable_agent ? (
+                      {runConfig?.enable_agent ? (
                         <CheckCircle className="text-green-500 h-3.5 w-3.5" />
                       ) : (
                         <CircleXIcon className="text-red-500 h-3.5 w-3.5" />
@@ -546,9 +557,9 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500 text-xs">MCP</span>
                       <div className="mt-1">
-                        {Array.isArray(evalRunConfig?.mcp_ids) && evalRunConfig?.mcp_ids.length > 0 ? (
+                        {Array.isArray(runConfig?.mcp_ids) && runConfig?.mcp_ids.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {evalRunConfig.mcp_ids.map((mcp, idx) => (
+                            {runConfig.mcp_ids.map((mcp, idx) => (
                               <Badge key={idx} variant="secondary" className="text-xs py-0.5 px-1.5">
                                 {mcp}
                               </Badge>
@@ -562,9 +573,9 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500 text-xs">知识库</span>
                       <div className="mt-1">
-                        {Array.isArray(evalRunConfig?.kb_ids) && evalRunConfig?.kb_ids.length > 0 ? (
+                        {Array.isArray(runConfig?.kb_ids) && runConfig?.kb_ids.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {evalRunConfig.kb_ids.map((kb, idx) => (
+                            {runConfig.kb_ids.map((kb, idx) => (
                               <Badge key={idx} variant="secondary" className="text-xs py-0.5 px-1.5">
                                 {kb}
                               </Badge>
@@ -581,13 +592,13 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                         <div className="flex items-center justify-between">
                           <span className="text-xs">输入/输出</span>
                           <div className="flex items-center gap-2">
-                            <Switch checked={evalRunConfig?.enable_input_guardrail || false} disabled className="h-4 w-8" />
-                            <Switch checked={evalRunConfig?.enable_output_guardrail || false} disabled className="h-4 w-8" />
+                            <Switch checked={runConfig?.enable_input_guardrail || false} disabled className="h-4 w-8" />
+                            <Switch checked={runConfig?.enable_output_guardrail || false} disabled className="h-4 w-8" />
                           </div>
                         </div>
-                        {evalRunConfig?.guardrail_hint && (
-                          <div className="text-xs bg-muted p-1.5 rounded mt-1 truncate" title={evalRunConfig.guardrail_hint}>
-                            {evalRunConfig.guardrail_hint}
+                        {runConfig?.guardrail_hint && (
+                          <div className="text-xs bg-muted p-1.5 rounded mt-1 truncate" title={runConfig.guardrail_hint}>
+                            {runConfig.guardrail_hint}
                           </div>
                         )}
                       </div>
@@ -599,20 +610,20 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                 <div className="flex flex-col gap-4">
                   <div>
                     <h3 className="font-semibold mb-3 flex items-center gap-1.5 text-sm">
-                      <BarChart2 className="h-4 w-4" /> 评估设置
+                      <BarChart2 className="h-4 w-4" /> 评估器设置
                     </h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-500">类型</span>
                         <Badge variant="outline" className="text-xs py-0.5 px-2">
-                          {evalRunConfig?.evaluator_config?.name === "ExactMatch" ? "精确匹配" : "LLM 评判"}
+                          {evaluatorConfig?.type === "ExactMatch" ? "精确匹配" : "LLM 评判"}
                         </Badge>
                       </div>
-                      {evalRunConfig?.evaluator_config?.name === "ExactMatch" && (
+                      {evaluatorConfig?.type === "ExactMatch" && (
                         <>
                           <div className="flex items-center justify-between">
                             <span className="text-gray-500">大小写</span>
-                            {evalRunConfig.evaluator_config.case_sensitive ? (
+                            {evaluatorConfig?.case_sensitive ? (
                               <CheckCircle className="text-green-500 h-3.5 w-3.5" />
                             ) : (
                               <CircleXIcon className="text-red-500 h-3.5 w-3.5" />
@@ -620,7 +631,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-gray-500">标点</span>
-                            {evalRunConfig.evaluator_config.ignore_punctuation ? (
+                            {evaluatorConfig?.ignore_punctuation ? (
                               <CheckCircle className="text-green-500 h-3.5 w-3.5" />
                             ) : (
                               <CircleXIcon className="text-red-500 h-3.5 w-3.5" />
@@ -628,10 +639,10 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ eva
                           </div>
                         </>
                       )}
-                      {evalRunConfig?.evaluator_config?.name === "LLMJudge" && (
+                      {evaluatorConfig?.type === "LLMJudge" && (
                         <div className="flex items-center justify-between">
                           <span className="text-gray-500">模型</span>
-                          <span className="font-medium text-xs">{evalRunConfig.evaluator_config.model_id || "未指定"}</span>
+                          <span className="font-medium text-xs">{evaluatorConfig?.model_id || "未指定"}</span>
                         </div>
                       )}
                     </div>

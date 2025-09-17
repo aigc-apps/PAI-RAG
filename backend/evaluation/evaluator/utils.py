@@ -21,7 +21,7 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
     """
     根据配置创建评估器实例
     """
-    eval_type = eval_config.get("name", "")
+    eval_type = eval_config.get("type", "")
     if eval_type == "ExactMatch":
         return ExactMatchEvaluator(
             case_sensitive=eval_config.get("case_sensitive", False),
