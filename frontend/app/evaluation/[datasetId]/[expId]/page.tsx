@@ -133,7 +133,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
 
   const handleViewSample = async (sample_id: string) => {
     try {
-        const response = await fetch(`/api/config/evaluation/${datasetId}/dataset/${sample_id}`, {
+        const response = await fetch(`/api/config/evaluation/${datasetId}/samples/${sample_id}`, {
             method: "GET",
             headers: { "Content-Type": "application/json" },
         });

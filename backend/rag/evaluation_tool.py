@@ -14,7 +14,8 @@ from evaluation.run import run_agent, run_evaluator
 from chat.openai.openai_like import OpenAILike
 from sqlmodel import select
 from db.encrypt_utils import decrypt_key
-
+from fastapi import UploadFile
+import json
 @with_async_db_session
 async def get_exp_run_entity(
     session: AsyncSession,
@@ -134,6 +135,56 @@ async def update_experiment_status(
 class PaiEvaluationClient:
     def __init__(self):
         pass
+
+    def load_dataset_from_local_path(self, file_path: str):
+        results = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                for line_num, line in enumerate(file, 1):
+                    line = line.strip()
+                    if not line:  # 跳过空行
+                        continue
+                    try:
+                        entry_data = json.loads(line)
+                        if "input" in entry_data:  # 只有包含 "input" 的才保留
+                            results.append(entry_data)
+                        else:
+                            print(f"Warning: Line {line_num} missing 'input' field, skipped.")
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Line {line_num} is not valid JSON, skipped. Error: {e}")
+        except FileNotFoundError:
+            print(f"Error: File '{file_path}' not found.")
+            raise
+        except Exception as e:
+            print(f"Error reading file '{file_path}': {e}")
+            raise
+
+        return results
+
+    async def load_dataset_from_upload_file(self, file: UploadFile):
+        results = []
+        try:
+            # 异步读取整个文件内容并按行分割（适用于中小文件）
+            content = await file.read()
+            lines = content.decode('utf-8').splitlines()
+
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
+                if not line:  # 跳过空行
+                    continue
+                try:
+                    entry_data = json.loads(line)
+                    if "input" in entry_data:  # 只保留包含 "input" 的条目
+                        results.append(entry_data)
+                    else:
+                        print(f"Warning: Line {line_num} missing 'input' field, skipped.")
+                except json.JSONDecodeError as e:
+                    print(f"Warning: Line {line_num} is not valid JSON, skipped. Error: {e}")
+        except Exception as e:
+            print(f"Error reading uploaded file: {e}")
+            raise
+
+        return results
 
     async def create_evaluation_task(self, dataset_id: str, experiment_id: str, exp_run_ids: List[str]):
         logger.info(f"[WORKER] creating evaluation dataset for dataset_id {dataset_id} in background.")

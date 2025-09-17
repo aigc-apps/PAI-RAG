@@ -43,7 +43,7 @@ export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
   // 删除样本
   const deleteSample = async (sampleId: string) => {
     try {
-      const res = await fetch(`/api/config/evaluation/${datasetId}/dataset/${sampleId}`, {
+      const res = await fetch(`/api/config/evaluation/${datasetId}/samples/${sampleId}`, {
         method: 'DELETE',
       });
 

@@ -15,7 +15,6 @@ from db.models.evaluation.run_config import RunConfigEntity, RunConfigCreate
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
-from rag.file.store.file_store_helper import file_store
 from api.response_model import (
     ResponseModel,
     PagedResult,
@@ -23,13 +22,14 @@ from api.response_model import (
     error_response,
 )
 from loguru import logger
-from rag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
 from config.providers.evaluation_provider import evaluation_provider
 from db.models.evaluation.evaluator_config import (
     EvaluatorConfigCreate,
     EvaluatorConfigEntity,
 )
+from rag.evaluation_tool import eval_client
+
 
 evaluation_router = APIRouter()
 
@@ -243,19 +243,7 @@ async def upload_dataset_samples(
                     code=404, message=f"没有找到数据集 {dataset_id}。"
                 )
 
-        file_name = file.filename
-        destination_file_path = f"{dataset_id}/datasets/{file_name}"
-        file_store.save(
-            file=file.file,
-            file_path=destination_file_path,
-        )
-        file_item = FileItem.from_file(
-            file=file.file,
-            file_path=destination_file_path,
-            kb_id=dataset_id,
-            file_name=file.filename,
-        )
-        file_results = file_item.get_eval_dataset_from_jsonl_file()
+        file_results = await eval_client.load_dataset_from_upload_file(file=file)
         dataset_entities = []
         for line in file_results:
             dataset_sample_entity = DatasetSampleEntity(
@@ -353,7 +341,7 @@ async def update_dataset_sample(
 
 
 @evaluation_router.get(
-    "/{dataset_id}/dataset/{sample_id}",
+    "/{dataset_id}/samples/{sample_id}",
     response_model=ResponseModel[DatasetSampleEntity],
 )
 async def get_dataset_sample(

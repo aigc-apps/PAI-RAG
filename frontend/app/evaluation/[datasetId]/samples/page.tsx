@@ -255,7 +255,7 @@ export default function EvalDatasetsDetailsPage({
 
     const handleSaveEdit = async (updatedSample: SampleItem) => {
         try {
-            const response = await fetch(`/api/config/evaluation/${datasetId}/dataset/${updatedSample.id}`, {
+            const response = await fetch(`/api/config/evaluation/${datasetId}/samples/${updatedSample.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(updatedSample),

@@ -24,7 +24,7 @@ from db.models.knowledgebase.embedding import (
 from db.models.evaluation.dataset import DatasetCreate, DatasetEntity
 from db.models.evaluation.dataset import DatasetSampleEntity
 from sqlalchemy.exc import IntegrityError
-from rag.file.models.file_item import FileItem
+from rag.evaluation_tool import eval_client
 
 
 class ConfigChangeManager:
@@ -150,13 +150,8 @@ class ConfigChangeManager:
             logger.error(f"IntegrityError occurred when add gaia evaluation: {e.orig}")
             await session.rollback()
 
-        # Add dataset entries
-        file_item = FileItem.from_file(
-            file_path="./data/gaia_level_1_validation_metadata.jsonl",
-            file=open("./data/gaia_level_1_validation_metadata.jsonl", "rb"),
-            kb_id=gaia_dataset.id
-        )
-        file_results = file_item.get_eval_dataset_from_jsonl_file()
+        GAIA_DATASET_PATH = "./data/gaia_level_1_validation_metadata.jsonl"
+        file_results = eval_client.load_dataset_from_local_path(file_path=GAIA_DATASET_PATH)
         for line in file_results:
             dataset_entity = DatasetSampleEntity(
                 dataset_id=gaia_dataset.id,
