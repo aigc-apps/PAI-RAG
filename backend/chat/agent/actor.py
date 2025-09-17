@@ -1,4 +1,5 @@
 import json
+from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_fixed
 from chat.agent.base import BaseAgent
@@ -50,88 +51,95 @@ class Actor(BaseAgent):
             **state.context_variables,
         )
 
-    @use_current_span(trace.get_current_span())
-    async def _run_async(self, state: AgentState) -> ChatResponseGenerator:
+
+    @pai_agent_wrapper
+    async def run_async(self, state: AgentState) -> ChatResponseGenerator:
+        logger.info("Running actor agent.")
         act_prompt = self.build_prompt(state)
         messages = [{"role": "user", "content": act_prompt}]
 
-        action_step = 1
-        while action_step <= self.max_steps:
-            logger.info(f"Acting at step {action_step} with messages: {messages}")
-            action_step += 1
+        @use_current_span(trace.get_current_span())
+        async def gen():
+            action_step = 1
+            while action_step <= self.max_steps:
+                logger.info(f"Acting at step {action_step} with messages: {messages}")
+                action_step += 1
 
-            tool_calls = []
+                tool_calls = []
 
-            step_content = ""
-            async for chunk in await self.invoke_llm_async(
-                messages=messages,
-                tools=self.tool_metadata,
-            ):
-                if chunk.tool_calls:
-                    tool_calls = chunk.tool_calls
-                if chunk.delta:
-                    step_content += chunk.delta
-                    yield TextChunk(
-                        delta=chunk.delta
-                    )
-
-            if step_content:
-                messages.append({
-                    "role": "assistant",
-                    "content": step_content,
-                })
                 step_content = ""
-
-            if tool_calls:
-                for tool in tool_calls:
-                    if tool.type == "function":
-                        function_name = tool.function.name
-                        if not function_name or function_name not in self.tool_fn_map:
-                            logger.warning(f"Unknown tool_call: {tool}, skip it.")
-                            continue
-
-
-                        if function_name == "respond-tool":
-                            logger.info("Actor finished with respond-tool.")
-                            yield TextChunk(tool_calls=[tool])
-                            return
-
-                        if tool.function.arguments:
-                            function_args = json.loads(tool.function.arguments)
-                        else:
-                            function_args = {}
-
+                async for chunk in await self.invoke_llm_async(
+                    messages=messages,
+                    tools=self.tool_metadata,
+                ):
+                    if chunk.tool_calls:
+                        tool_calls = chunk.tool_calls
+                    if chunk.delta:
+                        step_content += chunk.delta
                         yield TextChunk(
-                            tool_calls=[tool],
-                        )
-                        async_fn = self.tool_fn_map[function_name]
-                        logger.info(f"Calling tool {function_name} with args {function_args}.")
-                        tool_result = await call_tool_with_retry(async_fn, function_args)
-                        logger.info(f"Get tool result {tool_result}.")
-
-                        messages.append(
-                            {
-                                "role": "assistant",
-                                "content": None,
-                                "tool_calls": [
-                                    tool
-                                ]
-                            }
-                        )
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "content": tool_result.content,
-                                "tool_call_id": tool.id
-                            }
+                            delta=chunk.delta
                         )
 
-                        yield ToolResultChunk(
-                            tool=tool,
-                            result=tool_result.content,
-                        )
-            else:
-                break
+                if step_content:
+                    messages.append({
+                        "role": "assistant",
+                        "content": step_content,
+                    })
+                    step_content = ""
 
-        if state.step > self.max_steps:
-            yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+                if tool_calls:
+                    for tool in tool_calls:
+                        if tool.type == "function":
+                            function_name = tool.function.name
+                            if not function_name or function_name not in self.tool_fn_map:
+                                logger.warning(f"Unknown tool_call: {tool}, skip it.")
+                                continue
+
+
+                            if function_name == "respond-tool":
+                                logger.info("Actor finished with respond-tool.")
+                                yield TextChunk(tool_calls=[tool])
+                                return
+
+                            if tool.function.arguments:
+                                function_args = json.loads(tool.function.arguments)
+                            else:
+                                function_args = {}
+
+                            yield TextChunk(
+                                tool_calls=[tool],
+                            )
+                            async_fn = self.tool_fn_map[function_name]
+                            logger.info(f"Calling tool {function_name} with args {function_args}.")
+                            tool_result = await call_tool_with_retry(async_fn, function_args)
+                            logger.info(f"Get tool result {tool_result}.")
+
+                            messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": None,
+                                    "tool_calls": [
+                                        tool
+                                    ]
+                                }
+                            )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "content": tool_result.content,
+                                    "tool_call_id": tool.id
+                                }
+                            )
+
+                            yield ToolResultChunk(
+                                tool=tool,
+                                result=tool_result.content,
+                            )
+                else:
+                    break
+
+            if state.step > self.max_steps:
+                yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+
+
+        return gen()
