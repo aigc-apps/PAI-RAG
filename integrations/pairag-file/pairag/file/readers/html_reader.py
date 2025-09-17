@@ -8,6 +8,7 @@ from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_utils import get_image_from_url
 from pairag.file.utils.markdown_tree_utils import PaiTable, convert_table_to_markdown
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
+from pairag.file.utils.image_utils import to_markdown_image_text
 
 MARKDOWN_IMAGE_PATTERN = re.compile(
     r"!\[.*?\]\((https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))\)",
@@ -144,7 +145,8 @@ class HtmlReader(BaseReader):
                         self.file_store.get_url(save_image_name)
                     )
                     cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                    image_text = f'\n![{cleaned_alt}]({save_image_name})\n'
+                    
+                    image_text = to_markdown_image_text(save_image_name, cleaned_alt)
                     content = content.replace(
                         full_match,
                         image_text,

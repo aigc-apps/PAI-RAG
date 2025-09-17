@@ -217,7 +217,7 @@ class StructuredNodeParser(BaseModel):
                 node = self._create_text_node(tree_node.content, doc_node, ref_doc)
                 nodes_list.append(node)
             elif tree_node.category != "paragraph":
-                # 不进行切割, 通过title的范围模糊匹配在原文中找到bbox
+                # 不进行切割
                 pages_bbox, pointer = self.find_node_bbox_in_content_list(tree_node.content, content_list, pointer)
                 if nearest_title_stack:
                     pages_bbox.append({"page_idx": nearest_title_stack[-1].page_idx, 'bbox': nearest_title_stack[-1].bbox})

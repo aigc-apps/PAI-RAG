@@ -7,6 +7,7 @@ from pairag.file.store.oss_store import OssFileStore
 
 from pairag.file.utils.image_utils import get_image_from_url
 from llama_index.core.schema import Document
+from pairag.file.utils.image_utils import to_markdown_image_text
 from loguru import logger
 
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
@@ -51,7 +52,7 @@ class MarkdownReader(BaseReader):
                         self.file_store.get_url(save_image_name)
                     )
                     cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                    image_text = f'\n![{cleaned_alt}]({save_image_name})\n'
+                    image_text = to_markdown_image_text(save_image_name, cleaned_alt)
                     content = content.replace(full_match, image_text)
                     saved_images.append(save_image_name)
 

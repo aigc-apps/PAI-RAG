@@ -31,6 +31,7 @@ from loguru import logger
 import re
 from pairag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
+from rag.knowledgebase_tool import MARKDOWN_IMAGE_PATTERN
 
 knowledgebase_router = APIRouter()
 
@@ -451,9 +452,9 @@ async def list_chunks(
     chunk_entities = chunk_results.all()
     for chunk_entity in chunk_entities:
         origin_text = chunk_entity.text
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+        pattern = MARKDOWN_IMAGE_PATTERN
         matches = re.findall(pattern, origin_text)
-        chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for src, alt in matches]
+        chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for alt, src in matches]
     return success_response(
         data=PagedResult(
             items=chunk_entities,

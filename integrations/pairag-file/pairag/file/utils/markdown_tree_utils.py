@@ -12,6 +12,7 @@ from mistletoe.block_token import (
 )
 from mistletoe.span_token import RawText, Emphasis, Strong, InlineCode, Link, Image, LineBreak
 from mistletoe import Document
+from pairag.file.utils.image_utils import markdown_image_text_to_chunk
 
 START_HTML_TAG = "<html><body><table>"
 END_HTML_TAG = "</table></body></html>"
@@ -303,7 +304,7 @@ class ASTTreeBuilder:
     def handle_image(self, node: Image):
         image_url = node.src
         alt_text = self.render_span_tokens(node.children)
-        content = f"![]({image_url})\n上面图片的描述: {alt_text}"
+        content = markdown_image_text_to_chunk(image_url, alt_text)
         new_node = TreeNode(
             level=self.stack[-1].level + 1, category="image", content=content
         )

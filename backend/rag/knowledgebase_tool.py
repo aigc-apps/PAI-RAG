@@ -42,6 +42,7 @@ import re
 import json
 from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 from typing import Annotated
+MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -344,9 +345,9 @@ class PaiKnowledgebaseClient:
             if query_result.similarities[i] >= similarity_threshold:
                 file_ids.append(node.metadata["doc_id"])
                 origin_text = node.text
-                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text)
-                for src, _ in matches:
+                for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
                 node.text = origin_text
@@ -420,9 +421,9 @@ class PaiKnowledgebaseClient:
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
                 origin_text = node.text
-                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text)
-                for src, _ in matches:
+                for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
                 node.text = origin_text
@@ -442,9 +443,9 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
     for score_node in result_nodes:
         images = []
         origin_text = score_node.node.get_content()
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+        pattern = MARKDOWN_IMAGE_PATTERN
         matches = re.findall(pattern, origin_text)
-        images = [{"url": src, "desc": alt} for src, alt in matches]
+        images = [{"url": src, "desc": alt} for alt, src in matches]
         records.append({
             "text": score_node.node.get_content(),
             "metadata": {

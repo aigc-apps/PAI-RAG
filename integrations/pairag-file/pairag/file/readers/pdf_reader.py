@@ -17,6 +17,7 @@ from mineru.data.data_reader_writer import FileBasedDataWriter
 from mineru.utils.enum_class import BlockType, ContentType
 from mineru.backend.pipeline.pipeline_middle_json_mkcontent import merge_para_with_text
 from pairag.file.utils.markdown_tree_utils import HARD_LINE_BREAK
+from pairag.file.utils.image_utils import to_markdown_image_text
 from dataclasses import dataclass
 import json
 from llama_index.core.schema import Document
@@ -207,7 +208,7 @@ class MineruPdfReader(BaseReader):
                                             )
                                         )
                                         cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                                        para_text += f'\n![{cleaned_alt}]({real_image_path})\n'
+                                        para_text += to_markdown_image_text(real_image_path, cleaned_alt)
                 for block in para_block["blocks"]:  # 2nd.拼image_caption
                     if block["type"] == BlockType.IMAGE_CAPTION:
                         para_text += merge_para_with_text(block) + HARD_LINE_BREAK
@@ -240,7 +241,7 @@ class MineruPdfReader(BaseReader):
                                             )
                                         )
                                         cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                                        para_text += f'\n![{cleaned_alt}]({real_image_path})\n'
+                                        para_text += to_markdown_image_text(real_image_path, cleaned_alt)
                 for block in para_block["blocks"]:  # 3rd.拼table_footnote
                     if block["type"] == BlockType.TABLE_FOOTNOTE:
                         para_text += merge_para_with_text(block) + HARD_LINE_BREAK

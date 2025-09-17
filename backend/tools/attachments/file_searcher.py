@@ -9,6 +9,7 @@ from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
 from rag.knowledgebase_tool import kb_client
 from common.chat.models import RetrievalSetting
+from rag.knowledgebase_tool import MARKDOWN_IMAGE_PATTERN
 import re
 
 @with_async_db_session
@@ -32,9 +33,9 @@ async def aget_file_retrieve_results_from_vector_store(session: AsyncSession, fi
     records = []
     for score_node in node_results:
         origin_text = score_node.node.get_content()
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+        pattern = MARKDOWN_IMAGE_PATTERN
         matches = re.findall(pattern, origin_text)
-        score_node.node.metadata["images_info"] = [{"url":src, "desc": alt } for src, alt in matches]
+        score_node.node.metadata["images_info"] = [{"url":src, "desc": alt } for alt, src in matches]
         records.append({
             "title": score_node.node.metadata.get("file_name", "null"),
             "content": score_node.node.get_content(),
