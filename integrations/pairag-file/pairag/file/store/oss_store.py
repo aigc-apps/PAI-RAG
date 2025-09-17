@@ -5,6 +5,7 @@ from oss2.credentials import EnvironmentVariableCredentialsProvider, Credentials
 from typing import BinaryIO, Optional
 from pairag.file.store.base import BaseFileStore
 from loguru import logger
+from oss2.models import BucketCors, CorsRule
 
 DEFAULT_OSS_PREFIX = "pairag_knowledgebases"
 
