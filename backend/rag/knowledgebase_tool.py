@@ -43,6 +43,7 @@ import json
 from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 from typing import Annotated
 from chat.tools.search_result import SearchResult
+MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -343,14 +344,17 @@ class PaiKnowledgebaseClient:
         file_ids = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
+                images = []
                 file_ids.append(node.metadata["doc_id"])
                 origin_text = node.text
-                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text)
-                for src, _ in matches:
+                for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
+                    images.append({"url": src, "desc": origin_text})
                 node.text = origin_text
+                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
 
         file_source_map = await get_file_id_source_map(kb_id=knowledge_id, file_ids=file_ids)
@@ -420,13 +424,16 @@ class PaiKnowledgebaseClient:
         result_nodes = []
         for i, node in enumerate(query_result.nodes):
             if query_result.similarities[i] >= similarity_threshold:
+                images = []
                 origin_text = node.text
-                pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
+                pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text)
-                for src, _ in matches:
+                for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
+                    images.append({"url": src, "desc": origin_text})
                 node.text = origin_text
+                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
         logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
         return result_nodes
@@ -441,12 +448,6 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
     result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id, user_id=user_id)
     records = []
     for score_node in result_nodes:
-        images = []
-        origin_text = score_node.node.get_content()
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
-        matches = re.findall(pattern, origin_text)
-        images = [{"url": src, "desc": alt} for src, alt in matches]
-
         file_url = score_node.node.metadata.get("file_source")
         if not file_url:
             file_url = file_store.get_url(score_node.node.metadata.get("file_path", ""))
@@ -454,7 +455,7 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
             SearchResult(
                 score=score_node.score,
                 content=score_node.node.get_content(),
-                images=images,
+                images=json.loads(score_node.node.metadata.get("images_info", [])),
                 url=file_url,
                 title=score_node.node.metadata.get("file_name", ""),
             ).model_dump())

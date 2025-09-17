@@ -3,6 +3,7 @@ from pairag.file.store.base import BaseFileStore
 from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_utils import compress_image_if_needed
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
+from pairag.file.utils.image_utils import to_markdown_image_text
 from loguru import logger
 import re
 
@@ -37,7 +38,7 @@ class ImageReader(BaseReader):
                 self.file_store.get_url(save_image_name)
             )
             cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-            image_text = f'\n![{cleaned_alt}]({save_image_name})\n'
+            image_text = to_markdown_image_text(save_image_name, cleaned_alt)
 
             metadata = file_item.metadata()
 

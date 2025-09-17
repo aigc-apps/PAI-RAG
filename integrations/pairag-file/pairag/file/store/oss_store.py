@@ -5,6 +5,7 @@ from oss2.credentials import EnvironmentVariableCredentialsProvider, Credentials
 from typing import BinaryIO, Optional
 from pairag.file.store.base import BaseFileStore
 from loguru import logger
+from oss2.models import BucketCors, CorsRule
 
 DEFAULT_OSS_PREFIX = "pairag_knowledgebases"
 
@@ -22,12 +23,20 @@ class OssFileStore(BaseFileStore):
             credentials_provider = EnvironmentVariableCredentialsProvider()
 
         auth = oss2.ProviderAuth(credentials_provider)
-        self.bucket = oss2.Bucket(auth, endpoint, bucket)
-        self.prefix_path = prefix_path
-
-        logger.info(
-            f"Created oss file store with prefix {prefix_path} bucket {bucket} and endpoint {endpoint}."
+        self.bucket = oss2.Bucket(auth=auth, endpoint=endpoint, bucket_name=bucket)
+        rule = CorsRule(
+            allowed_origins=["*"],
+            allowed_methods=["GET", "HEAD"],
+            allowed_headers=["*"],
+            max_age_seconds=1000,
         )
+        try:
+            self.bucket.put_bucket_cors(BucketCors([rule]))
+            self.prefix_path = prefix_path
+        except Exception as ex:
+            logger.warning(f"Failed to set CORS for bucket {bucket}. error: {ex}")
+            pass
+
 
     def get_url(self, file_path: str):
         oss_file_key = os.path.join(self.prefix_path, file_path)

@@ -2,12 +2,14 @@ import hashlib
 from io import BytesIO
 import math
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Optional
 from urllib.parse import urlparse
 from PIL.PngImagePlugin import PngImageFile
 from PIL import Image
 import requests
 from loguru import logger
+
+MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
 
 IMAGE_MAX_PIXELS = 512 * 512
 UNSUPPORTED_FORMATS = {"WMF", "EMF", "WMZ", "EMZ", "SVG", "EPS"}
@@ -83,3 +85,11 @@ def compress_image_if_needed(image_file: BinaryIO) -> BinaryIO:
     except (OSError, ValueError) as e:
         logger.warning(f"Cannot load image: {e}")
         return None
+
+
+
+def to_markdown_image_text(image_url: str, alt: Optional[str] = "") -> str:
+    return f'\n![{alt}]({image_url})\n'
+
+def markdown_image_text_to_chunk(image_url: str, alt: Optional[str] = "") -> str:
+    return f"![]({image_url})\n图片的描述: {alt}"

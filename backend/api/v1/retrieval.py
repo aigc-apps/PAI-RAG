@@ -6,7 +6,6 @@ from db.models.knowledgebase.knowledgebase import KbEntity
 from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
 from sqlmodel.ext.asyncio.session import AsyncSession
 from rag.knowledgebase_tool import kb_client
-import re
 from loguru import logger
 
 
@@ -36,11 +35,6 @@ async def retrieval(
     )
     records = []
     for score_node in node_results:
-        origin_text = score_node.node.get_content()
-        pattern = r'<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"'
-        matches = re.findall(pattern, origin_text)
-
-        score_node.node.metadata["images_info"] = [{"url":src, "desc": alt } for src, alt in matches]
         records.append(DocRecord(
             content=score_node.node.get_content(),
             score=score_node.score,

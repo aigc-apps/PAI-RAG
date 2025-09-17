@@ -13,7 +13,7 @@ from pairag.file.utils.markdown_tree_utils import (
     is_horizontal_table,
 )
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
-
+from pairag.file.utils.image_utils import to_markdown_image_text
 
 class DocxReader(BaseReader):
     def __init__(
@@ -180,7 +180,7 @@ class DocxReader(BaseReader):
                                                     )
                                                 )
                                                 cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                                                image_text = f'\n![{cleaned_alt}]({save_image_name})\n'
+                                                image_text = to_markdown_image_text(save_image_name, cleaned_alt)
                                                 markdown.append(f"{image_text}\n")
                                                 images.append(save_image_name)
 

@@ -26,8 +26,10 @@ from pairag.file.utils.constants import (
     DEFAULT_SENTENCE_SEPARATOR,
     DEFAULT_PARSER_TYPE,
 )
+from pairag.file.utils.image_utils import MARKDOWN_IMAGE_PATTERN, markdown_image_text_to_chunk
 from llama_index.core.bridge.pydantic import Field, BaseModel
 from typing import Optional
+import re
 
 
 IMAGE_DOC_TYPES = set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"])
@@ -175,10 +177,13 @@ class FileParser:
             doc_type = doc_node.metadata["file_extension"]
             if doc_type in IMAGE_DOC_TYPES:
                 node_id = uuid.uuid4().hex
+                match = re.fullmatch(MARKDOWN_IMAGE_PATTERN, doc_node.text.strip())
+                alt, image_url = match.group(1), match.group(2)
+                chunk_text = markdown_image_text_to_chunk(image_url, alt)
                 chunks.append(
                     TextNode(
                         id_=node_id,
-                        text=doc_node.text,
+                        text=chunk_text,
                     )
                 )
 
