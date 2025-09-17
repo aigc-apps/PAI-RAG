@@ -42,8 +42,8 @@ import re
 import json
 from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 from typing import Annotated
-MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
 from chat.tools.search_result import SearchResult
+MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
