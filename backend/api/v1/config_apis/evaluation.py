@@ -191,6 +191,7 @@ async def update_dataset(
 
         return success_response(data=dataset, message="更新数据集信息成功。")
     except Exception:
+        await session.rollback()
         logger.error(f"数据集 {dataset_id} 更新失败: {traceback.format_exc()}")
         return error_response(
                 code=404, message=f"更新数据集信息失败：{traceback.format_exc()}"
@@ -202,26 +203,31 @@ async def delete_dataset(
     dataset_id: str,
     session: AsyncSession = Depends(get_session),
 ):
-    dataset = await session.get(DatasetEntity, dataset_id)
+    try:
+        dataset = await session.get(DatasetEntity, dataset_id)
 
-    if not dataset:
-        return error_response(
-                code=404, message=f"删除数据集失败: 数据集'{dataset_id}'不存在。"
-            )
+        if not dataset:
+            return error_response(
+                    code=404, message=f"删除数据集失败: 数据集'{dataset_id}'不存在。"
+                )
 
-    evaluation_provider.delete(dataset_id)
-    await session.delete(dataset)
-    await session.commit()
+        evaluation_provider.delete(dataset_id)
+        await session.delete(dataset)
+        await session.commit()
 
-    await config_change_manager.notify_change_async(
-        event_source=ChangeEventSource.EVALUATION,
-        event_type=ChangeEventType.DELETE,
-        source_id=dataset.id,
-    )
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.EVALUATION,
+            event_type=ChangeEventType.DELETE,
+            source_id=dataset.id,
+        )
 
-    logger.info(f"数据集 {dataset_id} 删除成功.")
+        logger.info(f"数据集 {dataset_id} 删除成功.")
 
-    return success_response(message=f"数据集'{dataset_id}'删除成功。")
+        return success_response(message=f"数据集'{dataset_id}'删除成功。")
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"数据集 {dataset_id} 删除失败: {e}")
+        raise error_response(status_code=500, detail=f"数据集 {dataset_id} 删除失败: {e}")
 
 
 @evaluation_router.post("/{dataset_id}/upload")
@@ -335,6 +341,7 @@ async def update_dataset_sample(
         logger.error(
             f"Failed to update Dataset Sample {sample_id} for evaluation {dataset_id}: {traceback.format_exc()}"
         )
+        await session.rollback()
         return error_response(
                 code=404, message=f"更新数据集样本失败：{traceback.format_exc()}"
             )
@@ -559,17 +566,22 @@ async def delete_experiment(
     session: AsyncSession = Depends(get_session),
 ):
     logger.info(f"Delete experiment for dataset_id {dataset_id} and exp_id {exp_id}.")
-    experiment = await session.get(ExperimentEntity, exp_id)
-    if not experiment:
-        return error_response(
-                code=404, message=f"删除实验失败: 实验'{exp_id}'不存在。"
-            )
+    try:
+        experiment = await session.get(ExperimentEntity, exp_id)
+        if not experiment:
+            return error_response(
+                    code=404, message=f"删除实验失败: 实验'{exp_id}'不存在。"
+                )
 
-    await session.delete(experiment)
-    await session.commit()
+        await session.delete(experiment)
+        await session.commit()
 
-    logger.info(f"Experiment {exp_id} has been deleted.")
-    return success_response(message=f"实验'{exp_id}'删除成功。")
+        logger.info(f"Experiment {exp_id} has been deleted.")
+        return success_response(message=f"实验'{exp_id}'删除成功。")
+    except Exception as e:
+        logger.error(f"[ExperimentProvider] Failed to delete experiment: {e}")
+        await session.rollback()
+        return error_response(code=500, message=f"删除实验失败: {e}")
 
 
 @evaluation_router.post("/{dataset_id}/runconfigs")
@@ -641,6 +653,7 @@ async def update_run_config(
         logger.error(
             f"Failed to update run config {config_id}: {traceback.format_exc()}"
         )
+        await session.rollback()
         return error_response(
                 code=404, message=f"更新运行配置失败：{traceback.format_exc()}"
             )
@@ -781,6 +794,7 @@ async def update_evaluator_config(
         logger.error(
             f"Failed to update evaluator config {config_id}: {traceback.format_exc()}"
         )
+        await session.rollback()
         return error_response(
                 code=404, message=f"更新评估器设置失败：{traceback.format_exc()}"
             )
