@@ -72,6 +72,7 @@ async def create_attachment_file(
         file_path=destination_file_path,
         kb_id=knowledgebase.id,
     )
+    file_item.id = file_id
     file_entity : KbFileEntity = to_file_entity(file_item)
     session.add(file_entity)
     await session.commit()
