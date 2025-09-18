@@ -200,7 +200,7 @@ class Planner(BaseAgent):
                     raise Exception("Empty plan steps.")
 
 
-                actor_with_paln = ActorWithPlan(
+                actor_with_plan = ActorWithPlan(
                     prompt=self.prompt_set.act_prompt,
                     llm=self.llm,
                     tools=self.tools + [await aget_respond_tool()],
@@ -213,7 +213,7 @@ class Planner(BaseAgent):
                     name="summarizer",
                 )
 
-                response_gen = await actor_with_paln.run_async(state)
+                response_gen = await actor_with_plan.run_async(state)
 
                 async for chunk in response_gen:
                     if chunk.tool_calls:
