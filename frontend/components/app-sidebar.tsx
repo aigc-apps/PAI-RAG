@@ -26,6 +26,7 @@ import {
   ChevronDown,
   BookIcon,
   AppWindowIcon,
+  Scale
 } from 'lucide-react';
 import {
   Collapsible,
@@ -59,6 +60,11 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link href="/apps"><AppWindowIcon /> 应用</Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <Link href="/evaluation"><Scale /> 评估</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

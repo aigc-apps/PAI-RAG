@@ -14,12 +14,16 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from config.providers.embedding_provider import embedding_provider
 from config.providers.llm_provider import llm_provider
 from config.providers.knowledgebase_provider import knowledgebase_provider
+from config.providers.evaluation_provider import evaluation_provider
 from db.models.knowledgebase.embedding import (
     EmbeddingModelCreate,
     EmbeddingModelEntity,
     EmbeddingType,
 )
+from db.models.evaluation.dataset import DatasetCreate, DatasetEntity
+from db.models.evaluation.dataset import DatasetSampleEntity
 from sqlalchemy.exc import IntegrityError
+from rag.evaluation_tool import eval_client
 
 
 class ConfigChangeManager:
@@ -45,6 +49,7 @@ class ConfigChangeManager:
             from config.providers.reranker_provider import reranker_provider
             from config.providers.chatbot_provider import chatbot_provider
             from config.providers.guardrail_provider import guardrail_provider
+
             await mcp_provider.full_load_from_db_async()
             logger.info("Initialized mcp tools.")
             await websearch_provider.full_load_from_db_async()
@@ -65,6 +70,11 @@ class ConfigChangeManager:
         logger.info("Initialized embedding models.")
         await knowledgebase_provider.full_load_from_db_async()
         logger.info("Initialized knowledgebases.")
+
+
+        await self.create_builtin_gaia_dataset()
+        await evaluation_provider.full_load_from_db_async()
+        logger.info("Initialized evaluation tasks.")
 
         self.initialized = True
         self.last_change_dt = current_dt
@@ -106,6 +116,51 @@ class ConfigChangeManager:
         except IntegrityError as e:
             logger.error(f"IntegrityError occurred when add embedding: {e.orig}")
             await session.rollback()
+
+    @with_async_db_session
+    async def create_builtin_gaia_dataset(self, session: AsyncSession):
+        # create builtin GAIA evaluation entity if not exists
+        sql_results = await session.exec(select(DatasetEntity).where(DatasetEntity.name == "GAIA"))
+        evaluation_entities: List[DatasetEntity] = sql_results.all()
+        if len(evaluation_entities) > 0:
+            logger.info("Builtin GAIA dataset already exists.")
+            return
+        logger.info("Creating builtin GAIA dataset.")
+        gaia_dataset = DatasetCreate(
+            name="GAIA",
+            description="GAIA评估",
+            type="built-in"
+        )
+        gaia_dataset = DatasetEntity.model_validate(gaia_dataset)
+        try:
+            evaluation_provider.add(gaia_dataset)
+            session.add(gaia_dataset)
+            await session.commit()
+            await session.refresh(gaia_dataset)
+            await self.notify_change_async(
+                event_source=ChangeEventSource.EVALUATION,
+                source_id=gaia_dataset.id,
+                event_type=ChangeEventType.ADD
+            )
+            logger.info("Builtin GAIA evaluation added to database.")
+        except IntegrityError as e:
+            logger.error(f"IntegrityError occurred when add gaia evaluation: {e.orig}")
+            await session.rollback()
+
+        GAIA_DATASET_PATH = "./data/gaia_level_1_validation_metadata.jsonl"
+        file_results = eval_client.load_dataset_from_local_path(file_path=GAIA_DATASET_PATH)
+        for line in file_results:
+            dataset_entity = DatasetSampleEntity(
+                dataset_id=gaia_dataset.id,
+                input=line["input"],
+                expected_output=line.get("expected_output"),
+                eval_metadata=line.get("metadata")
+            )
+            session.add(dataset_entity)
+            await session.commit()
+            logger.info(f"Saved file {dataset_entity} successfully.")
+
+
 
     @with_async_db_session
     async def notify_change_async(
@@ -192,6 +247,9 @@ class ConfigChangeManager:
             case ChangeEventSource.GUARDRAIL:
                 from config.providers.guardrail_provider import guardrail_provider
                 return guardrail_provider
+            case ChangeEventSource.EVALUATION:
+                from config.providers.evaluation_provider import evaluation_provider
+                return evaluation_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 

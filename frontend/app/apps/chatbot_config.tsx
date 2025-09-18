@@ -139,6 +139,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
           console.log('kbData', kbData);
           setKbs([...kbData]);
+          
           const botData = await botRes.json();
           botData.data.kb_ids = botData.data.kb_ids.filter(
             (kb_id: string) => {
@@ -332,7 +333,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             </Select>
           ) : (
             <div>
-              <p className="text-sm text-muted-foreground">尚未配置大模型，</p>
+              <p className="text-sm text-muted-foreground">尚未配置大模型</p>
               <Button
                 variant="outline"
                 onClick={() => {
