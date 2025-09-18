@@ -19,6 +19,7 @@ INTERNAL_MODELS = ["BAAI/bge-m3", PDF_EXTRACT_KIT_MODEL] #必须的模型文件�
 
 def init_mineru_config(model_dir: str = INTERNAL_MODEL_DIR):
     # 获取配置文件目录
+    os.environ["MINERU_MODEL_SOURCE"] = "local"
     download_model_to_directory(PDF_EXTRACT_KIT_MODEL)
 
     current_dir_path = Path(__file__).parent.parent
