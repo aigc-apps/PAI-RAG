@@ -273,7 +273,6 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         }, 3000);
       } else {
         console.log('✅ 所有实验已完成，停止轮询。');
-        fetchExperimentDetails();
       }
     };
 
