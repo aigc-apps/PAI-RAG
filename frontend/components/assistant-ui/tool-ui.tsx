@@ -437,7 +437,7 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
               </SheetHeader>
               <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
                 <div className="pl-3 pr-2">
-                  {plan_result?.steps.map((item, index) => (
+                  {plan_result?.steps.map((item: any, index: number) => (
                     <div
                       key={index}
                       className="text-sm p-1 hover:bg-muted/50 rounded-md transition-colors py-3"
