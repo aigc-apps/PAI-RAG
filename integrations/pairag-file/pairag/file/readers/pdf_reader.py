@@ -1,3 +1,4 @@
+os.environ["MINERU_MODEL_SOURCE"] = "local"
 from collections import defaultdict
 from io import BytesIO
 from operator import itemgetter
