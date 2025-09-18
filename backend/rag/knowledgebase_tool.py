@@ -455,7 +455,7 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
             SearchResult(
                 score=score_node.score,
                 content=score_node.node.get_content(),
-                images=json.loads(score_node.node.metadata.get("images_info", [])),
+                images=score_node.node.metadata.get("images_info", []),
                 url=file_url,
                 title=score_node.node.metadata.get("file_name", ""),
             ).model_dump())
