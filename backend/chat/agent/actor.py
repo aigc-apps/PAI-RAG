@@ -1,4 +1,4 @@
-# chat/agent/reactor.py
+# chat/agent/actor.py
 
 import json
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper

@@ -80,7 +80,16 @@ class Planner(BaseAgent):
                     selected_tool = chunk.tool_calls[0]
 
                 plan_delta += chunk.delta or ""
-                yield chunk
+                if chunk.delta:
+                    yield ReasoningChunk(
+                        reasoning_delta=chunk.delta,
+                        tool_calls=chunk.tool_calls,
+                        stage=ChunkStage.ACTING,
+                    )
+                else:
+                    chunk.stage = ChunkStage.ACTING
+                    yield chunk
+                # yield chunk
 
             # TODO: Fallback for empty plan
             if selected_tool is None:
