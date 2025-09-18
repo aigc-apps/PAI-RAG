@@ -370,6 +370,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                     <TabsContent value="plan" className="h-full flex flex-col">
                       <ResettableTextarea
                         value={planPrompt}
+                        onReset={() => setPlanPrompt(PLAN_PROMPT)}
                         onChange={(e) => setPlanPrompt(e.target.value)}
                         defaultValue={PLAN_PROMPT}
                         placeholder="输入规划阶段的提示词..."
@@ -379,6 +380,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                     <TabsContent value="act" className="h-full flex flex-col">
                       <ResettableTextarea
                         value={actPrompt}
+                        onReset={() => setPlanPrompt(ACT_PROMPT)}
                         onChange={(e) => setActPrompt(e.target.value)}
                         defaultValue={ACT_PROMPT}
                         placeholder="输入行动阶段的提示词..."
@@ -388,6 +390,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                     <TabsContent value="summarize" className="h-full flex flex-col">
                       <ResettableTextarea
                         value={summarizePrompt}
+                        onReset={() => setPlanPrompt(SUMMARY_PROMPT)}
                         onChange={(e) => setSummarizePrompt(e.target.value)}
                         defaultValue={SUMMARY_PROMPT}
                         placeholder="输入总结阶段的提示词..."
