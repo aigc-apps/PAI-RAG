@@ -352,9 +352,9 @@ class PaiKnowledgebaseClient:
                 for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
-                    images.append({"url": src, "desc": origin_text})
+                    images.append({"url": image_url, "desc": origin_text})
                 node.text = origin_text
-                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
+                node.metadata["images_info"] = images
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
 
         file_source_map = await get_file_id_source_map(kb_id=knowledge_id, file_ids=file_ids)
@@ -431,9 +431,9 @@ class PaiKnowledgebaseClient:
                 for _, src in matches:
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
-                    images.append({"url": src, "desc": origin_text})
+                    images.append({"url": image_url, "desc": origin_text})
                 node.text = origin_text
-                node.metadata["images_info"] = json.dumps(images, ensure_ascii=False)
+                node.metadata["images_info"] = images
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
         logger.info(f"Retrieved {len(result_nodes)} nodes from vector index.")
         return result_nodes
@@ -455,7 +455,7 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
             SearchResult(
                 score=score_node.score,
                 content=score_node.node.get_content(),
-                images=json.loads(score_node.node.metadata.get("images_info", [])),
+                images=score_node.node.metadata.get("images_info", []),
                 url=file_url,
                 title=score_node.node.metadata.get("file_name", ""),
             ).model_dump())

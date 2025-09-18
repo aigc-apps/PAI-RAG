@@ -36,7 +36,7 @@ interface EmbeddingModelDialogProps {
 }
 
 // 模型数据类型
-interface EmbConfig {
+export interface EmbConfig {
   id: string;
   model_id: string;
   model_name: string;

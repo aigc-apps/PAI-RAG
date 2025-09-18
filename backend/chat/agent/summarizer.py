@@ -3,7 +3,9 @@ from common.chat.constants import MessageRole
 from chat.agent.base import BaseAgent
 from chat.agent.state import AgentState
 from chat.agent.prompts import SUMMARY_PROMPT
+from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from extensions.trace.base import use_current_span
+from loguru import logger
 from opentelemetry import trace
 
 
@@ -19,17 +21,22 @@ def build_synthesize_prompt(state: AgentState, prompt: str):
 
 
 class Summarizer(BaseAgent):
-    @use_current_span(trace.get_current_span())
-    async def _run_async(self, state: AgentState) -> ChatResponseGenerator:
-        assert state.should_stop is True, "Summarizer should be last step."
 
+    @pai_agent_wrapper
+    async def run_async(self, state: AgentState) -> ChatResponseGenerator:
+        logger.info("Running summarizer agent.")
         prompt = build_synthesize_prompt(
             state=state,
             prompt=self.prompt,
         )
 
-        response_gen = await self.invoke_llm_async(messages=[
-            {"role": MessageRole.USER, "content": prompt},
-        ])
-        async for chunk in response_gen:
-            yield chunk
+        @use_current_span(trace.get_current_span())
+        async def gen():
+            response_gen = await self.invoke_llm_async(messages=[
+                {"role": MessageRole.USER, "content": prompt},
+            ])
+            async for chunk in response_gen:
+                yield chunk
+
+
+        return gen()
