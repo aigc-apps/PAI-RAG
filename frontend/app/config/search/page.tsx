@@ -32,7 +32,7 @@ export default function SearchConfig() {
   const [isLoading, setIsLoading] = useState(false); // 加载状态
   const [searchCount, setSearchCount] = useState(10); // 每次搜索返回的结果数
   const [tavilyApiKey, setTavilyApiKey] = useState(''); // Tavily API Key
-  const [searchEngineType, setSearchEngineType] = useState<'tavily' | 'aliyun'>('aliyun'); // 搜索引擎类型
+  const [searchEngineType, setSearchEngineType] = useState('aliyun'); // 搜索引擎类型
 
   // 初始化加载配置
   useEffect(() => {

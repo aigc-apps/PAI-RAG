@@ -17,22 +17,9 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { EmbeddingModelDialog } from '@/app/config/model/embedding/modelDialog';
+import { EmbeddingModelDialog, EmbConfig } from '@/app/config/model/embedding/modelDialog';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-
-interface EmbConfig {
-  id: string;
-  model_id: string;
-  model_name: string;
-  type: string;
-  api_key: string;
-  endpoint: string;
-  dimension: number;
-  embed_batch_size: number;
-  is_ready: boolean;
-  is_default: boolean;
-}
 
 const newembconfig: EmbConfig = {
   id: '',
