@@ -61,18 +61,6 @@ class Planner(BaseAgent):
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:
         logger.info("Start agentic run.")
 
-        ## Start processing attachments
-        ret_messages, tool_call_chunks, return_direct, return_content = await parse_attchments_from_messages(state.messages, state.user_query)
-        state.messages = ret_messages
-        for chunk in tool_call_chunks:
-            yield chunk
-
-        logger.info(f"Return direct: {return_direct}")
-        if return_direct is True:
-            yield TextChunk(delta=return_content)
-            return
-        ## End processing attachments
-
         plan_prompt = self.prompt.format(context_variables=state.format_context_str())
         tools_to_plan = self.tool_metadata
         if tools_to_plan and state.enable_agent:
@@ -80,6 +68,18 @@ class Planner(BaseAgent):
 
         @use_current_span(trace.get_current_span())
         async def gen():
+            ## Start processing attachments
+            ret_messages, tool_call_chunks, return_direct, return_content = await parse_attchments_from_messages(state.messages, state.user_query)
+            state.messages = ret_messages
+            for chunk in tool_call_chunks:
+                yield chunk
+
+            logger.info(f"Return direct: {return_direct}")
+            if return_direct is True:
+                yield TextChunk(delta=return_content)
+                return
+            ## End processing attachments
+
             selected_tool = None
             plan_delta = ""
             messages = [{"role": "system", "content": plan_prompt}] + state.messages
