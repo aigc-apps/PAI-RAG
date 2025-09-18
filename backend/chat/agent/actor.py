@@ -54,7 +54,7 @@ class Actor(BaseAgent):
                 react_step += 1
 
                 tool_calls = []
-                next_content = ""
+                step_content = ""
 
 
                 async for chunk in await self.invoke_llm_async(
@@ -64,14 +64,15 @@ class Actor(BaseAgent):
                     if chunk.tool_calls:
                         tool_calls = chunk.tool_calls
                     if chunk.delta:
-                        next_content += chunk.delta
+                        step_content += chunk.delta
                         yield TextChunk(delta=chunk.delta)
 
-                if next_content:
+                if step_content:
                     messages.append({
                         "role": "assistant",
-                        "content": next_content,
+                        "content": step_content,
                     })
+                    step_content = ""
 
                 if not tool_calls:
                     logger.info(f"[{self.name}] No more tool calls. Exiting ReAct loop.")
