@@ -8,7 +8,7 @@ from config.providers.websearch_provider import websearch_provider
 from llama_index.core.tools.function_tool import FunctionTool
 from loguru import logger
 from rag.knowledgebase_tool import aget_knowledgebase_tool
-from tools.attachments.file_searcher import aget_file_searcher
+from chat.tools.attachments.file_searcher import aget_file_searcher
 
 
 async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]=[]) -> List[FunctionTool]:
