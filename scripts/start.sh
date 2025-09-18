@@ -142,11 +142,11 @@ start_frontend() {
   if [[ "$DEV_MODE" == false ]]; then
     echo "👉 启动前端服务 on port $FRONTEND_PORT"
     export FRONTEND_PORT=$FRONTEND_PORT
-    NEXT_PUBLIC_BACKEND_URL=http://localhost:$BACKEND_PORT npm run start  -- --port $FRONTEND_PORT &
+    NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:$BACKEND_PORT npm run start  -- --port $FRONTEND_PORT &
   else
     npm install || { echo "错误: npm 安装失败"; exit 1; }
     echo "👉 开发模式启动前端服务 on port $PORT"
-    NEXT_PUBLIC_BACKEND_URL=http://localhost:$BACKEND_PORT npm run dev -- --port $PORT &
+    NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:$BACKEND_PORT npm run dev -- --port $PORT &
   fi
   FRONTEND_PID=$!
   echo "👉 启动前端服务 with pid $FRONTEND_PID."
