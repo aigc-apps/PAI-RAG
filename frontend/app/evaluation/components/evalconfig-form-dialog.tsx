@@ -26,6 +26,7 @@ import { useState, useEffect } from 'react';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { useRouter } from 'next/navigation';
 import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
+import { Checkbox } from "@/components/ui/checkbox";
 
 
 interface EvalConfigFormDialogProps {
@@ -59,7 +60,8 @@ export function EvalConfigFormDialog({
         type: "",
         model_id: "",
         case_sensitive: false,
-        ignore_punctuation: false
+        ignore_punctuation: false,
+        metrics_agent_trajectory: false,
       }
   );
 
@@ -74,7 +76,8 @@ export function EvalConfigFormDialog({
         type: "",
         model_id: "",
         case_sensitive: false,
-        ignore_punctuation: false
+        ignore_punctuation: false,
+        metrics_agent_trajectory: false,
       });
     }
   }, [mode, config]);
@@ -193,6 +196,24 @@ export function EvalConfigFormDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  <Label className="block flex flex-row items-center space-x-6">Agent Trajectory</Label>
+                  <div className="flex flex-row items-center space-x-6">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="metrics_agent_trajectory"
+                        checked={localConfig.metrics_agent_trajectory ?? false}
+                        onCheckedChange={(checked) => {
+                          setLocalConfig((prev) => ({
+                            ...prev,
+                            metrics_agent_trajectory: Boolean(checked),
+                          }))
+                        }}
+                        />
+                      <label htmlFor="metrics_agent_trajectory" className="text-sm font-medium cursor-pointer">
+                        Agent Trajectory
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

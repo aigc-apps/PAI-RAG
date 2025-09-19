@@ -13,6 +13,7 @@ class EvaluatorConfig(BaseModel):
     name: Optional[str] = "ExactMatch"
     case_sensitive: Optional[bool] = False
     ignore_punctuation: Optional[bool] = False
+    metrics_agent_trajectory: Optional[bool] = False
     llm: Optional[LLM] = None
 
 
@@ -25,12 +26,13 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
     if eval_type == "ExactMatch":
         return ExactMatchEvaluator(
             case_sensitive=eval_config.get("case_sensitive", False),
-            ignore_punctuation=eval_config.get("case_sensitive", True)
+            ignore_punctuation=eval_config.get("case_sensitive", True),
         )
     elif eval_type == "LLMJudge":
         assert eval_llm is not None, "Must provide eval llm instance"
         return LLMJudgeEvaluator(
-            llm=eval_llm
+            llm=eval_llm,
+            agent_trajectory=eval_config.get("metrics_agent_trajectory", False),
         )
 
     else:
