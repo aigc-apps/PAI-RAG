@@ -38,8 +38,7 @@ export async function proxyRequest(request: NextRequest) {
 
         // 3. Copy all fields from incoming formData
         for (const [key, value] of formData.entries()) {
-          if (value instanceof File) {
-            // Reconstruct File as Blob (Files survive .entries() in Node.js)
+          if ( value && typeof value === 'object' && typeof value.arrayBuffer === 'function' && typeof value.type === 'string' && typeof value.name === 'string' ) {            // Reconstruct File as Blob (Files survive .entries() in Node.js)
             const blob = new Blob([await value.arrayBuffer()], { type: value.type });
             externalFormData.append(key, blob, value.name);
           } else {
