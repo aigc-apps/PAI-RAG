@@ -144,60 +144,60 @@ class Planner(BaseAgent):
                     )
                     state.observations += tool_result.content + "\n\n"
 
-                yield ToolResultChunk(
-                    tool=selected_tool,
-                    result=tool_result.content,
-                )
+                    yield ToolResultChunk(
+                        tool=selected_tool,
+                        result=tool_result.content,
+                    )
 
-                actor = Actor(
-                    prompt=plan_prompt,
-                    llm=self.llm,
-                    tools=self.tools,
-                    name="actor",
-                    max_steps=self.max_steps
-                )
+                    actor = Actor(
+                        prompt=plan_prompt,
+                        llm=self.llm,
+                        tools=self.tools,
+                        name="actor",
+                        max_steps=self.max_steps
+                    )
 
-                summarizer = Summarizer(
-                    self.prompt_set.summary_prompt,
-                    llm=self.llm,
-                    name="summarizer",
-                )
-                response_gen = await actor.run_async(state)
-                async for chunk in response_gen:
-                    if chunk.tool_calls:
-                        if chunk.tool_calls[0].function.name == "respond-tool":
-                            logger.info("Actor finished with respond-tool.")
-                            break
-                        elif isinstance(chunk, ToolResultChunk):
-                            state.messages.append(
-                                {
-                                    "role": "tool",
-                                    "content": tool_result.content,
-                                    "tool_call_id": chunk.tool.id
-                                }
+                    summarizer = Summarizer(
+                        self.prompt_set.summary_prompt,
+                        llm=self.llm,
+                        name="summarizer",
+                    )
+                    response_gen = await actor.run_async(state)
+                    async for chunk in response_gen:
+                        if chunk.tool_calls:
+                            if chunk.tool_calls[0].function.name == "respond-tool":
+                                logger.info("Actor finished with respond-tool.")
+                                break
+                            elif isinstance(chunk, ToolResultChunk):
+                                state.messages.append(
+                                    {
+                                        "role": "tool",
+                                        "content": tool_result.content,
+                                        "tool_call_id": chunk.tool.id
+                                    }
+                                )
+                                state.observations += chunk.result + "\n\n"
+
+                        if chunk.delta:
+                            yield ReasoningChunk(
+                                reasoning_delta=chunk.delta,
+                                tool_calls=chunk.tool_calls,
+                                stage=ChunkStage.ACTING,
                             )
-                            state.observations += chunk.result + "\n\n"
+                        else:
+                            chunk.stage = ChunkStage.ACTING
+                            yield chunk
 
-                    if chunk.delta:
-                        yield ReasoningChunk(
-                            reasoning_delta=chunk.delta,
-                            tool_calls=chunk.tool_calls,
-                            stage=ChunkStage.ACTING,
-                        )
-                    else:
-                        chunk.stage = ChunkStage.ACTING
+
+                    answer_gen = await summarizer.run_async(state)
+                    is_first_chunk = True
+                    async for chunk in answer_gen:
+                        chunk.stage = ChunkStage.RESPONSE
+                        if is_first_chunk:
+                            chunk.delta = "\n" + chunk.delta # Summary 换行
+                            is_first_chunk = False
+
                         yield chunk
-
-
-                answer_gen = await summarizer.run_async(state)
-                is_first_chunk = True
-                async for chunk in answer_gen:
-                    chunk.stage = ChunkStage.RESPONSE
-                    if is_first_chunk:
-                        chunk.delta = "\n" + chunk.delta # Summary 换行
-                        is_first_chunk = False
-
-                    yield chunk
             else:
                 logger.info(f"Planning tool execution detected, plan: {selected_tool.function.arguments}.")
 
