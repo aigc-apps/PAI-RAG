@@ -16,45 +16,12 @@ from llama_index.core.base.llms.types import (
     ChatResponse,
 )
 from loguru import logger
-import re
 
-def parse_vlm_output(raw_output: str):
-    try:
-        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_output)
-        json_str = json_match.group(1) if json_match else raw_output
 
-        if not json_match:
-            brace_match = re.search(r'\{[\s\S]*?\}', raw_output)
-            if brace_match:
-                json_str = brace_match.group(0)
-
-        try:
-            result = json.loads(json_str)
-            if isinstance(result, dict) and "answer" in result and "return_direct" in result:
-                return {
-                    "answer": str(result["answer"]),
-                    "return_direct": bool(result["return_direct"])
-                }
-        except (json.JSONDecodeError, TypeError):
-            pass
-    except Exception:
-        logger.error(f"解析图片出错: {traceback.format_exc()}")
-        raise
-
-    # 4. fallback
-    logger.warning(f"VLM 未返回合法 JSON {raw_output[:100]}...")
-    return {
-        "answer": raw_output,
-        "return_direct": False
-    }
 async def analyze_image(image_url: str, question: str = "") -> str:
     multimodal_llm = await get_multimodal_llm_from_db()
     system_prompt = (
-        "你是一个图片理解专家。请根据用户问题和图片内容，输出一个 JSON 对象，包含两个字段：\n"
-        "- \"answer\": 你的回答内容（字符串）\n"
-        "- \"return_direct\": 布尔值。如果图片中信息足够直接、完整地回答用户问题，无需额外推理，请设为 true；"
-        "如果信息不完整、模糊、或需要结合外部知识，请设为 false。\n"
-        "不要输出任何其他内容，只输出合法 JSON。"
+        "你是一个图片理解专家。请根据用户问题和图片内容，回答问题"
     )
     user_prompt = question or "请描述这张图片的内容。"
     messages = [
@@ -75,7 +42,7 @@ async def analyze_image(image_url: str, question: str = "") -> str:
     try:
         response: ChatResponse = multimodal_llm.chat(messages)
         raw_output = response.message.content.strip()
-        return parse_vlm_output(raw_output)
+        return raw_output
     except Exception:
         logger.error(f"解析图片出错: {traceback.format_exc()}")
         raise
@@ -105,16 +72,13 @@ async def aget_image_analysis_from_db(
         return json.dumps({"error": "无法获取图片访问链接"}, ensure_ascii=False)
 
     try:
-        vlm_result = await analyze_image(image_url, question)
-        answer = vlm_result["answer"]
-        return_direct = vlm_result["return_direct"]
+        answer = await analyze_image(image_url, question)
 
         return json.dumps({
             "file_id": file_id,
             "image_url": image_url,
             "question": question,
             "answer": answer,
-            "return_direct": return_direct  # 由 VLM 自主判断
         }, ensure_ascii=False)
 
     except Exception as e:
@@ -122,7 +86,6 @@ async def aget_image_analysis_from_db(
         return json.dumps({
             "error": f"VLM 解析失败: {str(e)}",
             "image_url": image_url,
-            "return_direct": False
         }, ensure_ascii=False)
 
 async def aget_image_analysis(file_id: str,
