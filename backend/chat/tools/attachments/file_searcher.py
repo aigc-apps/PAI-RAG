@@ -58,17 +58,20 @@ async def aget_file_searcher(attachments: List[dict]):
             str,
             "用户的问题",
         ] = "",
+        **kwargs
     ):
         logger.info(
-            "File_retrieve_tool with attachments"
+            f"File_searcher_tool with attachments with query_str: {query_str}, kwargs: {kwargs}"
         )
         return await get_file_retrieve_results_func(
             query_str=query_str
         )
 
-    think_tool = FunctionTool.from_defaults(
+    search_tool = FunctionTool.from_defaults(
         async_fn=file_retrieve_handler,
         name="search-file",
-        description="文件检索工具：如果附件中并没有直接提供关于用户问题的相关信息，请使用该工具进一步搜索附件里的更多信息。",
+        description="""文件检索工具：如果附件中并没有直接提供关于用户问题的相关信息，请使用该工具进一步搜索附件里的更多信息。
+参数：
+- query_str: 用户想问的具体问题，例如“图片讲了什么？”、“请查找第三章的内容”等。""",
     )
-    return think_tool
+    return search_tool

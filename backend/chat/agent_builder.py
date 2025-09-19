@@ -8,7 +8,7 @@ from config.providers.websearch_provider import websearch_provider
 from llama_index.core.tools.function_tool import FunctionTool
 from loguru import logger
 from rag.knowledgebase_tool import aget_knowledgebase_tool
-from tools.attachments.file_searcher import aget_file_searcher
+from chat.tools.attachments.file_searcher import aget_file_searcher
 
 
 async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]=[]) -> List[FunctionTool]:
@@ -47,8 +47,12 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
     try:
         attachments = []
         for message in chat_request.messages:
-            if message.get("role") == "user" and len(message.get("attachments", [])) > 0:
-                attachments.extend(message.get("attachments", []))
+            if message.get("role") == "user":
+                non_image_attachments = [
+                    att for att in message.get("attachments", [])
+                    if not str(att.get("contentType", "")).startswith("image/")
+                ]
+                attachments.extend(non_image_attachments)
 
         mcp_tools = await aget_mcp_tools(chat_request, attachments=attachments)
 
