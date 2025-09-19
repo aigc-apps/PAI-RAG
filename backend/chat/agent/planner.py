@@ -88,7 +88,7 @@ class Planner(BaseAgent):
                     selected_tool = chunk.tool_calls[0]
 
                 plan_delta += chunk.delta or ""
-                if chunk.delta:
+                if chunk.delta and selected_tool:
                     yield ReasoningChunk(
                         reasoning_delta=chunk.delta,
                         tool_calls=chunk.tool_calls,

@@ -5,10 +5,7 @@ import shutil
 from tempfile import TemporaryDirectory
 import time
 from modelscope import snapshot_download
-from utils.cuda_utils import infer_cuda_device
-from pathlib import Path
 import os
-import json
 from loguru import logger
 
 
@@ -16,41 +13,6 @@ from loguru import logger
 INTERNAL_MODEL_DIR = "./model_repository"
 PDF_EXTRACT_KIT_MODEL = "OpenDataLab/PDF-Extract-Kit-1.0"
 INTERNAL_MODELS = ["BAAI/bge-m3", PDF_EXTRACT_KIT_MODEL] #必须的模型文件，提前下载
-
-
-def init_mineru_config(model_dir: str = INTERNAL_MODEL_DIR):
-    # 获取配置文件目录
-    download_model_to_directory(PDF_EXTRACT_KIT_MODEL)
-
-    current_dir_path = Path(__file__).parent.parent
-    source_path = os.path.join(current_dir_path, "mineru.template.json")
-
-    logger.info(f"Start to loading minerU config file from {source_path}.")
-    destination_path = os.path.expanduser("~/mineru.json")  # 目标路径
-
-    # 读取 source_path 文件的内容
-    with open(source_path, "r") as source_file:
-        data = json.load(source_file)  # 加载 JSON 数据
-
-    data["device-mode"] = infer_cuda_device()
-
-    if "models-dir" in data:
-        data["models-dir"] = os.path.join(
-            str(model_dir), "OpenDataLab/PDF-Extract-Kit-1.0/models"
-        )
-    if "layoutreader-model-dir" in data:
-        data["layoutreader-model-dir"] = os.path.join(
-            str(model_dir),
-            "OpenDataLab/PDF-Extract-Kit-1.0/layoutreader",
-        )
-
-    # 将修改后的内容写入destination_path
-    with open(destination_path, "w") as destination_file:
-        json.dump(data, destination_file, indent=4)
-
-    logger.info(
-        f"Copy {source_path} to ~/mineru.json and modify models-dir to model path."
-    )
 
 
 def download_model_to_directory(model_name: str):

@@ -34,9 +34,9 @@ def init_mineru_config(model_dir: str = INTERNAL_MODEL_DIR):
     data["device-mode"] = infer_cuda_device()
 
     if "models-dir" in data:
-        data["models-dir"] = os.path.join(
-            str(model_dir), "OpenDataLab/PDF-Extract-Kit-1.0/models"
-        )
+        data["models-dir"] = { "pipeline": os.path.join(
+            str(model_dir), "OpenDataLab/PDF-Extract-Kit-1.0"
+        )}
     if "layoutreader-model-dir" in data:
         data["layoutreader-model-dir"] = os.path.join(
             str(model_dir),
