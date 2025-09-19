@@ -1,8 +1,9 @@
 import json
 from typing import Any, Dict
-from chat.agent.actor import Actor
+from backend.chat.agent.actor_with_plan import ActorWithPlan
 from chat.agent.prompts import ACT_PROMPT, PLAN_PROMPT, SUMMARY_PROMPT
 from chat.agent.summarizer import Summarizer
+from backend.chat.agent.actor import Actor
 from chat.llm.models import ChunkStage, ToolResultChunk
 from chat.llm.utils import parse_llm_json
 from chat.tools.plan_tool import aget_plan_tool, aget_respond_tool
@@ -92,7 +93,16 @@ class Planner(BaseAgent):
                     selected_tool = chunk.tool_calls[0]
 
                 plan_delta += chunk.delta or ""
-                yield chunk
+                if chunk.delta:
+                    yield ReasoningChunk(
+                        reasoning_delta=chunk.delta,
+                        tool_calls=chunk.tool_calls,
+                        stage=ChunkStage.ACTING,
+                    )
+                else:
+                    chunk.stage = ChunkStage.ACTING
+                    yield chunk
+                # yield chunk
 
             # TODO: Fallback for empty plan
             if selected_tool is None:
@@ -122,31 +132,76 @@ class Planner(BaseAgent):
                     tool_result = await call_tool_with_retry(async_fn, function_args)
                     logger.info(f"Get tool result {tool_result}.")
 
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [
-                            selected_tool
-                        ]
-                    }
-                )
-                messages.append(
-                    {
-                        "role": "tool",
-                        "content": tool_result.content,
-                        "tool_call_id": selected_tool.id
-                    }
-                )
+
+                    state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [selected_tool]
+                        }
+                    )
+                    state.messages.append(
+                        {
+                            "role": "tool",
+                            "content": tool_result.content,
+                            "tool_call_id": selected_tool.id
+                        }
+                    )
+                    state.observations += tool_result.content + "\n\n"
 
                 yield ToolResultChunk(
                     tool=selected_tool,
                     result=tool_result.content,
                 )
-                response_gen = await self.invoke_llm_async(messages=messages)
-                async for chunk in response_gen:
 
+                actor = Actor(
+                    prompt=plan_prompt,
+                    llm=self.llm,
+                    tools=self.tools,
+                    name="actor",
+                    max_steps=self.max_steps
+                )
+
+                summarizer = Summarizer(
+                    self.prompt_set.summary_prompt,
+                    llm=self.llm,
+                    name="summarizer",
+                )
+                response_gen = await actor.run_async(state)
+                async for chunk in response_gen:
+                    if chunk.tool_calls:
+                        if chunk.tool_calls[0].function.name == "respond-tool":
+                            logger.info("Actor finished with respond-tool.")
+                            break
+                        elif isinstance(chunk, ToolResultChunk):
+                            state.messages.append(
+                                {
+                                    "role": "tool",
+                                    "content": tool_result.content,
+                                    "tool_call_id": chunk.tool.id
+                                }
+                            )
+                            state.observations += chunk.result + "\n\n"
+
+                    if chunk.delta:
+                        yield ReasoningChunk(
+                            reasoning_delta=chunk.delta,
+                            tool_calls=chunk.tool_calls,
+                            stage=ChunkStage.ACTING,
+                        )
+                    else:
+                        chunk.stage = ChunkStage.ACTING
+                        yield chunk
+
+
+                answer_gen = await summarizer.run_async(state)
+                is_first_chunk = True
+                async for chunk in answer_gen:
                     chunk.stage = ChunkStage.RESPONSE
+                    if is_first_chunk:
+                        chunk.delta = "\n" + chunk.delta # Summary 换行
+                        is_first_chunk = False
+
                     yield chunk
             else:
                 logger.info(f"Planning tool execution detected, plan: {selected_tool.function.arguments}.")
@@ -167,11 +222,11 @@ class Planner(BaseAgent):
                     raise Exception("Empty plan steps.")
 
 
-                actor = Actor(
+                actor_with_plan = ActorWithPlan(
                     prompt=self.prompt_set.act_prompt,
                     llm=self.llm,
                     tools=self.tools + [await aget_respond_tool()],
-                    name="actor",
+                    name="actor_with_plan",
                     max_steps=10,
                 )
                 summarizer = Summarizer(
@@ -180,7 +235,7 @@ class Planner(BaseAgent):
                     name="summarizer",
                 )
 
-                response_gen = await actor.run_async(state)
+                response_gen = await actor_with_plan.run_async(state)
 
                 async for chunk in response_gen:
                     if chunk.tool_calls:

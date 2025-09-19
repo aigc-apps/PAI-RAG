@@ -1,3 +1,5 @@
+# chat/agent/actor.py
+
 import json
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from loguru import logger
@@ -8,6 +10,7 @@ from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
 from chat.llm.llm_model import PaiLlm
 from chat.llm.models import TextChunk, ChatResponseGenerator, ToolResultChunk
 from extensions.trace.base import use_current_span
+
 from opentelemetry import trace
 
 
@@ -19,55 +22,41 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
 MAX_RECURSION_STEPS = 20
 
 
+
 class Actor(BaseAgent):
     def __init__(
         self,
         prompt: str,
         llm: PaiLlm,
         tools: list[FunctionTool],
-        name: str,
+        name: str = "actor",
         max_steps: int = MAX_RECURSION_STEPS
     ):
         super().__init__(prompt, llm, tools, name)
-
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
         self.tool_metadata = [
             tool.metadata.to_openai_tool() for tool in self.tools
         ]
 
-    def build_prompt(self, state: AgentState) -> str:
-        plan_list = ""
-        if len(state.plan["steps"]) > 0:
-            for i, task in enumerate(state.plan["steps"]):
-                plan_list += f"Step {i+1}. {task}\n"
-
-        return self.prompt.format(
-            task_results=state.observations,
-            plan_list=plan_list,
-            step=state.step,
-            context_variables=state.format_context_str(),
-            task_name=state.plan['steps'][state.step-1],
-            **state.context_variables,
-        )
-
-
     @pai_agent_wrapper
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:
-        logger.info("Running actor agent.")
-        act_prompt = self.build_prompt(state)
-        messages = [{"role": "user", "content": act_prompt}]
+        logger.info(f"[{self.name}] Starting ReAct loop.")
+
+        messages = [{"role": "system", "content": self.prompt}] + state.messages
 
         @use_current_span(trace.get_current_span())
         async def gen():
-            action_step = 1
-            while action_step <= self.max_steps:
-                logger.info(f"Acting at step {action_step} with messages: {messages}")
-                action_step += 1
+            react_step = 1
+
+            while react_step <= self.max_steps:
+                logger.info(f"[{self.name}] ReAct step {react_step} / {self.max_steps}")
+                react_step += 1
 
                 tool_calls = []
-
                 step_content = ""
+
+
                 async for chunk in await self.invoke_llm_async(
                     messages=messages,
                     tools=self.tool_metadata,
@@ -76,9 +65,7 @@ class Actor(BaseAgent):
                         tool_calls = chunk.tool_calls
                     if chunk.delta:
                         step_content += chunk.delta
-                        yield TextChunk(
-                            delta=chunk.delta
-                        )
+                        yield TextChunk(delta=chunk.delta)
 
                 if step_content:
                     messages.append({
@@ -87,59 +74,60 @@ class Actor(BaseAgent):
                     })
                     step_content = ""
 
-                if tool_calls:
-                    for tool in tool_calls:
-                        if tool.type == "function":
-                            function_name = tool.function.name
-                            if not function_name or function_name not in self.tool_fn_map:
-                                logger.warning(f"Unknown tool_call: {tool}, skip it.")
-                                continue
-
-
-                            if function_name == "respond-tool":
-                                logger.info("Actor finished with respond-tool.")
-                                yield TextChunk(tool_calls=[tool])
-                                return
-
-                            if tool.function.arguments:
-                                function_args = json.loads(tool.function.arguments)
-                            else:
-                                function_args = {}
-
-                            yield TextChunk(
-                                tool_calls=[tool],
-                            )
-                            async_fn = self.tool_fn_map[function_name]
-                            logger.info(f"Calling tool {function_name} with args {function_args}.")
-                            tool_result = await call_tool_with_retry(async_fn, function_args)
-                            logger.info(f"Get tool result {tool_result}.")
-
-                            messages.append(
-                                {
-                                    "role": "assistant",
-                                    "content": None,
-                                    "tool_calls": [
-                                        tool
-                                    ]
-                                }
-                            )
-                            messages.append(
-                                {
-                                    "role": "tool",
-                                    "content": tool_result.content,
-                                    "tool_call_id": tool.id
-                                }
-                            )
-
-                            yield ToolResultChunk(
-                                tool=tool,
-                                result=tool_result.content,
-                            )
-                else:
+                if not tool_calls:
+                    logger.info(f"[{self.name}] No more tool calls. Exiting ReAct loop.")
                     break
 
-            if state.step > self.max_steps:
-                yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+                # 处理工具调用
+                for tool in tool_calls:
+                    if tool.type != "function":
+                        continue
 
+                    function_name = tool.function.name
+                    if not function_name or function_name not in self.tool_fn_map:
+                        logger.warning(f"[{self.name}] Unknown tool: {function_name}, skipping.")
+                        continue
+
+                    if function_name == "respond-tool":
+                        logger.info(f"[{self.name}] respond-tool called. Exiting.")
+                        yield TextChunk(tool_calls=[tool])
+                        return
+
+                    try:
+                        function_args = json.loads(tool.function.arguments) if tool.function.arguments else {}
+                    except json.JSONDecodeError:
+                        logger.error(f"[{self.name}] Invalid JSON args: {tool.function.arguments}")
+                        function_args = {}
+
+                    yield TextChunk(tool_calls=[tool])
+
+                    # 调用工具
+                    async_fn = self.tool_fn_map[function_name]
+                    logger.info(f"[{self.name}] Calling {function_name} with args: {function_args}")
+                    tool_result = await call_tool_with_retry(async_fn, function_args)
+                    logger.info(f"[{self.name}] Tool result: {tool_result.content[:200]}...")
+
+
+                    messages.append({
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [tool]
+                    })
+
+                    messages.append({
+                        "role": "tool",
+                        "content": tool_result.content,
+                        "tool_call_id": tool.id
+                    })
+
+                    yield ToolResultChunk(
+                        tool=tool,
+                        result=tool_result.content,
+                    )
+
+            # 超出步数保护
+            if react_step > self.max_steps:
+                yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+                return
 
         return gen()
