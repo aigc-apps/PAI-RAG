@@ -1,8 +1,8 @@
+import os
 os.environ["MINERU_MODEL_SOURCE"] = "local"
 from collections import defaultdict
 from io import BytesIO
 from operator import itemgetter
-import os
 import re
 from pairag.file.models.file_item import FileItem
 from pairag.file.readers.base import BaseReader
