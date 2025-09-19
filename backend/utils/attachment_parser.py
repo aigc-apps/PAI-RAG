@@ -27,12 +27,10 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
 async def parse_attachments_from_messages(messages: List[dict], question: str = ""):
     ret_messages = messages
     tool_call_chunks = []
-    attachments = []
     for message in messages:
         if message.get("role") == "user":
             user_attachments = message.get("attachments", [])
             if len(user_attachments) > 0:
-                attachments.extend(user_attachments)
                 for attachment in user_attachments:
                     if str(attachment.get("contentType")).startswith("image/"):
                         # for image attachments
@@ -59,20 +57,27 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                             image_parser, image_parser_fn_args
                         )
                         logger.info(f"Get tool result {tool_result}.")
-                        ret_messages.append(
-                            {
-                                "role": "assistant",
-                                "content": None,
-                                "tool_calls": [image_parser_tool_call],
-                            }
-                        )
-                        ret_messages.append(
-                            {
-                                "role": "tool",
-                                "content": tool_result.content,
-                                "tool_call_id": image_parser_tool_call.id,
-                            }
-                        )
+                        reply_text = ""
+                        try:
+                            result_data = json.loads(tool_result.content)
+                            if "error" in result_data:
+                                reply_text = f"❌ 图片解析失败：{result_data['error']}"
+                            else:
+                                question = result_data.get("question") or "未指定问题"
+                                answer = result_data.get("answer", "无返回内容")
+                                file_id = result_data.get("file_id", "未知文件")
+                                reply_text = (
+                                    f"🖼️ 针对图片（ID: {file_id}）的问题“{question}”，我的分析如下：\n\n"
+                                    f"{answer}"
+                                )
+                        except (json.JSONDecodeError, TypeError):
+                            reply_text = f"🖼️ 图片分析结果：{tool_result.content}"
+
+                        # 只追加一条普通 assistant 消息，不使用 tool_call / tool 消息
+                        ret_messages.append({
+                            "role": "assistant",
+                            "content": reply_text,
+                        })
                         tool_call_chunks.append(
                             TextChunk(
                                 tool_calls=[image_parser_tool_call],
@@ -87,13 +92,15 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                     else:
                         # for text attachments
                         file_reader = await aget_file_reader()
+                        file_id = attachment.get("id")
+                        file_name = attachment.get("name", "未知附件")
                         file_reader_fn_args = {
-                            "file_id": attachment.get("id"),
-                            "file_name": attachment.get("name", "未知附件"),
+                            "file_id": file_id,
+                            "file_name": file_name,
                         }
                         file_reader_tool_call = ChoiceDeltaToolCall(
                             index=0,
-                            id=f"call_file_reader_{attachment.get('id')}",
+                            id=f"call_file_reader_{file_id}",
                             type="function",
                             function=ChoiceDeltaToolCallFunction(
                                 name=file_reader.metadata.name,
@@ -109,20 +116,18 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                             file_reader, file_reader_fn_args
                         )
                         logger.info(f"Get tool result {tool_result}.")
-                        ret_messages.append(
-                            {
-                                "role": "assistant",
-                                "content": None,
-                                "tool_calls": [file_reader_tool_call],
-                            }
-                        )
-                        ret_messages.append(
-                            {
-                                "role": "tool",
-                                "content": tool_result.content,
-                                "tool_call_id": file_reader_tool_call.id,
-                            }
-                        )
+                        reply_text = ""
+                        try:
+                            result_data = json.loads(tool_result.content)
+                            reply_text = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {result_data.get('data', '无内容')}"
+                        except (json.JSONDecodeError, TypeError):
+                            reply_text = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {tool_result.content}"
+
+                        # 只追加一条普通 assistant 消息，不使用 tool_call / tool 消息
+                        ret_messages.append({
+                            "role": "assistant",
+                            "content": reply_text,
+                        })
                         tool_call_chunks.append(
                             TextChunk(
                                 tool_calls=[file_reader_tool_call],
@@ -136,5 +141,5 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                         )
 
     return AttachmentInputData(
-        messages=ret_messages, tool_call_chunks=tool_call_chunks
+        messages=ret_messages, chunks=tool_call_chunks
     )
