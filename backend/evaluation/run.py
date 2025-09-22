@@ -20,6 +20,7 @@ async def run_agent(chat_request: ChatAgentRequest):
                 result = ""
                 execution_metadata = []
                 last_function_call_dict = None
+                trace_id = ""
                 async for sse_event in parse_sse_events(response):
                     if sse_event.get("choices", [])[0].get("finish_reason", "") == "stop":
                         break
@@ -27,20 +28,21 @@ async def run_agent(chat_request: ChatAgentRequest):
                     if content:
                         result += content
                     observation = sse_event.get("observation", "")
+                    trace_id = trace_id or sse_event.get("trace_id", "")
                     if observation:
                         execution_metadata.append(parse_function_call(last_function_call_dict, observation))
                     last_function_call_dict = sse_event
 
-                logger.info(f"Chat agent final response: {result}")
-                return result, execution_metadata, True
+                logger.info(f"Chat agent final, trace_id: {trace_id}, response: {result}")
+                return result, execution_metadata, trace_id, True
             else:
                 error_text = await response.text()
                 logger.error(f"Request failed with status {response.status}, body: {error_text}")
-                return f"Request failed: {error_text}", [], False
+                return f"Request failed: {error_text}", [], "", False
 
-async def run_evaluator(input: str, prediction: str, reference: str, eval_config: dict, eval_llm: LLM = None):
+async def run_evaluator(input: str, prediction: str, reference: str, eval_config: dict, trace_id: str, eval_llm: LLM = None):
     evaluator = create_evaluator(eval_config, eval_llm)
-    result = await evaluator.evaluate_async(input, prediction, reference)
+    result = await evaluator.evaluate_async(input, prediction, reference, trace_id=trace_id)
     return result
 
 if __name__ == '__main__':

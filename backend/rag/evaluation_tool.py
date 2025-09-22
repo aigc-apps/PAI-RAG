@@ -261,10 +261,9 @@ class PaiEvaluationClient:
                 prompts=run_config_entity.prompts,
             )
             try:
-                logger.info(f"=== Agent Run Input {chat_request} ===")
-                output, execution_metadata, status = await run_agent(chat_request)
+                output, execution_metadata, trace_id, status = await run_agent(chat_request)
                 logger.info(f"=== Agent output: {output} ===")
-                eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)
+                eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), trace_id, eval_llm)
                 logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
                 if status and eval_res:
                     logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")

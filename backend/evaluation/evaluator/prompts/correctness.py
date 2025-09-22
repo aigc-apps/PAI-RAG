@@ -55,3 +55,43 @@ Use the reference outputs below to help you evaluate the correctness of the resp
 
 <!-- START JSON OUTPUT -->
 """
+
+
+AGENT_TRAJECTORY_PROMPT = """
+You are a helpful AI bot that checks whether an AI agent's internal trajectory is accurate and effective.
+
+You will be given:
+1. The agent's actual trajectory of tool calls
+2. The user input that initiated the trajectory
+3. The definition of each tool that can be called
+
+An accurate trajectory:
+- Progresses logically from step to step
+- Uses the right tools for the task
+- Is reasonably efficient (no unnecessary detours)
+
+##
+Actual Trajectory:
+{tool_calls}
+
+User Input:
+{inputs}
+
+Tool Definitions:
+{tools}
+##
+
+score result with: `1` or `0`.
+- `1` → trajectory adheres to the rubric and achieves the task.
+- `0` → trajectory is confusing, inefficient, or fails the task.
+
+Think carefully for a while and then come to your conclusion. What you return is a json data structure
+containing the following fields: score and reason.
+The output format is as follows:
+    {{
+      "score": <score>,     // number
+      "reason": string,     // 1-2 sentence justification for the score
+      "correctness_issues": string[] // List of specific correctness problems found (if any)
+    }}
+DO NOT output anything else. No markdown, no explanations, no prefixes.
+"""

@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from evaluation.evaluator.base import BaseEvaluator
 from evaluation.evaluator.exact_match_evaluator import ExactMatchEvaluator
 from evaluation.evaluator.llm_judge_evaluator import LLMJudgeEvaluator
+from evaluation.evaluator.agent_trajectory_evaluator import AgentTrajectoryEvaluator
+
 from llama_index.core.llms import LLM
 
 class EvaluatorConfig(BaseModel):
@@ -32,8 +34,11 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
         assert eval_llm is not None, "Must provide eval llm instance"
         return LLMJudgeEvaluator(
             llm=eval_llm,
-            agent_trajectory=eval_config.get("metrics_agent_trajectory", False),
         )
-
+    elif eval_type == "AgentTrajectory":
+        assert eval_llm is not None, "Must provide eval llm instance"
+        return AgentTrajectoryEvaluator(
+            llm=eval_llm,
+        )
     else:
         raise ValueError(f"不支持的评估器类型: {eval_type}")

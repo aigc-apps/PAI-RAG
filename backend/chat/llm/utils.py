@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 import uuid
-from chat.llm.models import ChatResponseGenerator, ErrorChunk, ReasoningChunk, ToolResultChunk
+from chat.llm.models import ChatResponseGenerator, ErrorChunk, ReasoningChunk, ToolResultChunk, TextChunk
 from extensions.guardrail.guardrail_check import TextCheckResult
 from openai.types.chat import ChatCompletionChunk, ChatCompletion, ChatCompletionMessage
 from openai.types.completion_usage import CompletionUsage
@@ -109,6 +109,7 @@ async def convert_gen_to_stream_chat_completions(
             ],
             actions=[action.model_dump(mode="json") for action in chunk.tool_calls] if chunk.tool_calls else None,
             observation=chunk.result if isinstance(chunk, ToolResultChunk) else None,
+            trace_id=chunk.trace_id if isinstance(chunk, TextChunk) else None,
             model=model,
             created=int(time.time()),
             citations=citations,
