@@ -45,7 +45,6 @@ export interface EvaluatorConfig {
     model_id: string;    
     case_sensitive?: boolean;
     ignore_punctuation?: boolean;
-    metrics_agent_trajectory?: boolean;
 }
 
 export interface ExperimentItem {

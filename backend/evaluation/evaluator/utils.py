@@ -15,7 +15,6 @@ class EvaluatorConfig(BaseModel):
     name: Optional[str] = "ExactMatch"
     case_sensitive: Optional[bool] = False
     ignore_punctuation: Optional[bool] = False
-    metrics_agent_trajectory: Optional[bool] = False
     llm: Optional[LLM] = None
 
 
@@ -40,5 +39,6 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
         return AgentTrajectoryEvaluator(
             llm=eval_llm,
         )
+
     else:
         raise ValueError(f"不支持的评估器类型: {eval_type}")

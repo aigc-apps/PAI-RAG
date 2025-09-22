@@ -18,14 +18,12 @@ class LLMJudgeEvaluator(BaseEvaluator):
         prompt_template: Optional[str] = None,
         max_new_tokens: int = 512,
         temperature: float = 0.0,
-        agent_trajectory: bool = False,
     ):
         super().__init__(name)
         self.llm = llm
         self.prompt_template = prompt_template or self._default_prompt()
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
-        self.agent_trajectory = agent_trajectory
 
     def _default_prompt(self) -> str:
         return CORRECTNESS_PROMPT

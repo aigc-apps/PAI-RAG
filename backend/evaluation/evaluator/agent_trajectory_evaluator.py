@@ -86,24 +86,30 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
     async def evaluate_async(self, input:str, prediction: str, reference: str, trace_id: str, **kwargs) -> Dict[str, Any]:
         del prediction, reference
         if trace_id:
-            tool_calls, tools = self._get_tool_calls(kwargs.get("trace_id"))
+            tool_calls, tools = self._get_tool_calls(trace_id)
             tool_calls = json.dumps(tool_calls, ensure_ascii=False)
             tools = json.dumps(tools, ensure_ascii=False)
-            prompt = AGENT_TRAJECTORY_PROMPT.format(
+            prompt = self.prompt_template.format(
                     inputs=input,
                     tool_calls=tool_calls,
                     tools=tools,
                 )
-        llm_response = await self._call_llm(prompt)
-        result = self._parse_response(llm_response)
+            llm_response = await self._call_llm(prompt)
+            result = self._parse_response(llm_response)
+        else:
+            result = {
+                "score": 0.0,
+                "reason": "Missing trace_id, tracing must be enabled in AgentTrajectory evaluation.",
+                "evaluator": self.name,
+            }
         return result
 
     def _get_tool_calls(self, trace_id):
         """get tool_calls and tools from trace"""
         region = 'cn-hangzhou'
         config = open_api_models.Config(
-            access_key_id='xxxxxxx',
-            access_key_secret='xxxxxx',
+            access_key_id='xxxxxxxxx',
+            access_key_secret='xxxxxxxxx',
             protocol='HTTPS',
             region_id=region,
             endpoint=f'paillmtrace.{region}.aliyuncs.com')

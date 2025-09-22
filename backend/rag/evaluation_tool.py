@@ -10,6 +10,8 @@ from db.models.llm import LlmModelEntity
 from typing import List
 from datetime import datetime, timezone
 from common.chat.models import ChatAgentRequest
+from evaluation.evaluator.agent_trajectory_evaluator import AgentTrajectoryEvaluator
+from evaluation.evaluator.llm_judge_evaluator import LLMJudgeEvaluator
 from evaluation.run import run_agent, run_evaluator
 from chat.openai.openai_like import OpenAILike
 from sqlmodel import select
@@ -200,7 +202,7 @@ class PaiEvaluationClient:
         evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=experiment_entity.evaluator_config_id)
         logger.info(f"[WORKER]run_config_entity: {run_config_entity} \n evaluator_config: {evaluator_config}")
         eval_llm = None
-        if evaluator_config.type == "LLMJudge":
+        if evaluator_config.type in [LLMJudgeEvaluator.name, AgentTrajectoryEvaluator.name]:
             eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
         for exp_run_id in exp_run_ids:
             exp_run_entity: ExperimentSampleEntity = await get_exp_run_entity(exp_run_id=exp_run_id)

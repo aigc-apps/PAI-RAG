@@ -9,7 +9,6 @@ class EvaluatorConfigCreate(SQLModel):
     model_id: str = Field(default="")
     case_sensitive: bool = Field(default=False)
     ignore_punctuation: bool = Field(default=False)
-    metrics_agent_trajectory: bool = Field(default=False)
 
 class EvaluatorConfigEntity(EvaluatorConfigCreate, table=True):
     __tablename__ = "pai_evaluator_config"

@@ -61,7 +61,6 @@ export function EvalConfigFormDialog({
         model_id: "",
         case_sensitive: false,
         ignore_punctuation: false,
-        metrics_agent_trajectory: false,
       }
   );
 
@@ -77,7 +76,6 @@ export function EvalConfigFormDialog({
         model_id: "",
         case_sensitive: false,
         ignore_punctuation: false,
-        metrics_agent_trajectory: false,
       });
     }
   }, [mode, config]);
@@ -132,6 +130,7 @@ export function EvalConfigFormDialog({
                 <SelectContent>
                   <SelectItem value="ExactMatch">精确匹配</SelectItem>
                   <SelectItem value="LLMJudge">LLM 评判</SelectItem>
+                  <SelectItem value="AgentTrajectory">LLM 评判(AgentTrajectory)</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -196,26 +195,37 @@ export function EvalConfigFormDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <Label className="block flex flex-row items-center space-x-6">Agent Trajectory</Label>
-                  <div className="flex flex-row items-center space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="metrics_agent_trajectory"
-                        checked={localConfig.metrics_agent_trajectory ?? false}
-                        onCheckedChange={(checked) => {
-                          setLocalConfig((prev) => ({
-                            ...prev,
-                            metrics_agent_trajectory: Boolean(checked),
-                          }))
-                        }}
-                        />
-                      <label htmlFor="metrics_agent_trajectory" className="text-sm font-medium cursor-pointer">
-                        Agent Trajectory
-                      </label>
-                    </div>
-                  </div>
                 </div>
               )}
+
+              {localConfig.type === "AgentTrajectory" && (
+                <div className="pt-3">
+                  <Label htmlFor="model_id" className="block text-sm mb-2">
+                    选择评估器模型
+                  </Label>
+                  <Select
+                    value={localConfig.model_id || ""}
+                    onValueChange={(value) => {
+                      setLocalConfig((prev) => ({
+                        ...prev,
+                        model_id: value,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id="model_id">
+                      <SelectValue placeholder="请选择评估模型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {llms.map((llm) => (
+                        <SelectItem key={llm.model_id} value={llm.model_id}>
+                          {llm.model_id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
             </div>
           </div>
         </div>

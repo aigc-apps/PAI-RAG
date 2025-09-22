@@ -39,7 +39,6 @@ const default_evaluator_config = {
     model_id: "",
     case_sensitive: false,
     ignore_punctuation: false,
-    metrics_agent_trajectory: false,
 };
 
 
