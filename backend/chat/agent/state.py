@@ -3,6 +3,7 @@ from chat.agent.models import PlanOutput
 from pydantic import BaseModel, Field
 from common.chat.constants import MessageRole
 from utils.time_utils import get_current_time_str
+from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 
 
 def get_message_content(msg: dict) -> str:
@@ -27,6 +28,7 @@ class AgentState(BaseModel):
     plan: PlanOutput = None
     observations: str = ""
     enable_agent: bool = Field(default=False)
+    current_tool_call: ChoiceDeltaToolCall = None
 
     @classmethod
     def from_messages(

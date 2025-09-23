@@ -10,7 +10,8 @@ from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
 from chat.llm.llm_model import PaiLlm
 from chat.llm.models import TextChunk, ChatResponseGenerator, ToolResultChunk
 from extensions.trace.base import use_current_span
-
+from chat.agent.prompts import SUMMARY_PROMPT
+from common.chat.constants import MessageRole
 from opentelemetry import trace
 
 
@@ -39,15 +40,60 @@ class Actor(BaseAgent):
             tool.metadata.to_openai_tool() for tool in self.tools
         ]
 
+
+    def build_prompt(self, state: AgentState) -> str:
+        return self.prompt.format(
+            context_variables=state.format_context_str(),
+        )
+
     @pai_agent_wrapper
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:
-        logger.info(f"[{self.name}] Starting ReAct loop.")
-
-        messages = [{"role": "system", "content": self.prompt}] + state.messages
-
+        logger.info("Running actor agent.")
         @use_current_span(trace.get_current_span())
         async def gen():
             react_step = 1
+            messages = state.messages.copy()
+            observations = ""
+            if state.current_tool_call:
+                selected_tool = state.current_tool_call
+                tool_name = selected_tool.function.name
+                if selected_tool.function.arguments:
+                        function_args = json.loads(selected_tool.function.arguments)
+                else:
+                    function_args = {}
+
+                yield TextChunk(
+                    tool_calls=[selected_tool],
+                )
+                async_fn = self.tool_fn_map[tool_name]
+                logger.info(f"Calling tool {tool_name} with args {function_args}.")
+                tool_result = await call_tool_with_retry(async_fn, function_args)
+                logger.info(f"Get tool result {tool_result}.")
+
+
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [selected_tool]
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "content": tool_result.content,
+                        "tool_call_id": selected_tool.id
+                    }
+                )
+
+                yield ToolResultChunk(
+                    tool=selected_tool,
+                    result=tool_result.content,
+                )
+                state.current_tool_call = None
+                observations += tool_result.content + "\n\n"
+            act_prompt = self.build_prompt(state)
+            messages = [{"role": "system", "content": act_prompt}] + messages
 
             while react_step <= self.max_steps:
                 logger.info(f"[{self.name}] ReAct step {react_step} / {self.max_steps}")
@@ -88,10 +134,6 @@ class Actor(BaseAgent):
                         logger.warning(f"[{self.name}] Unknown tool: {function_name}, skipping.")
                         continue
 
-                    if function_name == "respond-tool":
-                        logger.info(f"[{self.name}] respond-tool called. Exiting.")
-                        yield TextChunk(tool_calls=[tool])
-                        return
 
                     try:
                         function_args = json.loads(tool.function.arguments) if tool.function.arguments else {}
@@ -124,10 +166,23 @@ class Actor(BaseAgent):
                         tool=tool,
                         result=tool_result.content,
                     )
+                    observations += tool_result.content + "\n\n"
 
             # 超出步数保护
             if react_step > self.max_steps:
-                yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+                logger.warning(f"Reached max recursion steps: {self.max_steps}")
+                current_datetime = state.context_variables.get("current_datetime", "")
+                prompt = SUMMARY_PROMPT.format(
+                    tool_results=observations,
+                    chat_history=state.chat_history,
+                    current_datetime=current_datetime,
+                    user_query=state.user_query,
+                )
+                response_gen = await self.invoke_llm_async(messages=[
+                {"role": MessageRole.USER, "content": prompt},
+            ])
+                async for chunk in response_gen:
+                    yield chunk
                 return
 
         return gen()

@@ -40,7 +40,7 @@ import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import {PLAN_PROMPT, ACT_PROMPT, SUMMARY_PROMPT} from '../common/prompts';
+import {PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT} from '../common/prompts';
 
 // Add import for ResettableTextarea
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
@@ -50,6 +50,7 @@ import { toast } from 'sonner';
 interface PromptConfig {
   plan: string;
   act: string;
+  act_with_plan: string;
   summary: string;
 };
 
@@ -92,6 +93,7 @@ const default_chat_config = {
   prompts: {
     plan: PLAN_PROMPT,
     act: ACT_PROMPT,
+    act_with_plan: ACT_WITH_PLAN_PROMPT,
     summary: SUMMARY_PROMPT,
   }
 };
@@ -110,6 +112,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const isCreate: boolean = chatbotId === undefined || chatbotId === '';
   const [planPrompt, setPlanPrompt] = useState('');
   const [actPrompt, setActPrompt] = useState('');
+  const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
   const [summarizePrompt, setSummarizePrompt] = useState('');
 
   const router = useRouter();
@@ -169,6 +172,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
 
           setPlanPrompt(botData.data.prompts?.plan || PLAN_PROMPT);
           setActPrompt(botData.data.prompts?.act || ACT_PROMPT);
+          setActWithPlanPrompt(botData.data.prompts?.act_with_plan || ACT_WITH_PLAN_PROMPT);
           setSummarizePrompt(botData.data.prompts?.summary || SUMMARY_PROMPT);
         }
         else
@@ -195,6 +199,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
 
           setPlanPrompt(PLAN_PROMPT);
           setActPrompt(ACT_PROMPT);
+          setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT);
           setSummarizePrompt(SUMMARY_PROMPT);
         }
       } catch (err: unknown) {
@@ -347,86 +352,106 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         </div>
         <div className="px-2">
           <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="text-xs">编辑提示词</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col">
-              <DialogHeader>
-                <DialogTitle>编辑提示词</DialogTitle>
-                <DialogDescription>
-                  自定义 AI Agent 在不同阶段的行为提示词
-                </DialogDescription>
-              </DialogHeader>
+  <DialogTrigger asChild>
+    <Button variant="outline" className="text-xs">编辑提示词</Button>
+  </DialogTrigger>
+  <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col">
+    <DialogHeader>
+      <DialogTitle>编辑提示词</DialogTitle>
+      <DialogDescription>
+        自定义 AI Agent 在不同阶段的行为提示词
+      </DialogDescription>
+    </DialogHeader>
 
-              <div className="flex-1 overflow-hidden">
-                <Tabs defaultValue="plan" className="h-full flex flex-col">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="plan">规划提示词</TabsTrigger>
-                    <TabsTrigger value="act">行动提示词</TabsTrigger>
-                    <TabsTrigger value="summarize">总结提示词</TabsTrigger>
-                  </TabsList>
+    <div className="flex-1 overflow-hidden">
+      {/* 外层 Tabs：分 Plan、Act 两大块 */}
+      <Tabs defaultValue="plan_group" className="h-full flex flex-col">
+        <TabsList className="flex space-x-2">
+          <TabsTrigger value="plan_group">规划提示词</TabsTrigger>
+          <TabsTrigger value="act_group">行动提示词</TabsTrigger>
+        </TabsList>
 
-                  <div className="flex-1 overflow-hidden mt-4">
-                    <TabsContent value="plan" className="h-full flex flex-col">
-                      <ResettableTextarea
-                        value={planPrompt}
-                        onReset={() => setPlanPrompt(PLAN_PROMPT)}
-                        onChange={(e) => setPlanPrompt(e.target.value)}
-                        defaultValue={PLAN_PROMPT}
-                        placeholder="输入规划阶段的提示词..."
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="act" className="h-full flex flex-col">
-                      <ResettableTextarea
-                        value={actPrompt}
-                        onReset={() => setPlanPrompt(ACT_PROMPT)}
-                        onChange={(e) => setActPrompt(e.target.value)}
-                        defaultValue={ACT_PROMPT}
-                        placeholder="输入行动阶段的提示词..."
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="summarize" className="h-full flex flex-col">
-                      <ResettableTextarea
-                        value={summarizePrompt}
-                        onReset={() => setPlanPrompt(SUMMARY_PROMPT)}
-                        onChange={(e) => setSummarizePrompt(e.target.value)}
-                        defaultValue={SUMMARY_PROMPT}
-                        placeholder="输入总结阶段的提示词..."
-                      />
-                    </TabsContent>
-                  </div>
-                </Tabs>
+        <div className="flex-1 overflow-hidden mt-4">
+          {/* Plan 块内容：内部再分 3 个子 Tab */}
+          <TabsContent value="plan_group" className="h-full flex flex-col">
+            <Tabs defaultValue="plan" className="h-full flex flex-col">
+              <TabsList className="grid grid-cols-3">
+                <TabsTrigger value="plan">规划</TabsTrigger>
+                <TabsTrigger value="act_with_plan">规划行动</TabsTrigger>
+                <TabsTrigger value="summary">规划总结</TabsTrigger>
+              </TabsList>
+              <div className="flex-1 overflow-hidden mt-2">
+                <TabsContent value="plan" className="h-full flex flex-col">
+                  <ResettableTextarea
+                    value={planPrompt}
+                    onReset={() => setPlanPrompt(PLAN_PROMPT)}
+                    onChange={(e) => setPlanPrompt(e.target.value)}
+                    defaultValue={PLAN_PROMPT}
+                    placeholder="输入规划阶段的提示词..."
+                  />
+                </TabsContent>
+                <TabsContent value="act_with_plan" className="h-full flex flex-col">
+                  <ResettableTextarea
+                    value={actWithPlanPrompt}
+                    onReset={() => setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT)}
+                    onChange={(e) => setActWithPlanPrompt(e.target.value)}
+                    defaultValue={ACT_WITH_PLAN_PROMPT}
+                    placeholder="输入规划驱动行动阶段的提示词..."
+                  />
+                </TabsContent>
+                <TabsContent value="summary" className="h-full flex flex-col">
+                  <ResettableTextarea
+                    value={summarizePrompt}
+                    onReset={() => setSummarizePrompt(SUMMARY_PROMPT)}
+                    onChange={(e) => setSummarizePrompt(e.target.value)}
+                    defaultValue={SUMMARY_PROMPT}
+                    placeholder="输入总结阶段的提示词..."
+                  />
+                </TabsContent>
               </div>
+            </Tabs>
+          </TabsContent>
 
-              <DialogFooter className="gap-2 sm:gap-0">
-                <DialogClose asChild>
-                  <Button variant="outline" onClick={
-                    () => {
-                      setActPrompt(botConfig.prompts.act);
-                      setPlanPrompt(botConfig.prompts.plan);
-                      setSummarizePrompt(botConfig.prompts.summary);
-                    }
-                  }>取消</Button>
-                </DialogClose>
-                <Button type="button" onClick={() => {
-                  setBotConfig({
-                    ...botConfig,
-                    prompts: {
-                      plan: planPrompt,
-                      act: actPrompt,
-                      summary: summarizePrompt,
-                    }
-                  });
-                  // 关闭对话框
-                  toast('success', { description: '提示词已保存' });
-                }}>
-                  保存更改
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {/* Act 块内容：单独一个 Textarea */}
+          <TabsContent value="act_group" className="h-full flex flex-col">
+            <ResettableTextarea
+              value={actPrompt}
+              onReset={() => setActPrompt(ACT_PROMPT)}
+              onChange={(e) => setActPrompt(e.target.value)}
+              defaultValue={ACT_PROMPT}
+              placeholder="输入行动阶段的提示词..."
+            />
+          </TabsContent>
+        </div>
+      </Tabs>
+    </div>
+
+    <DialogFooter className="gap-2 sm:gap-0">
+      <DialogClose asChild>
+        <Button variant="outline" onClick={() => {
+          setActPrompt(botConfig.prompts.act);
+          setPlanPrompt(botConfig.prompts.plan);
+          setActWithPlanPrompt(botConfig.prompts.act_with_plan);
+          setSummarizePrompt(botConfig.prompts.summary);
+        }}>取消</Button>
+      </DialogClose>
+      <Button type="button" onClick={() => {
+        setBotConfig({
+          ...botConfig,
+          prompts: {
+            plan: planPrompt,
+            act: actPrompt,
+            act_with_plan: actWithPlanPrompt,
+            summary: summarizePrompt,
+          }
+        });
+        toast('success', { description: '提示词已保存' });
+      }}>
+        保存更改
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
         </div>
       </div>
       <div className="flex gap-6">
