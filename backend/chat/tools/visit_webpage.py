@@ -8,12 +8,6 @@ from functools import partial
 from typing import List, Union, Annotated
 from llama_index.core.tools import FunctionTool
 from tools.llm_utils import get_llm_from_db
-from llama_index.core.base.llms.types import (
-    ChatMessage,
-    MessageRole,
-    TextBlock,
-    ChatResponse,
-)
 from loguru import logger
 
 VISIT_SERVER_TIMEOUT = int(os.getenv("VISIT_SERVER_TIMEOUT", 200))
@@ -47,14 +41,20 @@ def truncate_to_tokens(text: str, max_tokens: int = 20000) -> str:
     return encoding.decode(truncated_tokens)
 
 
-async def call_llm_for_summary(model:str, messages: List[ChatMessage], max_retries: int = 2) -> str:
+async def call_llm_for_summary(model:str, messages: List[dict], max_retries: int = 2) -> str:
     """调用 LLM 服务生成摘要"""
     llm = await get_llm_from_db(model_id=model)
 
     for attempt in range(max_retries):
         try:
-            response: ChatResponse = llm.chat(messages)
-            content = response.message.content.strip()
+            response_gen = await llm.astream(
+                messages=messages
+            )
+            content = ""
+            async for chunk in response_gen:
+                content += chunk.delta
+
+            content = content.strip()
 
             if content:
                 # 尝试提取 JSON 块
@@ -109,12 +109,10 @@ async def readpage_and_summarize(model:str, url: str, goal: str) -> dict:
     # 截断内容
     content = truncate_to_tokens(content, max_tokens=20000)
     messages = [
-        ChatMessage(
-            role=MessageRole.USER,
-            content=[
-                TextBlock(text=EXTRACTOR_PROMPT.format(webpage_content=content, goal=goal)),
-            ],
-        ),
+        {
+            "role": "user",
+            "content": EXTRACTOR_PROMPT.format(webpage_content=content, goal=goal),
+        }
     ]
 
     max_retries = int(os.getenv('VISIT_SERVER_MAX_RETRIES', 1))
@@ -269,4 +267,5 @@ Returns:
 
 
 if __name__ == "__main__":
+    print(asyncio.run(avisit_webpage_tool(model = "qwen-max", url = "https://www.qweather.com/weather30d/hangzhou-101210101.html", goal="确定下个月杭州到上海的天气情况")))
     print(asyncio.run(avisit_webpage_tool(model = "qwen-max", url =["https://www.klook.com/zh-CN/china-high-speed-rail/19190-hangzhou/59-shanghai/","https://tw.trip.com/trains/china/route/hangzhou-to-shanghai/", "https://trains.ctrip.com/trainbooking/hangzhou-shanghai/gaotie"], goal="查询从杭州到上海的往返高铁时刻表和票价信息，重点关注早上从杭州出发和晚上从上海返回的班次。")))
