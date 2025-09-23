@@ -21,7 +21,7 @@ import { is } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type DBType = "local" | "postgresql" | "milvus" | "elasticsearch" | "hologres";
+type DBType = "local" | "postgresql" | "milvus" | "elasticsearch" ;
 
 const cache = new Map();
 
@@ -56,6 +56,32 @@ export default function VectorDBConsole() {
 
     fetchConfig();
   }, []);
+
+
+  const saveConnection = async () => { 
+      try {
+        const res = await fetch(`/api/config/vectordb`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: dbType,
+            config: { ...db, type: dbType, password: db.password === '******' ? '' :  db.password},
+          }),
+        });
+
+        const response = await res.json();
+        if (response.code === 200) 
+        {
+            toast.success(response.message);
+        }
+        else {
+            toast.error(response.message);
+        }
+      } catch (err: any) {
+        toast.error(err.message);
+      }
+
+ };
 
 
   const testConnection = async () => { 
@@ -124,7 +150,6 @@ export default function VectorDBConsole() {
                 <SelectItem value="postgresql">PostgreSQL</SelectItem>
                 <SelectItem value="milvus">Milvus</SelectItem>
                 <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
-                <SelectItem value="hologres">Hologres</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -145,7 +170,8 @@ export default function VectorDBConsole() {
                             测试连接
                           </>
                         )}</Button>
-            <Button>保存配置</Button>
+                        
+            <Button onClick={saveConnection}>保存配置</Button>
           </div>
         </div>
         }
