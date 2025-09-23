@@ -71,7 +71,6 @@ class Planner(BaseAgent):
         async def gen():
             ## Start processing attachments in messages
             attachment_input_data = await parse_attachments_from_messages(state.messages, state.user_query)
-            print("attachment_input_data", attachment_input_data)
             state.messages = attachment_input_data.messages
             for chunk in attachment_input_data.chunks:
                 yield chunk
@@ -81,7 +80,6 @@ class Planner(BaseAgent):
             plan_delta = ""
             messages = [{"role": "system", "content": plan_prompt}] + state.messages
 
-            print("tools_to_plan", tools_to_plan)
             async for chunk in await self.invoke_llm_async(
                 messages=messages,
                 tools=tools_to_plan,
