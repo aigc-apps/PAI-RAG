@@ -116,6 +116,7 @@ class PaiLlm():
                 max_tokens=self.max_tokens,
                 tools=tools or None,
                 stream_options={"include_usage": True},
+                extra_body={"chat_template_kwargs":{"enable_thinking": self.enable_thinking}},
                 **kwargs,
             )
 
