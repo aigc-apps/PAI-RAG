@@ -22,3 +22,11 @@ def decrypt_key(key: str) -> str:
         return key
 
     return cipher.decrypt(key.encode()).decode()
+
+
+if __name__ == "__main__":
+    encrypted_key = encrypt_key("123")
+    print(encrypted_key)
+    key = decrypt_key(encrypted_key)
+
+    print(encrypted_key, key)

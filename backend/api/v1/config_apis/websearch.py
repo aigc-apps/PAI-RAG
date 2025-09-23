@@ -12,7 +12,7 @@ from db.models.websearch import (
 )
 from api.response_model import error_response
 from db.db_context import get_session
-from db.encrypt_utils import encrypt_key
+from common.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
 from config.providers.websearch_provider import websearch_provider

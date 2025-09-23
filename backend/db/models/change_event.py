@@ -22,6 +22,7 @@ class ChangeEventSource(str, Enum):
     PROMPT = "prompt"
     GUARDRAIL = "guardrail"
     EVALUATION = "evaluation"
+    VECTORDB = "vectordb"
 
 
 

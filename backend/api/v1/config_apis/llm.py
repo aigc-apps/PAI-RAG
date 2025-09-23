@@ -5,7 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.llm import LlmModelCreate, LlmModelRead, LlmModelEntity
 from db.db_context import get_session
-from db.encrypt_utils import encrypt_key
+from common.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
 from config.providers.llm_provider import llm_provider

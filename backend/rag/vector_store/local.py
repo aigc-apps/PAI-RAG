@@ -382,7 +382,7 @@ class LocalChromaVectorStore(BasePydanticVectorStore):
                 "$in": query.doc_ids,
             }
 
-        if not query.query_embedding:
+        if query.query_embedding is None:
             return self._get(limit=query.similarity_top_k, where=where, **kwargs)
 
         return self._query(

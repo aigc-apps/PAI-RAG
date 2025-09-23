@@ -1,6 +1,6 @@
 from typing import Dict, List, Type
 from sqlmodel import SQLModel, select
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from db.models.mcp import McpServerCreate, McpServerEntity
 from db.db_context import with_async_db_session
 from config.providers.base_provider import BaseConfigProvider

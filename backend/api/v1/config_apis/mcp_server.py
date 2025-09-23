@@ -10,7 +10,7 @@ from api.v1.utils.paginate import get_pagination_meta
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.mcp import McpServerRead, McpServerCreate, McpServerEntity
 from db.db_context import get_session
-from db.encrypt_utils import encrypt_key
+from common.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
 from config.providers.mcp_tool_provider import mcp_provider

@@ -1,5 +1,5 @@
 'use client';
-import { Search, Settings, Bot, Wrench, UserCog } from 'lucide-react';
+import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck } from 'lucide-react';
 import React from 'react';
 import {
   Sidebar,
@@ -100,19 +100,22 @@ export function AppSidebar() {
                   <Link href="/config/model"><Bot /> 模型</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/mcp"><Wrench /> MCP</Link>
+                  <Link href="/config/vectordb"><Database /> 向量数据库 </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/mcp"><PlugZap /> MCP</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/config/search"><Search /> 搜索</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/tracing"><Wrench /> 链路追踪</Link>
+                  <Link href="/config/tracing"><SquareActivity /> 链路追踪</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/role"><Wrench /> 权限控制 </Link>
+                  <Link href="/config/role"><GlobeLock /> 权限控制 </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/guardrail"><Wrench /> 安全护栏 </Link>
+                  <Link href="/config/guardrail"><ShieldCheck /> 安全护栏 </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -3,7 +3,7 @@ from typing import Any, Type
 
 from pydantic import Field
 from sqlmodel import SQLModel
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from db.models.websearch import WebSearchConfigEntity
 from config.providers.base_provider import BaseConfigProvider
 from tools.search.aliyun_search_tool import AliyunSearchTool

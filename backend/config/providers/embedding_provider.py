@@ -2,7 +2,7 @@ import traceback
 from typing import Dict, Type
 
 from sqlmodel import SQLModel
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from db.models.knowledgebase.embedding import EmbeddingModelEntity, EmbeddingType
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.embeddings.openai_like import OpenAILikeEmbedding
