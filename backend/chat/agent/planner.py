@@ -168,15 +168,8 @@ class Planner(BaseAgent):
                             if chunk.tool_calls[0].function.name == "respond-tool":
                                 logger.info("Actor finished with respond-tool.")
                                 break
-                            elif isinstance(chunk, ToolResultChunk):
-                                state.messages.append(
-                                    {
-                                        "role": "tool",
-                                        "content": tool_result.content,
-                                        "tool_call_id": chunk.tool.id
-                                    }
-                                )
-                                state.observations += chunk.result + "\n\n"
+                        if isinstance(chunk, ToolResultChunk):
+                            state.observations += chunk.result + "\n\n"
 
                         if chunk.delta:
                             yield ReasoningChunk(
@@ -237,15 +230,8 @@ class Planner(BaseAgent):
                         if chunk.tool_calls[0].function.name == "respond-tool":
                             logger.info("Actor finished with respond-tool.")
                             break
-                        elif isinstance(chunk, ToolResultChunk):
-                            state.messages.append(
-                                {
-                                    "role": "tool",
-                                    "content": tool_result.content,
-                                    "tool_call_id": chunk.tool.id
-                                }
-                            )
-                            state.observations += chunk.result + "\n\n"
+                    if isinstance(chunk, ToolResultChunk):
+                        state.observations += chunk.result + "\n\n"
 
                     if chunk.delta:
                         yield ReasoningChunk(

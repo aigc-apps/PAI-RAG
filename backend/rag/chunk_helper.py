@@ -38,6 +38,27 @@ async def get_embedding_from_db(
     return create_embedding_model(config=embedding_entity)
 
 @with_async_db_session
+async def get_llm_from_db(
+    session: AsyncSession, model_id: str
+) -> OpenAILike:
+    config = (await session.exec(
+        select(LlmModelEntity).where(LlmModelEntity.model_id == model_id)
+    )).first()
+
+    if not config:
+        raise ValueError(f"Llm model {model_id} not found.")
+
+    return OpenAILike(
+        model=config.model,
+        api_base=config.base_url,
+        api_key=decrypt_key(config.encrypted_api_key),
+        temperature=config.temperature,
+        max_tokens=config.context_window,
+        is_chat_model=True,
+        is_function_calling_model=True,
+    )
+
+@with_async_db_session
 async def get_multimodal_llm_from_db(
     session: AsyncSession,
 ) -> OpenAILike:
