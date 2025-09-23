@@ -7,7 +7,7 @@ import tiktoken
 from functools import partial
 from typing import List, Union, Annotated
 from llama_index.core.tools import FunctionTool
-from rag.chunk_helper import get_llm_from_db
+from tools.llm_utils import get_llm_from_db
 from llama_index.core.base.llms.types import (
     ChatMessage,
     MessageRole,
@@ -36,7 +36,7 @@ EXTRACTOR_PROMPT = """Please process the following webpage content and user goal
 """
 
 @staticmethod
-def truncate_to_tokens(text: str, max_tokens: int = 95000) -> str:
+def truncate_to_tokens(text: str, max_tokens: int = 20000) -> str:
     encoding = tiktoken.get_encoding("cl100k_base")
 
     tokens = encoding.encode(text)
@@ -107,7 +107,7 @@ async def readpage_and_summarize(model:str, url: str, goal: str) -> dict:
         }
 
     # 截断内容
-    content = truncate_to_tokens(content, max_tokens=95000)
+    content = truncate_to_tokens(content, max_tokens=20000)
     messages = [
         ChatMessage(
             role=MessageRole.USER,

@@ -16,12 +16,12 @@ from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition, 
 from rag.chunk_helper import (
     get_embedding_from_db,
     get_file_id_source_map,
-    get_multimodal_llm_from_db,
     read_file_from_db,
     save_chunks_to_db_async,
     update_chunk_status_async,
     update_file_status_async,
 )
+from tools.llm_utils import get_multimodal_llm_from_db
 from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
