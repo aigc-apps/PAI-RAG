@@ -19,7 +19,7 @@ from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.attachment_parser import parse_attachments_from_messages
 
-MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 2) # 最大循环步数
+MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
