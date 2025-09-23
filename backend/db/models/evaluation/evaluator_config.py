@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 import uuid
+from typing import Dict
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, JSON
 
 class EvaluatorConfigCreate(SQLModel):
     name: str = Field(default="")
@@ -9,6 +10,10 @@ class EvaluatorConfigCreate(SQLModel):
     model_id: str = Field(default="")
     case_sensitive: bool = Field(default=False)
     ignore_punctuation: bool = Field(default=False)
+    extra_params: Dict[str, str] = Field(
+        default_factory=dict,
+        sa_column=Column("extra_params", JSON, nullable=False)
+    )
 
 class EvaluatorConfigEntity(EvaluatorConfigCreate, table=True):
     __tablename__ = "pai_evaluator_config"

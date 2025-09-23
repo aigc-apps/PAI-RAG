@@ -24,12 +24,18 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
         prompt_template: Optional[str] = None,
         max_new_tokens: int = 512,
         temperature: float = 0.0,
+        region: str = "cn-hangzhou",
+        ak: str = None,
+        sk: str = None,
     ):
         super().__init__(name)
         self.llm = llm
         self.prompt_template = prompt_template or self._default_prompt()
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
+        self.region = region
+        self.ak = ak
+        self.sk = sk
 
 
     def _default_prompt(self) -> str:
@@ -106,13 +112,12 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
 
     def _get_tool_calls(self, trace_id):
         """get tool_calls and tools from trace"""
-        region = 'cn-hangzhou'
         config = open_api_models.Config(
-            access_key_id='xxxxxxxxx',
-            access_key_secret='xxxxxxxxx',
+            access_key_id=self.ak,
+            access_key_secret=self.sk,
             protocol='HTTPS',
-            region_id=region,
-            endpoint=f'paillmtrace.{region}.aliyuncs.com')
+            region_id=self.region,
+            endpoint=f'paillmtrace.{self.region}.aliyuncs.com')
         client = Client(config)
 
         yesterday = datetime.now().date() - timedelta(days=1)
@@ -131,7 +136,7 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
                     tools = TraceUtil.get_tools(resp.body.traces[0])
                     tool_calls = TraceUtil.get_tool_calls(resp.body.traces[0])
                     return tool_calls, tools
-            except Exception as e:
-                print(e)
+            except Exception:
+                pass
 
         return [], []

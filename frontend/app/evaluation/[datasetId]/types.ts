@@ -45,6 +45,7 @@ export interface EvaluatorConfig {
     model_id: string;    
     case_sensitive?: boolean;
     ignore_punctuation?: boolean;
+    extra_params?: Record<string, any>;
 }
 
 export interface ExperimentItem {
@@ -85,6 +86,7 @@ export interface ExperimentSampleDetails {
     type: string
     observation: string | null
   }[]
+  trace_id?: string
   created_at: string
   started_at: string | null
   updated_at: string

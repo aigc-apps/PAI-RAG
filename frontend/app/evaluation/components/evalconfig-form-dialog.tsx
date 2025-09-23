@@ -26,7 +26,7 @@ import { useState, useEffect } from 'react';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { useRouter } from 'next/navigation';
 import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
-import { Checkbox } from "@/components/ui/checkbox";
+import { useTracingConfig } from '@/app/config/tracing/traceingconfig'
 
 
 interface EvalConfigFormDialogProps {
@@ -61,8 +61,10 @@ export function EvalConfigFormDialog({
         model_id: "",
         case_sensitive: false,
         ignore_punctuation: false,
+        extra_params: {},
       }
   );
+  const { config: traceConfig, loading: tracingLoading, error: tracingError } = useTracingConfig();
 
   // 当 config 或 mode 变化时重置表单
   useEffect(() => {
@@ -76,6 +78,7 @@ export function EvalConfigFormDialog({
         model_id: "",
         case_sensitive: false,
         ignore_punctuation: false,
+        extra_params: {},
       });
     }
   }, [mode, config]);
@@ -170,7 +173,7 @@ export function EvalConfigFormDialog({
                 </div>
               )}
 
-              {localConfig.type === "LLMJudge" && (
+              {(localConfig.type === "LLMJudge" || localConfig.type === "AgentTrajectory") && (
                 <div className="pt-3">
                   <Label htmlFor="model_id" className="block text-sm mb-2">
                     选择评估器模型
@@ -200,29 +203,84 @@ export function EvalConfigFormDialog({
 
               {localConfig.type === "AgentTrajectory" && (
                 <div className="pt-3">
-                  <Label htmlFor="model_id" className="block text-sm mb-2">
-                    选择评估器模型
-                  </Label>
-                  <Select
-                    value={localConfig.model_id || ""}
-                    onValueChange={(value) => {
-                      setLocalConfig((prev) => ({
-                        ...prev,
-                        model_id: value,
-                      }));
-                    }}
-                  >
-                    <SelectTrigger id="model_id">
-                      <SelectValue placeholder="请选择评估模型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {llms.map((llm) => (
-                        <SelectItem key={llm.model_id} value={llm.model_id}>
-                          {llm.model_id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {localConfig.type === "AgentTrajectory" && (
+                    <div className="mt-4 space-y-2 text-sm">
+                      {tracingLoading ? (
+                        <p className="text-gray-500">正在加载链路追踪配置...</p>
+                      ) : tracingError ? (
+                        <p className="text-red-500">加载失败: {tracingError}</p>
+                      ) : traceConfig?.enabled ? (
+                        <>
+                           <div className="flex items-center">
+                            <span className="w-20 text-green-700 font-medium">链路追踪 </span>
+                            <span className="text-green-700 font-medium">已启用</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Label className="w-20 text-gray-600">Region</Label>
+                            <span>{traceConfig.region || '未知区域'}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Label className="w-20 text-gray-600">服务名</Label>
+                            <span>{traceConfig.service_name}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Label className="w-20 text-gray-600">Endpoint</Label>
+                            <span>{traceConfig.endpoint}</span>
+                          </div>
+
+                          <div className="space-y-2 mt-3 border-t pt-3">
+                            <Label className="block">认证信息</Label>
+                            <div className="space-y-3">
+                              {/* Access Key */}
+                              <div className="flex items-center">
+                                <Label htmlFor="ak" className="min-w-20">Access Key</Label>
+                                <Input
+                                  id="ak"
+                                  type="password"
+                                  value={localConfig.extra_params?.ak || ""}
+                                  onChange={(e) => {
+                                    setLocalConfig((prev) => ({
+                                      ...prev,
+                                      extra_params: {
+                                        ...prev.extra_params,
+                                        ak: e.target.value,
+                                        region: traceConfig.region,
+                                      },
+                                    }));
+                                  }}
+                                  placeholder="请输入 Access Key"
+                                  className="flex-1"
+                                />
+                              </div>
+
+                              <div className="flex items-center">
+                                <Label htmlFor="sk" className="min-w-20">Secret Key</Label>
+                                <Input
+                                  id="sk"
+                                  type="password"
+                                  value={localConfig.extra_params?.sk || ""}
+                                  onChange={(e) => {
+                                    setLocalConfig((prev) => ({
+                                      ...prev,
+                                      extra_params: {
+                                        ...prev.extra_params,
+                                        sk: e.target.value,
+                                        region: traceConfig.region,
+                                      },
+                                    }));
+                                  }}
+                                  placeholder="请输入 Secret Key"
+                                  className="flex-1"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-yellow-600">⚠️ 当前未启用链路追踪，请先配置并启用链路追踪！</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -751,6 +751,7 @@ async def create_evaluator_config(
             model_id=eval_config.model_id,
             case_sensitive=eval_config.case_sensitive,
             ignore_punctuation=eval_config.ignore_punctuation,
+            extra_params=eval_config.extra_params,
         )
 
         session.add(eval_config_entity)
@@ -784,6 +785,7 @@ async def update_evaluator_config(
         eval_config.model_id = new_eval_config.model_id
         eval_config.case_sensitive = new_eval_config.case_sensitive
         eval_config.ignore_punctuation = new_eval_config.ignore_punctuation
+        eval_config.extra_params = new_eval_config.extra_params
 
 
         evaluation_provider.update(eval_config)

@@ -36,8 +36,14 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
         )
     elif eval_type == "AgentTrajectory":
         assert eval_llm is not None, "Must provide eval llm instance"
+        extra_params = eval_config.get("extra_params", {})
+        assert extra_params.get("ak", ""), "Must provide ak for trace retrieval during evaluation"
+        assert extra_params.get("sk", ""), "Must provide sk for trace retrieval during evaluation"
         return AgentTrajectoryEvaluator(
             llm=eval_llm,
+            ak=extra_params.get("ak", ""),
+            sk=extra_params.get("sk", ""),
+            region=extra_params.get("region", "cn-hangzhou"),
         )
 
     else:

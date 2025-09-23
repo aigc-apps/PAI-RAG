@@ -103,6 +103,10 @@ class ExperimentSampleEntity(SQLModel, table=True):
         sa_column=Column("execution_metadata", JSON),
         description="Additional execution metadata (function_call, observations, etc.)"
     )
+    trace_id: Optional[str] = Field(
+        default="",
+        description="Trace ID for the chat agent request"
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime),

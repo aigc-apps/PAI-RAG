@@ -10,8 +10,6 @@ from db.models.llm import LlmModelEntity
 from typing import List
 from datetime import datetime, timezone
 from common.chat.models import ChatAgentRequest
-from evaluation.evaluator.agent_trajectory_evaluator import AgentTrajectoryEvaluator
-from evaluation.evaluator.llm_judge_evaluator import LLMJudgeEvaluator
 from evaluation.run import run_agent, run_evaluator
 from chat.openai.openai_like import OpenAILike
 from sqlmodel import select
@@ -104,7 +102,8 @@ async def update_experiment_run_result(
     status: str,
     score: float = 0.0,
     reason: str = "",
-    execution_metadata: List[dict] = []
+    execution_metadata: List[dict] = [],
+    trace_id: str = "",
 ):
     exp_run_entity = await session.get(ExperimentSampleEntity, exp_run_id)
     if exp_run_entity.status == "pending" and status == "running":
@@ -115,6 +114,8 @@ async def update_experiment_run_result(
     exp_run_entity.reason = reason
     if execution_metadata:
         exp_run_entity.execution_metadata = execution_metadata
+    if trace_id:
+        exp_run_entity.trace_id = trace_id
     exp_run_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     session.add(exp_run_entity)
@@ -202,7 +203,7 @@ class PaiEvaluationClient:
         evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=experiment_entity.evaluator_config_id)
         logger.info(f"[WORKER]run_config_entity: {run_config_entity} \n evaluator_config: {evaluator_config}")
         eval_llm = None
-        if evaluator_config.type in [LLMJudgeEvaluator.name, AgentTrajectoryEvaluator.name]:
+        if evaluator_config.type in ['LLMJudge', 'AgentTrajectory']:
             eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
         for exp_run_id in exp_run_ids:
             exp_run_entity: ExperimentSampleEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
@@ -277,7 +278,8 @@ class PaiEvaluationClient:
                         status="success",
                         score=score,
                         reason=reason,
-                        execution_metadata=execution_metadata
+                        execution_metadata=execution_metadata,
+                        trace_id=trace_id,
                     )
                     run_scores.append(score)
                 else:
