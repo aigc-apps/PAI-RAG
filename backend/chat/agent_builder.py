@@ -61,13 +61,13 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
                 attachments.extend(non_image_attachments)
 
         mcp_tools = await aget_mcp_tools(chat_request, attachments=attachments)
-
         llm: PaiLlm = llm_provider.get_llm_model(model_id=chat_request.model)
 
         prompt_set = PlanAgentPromptSet()
         if chat_request.prompts:
             prompt_set.plan_prompt = chat_request.prompts.get("plan") or prompt_set.plan_prompt
             prompt_set.act_prompt = chat_request.prompts.get("act") or prompt_set.act_prompt
+            prompt_set.act_with_plan_prompt = chat_request.prompts.get("act_with_plan") or prompt_set.act_with_plan_prompt
             prompt_set.summary_prompt = chat_request.prompts.get("summary") or prompt_set.summary_prompt
 
         runner = Planner(

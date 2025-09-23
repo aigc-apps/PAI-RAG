@@ -54,9 +54,9 @@ class ActorWithPlan(BaseAgent):
 
     @pai_agent_wrapper
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:
-        logger.info("Running actor agent.")
-        act_prompt = self.build_prompt(state)
-        messages = [{"role": "user", "content": act_prompt}]
+        logger.info("Running actor_with_plan agent.")
+        act_with_plan_prompt = self.build_prompt(state)
+        messages = [{"role": "user", "content": act_with_plan_prompt}]
 
         @use_current_span(trace.get_current_span())
         async def gen():

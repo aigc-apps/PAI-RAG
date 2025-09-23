@@ -1,7 +1,6 @@
-import json
 from typing import Any, Dict
 from backend.chat.agent.actor_with_plan import ActorWithPlan
-from chat.agent.prompts import ACT_PROMPT, PLAN_PROMPT, SUMMARY_PROMPT
+from chat.agent.prompts import ACT_PROMPT, ACT_WITH_PLAN_PROMPT, PLAN_PROMPT, SUMMARY_PROMPT
 from chat.agent.summarizer import Summarizer
 from backend.chat.agent.actor import Actor
 from chat.llm.models import ChunkStage, ToolResultChunk
@@ -32,6 +31,7 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
 class PlanAgentPromptSet(BaseModel):
     plan_prompt: str = PLAN_PROMPT
     act_prompt: str = ACT_PROMPT
+    act_with_plan_prompt: str = ACT_WITH_PLAN_PROMPT
     summary_prompt: str = SUMMARY_PROMPT
 
 
@@ -71,6 +71,7 @@ class Planner(BaseAgent):
         async def gen():
             ## Start processing attachments in messages
             attachment_input_data = await parse_attachments_from_messages(state.messages, state.user_query)
+            print("attachment_input_data", attachment_input_data)
             state.messages = attachment_input_data.messages
             for chunk in attachment_input_data.chunks:
                 yield chunk
@@ -80,6 +81,7 @@ class Planner(BaseAgent):
             plan_delta = ""
             messages = [{"role": "system", "content": plan_prompt}] + state.messages
 
+            print("tools_to_plan", tools_to_plan)
             async for chunk in await self.invoke_llm_async(
                 messages=messages,
                 tools=tools_to_plan,
@@ -114,83 +116,24 @@ class Planner(BaseAgent):
                 if not tool_name or tool_name not in self.tool_fn_map:
                     logger.warning(f"Unknown tool_call: {tool_name}, ignore it.")
                 else:
-                    if selected_tool.function.arguments:
-                        function_args = json.loads(selected_tool.function.arguments)
-                    else:
-                        function_args = {}
-
-                    yield TextChunk(
-                        tool_calls=[selected_tool],
-                    )
-                    async_fn = self.tool_fn_map[tool_name]
-                    logger.info(f"Calling tool {tool_name} with args {function_args}.")
-                    tool_result = await call_tool_with_retry(async_fn, function_args)
-                    logger.info(f"Get tool result {tool_result}.")
-
-
-                    state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": None,
-                            "tool_calls": [selected_tool]
-                        }
-                    )
-                    state.messages.append(
-                        {
-                            "role": "tool",
-                            "content": tool_result.content,
-                            "tool_call_id": selected_tool.id
-                        }
-                    )
-                    state.observations += tool_result.content + "\n\n"
-
-                    yield ToolResultChunk(
-                        tool=selected_tool,
-                        result=tool_result.content,
-                    )
+                    state.current_tool_call = selected_tool
 
                     actor = Actor(
-                        prompt=plan_prompt,
+                        prompt=self.prompt_set.act_prompt,
                         llm=self.llm,
                         tools=self.tools,
                         name="actor",
                         max_steps=self.max_steps
                     )
 
-                    summarizer = Summarizer(
-                        self.prompt_set.summary_prompt,
-                        llm=self.llm,
-                        name="summarizer",
-                    )
                     response_gen = await actor.run_async(state)
                     async for chunk in response_gen:
-                        if chunk.tool_calls:
-                            if chunk.tool_calls[0].function.name == "respond-tool":
-                                logger.info("Actor finished with respond-tool.")
-                                break
                         if isinstance(chunk, ToolResultChunk):
                             state.observations += chunk.result + "\n\n"
 
-                        if chunk.delta:
-                            yield ReasoningChunk(
-                                reasoning_delta=chunk.delta,
-                                tool_calls=chunk.tool_calls,
-                                stage=ChunkStage.ACTING,
-                            )
-                        else:
-                            chunk.stage = ChunkStage.ACTING
-                            yield chunk
-
-
-                    answer_gen = await summarizer.run_async(state)
-                    is_first_chunk = True
-                    async for chunk in answer_gen:
-                        chunk.stage = ChunkStage.RESPONSE
-                        if is_first_chunk:
-                            chunk.delta = "\n" + chunk.delta # Summary 换行
-                            is_first_chunk = False
-
+                        chunk.stage = ChunkStage.ACTING
                         yield chunk
+
             else:
                 logger.info(f"Planning tool execution detected, plan: {selected_tool.function.arguments}.")
 
@@ -211,7 +154,7 @@ class Planner(BaseAgent):
 
 
                 actor_with_plan = ActorWithPlan(
-                    prompt=self.prompt_set.act_prompt,
+                    prompt=self.prompt_set.act_with_plan_prompt,
                     llm=self.llm,
                     tools=self.tools + [await aget_respond_tool()],
                     name="actor_with_plan",
@@ -226,11 +169,10 @@ class Planner(BaseAgent):
                 response_gen = await actor_with_plan.run_async(state)
 
                 async for chunk in response_gen:
-                    if chunk.tool_calls:
-                        if chunk.tool_calls[0].function.name == "respond-tool":
-                            logger.info("Actor finished with respond-tool.")
-                            break
-                    if isinstance(chunk, ToolResultChunk):
+                    if chunk.tool_calls and chunk.tool_calls[0].function.name == "respond-tool":
+                        logger.info("Actor finished with respond-tool.")
+                        break
+                    elif isinstance(chunk, ToolResultChunk):
                         state.observations += chunk.result + "\n\n"
 
                     if chunk.delta:
