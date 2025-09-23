@@ -6,7 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
 from pairag.file.store.file_store_helper import file_store
-from rag.chunk_helper import get_multimodal_llm_from_db
+from tools.llm_utils import get_multimodal_llm_from_db
 import traceback
 from llama_index.core.base.llms.types import (
     ChatMessage,

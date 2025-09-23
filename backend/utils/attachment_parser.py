@@ -27,7 +27,7 @@ async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
 async def parse_attachments_from_messages(messages: List[dict], question: str = ""):
     ret_messages = messages
     tool_call_chunks = []
-    for message in messages:
+    for message in ret_messages:
         if message.get("role") == "user":
             user_attachments = message.get("attachments", [])
             if len(user_attachments) > 0:
@@ -57,7 +57,7 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                             image_parser, image_parser_fn_args
                         )
                         logger.info(f"Get tool result {tool_result}.")
-                        reply_text = ""
+                        reply_text = "\n\n 以下是附件的解析结果："
                         try:
                             result_data = json.loads(tool_result.content)
                             if "error" in result_data:
@@ -73,11 +73,8 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                         except (json.JSONDecodeError, TypeError):
                             reply_text = f"🖼️ 图片分析结果：{tool_result.content}"
 
-                        # 只追加一条普通 assistant 消息，不使用 tool_call / tool 消息
-                        ret_messages.append({
-                            "role": "assistant",
-                            "content": reply_text,
-                        })
+                        # 只在user message最后追加文件读取结果，不使用 tool_call / tool 消息
+                        message["content"][0]["text"] += reply_text
                         tool_call_chunks.append(
                             TextChunk(
                                 tool_calls=[image_parser_tool_call],
@@ -116,18 +113,15 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                             file_reader, file_reader_fn_args
                         )
                         logger.info(f"Get tool result {tool_result}.")
-                        reply_text = ""
+                        reply_text = "\n\n 以下是附件的解析结果："
                         try:
                             result_data = json.loads(tool_result.content)
                             reply_text = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {result_data.get('data', '无内容')}"
                         except (json.JSONDecodeError, TypeError):
                             reply_text = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {tool_result.content}"
 
-                        # 只追加一条普通 assistant 消息，不使用 tool_call / tool 消息
-                        ret_messages.append({
-                            "role": "assistant",
-                            "content": reply_text,
-                        })
+                        # 只在user message最后追加文件读取结果，不使用 tool_call / tool 消息
+                        message["content"][0]["text"] += reply_text
                         tool_call_chunks.append(
                             TextChunk(
                                 tool_calls=[file_reader_tool_call],

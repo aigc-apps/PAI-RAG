@@ -9,6 +9,7 @@ from llama_index.core.tools.function_tool import FunctionTool
 from loguru import logger
 from rag.knowledgebase_tool import aget_knowledgebase_tool
 from chat.tools.attachments.file_searcher import aget_file_searcher
+from chat.tools.visit_webpage import aget_visit_webpage_tool
 
 
 async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]=[]) -> List[FunctionTool]:
@@ -19,8 +20,13 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]
         mcp_tools.append(file_searcher_tool)
 
     if chat_request.enable_search:
+        # Add search web tool
         search_tools = websearch_provider.get_search_tools()
         mcp_tools.extend(search_tools)
+        # Add visit webpage tool
+        visit_webpage_tool = await aget_visit_webpage_tool(chat_request.model)
+        mcp_tools.append(visit_webpage_tool)
+
     if len(chat_request.mcp_ids) > 0:
         logger.info(f"[Model] selected mcp servers: {chat_request.mcp_ids}")
         mcp_tools.extend(await mcp_provider.get_mcp_tools_async(chat_request.mcp_ids))
@@ -55,7 +61,6 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
                 attachments.extend(non_image_attachments)
 
         mcp_tools = await aget_mcp_tools(chat_request, attachments=attachments)
-
         llm: PaiLlm = llm_provider.get_llm_model(model_id=chat_request.model)
 
         prompt_set = PlanAgentPromptSet()

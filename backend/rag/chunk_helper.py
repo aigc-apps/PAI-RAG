@@ -1,11 +1,8 @@
 from typing import List
-from chat.openai.openai_like import OpenAILike
 from loguru import logger
 from sqlalchemy import delete
-from sqlmodel import select, update, and_
-from db.encrypt_utils import decrypt_key
+from sqlmodel import select, update
 from config.providers.embedding_provider import create_embedding_model
-from db.models.llm import LlmModelEntity
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.knowledgebase.chunk import (
     KbChunkEntity,
@@ -36,30 +33,6 @@ async def get_embedding_from_db(
         raise ValueError(f"Embedding model {model_id} is not downloaded, please check the download status.")
 
     return create_embedding_model(config=embedding_entity)
-
-@with_async_db_session
-async def get_multimodal_llm_from_db(
-    session: AsyncSession,
-) -> OpenAILike:
-    config = (await session.exec(
-        select(LlmModelEntity).where(and_(
-                LlmModelEntity.vision_support,
-                LlmModelEntity.enabled
-            ))
-    )).first()
-
-    if not config:
-        logger.warning("No multimodal LLM model found.")
-        return None
-    return OpenAILike(
-        model=config.model,
-        api_base=config.base_url,
-        api_key=decrypt_key(config.encrypted_api_key),
-        temperature=config.temperature,
-        max_tokens=config.context_window,
-        is_chat_model=True,
-        is_function_calling_model=True,
-    )
 
 @with_async_db_session
 async def set_embedding_model_ready(
