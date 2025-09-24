@@ -41,7 +41,6 @@ Analyze the user’s intent carefully. Then decide:
 
 ### Search Web Tool
 Searches web for the given query and returns the searched results.
-Treat all location-based recommendation requests (e.g., 'food in X', 'top attractions in Y') as requiring live web search, NEVER answer from internal knowledge alone.
 For time-related queries, better to convert with current date information, for example, "this month" -> "April 2024", "next week" -> "April 25-31, 2024".
 
 ### Visit Webpage Tool [visit_webpage]
