@@ -256,7 +256,7 @@ async def upload_dataset_samples(
                 dataset_id=dataset_id,
                 input=line["input"],
                 expected_output=line.get("expected_output"),
-                eval_metadata=line.get("metadata"),
+                eval_metadata=line.get("metadata", {}),
             )
             session.add(dataset_sample_entity)
             dataset_entities.append(dataset_sample_entity)
@@ -735,7 +735,6 @@ async def delete_config(
     return success_response(message=f"实验设置'{config_id}'删除成功。")
 
 
-
 @evaluation_router.post("/{dataset_id}/evalconfigs")
 async def create_evaluator_config(
     dataset_id: str,
@@ -753,6 +752,7 @@ async def create_evaluator_config(
             ignore_punctuation=eval_config.ignore_punctuation,
             extra_params=eval_config.extra_params,
         )
+        eval_config_entity.encrypt_extra_params()
 
         session.add(eval_config_entity)
         await session.commit()
@@ -786,6 +786,7 @@ async def update_evaluator_config(
         eval_config.case_sensitive = new_eval_config.case_sensitive
         eval_config.ignore_punctuation = new_eval_config.ignore_punctuation
         eval_config.extra_params = new_eval_config.extra_params
+        eval_config.encrypt_extra_params()
 
 
         evaluation_provider.update(eval_config)
@@ -827,6 +828,8 @@ async def list_eval_configs(
         .limit(size)
     )
     eval_config_entities = eval_config_results.all()
+    for item in eval_config_entities:
+        item.decrypt_extra_params()
 
     return success_response(
         data=PagedResult(
@@ -853,6 +856,7 @@ async def get_eval_config_details(
                 code=404, message=f"获取评估器设置失败: '{config_id}'不存在。"
             )
 
+    eval_config.decrypt_extra_params()
     return success_response(
             data=eval_config, message="获取评估器设置详情成功"
         )

@@ -198,6 +198,11 @@ export function EvalConfigFormDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {(!localConfig.model_id) && (
+                    <p style={{ color: 'red', fontSize: '12px' }}>
+                      请从列表中选择一个模型
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -235,41 +240,41 @@ export function EvalConfigFormDialog({
                               <div className="flex items-center">
                                 <Label htmlFor="ak" className="min-w-20">Access Key</Label>
                                 <Input
-                                  id="ak"
+                                  id="access_key_id"
                                   type="password"
-                                  value={localConfig.extra_params?.ak || ""}
+                                  value={localConfig.extra_params?.access_key_id || ""}
                                   onChange={(e) => {
                                     setLocalConfig((prev) => ({
                                       ...prev,
                                       extra_params: {
                                         ...prev.extra_params,
-                                        ak: e.target.value,
+                                        access_key_id: e.target.value,
                                         region: traceConfig.region,
                                       },
                                     }));
                                   }}
-                                  placeholder="请输入 Access Key"
+                                  placeholder="请输入 Access Key ID"
                                   className="flex-1"
                                 />
                               </div>
 
                               <div className="flex items-center">
-                                <Label htmlFor="sk" className="min-w-20">Secret Key</Label>
+                                <Label htmlFor="access_key_secret" className="min-w-20">Secret Key</Label>
                                 <Input
-                                  id="sk"
+                                  id="access_key_secret"
                                   type="password"
-                                  value={localConfig.extra_params?.sk || ""}
+                                  value={localConfig.extra_params?.access_key_secret || ""}
                                   onChange={(e) => {
                                     setLocalConfig((prev) => ({
                                       ...prev,
                                       extra_params: {
                                         ...prev.extra_params,
-                                        sk: e.target.value,
+                                        access_key_secret: e.target.value,
                                         region: traceConfig.region,
                                       },
                                     }));
                                   }}
-                                  placeholder="请输入 Secret Key"
+                                  placeholder="请输入 Access Key Secret"
                                   className="flex-1"
                                 />
                               </div>

@@ -2,6 +2,9 @@ import json
 from typing import Dict, Any, Optional
 import time
 from datetime import datetime, timedelta
+from loguru import logger
+
+from common.encrypt_utils import decrypt_key
 from evaluation.evaluator.base import BaseEvaluator
 from llama_index.core.llms import LLM
 from evaluation.evaluator.prompts.correctness import AGENT_TRAJECTORY_PROMPT
@@ -25,8 +28,8 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
         max_new_tokens: int = 512,
         temperature: float = 0.0,
         region: str = "cn-hangzhou",
-        ak: str = None,
-        sk: str = None,
+        access_key_id: str = None,
+        access_key_secret: str = None,
     ):
         super().__init__(name)
         self.llm = llm
@@ -34,8 +37,8 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.region = region
-        self.ak = ak
-        self.sk = sk
+        self.access_key_id = access_key_id
+        self.access_key_secret = access_key_secret
 
 
     def _default_prompt(self) -> str:
@@ -92,7 +95,14 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
     async def evaluate_async(self, input:str, prediction: str, reference: str, trace_id: str, **kwargs) -> Dict[str, Any]:
         del prediction, reference
         if trace_id:
-            tool_calls, tools = self._get_tool_calls(trace_id)
+            tool_calls, tools, error_msg = self._get_tool_calls(trace_id)
+            if error_msg:
+                return {
+                    "score": 0.0,
+                    "reason": error_msg,
+                    "evaluator": self.name,
+                }
+
             tool_calls = json.dumps(tool_calls, ensure_ascii=False)
             tools = json.dumps(tools, ensure_ascii=False)
             prompt = self.prompt_template.format(
@@ -113,8 +123,8 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
     def _get_tool_calls(self, trace_id):
         """get tool_calls and tools from trace"""
         config = open_api_models.Config(
-            access_key_id=self.ak,
-            access_key_secret=self.sk,
+            access_key_id=decrypt_key(self.access_key_id),
+            access_key_secret=decrypt_key(self.access_key_secret),
             protocol='HTTPS',
             region_id=self.region,
             endpoint=f'paillmtrace.{self.region}.aliyuncs.com')
@@ -128,15 +138,20 @@ class AgentTrajectoryEvaluator(BaseEvaluator):
             page_size=1,
             trace_ids=[trace_id]
         )
-        for _ in range(3):
+        error_msg = ""
+        for i in range(3):
             time.sleep(20)
             try:
                 resp = client.list_traces_datas(request)
                 if resp.body.traces:
                     tools = TraceUtil.get_tools(resp.body.traces[0])
                     tool_calls = TraceUtil.get_tool_calls(resp.body.traces[0])
-                    return tool_calls, tools
-            except Exception:
-                pass
+                    return tool_calls, tools, ""
+            except Exception as e:
+                if hasattr(e, "data"):
+                    error_msg = f"ERROR during retrieval trace: {trace_id}, exception: {e.data}"
+                else:
+                    error_msg = f"ERROR during retrieval trace: {trace_id}, exception: {e}"
+                logger.info(f"try-{i}: {error_msg}")
 
-        return [], []
+        return [], [], error_msg
