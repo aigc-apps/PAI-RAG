@@ -52,7 +52,7 @@ async def readpage_and_summarize(model:str, url: str, goal: str) -> dict:
         return {
             "url": url,
             "goal": goal,
-            "summary": "The provided webpage content could not be accessed. Please check the URL or file format.",
+            "content": "The provided webpage content could not be accessed. Please check the URL or file format.",
             "success": False
         }
 
@@ -61,7 +61,7 @@ async def readpage_and_summarize(model:str, url: str, goal: str) -> dict:
     return {
         "url": url,
         "goal": goal,
-        "summary": content,
+        "content": content,
         "success": True
     }
 
@@ -89,7 +89,7 @@ async def avisit_webpage(
             results.append({
                 "url": u,
                 "goal": goal,
-                "summary": "No summary available due to timeout.",
+                "content": "No content available due to timeout.",
                 "success": False
             })
             continue
@@ -102,7 +102,7 @@ async def avisit_webpage(
             results.append({
                 "url": u,
                 "goal": goal,
-                "summary": "Processing failed.",
+                "content": "Processing failed.",
                 "success": False
             })
 
@@ -129,7 +129,7 @@ async def avisit_webpage_tool(model:str, url: Union[str, List[str]], goal: str):
 
 async def aget_visit_webpage_tool(model: str):
     """
-    Visit webpage(s) and return the summary of the content.
+    Visit webpage(s) and return the content.
     """
     avisit_webpage_tool_func = partial(avisit_webpage_tool, model=model)
 
@@ -155,7 +155,7 @@ async def aget_visit_webpage_tool(model: str):
     visit_tool = FunctionTool.from_defaults(
         async_fn=visit_webpage_handler,
         name="visit_webpage",
-        description="""Visit webpage(s) and return the summary of the content.
+        description="""Visit webpage(s) and return the content of webpage(s).
 Params:
 - url: required, string | list[string], the URL(s) of the webpage(s) to visit. Can be a single URL or an array of URLs.
 - goal: required, string, the goal of the visit for webpage(s).
@@ -165,7 +165,7 @@ Returns:
     {
       "url": "string",
       "goal": "string",
-      "summary": "string",
+      "content": "string",
       "success": true
     }
   ]
