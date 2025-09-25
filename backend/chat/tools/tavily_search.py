@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import asyncio
 
 # https://docs.tavily.com/documentation/api-reference/endpoint/search#response-results-favicon
 
@@ -41,5 +42,11 @@ class TavilySearchTool:
         Returns:
             The search results.
         """
-        results = await self.client.search(query, max_results=self.search_count, search_depth='basic', topic='general', time_range=None, include_favicon=True)  # type: ignore[reportUnknownMemberType]
+        # Tavily search API requires "Max query length is 400 characters".
+        truncated_query = query[0:400]
+        results = await self.client.search(truncated_query, max_results=self.search_count, search_depth='basic', topic='general', time_range=None, include_favicon=True)  # type: ignore[reportUnknownMemberType]
         return {"result": results['results']}  # type: ignore[reportUnknownMemberType]
+
+if __name__ == "__main__":
+    search_tool = TavilySearchTool(api_key="your-api-key")
+    print(asyncio.run(search_tool.aquery("What is the weather like in New York City?")))

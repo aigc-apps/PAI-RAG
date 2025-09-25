@@ -24,7 +24,7 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]
         search_tools = websearch_provider.get_search_tools()
         mcp_tools.extend(search_tools)
         # Add visit webpage tool
-        visit_webpage_tool = await aget_visit_webpage_tool(chat_request.model)
+        visit_webpage_tool = await aget_visit_webpage_tool()
         mcp_tools.append(visit_webpage_tool)
 
     if len(chat_request.mcp_ids) > 0:
