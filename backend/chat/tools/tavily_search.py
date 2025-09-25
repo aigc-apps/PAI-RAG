@@ -48,5 +48,5 @@ class TavilySearchTool:
         return {"result": results['results']}  # type: ignore[reportUnknownMemberType]
 
 if __name__ == "__main__":
-    search_tool = TavilySearchTool(api_key="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")
-    print(asyncio.run(search_tool.aquery("What is the weather like in New York City?" * 10)))
+    search_tool = TavilySearchTool(api_key="your-api-key")
+    print(asyncio.run(search_tool.aquery("What is the weather like in New York City?")))

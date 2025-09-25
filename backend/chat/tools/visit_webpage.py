@@ -10,7 +10,7 @@ from llama_index.core.tools import FunctionTool
 from loguru import logger
 
 TRUNCATE_TOKEN_MAXLENGTH = 5000
-@staticmethod
+
 def truncate_to_tokens(text: str, max_tokens: int = TRUNCATE_TOKEN_MAXLENGTH) -> str:
     encoding = tiktoken.get_encoding("cl100k_base")
 
