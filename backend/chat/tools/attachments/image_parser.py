@@ -76,7 +76,6 @@ async def aget_image_analysis_from_db(
 
         return json.dumps({
             "file_id": file_id,
-            "image_url": image_url,
             "question": question,
             "answer": answer,
         }, ensure_ascii=False)
@@ -84,8 +83,7 @@ async def aget_image_analysis_from_db(
     except Exception as e:
         logger.error(f"VLM 解析失败: {str(e)}")
         return json.dumps({
-            "error": f"VLM 解析失败: {str(e)}",
-            "image_url": image_url,
+            "error": f"VLM 解析失败: {str(e)}"
         }, ensure_ascii=False)
 
 async def aget_image_analysis(file_id: str,

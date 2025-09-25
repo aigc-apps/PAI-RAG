@@ -70,8 +70,10 @@ async def aget_file_searcher(attachments: List[dict]):
     search_tool = FunctionTool.from_defaults(
         async_fn=file_retrieve_handler,
         name="search-file",
-        description="""文件检索工具：如果附件中并没有直接提供关于用户问题的相关信息，请使用该工具进一步搜索附件里的更多信息。
-参数：
-- query_str: 用户想问的具体问题，例如“图片讲了什么？”、“请查找第三章的内容”等。""",
+        description="""File Search Tool: Use this tool to retrieve additional information from attached documents when the initial response is truncated (e.g., contains "[truncated]") and does not directly answer the user's question.
+Parameters:
+- query_str (str): A clear and specific query describing what information you need from the file (e.g., "What is shown in the image?", "Find the content of Chapter 3", or "Summarize the section about climate trends").
+- kwargs (dict, optional): Additional arguments for the tool.
+""",
     )
     return search_tool
