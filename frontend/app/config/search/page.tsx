@@ -29,7 +29,7 @@ export default function SearchConfig() {
   const [aliyunAK, setAliyunAK] = useState(''); // AccessKey ID
   const [aliyunSK, setAliyunSK] = useState(''); // AccessKey Secret
   const [endpoint, setEndpoint] = useState('')
-  const [isLoading, setIsLoading] = useState(false); // 加载状态
+  const [isSaving, setIsSaving] = useState(false); // 加载状态
   const [searchCount, setSearchCount] = useState(10); // 每次搜索返回的结果数
   const [tavilyApiKey, setTavilyApiKey] = useState(''); // Tavily API Key
   const [searchEngineType, setSearchEngineType] = useState('aliyun'); // 搜索引擎类型
@@ -38,8 +38,6 @@ export default function SearchConfig() {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        setIsLoading(true);
-
         const res = await fetch(`/api/config/websearch`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -58,8 +56,6 @@ export default function SearchConfig() {
         setTavilyApiKey(MASK_API_KEY)
       } catch (err: any) {
         toast.error(err.message);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -67,12 +63,8 @@ export default function SearchConfig() {
   }, []);
   // 保存配置
   const handleSave = async () => {
-    if (!aliyunAK || !aliyunSK) {
-      toast.warning(`必须填入AK和SK信息`);
-      return;
-    }
     try {
-      setIsLoading(true);
+      setIsSaving(true);
 
       const update_ak = aliyunAK === MASK_API_KEY ? '' : aliyunAK;
       const update_sk = aliyunSK === MASK_API_KEY ? '' : aliyunSK;
@@ -98,7 +90,7 @@ export default function SearchConfig() {
     } catch (err: any) {
       toast.warning(err.message);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -229,10 +221,10 @@ export default function SearchConfig() {
 
           <Button
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isSaving}
             className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
           >
-            {isLoading ? '保存中...' : '保存搜索配置'}
+            {isSaving ? '保存中...' : '保存搜索配置'}
           </Button>
         </div>
       </div>

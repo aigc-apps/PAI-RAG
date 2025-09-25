@@ -13,6 +13,8 @@ export default function TracingConfig() {
   const [serviceName, setServiceName] = useState('');
   const [traceEnabled, setTraceEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // 加载状态
+  const [isSaving, setIsSaving] = useState(false); // 加载状态
+
   const [error, setError] = useState(''); // 错误提示
 
   // 初始化加载配置
@@ -49,7 +51,7 @@ export default function TracingConfig() {
       return;
     }
     try {
-      setIsLoading(true);
+      setIsSaving(true);
       setError('');
 
       const res = await fetch(`/api/config/trace`, {
@@ -69,7 +71,7 @@ export default function TracingConfig() {
     } catch (err: any) {
         toast.error(err.message);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -145,10 +147,10 @@ export default function TracingConfig() {
           </div>
           <Button
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isSaving}
             className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
           >
-            {isLoading ? '保存中...' : '保存链路追踪配置'}
+            {isSaving ? '保存中...' : '保存链路追踪配置'}
           </Button>
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>
