@@ -8,6 +8,7 @@ interface ChatOptions {
   model: string;
   enable_agent: boolean;
   enable_search: boolean;
+  user_id: string;
   mcp_ids: string[];           // mcp列表
   kb_ids: string[];            // 知识库列表
 
@@ -16,6 +17,7 @@ interface ChatOptions {
   updateEnableSearch: (search: boolean) => void;
   updateMcpIds: (mcp_ids: string[]) => void;
   updateKbIds: (kb_ids: string[]) => void;
+  updateUser: (user_id: string) => void;
 }
 
 const ChatContext = createContext<ChatOptions | undefined>(undefined);
@@ -26,6 +28,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [enableSearch, setEnableSearch] = useState(false);
   const [mcpIds, setMcpIds] = useState<string[]>([]);
   const [kbIds, setKbIds] = useState<string[]>([]);
+  const [user_id, setUserId] = useState<string>("");
 
   const updateModel = (model: string) => {
     setModel(model);
@@ -44,6 +47,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setKbIds(kb_ids);
   }
 
+  const updateUser = (user_id: string) => {
+    setUserId(user_id);
+  }
+
   return (
     <ChatContext.Provider value={{ 
         model: model,
@@ -51,11 +58,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         enable_search: enableSearch,
         mcp_ids: mcpIds,
         kb_ids: kbIds,
+        user_id: user_id,
         updateModel,
         updateEnableSearch,
         updateEnablePlanning,
         updateMcpIds,
-        updateKbIds}}>
+        updateKbIds,
+        updateUser}}>
       {children}
     </ChatContext.Provider>
   );
