@@ -98,6 +98,8 @@ class FileParser:
                     return ImageReader(
                         file_store=self.file_store,
                     )
+                case ".xlsx":
+                    return ExcelReader()
                 case _:
                     raise ValueError(f"不支持的附件文件类型: {file_extension}")
         else:
