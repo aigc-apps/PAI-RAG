@@ -83,19 +83,19 @@ const ChatbotPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen px-6 py-0 space-y-6">
+    <div className="flex flex-col h-screen px-6 py-0 space-y-2">
       {/* 顶部标题栏 */}
       <div className="flex justify-between items-center h-1/10">
-        <h1 className="text-2xl font-bold">Chat应用</h1>
+        <h1 className="text-xl font-medium">Chat应用</h1>
         <Button
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 w-40"
+          className="px-4 py-2 bg-primary rounded-md text-sm font-medium hover:bg-primary/90 w-40"
           onClick={()=>{router.push('/apps/create')}}
         >
           <Plus className="w-6 h-6" />
           新建应用
         </Button>
       </div>
-      <div className="text-sm text-muted-foreground">
+      <div className="text-sm text-muted-foreground pb-2">
         应用可以给基模型配置知识库、联网、MCP工具。
       </div>
 

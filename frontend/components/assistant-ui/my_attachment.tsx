@@ -154,7 +154,7 @@ const AttachmentUI: FC = () => {
             <div className="flex h-12 w-40 items-center justify-center gap-2 rounded-lg border p-1">
               <AttachmentThumb />
               <div className="flex-grow basis-0">
-                <p className="text-muted-foreground line-clamp-1 text-ellipsis break-all text-xs font-bold">
+                <p className="text-muted-foreground line-clamp-1 text-ellipsis break-all text-xs font-medium">
                   <AttachmentPrimitive.Name />
                 </p>
                 <div className="flex felx-row items-center gap-2 py-1">

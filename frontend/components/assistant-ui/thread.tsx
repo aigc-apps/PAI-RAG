@@ -18,7 +18,7 @@ import {
   SendHorizontalIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { CollapsibleReasoning } from "@/components/assistant-ui/reasoning-ui";
@@ -304,7 +304,7 @@ const ThreadWelcomeSuggestions: FC = () => {
         method="replace"
         autoSend
       >
-        <span className="line-clamp-2 text-ellipsis text-sm font-semibold">
+        <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
           帮我规划下个月从杭州去上海旅游的一日游攻略和交通规划，两大一小，考虑天气情况。
         </span>
       </ThreadPrimitive.Suggestion>
@@ -314,7 +314,7 @@ const ThreadWelcomeSuggestions: FC = () => {
         method="replace"
         autoSend
       >
-        <span className="line-clamp-2 text-ellipsis text-sm font-semibold">
+        <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
           杭州有什么好玩的景点？
         </span>
       </ThreadPrimitive.Suggestion>
@@ -446,7 +446,7 @@ const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
       <UserActionBar />
-      <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2 col-start-2 row-start-2 text-sm">
+      <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-2xl px-5 py-2 col-start-2 row-start-2 text-sm">
         <UserMessageAttachments />
         <MessagePrimitive.Content />
       </div>
@@ -490,9 +490,10 @@ const EditComposer: FC = () => {
 };
 
 const AssistantMessage: FC = () => {
+
   return (
     <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-1">
-      <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-5 col-span-2 col-start-2 row-start-1 my-1.5 text-sm">
+      <div className="gap-2 text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-5 col-span-2 col-start-2 row-start-1 my-1.5 text-sm">
         {/* <MessagePrimitive.Content components={{ Text: MarkdownText }} /> */}
         <MessagePrimitive.Content
           components={{

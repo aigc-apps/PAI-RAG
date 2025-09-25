@@ -86,7 +86,7 @@ export default function KnowledgeBaseCreatePage() {
             >
               <ArrowLeft />
             </Button>
-            <h1 className="text-2xl font-bold">新建知识库</h1>
+            <h1 className="text-xl font-medium">新建知识库</h1>
           </div>
         </div>
       </div>

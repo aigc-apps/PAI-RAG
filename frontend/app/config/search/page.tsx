@@ -102,7 +102,7 @@ export default function SearchConfig() {
         }
       >
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          <h2 className="text-2xl font-bold text-gray-800">搜索配置</h2>
+          <h2 className="text-xl font-medium text-gray-800">搜索配置</h2>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="endpoint" className="text-right">

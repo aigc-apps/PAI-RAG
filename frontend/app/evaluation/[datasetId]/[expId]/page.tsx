@@ -319,7 +319,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
           <CardContent className="p-6 justify-center">
             <div className="flex items-center space-x-2">
               <Loader2 className="h-8 w-8 animate-spin" />
-              <h2 className="text-2xl font-bold">Loading Experiment</h2>
+              <h2 className="text-xl font-medium">Loading Experiment</h2>
             </div>
             <p className="text-gray-500 mt-2">Please wait while we load the experiment data.</p>
           </CardContent>
@@ -369,7 +369,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         <Card className="mb-4">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <CardTitle className="text-2xl">实验: {experiment.name}</CardTitle>
+              <CardTitle className="text-xl">实验: {experiment.name}</CardTitle>
             </div>
           </CardHeader>
 
@@ -441,7 +441,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                           <span className="text-xs font-medium text-blue-700 dark:text-blue-300">平均</span>
                         </div>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-xl font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+                          <span className="text-xl font-medium text-blue-600 dark:text-blue-400 tabular-nums">
                             {getAverageTime(allExpItems)}
                           </span>
                           <span className="text-xs text-blue-500 dark:text-blue-500">s</span>
@@ -455,7 +455,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                           <span className="text-xs font-medium text-green-700 dark:text-green-300">最短</span>
                         </div>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-xl font-bold text-green-600 dark:text-green-400 tabular-nums">
+                          <span className="text-xl font-medium text-green-600 dark:text-green-400 tabular-nums">
                             {getMinTime(allExpItems)}
                           </span>
                           <span className="text-xs text-green-500 dark:text-green-500">s</span>
@@ -469,7 +469,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                           <span className="text-xs font-medium text-red-700 dark:text-red-300">最长</span>
                         </div>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-xl font-bold text-red-600 dark:text-red-400 tabular-nums">
+                          <span className="text-xl font-medium text-red-600 dark:text-red-400 tabular-nums">
                             {getMaxTime(allExpItems)}
                           </span>
                           <span className="text-xs text-red-500 dark:text-red-500">s</span>

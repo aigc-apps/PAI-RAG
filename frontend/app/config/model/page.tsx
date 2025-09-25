@@ -12,7 +12,7 @@ export default function ModelConfigPage() {
       <div className="flex flex-col h-screen p-2">
         {/* 顶部标题栏 */}
         <div className="flex items-center h-1/10">
-          <h1 className="text-2xl font-bold">模型</h1>
+          <h1 className="text-xl font-medium">模型</h1>
         </div>
 
         {/* 卡片容器 */}
