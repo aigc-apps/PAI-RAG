@@ -43,7 +43,9 @@ import json
 from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 from typing import Annotated
 from chat.tools.search_result import SearchResult
-MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
+
+MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
+MAX_TRUNCATED_CHUNK_LEN = 8000
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -346,11 +348,11 @@ class PaiKnowledgebaseClient:
                 file_ids.append(node.metadata["doc_id"])
                 origin_text = node.text
                 pattern = MARKDOWN_IMAGE_PATTERN
-                matches = re.findall(pattern, origin_text)
-                for _, src in matches:
+                matches = re.findall(pattern, origin_text, re.DOTALL)
+                for _, (src, desc)  in enumerate(matches):
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
-                    images.append({"url": image_url, "desc": origin_text})
+                    images.append({"url": image_url, "desc": desc})
                 node.text = origin_text
                 node.metadata["images_info"] = images
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
@@ -425,11 +427,11 @@ class PaiKnowledgebaseClient:
                 images = []
                 origin_text = node.text
                 pattern = MARKDOWN_IMAGE_PATTERN
-                matches = re.findall(pattern, origin_text)
-                for _, src in matches:
+                matches = re.findall(pattern, origin_text, re.DOTALL)
+                for _, (src, desc)  in enumerate(matches):
                     image_url = file_store.get_url(src)
                     origin_text = origin_text.replace(src, image_url)
-                    images.append({"url": image_url, "desc": origin_text})
+                    images.append({"url": image_url, "desc": desc})
                 node.text = origin_text
                 node.metadata["images_info"] = images
                 result_nodes.append(NodeWithScore(node=node, score=query_result.similarities[i]))
@@ -452,7 +454,7 @@ async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonym
         records.append(
             SearchResult(
                 score=score_node.score,
-                content=score_node.node.get_content(),
+                content=score_node.node.get_content()[:MAX_TRUNCATED_CHUNK_LEN],
                 images=score_node.node.metadata.get("images_info", []),
                 url=file_url,
                 title=score_node.node.metadata.get("file_name", ""),

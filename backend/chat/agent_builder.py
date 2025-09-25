@@ -10,12 +10,13 @@ from loguru import logger
 from rag.knowledgebase_tool import aget_knowledgebase_tool
 from chat.tools.attachments.file_searcher import aget_file_searcher
 from chat.tools.visit_webpage import aget_visit_webpage_tool
-
+from utils.attachment_utils import is_attachment_truncated
 
 async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]=[]) -> List[FunctionTool]:
     mcp_tools = []
 
     if len(attachments) > 0:
+        logger.info(f"Loading file searcher tool with attachments: {attachments}")
         file_searcher_tool = await aget_file_searcher(attachments=attachments)
         mcp_tools.append(file_searcher_tool)
 
@@ -48,17 +49,19 @@ async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     return kb_tools
 
 
-
 async def build_agent(chat_request: ChatAgentRequest) -> Planner:
     try:
         attachments = []
         for message in chat_request.messages:
             if message.get("role") == "user":
-                non_image_attachments = [
-                    att for att in message.get("attachments", [])
-                    if not str(att.get("contentType", "")).startswith("image/")
-                ]
-                attachments.extend(non_image_attachments)
+                for attachment in message.get("attachments", []):
+                    if not str(attachment.get("contentType", "")).startswith(
+                        "image/"
+                    ):
+                        is_truncated = await is_attachment_truncated(attachment.get("id"))
+                        logger.info(f"Attachment {attachment.get('id')} truncated status is {is_truncated}.")
+                        if is_truncated:
+                            attachments.append(attachment)
 
         mcp_tools = await aget_mcp_tools(chat_request, attachments=attachments)
         llm: PaiLlm = llm_provider.get_llm_model(model_id=chat_request.model)

@@ -44,7 +44,7 @@ def create_vector_store(
         )
     elif isinstance(vector_db_connection, ElasticsearchConnection):
         logger.info(
-            f"Creating ElasticsearchStore for {kb_id} with url {vector_db_connection.url}."
+            f"Creating ElasticsearchStore for {kb_id} with url {vector_db_connection.endpoint}."
         )
         return ElasticsearchStore(
             es_url=vector_db_connection.endpoint,

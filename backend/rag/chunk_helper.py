@@ -88,8 +88,12 @@ async def update_file_status_async(
 ):
     file = await session.get(KbFileEntity, file_id)
     if is_attachment and documents:
-        file.file_content = documents[0].text
-        file.file_content_length = len(documents[0].text)
+        if file.file_extension in [".xlsx"]:
+            file.file_content = "\n".join([doc.text for doc in documents])
+            file.file_content_length = len(file.file_content)
+        else:
+            file.file_content = documents[0].text
+            file.file_content_length = len(documents[0].text)
 
     file.status = status
     file.failed_reason = failed_reason
