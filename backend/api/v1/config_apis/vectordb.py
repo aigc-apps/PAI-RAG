@@ -102,7 +102,6 @@ async def connection_test(
                 env_connection = create_vector_db_connection_from_env()
                 test_config.config["encrypted_password"] = env_connection.model_dump().get("encrypted_password")
 
-    print(test_config)
     vector_connection = create_vector_db_connection_from_dict(test_config.config)
     try:
         from llama_index.core.schema import TextNode

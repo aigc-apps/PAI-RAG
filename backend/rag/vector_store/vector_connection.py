@@ -26,7 +26,6 @@ def create_vector_store(
             f"http://{vector_db_connection.host.strip('/')}:{vector_db_connection.port}/{vector_db_connection.database}"
         )
         token = f"{vector_db_connection.user}:{decrypt_key(vector_db_connection.encrypted_password)}"
-        print(f"KEY: {token}")
         sparse_embedding_function = BM25BuiltInFunction()
 
         logger.info(f"Creating Milvus vector store for {kb_id} with url: {milvus_url}.")
