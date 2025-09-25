@@ -1,7 +1,7 @@
 from chat.openai.openai_like import OpenAILike
 from loguru import logger
 from sqlmodel import select, and_
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from db.models.llm import LlmModelEntity
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
