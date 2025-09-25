@@ -48,6 +48,7 @@ def parse_chat_request(chat_request: ChatAgentRequest) -> ChatAgentRequest:
             enable_output_guardrail=chatbot.enable_output_guardrail,
             guardrail_hint=chatbot.guardrail_hint or DEFAULT_GUARDRAIL_ADVICE,
             prompts=chatbot.prompts,
+            user_id=chat_request.user_id,
         )
         logger.info(f"正在调用应用{chat_request.model}: {new_chat_request}")
         return new_chat_request

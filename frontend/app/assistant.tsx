@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { Thread } from '@/components/assistant-ui/thread';
 import ModelSelector from '@/components/model-selector/index';
+import UserIdInput from '@/components/user/index';
 import ToolUIWrapper from '@/components/assistant-ui/tool-ui';
 import { useChatOptions } from './providers/chat';
 
 export const Assistant = () => {
   const [optionsVisible, setoptionsVisible] = useState(true);
-  const {model, updateModel} = useChatOptions();
+  const {model, updateModel, user_id, updateUser} = useChatOptions();
 
   // 模型选择回调
   const handleModelChange = async (
@@ -22,6 +23,10 @@ export const Assistant = () => {
     setoptionsVisible(source !== 'chatbot');
     console.log(source);
   };
+
+  const handleUserChange = async (user_id: string) => {
+    updateUser(user_id);
+  }
 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
 
@@ -37,6 +42,10 @@ export const Assistant = () => {
             model_id: model || undefined,
           }}
           onModelChange={handleModelChange}
+        />
+        <UserIdInput
+          user_id={user_id}
+          onChange={handleUserChange}
         />
       </header>
       <div className="flex flex-col flex-1 justify-end pb-8 overflow-y-auto">

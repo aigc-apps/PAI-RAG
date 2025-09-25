@@ -102,6 +102,7 @@ const default_chat_config = {
 export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   chatbotId,
 }) => {
+  const [openPrompt, setOpenPrompt] = useState(false);
   const [botConfig, setBotConfig] = useState<Chatbot>(default_chat_config);
   const [llms, setLlms] = useState<LlmConfig[]>([]);
   const [mcps, setMcps] = useState<McpConfig[]>([]);
@@ -351,7 +352,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           )}
         </div>
         <div className="px-2">
-          <Dialog>
+  <Dialog open={openPrompt} onOpenChange={setOpenPrompt}>
   <DialogTrigger asChild>
     <Button variant="outline" className="text-xs">编辑提示词</Button>
   </DialogTrigger>
@@ -445,7 +446,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             summary: summarizePrompt,
           }
         });
-        toast('success', { description: '提示词已保存' });
+        setOpenPrompt(false);
       }}>
         保存更改
       </Button>
