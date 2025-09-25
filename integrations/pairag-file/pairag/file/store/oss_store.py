@@ -30,9 +30,9 @@ class OssFileStore(BaseFileStore):
             allowed_headers=["*"],
             max_age_seconds=1000,
         )
+        self.prefix_path = prefix_path
         try:
             self.bucket.put_bucket_cors(BucketCors([rule]))
-            self.prefix_path = prefix_path
         except Exception as ex:
             logger.warning(f"Failed to set CORS for bucket {bucket}. error: {ex}")
             pass
