@@ -1,5 +1,5 @@
 import json
-import os
+import re
 import requests
 import time
 import asyncio
@@ -9,18 +9,27 @@ from typing import List, Union, Annotated
 from llama_index.core.tools import FunctionTool
 from loguru import logger
 
-VISIT_SERVER_TIMEOUT = int(os.getenv("VISIT_SERVER_TIMEOUT", 200))
-WEBCONTENT_MAXLENGTH = int(os.getenv("WEBCONTENT_MAXLENGTH", 150000))
+TRUNCATE_TOKEN_MAXLENGTH = 5000
 @staticmethod
-def truncate_to_tokens(text: str, max_tokens: int = 20000) -> str:
+def truncate_to_tokens(text: str, max_tokens: int = TRUNCATE_TOKEN_MAXLENGTH) -> str:
     encoding = tiktoken.get_encoding("cl100k_base")
 
     tokens = encoding.encode(text)
     if len(tokens) <= max_tokens:
+        logger.info(f"Current tokens length is {len(tokens)}, return original text.")
         return text
-
+    logger.info(f"Current tokens length is {len(tokens)}, truncating to {max_tokens} tokens.")
     truncated_tokens = tokens[:max_tokens]
-    return encoding.decode(truncated_tokens)
+    return encoding.decode(truncated_tokens) + " \n\n [truncated] The content is too long, has been truncated."
+
+def remove_images_and_links(text: str) -> str:
+    # 1. 移除 Markdown 图片: ![...](...)
+    text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
+    # 2. 清理多余空行和空白
+    text = re.sub(r'\n\s*\n', '\n\n', text)
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    return text
 
 async def jina_readpage(url: str) -> str:
     """使用 Jina Reader 读取网页内容"""
@@ -34,7 +43,7 @@ async def jina_readpage(url: str) -> str:
                 timeout=timeout
             )
             if response.status_code == 200:
-                return response.text
+                return remove_images_and_links(response.text)
             else:
                 logger.warning(f"Jina 返回非200状态码: {response.status_code} - {response.text}")
         except Exception as e:
@@ -44,8 +53,8 @@ async def jina_readpage(url: str) -> str:
             time.sleep(0.5)
     return "[visit] Failed to read page."
 
-async def readpage_and_summarize(model:str, url: str, goal: str) -> dict:
-    """读取网页并生成结构化摘要"""
+async def readpage_and_truncate(url: str, goal: str) -> dict:
+    """读取网页并截断过长内容"""
     content = await jina_readpage(url)
     logger.info(f"Jina 读取网页成功, 内容长度 {len(content.strip())}")
     if not content or content.startswith("[visit] Failed to read page."):
@@ -57,7 +66,7 @@ async def readpage_and_summarize(model:str, url: str, goal: str) -> dict:
         }
 
     # 截断内容
-    content = truncate_to_tokens(content, max_tokens=20000)
+    content = truncate_to_tokens(content, max_tokens=TRUNCATE_TOKEN_MAXLENGTH)
     return {
         "url": url,
         "goal": goal,
@@ -66,7 +75,6 @@ async def readpage_and_summarize(model:str, url: str, goal: str) -> dict:
     }
 
 async def avisit_webpage(
-    model: str,
     url: Union[str, List[str]],
     goal: str
 ) -> str:
@@ -95,7 +103,7 @@ async def avisit_webpage(
             continue
 
         try:
-            result = await readpage_and_summarize(model, u, goal)
+            result = await readpage_and_truncate(u, goal)
             results.append(result)
         except Exception as e:
             logger.error(f"处理 {u} 时出错: {e}")
@@ -114,10 +122,10 @@ async def avisit_webpage(
 
     return json.dumps(output, ensure_ascii=False, indent=2)
 
-async def avisit_webpage_tool(model:str, url: Union[str, List[str]], goal: str):
+async def avisit_webpage_tool(url: Union[str, List[str]], goal: str):
     """Async visit webpage tool entry"""
     try:
-        content = await avisit_webpage(model=model, url=url, goal=goal)
+        content = await avisit_webpage(url=url, goal=goal)
         return content
     except Exception as e:
         logger.error(f"Webpage visit tool failed: {e}")
@@ -127,11 +135,11 @@ async def avisit_webpage_tool(model:str, url: Union[str, List[str]], goal: str):
             "goal": goal
         }, ensure_ascii=False)
 
-async def aget_visit_webpage_tool(model: str):
+async def aget_visit_webpage_tool():
     """
     Visit webpage(s) and return the content.
     """
-    avisit_webpage_tool_func = partial(avisit_webpage_tool, model=model)
+    avisit_webpage_tool_func = partial(avisit_webpage_tool)
 
     async def visit_webpage_handler(
         url: Annotated[
@@ -176,5 +184,5 @@ Returns:
 
 
 if __name__ == "__main__":
-    print(asyncio.run(avisit_webpage_tool(model = "qwen-max", url = "https://www.qweather.com/weather30d/hangzhou-101210101.html", goal="确定下个月杭州到上海的天气情况")))
-    print(asyncio.run(avisit_webpage_tool(model = "qwen-max", url =["https://www.klook.com/zh-CN/china-high-speed-rail/19190-hangzhou/59-shanghai/","https://tw.trip.com/trains/china/route/hangzhou-to-shanghai/", "https://trains.ctrip.com/trainbooking/hangzhou-shanghai/gaotie"], goal="查询从杭州到上海的往返高铁时刻表和票价信息，重点关注早上从杭州出发和晚上从上海返回的班次。")))
+    print(asyncio.run(avisit_webpage_tool(url = "https://www.qweather.com/weather30d/hangzhou-101210101.html", goal="确定下个月杭州到上海的天气情况")))
+    print(asyncio.run(avisit_webpage_tool( url =["https://www.klook.com/zh-CN/china-high-speed-rail/19190-hangzhou/59-shanghai/","https://tw.trip.com/trains/china/route/hangzhou-to-shanghai/", "https://trains.ctrip.com/trainbooking/hangzhou-shanghai/gaotie"], goal="查询从杭州到上海的往返高铁时刻表和票价信息，重点关注早上从杭州出发和晚上从上海返回的班次。")))

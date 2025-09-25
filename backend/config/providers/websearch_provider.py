@@ -8,7 +8,7 @@ from db.models.websearch import WebSearchConfigEntity
 from config.providers.base_provider import BaseConfigProvider
 from tools.search.aliyun_search_tool import AliyunSearchTool
 from llama_index.core.tools import FunctionTool
-from chat.tools.tavily import TavilySearchTool
+from chat.tools.tavily_search import TavilySearchTool
 import traceback
 from loguru import logger
 
