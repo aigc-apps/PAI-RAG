@@ -1,6 +1,7 @@
 from functools import partial
 import traceback
 from typing import Any, List, Optional
+from config.providers.vectordb_provider import vectordb_provider, get_vector_db_connection_from_db
 from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
 
@@ -26,7 +27,6 @@ from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
-    create_vector_db_connection_from_env,
     create_vector_store,
     is_docid_filter_supported,
 )
@@ -56,10 +56,6 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
 
 
 class PaiKnowledgebaseClient:
-    def __init__(self):
-        self.vector_connection = create_vector_db_connection_from_env()
-        self.vector_store_cache = {}
-
     def create_vector_store_from_knowledgebase(
         self,
         knowledgebase: KbEntity,
@@ -70,15 +66,11 @@ class PaiKnowledgebaseClient:
             embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
 
         dimension = len(embed_model.get_text_embedding("0"))
-        kb_key = f"{knowledgebase.id}_{dimension}"
-        if kb_key not in self.vector_store_cache:
-            vector_store = create_vector_store(
-                knowledgebase.id, dimension, self.vector_connection
-            )
-            self.vector_store_cache[kb_key] = vector_store
-            logger.info(f"Created vector index for knowledgebase {kb_key}.")
-
-        return self.vector_store_cache[kb_key]
+        vector_connection = vectordb_provider.get_vector_db_connection()
+        vector_store = create_vector_store(
+            knowledgebase.id, dimension, vector_db_connection=vector_connection,
+        )
+        return vector_store
 
     def create_file_parser(self, knowledgebase: KbEntity, multimodal_llm: Any = None):
         image_caption_tool = None
@@ -154,7 +146,13 @@ class PaiKnowledgebaseClient:
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
             embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
 
-            vector_store = self.create_vector_store_from_knowledgebase(knowledgebase, embed_model=embed_model)
+
+            vector_connection = await get_vector_db_connection_from_db()
+            dimension = len(embed_model.get_text_embedding("0"))
+
+            vector_store = create_vector_store(
+                knowledgebase.id, dimension, vector_db_connection=vector_connection,
+            )
             if old_chunk_ids:
                 await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")

@@ -49,6 +49,7 @@ class ConfigChangeManager:
             from config.providers.reranker_provider import reranker_provider
             from config.providers.chatbot_provider import chatbot_provider
             from config.providers.guardrail_provider import guardrail_provider
+            from config.providers.vectordb_provider import vectordb_provider
 
             await mcp_provider.full_load_from_db_async()
             logger.info("Initialized mcp tools.")
@@ -62,6 +63,8 @@ class ConfigChangeManager:
             logger.info("Initialized trace configs.")
             await guardrail_provider.full_load_from_db_async()
             logger.info("Initialized guardrail configs.")
+            await vectordb_provider.full_load_from_db_async()
+            logger.info("Initialized vector db configs.")
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
@@ -250,6 +253,9 @@ class ConfigChangeManager:
             case ChangeEventSource.EVALUATION:
                 from config.providers.evaluation_provider import evaluation_provider
                 return evaluation_provider
+            case ChangeEventSource.VECTORDB:
+                from config.providers.vectordb_provider import vectordb_provider
+                return vectordb_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 

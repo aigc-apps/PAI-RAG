@@ -1,7 +1,7 @@
 import traceback
 from typing import Dict, Type
 from sqlmodel import Field, SQLModel
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from db.models.knowledgebase.reranker import RerankerModelEntity
 from config.providers.base_provider import BaseConfigProvider
 from rag.rerank.reranker import OpenAICompatibleReranker

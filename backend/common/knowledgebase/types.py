@@ -19,3 +19,24 @@ class ChunkStatus(str, Enum):
     pending = "pending"
     succeeded = "succeeded"
     failed = "failed"
+
+
+class VectorDbType(str, Enum):
+    OPENSEARCH = "opensearch"
+    ELASTICSEARCH = "elasticsearch"
+    ANALYTICDB = "analyticdb"
+    POSTGRESQL = "postgresql"
+    HOLOGRES = "hologres"
+    TABLESTORE = "tablestore"
+    MILVUS = "milvus"
+    DASHVECTOR = "dashvector"
+    LOCAL = "local"
+
+
+
+SUPPORTED_VECTOR_DB_TYPES = [
+    "local",
+    "milvus",
+    "postgresql",
+    "elasticsearch",
+]

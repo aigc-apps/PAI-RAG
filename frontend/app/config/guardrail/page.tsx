@@ -60,6 +60,7 @@ export default function GuardrailConfig() {
   const [aliyunSK, setAliyunSK] = useState(''); // AccessKey Secret
   const [regionName, setRegionName] = useState('');
   const [isLoading, setIsLoading] = useState(false); // 加载状态
+  const [isSaving, setIsSaving] = useState(false); // 加载状态
   const [error, setError] = useState(''); // 错误提示
 
   // 初始化加载配置
@@ -97,7 +98,7 @@ export default function GuardrailConfig() {
       return;
     }
     try {
-      setIsLoading(true);
+      setIsSaving(true);
 
       const update_ak = aliyunAK === '******' ? '' : aliyunAK;
       const update_sk = aliyunSK === '******' ? '' : aliyunSK;
@@ -124,7 +125,7 @@ export default function GuardrailConfig() {
     } catch (err: any) {
       toast.success(`保存失败: ${err.message}`);
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -198,10 +199,10 @@ export default function GuardrailConfig() {
           </div>
           <Button
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isSaving}
             className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
           >
-            {isLoading ? '保存中...' : '保存AI护栏配置'}
+            {isSaving ? '保存中...' : '保存AI护栏配置'}
           </Button>
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>

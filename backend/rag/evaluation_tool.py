@@ -13,7 +13,7 @@ from common.chat.models import ChatAgentRequest
 from evaluation.run import run_agent, run_evaluator
 from chat.openai.openai_like import OpenAILike
 from sqlmodel import select
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from fastapi import UploadFile
 import json
 @with_async_db_session

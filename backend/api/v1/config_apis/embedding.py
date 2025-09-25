@@ -11,7 +11,7 @@ from db.models.knowledgebase.embedding import (
     EmbeddingType,
 )
 from db.db_context import get_session
-from db.encrypt_utils import encrypt_key
+from common.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
 from config.providers.embedding_provider import embedding_provider
 from api.response_model import PagedResult, ResponseModel, success_response, error_response

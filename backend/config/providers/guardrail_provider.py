@@ -3,7 +3,7 @@ from typing import Any, Type, cast
 from extensions.guardrail.guardrail_check import GuardrailChecker
 from pydantic import Field
 from sqlmodel import SQLModel
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from db.models.guardrail import GuardrailConfigEntity
 from config.providers.base_provider import BaseConfigProvider
 

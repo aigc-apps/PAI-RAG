@@ -12,7 +12,7 @@ def create_file_store_from_env() -> BaseFileStore:
 
     :return: 文件存储实例
     """
-    print("Creating file store from environment variables...")
+    logger.info("Creating file store from environment variables...")
     file_store_type = os.getenv("FILE_STORE_TYPE", "local").lower()
     if file_store_type == "oss":
         oss_ak = os.getenv("OSS_ACCESS_KEY_ID")

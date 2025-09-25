@@ -3,7 +3,7 @@ from typing import Dict, Optional, Type
 from chat.llm.llm_model import PaiLlm
 from sqlmodel import Field, SQLModel
 from loguru import logger
-from db.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key
 from config.providers.base_provider import BaseConfigProvider
 from db.models.llm import LlmModelEntity
 

@@ -7,7 +7,6 @@ from llama_index.core.base.llms.types import (
 
 
 def response_from_text(text: str, additional_kwargs:dict={}) -> ChatResponse:
-    print(text)
     return ChatResponse(
         message=ChatMessage(
             role=MessageRole.ASSISTANT.value,
