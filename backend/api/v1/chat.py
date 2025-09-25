@@ -1,17 +1,32 @@
 from chat.agent.state import AgentState
 from chat.agent_builder import build_agent
-from chat.llm.utils import convert_gen_to_stream_chat_completions, convert_gen_to_chat_completions
+from chat.llm.models import ChatResponseGenerator
+from chat.llm.utils import convert_gen_to_stream_chat_completions, convert_gen_to_chat_completions, error_chunk_gen
+from config.providers.guardrail_provider import guardrail_provider
 from fastapi import APIRouter
 from sse_starlette import EventSourceResponse
 from common.chat.models import DEFAULT_GUARDRAIL_ADVICE, ChatAgentRequest
 from config.providers.llm_provider import llm_provider
 from config.providers.chatbot_provider import chatbot_provider
+from openai.types.chat import ChatCompletionMessageParam
 import traceback
 from loguru import logger
 
 
 chat_agent_router = APIRouter()
 
+
+
+def extract_user_message(raw_msg: ChatCompletionMessageParam) -> str:
+    content = raw_msg.get("content", "")
+    logger.info(f"Extracted {content} from {raw_msg}.")
+    if isinstance(content, str):
+        return content
+    else:
+        user_content = ""
+        for block in content:
+            user_content += block.get("text", "")
+        return user_content
 
 def parse_chat_request(chat_request: ChatAgentRequest) -> ChatAgentRequest:
     if chat_request.model in llm_provider.model_id_to_entry_id:
@@ -40,6 +55,32 @@ def parse_chat_request(chat_request: ChatAgentRequest) -> ChatAgentRequest:
     raise ValueError(f"Unknown model id: {chat_request.model}")
 
 
+async def generate_reponse(
+    chunk_gen: ChatResponseGenerator,
+    model: str,
+    stream: bool,
+    enable_output_check: bool = False,
+    guardrail_hint: str | None = None,
+):
+    if stream:
+        return EventSourceResponse(
+            convert_gen_to_stream_chat_completions(
+                model,
+                chunk_gen,
+                enable_output_check,
+                guardrail_hint,
+            ),
+            media_type="text/event-stream",
+        )
+    else:
+        return await convert_gen_to_chat_completions(
+            model,
+            chunk_gen,
+            enable_output_check,
+            guardrail_hint,
+        )
+
+
 @chat_agent_router.post("")
 async def chat(chat_request: ChatAgentRequest):
     logger.info(f"Chat agent body: {chat_request}")
@@ -51,20 +92,29 @@ async def chat(chat_request: ChatAgentRequest):
             messages=new_chat_request.messages,
             enable_agent=new_chat_request.enable_agent,
         )
+
+        # 创建审核器
+        checker = guardrail_provider.get_checker()
+
+        # 输入护栏检测
+        if new_chat_request.enable_input_guardrail:
+            user_message = extract_user_message(chat_request.messages[-1])
+            check_result = await checker.acheck_input(text=user_message)
+            if check_result.reject:
+                return await generate_reponse(
+                    error_chunk_gen(message=check_result.advice or new_chat_request.guardrail_hint),
+                    model=chat_request.model,
+                    stream=chat_request.stream,
+                )
+
         async_response_gen = await agent.run_async(state=state)
-        if chat_request.stream:
-            return EventSourceResponse(
-                convert_gen_to_stream_chat_completions(
-                    new_chat_request.model,
-                    async_response_gen
-                ),
-                media_type="text/event-stream",
-            )
-        else:
-            return await convert_gen_to_chat_completions(
-                new_chat_request.model,
-                async_response_gen
-            )
+        return await generate_reponse(
+            async_response_gen,
+            model=chat_request.model,
+            stream=chat_request.stream,
+            enable_output_check=new_chat_request.enable_output_guardrail,
+            guardrail_hint=new_chat_request.guardrail_hint,
+        )
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
         raise ValueError(f"Chat failed: {ve}")

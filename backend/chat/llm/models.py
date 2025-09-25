@@ -36,4 +36,10 @@ class ToolResultChunk(TextChunk):
     tool: ChoiceDeltaToolCall
 
 
+class ErrorChunk(TextChunk):
+    error_message: str = ""
+    exception: str | None = None
+    error_type: str = ""
+
+
 ChatResponseGenerator = AsyncGenerator[TextChunk, None]
