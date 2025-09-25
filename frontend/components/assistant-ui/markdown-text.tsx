@@ -35,7 +35,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   };
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-t-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">
+    <div className="flex items-center justify-between gap-4 rounded-t-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white">
       <span className="lowercase [&>span]:text-xs">{language}</span>
       <TooltipIconButton tooltip="Copy" onClick={onCopy}>
         {!isCopied && <CopyIcon />}
@@ -68,7 +68,7 @@ const defaultComponents = memoizeMarkdownComponents({
   h1: ({ className, ...props }) => (
     <h1
       className={cn(
-        'mb-8 scroll-m-20 text-4xl font-extrabold tracking-tight last:mb-0',
+        'mb-6 mt-6 scroll-m-20 text-2xl font-extrabold tracking-tight last:mb-0',
         className,
       )}
       {...props}
@@ -77,7 +77,7 @@ const defaultComponents = memoizeMarkdownComponents({
   h2: ({ className, ...props }) => (
     <h2
       className={cn(
-        'mb-4 mt-8 scroll-m-20 text-3xl font-semibold tracking-tight first:mt-0 last:mb-0',
+        'mb-4 mt-4 scroll-m-20 text-xl font-semibold tracking-tight first:mt-0 last:mb-0',
         className,
       )}
       {...props}
@@ -86,7 +86,7 @@ const defaultComponents = memoizeMarkdownComponents({
   h3: ({ className, ...props }) => (
     <h3
       className={cn(
-        'mb-4 mt-6 scroll-m-20 text-2xl font-semibold tracking-tight first:mt-0 last:mb-0',
+        'mb-2 mt-2 scroll-m-20 text-lg font-semibold tracking-tight first:mt-0 last:mb-0',
         className,
       )}
       {...props}
@@ -95,7 +95,7 @@ const defaultComponents = memoizeMarkdownComponents({
   h4: ({ className, ...props }) => (
     <h4
       className={cn(
-        'mb-4 mt-6 scroll-m-20 text-xl font-semibold tracking-tight first:mt-0 last:mb-0',
+        'mb-2 mt-2 scroll-m-20 text-md font-semibold tracking-tight first:mt-0 last:mb-0',
         className,
       )}
       {...props}
@@ -104,7 +104,7 @@ const defaultComponents = memoizeMarkdownComponents({
   h5: ({ className, ...props }) => (
     <h5
       className={cn(
-        'my-4 text-lg font-semibold first:mt-0 last:mb-0',
+        'my-2 font-semibold first:mt-0 last:mb-0',
         className,
       )}
       {...props}
@@ -112,13 +112,13 @@ const defaultComponents = memoizeMarkdownComponents({
   ),
   h6: ({ className, ...props }) => (
     <h6
-      className={cn('my-4 font-semibold first:mt-0 last:mb-0', className)}
+      className={cn('my-1 font-semibold first:mt-0 last:mb-0', className)}
       {...props}
     />
   ),
   p: ({ className, ...props }) => (
     <p
-      className={cn('mb-5 mt-5 leading-7 first:mt-0 last:mb-0', className)}
+      className={cn('mb-1 mt-1 leading-5 first:mt-0 last:mb-0', className)}
       {...props}
     />
   ),
@@ -139,23 +139,23 @@ const defaultComponents = memoizeMarkdownComponents({
   ),
   ul: ({ className, ...props }) => (
     <ul
-      className={cn('my-5 ml-6 list-disc [&>li]:mt-2', className)}
+      className={cn('my-2 ml-6 list-disc [&>li]:mt-2', className)}
       {...props}
     />
   ),
   ol: ({ className, ...props }) => (
     <ol
-      className={cn('my-5 ml-6 list-decimal [&>li]:mt-2', className)}
+      className={cn('my-2 ml-6 list-decimal [&>li]:mt-2', className)}
       {...props}
     />
   ),
   hr: ({ className, ...props }) => (
-    <hr className={cn('my-5 border-b', className)} {...props} />
+    <hr className={cn('my-3 border-b', className)} {...props} />
   ),
   table: ({ className, ...props }) => (
     <table
       className={cn(
-        'my-5 w-full border-separate border-spacing-0 overflow-y-auto',
+        'my-2 w-full border-separate border-spacing-0 overflow-y-auto',
         className,
       )}
       {...props}
@@ -164,7 +164,7 @@ const defaultComponents = memoizeMarkdownComponents({
   th: ({ className, ...props }) => (
     <th
       className={cn(
-        'bg-muted px-4 py-2 text-left font-bold first:rounded-tl-lg last:rounded-tr-lg [&[align=center]]:text-center [&[align=right]]:text-right',
+        'bg-muted px-4 py-1 text-left font-bold first:rounded-tl-lg last:rounded-tr-lg [&[align=center]]:text-center [&[align=right]]:text-right',
         className,
       )}
       {...props}
