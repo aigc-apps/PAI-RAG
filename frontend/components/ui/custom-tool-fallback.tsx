@@ -91,7 +91,6 @@ export const ToolFallback: ToolCallContentPartComponent = ({
             >
               {' '}
               <Wrench className="size-4" /> 完成工具调用: {toolName}{' '}
-              (点击查看结果){' '}
             </Button>
           </SheetTrigger>
           <SheetContent side="right">

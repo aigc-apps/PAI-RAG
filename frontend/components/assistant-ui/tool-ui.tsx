@@ -83,7 +83,7 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
       }
       const search_result = JSON.parse(result) as SearchWebResult;
       return (
-        <div className="h-7 items-center bg-muted/75 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
+        <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
           <Sheet>
             <SheetTrigger asChild>
               <Button
@@ -92,7 +92,6 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
               >
                 {' '}
                 <GlobeIcon className="size-4" /> 完成网页搜索: {args.query}{' '}
-                (点击查看结果){' '}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
@@ -183,7 +182,6 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
               >
                 {' '}
                 <ListTodoIcon className="size-4" /> 执行计划完成
-                (点击查看结果){' '}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
@@ -255,7 +253,6 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
               >
                 {' '}
                 <GlobeIcon className="size-4" /> 完成网页搜索: {args.query}{' '}
-                (点击查看结果){' '}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
@@ -349,7 +346,6 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
                 className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
               >
                 <PaperclipIcon className="size-4" /> 完成文件读取: {args.file_name}
-                (点击查看结果)
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
@@ -418,7 +414,6 @@ export const SearchFileToollUI = makeAssistantToolUI<
                 className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
               >
                 <FileSearch className="size-4" /> 完成文件搜索: {args.query_str}
-                (点击查看结果)
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
@@ -506,7 +501,6 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
               >
                 {" "}
                 <BookCheckIcon className="size-4" /> 完成知识库搜索: {args.query}{" "}
-                (点击查看结果){" "}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
