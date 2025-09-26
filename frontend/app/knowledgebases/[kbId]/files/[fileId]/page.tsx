@@ -289,7 +289,7 @@ export default function KnowledgeBaseFileChunksPage(
             >
               <ArrowLeft />
             </Button>
-            <h1 className="text-xl font-bold pl-2">文件切片列表</h1>
+            <h1 className="text-xl font-medium pl-2">文件切片列表</h1>
           </div>
         </div>
       </div>

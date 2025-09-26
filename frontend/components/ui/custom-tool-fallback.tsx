@@ -38,10 +38,10 @@ export const ToolFallback: ToolCallContentPartComponent = ({
 }) => {
   if (status.type === 'running') {
     return (
-      <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+      <div className="rounded mb-1 bg-muted/50 h-7 cursor-pointer hover:bg-muted/100 transition-colors">
         <Button
-          variant="link"
-          className="flex items-center gap-2 px-4 text-blue-800"
+          variant="ghost"
+          className="flex h-7 items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
         >
           <Wrench className="size-4" /> 正在调用工具: {toolName}{' '}
           (请稍候，结果将会显示在这里)
@@ -82,16 +82,15 @@ export const ToolFallback: ToolCallContentPartComponent = ({
     // const parsedArgs = JSON.parse(argsText);
 
     return (
-      <div className="thinking-box rounded-md p-1 bg-muted/50 border-l-4 border-primary cursor-pointer hover:bg-muted/70 transition-colors">
+      <div className="rounded mb-1 bg-muted/50 h-7 cursor-pointer hover:bg-muted/100 transition-colors">
         <Sheet>
           <SheetTrigger asChild>
             <Button
-              variant="link"
-              className="flex items-center gap-2 px-4 text-blue-800"
+              variant="ghost"
+              className="flex items-center gap-2 justify-start h-7 w-full text-gray-600 text-xs"
             >
               {' '}
               <Wrench className="size-4" /> 完成工具调用: {toolName}{' '}
-              (点击查看结果){' '}
             </Button>
           </SheetTrigger>
           <SheetContent side="right">

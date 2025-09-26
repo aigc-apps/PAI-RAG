@@ -134,7 +134,7 @@ const EvaluationPage = () => {
         <div className="p-6 rounded-2xl border border-primary/20">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              <h1 className="text-xl font-medium bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                 数据集 & 评估
               </h1>
               <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
@@ -201,8 +201,8 @@ const EvaluationPage = () => {
       {/* 数据表格区 —— 卡片容器 + 悬停效果 */}
       <div className="flex-1 overflow-hidden rounded-2xl border bg-card shadow-sm hover:shadow-md transition-shadow duration-300">
         <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Database className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-medium flex items-center gap-2">
+            <Database className="h-5 w-5" />
             数据集列表
           </h2>
         </div>

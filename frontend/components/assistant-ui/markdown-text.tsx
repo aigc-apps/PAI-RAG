@@ -68,7 +68,7 @@ const defaultComponents = memoizeMarkdownComponents({
   h1: ({ className, ...props }) => (
     <h1
       className={cn(
-        'mb-6 mt-6 scroll-m-20 text-2xl font-extrabold tracking-tight last:mb-0',
+        'mb-6 mt-6 scroll-m-20 text-xl font-extrabold tracking-tight last:mb-0',
         className,
       )}
       {...props}
@@ -164,7 +164,7 @@ const defaultComponents = memoizeMarkdownComponents({
   th: ({ className, ...props }) => (
     <th
       className={cn(
-        'bg-muted px-4 py-1 text-left font-bold first:rounded-tl-lg last:rounded-tr-lg [&[align=center]]:text-center [&[align=right]]:text-right',
+        'bg-muted px-4 py-1 text-left font-medium first:rounded-tl-lg last:rounded-tr-lg [&[align=center]]:text-center [&[align=right]]:text-right',
         className,
       )}
       {...props}

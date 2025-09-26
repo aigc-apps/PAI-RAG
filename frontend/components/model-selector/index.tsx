@@ -68,7 +68,7 @@ export default function ModelSelector({
             };
           }),
         };
-        const modelGroups = [...data.groups, chatbotGroup];
+        const modelGroups = [chatbotGroup, ...data.groups];
         setModelGroups(modelGroups);
 
         if (!selectedModel.model_id) {
@@ -100,9 +100,9 @@ export default function ModelSelector({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className="absolute top-0 left-18 max-w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 text-sm focus:ring-1 focus:ring-ring">
-        <div className="flex items-center pr-2 truncate gap-2">
-          <span className="flex flex-row items-center justify-start gap-2 text-lg font-medium">
+      <PopoverTrigger className="absolute top-2 left-12 max-w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 text-sm focus:ring-1 focus:ring-ring">
+        <div className="flex items-center truncate gap-2">
+          <span className="text-md font-medium items-center">
             {currentModel || '请选择模型'}
           </span>
           <ChevronsUpDown className="size-4 opacity-50 ml-auto" />

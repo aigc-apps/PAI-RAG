@@ -79,7 +79,7 @@ export default function EvalExpDetailsPage(
                     </div>
                     <div className="flex justify-between items-center">
                         <div>
-                            <h1 className="text-2xl font-bold">概览: {evaluation.name}</h1>
+                            <h1 className="text-xl font-medium">概览: {evaluation.name}</h1>
                             <div className="text-sm text-muted-foreground mt-1">
                                 {evaluation.description}
                             </div>

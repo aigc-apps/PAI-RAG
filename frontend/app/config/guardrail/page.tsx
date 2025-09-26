@@ -138,7 +138,7 @@ export default function GuardrailConfig() {
       >
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           <div className="flex gap-6 items-center">
-            <h2 className="text-2xl font-bold text-gray-800">阿里云AI安全护栏配置</h2> 
+            <h2 className="text-xl font-medium text-gray-800">阿里云AI安全护栏配置</h2> 
             <Button variant="outline" className="h-6" asChild><a href="https://www.aliyun.com/product/content-moderation/guardrail">开通地址</a></Button>
           </div>
           <div className="grid gap-4 py-4">

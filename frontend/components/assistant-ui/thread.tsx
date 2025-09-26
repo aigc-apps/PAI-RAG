@@ -18,7 +18,7 @@ import {
   SendHorizontalIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { CollapsibleReasoning } from "@/components/assistant-ui/reasoning-ui";
@@ -224,10 +224,10 @@ export const Thread: FC<{
           />
 
           <ThreadPrimitive.If empty={false}>
-            <div className="min-h-8 flex-grow" />
+            <div className="min-h-2 flex-grow" />
           </ThreadPrimitive.If>
 
-          <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
+          <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-2">
             <ThreadScrollToBottom />
             <Composer
               value={activeTools}
@@ -297,14 +297,14 @@ const ThreadWelcome: FC = () => {
 
 const ThreadWelcomeSuggestions: FC = () => {
   return (
-    <div className="mt-3 flex w-full items-stretch justify-center gap-4">
+    <div className="mt-3 flex w-full items-stretch justify-center gap-4 pb-8">
       <ThreadPrimitive.Suggestion
         className="hover:bg-muted/80 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
         prompt="帮我规划下个月从杭州去上海旅游的一日游攻略和交通规划，两大一小，考虑天气情况。"
         method="replace"
         autoSend
       >
-        <span className="line-clamp-2 text-ellipsis text-sm font-semibold">
+        <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
           帮我规划下个月从杭州去上海旅游的一日游攻略和交通规划，两大一小，考虑天气情况。
         </span>
       </ThreadPrimitive.Suggestion>
@@ -314,7 +314,7 @@ const ThreadWelcomeSuggestions: FC = () => {
         method="replace"
         autoSend
       >
-        <span className="line-clamp-2 text-ellipsis text-sm font-semibold">
+        <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
           杭州有什么好玩的景点？
         </span>
       </ThreadPrimitive.Suggestion>
@@ -343,48 +343,46 @@ const Composer: FC<ComposerProps> = ({
       className="focus-within:border-ring/20 flex w-full flex-col rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
     >
       {/* 第一行：输入框 */}
-      <div>
-        <ComposerAttachments />
-        <ComposerAddAttachment />
-      </div>
-      <div className="flex items-center justify-between px-2 pb-4">
-        <div>
-          <ComposerPrimitive.Input
-            rows={1}
-            autoFocus
-            placeholder="输入您的问题..."
-            className="placeholder:text-muted-foreground max-h-40 w-full resize-none border-none bg-transparent px-2 py-4 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
-          />
-
+      <div className="flex items-center justify-between px-2 pb-1">
+        <div className="w-full">
+          <div className="flex gap-3 pt-2">
+            <ComposerAttachments />
+            <ComposerPrimitive.Input
+              rows={1}
+              autoFocus
+              placeholder="输入您的问题..."
+              className="flex-1 placeholder:text-muted-foreground max-h-40 resize-none border-none bg-transparent px-2 py-3 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+            />
+          </div>
           {/* 第二行：按钮组 + ComposerAction */}
           {optionsVisible && (
-            <div className="flex flex-row items-center justify-between px-2 pb-4">
-              <div>
+            <div className="flex flex-row items-center px-2 pb-1">
+                <ComposerAddAttachment />
                 <ToggleGroup
                   type="multiple"
                   variant="outline"
-                  className="flex gap-x-4 overflow-visible"
+                  className="flex gap-x-4 px-6 overflow-visible"
                   value={value} // 同步 Thread 的 activeTools
                   onValueChange={onValueChange}
                 >
                   <ToggleGroupItem
                     value="planning"
                     aria-label="Toggle deep planning"
-                    className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    className="!rounded-full px-6 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
                   >
                     <Brain /> 深度思考
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="search"
                     aria-label="Toggle web search"
-                    className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    className="!rounded-full px-2 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
                   >
                     <Search /> 搜索
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="mcp"
                     aria-label="Toggle mcp"
-                    className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    className="!rounded-full px-2 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
                     onClick={() => {
                       onOpenMcpModal?.();
                     }}
@@ -394,7 +392,7 @@ const Composer: FC<ComposerProps> = ({
                   <ToggleGroupItem
                     value="kb"
                     aria-label="Toggle kb"
-                    className="!rounded-full px-2 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    className="!rounded-full px-2 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
                     onClick={() => {
                       onOpenKbModal?.();
                     }}
@@ -402,7 +400,6 @@ const Composer: FC<ComposerProps> = ({
                     <LibraryBig /> 知识库
                   </ToggleGroupItem>
                 </ToggleGroup>
-              </div>
 
               {/* 右侧按钮：ComposerAction */}
             </div>
@@ -449,7 +446,7 @@ const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
       <UserActionBar />
-      <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2 col-start-2 row-start-2 text-sm">
+      <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-2xl px-5 py-2 col-start-2 row-start-2 text-sm">
         <UserMessageAttachments />
         <MessagePrimitive.Content />
       </div>
@@ -493,9 +490,10 @@ const EditComposer: FC = () => {
 };
 
 const AssistantMessage: FC = () => {
+
   return (
     <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-1">
-      <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-5 col-span-2 col-start-2 row-start-1 my-1.5 text-sm">
+      <div className="gap-2 text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-5 col-span-2 col-start-2 row-start-1 my-1.5 text-sm">
         {/* <MessagePrimitive.Content components={{ Text: MarkdownText }} /> */}
         <MessagePrimitive.Content
           components={{
@@ -519,7 +517,7 @@ const AssistantActionBar: FC = () => {
       hideWhenRunning
       autohide="not-last"
       autohideFloat="single-branch"
-      className="flex flex-row items-center gap-x-10  text-muted-foreground flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
+      className="flex flex-row items-center text-muted-foreground gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
     >
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip="Copy">
