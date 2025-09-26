@@ -100,7 +100,7 @@ export default function EvalExperimentsDetailsPage(
       <Card className="flex flex-col h-full min-h-0 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
         <CardHeader className="shrink-0 flex md:items-center md:justify-between">
           <div>
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
               <BarChart2 className="h-5 w-5" /> 运行历史
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
@@ -136,7 +136,7 @@ export default function EvalExperimentsDetailsPage(
                     <TableCell colSpan={9} className="h-32 text-center">
                       <div className="flex items-center justify-center space-x-4">
                           <Loader2 className="h-6 w-6 animate-spin" />
-                          <h4 className="font-bold">Loading Experiments</h4>
+                          <h4 className="font-medium">Loading Experiments</h4>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -202,7 +202,7 @@ export default function EvalExperimentsDetailsPage(
                       </TableCell>
 
                       <TableCell>
-                        <div className={`font-bold text-lg ${item.status === 'success'
+                        <div className={`font-medium text-lg ${item.status === 'success'
                           ? item.avg_score >= 0.8
                             ? 'text-green-600'
                             : item.avg_score >= 0.6

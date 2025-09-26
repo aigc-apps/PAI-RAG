@@ -40,16 +40,14 @@ export default function RootLayout({
           href="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag_1.png"
         />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body>
         <ChatProvider>
           <MyChatRuntimeProvider>
             <SidebarProvider>
               <AppSidebar />
               <SidebarInset>
                   <div className="h-screen w-full overflow-hidden">
-                    <SidebarTrigger className="w-10"/>
+                    <SidebarTrigger className="w-10 pt-2"/>
                     <div className="w-full pt-0">
                         {children}
                         <Toaster duration={3000} position='top-right'/>

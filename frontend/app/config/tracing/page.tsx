@@ -83,7 +83,7 @@ export default function TracingConfig() {
         }
       >
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          <h2 className="text-2xl font-bold text-gray-800">
+          <h2 className="text-xl font-medium text-gray-800">
             阿里云链路追踪配置
           </h2>
           <a

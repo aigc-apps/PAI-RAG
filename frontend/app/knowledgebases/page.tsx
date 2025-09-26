@@ -94,7 +94,7 @@ export default function KnowledgeBasePage() {
     <div className="flex flex-col h-screen px-6 py-0 space-y-4">
       {/* 顶部标题栏 */}
       <div className="flex justify-between items-center h-1/10">
-        <h1 className="text-2xl font-bold">知识库</h1>
+        <h1 className="text-xl font-medium">知识库</h1>
         <Button
           className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 w-40"
           onClick={() => router.push('/knowledgebases/create')}
@@ -126,7 +126,7 @@ export default function KnowledgeBasePage() {
                   className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300"
                 >
                   <CardHeader>
-                    <CardTitle className="text-md flex pt-4 pb-1">
+                    <CardTitle className="text-sm flex pt-4 pb-1">
                       {base.name}
                     </CardTitle>
                   </CardHeader>

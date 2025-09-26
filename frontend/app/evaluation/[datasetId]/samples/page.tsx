@@ -377,7 +377,7 @@ export default function EvalDatasetsDetailsPage({
             <Card className="flex flex-col h-full min-h-0 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <CardHeader className="shrink-0 flex md:items-center md:justify-between">
                     <div>
-                        <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                        <CardTitle className="text-lg font-medium flex items-center gap-2">
                             <FileText className="h-5 w-5" /> 样本管理
                         </CardTitle>
                         <p className="text-sm text-muted-foreground mt-1">
@@ -476,7 +476,7 @@ export default function EvalDatasetsDetailsPage({
                                         <TableCell colSpan={9} className="h-32 text-center">
                                             <div className="flex items-center justify-center space-x-4">
                                                 <Loader2 className="h-6 w-6 animate-spin" />
-                                                <h4 className="font-bold">Loading Datasets</h4>
+                                                <h4 className="font-medium">Loading Datasets</h4>
                                             </div>
                                         </TableCell>
                                     </TableRow>

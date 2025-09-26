@@ -3,6 +3,23 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 设置中文字体 */
+html {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",        /* macOS/iOS 优秀中文字体 */
+    "Hiragino Sans GB",   /* macOS 旧版中文字体 */
+    "Microsoft YaHei",    /* Windows 微软雅黑 */
+    "Noto Sans SC",       /* 可选：Google 开源字体（需引入） */
+    "Helvetica Neue",
+    Arial,
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji";
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

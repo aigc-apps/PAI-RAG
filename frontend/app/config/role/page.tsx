@@ -17,7 +17,7 @@ export default function RoleConfigPage() {
       <div className="flex flex-col h-screen p-6 space-y-6">
         {/* 顶部标题栏 */}
         <div className="flex justify-between items-center h-1/10">
-          <h1 className="text-2xl font-bold">权限控制</h1>
+          <h1 className="text-xl font-medium">权限控制</h1>
         </div>
 
         {/* 卡片容器 */}

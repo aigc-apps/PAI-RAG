@@ -275,7 +275,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
 
   return (
     <div className="grid gap-4 py-6 px-6">
-      <div className="text-xl font-bold">
+      <div className="text-xl font-medium">
         {isCreate ? '新建应用' : '编辑应用'}
       </div>
       <div className="space-y-2">
