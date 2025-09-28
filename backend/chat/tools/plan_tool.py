@@ -5,17 +5,15 @@ from loguru import logger
 
 
 PLAN_TOOL_DESCRIPTION = """
-Break down user requests into clear, sequential steps that can be executed by worker agents. Each step must be a single, unambiguous action.
+Use this tool ONLY for complex, multi-step, or ambiguous requests (e.g., "Plan a trip to Tokyo", "Compare iPhone 15 vs S24").
 
-## Guidelines
-- **Atomic & Independent**: Each step must represent a single, executable action. No compound tasks.
-- **Self-Contained**: Include all necessary context: who, what, where, and when — derived from available information.
-- **Action-Oriented Language**: Start with strong verbs (e.g., "Verify", "Retrieve", "Generate"). Avoid vague terms like "check" or "review" without specifics.
-- **Measurable Outcome**: Each step must produce a concrete, observable result that can be validated.
-- **Concise Sequence**: Limit plans to 3-5 essential steps. Omit redundant or implied actions.
-- **Valid JSON Only**: Return a well-formed JSON object. No additional text, explanation, or markdown.
-- **Language Consistency**: Use the same language as the user's query unless specified otherwise.
+Break the request into 3–5 atomic, executable steps for worker agents. Each step must:
+- Be a single action starting with a strong verb (e.g., Retrieve, Verify, Generate).
+- Include all necessary context (who, what, where, when).
+- Produce a concrete, verifiable result.
+- Be self-contained and independent.
 
+Return ONLY a valid JSON object with a "steps" array. Use the same language as the user query. Do not include explanations, markdown, or extra text.
 """
 
 async def aget_plan_tool():
