@@ -14,6 +14,7 @@ export interface SampleItem {
     eval_metadata?: {
         Steps?: string;
         Tools?: string;
+        file_name?: string;
     };
 }
 

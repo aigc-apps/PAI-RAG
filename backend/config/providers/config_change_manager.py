@@ -150,7 +150,7 @@ class ConfigChangeManager:
             logger.error(f"IntegrityError occurred when add gaia evaluation: {e.orig}")
             await session.rollback()
 
-        GAIA_DATASET_PATH = "./data/gaia_level_1_validation_metadata.jsonl"
+        GAIA_DATASET_PATH = "./resources/dataset/gaia/gaia_level_1_27.jsonl"
         file_results = eval_client.load_dataset_from_local_path(file_path=GAIA_DATASET_PATH)
         for line in file_results:
             dataset_entity = DatasetSampleEntity(
