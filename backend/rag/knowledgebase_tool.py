@@ -229,7 +229,7 @@ class PaiKnowledgebaseClient:
             if chapter_name:
                 base_text += f"\n\nchapter_name: {chapter_name}"
 
-            texts.append(base_text)
+            texts.append(base_text[:1024])
         return texts
 
 

@@ -18,10 +18,16 @@ from llama_index.core.schema import Document
 from config.providers.config_change_manager import config_change_manager
 
 
+MAX_CACHE_SIZE = 3
+embed_cache_dict = {}
+
 @with_async_db_session
 async def get_embedding_from_db(
     session: AsyncSession, model_id: str
 ) -> EmbeddingModelEntity:
+    if model_id in embed_cache_dict:
+        return embed_cache_dict[model_id]
+
     embedding_entity = (await session.exec(
         select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == model_id)
     )).first()
@@ -32,7 +38,14 @@ async def get_embedding_from_db(
     if not embedding_entity.is_ready:
         raise ValueError(f"Embedding model {model_id} is not downloaded, please check the download status.")
 
-    return create_embedding_model(config=embedding_entity)
+    embed_model = create_embedding_model(config=embedding_entity)
+    if model_id not in embed_cache_dict and len(embed_cache_dict) >= MAX_CACHE_SIZE:
+        first_key = next(iter(embed_cache_dict))
+        embed_cache_dict.pop(first_key)
+
+    embed_cache_dict[model_id] = embed_model
+    return embed_cache_dict[model_id]
+
 
 @with_async_db_session
 async def set_embedding_model_ready(
