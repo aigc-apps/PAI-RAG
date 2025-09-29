@@ -14,6 +14,7 @@ export interface SampleItem {
     eval_metadata?: {
         Steps?: string;
         Tools?: string;
+        file_name?: string;
     };
 }
 
@@ -29,6 +30,12 @@ export interface RunConfig {
     enable_input_guardrail?: boolean;
     enable_output_guardrail?: boolean;
     guardrail_hint?: string;
+    prompts: {
+      plan: string;
+      act: string;
+      act_with_plan: string;
+      summary: string;
+    };
 }
 
 export interface EvaluatorConfig {
