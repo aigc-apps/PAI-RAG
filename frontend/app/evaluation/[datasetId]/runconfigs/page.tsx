@@ -29,8 +29,9 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Settings, Pencil, Trash2, Settings2, BarChart2, Loader2 } from "lucide-react";
-import { EvalConfigFormDialog } from "@/app/evaluation/components/runconfig-form-dialog";
+import { RunConfigFormDialog } from "@/app/evaluation/components/runconfig-form-dialog";
 import { RunConfig } from '@/app/evaluation/[datasetId]/types';
+import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
 
 const default_eval_run_config = {
     id: "",
@@ -44,6 +45,12 @@ const default_eval_run_config = {
     enable_input_guardrail: false,
     enable_output_guardrail: false,
     guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+    prompts: {
+        plan: PLAN_PROMPT,
+        act: ACT_PROMPT,
+        act_with_plan: ACT_WITH_PLAN_PROMPT,
+        summary: SUMMARY_PROMPT,
+    },
 };
 
 
@@ -293,7 +300,7 @@ export default function RunConfigsPage(
                     <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
 
                         <div className="flex gap-2">
-                            <EvalConfigFormDialog
+                            <RunConfigFormDialog
                                 mode={isEditSetting ? "edit" : "new"}
                                 config={isEditSetting ? editConfig : undefined}
                                 llms={llms}
@@ -307,7 +314,7 @@ export default function RunConfigsPage(
                             />
                             <Dialog open={isNewSettingsOpen} onOpenChange={setIsNewSettingsOpen}>
                                 <DialogTrigger asChild>
-                                    <Button>
+                                    <Button onClick={() => setIsEditSetting(false)}>
                                         <Settings className="mr-2 h-4 w-4" /> 新建配置
                                     </Button>
                                 </DialogTrigger>

@@ -8,6 +8,8 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTrigger,
+  DialogClose
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -24,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from '@/components/ui/switch';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -36,6 +39,9 @@ import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { useRouter } from 'next/navigation';
 import { RunConfig } from '@/app/evaluation/[datasetId]/types';
+import { ResettableTextarea } from '@/app/apps/resetable_textarea';
+import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
+import { set } from "date-fns";
 
 
 interface RunConfigFormDialogProps {
@@ -51,7 +57,7 @@ interface RunConfigFormDialogProps {
   isSaving: boolean;
 }
 
-export function EvalConfigFormDialog({
+export function RunConfigFormDialog({
   mode,
   config,
   llms,
@@ -79,6 +85,12 @@ export function EvalConfigFormDialog({
         enable_input_guardrail: false,
         enable_output_guardrail: false,
         guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+        prompts: {
+          plan: PLAN_PROMPT,
+          act: ACT_PROMPT,
+          act_with_plan: ACT_WITH_PLAN_PROMPT,
+          summary: SUMMARY_PROMPT,
+        },
       }
   );
 
@@ -88,6 +100,12 @@ export function EvalConfigFormDialog({
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>(
     mcps.filter(mcp => localConfig.mcp_ids.includes(mcp.id)).map(mcp => mcp.name)
   );
+
+  const [planPrompt, setPlanPrompt] = useState('');
+  const [actPrompt, setActPrompt] = useState('');
+  const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
+  const [summarizePrompt, setSummarizePrompt] = useState('');
+  const [openPrompt, setOpenPrompt] = useState(false);
 
   // 当 config 或 mode 变化时重置表单
   useEffect(() => {
@@ -99,6 +117,10 @@ export function EvalConfigFormDialog({
       setSelectedMcpNames(
         mcps.filter(mcp => config.mcp_ids.includes(mcp.id)).map(mcp => mcp.name)
       );
+      setPlanPrompt(config.prompts.plan);
+      setActPrompt(config.prompts.act);
+      setActWithPlanPrompt(config.prompts.act_with_plan);
+      setSummarizePrompt(config.prompts.summary);
     } else {
       setLocalConfig({
         id: "",
@@ -112,6 +134,12 @@ export function EvalConfigFormDialog({
         enable_input_guardrail: false,
         enable_output_guardrail: false,
         guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+        prompts: {
+          plan: PLAN_PROMPT,
+          act: ACT_PROMPT,
+          act_with_plan: ACT_WITH_PLAN_PROMPT,
+          summary: SUMMARY_PROMPT,
+        },
       });
       setSelectedKbNames([]);
       setSelectedMcpNames([]);
@@ -222,7 +250,115 @@ export function EvalConfigFormDialog({
               )}
             </div>
           </div>
+          {/* 提示词设置 */}
+          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+            <Label className="flex items-center">
+              提示词设置
+            </Label>
+            <div className="px-2">
+              <Dialog open={openPrompt} onOpenChange={setOpenPrompt}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="text-xs">编辑提示词</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col">
+                  <DialogHeader>
+                    <DialogTitle>编辑提示词</DialogTitle>
+                    <DialogDescription>
+                      自定义 AI Agent 在不同阶段的行为提示词
+                    </DialogDescription>
+                  </DialogHeader>
 
+                  <div className="flex-1 overflow-hidden">
+                    {/* 外层 Tabs：分 Plan、Act 两大块 */}
+                    <Tabs defaultValue="plan_group" className="h-full flex flex-col">
+                      <TabsList className="flex space-x-2">
+                        <TabsTrigger value="plan_group">规划提示词</TabsTrigger>
+                        <TabsTrigger value="act_group">行动提示词</TabsTrigger>
+                      </TabsList>
+
+                      <div className="flex-1 overflow-hidden mt-4">
+                        {/* Plan 块内容：内部再分 3 个子 Tab */}
+                        <TabsContent value="plan_group" className="h-full flex flex-col">
+                          <Tabs defaultValue="plan" className="h-full flex flex-col">
+                            <TabsList className="grid grid-cols-3">
+                              <TabsTrigger value="plan">规划</TabsTrigger>
+                              <TabsTrigger value="act_with_plan">规划行动</TabsTrigger>
+                              <TabsTrigger value="summary">规划总结</TabsTrigger>
+                            </TabsList>
+                            <div className="flex-1 overflow-hidden mt-2">
+                              <TabsContent value="plan" className="h-full flex flex-col">
+                                <ResettableTextarea
+                                  value={planPrompt}
+                                  onReset={() => setPlanPrompt(PLAN_PROMPT)}
+                                  onChange={(e) => setPlanPrompt(e.target.value)}
+                                  defaultValue={PLAN_PROMPT}
+                                  placeholder="输入规划阶段的提示词..."
+                                />
+                              </TabsContent>
+                              <TabsContent value="act_with_plan" className="h-full flex flex-col">
+                                <ResettableTextarea
+                                  value={actWithPlanPrompt}
+                                  onReset={() => setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT)}
+                                  onChange={(e) => setActWithPlanPrompt(e.target.value)}
+                                  defaultValue={ACT_WITH_PLAN_PROMPT}
+                                  placeholder="输入规划驱动行动阶段的提示词..."
+                                />
+                              </TabsContent>
+                              <TabsContent value="summary" className="h-full flex flex-col">
+                                <ResettableTextarea
+                                  value={summarizePrompt}
+                                  onReset={() => setSummarizePrompt(SUMMARY_PROMPT)}
+                                  onChange={(e) => setSummarizePrompt(e.target.value)}
+                                  defaultValue={SUMMARY_PROMPT}
+                                  placeholder="输入总结阶段的提示词..."
+                                />
+                              </TabsContent>
+                            </div>
+                          </Tabs>
+                        </TabsContent>
+
+                        {/* Act 块内容：单独一个 Textarea */}
+                        <TabsContent value="act_group" className="h-full flex flex-col">
+                          <ResettableTextarea
+                            value={actPrompt}
+                            onReset={() => setActPrompt(ACT_PROMPT)}
+                            onChange={(e) => setActPrompt(e.target.value)}
+                            defaultValue={ACT_PROMPT}
+                            placeholder="输入行动阶段的提示词..."
+                          />
+                        </TabsContent>
+                      </div>
+                    </Tabs>
+                  </div>
+
+                  <DialogFooter className="gap-2 sm:gap-0">
+                    <DialogClose asChild>
+                      <Button variant="outline" onClick={() => {
+                        setActPrompt(localConfig.prompts.act);
+                        setPlanPrompt(localConfig.prompts.plan);
+                        setActWithPlanPrompt(localConfig.prompts.act_with_plan);
+                        setSummarizePrompt(localConfig.prompts.summary);
+                      }}>取消</Button>
+                    </DialogClose>
+                    <Button type="button" onClick={() => {
+                      setLocalConfig((prev) => ({
+                        ...prev,
+                        prompts: {
+                          plan: planPrompt,
+                          act: actPrompt,
+                          act_with_plan: actWithPlanPrompt,
+                          summary: summarizePrompt,
+                        }
+                      }));
+                      setOpenPrompt(false);
+                    }}>
+                      保存更改
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
           {/* 启用联网搜索 */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <Label htmlFor="enable_search">启用联网搜索</Label>
@@ -410,9 +546,13 @@ export function EvalConfigFormDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
+          <DialogClose asChild>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              取消
+            </Button>
+          </DialogClose>
+
+
           <Button onClick={handleSubmit} disabled={isSaving}>
             {isSaving ? (
               <>

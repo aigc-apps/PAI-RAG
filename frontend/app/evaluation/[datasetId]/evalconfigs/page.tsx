@@ -199,7 +199,7 @@ export default function EvaluatorConfigsPage(
                             />
                             <Dialog open={isNewSettingsOpen} onOpenChange={setIsNewSettingsOpen}>
                                 <DialogTrigger asChild>
-                                    <Button>
+                                    <Button onClick={() => setIsEditSetting(false)}>
                                         <Settings className="mr-2 h-4 w-4" /> 新建配置
                                     </Button>
                                 </DialogTrigger>

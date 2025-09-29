@@ -16,6 +16,8 @@ from sqlmodel import select
 from common.encrypt_utils import decrypt_key
 from fastapi import UploadFile
 import json
+from utils.attachment_utils import AttachmentFile, upload_gaia_attachment_file
+
 @with_async_db_session
 async def get_exp_run_entity(
     session: AsyncSession,
@@ -212,9 +214,39 @@ class PaiEvaluationClient:
                 status="running",
                 score=0.0
             )
-            input_messages = [
-                {"role": "user", "content": dataset_sample_entity.input}
-            ]
+            if dataset_sample_entity.eval_metadata.get("file_name"):
+                try:
+                    file_entity: AttachmentFile = await upload_gaia_attachment_file(file_name=dataset_sample_entity.eval_metadata.get("file_name"))
+                    logger.info("[WORKER] get file_entity", file_entity)
+                    input_messages = [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": dataset_sample_entity.input}
+                            ],
+                            "attachments": [
+                                {
+                                    "id": file_entity.id,
+                                    "name": file_entity.name,
+                                    "contentType": file_entity.contentType,
+                                }
+                            ],
+                        }
+                    ]
+                except Exception as ex:
+                    logger.error(f"Get gaia attachment file failed: {ex}")
+                    await update_experiment_run_result(
+                        exp_run_id=exp_run_id,
+                        actual_output="",
+                        status="failed",
+                        score=0.0
+                    )
+                    run_scores.append(0.0)
+                    continue
+            else:
+                input_messages = [
+                    {"role": "user", "content": dataset_sample_entity.input}
+                ]
             chat_request = ChatAgentRequest(
                 model=run_config_entity.model_id,
                 messages=input_messages,
@@ -226,8 +258,10 @@ class PaiEvaluationClient:
                 enable_input_guardrail=run_config_entity.enable_input_guardrail,
                 enable_output_guardrail=run_config_entity.enable_output_guardrail,
                 guardrail_hint=run_config_entity.guardrail_hint,
+                prompts=run_config_entity.prompts,
             )
             try:
+                logger.info(f"=== Agent Run Input {chat_request} ===")
                 output, execution_metadata, status = await run_agent(chat_request)
                 logger.info(f"=== Agent output: {output} ===")
                 eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)

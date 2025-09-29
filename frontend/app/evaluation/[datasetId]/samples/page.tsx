@@ -456,7 +456,7 @@ export default function EvalDatasetsDetailsPage({
                         <Table className='rounded-md border'>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[50px]">
+                                    <TableHead className="w-[5%]">
                                         <Checkbox
                                             checked={isAllSelected}
                                             onCheckedChange={(checked) => {
@@ -465,9 +465,10 @@ export default function EvalDatasetsDetailsPage({
                                         />
                                     </TableHead>
                                     <TableHead className="w-[10%]">样本ID</TableHead>
-                                    <TableHead className="w-[45%]">问题</TableHead>
-                                    <TableHead className="w-[30%]">答案</TableHead>
-                                    <TableHead className="w-[100px] text-center">操作</TableHead>
+                                    <TableHead className="w-[35%]">问题</TableHead>
+                                    <TableHead className="w-[20%]">答案</TableHead>
+                                    <TableHead className="w-[15%]">附件</TableHead>
+                                    <TableHead className="w-[15%] text-center">操作</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -519,18 +520,27 @@ export default function EvalDatasetsDetailsPage({
                                                 </div>
                                             </TableCell>
                                             <TableCell
-                                                className="whitespace-normal break-words min-w-[250px] max-w-[400px] py-2"
+                                                className="whitespace-normal break-words min-w-[250px] max-w-[400px] px-4 py-2"
                                                 style={{
                                                     whiteSpace: expandedRows.has(item.id) ? 'normal' : 'nowrap',
                                                     overflow: 'hidden',
-                                                    textOverflow: 'ellipsis'
+                                                    textOverflow: 'ellipsis',
                                                 }}
                                             >
                                                 {item.input}
                                             </TableCell>
+                                            <TableCell className="whitespace-normal break-words max-w-[150px] px-4"
+                                                style={{
+                                                    whiteSpace: expandedRows.has(item.id) ? 'normal' : 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                }}
+                                                >
+                                                {item.expected_output}
+                                            </TableCell>
                                             <TableCell>
-                                                <Badge variant="secondary" className="bg-green-50 text-green-700 whitespace-pre-wrap">
-                                                    {item.expected_output}
+                                                <Badge variant="secondary">
+                                                    {item.eval_metadata?.file_name}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
