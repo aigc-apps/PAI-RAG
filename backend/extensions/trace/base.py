@@ -20,6 +20,7 @@ from opentelemetry.sdk.trace.export import (
 from opentelemetry.trace import Span
 from opentelemetry.context import attach, detach
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+from openinference.instrumentation.openai import OpenAIInstrumentor
 from openinference.semconv.trace import SpanAttributes
 
 from extensions.trace.reloadable_exporter import ReloadableOTLPSpanExporter
@@ -91,6 +92,7 @@ def init_instrument(config: TraceConfig):
         trace.set_tracer_provider(trace_provider)
 
     LlamaIndexInstrumentor().instrument()
+    OpenAIInstrumentor().instrument()
     os.environ["TRACING_ENABLED"] = "true"
     logger.info("Init trace successfully.")
 
