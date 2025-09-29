@@ -102,6 +102,10 @@ class FileParser:
                     return ExcelReader()
                 case ".xls":
                     return ExcelReader()
+                case ".pptx":
+                    return PptxReader(
+                        file_store=self.file_store,
+                    )
                 case _:
                     raise ValueError(f"不支持的附件文件类型: {file_extension}")
         else:

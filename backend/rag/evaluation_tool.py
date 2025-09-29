@@ -258,6 +258,7 @@ class PaiEvaluationClient:
                 enable_input_guardrail=run_config_entity.enable_input_guardrail,
                 enable_output_guardrail=run_config_entity.enable_output_guardrail,
                 guardrail_hint=run_config_entity.guardrail_hint,
+                prompts=run_config_entity.prompts,
             )
             try:
                 logger.info(f"=== Agent Run Input {chat_request} ===")
