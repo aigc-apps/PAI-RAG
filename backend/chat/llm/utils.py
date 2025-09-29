@@ -83,6 +83,7 @@ async def convert_gen_to_stream_chat_completions(
             total_usage.prompt_tokens += chunk.usage.prompt_tokens
             total_usage.completion_tokens += chunk.usage.completion_tokens
             total_usage.total_tokens += chunk.usage.total_tokens
+            continue
 
         if isinstance(chunk, ToolResultChunk):
             citations, citation_details = extract_citations(chunk)
@@ -164,6 +165,7 @@ async def convert_gen_to_stream_chat_completions(
             object="chat.completion.chunk",
             citation_details=citation_details,
             citations=citations,
+            usage=total_usage
         )
     yield json.dumps(stop_chunk.model_dump(mode="json"), ensure_ascii=False)
 
@@ -236,6 +238,7 @@ async def convert_gen_to_chat_completions(
             steps=steps,
             citations=citations,
             citation_details=citation_details,
+            usage=total_usage
         )
 
     return message.model_dump(mode="json")

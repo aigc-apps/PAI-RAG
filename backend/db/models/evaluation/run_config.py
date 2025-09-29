@@ -18,6 +18,8 @@ class RunConfigCreate(SQLModel):
     enable_input_guardrail: Optional[bool] = Field(default=False)
     enable_output_guardrail: Optional[bool] = Field(default=False)
     guardrail_hint: Optional[str] = Field(default=None)
+    prompts: Optional[dict] = Field(default={})
+
 
 class RunConfigEntity(RunConfigCreate, table=True):
     __tablename__ = "pai_run_config"
@@ -29,6 +31,7 @@ class RunConfigEntity(RunConfigCreate, table=True):
     )
     mcp_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     kb_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    prompts: Optional[dict] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime),

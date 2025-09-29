@@ -604,6 +604,7 @@ async def create_run_config(
             enable_input_guardrail=run_config.enable_input_guardrail,
             enable_output_guardrail=run_config.enable_output_guardrail,
             guardrail_hint=run_config.guardrail_hint,
+            prompts=run_config.prompts,
         )
 
         session.add(run_config_entity)
@@ -642,6 +643,7 @@ async def update_run_config(
         run_config.enable_input_guardrail = new_run_config.enable_input_guardrail
         run_config.enable_output_guardrail = new_run_config.enable_output_guardrail
         run_config.guardrail_hint = new_run_config.guardrail_hint
+        run_config.prompts = new_run_config.prompts
 
         evaluation_provider.update(run_config)
         session.add(run_config)

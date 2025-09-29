@@ -40,7 +40,6 @@ RUN mkdir -p /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
 
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 COPY resources /app/resources
-COPY data /app/data
 COPY scripts /app/scripts
 COPY frontend /app/frontend
 COPY backend /app/backend
