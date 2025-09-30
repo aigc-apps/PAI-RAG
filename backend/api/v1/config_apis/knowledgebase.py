@@ -437,8 +437,8 @@ async def list_chunks(
     for chunk_entity in chunk_entities:
         origin_text = chunk_entity.text
         pattern = MARKDOWN_IMAGE_PATTERN
-        matches = re.findall(pattern, origin_text)
-        chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": alt } for alt, src in matches]
+        matches = re.findall(pattern, origin_text, re.DOTALL)
+        chunk_entity.chunk_metadata["images_info"] = [{"url":file_store.get_url(src), "desc": desc} for src, desc in matches]
     return success_response(
         data=PagedResult(
             items=chunk_entities,

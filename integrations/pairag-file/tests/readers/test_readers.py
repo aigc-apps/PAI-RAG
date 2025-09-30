@@ -132,5 +132,3 @@ def test_text_reader():
             )
     documents = file_parser.read_file(file_item,is_attachment=False)
     assert len(documents) == 1
-
-    
