@@ -10,6 +10,7 @@ from pairag.file.utils.image_utils import compress_image_if_needed
 from pairag.file.utils.markdown_tree_utils import PaiTable, convert_table_to_markdown
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import to_markdown_image_text
+from pptx.enum.shapes import PP_PLACEHOLDER
 import re
 
 
@@ -21,38 +22,45 @@ class PptxReader(BaseReader):
         self.image_caption_tool = image_caption_tool
         logger.info("PptxReader inited.")
 
+
+    def _extract_image_from_shape(self,shape, save_name_template: str):
+        """从 shape 提取图片（支持 PICTURE、PLACEHOLDER.PICTURE、CHART 等）"""
+        markdown = []
+        images = []
+        if not (hasattr(shape, 'image') and shape.image):
+            return markdown, images
+        if isinstance(self.file_store, OssFileStore) and self.image_caption_tool:
+            image_blob = shape.image.blob
+            image_name = hashlib.md5(image_blob).hexdigest() + ".jpeg"
+            save_image_name = save_name_template.format(image_name)
+            image_file = BytesIO(image_blob)
+            image_file = compress_image_if_needed(image_file)
+            if image_file:
+                try:
+                    self.file_store.save(BytesIO(image_blob), save_image_name)
+                    image_alt_text = self.image_caption_tool.extract_url(
+                        self.file_store.get_url(save_image_name)
+                    )
+                    cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                    image_text = to_markdown_image_text(save_image_name, cleaned_alt)
+                    markdown.append(f"{image_text}\n\n")
+                    images.append(save_image_name)
+                    logger.info(f"Successfully saved image {save_image_name}.")
+                except Exception as ex:
+                    logger.exception(f"Failed to save image: {save_image_name}. Error: {ex}")
+        return markdown, images
+
     def _extract_shape(self, slide_number, shape, save_name_template: str):
         markdown = []
         images = []
         if shape.name.startswith("Title"):
             # 标题
             markdown.append(f"# {shape.text}\n\n")
-        elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+        elif shape.shape_type in (MSO_SHAPE_TYPE.PICTURE, MSO_SHAPE_TYPE.CHART):
             # 图片
-            logger.info("extracting image from pptx.")
-            if isinstance(self.file_store, OssFileStore) and self.image_caption_tool:
-                image_blob = shape.image.blob
-
-                image_name = hashlib.md5(image_blob).hexdigest() + ".jpeg"
-                save_image_name = save_name_template.format(image_name)
-                image_file = BytesIO(image_blob)
-                image_file = compress_image_if_needed(image_file)
-                if image_file:
-                    try:
-                        self.file_store.save(BytesIO(image_blob), save_image_name)
-                        image_alt_text = self.image_caption_tool.extract_url(
-                            self.file_store.get_url(save_image_name)
-                        )
-                        cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                        image_text = to_markdown_image_text(save_image_name, cleaned_alt)
-                        markdown.append(f"{image_text}\n\n")
-                        images.append(save_image_name)
-
-                        logger.info(f"Successfully saved image {save_image_name}.")
-                    except Exception as ex:
-                        logger.exception(
-                            f"Failed to save image from URL: {save_image_name}. Error: {ex}"
-                        )
+            new_markdown, new_images = self._extract_image_from_shape(shape, save_name_template)
+            markdown.extend(new_markdown)
+            images.extend(new_images)
         elif shape.shape_type == MSO_SHAPE_TYPE.TEXT_BOX:
             # 文本框
             markdown.append(f"{shape.text}\n\n")
@@ -70,8 +78,38 @@ class PptxReader(BaseReader):
                 if md:
                     texts.append(md)
                     images.extend(new_images)
-
             markdown.append("\n".join(texts))
+        elif shape.shape_type == MSO_SHAPE_TYPE.PLACEHOLDER:
+            placeholder_type = shape.placeholder_format.type
+            text = shape.text.strip()
+
+            if placeholder_type in (PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE, PP_PLACEHOLDER.SUBTITLE, PP_PLACEHOLDER.VERTICAL_TITLE,PP_PLACEHOLDER.HEADER):
+                # 标题
+                if text:
+                    markdown.append(f"# {text}\n\n")
+            elif placeholder_type == PP_PLACEHOLDER.BODY:
+                if text:
+                    markdown.append(f"{text}\n\n")
+            elif placeholder_type in (PP_PLACEHOLDER.PICTURE, PP_PLACEHOLDER.CHART):
+                # 图片
+                new_markdown, new_images = self._extract_image_from_shape(shape, save_name_template)
+                markdown.extend(new_markdown)
+                images.extend(new_images)
+            elif placeholder_type == PP_PLACEHOLDER.TABLE:
+                if hasattr(shape, 'table') and shape.table:
+                    table = shape.table
+                    # 检查是否有至少 1 行 1 列，且内容非空
+                    if len(table.rows) > 0 and len(table.columns) > 0:
+                        # 可选：进一步检查是否有非空单元格
+                        has_content = any(
+                            cell.text.strip() 
+                            for row in table.rows 
+                            for cell in row.cells
+                        )
+                        if has_content:
+                            markdown.append(self._convert_table_to_pai_table(table))
+                            markdown.append("\n\n")
+
 
         return "".join(markdown), images
 

@@ -6049,13 +6049,13 @@ files = [
 
 [[package]]
 name = "pairag-file"
-version = "2.0.12"
+version = "2.0.13"
 description = "PAI-RAG file processing library."
 optional = false
 python-versions = ">=3.11,<3.13"
 groups = ["main"]
 files = [
-    {file = "pairag_file-2.0.12-py3-none-any.whl", hash = "sha256:7ce94d1304844949bdf0863aed5b39e899624cdeb9deaace22e5056df308ca04"},
+    {file = "pairag_file-2.0.13-py3-none-any.whl", hash = "sha256:27a1e65967a203e6bba149b0f6d948fd7acf84db6623a1e147c4a5aae472a36b"},
 ]
 
 [package.dependencies]
@@ -6099,7 +6099,7 @@ xlrd = ">=2.0.2,<3.0.0"
 
 [package.source]
 type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.0.12-py3-none-any.whl"
+url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.0.13-py3-none-any.whl"
 
 [[package]]
 name = "pandas"
@@ -10721,4 +10721,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.13"
-content-hash = "7f085fce762db87be173cb6d159099cd492d1ba0a11f3e67229b0805adfc2e22"
+content-hash = "ffe6f0eaf6abb0bec8bda9b75a00ddb589052b3795fa7d0afa6251bc4d23d429"

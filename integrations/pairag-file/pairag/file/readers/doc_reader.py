@@ -2,6 +2,7 @@ import hashlib
 from io import BytesIO
 import re
 from docx import Document as DocxDocument
+from docx.oxml.ns import qn
 from loguru import logger
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
@@ -56,18 +57,19 @@ class DocxReader(BaseReader):
         # 根据样式名称获取层级
         return indent_levels.get(style_name, 0)
 
-    def _convert_list(self, paragraph, level=0):
+    def _convert_list(self, paragraph, level=0, number=1):
         text = paragraph.text.strip()
         if not text:
             return ""
 
         # 处理无序列表
-        if paragraph.style.name.startswith("List Bullet"):
-            return f"{'-' * level} {text}\n"
-
+        if paragraph.style.name.startswith("List Bullet") or not self._is_ordered_list(paragraph):
+            indent = "  " * level
+            return f"{indent}- {text}\n"
         # 处理有序列表
-        if paragraph.style.name.startswith("List Number"):
-            return f"{level}. {text}\n"
+        elif paragraph.style.name.startswith("List Number") or paragraph.style.name.startswith("List Paragraph"):
+            indent = "  " * level
+            return f"{indent}{number}. {text}\n"
 
         return ""
 
@@ -111,6 +113,66 @@ class DocxReader(BaseReader):
             if not run.element.xpath(".//a:blip"):
                 paragraph_content.append(run.text)
         return "".join(paragraph_content).strip()
+    
+
+    def _is_ordered_list(self, paragraph) -> bool:
+        """
+        判断一个 paragraph 是否属于有序列表（如 1, 2, 3...），而不是无序列表（•, -）。
+        返回 True 表示有序，False 表示无序或非列表。
+        """
+        p = paragraph._element
+        num_pr = p.find('.//w:numPr', p.nsmap)
+        if num_pr is None:
+            return False
+
+        num_id = num_pr.find('.//w:numId', p.nsmap)
+        if num_id is None:
+            return False
+
+        # 获取 numbering part
+        numbering_part = paragraph.part.numbering_part
+        if numbering_part is None:
+            return False
+
+        # 查找对应的 num -> abstractNumId
+        num_id_val = num_id.get(qn('w:val'))
+        for num in numbering_part.element.findall('.//w:num', numbering_part.element.nsmap):
+            if num.get(qn('w:numId')) == num_id_val:
+                abstract_num_id = num.find('.//w:abstractNumId', num.nsmap)
+                if abstract_num_id is None:
+                    return False
+                abstract_id_val = abstract_num_id.get(qn('w:val'))
+                break
+        else:
+            return False
+        
+        # Numbered formats include: decimal, lowerRoman, upperRoman, lowerLetter, upperLetter
+        # Bullet formats include: bullet
+        numbered_formats = {
+            "decimal",
+            "lowerRoman",
+            "upperRoman",
+            "lowerLetter",
+            "upperLetter",
+            "decimalZero",
+        }
+
+        # 查找 abstractNum 定义
+        for abstract in numbering_part.element.findall('.//w:abstractNum', numbering_part.element.nsmap):
+            if abstract.get(qn('w:abstractNumId')) == abstract_id_val:
+                ilvl_elem = num_pr.find('.//w:ilvl', p.nsmap)
+                ilvl = ilvl_elem.get(qn('w:val')) if ilvl_elem is not None else '0'
+                # 找到对应级别的 lvl
+                for lvl in abstract.findall('.//w:lvl', abstract.nsmap):
+                    if lvl.get(qn('w:ilvl')) == ilvl:
+                        num_fmt = lvl.find('.//w:numFmt', lvl.nsmap)
+                        if num_fmt is not None:
+                            fmt = num_fmt.get(qn('w:val'))
+                            return fmt in numbered_formats
+                return False
+        return False
+
+       
 
     def convert_docx_to_markdown(
         self, document: DocxDocument, save_name_template: str
@@ -119,14 +181,41 @@ class DocxReader(BaseReader):
         tables = document.tables.copy()
         markdown = []
         images = []
+        # 用于跟踪有序列表的编号
+        ordered_counters = []
+        # 记录当前列表层级（用于判断是否连续）
+        last_list_level = -1
         for element in document.element.body:
             if isinstance(element.tag, str) and element.tag.endswith("p"):  # 段落
                 paragraph = paragraphs.pop(0)
 
                 if paragraph.style and paragraph.style.name.startswith("List"):
-                    current_list_level = self._get_list_level(paragraph)
-                    markdown.append(self._convert_list(paragraph, current_list_level))
+                    current_level = self._get_list_level(paragraph)
+                    if current_level > last_list_level:
+                        # 进入更深层级：压入新计数器
+                        ordered_counters.append(1)
+                    elif current_level < last_list_level:
+                        # 退回上层：弹出多余层级
+                        ordered_counters = ordered_counters[:current_level + 1]
+                        if current_level >= 0:
+                            ordered_counters[current_level] += 1
+                        else:
+                            ordered_counters = [1]
+                    else:
+                        # 同一层级：递增
+                        if current_level < len(ordered_counters):
+                            ordered_counters[current_level] += 1
+                        else:
+                            ordered_counters.append(1)
+
+                    last_list_level = current_level
+
+                    # 获取当前层级的编号
+                    current_number = ordered_counters[current_level] if current_level < len(ordered_counters) else 1
+                    markdown.append(self._convert_list(paragraph, current_level, current_number))
                 else:
+                    ordered_counters = []
+                    last_list_level = -1
                     for run in paragraph.runs:
                         if (
                             hasattr(run.element, "tag")
