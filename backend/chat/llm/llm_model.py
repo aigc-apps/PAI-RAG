@@ -1,7 +1,6 @@
 from typing import List, Optional, cast
 import uuid
 from chat.llm.models import DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_RETRIES, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_TIMEOUT, THINK_END_TAG, THINK_START_TAG, ChatResponseGenerator, ReasoningChunk, TextChunk
-from extensions.trace.pai_llm_wrapper import pai_llm_wrapper
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionChunk, ChatCompletionToolParam
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
@@ -96,7 +95,6 @@ class PaiLlm():
             max_retries=self.max_retries,
         )
 
-    @pai_llm_wrapper
     async def astream(
         self,
         messages: List[dict],

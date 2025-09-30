@@ -16,7 +16,6 @@ from loguru import logger
 from extensions.trace.tracer import get_tracer
 
 
-TOOLS = "gen_ai.tools"
 GEN_AI_MODEL = "gen_ai.request.model"
 TEMPERATURE = "gen_ai.request.temperature"
 MAX_TOKENS = "gen_ai.request.max_tokens"
@@ -25,7 +24,6 @@ OUTPUT_TOKENS = "gen_ai.usage.completion_tokens"
 TOTAL_TOKENS = "gen_ai.usage.total_tokens"
 INPUT_MESSAGES = "gen_ai.input.messages"
 OUTPUT_MESSAGES = "gen_ai.output.messages"
-TOOL_CALLS = "gen_ai.output.tool_calls"
 
 INPUT_VALUE = SpanAttributes.INPUT_VALUE
 INPUT_QUERY = "input.query"
@@ -71,10 +69,6 @@ def pai_agent_wrapper(func):
         span = get_tracer().start_span(func.__qualname__)
         span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
 
-        tools = kwargs.get("tools")
-        if tools:
-            span.set_attribute(TOOLS, json.dumps(pydantic_to_dict(tools), ensure_ascii=False))
-
         span.set_attribute(INPUT_VALUE, request_text)
         span.set_attribute(GEN_AI_SPAN_KIND, OpenInferenceSpanKindValues.CHAIN.value)
         for k, v in trace_context.get_context_vars():
@@ -88,22 +82,16 @@ def pai_agent_wrapper(func):
             response_gen = await func(self, *args, **kwargs)
             response_gen = cast(ChatResponseGenerator, response_gen)
             async def wrapped_generator():
-                usage = None
                 final_output = ""
                 final_reasoning_content = ""
-                tool_calls = []
                 first_token_time = None
                 try:
                     async for response in response_gen:
-                        if response.usage:
-                            usage = response.usage
                         if isinstance(response, ReasoningChunk):
                             final_reasoning_content += response.reasoning_delta
                         elif isinstance(response, TextChunk):
                             final_output += response.delta
 
-                        if response.tool_calls:
-                            tool_calls = response.tool_calls
                         first_token_time = first_token_time or time.time_ns()
                         yield response
 
@@ -113,23 +101,6 @@ def pai_agent_wrapper(func):
                     span.set_status(Status(StatusCode.ERROR, str(stream_exc)))
                     raise
                 finally:
-                    if usage:
-                        span.set_attribute(INPUT_TOKENS, usage.prompt_tokens)
-                        span.set_attribute(OUTPUT_TOKENS, usage.completion_tokens)
-                        span.set_attribute(TOTAL_TOKENS, usage.total_tokens)
-
-                    raw_tool_calls = pydantic_to_dict(tool_calls)
-                    output_message = {
-                        "role": "assistant",
-                        "content": final_output,
-                        "reasoning_content": final_reasoning_content,
-                        "tool_calls": raw_tool_calls
-                    }
-
-                    span.set_attribute(OUTPUT_MESSAGES, json.dumps([output_message], ensure_ascii=False))
-                    if raw_tool_calls:
-                        span.set_attribute(TOOL_CALLS, json.dumps(raw_tool_calls, ensure_ascii=False))
-
                     span.set_attribute(OUTPUT_VALUE, final_output)
                     if final_reasoning_content:
                         span.set_attribute(REASONING_CONTENT, final_reasoning_content)
