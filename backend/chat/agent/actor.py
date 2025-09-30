@@ -17,7 +17,8 @@ from opentelemetry import trace
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
-    return await async_fn.acall(**fn_args)
+    from extensions.trace.pai_agent_wrapper import instrument_async_call
+    return await instrument_async_call(async_fn, fn_args)
 
 
 MAX_RECURSION_STEPS = 20
@@ -68,7 +69,7 @@ class Actor(BaseAgent):
                 async_fn = self.tool_fn_map[tool_name]
                 logger.info(f"Calling tool {tool_name} with args {function_args}.")
                 tool_result = await call_tool_with_retry(async_fn, function_args)
-                logger.info(f"Get tool result {tool_result}.")
+                #logger.info(f"Get tool result {tool_result}.")
 
 
                 messages.append(

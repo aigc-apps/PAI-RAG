@@ -4,6 +4,7 @@ from typing import Any, List, Optional
 from config.providers.vectordb_provider import vectordb_provider, get_vector_db_connection_from_db
 from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
+from openinference.instrumentation import suppress_tracing
 
 from common.chat.models import RetrievalSetting
 from db.models.knowledgebase.file import KbFileEntity
@@ -67,7 +68,8 @@ class PaiKnowledgebaseClient:
         if not embed_model:
             embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
 
-        dimension = len(embed_model.get_text_embedding("0"))
+        with suppress_tracing():
+            dimension = len(embed_model.get_text_embedding("0"))
         vector_connection = vectordb_provider.get_vector_db_connection()
         vector_store = create_vector_store(
             knowledgebase.id, dimension, vector_db_connection=vector_connection,
@@ -150,7 +152,8 @@ class PaiKnowledgebaseClient:
 
 
             vector_connection = await get_vector_db_connection_from_db()
-            dimension = len(embed_model.get_text_embedding("0"))
+            with suppress_tracing():
+                dimension = len(embed_model.get_text_embedding("0"))
 
             vector_store = create_vector_store(
                 knowledgebase.id, dimension, vector_db_connection=vector_connection,
