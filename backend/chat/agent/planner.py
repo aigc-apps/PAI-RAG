@@ -24,8 +24,8 @@ MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环�
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
-    return await async_fn.acall(**fn_args)
-
+    from extensions.trace.pai_agent_wrapper import instrument_async_call
+    return await instrument_async_call(async_fn, fn_args)
 
 
 class PlanAgentPromptSet(BaseModel):
