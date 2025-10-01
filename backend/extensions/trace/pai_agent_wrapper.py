@@ -136,7 +136,7 @@ async def instrument_async_call(
             span.set_attribute(GEN_AI_SPAN_KIND, "TOOL")
             span.set_attribute(TOOL_NAME, async_fn.metadata.name)
             span.set_attribute(TOOL_DESCRIPTION, async_fn.metadata.description)
-            span.set_attribute(TOOL_PARAMETERS, async_fn.metadata.fn_schema.model_json_schema())
+            span.set_attribute(TOOL_PARAMETERS, json.dumps(async_fn.metadata.fn_schema.model_json_schema(), ensure_ascii=False))
             span.set_attribute(INPUT_VALUE, json.dumps(fn_args, ensure_ascii=False))
 
             result = await async_fn.acall(**fn_args)
