@@ -1,3 +1,4 @@
+import asyncio
 from loguru import logger
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -12,11 +13,12 @@ from datetime import datetime, timezone
 from common.chat.models import ChatAgentRequest
 from evaluation.run import run_agent, run_evaluator
 from chat.openai.openai_like import OpenAILike
-from sqlmodel import select
+from sqlmodel import select, update, func
 from common.encrypt_utils import decrypt_key
 from fastapi import UploadFile
 import json
 from utils.attachment_utils import AttachmentFile, upload_gaia_attachment_file
+
 
 @with_async_db_session
 async def get_exp_run_entity(
@@ -79,7 +81,7 @@ async def get_llm_model(
 ) -> OpenAILike:
     model_entity = (await session.exec(
         select(LlmModelEntity).where(LlmModelEntity.model_id == model_id)
-    )).first()
+    )).scalar()
 
     assert model_entity is not None, f"Model ID {model_id} not found."
     return OpenAILike(
@@ -133,6 +135,58 @@ async def update_experiment_status(
     session.add(exp_entity)
     await session.commit()
     await session.refresh(exp_entity)
+
+@with_async_db_session
+async def is_evaluation_completed(
+    session: AsyncSession,
+    experiment_id: str,
+) -> bool:
+    """
+    检查 experiment_id 对应的所有样本是否都已完成
+    """
+    statement = (
+        select(func.count(ExperimentSampleEntity.id))
+        .where(
+            ExperimentSampleEntity.experiment_id == experiment_id,
+            ExperimentSampleEntity.status == "running"
+        )
+    )
+    result = await session.execute(statement)
+    running_count = result.scalar()
+    return running_count == 0
+
+@with_async_db_session
+async def update_evaluation_summary(
+    session: AsyncSession,
+    experiment_id: str,
+    sample_count: int,
+    status: str,
+):
+    """ Update average score & status"""
+    statement = (
+        select(
+            func.count(ExperimentSampleEntity.id).label("count"),
+            func.sum(ExperimentSampleEntity.score).label("avg_score")
+        )
+        .where(
+            ExperimentSampleEntity.experiment_id == experiment_id,
+            ExperimentSampleEntity.status == "success",
+            ExperimentSampleEntity.score.is_not(None)
+        )
+    )
+    result = await session.execute(statement)
+    row = result.one()
+    avg_score = (row.avg_score or 0.0)/sample_count
+
+    update_statement = (
+        update(ExperimentEntity)
+        .where(ExperimentEntity.id == experiment_id)
+        .values(avg_score=avg_score,
+                status=status)
+    )
+    await session.execute(update_statement)
+    await session.commit()
+
 
 class PaiEvaluationClient:
     def __init__(self):
@@ -199,9 +253,6 @@ class PaiEvaluationClient:
         run_config_entity: RunConfigEntity = await get_run_config_entity(run_config_id=experiment_entity.run_config_id)
         evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=experiment_entity.evaluator_config_id)
         logger.info(f"[WORKER]run_config_entity: {run_config_entity} \n evaluator_config: {evaluator_config}")
-        eval_llm = None
-        if evaluator_config.type == "LLMJudge":
-            eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
         for exp_run_id in exp_run_ids:
             exp_run_entity: ExperimentSampleEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
             dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=exp_run_entity.sample_id)
@@ -261,33 +312,15 @@ class PaiEvaluationClient:
                 prompts=run_config_entity.prompts,
             )
             try:
+                import app.worker as background_worker
                 logger.info(f"=== Agent Run Input {chat_request} ===")
                 output, execution_metadata, status = await run_agent(chat_request)
                 logger.info(f"=== Agent output: {output} ===")
-                eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)
-                logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
-                if status and eval_res:
-                    logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")
-                    score = eval_res.get("score", 0.0)
-                    reason = eval_res.get("reason", "Empty Reason")
-                    await update_experiment_run_result(
-                        exp_run_id=exp_run_id,
-                        actual_output=output,
-                        status="success",
-                        score=score,
-                        reason=reason,
-                        execution_metadata=execution_metadata
-                    )
-                    run_scores.append(score)
-                else:
-                    logger.error("GAIA agent failed to get valid response.")
-                    await update_experiment_run_result(
-                        exp_run_id=exp_run_id,
-                        actual_output=output,
-                        status="failed",
-                        score=0.0
-                    )
-                    run_scores.append(0.0)
+                background_worker.process_evaluation_message.delay(exp_run_id,
+                                                                   exp_run_entity.sample_id,
+                                                                   experiment_entity.evaluator_config_id,
+                                                                   execution_metadata,
+                                                                   output)
             except Exception as e:
                 output = f"Error: {e}"
                 logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {e}")
@@ -297,14 +330,45 @@ class PaiEvaluationClient:
                     status="failed",
                     score=0.0
                 )
-                run_scores.append(0.0)
-                continue
 
-        logger.info(f"[WORKER] completed all evaluation task for experiment_id {experiment_id} in background.")
-        await update_experiment_status(
-            experiment_id=experiment_id,
-            status="success",
-            avg_score=sum(run_scores) / len(run_scores) if run_scores else 0
-        )
+        while not await is_evaluation_completed(experiment_id=experiment_id):
+            await update_evaluation_summary(experiment_id=experiment_id,
+                                            sample_count=experiment_entity.samples_count,
+                                            status="running")
+            await asyncio.sleep(10.0)
+
+        await update_evaluation_summary(experiment_id=experiment_id,
+                                        sample_count=experiment_entity.samples_count,
+                                        status="success")
+
+    async def process_evaluation_message(self, exp_run_id, sample_id, evaluator_config_id, execution_metadata, output):
+        dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=sample_id)
+        evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=evaluator_config_id)
+        eval_llm = None
+        if evaluator_config.type == "LLMJudge":
+            eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
+
+        eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)
+        logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
+        if eval_res:
+            logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")
+            score = eval_res.get("score", 0.0)
+            reason = eval_res.get("reason", "Empty Reason")
+            await update_experiment_run_result(
+                exp_run_id=exp_run_id,
+                actual_output=output,
+                status="success",
+                score=score,
+                reason=reason,
+                execution_metadata=execution_metadata
+            )
+        else:
+            logger.error("GAIA agent failed to get valid response.")
+            await update_experiment_run_result(
+                exp_run_id=exp_run_id,
+                actual_output=output,
+                status="failed",
+                score=0.0
+            )
 
 eval_client = PaiEvaluationClient()

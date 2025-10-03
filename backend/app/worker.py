@@ -60,7 +60,13 @@ def download_model(
 
 @app.task(name="execute_evaluation_task")
 def execute_evaluation_task(dataset_id: str, experiment_id: str, exp_run_ids: List[str]):
-    loop = asyncio.get_event_loop()
     logger.info(f"execute_evaluation_task exp_run_ids {exp_run_ids} dataset_id {dataset_id}.")
-    loop.run_until_complete(eval_client.create_evaluation_task(dataset_id, experiment_id, exp_run_ids))
+    asyncio.run(eval_client.create_evaluation_task(dataset_id, experiment_id, exp_run_ids))
     logger.info(f"execute_evaluation_task successfully.")
+
+
+@app.task(name="execute_evaluation_message")
+def process_evaluation_message(exp_run_id, sample_id, evaluator_config_id, execution_metadata, output):
+    logger.info(f"Processing sample_id: {sample_id}.")
+    asyncio.run(eval_client.process_evaluation_message(exp_run_id, sample_id, evaluator_config_id, execution_metadata, output))
+    logger.info(f"Processed sample_id: {sample_id} successfully.")
