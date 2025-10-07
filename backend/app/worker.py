@@ -59,14 +59,14 @@ def download_model(
 
 
 @app.task(name="execute_evaluation_task")
-def execute_evaluation_task(dataset_id: str, experiment_id: str, exp_run_ids: List[str]):
+def execute_evaluation_task(dataset_id: str, experiment_id: str, exp_run_ids: List[str], is_evaluate_single_sample:bool=False):
     logger.info(f"execute_evaluation_task exp_run_ids {exp_run_ids} dataset_id {dataset_id}.")
-    asyncio.run(eval_client.create_evaluation_task(dataset_id, experiment_id, exp_run_ids))
+    asyncio.run(eval_client.create_evaluation_task(dataset_id, experiment_id, exp_run_ids, is_evaluate_single_sample))
     logger.info(f"execute_evaluation_task successfully.")
 
 
-@app.task(name="execute_evaluation_message")
-def process_evaluation_message(exp_run_id, sample_id, evaluator_config_id, execution_metadata, output):
-    logger.info(f"Processing sample_id: {sample_id}.")
-    asyncio.run(eval_client.process_evaluation_message(exp_run_id, sample_id, evaluator_config_id, execution_metadata, output))
-    logger.info(f"Processed sample_id: {sample_id} successfully.")
+@app.task(name="evaluate_sample_result")
+def evaluate_sample_result(experiment_id: str, exp_run_id:str, sample_id:str, evaluator_config_id:str, execution_metadata:str, output:str):
+    logger.info(f"evaluate_sample_result sample_id: {sample_id}.")
+    asyncio.run(eval_client.evaluate_sample_result(experiment_id, exp_run_id, sample_id, evaluator_config_id, execution_metadata, output))
+    logger.info(f"evaluate_sample_result sample_id: {sample_id} successfully.")
