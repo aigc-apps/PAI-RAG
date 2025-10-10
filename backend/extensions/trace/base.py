@@ -103,9 +103,12 @@ def use_current_span(span: Span):
         async def wrapper(*args, **kwargs) -> AsyncGenerator:
             if span and span.is_recording():
                 ctx = trace.set_span_in_context(span)
+                trace_id = format(span.get_span_context().trace_id, '032x')
                 token = attach(ctx)
                 try:
                     async for item in func(*args, **kwargs):
+                        if hasattr(item, 'trace_id'):
+                            item.trace_id = trace_id
                         yield item
                 finally:
                     detach(token)

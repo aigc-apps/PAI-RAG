@@ -20,6 +20,7 @@ async def run_agent(chat_request: ChatAgentRequest):
                 result = ""
                 execution_metadata = []
                 last_function_call_dict = None
+                trace_id = ""
                 async for sse_event in parse_sse_events(response):
                     if sse_event.get("choices", [])[0].get("finish_reason", "") == "stop":
                         break
@@ -27,11 +28,12 @@ async def run_agent(chat_request: ChatAgentRequest):
                     if content:
                         result += content
                     observation = sse_event.get("observation", "")
+                    trace_id = trace_id or sse_event.get("trace_id", "")
                     if observation:
                         execution_metadata.append(parse_function_call(last_function_call_dict, observation))
                     last_function_call_dict = sse_event
 
-                logger.info(f"Chat agent final response: {result}")
+                logger.info(f"Chat agent final, trace_id: {trace_id}, response: {result}")
                 return result, execution_metadata, True
             else:
                 error_text = await response.text()

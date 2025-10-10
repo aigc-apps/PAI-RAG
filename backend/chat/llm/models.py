@@ -25,6 +25,7 @@ class TextChunk(BaseModel):
     tool_calls: List[ChoiceDeltaToolCall] = []
     usage: Optional[CompletionUsage] = None
     stage: str = ""  # planning/acting/response
+    trace_id: str = ""
 
 
 class ReasoningChunk(TextChunk):
