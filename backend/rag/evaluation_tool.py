@@ -122,20 +122,6 @@ async def update_experiment_run_result(
     await session.commit()
     await session.refresh(exp_run_entity)
 
-@with_async_db_session
-async def update_experiment_status(
-    session: AsyncSession,
-    experiment_id: str,
-    status: str,
-    avg_score: float = 0.0
-):
-    exp_entity = await session.get(ExperimentEntity, experiment_id)
-    exp_entity.status = status
-    exp_entity.avg_score = avg_score
-    exp_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    session.add(exp_entity)
-    await session.commit()
-    await session.refresh(exp_entity)
 
 @with_async_db_session
 async def is_evaluation_completed(
@@ -163,7 +149,7 @@ async def is_evaluation_completed(
     return running_count == 0
 
 @with_async_db_session
-async def update_evaluation_summary(
+async def update_experiment(
     session: AsyncSession,
     experiment_id: str,
     status: str,
@@ -184,10 +170,15 @@ async def update_evaluation_summary(
         else:
             avg_score = 0.0
 
+        # if experiment already finished, don't update updated_at&status
         update_statement = (
             update(ExperimentEntity)
             .where(ExperimentEntity.id == experiment_id)
             .values(avg_score=avg_score,
+                    updated_at=case(
+                        (ExperimentEntity.status.not_in(["success", "failed"]), datetime.now(timezone.utc).replace(tzinfo=None)),
+                        else_=ExperimentEntity.updated_at,
+                        ),
                     status=case(
                         (ExperimentEntity.status.not_in(["success", "failed"]), status),
                         else_=ExperimentEntity.status
@@ -344,7 +335,7 @@ class PaiEvaluationClient:
 
         logger.info(f"[WORKER] creating evaluation dataset for dataset_id {dataset_id}, experiment_id {experiment_id} in background.")
         if not is_evaluate_single_sample:
-            await update_experiment_status(
+            await update_experiment(
                 experiment_id=experiment_id,
                 status="running"
             )
@@ -359,8 +350,8 @@ class PaiEvaluationClient:
         if not is_evaluate_single_sample:
             while not await is_evaluation_completed(experiment_id=experiment_id):
                 await asyncio.sleep(10.0)
-            await update_evaluation_summary(experiment_id=experiment_id,
-                                            status="success")
+            await update_experiment(experiment_id=experiment_id,
+                                    status="success")
 
     async def evaluate_sample_result(self, experiment_id: str, exp_run_id:str, sample_id:str, evaluator_config_id:str, execution_metadata:str, output:str):
         dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=sample_id)
@@ -383,7 +374,7 @@ class PaiEvaluationClient:
                 reason=reason,
                 execution_metadata=execution_metadata
             )
-            await update_evaluation_summary(
+            await update_experiment(
                 experiment_id=experiment_id,
                 status="running",
             )
