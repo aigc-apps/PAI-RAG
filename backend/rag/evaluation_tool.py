@@ -1,3 +1,4 @@
+import asyncio
 from loguru import logger
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -12,11 +13,12 @@ from datetime import datetime, timezone
 from common.chat.models import ChatAgentRequest
 from evaluation.run import run_agent, run_evaluator
 from chat.openai.openai_like import OpenAILike
-from sqlmodel import select
+from sqlmodel import select, update, func, case
 from common.encrypt_utils import decrypt_key
 from fastapi import UploadFile
 import json
 from utils.attachment_utils import AttachmentFile, upload_gaia_attachment_file
+
 
 @with_async_db_session
 async def get_exp_run_entity(
@@ -102,10 +104,11 @@ async def update_experiment_run_result(
     status: str,
     score: float = 0.0,
     reason: str = "",
+    entity_status: str = "",
     execution_metadata: List[dict] = []
 ):
     exp_run_entity = await session.get(ExperimentSampleEntity, exp_run_id)
-    if exp_run_entity.status == "pending" and status == "running":
+    if (exp_run_entity.status == "pending" or entity_status == "running") and status == "running":
         exp_run_entity.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
     exp_run_entity.actual_output = actual_output
     exp_run_entity.status = status
@@ -119,20 +122,75 @@ async def update_experiment_run_result(
     await session.commit()
     await session.refresh(exp_run_entity)
 
+
 @with_async_db_session
-async def update_experiment_status(
+async def is_evaluation_completed(
+    session: AsyncSession,
+    experiment_id: str,
+) -> bool:
+    """
+    检查 experiment_id 对应的所有样本是否都已完成
+    """
+    experiment = await session.get(ExperimentEntity, experiment_id)
+    if not experiment:
+        # experiment not exist, both true/false sounds correct.
+        # However, to prevent the loop from hanging, return True if the experiment not exist.
+        return True
+
+    statement = (
+        select(func.count(ExperimentSampleEntity.id))
+        .where(
+            ExperimentSampleEntity.experiment_id == experiment_id,
+            ExperimentSampleEntity.status == "running"
+        )
+    )
+    result = await session.execute(statement)
+    running_count = result.scalar()
+    return running_count == 0
+
+@with_async_db_session
+async def update_experiment(
     session: AsyncSession,
     experiment_id: str,
     status: str,
-    avg_score: float = 0.0
 ):
-    exp_entity = await session.get(ExperimentEntity, experiment_id)
-    exp_entity.status = status
-    exp_entity.avg_score = avg_score
-    exp_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    session.add(exp_entity)
-    await session.commit()
-    await session.refresh(exp_entity)
+    """ Update average score & status"""
+    statement = (
+        select(
+            func.count(ExperimentSampleEntity.id).label("total_count"),
+            func.sum(func.coalesce(ExperimentSampleEntity.score, 0.0)).label("total_score")
+        )
+        .where(ExperimentSampleEntity.experiment_id == experiment_id)
+    )
+    try:
+        result = await session.execute(statement)
+        row = result.one()
+        if row.total_count > 0:
+            avg_score = row.total_score / row.total_count
+        else:
+            avg_score = 0.0
+
+        # if experiment already finished, don't update updated_at&status
+        update_statement = (
+            update(ExperimentEntity)
+            .where(ExperimentEntity.id == experiment_id)
+            .values(avg_score=avg_score,
+                    updated_at=case(
+                        (ExperimentEntity.status.not_in(["success", "failed"]), datetime.now(timezone.utc).replace(tzinfo=None)),
+                        else_=ExperimentEntity.updated_at,
+                        ),
+                    status=case(
+                        (ExperimentEntity.status.not_in(["success", "failed"]), status),
+                        else_=ExperimentEntity.status
+                        )
+                    )
+        )
+        await session.execute(update_statement)
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        print(f"Error: update_evaluation_summary exception: {e}")
+
 
 class PaiEvaluationClient:
     def __init__(self):
@@ -188,123 +246,145 @@ class PaiEvaluationClient:
 
         return results
 
-    async def create_evaluation_task(self, dataset_id: str, experiment_id: str, exp_run_ids: List[str]):
-        logger.info(f"[WORKER] creating evaluation dataset for dataset_id {dataset_id} in background.")
-        await update_experiment_status(
-            experiment_id=experiment_id,
-            status="running"
+    async def evaluate_one_sample(self, experiment_id: str, exp_run_id: str):
+        experiment_entity: ExperimentEntity = await get_experiment_entity(experiment_id=experiment_id)
+        run_config_entity: RunConfigEntity = await get_run_config_entity(run_config_id=experiment_entity.run_config_id)
+        exp_run_entity: ExperimentSampleEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
+        dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=exp_run_entity.sample_id)
+
+        logger.info(f"[WORKER] get exp_run_entity {exp_run_entity} and dataset_sample_entity {dataset_sample_entity}.")
+        logger.info("[WORKER] processing evaluation task...")
+        await update_experiment_run_result(
+            exp_run_id=exp_run_id,
+            actual_output="",
+            status="running",
+            entity_status="running",
+            score=0.0
         )
-        run_scores = []
+
+        input_messages = [
+            {"role": "user", "content": dataset_sample_entity.input}
+        ]
+        if dataset_sample_entity.eval_metadata.get("file_name"):
+            try:
+                file_entity: AttachmentFile = await upload_gaia_attachment_file(file_name=dataset_sample_entity.eval_metadata.get("file_name"))
+                logger.info("[WORKER] get file_entity", file_entity)
+                input_messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": dataset_sample_entity.input}
+                        ],
+                        "attachments": [
+                            {
+                                "id": file_entity.id,
+                                "name": file_entity.name,
+                                "contentType": file_entity.contentType,
+                            }
+                        ],
+                    }
+                ]
+            except Exception as ex:
+                logger.error(f"Get gaia attachment file failed: {ex}")
+                await update_experiment_run_result(
+                    exp_run_id=exp_run_id,
+                    actual_output="",
+                    status="failed",
+                    score=0.0
+                )
+
+        chat_request = ChatAgentRequest(
+            model=run_config_entity.model_id,
+            messages=input_messages,
+            stream=True,
+            mcp_ids=run_config_entity.mcp_ids,
+            enable_search=run_config_entity.enable_search,
+            enable_agent=run_config_entity.enable_agent,
+            kb_ids=run_config_entity.kb_ids,
+            enable_input_guardrail=run_config_entity.enable_input_guardrail,
+            enable_output_guardrail=run_config_entity.enable_output_guardrail,
+            guardrail_hint=run_config_entity.guardrail_hint,
+            prompts=run_config_entity.prompts,
+        )
+        try:
+            import app.worker as background_worker
+            logger.info(f"=== Agent Run Input {chat_request} ===")
+            output, execution_metadata, status = await run_agent(chat_request)
+            logger.info(f"=== Agent output: {output} ===")
+            background_worker.evaluate_sample_result.delay(experiment_id=experiment_id,
+                                                               exp_run_id=exp_run_id,
+                                                               sample_id=exp_run_entity.sample_id,
+                                                               evaluator_config_id=experiment_entity.evaluator_config_id,
+                                                               execution_metadata=execution_metadata,
+                                                               output=output)
+        except Exception as e:
+            output = f"Error: {e}"
+            logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {e}")
+            await update_experiment_run_result(
+                exp_run_id=exp_run_id,
+                actual_output=output,
+                status="failed",
+                score=0.0
+            )
+
+
+    async def create_evaluation_task(self, dataset_id: str, experiment_id: str, exp_run_ids: List[str], is_evaluate_single_sample:bool=False):
+        # is_evaluate_single_sample=False, create a brand new evaluation task
+        # is_evaluate_single_sample=True, meaning evaluate one-single sample of given experiment
+        #   e.g., when experiment_id already finished, however some cases failed due to exception, we need re-run the single case.
+
+        logger.info(f"[WORKER] creating evaluation dataset for dataset_id {dataset_id}, experiment_id {experiment_id} in background.")
+        if not is_evaluate_single_sample:
+            await update_experiment(
+                experiment_id=experiment_id,
+                status="running"
+            )
         experiment_entity: ExperimentEntity = await get_experiment_entity(experiment_id=experiment_id)
         run_config_entity: RunConfigEntity = await get_run_config_entity(run_config_id=experiment_entity.run_config_id)
         evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=experiment_entity.evaluator_config_id)
         logger.info(f"[WORKER]run_config_entity: {run_config_entity} \n evaluator_config: {evaluator_config}")
+        for exp_run_id in exp_run_ids:
+            await self.evaluate_one_sample(experiment_id=experiment_id, exp_run_id=exp_run_id)
+
+
+        if not is_evaluate_single_sample:
+            while not await is_evaluation_completed(experiment_id=experiment_id):
+                await asyncio.sleep(10.0)
+            await update_experiment(experiment_id=experiment_id,
+                                    status="success")
+
+    async def evaluate_sample_result(self, experiment_id: str, exp_run_id:str, sample_id:str, evaluator_config_id:str, execution_metadata:str, output:str):
+        dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=sample_id)
+        evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=evaluator_config_id)
         eval_llm = None
         if evaluator_config.type == "LLMJudge":
             eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
-        for exp_run_id in exp_run_ids:
-            exp_run_entity: ExperimentSampleEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
-            dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=exp_run_entity.sample_id)
 
-            logger.info(f"[WORKER] get exp_run_entity {exp_run_entity} and dataset_sample_entity {dataset_sample_entity}.")
-            logger.info("[WORKER] processing evaluation task...")
+        eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)
+        logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
+        if eval_res:
+            logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")
+            score = eval_res.get("score", 0.0)
+            reason = eval_res.get("reason", "Empty Reason")
             await update_experiment_run_result(
                 exp_run_id=exp_run_id,
-                actual_output="",
+                actual_output=output,
+                status="success",
+                score=score,
+                reason=reason,
+                execution_metadata=execution_metadata
+            )
+            await update_experiment(
+                experiment_id=experiment_id,
                 status="running",
+            )
+        else:
+            logger.error("GAIA agent failed to get valid response.")
+            await update_experiment_run_result(
+                exp_run_id=exp_run_id,
+                actual_output=output,
+                status="failed",
                 score=0.0
             )
-            if dataset_sample_entity.eval_metadata.get("file_name"):
-                try:
-                    file_entity: AttachmentFile = await upload_gaia_attachment_file(file_name=dataset_sample_entity.eval_metadata.get("file_name"))
-                    logger.info("[WORKER] get file_entity", file_entity)
-                    input_messages = [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": dataset_sample_entity.input}
-                            ],
-                            "attachments": [
-                                {
-                                    "id": file_entity.id,
-                                    "name": file_entity.name,
-                                    "contentType": file_entity.contentType,
-                                }
-                            ],
-                        }
-                    ]
-                except Exception as ex:
-                    logger.error(f"Get gaia attachment file failed: {ex}")
-                    await update_experiment_run_result(
-                        exp_run_id=exp_run_id,
-                        actual_output="",
-                        status="failed",
-                        score=0.0
-                    )
-                    run_scores.append(0.0)
-                    continue
-            else:
-                input_messages = [
-                    {"role": "user", "content": dataset_sample_entity.input}
-                ]
-            chat_request = ChatAgentRequest(
-                model=run_config_entity.model_id,
-                messages=input_messages,
-                stream=True,
-                mcp_ids=run_config_entity.mcp_ids,
-                enable_search=run_config_entity.enable_search,
-                enable_agent=run_config_entity.enable_agent,
-                kb_ids=run_config_entity.kb_ids,
-                enable_input_guardrail=run_config_entity.enable_input_guardrail,
-                enable_output_guardrail=run_config_entity.enable_output_guardrail,
-                guardrail_hint=run_config_entity.guardrail_hint,
-                prompts=run_config_entity.prompts,
-            )
-            try:
-                logger.info(f"=== Agent Run Input {chat_request} ===")
-                output, execution_metadata, status = await run_agent(chat_request)
-                logger.info(f"=== Agent output: {output} ===")
-                eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)
-                logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
-                if status and eval_res:
-                    logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")
-                    score = eval_res.get("score", 0.0)
-                    reason = eval_res.get("reason", "Empty Reason")
-                    await update_experiment_run_result(
-                        exp_run_id=exp_run_id,
-                        actual_output=output,
-                        status="success",
-                        score=score,
-                        reason=reason,
-                        execution_metadata=execution_metadata
-                    )
-                    run_scores.append(score)
-                else:
-                    logger.error("GAIA agent failed to get valid response.")
-                    await update_experiment_run_result(
-                        exp_run_id=exp_run_id,
-                        actual_output=output,
-                        status="failed",
-                        score=0.0
-                    )
-                    run_scores.append(0.0)
-            except Exception as e:
-                output = f"Error: {e}"
-                logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {e}")
-                await update_experiment_run_result(
-                    exp_run_id=exp_run_id,
-                    actual_output=output,
-                    status="failed",
-                    score=0.0
-                )
-                run_scores.append(0.0)
-                continue
-
-        logger.info(f"[WORKER] completed all evaluation task for experiment_id {experiment_id} in background.")
-        await update_experiment_status(
-            experiment_id=experiment_id,
-            status="success",
-            avg_score=sum(run_scores) / len(run_scores) if run_scores else 0
-        )
 
 eval_client = PaiEvaluationClient()
