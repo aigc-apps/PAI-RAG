@@ -34,11 +34,11 @@ async def run_agent(chat_request: ChatAgentRequest):
                     last_function_call_dict = sse_event
 
                 logger.info(f"Chat agent final, trace_id: {trace_id}, response: {result}")
-                return result, execution_metadata, True
+                return result, execution_metadata, trace_id, True
             else:
                 error_text = await response.text()
                 logger.error(f"Request failed with status {response.status}, body: {error_text}")
-                return f"Request failed: {error_text}", [], False
+                return f"Request failed: {error_text}", [], "", False
 
 async def run_evaluator(input: str, prediction: str, reference: str, eval_config: dict, eval_llm: LLM = None):
     evaluator = create_evaluator(eval_config, eval_llm)

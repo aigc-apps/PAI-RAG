@@ -103,6 +103,7 @@ async def update_experiment_run_result(
     actual_output: str,
     status: str,
     score: float = 0.0,
+    trace_id: str = "",
     reason: str = "",
     entity_status: str = "",
     execution_metadata: List[dict] = []
@@ -114,6 +115,7 @@ async def update_experiment_run_result(
     exp_run_entity.status = status
     exp_run_entity.score = score
     exp_run_entity.reason = reason
+    exp_run_entity.trace_id = trace_id
     if execution_metadata:
         exp_run_entity.execution_metadata = execution_metadata
     exp_run_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -246,7 +248,7 @@ class PaiEvaluationClient:
 
         return results
 
-    async def evaluate_one_sample(self, experiment_id: str, exp_run_id: str):
+    async def evaluate_one_sample(self, experiment_id: str, exp_run_id: str, trace_id: str = ""):
         experiment_entity: ExperimentEntity = await get_experiment_entity(experiment_id=experiment_id)
         run_config_entity: RunConfigEntity = await get_run_config_entity(run_config_id=experiment_entity.run_config_id)
         exp_run_entity: ExperimentSampleEntity = await get_exp_run_entity(exp_run_id=exp_run_id)
@@ -257,6 +259,7 @@ class PaiEvaluationClient:
         await update_experiment_run_result(
             exp_run_id=exp_run_id,
             actual_output="",
+            trace_id=trace_id,
             status="running",
             entity_status="running",
             score=0.0
@@ -289,6 +292,7 @@ class PaiEvaluationClient:
                 await update_experiment_run_result(
                     exp_run_id=exp_run_id,
                     actual_output="",
+                    trace_id=trace_id,
                     status="failed",
                     score=0.0
                 )
@@ -309,20 +313,22 @@ class PaiEvaluationClient:
         try:
             import app.worker as background_worker
             logger.info(f"=== Agent Run Input {chat_request} ===")
-            output, execution_metadata, status = await run_agent(chat_request)
+            output, execution_metadata, trace_id, status = await run_agent(chat_request)
             logger.info(f"=== Agent output: {output} ===")
             background_worker.evaluate_sample_result.delay(experiment_id=experiment_id,
-                                                               exp_run_id=exp_run_id,
-                                                               sample_id=exp_run_entity.sample_id,
-                                                               evaluator_config_id=experiment_entity.evaluator_config_id,
-                                                               execution_metadata=execution_metadata,
-                                                               output=output)
+                                                           exp_run_id=exp_run_id,
+                                                           sample_id=exp_run_entity.sample_id,
+                                                           trace_id=trace_id,
+                                                           evaluator_config_id=experiment_entity.evaluator_config_id,
+                                                           execution_metadata=execution_metadata,
+                                                           output=output)
         except Exception as e:
             output = f"Error: {e}"
             logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {e}")
             await update_experiment_run_result(
                 exp_run_id=exp_run_id,
                 actual_output=output,
+                trace_id=trace_id,
                 status="failed",
                 score=0.0
             )
@@ -353,7 +359,7 @@ class PaiEvaluationClient:
             await update_experiment(experiment_id=experiment_id,
                                     status="success")
 
-    async def evaluate_sample_result(self, experiment_id: str, exp_run_id:str, sample_id:str, evaluator_config_id:str, execution_metadata:str, output:str):
+    async def evaluate_sample_result(self, experiment_id: str, exp_run_id:str, sample_id:str, trace_id:str, evaluator_config_id:str, execution_metadata:str, output:str):
         dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=sample_id)
         evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=evaluator_config_id)
         eval_llm = None
@@ -371,6 +377,7 @@ class PaiEvaluationClient:
                 actual_output=output,
                 status="success",
                 score=score,
+                trace_id=trace_id,
                 reason=reason,
                 execution_metadata=execution_metadata
             )
@@ -383,6 +390,7 @@ class PaiEvaluationClient:
             await update_experiment_run_result(
                 exp_run_id=exp_run_id,
                 actual_output=output,
+                trace_id=trace_id,
                 status="failed",
                 score=0.0
             )
