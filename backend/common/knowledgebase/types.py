@@ -13,6 +13,7 @@ class FileStatus(str, Enum):
     persisting = "persisting"  # file is persisting (including embedding)
     succeeded = "succeeded"  # file process succeeded is ready for searching
     failed = "failed"  # file failed
+    cancelled = "cancelled" # file process cancelled
 
 
 class ChunkStatus(str, Enum):

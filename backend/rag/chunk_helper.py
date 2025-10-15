@@ -1,4 +1,5 @@
 from typing import List
+from db.models.knowledgebase.file_task import KbFileTaskEntity
 from loguru import logger
 from sqlalchemy import delete
 from sqlmodel import select, update
@@ -52,22 +53,73 @@ async def set_embedding_model_ready(
     session: AsyncSession,
     id: str,
 ):
-    embedding_model = await session.get(EmbeddingModelEntity, id)
-    if embedding_model is None:
-        raise ValueError(
-            f"Embedding model {id} not found."
+    try:
+        embedding_model = await session.get(EmbeddingModelEntity, id)
+        if embedding_model is None:
+            raise ValueError(
+                f"Embedding model {id} not found."
+            )
+
+        embedding_model.is_ready = True
+        session.add(embedding_model)
+        await session.commit()
+        await session.refresh(embedding_model)
+
+        await config_change_manager.notify_change_async(
+            event_source=ChangeEventSource.EMBEDDING,
+            source_id=id,
+            event_type=ChangeEventType.UPDATE
         )
+    except Exception as e:
+        logger.error(f"Error setting embedding model {id} ready: {e}")
+        await session.rollback()
+        raise e
 
-    embedding_model.is_ready = True
-    session.add(embedding_model)
-    await session.commit()
-    await session.refresh(embedding_model)
+@with_async_db_session
+async def should_cancel_file_task(
+    session: AsyncSession,
+    kb_id: str,
+    file_id: str,
+    file_part: int = 0,
+    file_version: int = 0,
+) -> bool:
+    file_entity = await session.get(KbFileEntity, file_id)
+    if not file_entity:
+        logger.warning(f"File entity {file_id} not found, cancel the task.")
+        return True
 
-    await config_change_manager.notify_change_async(
-        event_source=ChangeEventSource.EMBEDDING,
-        source_id=id,
-        event_type=ChangeEventType.UPDATE
-    )
+    # If a newer file version uploaded, cancel the task.
+    if file_entity.file_version != file_version:
+        logger.warning(f"File entity {file_id} version changed from {file_version} to {file_entity.file_version}, cancel the task.")
+        return True
+
+    # If file status is cancelled or failed, cancel the task.
+    if file_entity.status in [FileStatus.cancelled, FileStatus.failed]:
+        logger.warning(f"File entity {file_id} status is {file_entity.status}, cancel the task.")
+        return True
+
+
+    file_task = (await session.exec(
+        select(KbFileTaskEntity).where(
+            KbFileTaskEntity.kb_id == kb_id,
+            KbFileTaskEntity.file_id == file_id,
+            KbFileTaskEntity.file_part == file_part,
+        )
+    )).first()
+
+    if not file_task:
+        logger.warning(f"File task for file {file_id} part {file_part} not found, cancel the task.")
+        return True
+
+    if file_task.status in FileStatus.cancelled:
+        logger.warning(f"File task for file {file_id} part {file_part} is cancelled, cancel the task.")
+        return True
+
+    if file_task.file_version != file_version:
+        logger.warning(f"File task for file {file_id} part {file_part} is outdated, cancel the task.")
+        return True
+
+    return False
 
 
 @with_async_db_session
@@ -76,7 +128,6 @@ async def read_file_from_db(
     file_id: str,
 ) -> KbFileEntity:
     file_entity = await session.get(KbFileEntity, file_id)
-    assert file_entity is not None, f"File {file_id} not found."
     return file_entity
 
 
@@ -85,9 +136,13 @@ async def save_file_to_db(
     session: AsyncSession,
     file_entity: KbFileEntity,
 ):
-    session.add(file_entity)
-    await session.commit()
-    logger.info(f"[FileHelper] Add file entity {file_entity}.")
+    try:
+        session.add(file_entity)
+        await session.commit()
+        logger.info(f"[FileHelper] Add file entity {file_entity}.")
+    except Exception as e:
+        logger.error(f"[FileHelper] Error adding file entity {file_entity}: {e}")
+        await session.rollback()
 
 
 @with_async_db_session
@@ -121,35 +176,41 @@ async def save_chunks_to_db_async(
     session: AsyncSession,
     kb_id: str,
     file_id: str,
+    file_part: int,
     chunk_nodes: List[TextNode],
 ):
-    logger.info(f"[KnowledgebaseProvider] Start saving {len(chunk_nodes)} chunks.")
-    chunk_records: List[KbChunkEntity] = [
-        create_chunk_from_text_node(kb_id=kb_id, file_id=file_id, node=chunk, index=i) for (i, chunk) in enumerate(chunk_nodes)
-    ]
-    select_statement = select(KbChunkEntity).where(
-        KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
-    )
-    existing_chunks = (await session.exec(select_statement)).all()
-    existing_chunk_ids = [chunk.id for chunk in existing_chunks]
+    try:
+        logger.info(f"[KnowledgebaseProvider] Start saving {len(chunk_nodes)} chunks.")
+        chunk_records: List[KbChunkEntity] = [
+            create_chunk_from_text_node(kb_id=kb_id, file_id=file_id, file_part=file_part,node=chunk, index=i) for (i, chunk) in enumerate(chunk_nodes)
+        ]
+        select_statement = select(KbChunkEntity).where(
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, KbChunkEntity.file_part == file_part
+        )
+        existing_chunks = (await session.exec(select_statement)).all()
+        existing_chunk_ids = [chunk.id for chunk in existing_chunks]
 
-    # 构造 DELETE 语句
-    del_statement = delete(KbChunkEntity).where(
-        KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
-    )
+        # 构造 DELETE 语句
+        del_statement = delete(KbChunkEntity).where(
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, KbChunkEntity.file_part == file_part
+        )
 
-    # 执行删除操作
-    await session.exec(del_statement)
-    logger.info(
-        f"[KnowledgebaseProvider] Deleted {len(existing_chunks)} chunks for file {file_id}."
-    )
+        # 执行删除操作
+        await session.exec(del_statement)
+        logger.info(
+            f"[KnowledgebaseProvider] Deleted {len(existing_chunks)} chunks for file {file_id}, file_part {file_part}."
+        )
 
-    session.add_all(chunk_records)
-    await session.commit()
+        session.add_all(chunk_records)
+        await session.commit()
 
-    new_chunk_ids = [record.id for record in chunk_records]
-    logger.info(f"[FileHelper] saved {len(chunk_records)} chunks.")
-    return existing_chunk_ids, new_chunk_ids
+        new_chunk_ids = [record.id for record in chunk_records]
+        logger.info(f"[FileHelper] saved {len(chunk_records)} chunks.")
+        return existing_chunk_ids, new_chunk_ids
+    except Exception as e:
+        logger.error(f"[FileHelper] Error saving chunks to db: {e}")
+        await session.rollback()
+        raise e
 
 @with_async_db_session
 async def update_chunk_status_async(
@@ -157,16 +218,20 @@ async def update_chunk_status_async(
     chunk_ids: List[str],
     status: ChunkStatus,
 ) -> None:
-    logger.info(f"[FileHelper] updating chunk {chunk_ids} status to {status}.")
-    await session.exec(
-        update(KbChunkEntity)
-        .where(KbChunkEntity.id.in_(chunk_ids))
-        .values(status=status.value)
-    )
-    await session.commit()
-    logger.info(
-        f"[FileHelper] successfully updated chunk {chunk_ids} status to {status}."
-    )
+    try:
+        logger.info(f"[FileHelper] updating chunk {chunk_ids} status to {status}.")
+        await session.exec(
+            update(KbChunkEntity)
+            .where(KbChunkEntity.id.in_(chunk_ids))
+            .values(status=status.value)
+        )
+        await session.commit()
+        logger.info(
+            f"[FileHelper] successfully updated chunk {chunk_ids} status to {status}."
+        )
+    except Exception as e:
+        logger.error(f"[FileHelper] failed to update chunk {chunk_ids} status to {status}. error: {e}")
+        await session.rollback()
 
 
 @with_async_db_session
@@ -202,3 +267,45 @@ async def get_file_id_source_map(
         file_id: file_source
         for file_id, file_source in file_source_results
     }
+
+
+@with_async_db_session
+async def save_file_task_async(
+    session: AsyncSession,
+    task_entity: KbFileTaskEntity,
+):
+    try:
+        target_task_entity = (await session.exec(
+            select(KbFileTaskEntity).where(
+                KbFileTaskEntity.kb_id == task_entity.kb_id,
+                KbFileTaskEntity.file_id == task_entity.file_id,
+                KbFileTaskEntity.file_part == task_entity.file_part,
+            )
+        )).first()
+
+        if target_task_entity:
+            logger.info(f"File task {task_entity.id} already exists, updating.")
+            target_task_entity.file_version = task_entity.file_version
+            target_task_entity.status = task_entity.status
+            target_task_entity.failed_reason = task_entity.failed_reason
+        else:
+            target_task_entity = task_entity
+
+        session.add(target_task_entity)
+        await session.commit()
+        await session.refresh(target_task_entity)
+        logger.info(f"Saved file task entity {target_task_entity}.")
+
+        return target_task_entity
+    except Exception as e:
+        logger.error(f"Error saving file task entity {task_entity}: {e}")
+        await session.rollback()
+
+
+@with_async_db_session
+async def get_file_task_async(
+    session: AsyncSession,
+    task_id: str,
+) -> KbFileTaskEntity:
+    target_task_entity = await session.get(KbFileTaskEntity, task_id)
+    return target_task_entity

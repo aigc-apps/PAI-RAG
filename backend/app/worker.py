@@ -1,8 +1,11 @@
 import traceback
+from common.knowledgebase.types import FileStatus
+from db.models.knowledgebase.file import KbFileEntity
 import dotenv
+from rag.split.file_split import split_file_tasks
 dotenv.load_dotenv()
 
-from rag.chunk_helper import set_embedding_model_ready
+from rag.chunk_helper import read_file_from_db, save_file_task_async, set_embedding_model_ready, update_file_status_async
 from utils.modelscope_utils import download_model_to_directory
 # Fix for macOS fork issues (like with ChromaDB)
 # this forces the application to use spawn instead of fork
@@ -14,12 +17,11 @@ if os.name != "nt":
 
 from celery import Celery
 import os
-from rag.knowledgebase_tool import kb_client
+from rag.kb_file_client import kb_file_client
 from rag.evaluation_tool import eval_client
 import asyncio
 from loguru import logger
 from typing import List
-
 
 
 DEFAULT_BROKER = "redis://localhost:6379/0"
@@ -31,13 +33,41 @@ app = Celery(
     backend=os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER,
 )
 
+async def enqueue_file_tasks_async(file_id: str, file_version: int) -> None:
+    logger.info(f"[WORKER] Enqueueing file {file_id} in background.")
+    try:
 
-@app.task(name="process_file")
-def process_file(file_id: str, is_attachment: bool = False):
+        file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
+        if not file_entity:
+            logger.warning(f"[WORKER] file {file_id} not found. Process file completed.")
+            return
+
+        if file_entity.file_version != file_version:
+            logger.warning(f"[WORKER] file {file_id} has been updated. Process file completed.")
+            return
+
+        # Split file into small file tasks
+        for file_task in split_file_tasks(file_entity=file_entity):
+            file_task = await save_file_task_async(task_entity=file_task)
+            process_file_task.delay(task_id=file_task.id)
+            logger.info(f"[WORKER] Enqueued file {file_id} part {file_task.file_part} with task {file_task.id} successfully.")
+    except Exception:
+        logger.error(f"[WORKER] Enqueueing file {file_id} failed, error: {traceback.format_exc()}")
+        await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(traceback.format_exc()))
+
+@app.task(name="enqueue_file_tasks")
+def enqueue_file_tasks(file_id: str, file_version: int):
     loop = asyncio.get_event_loop()
-    logger.info(f"Processing file {file_id}.")
-    loop.run_until_complete(kb_client.process_file_async(file_id, is_attachment))
-    logger.info(f"Processed file {file_id} successfully.")
+    loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version))
+    logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
+
+# Enqueue file for processing, split into multiple tasks for large excels.
+@app.task(name="process_file_task")
+def process_file_task(task_id: str):
+    loop = asyncio.get_event_loop()
+    logger.info(f"Processing file {task_id}.")
+    loop.run_until_complete(kb_file_client.process_file_async(task_id=task_id))
+    logger.info(f"Processed file {task_id} completed.")
 
 
 @app.task(name="download_model")

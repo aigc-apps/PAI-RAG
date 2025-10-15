@@ -6,12 +6,12 @@ from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from llama_index.core.node_parser import SentenceSplitter
 from pairag.file.models.file_item import FileItem
 from pairag.file.readers.base import BaseReader
-from pairag.file.readers.csv_reader import CsvReader
+from pairag.file.readers.csv2md_reader import Csv2MdReader
 from pairag.file.readers.doc_reader import DocxReader
-from pairag.file.readers.excel_reader import ExcelReader
+from pairag.file.readers.excel2md_reader import Excel2MdReader
 from pairag.file.readers.html_reader import HtmlReader
 from pairag.file.readers.image_reader import ImageReader
-from pairag.file.readers.jsonl_reader import JsonReader
+from pairag.file.readers.jsonl2md_reader import Json2MdReader
 from pairag.file.readers.markdown_reader import MarkdownReader
 from pairag.file.readers.pdf_reader import MineruPdfReader
 from pairag.file.readers.pptx_reader import PptxReader
@@ -75,7 +75,11 @@ class FileParser:
         self.image_caption_tool = image_caption_tool
         self.chunk_config = chunk_config
 
-    def _get_reader(self, file_extension: str, is_attachment: bool=False) -> BaseReader:
+    def _get_reader(
+            self,
+            file_extension: str,
+            is_attachment: bool=False,
+            chunk_size: int=DEFAULT_CHUNK_SIZE) -> BaseReader:
         if is_attachment:
             match file_extension:
                 case ".docx":
@@ -99,13 +103,17 @@ class FileParser:
                         file_store=self.file_store,
                     )
                 case ".xlsx":
-                    return ExcelReader()
+                    return Excel2MdReader(chunk_size=chunk_size)
                 case ".xls":
-                    return ExcelReader()
+                    return Excel2MdReader(chunk_size=chunk_size)
                 case ".pptx":
                     return PptxReader(
                         file_store=self.file_store,
                     )
+                case ".csv":
+                    return Csv2MdReader(chunk_size=chunk_size)
+                case ".jsonl":
+                    return Json2MdReader(chunk_size=chunk_size)
                 case _:
                     raise ValueError(f"不支持的附件文件类型: {file_extension}")
         else:
@@ -156,21 +164,29 @@ class FileParser:
                         image_caption_tool=self.image_caption_tool,
                     )
                 case ".xlsx":
-                    return ExcelReader()
+                    return Excel2MdReader(chunk_size=chunk_size)
                 case ".xls":
-                    return ExcelReader()
+                    return Excel2MdReader(chunk_size=chunk_size)
                 case ".csv":
-                    return CsvReader()
+                    return Csv2MdReader(chunk_size=chunk_size)
                 case ".jsonl":
-                    return JsonReader()
+                    return Json2MdReader(chunk_size=chunk_size)
                 case ".txt":
                     return TextReader()
                 case _:
                     raise ValueError(f"不支持的文件类型: {file_extension}")
 
     # 读取文件解析为Document列表
-    def read_file(self, file_item: FileItem, is_attachment: bool) -> List[Document]:
-        reader = self._get_reader(file_item.file_extension, is_attachment=is_attachment)
+    def read_file(
+            self,
+            file_item: FileItem,
+            is_attachment: bool,
+            chunk_config: ChunkConfig = None,
+        ) -> List[Document]:
+        reader = self._get_reader(
+            file_item.file_extension,
+            is_attachment=is_attachment,
+            chunk_size=chunk_config.chunk_size if chunk_config else DEFAULT_CHUNK_SIZE)
         return reader.read(file_item)
 
     def split_docs(
@@ -252,6 +268,6 @@ class FileParser:
         return splitted_nodes
 
     def parse(self, file_item: FileItem, is_attachment: bool):
-        docs = self.read_file(file_item, is_attachment)
+        docs = self.read_file(file_item, is_attachment, chunk_config=self.chunk_config)
         nodes = self.split_docs(docs, chunk_config=self.chunk_config)
         return docs, nodes

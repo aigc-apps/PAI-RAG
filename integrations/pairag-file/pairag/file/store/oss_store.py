@@ -1,6 +1,7 @@
 from io import BytesIO
 import os
 import oss2
+from alibabacloud_credentials import providers
 from oss2.credentials import EnvironmentVariableCredentialsProvider, CredentialsProvider
 from typing import BinaryIO, Optional
 from pairag.file.store.base import BaseFileStore
@@ -20,7 +21,11 @@ class OssFileStore(BaseFileStore):
     ):
         super().__init__()
         if credentials_provider is None:
-            credentials_provider = EnvironmentVariableCredentialsProvider()
+            if os.getenv('OSS_ACCESS_KEY_ID') and os.getenv('OSS_ACCESS_KEY_SECRET'):
+                credentials_provider = EnvironmentVariableCredentialsProvider()
+            else:
+                # 获取EAS ram role
+                credentials_provider = providers.DefaultCredentialsProvider()
 
         auth = oss2.ProviderAuth(credentials_provider)
         self.bucket = oss2.Bucket(auth=auth, endpoint=endpoint, bucket_name=bucket)

@@ -6,12 +6,13 @@ TOKENIZATION_MODEL = "resources/tokenizer/Qwen3-32B-Tokenizer"
 
 
 def get_tokenizer():
-    tokenizer = AutoTokenizer.from_pretrained(TOKENIZATION_MODEL, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZATION_MODEL, local_files_only=True, use_fast=True)
     return tokenizer
 
 
 def estimate_tokens_in_text(
     text: str,
+    return_offsets_mapping: bool = True,
     tokenizer: Any = None,
 ) -> int:
     """
@@ -27,10 +28,9 @@ def estimate_tokens_in_text(
     if not text:
         return 0
     tokenizer = tokenizer or get_tokenizer()
-    result = tokenizer(text, return_offsets_mapping=True)
+    result = tokenizer(text, return_offsets_mapping=return_offsets_mapping, return_attention_mask=False, add_special_tokens=False)
     token_ids = result["input_ids"]
     return len(token_ids)
-
 
 def truncate(
     text: str,
