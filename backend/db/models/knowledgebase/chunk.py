@@ -28,7 +28,7 @@ class KbChunkEntity(KbChunkModel, table=True):
     # ref
     file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
     file_part: Optional[int] = Field(default=0) # file part index, if file is split into multiple parts
-    file_version: Optional[int] = Field(default=1)
+    file_version: Optional[int] = Field(default=0)
     kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
     index: Optional[int] = Field(default=0) # chunk index
 
