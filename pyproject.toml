@@ -68,7 +68,7 @@ sqlmodel = "^0.0.24"
 mcp = "^1.9.3"
 llama-index-tools-mcp = "^0.2.5"
 # with bug fix, ref: https://github.com/Arize-ai/openinference/pull/2241
-openinference-instrumentation-openai = {url = "http://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/release/20250930/openinference_instrumentation_openai-0.1.33-py3-none-any.whl"}
+openinference-instrumentation-openai = "^0.1.39"
 aiosqlite = "^0.21.0"
 alembic = "^1.16.2"
 llama-index-embeddings-openai-like = "^0.1.1"

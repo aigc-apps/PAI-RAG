@@ -846,6 +846,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                                       <MessageSquare className="h-5 w-5 text-primary" /> 问答对评估
                                     </h4>
                                     <div className="space-y-4">
+                                    {sample.trace_id && (
+                                        <div className="space-y-2">
+                                          <div className="flex items-center gap-2">
+                                          <span className="font-medium text-gray-800 dark:text-gray-300">TraceId:</span>
+                                            <span className="text-muted-foreground text-sm">{sample.trace_id}</span>
+                                          </div>
+                                        </div>
+                                      )}
                                       <div className="space-y-2">
                                         <div className="flex items-center gap-2">
                                           <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-lg text-blue-800 dark:text-blue-300 font-medium flex items-center">

@@ -103,7 +103,7 @@ def execute_evaluation_task(dataset_id: str, experiment_id: str, exp_run_ids: Li
 
 
 @app.task(name="evaluate_sample_result")
-def evaluate_sample_result(experiment_id: str, exp_run_id:str, sample_id:str, evaluator_config_id:str, execution_metadata:str, output:str):
+def evaluate_sample_result(experiment_id: str, exp_run_id:str, sample_id:str, trace_id:str, evaluator_config_id:str, execution_metadata:str, output:str):
     logger.info(f"evaluate_sample_result sample_id: {sample_id}.")
-    asyncio.run(eval_client.evaluate_sample_result(experiment_id, exp_run_id, sample_id, evaluator_config_id, execution_metadata, output))
+    asyncio.run(eval_client.evaluate_sample_result(experiment_id, exp_run_id, sample_id, trace_id, evaluator_config_id, execution_metadata, output))
     logger.info(f"evaluate_sample_result sample_id: {sample_id} successfully.")

@@ -82,6 +82,10 @@ class ExperimentSampleEntity(SQLModel, table=True):
         default=None,
         description="The actual output from model during experiment"
     )
+    trace_id: Optional[str] = Field(
+        default="",
+        description="Trace ID for the request"
+    )
     status: str = Field(
         default="pending",
         description="Execution status (pending, running, success, error)"

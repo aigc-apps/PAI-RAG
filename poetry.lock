@@ -5720,18 +5720,19 @@ test = ["jsonschema", "openai", "pydantic (>=2.0.0)", "pytest-asyncio", "pytest-
 
 [[package]]
 name = "openinference-instrumentation-openai"
-version = "0.1.33"
+version = "0.1.39"
 description = "OpenInference OpenAI Instrumentation"
 optional = false
 python-versions = "<3.14,>=3.9"
 groups = ["main"]
 files = [
-    {file = "openinference_instrumentation_openai-0.1.33-py3-none-any.whl", hash = "sha256:6927c7b10b461c7f775cbd74b09f9a85e471abd2484a7e37994ae1a566328cf1"},
+    {file = "openinference_instrumentation_openai-0.1.39-py3-none-any.whl", hash = "sha256:0ab0da12e77e9cf28265d491837e8d43488f01a7bbc005fed2cff1d8f5fff162"},
+    {file = "openinference_instrumentation_openai-0.1.39.tar.gz", hash = "sha256:86beb3f48fe08caafb2b4cc30a6ac81e790906d9c3fae188618314a50dea1b82"},
 ]
 
 [package.dependencies]
 openinference-instrumentation = ">=0.1.27"
-openinference-semantic-conventions = ">=0.1.17"
+openinference-semantic-conventions = ">=0.1.23"
 opentelemetry-api = "*"
 opentelemetry-instrumentation = "*"
 opentelemetry-semantic-conventions = "*"
@@ -5741,20 +5742,16 @@ wrapt = "*"
 [package.extras]
 instruments = ["openai (>=1.99.9)"]
 
-[package.source]
-type = "url"
-url = "http://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/release/20250930/openinference_instrumentation_openai-0.1.33-py3-none-any.whl"
-
 [[package]]
 name = "openinference-semantic-conventions"
-version = "0.1.21"
+version = "0.1.24"
 description = "OpenInference Semantic Conventions"
 optional = false
-python-versions = ">=3.9"
+python-versions = "<3.15,>=3.9"
 groups = ["main"]
 files = [
-    {file = "openinference_semantic_conventions-0.1.21-py3-none-any.whl", hash = "sha256:acde8282c20da1de900cdc0d6258a793ec3eb8031bfc496bd823dae17d32e326"},
-    {file = "openinference_semantic_conventions-0.1.21.tar.gz", hash = "sha256:328405b9f79ff72a659c7712b8429c0d7ea68c6a4a1679e3eb44372aa228119b"},
+    {file = "openinference_semantic_conventions-0.1.24-py3-none-any.whl", hash = "sha256:b2d650ca7e39c5fb02bf908b8049d6ece2a2657757448e1925a38b59548a80b3"},
+    {file = "openinference_semantic_conventions-0.1.24.tar.gz", hash = "sha256:3223b8c3958525457a369d58ebf0c56230a1f00567ae1e99f1c2049a8ac2cacd"},
 ]
 
 [[package]]
