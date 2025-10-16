@@ -25,6 +25,7 @@ def split_file_tasks(file_entity: KbFileEntity) -> Iterator[KbFileTaskEntity]:
             file_version=file_entity.file_version,
             status=FileStatus.pending,
         )
+        return
 
     if file_ext == ".csv":
         yield from split_csv(file_entity)

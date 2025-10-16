@@ -5,7 +5,7 @@ import dotenv
 from rag.split.file_split import split_file_tasks
 dotenv.load_dotenv()
 
-from rag.chunk_helper import read_file_from_db, save_file_task_async, set_embedding_model_ready, update_file_status_async
+from rag.chunk_helper import clear_useless_file_resources_async, delete_file_tasks_by_file_id_async, read_file_from_db, save_file_task_async, set_embedding_model_ready, update_file_status_async
 from utils.modelscope_utils import download_model_to_directory
 # Fix for macOS fork issues (like with ChromaDB)
 # this forces the application to use spawn instead of fork
@@ -35,6 +35,8 @@ app = Celery(
 
 async def enqueue_file_tasks_async(file_id: str, file_version: int) -> None:
     logger.info(f"[WORKER] Enqueueing file {file_id} in background.")
+    await update_file_status_async(file_id=file_id, status=FileStatus.parsing, failed_reason=str(traceback.format_exc()))
+
     try:
 
         file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
@@ -46,11 +48,16 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int) -> None:
             logger.warning(f"[WORKER] file {file_id} has been updated. Process file completed.")
             return
 
+        await delete_file_tasks_by_file_id_async(file_id=file_id, kb_id=file_entity.kb_id)
         # Split file into small file tasks
+        part_count = 0
         for file_task in split_file_tasks(file_entity=file_entity):
+            part_count = file_task.file_part
             file_task = await save_file_task_async(task_entity=file_task)
             process_file_task.delay(task_id=file_task.id)
             logger.info(f"[WORKER] Enqueued file {file_id} part {file_task.file_part} with task {file_task.id} successfully.")
+        chunk_ids_to_delete = await clear_useless_file_resources_async(file_id=file_id, kb_id=file_entity.kb_id, part_count=part_count)
+        await kb_file_client.adelete_chunks_from_vectordb(kb_id=file_entity.kb_id, node_ids=chunk_ids_to_delete)
     except Exception:
         logger.error(f"[WORKER] Enqueueing file {file_id} failed, error: {traceback.format_exc()}")
         await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(traceback.format_exc()))

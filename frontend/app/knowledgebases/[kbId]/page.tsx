@@ -584,13 +584,13 @@ export default function KnowledgeBaseDetailPage(
     // 文件校验 (Demo功能，后续调整优化)
     const validFiles = Array.from(files).filter((file) => {
       // const isValidType = ['application/pdf', 'application/msword'].includes(file.type);
-      const isValidSize = file.size <= 100 * 1024 * 1024;
+      const isValidSize = file.size <= 1000 * 1024 * 1024;
       // return isValidType && isValidSize;
       return isValidSize;
     });
 
     if (validFiles.length === 0) {
-      alert("请选择有效的文件（如 PDF 或 Word，且小于 100MB）");
+      alert("请选择有效的文件（如 PDF 或 Word，且小于 1GB）");
       setUploading(false);
       return;
     }

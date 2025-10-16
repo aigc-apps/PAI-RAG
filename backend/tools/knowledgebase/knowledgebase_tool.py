@@ -29,6 +29,7 @@ import re
 import json
 from typing import Annotated
 from chat.tools.search_result import SearchResult
+from utils.lru_cache import LruCache
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
 MAX_TRUNCATED_CHUNK_LEN = 8000
@@ -42,23 +43,39 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
         return VectorStoreQueryMode.DEFAULT
 
 
+kb_cache = LruCache(maxsize=100)
 
+def get_kb_cache_key(knowledgebase: KbEntity):
+    vector_connection = vectordb_provider.get_vector_db_connection()
+    vector_str = vector_connection.model_dump_json()
+    key_str = f"{knowledgebase.id}--{knowledgebase.embedding_model}--{vector_str}"
+    return key_str
+
+
+# 在线的知识库工具
 class PaiKnowledgebaseTool:
     def create_vector_store_from_knowledgebase(
         self,
         knowledgebase: KbEntity,
         embed_model: BaseEmbedding = None,
     ) -> BasePydanticVectorStore:
-        # TODO: 检查配置是否变化
-        if not embed_model:
-            embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
+        key = get_kb_cache_key(knowledgebase)
+        vector_store = kb_cache.get(key)
 
-        dimension = len(embed_model.get_text_embedding("0"))
-        vector_connection = vectordb_provider.get_vector_db_connection()
-        vector_store = create_vector_store(
-            knowledgebase.id, dimension, vector_db_connection=vector_connection,
-        )
+        if vector_store is None:
+            logger.info(f"Cache miss for knowledgebase {knowledgebase.id}, creating new vector store.")
+            # TODO: 检查配置是否变化
+            if not embed_model:
+                embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
+
+            dimension = len(embed_model.get_text_embedding("0"))
+            vector_connection = vectordb_provider.get_vector_db_connection()
+            vector_store = create_vector_store(
+                knowledgebase.id, dimension, vector_db_connection=vector_connection,
+            )
+            kb_cache.put(key, vector_store)
         return vector_store
+
     async def adelete_chunks_from_vectordb(
         self,
         kb_id: str,
@@ -69,7 +86,13 @@ class PaiKnowledgebaseTool:
 
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
         vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
-        await vector_store.adelete_nodes(node_ids=node_ids)
+        try:
+            await vector_store.adelete_nodes(node_ids=node_ids)
+        except Exception as e:
+            logger.error(f"Failed to delete nodes from vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
         logger.info(
             f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
         )
@@ -103,7 +126,13 @@ class PaiKnowledgebaseTool:
         for i in range(len(nodes)):
             nodes[i].embedding = embeddings[i]
 
-        await vector_store.async_add(nodes)
+        try:
+            await vector_store.async_add(nodes)
+        except Exception as e:
+            logger.error(f"Failed to insert nodes into vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
         logger.info(f"Finished inserting {len(nodes)} into vector store.")
 
     async def aquery(
@@ -181,8 +210,14 @@ class PaiKnowledgebaseTool:
                 filters=metadata_filters,
             )
 
-        query_result = await vector_store.aquery(vector_query)
-        logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+        try:
+            query_result = await vector_store.aquery(vector_query)
+            logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+        except Exception as e:
+            logger.error(f"Failed to query vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
 
         if retrieval_config.enable_rerank and len(query_result.nodes) > 0 and query:
             raranker_model = reranker_provider.get_reranker_model(
@@ -265,7 +300,14 @@ class PaiKnowledgebaseTool:
             alpha=retrieval_config.vector_weight,
         )
 
-        query_result = await vector_store.aquery(vector_query)
+        try:
+            query_result = await vector_store.aquery(vector_query)
+        except Exception as e:
+            logger.error(f"Failed to query vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
+
         if retrieval_config.enable_rerank:
             raranker_model = reranker_provider.get_reranker_model(
                 retrieval_config.rerank_model

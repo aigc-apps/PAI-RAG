@@ -195,8 +195,6 @@ class FileParser:
         splitted_nodes: List[BaseNode] = []
 
         for doc_node in docs:
-            logger.info(f"Start splitting document: {doc_node.metadata['file_name']} with id {doc_node.id_}")
-
             chunks = []
             doc_type = doc_node.metadata["file_extension"]
             if doc_type in IMAGE_DOC_TYPES:
@@ -221,6 +219,7 @@ class FileParser:
                     )
                 )
             else:
+                logger.info(f"Start splitting document: {doc_node.metadata['file_name']} with id {doc_node.id_}")
                 parser = SentenceSplitter(
                     id_func=node_id_func,
                     chunk_size=chunk_config.chunk_size,
@@ -239,6 +238,9 @@ class FileParser:
                 else:
                     # txt格式等纯文本
                     chunks = parser.get_nodes_from_documents([doc_node])
+                logger.info(
+                    f"Finished split document into {len(chunks)} chunks: {doc_node.metadata['file_name']}"
+                )
 
             for chunk in chunks:
                 chunk.metadata = doc_node.metadata
@@ -249,9 +251,6 @@ class FileParser:
                             ),
                         }
             splitted_nodes.extend(chunks)
-            logger.info(
-                f"Finished split document into {len(chunks)} chunks: {doc_node.metadata['file_name']}"
-            )
 
         for node in splitted_nodes:
             node.excluded_embed_metadata_keys = list(

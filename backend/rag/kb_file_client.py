@@ -1,9 +1,9 @@
 import traceback
-from typing import Any
-from config.providers.vectordb_provider import vectordb_provider, get_vector_db_connection_from_db
+from typing import Any, List
+from config.providers.vectordb_provider import get_vector_db_connection_from_db
 from db.models.knowledgebase.file_task import KbFileTaskEntity
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
-
+from tqdm import tqdm
 from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.knowledgebase import KbEntity, ChunkConfig
 from common.knowledgebase.types import (
@@ -25,12 +25,11 @@ from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
+    cleanup_vector_store,
     create_vector_store,
 )
 from llama_index.core.embeddings import BaseEmbedding
-from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from config.providers.knowledgebase_provider import fetch_knowledgebases_by_id
-from config.providers.embedding_provider import embedding_provider
 from pairag.file.store.file_store_helper import file_store
 from loguru import logger
 
@@ -48,22 +47,6 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
 
 
 class KbFileClient:
-    def create_vector_store_from_knowledgebase(
-        self,
-        knowledgebase: KbEntity,
-        embed_model: BaseEmbedding = None,
-    ) -> BasePydanticVectorStore:
-        # TODO: 检查配置是否变化
-        if not embed_model:
-            embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
-
-        dimension = len(embed_model.get_text_embedding("0"))
-        vector_connection = vectordb_provider.get_vector_db_connection()
-        vector_store = create_vector_store(
-            knowledgebase.id, dimension, vector_db_connection=vector_connection,
-        )
-        return vector_store
-
     def get_node_texts_for_embedding(self, nodes) -> list[str]:
         texts = []
         for node in nodes:
@@ -86,6 +69,32 @@ class KbFileClient:
             chunk_config=chunk_config,
         )
         return file_parser
+
+    async def adelete_chunks_from_vectordb(
+        self,
+        kb_id: str,
+        node_ids: List[str],
+    ):
+        if not node_ids:
+            return
+
+        knowledgebase: KbEntity = await fetch_knowledgebases_by_id(
+            kb_id=kb_id
+        )
+        embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
+
+        vector_connection = await get_vector_db_connection_from_db()
+        dimension = len(embed_model.get_text_embedding("0"))
+
+        vector_store = create_vector_store(
+            knowledgebase.id, dimension, vector_db_connection=vector_connection,
+        )
+        await vector_store.adelete_nodes(node_ids=node_ids)
+        await cleanup_vector_store(vector_store)
+
+        logger.info(
+            f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
+        )
 
 
     # process file item, status -> processing
@@ -143,10 +152,10 @@ class KbFileClient:
                 logger.info(
                     f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
                 )
-                await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
+                await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, task_id=task_id, is_attachment=is_attachment)
             except Exception as ex:
                 logger.error(f"处理文件失败：{traceback.format_exc()}")
-                await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(ex), is_attachment=is_attachment)
+                await update_file_status_async(file_id=file_id, status=FileStatus.failed, task_id=task_id, failed_reason=str(ex), is_attachment=is_attachment)
 
 
             if await should_cancel_file_task(
@@ -167,7 +176,7 @@ class KbFileClient:
             if not nodes or len(nodes) == 0:
                 logger.warning(f"No nodes parsed from file {file_item.file_name}. Marking file as completed.")
                 await update_file_status_async(
-                    file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
+                    file_id=file_item.id, task_id=task_id, status=FileStatus.succeeded, is_attachment=is_attachment
                 )
                 return
 
@@ -195,7 +204,7 @@ class KbFileClient:
                 return
 
             await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.persisting,
+                file_id=file_item.id, task_id=task_id, status=FileStatus.persisting,
                 is_attachment=is_attachment, documents=documents
             )
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
@@ -212,32 +221,32 @@ class KbFileClient:
                 await vector_store.adelete_nodes(node_ids=old_chunk_ids)
                 logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
 
-            texts_to_embed = self.get_node_texts_for_embedding(nodes)
-            embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
-            for i in range(len(nodes)):
-                nodes[i].embedding = embeddings[i]
-
-            # save vectors
-            if await should_cancel_file_task(
-                file_id=file_id,
-                kb_id=file_task.kb_id,
-                file_part=file_task.file_part,
-                file_version=file_task.file_version,
-            ):
-                return
-            await vector_store.async_add(nodes)
-
+            for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
+                batch_nodes = nodes[i:i + 1000]
+                texts_to_embed = self.get_node_texts_for_embedding(batch_nodes)
+                embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
+                for j in range(len(batch_nodes)):
+                    batch_nodes[j].embedding = embeddings[j]
+                if await should_cancel_file_task(
+                    file_id=file_id,
+                    kb_id=file_task.kb_id,
+                    file_part=file_task.file_part,
+                    file_version=file_task.file_version,
+                ):
+                    return
+                await vector_store.async_add(batch_nodes)
+            await cleanup_vector_store(vector_store)
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
             await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
+                file_id=file_item.id, task_id=task_id, status=FileStatus.succeeded, is_attachment=is_attachment
             )
             logger.info(
                 f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
             )
         except Exception as e:
             await update_file_status_async(
-                file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment, failed_reason=str(e),
+                file_id=file_item.id, task_id=task_id, status=FileStatus.failed, is_attachment=is_attachment, failed_reason=str(e),
             )
             logger.error(f"Error processing file: {traceback.format_exc()}")
 

@@ -13,7 +13,7 @@ async def aget_file_content_from_db(session: AsyncSession, file_id: str):
         return file_store.get_url(processed_file_entity.file_path)
     content =  processed_file_entity.file_content
     if processed_file_entity.file_content_length > 1000:
-        content =  content[0:1000] + " \n\n [truncated] The content is too long, has been truncated."
+        content = content[0:1000] + " \n\n [truncated] The content is too long, has been truncated."
     return content
 
 async def aget_file_content(file_id: str, file_name: str = None):
