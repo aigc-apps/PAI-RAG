@@ -5,7 +5,7 @@ from db.db_context import get_session
 from db.models.knowledgebase.knowledgebase import KbEntity
 from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
 from sqlmodel.ext.asyncio.session import AsyncSession
-from rag.knowledgebase_tool import kb_client
+from tools.knowledgebase.knowledgebase_tool import kb_tool
 from loguru import logger
 
 
@@ -23,7 +23,7 @@ async def retrieval(
             code=404, message=f"找不到知识库{retrieval_request.knowledge_id}"
         )
 
-    node_results = await kb_client.aquery(
+    node_results = await kb_tool.aquery(
         query=retrieval_request.query,
         user_id=retrieval_request.user_id,
         knowledge_id=retrieval_request.knowledge_id,

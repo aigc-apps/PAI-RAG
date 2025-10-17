@@ -37,6 +37,7 @@ def create_embedding_model(config: EmbeddingModelEntity) -> BaseEmbedding:
             model_name=pai_model_path,
             embed_batch_size=config.embed_batch_size,
             device=infer_cuda_device(),
+            show_progress_bar=False,
         )
     else:
         logger.error(f"Unknown embedding type: {config.type}.")

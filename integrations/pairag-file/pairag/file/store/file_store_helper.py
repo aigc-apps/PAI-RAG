@@ -15,14 +15,10 @@ def create_file_store_from_env() -> BaseFileStore:
     logger.info("Creating file store from environment variables...")
     file_store_type = os.getenv("FILE_STORE_TYPE", "local").lower()
     if file_store_type == "oss":
-        oss_ak = os.getenv("OSS_ACCESS_KEY_ID")
-        oss_sk = os.getenv("OSS_ACCESS_KEY_SECRET")
         bucket = os.getenv("OSS_BUCKET")
         endpoint = os.getenv("OSS_ENDPOINT")
         prefix_path = os.getenv("OSS_PREFIX_PATH", DEFAULT_OSS_PREFIX)
 
-        assert oss_ak, "OSS_ACCESS_KEY_ID environment variable is required."
-        assert oss_sk, "OSS_ACCESS_KEY_SECRET environment variable is required."
         assert bucket, "OSS_BUCKET environment variable is required."
         assert endpoint, "OSS_ENDPOINT environment variable is required."
 
@@ -34,6 +30,7 @@ def create_file_store_from_env() -> BaseFileStore:
             logger.warning(
                 f"Unknown FILE_STORE_TYPE {file_store_type}, using local file store."
             )
+        logger.info("Created local file store.")
         return LocalFileStore(base_path=DEFAULT_KNOWLEDGEBASE_PATH)
 
 

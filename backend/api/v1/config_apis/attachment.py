@@ -1,4 +1,7 @@
 ### Embedding configuration API ###
+import time
+import uuid
+from db.models.knowledgebase.file_task import KbFileTaskEntity
 from fastapi import APIRouter, File, UploadFile, Form, Depends
 from db.models.knowledgebase.knowledgebase import (
     ChunkConfig,
@@ -6,6 +9,7 @@ from db.models.knowledgebase.knowledgebase import (
     KnowledgebaseCreate,
     RetrievalConfig,
 )
+from rag.split.excel_split import convert_xls_to_xlsx
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.db_context import get_session
 from config.providers.knowledgebase_provider import knowledgebase_provider
@@ -15,7 +19,7 @@ from rag.file_item_utils import to_file_entity
 from db.models.knowledgebase.file import KbFileEntity
 from api.response_model import success_response, error_response
 from common.knowledgebase.types import FileStatus
-from rag.knowledgebase_tool import kb_client
+from rag.kb_file_client import kb_file_client
 from sqlmodel import select
 from db.models.knowledgebase.embedding import (
     EmbeddingModelEntity,
@@ -61,22 +65,41 @@ async def create_attachment_file(
             source_id=knowledgebase.id,
         )
 
+    # Save file to local storage
     file_name = file.filename
+    file_data = file.file
+    if file.filename.endswith(".xls"):
+        file_data = convert_xls_to_xlsx(file_data)
+        file_name = file_name[:-4] + ".xlsx"
+
+
     destination_file_path = f"{knowledgebase.name}/docs/{file_name}"
     file_store.save(
-        file=file.file,
+        file=file_data,
         file_path=destination_file_path,
     )
     file_item = FileItem.from_file(
-        file=file.file,
+        file=file_data,
         file_path=destination_file_path,
         kb_id=knowledgebase.id,
     )
     file_item.id = file_id
     file_entity : KbFileEntity = to_file_entity(file_item)
+    file_entity.file_version = int(time.time())
+    file_task_entity = KbFileTaskEntity(
+        id=uuid.uuid4().hex,
+        file_id=file_entity.id,
+        status=FileStatus.pending,
+        file_version=file_entity.file_version,
+        kb_id=file_entity.kb_id,
+        file_part=0,
+        file_path=file_entity.file_path,
+    )
     session.add(file_entity)
+    session.add(file_task_entity)
     await session.commit()
-    await kb_client.process_file_async(file_entity.id, True)
+
+    await kb_file_client.process_file_async(file_task_entity.id, is_attachment=True)
     await session.refresh(file_entity)
     if file_entity.status == FileStatus.succeeded:
         return success_response(data=file_entity, message="文件上传成功")

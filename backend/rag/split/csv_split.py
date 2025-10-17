@@ -1,0 +1,95 @@
+# Split csv file into multiple parts
+
+import os
+from typing import Iterator, List
+import csv
+import uuid
+from db.models.knowledgebase.file import KbFileEntity
+from db.models.knowledgebase.file_task import KbFileTaskEntity
+from pairag.file.store.file_store_helper import file_store
+from io import TextIOWrapper, BytesIO
+from loguru import logger
+from rag.split.constants import MAX_PART_ROW_NUM
+
+def _create_file_task(
+    file_entity: KbFileEntity,
+    header: List[str],
+    current_rows: List[List[str]],
+    current_part: int,
+    base_path: str,
+) -> KbFileTaskEntity:
+    text_wrapper = TextIOWrapper(BytesIO(), encoding='utf-8', newline='')
+    csv_writer = csv.writer(text_wrapper)
+
+    csv_writer.writerow(header)
+    csv_writer.writerows(current_rows)
+    text_wrapper.flush()
+    binary_buffer = text_wrapper.detach()
+    binary_buffer.seek(0)
+
+    file_part_path = f"{base_path}_Part{current_part:04d}.csv"
+    file_store.save(file=binary_buffer, file_path=file_part_path)
+    logger.info(f"Created csv part file: {file_part_path} with {len(current_rows)} rows.")
+    return KbFileTaskEntity(
+        id=uuid.uuid4().hex,
+        file_id=file_entity.id,
+        kb_id=file_entity.kb_id,
+        file_part=current_part,
+        file_path=file_part_path,
+        file_version=file_entity.file_version,
+    )
+
+
+def split_csv(file_entity: KbFileEntity) -> Iterator[KbFileTaskEntity]:
+    logger.info(f"Start splitting csv file: {file_entity.file_path}")
+    file = file_store.load(file_entity.file_path)
+    base_path, _ = os.path.splitext(file_entity.file_path)
+
+    text_instream = TextIOWrapper(file, encoding="utf-8")
+    reader = csv.reader(text_instream)
+
+    header = None
+    try:
+        header = next(reader)
+    except StopIteration:
+        logger.warning("Empty csv file!")
+        return
+
+    current_rows = []
+    current_part = 1
+    for row in reader:
+        if len(current_rows) > 0 and len(current_rows) % MAX_PART_ROW_NUM == 0:
+            yield _create_file_task(
+                file_entity=file_entity,
+                header=header,
+                current_rows=current_rows,
+                current_part=current_part,
+                base_path=base_path,
+            )
+
+            current_part += 1
+            current_rows = []
+        current_rows.append(row)
+
+    # Only one part, rows count less than MAX_PART_ROW_NUM
+    if current_part == 1:
+        yield KbFileTaskEntity(
+            id=uuid.uuid4().hex,
+            file_id=file_entity.id,
+            kb_id=file_entity.kb_id,
+            file_part=0,
+            file_path=file_entity.file_path,
+            file_version=file_entity.file_version,
+        )
+    elif current_rows:
+        yield _create_file_task(
+            file_entity=file_entity,
+            header=header,
+            current_rows=current_rows,
+            current_part=current_part,
+            base_path=base_path,
+        )
+        current_rows = []
+
+    logger.info(f"Finished splitting csv file into {current_part} parts.")
+    return

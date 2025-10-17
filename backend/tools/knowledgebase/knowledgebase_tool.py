@@ -1,39 +1,25 @@
 from functools import partial
-import traceback
-from typing import Any, List, Optional
-from config.providers.vectordb_provider import vectordb_provider, get_vector_db_connection_from_db
+from typing import List, Optional
+from config.providers.vectordb_provider import vectordb_provider
 from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
-from openinference.instrumentation import suppress_tracing
 
 from common.chat.models import RetrievalSetting
-from db.models.knowledgebase.file import KbFileEntity
-from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig, ChunkConfig
+from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
 from common.knowledgebase.types import (
-    ChunkStatus,
-    FileStatus,
     VectorIndexRetrievalType,
 )
 from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition, query_file_ids_with_metadata_filter
 from rag.chunk_helper import (
-    get_embedding_from_db,
     get_file_id_source_map,
-    read_file_from_db,
-    save_chunks_to_db_async,
-    update_chunk_status_async,
-    update_file_status_async,
 )
-from tools.llm_utils import get_multimodal_llm_from_db
-from pairag.file.models.file_item import FileItem
-from pairag.file.nodeparsers.file_parser import FileParser
-from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
     create_vector_store,
     is_docid_filter_supported,
 )
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
-from config.providers.knowledgebase_provider import fetch_knowledgebases_by_id, knowledgebase_provider
+from config.providers.knowledgebase_provider import knowledgebase_provider
 from config.providers.embedding_provider import embedding_provider
 from config.providers.reranker_provider import reranker_provider
 from pairag.file.store.file_store_helper import file_store
@@ -41,9 +27,9 @@ from llama_index.core.schema import NodeWithScore
 from loguru import logger
 import re
 import json
-from rag.file_existence_guard import FileExistenceGuard, require_file_exists
 from typing import Annotated
 from chat.tools.search_result import SearchResult
+from utils.lru_cache import LruCache
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
 MAX_TRUNCATED_CHUNK_LEN = 8000
@@ -57,156 +43,38 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
         return VectorStoreQueryMode.DEFAULT
 
 
+kb_cache = LruCache(maxsize=100)
 
-class PaiKnowledgebaseClient:
+def get_kb_cache_key(knowledgebase: KbEntity):
+    vector_connection = vectordb_provider.get_vector_db_connection()
+    vector_str = vector_connection.model_dump_json()
+    key_str = f"{knowledgebase.id}--{knowledgebase.embedding_model}--{vector_str}"
+    return key_str
+
+
+# 在线的知识库工具
+class PaiKnowledgebaseTool:
     def create_vector_store_from_knowledgebase(
         self,
         knowledgebase: KbEntity,
         embed_model: BaseEmbedding = None,
     ) -> BasePydanticVectorStore:
-        # TODO: 检查配置是否变化
-        if not embed_model:
-            embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
+        key = get_kb_cache_key(knowledgebase)
+        vector_store = kb_cache.get(key)
 
-        with suppress_tracing():
+        if vector_store is None:
+            logger.info(f"Cache miss for knowledgebase {knowledgebase.id}, creating new vector store.")
+            # TODO: 检查配置是否变化
+            if not embed_model:
+                embed_model = embedding_provider.get_embedding_model(knowledgebase.embedding_model)
+
             dimension = len(embed_model.get_text_embedding("0"))
-        vector_connection = vectordb_provider.get_vector_db_connection()
-        vector_store = create_vector_store(
-            knowledgebase.id, dimension, vector_db_connection=vector_connection,
-        )
-        return vector_store
-
-    def create_file_parser(self, knowledgebase: KbEntity, multimodal_llm: Any = None):
-        image_caption_tool = None
-        if multimodal_llm:
-            image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
-        chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
-        file_parser = FileParser(
-            file_store=file_store,
-            image_caption_tool=image_caption_tool,
-            chunk_config=chunk_config,
-        )
-        return file_parser
-
-
-    # process file item, status -> processing
-    # 这里是离线链路，所有的数据直接从db读取，不需要用到provider信息
-    async def process_file_async(
-        self,
-        file_id: str,
-        is_attachment: bool = False,
-    ):
-        logger.info(f"[WORKER] processing file {file_id} in background. Is attachment: {is_attachment}")
-        # 创建守护器, 初始检查
-        guard = FileExistenceGuard(file_id)
-        if not await guard.check_exists():
-            return
-
-        file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
-
-        logger.info(f"[WORKER] retrieved file {file_entity} for {file_id}.")
-        try:
-            file = file_store.load(file_entity.file_path)
-            file_item = FileItem(
-                id=file_entity.id,
-                file_path=file_entity.file_path,
-                file=file,
-                kb_id=file_entity.kb_id,
-                file_extension=file_entity.file_extension,
-                file_name=file_entity.file_name,
-                file_md5=file_entity.file_md5,
-                file_size=file_entity.file_size,
-            )
-
-            kb_id = file_item.kb_id
-            knowledgebase: KbEntity = await fetch_knowledgebases_by_id(
-                kb_id=kb_id
-            )
-            logger.info(
-                f"Start to add file {file_item.file_name} to knowledgebase {kb_id}."
-            )
-            await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, is_attachment=is_attachment)
-        except Exception as ex:
-            logger.error(f"处理文件失败：{traceback.format_exc()}")
-            await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(ex), is_attachment=is_attachment)
-
-
-        @require_file_exists()
-        async def parse_file(guard_instance):
-            multimodal_llm = await get_multimodal_llm_from_db()
-            file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
-            documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
-            return documents, nodes
-
-        @require_file_exists()
-        async def save_chunks(guard_instance, nodes):
-            old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
-                kb_id=kb_id, file_id=file_item.id, chunk_nodes=nodes
-            )
-            return old_chunk_ids, new_chunk_ids
-
-        @require_file_exists()
-        async def update_vector_store(guard_instance):
-            logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
-            embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
-
-
-            vector_connection = await get_vector_db_connection_from_db()
-            with suppress_tracing():
-                dimension = len(embed_model.get_text_embedding("0"))
-
+            vector_connection = vectordb_provider.get_vector_db_connection()
             vector_store = create_vector_store(
                 knowledgebase.id, dimension, vector_db_connection=vector_connection,
             )
-            if old_chunk_ids:
-                await vector_store.adelete_nodes(node_ids=old_chunk_ids)
-                logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
-
-            texts_to_embed = self.get_node_texts_for_embedding(nodes)
-            embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
-            for i in range(len(nodes)):
-                nodes[i].embedding = embeddings[i]
-
-            await vector_store.async_add(nodes)
-
-            logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
-            return True
-
-        try:
-            result = await parse_file(guard)
-            if result:
-                documents, nodes = result
-                old_chunk_ids, new_chunk_ids = await save_chunks(guard, nodes)
-                await update_file_status_async(
-                    file_id=file_item.id, status=FileStatus.persisting,
-                    is_attachment=is_attachment, documents=documents
-                )
-
-                await update_vector_store(guard)
-
-                if await guard.check_exists():  # 最后检查
-                    await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
-                    await update_file_status_async(
-                        file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
-                    )
-                    logger.info(
-                        f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
-                    )
-        except Exception as e:
-            if await guard.check_exists():  # 只有文件还存在时才更新状态
-                await update_file_status_async(
-                    file_id=file_item.id, status=FileStatus.failed, is_attachment=is_attachment, failed_reason=str(e),
-                )
-            logger.error(f"Error processing file: {traceback.format_exc()}")
-
-    async def adelete_kb(
-        self,
-        kb_id: str,
-    ):
-        # TODO: 是否delete表？
-        if kb_id in self.vector_store_cache:
-            del self.vector_store_cache[kb_id]
-
+            kb_cache.put(key, vector_store)
+        return vector_store
 
     async def adelete_chunks_from_vectordb(
         self,
@@ -218,7 +86,13 @@ class PaiKnowledgebaseClient:
 
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
         vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
-        await vector_store.adelete_nodes(node_ids=node_ids)
+        try:
+            await vector_store.adelete_nodes(node_ids=node_ids)
+        except Exception as e:
+            logger.error(f"Failed to delete nodes from vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
         logger.info(
             f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
         )
@@ -232,7 +106,7 @@ class PaiKnowledgebaseClient:
             if chapter_name:
                 base_text += f"\n\nchapter_name: {chapter_name}"
 
-            texts.append(base_text[:1024])
+            texts.append(base_text)
         return texts
 
 
@@ -252,7 +126,13 @@ class PaiKnowledgebaseClient:
         for i in range(len(nodes)):
             nodes[i].embedding = embeddings[i]
 
-        await vector_store.async_add(nodes)
+        try:
+            await vector_store.async_add(nodes)
+        except Exception as e:
+            logger.error(f"Failed to insert nodes into vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
         logger.info(f"Finished inserting {len(nodes)} into vector store.")
 
     async def aquery(
@@ -330,8 +210,14 @@ class PaiKnowledgebaseClient:
                 filters=metadata_filters,
             )
 
-        query_result = await vector_store.aquery(vector_query)
-        logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+        try:
+            query_result = await vector_store.aquery(vector_query)
+            logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+        except Exception as e:
+            logger.error(f"Failed to query vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
 
         if retrieval_config.enable_rerank and len(query_result.nodes) > 0 and query:
             raranker_model = reranker_provider.get_reranker_model(
@@ -414,7 +300,14 @@ class PaiKnowledgebaseClient:
             alpha=retrieval_config.vector_weight,
         )
 
-        query_result = await vector_store.aquery(vector_query)
+        try:
+            query_result = await vector_store.aquery(vector_query)
+        except Exception as e:
+            logger.error(f"Failed to query vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key) # 删除缓存，强制重新创建
+            raise
+
         if retrieval_config.enable_rerank:
             raranker_model = reranker_provider.get_reranker_model(
                 retrieval_config.rerank_model
@@ -442,13 +335,13 @@ class PaiKnowledgebaseClient:
         return result_nodes
 
 
-kb_client = PaiKnowledgebaseClient()
+kb_tool = PaiKnowledgebaseTool()
 
 
 async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str="anonymous") -> str:
     """Get aliyun search tool"""
     logger.info(f"Searching knowledgebase with kb {kb_id} and user {user_id}.")
-    result_nodes = await kb_client.aquery(query=query, knowledge_id=kb_id, user_id=user_id)
+    result_nodes = await kb_tool.aquery(query=query, knowledge_id=kb_id, user_id=user_id)
     records = []
     for score_node in result_nodes:
         file_url = score_node.node.metadata.get("file_source")

@@ -7,7 +7,7 @@ from config.providers.mcp_tool_provider import mcp_provider
 from config.providers.websearch_provider import websearch_provider
 from llama_index.core.tools.function_tool import FunctionTool
 from loguru import logger
-from rag.knowledgebase_tool import aget_knowledgebase_tool
+from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from chat.tools.attachments.file_searcher import aget_file_searcher
 from chat.tools.visit_webpage import aget_visit_webpage_tool
 from utils.attachment_utils import is_attachment_truncated

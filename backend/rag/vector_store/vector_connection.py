@@ -88,6 +88,11 @@ def create_vector_store(
         raise ValueError(f"Unknown vector_db_connection: {vector_db_connection}.")
 
 
+async def cleanup_vector_store(vector_store: BasePydanticVectorStore):
+    if isinstance(vector_store, PGVectorStore):
+        await vector_store.close()
+
+
 def is_docid_filter_supported(vector_store: BasePydanticVectorStore) -> bool:
     """
     Check if the vector store supports filtering by docid.

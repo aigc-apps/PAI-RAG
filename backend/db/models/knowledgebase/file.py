@@ -35,6 +35,8 @@ class KbFileEntity(SQLModel, table=True):
     file_size: int = Field(default=None)
     file_md5: str = Field(default=None)
 
+    file_version: Optional[int] = Field(default=0)
+
     status: str = Field(default=FileStatus.pending)
     failed_reason: str | None = Field(default=None)
     active: bool = Field(default=True)

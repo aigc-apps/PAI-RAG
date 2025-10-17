@@ -33,6 +33,14 @@ from db.models import (
     ChangeEvent,
     ChatBotEntity,
     GuardrailConfigEntity,
+    KbFileTaskEntity,
+    DatasetEntity,
+    DatasetSampleEntity,
+    EvaluatorConfigEntity,
+    ExperimentEntity,
+    ExperimentSampleEntity,
+    RunConfigEntity,
+    VectorDbConfig,
 )
 
 
