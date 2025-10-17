@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FC, useState } from "react";
 
-export interface PostgresqlConfig {
+export interface HologresConfig {
   host: string;
   port: string;
   user: string;
@@ -11,20 +11,20 @@ export interface PostgresqlConfig {
   database: string;
 }
 
-interface PostgresqlConfigProps {
-  config: PostgresqlConfig;
-  onValueChange: (config: PostgresqlConfig) => void;
+interface HologresConfigProps {
+  config: HologresConfig;
+  onValueChange: (config: HologresConfig) => void;
 }
 
-export const PostgresqlForm: FC<PostgresqlConfigProps> = ({
+export const HologresForm: FC<HologresConfigProps> = ({
   config,
   onValueChange
 }) => {
-  const [db, setDb] = useState<PostgresqlConfig>(config);
+  const [db, setDb] = useState<HologresConfig>(config);
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="host">pg-vector主机地址</Label>
+        <Label htmlFor="host">Hologres主机地址</Label>
         <Input id="host" value={db.host || ''} onChange={(e) => {
           setDb({...db, host: e.target.value});
           onValueChange({ ...db, host: e.target.value });
@@ -32,14 +32,14 @@ export const PostgresqlForm: FC<PostgresqlConfigProps> = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="port">端口</Label>
-        <Input id="port" type="number" value={db.port || 5432} onChange={(e) => {
+        <Input id="port" type="number" value={db.port || 80} onChange={(e) => {
           setDb({...db, port: e.target.value});
           onValueChange({ ...db, port: e.target.value });
         }} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="database">数据库名</Label>
-        <Input id="database"  value={db.database} onChange={(e) => {
+        <Input id="database"  value={db.database || ''} onChange={(e) => {
           setDb({...db, database: e.target.value});
           onValueChange({ ...db, database: e.target.value });
         }} />
@@ -53,7 +53,7 @@ export const PostgresqlForm: FC<PostgresqlConfigProps> = ({
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">密码</Label>
-          <Input id="password" type="password" value={db.password  || ''} onChange={(e) => {
+          <Input id="password" type="password" value={db.password || ''} onChange={(e) => {
             setDb({...db, password: e.target.value});
             onValueChange({ ...db, password: e.target.value })}
             } />

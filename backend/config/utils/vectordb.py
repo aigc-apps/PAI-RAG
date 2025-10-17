@@ -5,6 +5,7 @@ from common.encrypt_utils import encrypt_key
 from common.knowledgebase.types import VectorDbType
 from common.knowledgebase.vectordb.base import BaseVectorDbConnection
 from common.knowledgebase.vectordb.elastic import ElasticsearchConnection
+from common.knowledgebase.vectordb.hologres import HologresConnection
 from common.knowledgebase.vectordb.local import LocalConnection
 from common.knowledgebase.vectordb.milvus import MilvusConnection
 from common.knowledgebase.vectordb.postgres import PostgresqlConnection
@@ -50,6 +51,13 @@ POSTGRES_PORT_KEYS = ["POSTGRES_PORT", "PAIRAG_RAG__INDEX__VECTOR_STORE__port"]
 POSTGRES_DATABASE_KEYS = ["POSTGRES_DATABASE", "PAIRAG_RAG__INDEX__VECTOR_STORE__database"]
 POSTGRES_USER_KEYS = ["POSTGRES_USER", "PAIRAG_RAG__INDEX__VECTOR_STORE__username"]
 POSTGRES_PASSWORD_KEYS = ["POSTGRES_PASSWORD", "PAIRAG_RAG__INDEX__VECTOR_STORE__password"]
+
+
+HOLOGRES_HOST_KEYS = ["HOLOGRES_HOST", "PAIRAG_RAG__INDEX__VECTOR_STORE__host"]
+HOLOGRES_PORT_KEYS = ["HOLOGRES_PORT", "PAIRAG_RAG__INDEX__VECTOR_STORE__port"]
+HOLOGRES_DATABASE_KEYS = ["HOLOGRES_DATABASE", "PAIRAG_RAG__INDEX__VECTOR_STORE__database"]
+HOLOGRES_USER_KEYS = ["HOLOGRES_USER", "PAIRAG_RAG__INDEX__VECTOR_STORE__username"]
+HOLOGRES_PASSWORD_KEYS = ["HOLOGRES_PASSWORD", "PAIRAG_RAG__INDEX__VECTOR_STORE__password"]
 
 
 def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
@@ -101,6 +109,26 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
 
         logger.info(f"Created PostgresqlConnection with host:{host} port:{port} database:{database} user:{user}.")
         return PostgresqlConnection(
+            host=host,
+            port=port,
+            user=user,
+            encrypted_password=encrypt_key(password),
+            database=database,
+        )
+    elif vector_db_type == VectorDbType.HOLOGRES:
+        host = get_value_from_multiple_envs(HOLOGRES_HOST_KEYS)
+        port = get_value_from_multiple_envs(HOLOGRES_PORT_KEYS)
+        user = get_value_from_multiple_envs(HOLOGRES_USER_KEYS)
+        password = get_value_from_multiple_envs(HOLOGRES_PASSWORD_KEYS)
+        database = get_value_from_multiple_envs(HOLOGRES_DATABASE_KEYS)
+
+        assert host, "Hologres host不能为空。"
+        assert user, "Hologres user不能为空。"
+        assert password, "Hologres password不能为空。"
+        assert database, "Hologres database不能为空。"
+
+        logger.info(f"Created HologresConnection with host: {host} port: {port}, database: {database}.")
+        return HologresConnection(
             host=host,
             port=port,
             user=user,

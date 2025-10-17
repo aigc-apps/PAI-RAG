@@ -39,7 +39,7 @@ export const ElasticsearchForm: FC<ElasticConfigProps> = ({
         </div>
         <div className="space-y-2">
           <Label htmlFor="user">密码</Label>
-          <Input id="password" type="password" value={db.password} onChange={(e) => {
+          <Input id="password" type="password" value={db.password || ''} onChange={(e) => {
             setDb({...db, password: e.target.value});
             onValueChange({ ...db, password: e.target.value })}
             } />

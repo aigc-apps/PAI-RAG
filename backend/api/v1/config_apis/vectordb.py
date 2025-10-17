@@ -110,7 +110,7 @@ async def connection_test(
         vector_store = create_vector_store(
             "connectiontest", 1024, vector_db_connection=vector_connection,
         )
-        embedding = np.random.rand(1024)
+        embedding = list(np.random.rand(1024)) # convert to list for JSON serializable (HologresVectorStore requirement)
         node = TextNode(
             text="This is a test",
             id_="test",

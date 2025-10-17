@@ -2,6 +2,7 @@ from urllib.parse import quote_plus
 from common.encrypt_utils import decrypt_key
 from common.knowledgebase.vectordb.base import BaseVectorDbConnection
 from common.knowledgebase.vectordb.elastic import ElasticsearchConnection
+from common.knowledgebase.vectordb.hologres import HologresConnection
 from common.knowledgebase.vectordb.local import LocalConnection
 from common.knowledgebase.vectordb.milvus import MilvusConnection
 from common.knowledgebase.vectordb.postgres import PostgresqlConnection
@@ -15,6 +16,7 @@ from rag.vector_store.local import LocalChromaVectorStore
 from rag.vector_store.elasticsearch import ElasticsearchStore
 from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
+from llama_index.vector_stores.hologres import HologresVectorStore
 
 def create_vector_store(
     kb_id: str,
@@ -77,6 +79,21 @@ def create_vector_store(
             hybrid_search=True,
             text_search_config="jiebacfg",
         )
+    elif isinstance(vector_db_connection, HologresConnection):
+        logger.info(
+            f"Creating HologresVectorStore for {kb_id} with url {vector_db_connection.host}:{vector_db_connection.port}/{vector_db_connection.database}."
+        )
+        password = quote_plus(decrypt_key(vector_db_connection.encrypted_password))
+        vector_store = HologresVectorStore.from_param(
+            host=vector_db_connection.host,
+            port=vector_db_connection.port,
+            database=vector_db_connection.database,
+            user=vector_db_connection.user,
+            password=password,
+            embedding_dimension=dimension,
+            table_name=kb_id,
+        )
+        return vector_store
     elif isinstance(vector_db_connection, LocalConnection):
         logger.info(f"Creating LocalVectorStore for {kb_id} with port {DEFAULT_CHROMA_PORT}.")
         return LocalChromaVectorStore(

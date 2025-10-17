@@ -6,6 +6,7 @@ from common.knowledgebase.vectordb.elastic import ElasticsearchConnection
 from common.knowledgebase.vectordb.local import LocalConnection
 from common.knowledgebase.vectordb.milvus import MilvusConnection
 from common.knowledgebase.vectordb.postgres import PostgresqlConnection
+from common.knowledgebase.vectordb.hologres import HologresConnection
 from config.utils.vectordb import create_vector_db_connection_from_env
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -42,6 +43,8 @@ def create_vector_db_connection_from_dict(config: dict) -> BaseVectorDbConnectio
         return MilvusConnection.from_dict(config)
     elif vector_db_type == VectorDbType.POSTGRESQL:
         return PostgresqlConnection.from_dict(config)
+    elif vector_db_type == VectorDbType.HOLOGRES:
+        return HologresConnection.from_dict(config)
     else:
         raise ValueError(f"Invalid vector db type: {vector_db_type}")
 
