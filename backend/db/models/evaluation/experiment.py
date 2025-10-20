@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 class ExperimentCreate(SQLModel):
     name: Optional[str] = None
@@ -94,13 +94,24 @@ class ExperimentSampleEntity(SQLModel, table=True):
         default="",
         description="Trace ID for the request"
     )
+    trace: Optional[List[dict]] = Field(
+        default=[],
+        sa_column=Column("trace", JSON),
+        description="Trace as a list of spans, each span is represented as a dictionary"
+    )
     status: str = Field(
         default="pending",
         description="Execution status (pending, running, success, error)"
     )
+    # TODO: remove, replace by the result column when updating exact match evaluator and llm judge evaluator
     score: Optional[float] = Field(
         default=None,
         description="Score of the experiment run"
+    )
+    result: Optional[Dict[str, Any]] = Field(
+        default={},
+        sa_column=Column("result", JSON),
+        description="Experimentation result"
     )
     reason: Optional[str] = Field(
         default=None,
