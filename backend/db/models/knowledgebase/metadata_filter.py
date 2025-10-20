@@ -9,6 +9,7 @@ from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
 from loguru import logger
 
+
 def _build_metadata_condition_(
     condition: Condition,
 ) -> tuple[str, list[str]]:
@@ -18,23 +19,23 @@ def _build_metadata_condition_(
 
     match condition.comparison_operator:
         case "contains":
-            condition_filter = KbFileEntity.file_metadata[condition.name].like(f"%{condition.value}%")
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}%")
         case "not contains":
-            condition_filter = ~KbFileEntity.file_metadata[condition.name].like(f"%{condition.value}%")
+            condition_filter = ~KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}%")
         case "start with":
-            condition_filter = KbFileEntity.file_metadata[condition.name].like(f'"{condition.value}%')
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().like(f"{condition.value}%")
         case "end with":
-            condition_filter = KbFileEntity.file_metadata[condition.name].like(f'%{condition.value}"')
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}")
         case "is" | "=":
             if isinstance(condition.value, str):
                 # 添加json_quote ""
-                condition_filter = KbFileEntity.file_metadata[condition.name] == f'"{condition.value}"'
+                condition_filter = KbFileEntity.file_metadata[condition.name].as_string() == f'{condition.value}'
             else:
                 condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) == condition.value
         case "is not" | "≠":
             if isinstance(condition.value, str):
                 # 添加json_quote ""
-                condition_filter = KbFileEntity.file_metadata[condition.name] != f'"{condition.value}"'
+                condition_filter = KbFileEntity.file_metadata[condition.name].as_string() != f'{condition.value}'
             else:
                 condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) != condition.value
         case "empty":

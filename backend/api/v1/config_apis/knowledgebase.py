@@ -405,8 +405,7 @@ async def delete_file(
     )
     chunk_entities = chunks_res.all()
 
-    node_ids = [chunk_entity.id for chunk_entity in chunk_entities]
-    await kb_tool.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=node_ids)
+    await kb_tool.adelete_doc(kb_id=kb_id, file_id=file_id)
 
     await session.delete(file_entity)
     for chunk_entity in chunk_entities:

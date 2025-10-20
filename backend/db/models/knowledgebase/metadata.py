@@ -18,7 +18,7 @@ class KbMetadataEntity(SQLModel, table=True):
 
     # metadata id
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, min_length=3, max_length=50, primary_key=True)
-    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
+    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id", ondelete="CASCADE")
 
     name: str = Field(default=None, min_length=3, max_length=50)
     value_type: str = Field(default=MetadataValueType.STRING)
@@ -47,9 +47,9 @@ class FileMetadataEntity(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("id", "kb_id", "file_id", name="unique_kb_file_metadata"),)
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, min_length=3, max_length=50, primary_key=True)
-    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
-    file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
-    metadata_id: str = Field(default=None, foreign_key="pai_knowledgebase_metadata.id")
+    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id", ondelete="CASCADE")
+    file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id", ondelete="CASCADE")
+    metadata_id: str = Field(default=None, foreign_key="pai_knowledgebase_metadata.id", ondelete="CASCADE")
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

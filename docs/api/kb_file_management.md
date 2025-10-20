@@ -1,12 +1,12 @@
 
+# PAI-RAG知识库管理API
+## 知识库文件管理 API 文档
 
-# 知识库文件管理 API 文档
-
-> 本文档描述了知识库中文件的上传、查询、更新来源、删除及检索等操作接口。
+> 本节描述了知识库中文件的上传、查询、更新来源、删除及检索等操作接口。
 
 ---
 
-## 认证方式
+### 认证方式
 
 所有请求需在请求头中携带认证 Token：
 
@@ -18,23 +18,23 @@ Authorization: EAS_TOKEN
 
 ---
 
-## 1. 上传文件
+### 1. 上传文件
 
 将本地文件上传至指定知识库，支持保留目录结构。
 
-### 请求信息
+#### 请求信息
 
 - **方法**：`POST`
 - **路径**：`/v1/config/knowledgebases/{knowledge_id}/files`
 - **内容类型**：`multipart/form-data`
 
-### 路径参数
+#### 路径参数
 
 | 参数名         | 类型   | 说明 |
 |----------------|--------|------|
 | `knowledge_id` | string | 知识库唯一 ID（如 `kb9acd1faa893d41b9b5487abe9105b7c7`） |
 
-### 表单字段（form-data）
+#### 表单字段（form-data）
 
 | 字段名  | 类型     | 必填 | 说明 |
 |---------|----------|------|------|
@@ -44,7 +44,7 @@ Authorization: EAS_TOKEN
 > - 文件名在同一个知识库内必须唯一。
 > - 若上传同名文件，则视为**更新该文件内容**（覆盖原文件并触发重新处理）。
 
-### 示例请求
+#### 示例请求
 
 ```bash
 curl -X POST \
@@ -54,7 +54,7 @@ curl -X POST \
   -F 'files=@/Users/feiyue/Documents/test_files/pairag.md;filename=test/pairag.md'
 ```
 
-### 成功响应（200 OK）
+#### 成功响应（200 OK）
 
 ```json
 {
@@ -85,7 +85,7 @@ curl -X POST \
 }
 ```
 
-### 响应字段说明
+#### 响应字段说明
 
 | 字段名             | 类型     | 说明 |
 |--------------------|----------|------|
@@ -94,7 +94,7 @@ curl -X POST \
 | `file_md5`         | string   | 文件内容 MD5 校验值 |
 | `file_metadata`    | object   | 文件元信息，包含路径、大小等 |
 
-#### 文件处理状态（`status`）
+##### 文件处理状态（`status`）
 
 | 状态        | 说明 |
 |-------------|------|
@@ -106,23 +106,23 @@ curl -X POST \
 
 ---
 
-## 2. 查询文件状态（按 ID）
+### 2. 查询文件状态（按 ID）
 
 获取单个文件的详细信息及其处理状态。
 
-### 请求信息
+#### 请求信息
 
 - **方法**：`GET`
 - **路径**：`/v1/config/knowledgebases/{knowledge_id}/files/{file_id}`
 
-### 路径参数
+#### 路径参数
 
 | 参数名         | 类型   | 说明 |
 |----------------|--------|------|
 | `knowledge_id` | string | 知识库 ID |
 | `file_id`      | string | 文件唯一 ID |
 
-### 示例请求
+#### 示例请求
 
 ```bash
 curl -X GET \
@@ -130,7 +130,7 @@ curl -X GET \
   -H "Authorization: EAS_TOKEN"
 ```
 
-### 成功响应（200 OK）
+#### 成功响应（200 OK）
 
 ```json
 {
@@ -163,17 +163,17 @@ curl -X GET \
 
 ---
 
-## 3. 按文件名查询
+### 3. 按文件名查询
 
 通过文件名精确查找文件（适用于已知路径/名称的场景）。
 
-### 请求信息
+#### 请求信息
 
 - **方法**：`GET`
 - **路径**：`/v1/config/knowledgebases/{knowledge_id}/files`
 - **查询参数**：`file_name=test/pairag.md`
 
-### 示例请求
+#### 示例请求
 
 ```bash
 curl -X GET \
@@ -185,16 +185,16 @@ curl -X GET \
 
 ---
 
-## 4. 删除文件
+### 4. 删除文件
 
 从知识库中删除指定文件。
 
-### 请求信息
+#### 请求信息
 
 - **方法**：`DELETE`
 - **路径**：`/v1/config/knowledgebases/{knowledge_id}/files/{file_id}`
 
-### 示例请求
+#### 示例请求
 
 ```bash
 curl -X DELETE \
@@ -202,7 +202,7 @@ curl -X DELETE \
   -H "Authorization: EAS_TOKEN"
 ```
 
-### 成功响应（200 OK）
+#### 成功响应（200 OK）
 
 ```json
 {
@@ -216,17 +216,17 @@ curl -X DELETE \
 
 ---
 
-## 5. 更新文件来源链接
+### 5. 更新文件来源链接
 
 为文件设置外部源链接（如语雀文档地址），便于跳转查看原文。
 
-### 请求信息
+#### 请求信息
 
 - **方法**：`POST`
 - **路径**：`/v1/config/knowledgebases/{knowledge_id}/files/{file_id}/source`
 - **内容类型**：`application/json`
 
-### 请求体（Body）
+#### 请求体（Body）
 
 ```json
 {
@@ -238,7 +238,7 @@ curl -X DELETE \
 |---------------|--------|------|------|
 | `file_source` | string | 是   | 外部文档链接（URL） |
 
-### 示例请求
+#### 示例请求
 
 ```bash
 curl -X POST \
@@ -248,7 +248,7 @@ curl -X POST \
   -d '{"file_source": "https://aliyuque.antfin.com/pai/arch/ktarnwbn0iqpgy3b"}'
 ```
 
-### 成功响应（200 OK）
+#### 成功响应（200 OK）
 
 ```json
 {
@@ -273,17 +273,17 @@ curl -X POST \
 
 ---
 
-## 6. 检索知识库内容
+### 6. 检索知识库内容
 
 在指定知识库中执行语义检索。
 
-### 请求信息
+#### 请求信息
 
 - **方法**：`POST`
 - **路径**：`/v1/retrieval`
 - **内容类型**：`application/json`
 
-### 请求体（Body）
+#### 请求体（Body）
 
 ```json
 {
@@ -303,7 +303,7 @@ curl -X POST \
 | `retrieval_setting.score_threshold` | number | 否 | 相似度阈值（默认 0.2） |
 | `retrieval_setting.top_k`           | integer | 否 | 返回最多前 K 个结果（默认 3） |
 
-### 示例请求
+#### 示例请求
 
 ```bash
 curl -X POST \
@@ -319,7 +319,7 @@ curl -X POST \
   }'
 ```
 
-### 成功响应（200 OK）
+#### 成功响应（200 OK）
 
 ```json
 {
@@ -351,7 +351,7 @@ curl -X POST \
 
 ---
 
-## 通用响应结构
+### 通用响应结构
 
 所有接口返回统一格式：
 
@@ -365,7 +365,7 @@ curl -X POST \
 
 ---
 
-## 注意事项
+### 注意事项
 
 1. 📁 **文件命名唯一性**：同一知识库中不允许存在同名文件，上传同名文件会覆盖旧文件。
 2. 🔁 **异步处理机制**：文件上传后需经历解析、向量化等步骤，状态从 `pending` → `succeeded` 可能需要几秒到几分钟。

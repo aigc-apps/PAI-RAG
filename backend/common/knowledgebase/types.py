@@ -40,4 +40,7 @@ SUPPORTED_VECTOR_DB_TYPES = [
     "milvus",
     "postgresql",
     "elasticsearch",
+    "hologres",
+    "opensearch",
+    "tablestore",
 ]

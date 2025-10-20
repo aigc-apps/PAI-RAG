@@ -76,6 +76,31 @@ class PaiKnowledgebaseTool:
             kb_cache.put(key, vector_store)
         return vector_store
 
+    async def adelete_doc(
+        self,
+        kb_id: str,
+        file_id: str,
+    ):
+        if not file_id or not kb_id:
+            return
+
+        knowledgebase = await knowledgebase_provider.aget_knowledgebase(kb_id)
+        vector_store = self.create_vector_store_from_knowledgebase(knowledgebase)
+        try:
+            await vector_store.adelete(ref_doc_id=file_id)
+        except Exception as e:
+            if "Doc is empty." in str(e):
+                logger.warning("empty doc found for opensearch. skipping.")
+            else:
+                logger.error(f"Failed to delete doc from vector store: {e}")
+                key = get_kb_cache_key(knowledgebase)
+                kb_cache.delete(key) # 删除缓存，强制重新创建
+                raise
+        logger.info(
+            f"Deleted file {file_id} from {kb_id} vector db successfully."
+        )
+
+
     async def adelete_chunks_from_vectordb(
         self,
         kb_id: str,
