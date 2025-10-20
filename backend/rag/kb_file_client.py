@@ -217,9 +217,14 @@ class KbFileClient:
             vector_store = create_vector_store(
                 knowledgebase.id, dimension, vector_db_connection=vector_connection,
             )
+
             if old_chunk_ids:
-                await vector_store.adelete_nodes(node_ids=old_chunk_ids)
-                logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
+                try:
+                    await vector_store.adelete_nodes(node_ids=old_chunk_ids)
+                    logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
+                except NotImplementedError:
+                    logger.warning("Will not remove previous data as vector store does not support removing nodes.")
+                    pass
 
             for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
                 batch_nodes = nodes[i:i + 1000]

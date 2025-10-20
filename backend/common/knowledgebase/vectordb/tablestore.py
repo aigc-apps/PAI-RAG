@@ -10,5 +10,5 @@ class TablestoreConnection(BaseVectorDbConnection):
 
     endpoint: str
     instance_name: str
-    access_key_id: str
-    access_key_secret: str
+    ak: str
+    encrypted_sk: str

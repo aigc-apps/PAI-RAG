@@ -12,5 +12,8 @@ class BaseVectorDbConnection(BaseModel):
         if config.get("password"):
             config["encrypted_password"] = encrypt_key(config["password"])
             del config["password"]
+        if config.get("sk"):
+            config["encrypted_sk"] = encrypt_key(config["sk"])
+            del config["sk"]
 
         return cls(**config)

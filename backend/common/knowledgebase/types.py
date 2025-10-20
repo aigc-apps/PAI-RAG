@@ -41,4 +41,6 @@ SUPPORTED_VECTOR_DB_TYPES = [
     "postgresql",
     "elasticsearch",
     "hologres",
+    "opensearch",
+    "tablestore",
 ]

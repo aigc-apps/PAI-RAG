@@ -10,11 +10,13 @@ class ExperimentCreate(SQLModel):
     sample_ids: Optional[list[str]] = None  # List of dataset IDs to run the experiment on
     run_config_id: str = Field(
         foreign_key="pai_run_config.id",
-        description="Reference to the run task"
+        description="Reference to the run task",
+        ondelete="CASCADE",
     )
     evaluator_config_id: str = Field(
         foreign_key="pai_evaluator_config.id",
-        description="Reference to the evaluation task"
+        description="Reference to the evaluation task",
+        ondelete="CASCADE",
     )
 
 class ExperimentEntity(SQLModel, table=True):
@@ -23,7 +25,8 @@ class ExperimentEntity(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
-        description="Reference to the evaluation task"
+        description="Reference to the evaluation task",
+        ondelete="CASCADE",
     )
     name: Optional[str] = Field(
         default=None,
@@ -39,11 +42,13 @@ class ExperimentEntity(SQLModel, table=True):
     )
     run_config_id: str = Field(
         foreign_key="pai_run_config.id",
-        description="Reference to the run task"
+        description="Reference to the run task",
+        ondelete="CASCADE",
     )
     evaluator_config_id: str = Field(
         foreign_key="pai_evaluator_config.id",
-        description="Reference to the evaluation task"
+        description="Reference to the evaluation task",
+        ondelete="CASCADE",
     )
     avg_score: Optional[float] = Field(
         default=None,
@@ -68,15 +73,18 @@ class ExperimentSampleEntity(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     experiment_id: str = Field(
         foreign_key="pai_experiment.id",
-        description="Reference to the experiment"
+        description="Reference to the experiment",
+        ondelete="CASCADE",
     )
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
-        description="Reference to the dataset entry used"
+        description="Reference to the dataset entry used",
+        ondelete="CASCADE",
     )
     sample_id: str = Field(
         foreign_key="pai_dataset_sample.id",
-        description="Reference to the dataset sample entry used"
+        description="Reference to the dataset sample entry used",
+        ondelete="CASCADE",
     )
     actual_output: Optional[str] = Field(
         default=None,

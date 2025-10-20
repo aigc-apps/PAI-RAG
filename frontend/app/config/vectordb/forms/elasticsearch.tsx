@@ -1,4 +1,4 @@
-// app/config/vectordb/forms/milvus.tsx
+// app/config/vectordb/forms/elasticsearch.tsx
 
 import React, { FC, useState } from "react";
 import { Input } from "@/components/ui/input";

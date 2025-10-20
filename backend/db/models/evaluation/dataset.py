@@ -29,7 +29,8 @@ class DatasetSampleEntity(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
-        description="Reference to the evaluation task"
+        description="Reference to the evaluation task",
+        ondelete="CASCADE",
     )
     input: str = Field(
         description="The user input/query for evaluation"

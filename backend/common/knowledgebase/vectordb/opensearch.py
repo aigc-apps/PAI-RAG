@@ -11,4 +11,4 @@ class OpensearchConnection(BaseVectorDbConnection):
     endpoint: str
     instance_id: str
     username: str
-    password: str
+    encrypted_password: str

@@ -1,4 +1,4 @@
-// app/config/vectordb/forms/postgresql.tsx
+// app/config/vectordb/forms/hologres.tsx
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FC, useState } from "react";

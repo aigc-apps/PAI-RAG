@@ -35,6 +35,9 @@ async def add_vector_db_config(
         if not new_config.config.get("password"):
             env_connection = create_vector_db_connection_from_env()
             new_config.config["encrypted_password"] = env_connection.model_dump().get("encrypted_password")
+        if not new_config.config.get("sk"):
+            env_connection = create_vector_db_connection_from_env()
+            new_config.config["encrypted_sk"] = env_connection.model_dump().get("encrypted_sk")
 
         existing_vector_config = VectorDbConfig(
             id=DEFAULT_VECTOR_ID,
@@ -46,6 +49,10 @@ async def add_vector_db_config(
         if not new_config.config.get("password"):
             new_config.config["encrypted_password"] = existing_vector_config.config.get(
                 "encrypted_password"
+            )
+        if not new_config.config.get("sk"):
+            new_config.config["encrypted_sk"] = existing_vector_config.config.get(
+                "encrypted_sk"
             )
 
         existing_vector_config.config = create_vector_db_connection_from_dict(new_config.config).model_dump()
@@ -101,6 +108,15 @@ async def connection_test(
             else:
                 env_connection = create_vector_db_connection_from_env()
                 test_config.config["encrypted_password"] = env_connection.model_dump().get("encrypted_password")
+
+        if not test_config.config.get("sk"):
+            existing_vector_config = await session.get(VectorDbConfig, DEFAULT_VECTOR_ID)
+            if existing_vector_config is not None:
+                test_config.config["encrypted_sk"] = existing_vector_config.config.get("encrypted_sk")
+            else:
+                env_connection = create_vector_db_connection_from_env()
+                test_config.config["encrypted_sk"] = env_connection.model_dump().get("encrypted_sk")
+
 
     vector_connection = create_vector_db_connection_from_dict(test_config.config)
     try:
