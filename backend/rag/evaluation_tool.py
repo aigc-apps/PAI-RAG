@@ -191,7 +191,7 @@ async def update_experiment(
         await session.commit()
     except Exception as e:
         await session.rollback()
-        logger.error(f"Error: update_evaluation_summary exception: {e}")
+        logger.error(f"Update_evaluation_summary exception: {e}")
 
 
 class PaiEvaluationClient:
@@ -215,10 +215,10 @@ class PaiEvaluationClient:
                     except json.JSONDecodeError as e:
                         logger.warning(f"Warning: Line {line_num} is not valid JSON, skipped. Error: {e}")
         except FileNotFoundError:
-            logger.error(f"Error: File '{file_path}' not found.")
+            logger.error(f"File '{file_path}' not found.")
             raise
         except Exception as e:
-            logger.error(f"Error reading file '{file_path}': {e}")
+            logger.error(f"Fail to read file '{file_path}': {e}")
             raise
 
         return results
@@ -232,7 +232,6 @@ class PaiEvaluationClient:
         if not lines:
             raise ValueError("上传文件为空，请重新上传。")
 
-        valid_lines = 0
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
             if not line:  # 跳过空行
@@ -241,14 +240,13 @@ class PaiEvaluationClient:
                 entry_data = json.loads(line)
                 if "input" in entry_data:  # 只保留包含 "input" 的条目
                     results.append(entry_data)
-                    valid_lines += 1
                 else:
                     logger.warning(f"Warning: Line {line_num} missing 'input' field, skipped.")
             except json.JSONDecodeError as e:
                 logger.warning(f"Warning: Line {line_num} is not valid JSON, skipped. Error: {e}")
 
-        if valid_lines == 0:
-            raise ValueError("文件解析失败，请检查schema。")
+        if not results:
+            raise ValueError("文件解析失败, 请检查schema。")
         return results
 
     async def evaluate_one_sample(self, experiment_id: str, exp_run_id: str, trace_id: str = ""):
@@ -271,7 +269,7 @@ class PaiEvaluationClient:
         input_messages = [
             {"role": "user", "content": dataset_sample_entity.input}
         ]
-        if dataset_sample_entity.eval_metadata is not None and dataset_sample_entity.eval_metadata.get("file_name"):
+        if dataset_sample_entity.eval_metadata and dataset_sample_entity.eval_metadata.get("file_name"):
             try:
                 file_entity: AttachmentFile = await upload_gaia_attachment_file(file_name=dataset_sample_entity.eval_metadata.get("file_name"))
                 logger.info("[WORKER] get file_entity", file_entity)
