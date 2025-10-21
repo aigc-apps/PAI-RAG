@@ -12,6 +12,7 @@ from typing import List
 from datetime import datetime, timezone
 from common.chat.models import ChatAgentRequest
 from evaluation.run import run_agent, run_evaluator
+from evaluation.evaluator.utils import SupportedEvaluators
 from chat.openai.openai_like import OpenAILike
 from sqlmodel import select, update, func, case
 from common.encrypt_utils import decrypt_key
@@ -364,10 +365,10 @@ class PaiEvaluationClient:
         dataset_sample_entity: DatasetSampleEntity = await get_dataset_sample_entity(sample_id=sample_id)
         evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=evaluator_config_id)
         eval_llm = None
-        if evaluator_config.type == "LLMJudge":
+        if evaluator_config.type == SupportedEvaluators.LLM_JUDGE:
             eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
 
-        eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)
+        eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm, trace_id)
         logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
         if eval_res:
             logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")

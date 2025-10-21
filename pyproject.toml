@@ -85,3 +85,6 @@ rapidfuzz = "3.14.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+dependencies = [
+  "pai-llm-evals @ https://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/release/20251017/pai_llm_evals-0.1.0.2025101706-py3-none-any.whl"
+]

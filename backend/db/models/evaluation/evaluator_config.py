@@ -5,7 +5,8 @@ from sqlalchemy import Column, DateTime
 
 class EvaluatorConfigCreate(SQLModel):
     name: str = Field(default="")
-    type: str = Field(default="") # ExactMatch, LLMJudge
+    # valid types are defined in class SupportedEvaluators
+    type: str = Field(default="")
     model_id: str = Field(default="")
     case_sensitive: bool = Field(default=False)
     ignore_punctuation: bool = Field(default=False)

@@ -14,11 +14,14 @@ class LLMJudgeEvaluator(BaseEvaluator):
     def __init__(
         self,
         llm: LLM,
-        name: str = "LLMJudge",
+        name: str = '',
         prompt_template: Optional[str] = None,
         max_new_tokens: int = 512,
         temperature: float = 0.0,
     ):
+        if not name:
+            name = LLMJudgeEvaluator.__name__
+
         super().__init__(name)
         self.llm = llm
         self.prompt_template = prompt_template or self._default_prompt()

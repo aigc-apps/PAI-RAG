@@ -1,4 +1,5 @@
 import os
+from typing import Tuple
 import aiohttp
 from loguru import logger
 from common.chat.models import ChatAgentRequest
@@ -11,7 +12,8 @@ import asyncio
 BACKEND_PORT = os.environ.get("BACKEND_PORT", "8682")
 CHAT_API = f"http://127.0.0.1:{BACKEND_PORT}/v1/chat/completions"
 
-async def run_agent(chat_request: ChatAgentRequest):
+async def run_agent(chat_request: ChatAgentRequest) -> Tuple[str, list, str, bool]:
+    """Return (agent returned value, a list of function call execution metadata, trace id, success flag)"""
     logger.info(f"Chat agent body: {chat_request} via backend api {CHAT_API}")
     chat_request_dict = chat_request.model_dump()
     async with aiohttp.ClientSession() as session:
@@ -40,9 +42,12 @@ async def run_agent(chat_request: ChatAgentRequest):
                 logger.error(f"Request failed with status {response.status}, body: {error_text}")
                 return f"Request failed: {error_text}", [], "", False
 
-async def run_evaluator(input: str, prediction: str, reference: str, eval_config: dict, eval_llm: LLM = None):
+async def run_evaluator(input: str, prediction: str, reference: str, eval_config: dict, eval_llm: LLM = None, trace_id: str = None):
     evaluator = create_evaluator(eval_config, eval_llm)
-    result = await evaluator.evaluate_async(input, prediction, reference)
+    extra_params = {}
+    if trace_id:
+        extra_params['trace_id'] = trace_id
+    result = await evaluator.evaluate_async(input, prediction, reference, **extra_params)
     return result
 
 if __name__ == '__main__':
@@ -55,5 +60,5 @@ if __name__ == '__main__':
         enable_agent=False,
         chatbot_id='',
     )
-    res, _, _ = asyncio.run(run_agent(chat_request))
+    res, _, _, _ = asyncio.run(run_agent(chat_request))
     print("res", res)

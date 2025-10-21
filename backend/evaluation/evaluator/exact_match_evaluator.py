@@ -9,7 +9,9 @@ class ExactMatchEvaluator(BaseEvaluator):
     适用于答案标准化、选择题、填空题等场景
     """
 
-    def __init__(self, name: str = "ExactMatch", normalize_spaces: bool = True, ignore_punctuation: bool = True, case_sensitive: bool = False):
+    def __init__(self, name: str = '', normalize_spaces: bool = True, ignore_punctuation: bool = True, case_sensitive: bool = False):
+        if not name:
+            name = ExactMatchEvaluator.__name__
         super().__init__(name)
         self.normalize_spaces = normalize_spaces
         self.ignore_punctuation = ignore_punctuation

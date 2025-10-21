@@ -5,11 +5,11 @@ from typing import Any, Dict
 class BaseEvaluator(ABC):
     """
     评估器基类
-    所有评估器必须实现 `evaluate` 方法
+    所有评估器派生类必须实现 `evaluate_async` 方法
     """
 
-    def __init__(self, name: str = "BaseEvaluator"):
-        self.name = name
+    def __init__(self, name: str = ''):
+        self.name = name if name else BaseEvaluator.__name__
 
     @abstractmethod
     async def evaluate_async(self, input:str, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
