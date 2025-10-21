@@ -177,8 +177,6 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
 
         assert endpoint, "Tablestore endpoint 不能为空。"
         assert instance_name, "Tablestore instance_name 不能为空"
-        assert ak, "Tablestore ak 不能为空"
-        assert sk, "Tablestore sk 不能为空"
 
         return TablestoreConnection(
             endpoint=endpoint,
