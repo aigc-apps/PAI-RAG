@@ -88,7 +88,7 @@ def with_async_db_session(func):
             kwargs["session"] = session
             return await func(*args, **kwargs)
         except Exception as e:
-            logger.error(f"Database execution error: {e}")
+            logger.error(f"Execution error: {e}")
             raise
         finally:
             await session.close()
