@@ -47,6 +47,6 @@ jobs:
           SPECIFIC_IMAGE_TAG: ${{env.SPECIFIC_VERSION_TAG}}
         run: |
           docker build -t ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} .
-          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.TIME_VERSION_TAG }}
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.TIME_VERSION_TAG }}
+          docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}

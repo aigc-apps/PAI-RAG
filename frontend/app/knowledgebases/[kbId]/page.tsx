@@ -602,10 +602,11 @@ export default function KnowledgeBaseDetailPage(
     });
 
     try {
-      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8682"; // 你的后端地址
-
+      // 生产环境上传大文件直连
+      const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1"; // 你的后端地址
+      console.log("上传后端地址前缀: ", API_PREFIX)
       const res = await fetch(
-        `${BACKEND_URL}/v1/config/knowledgebases/${kbId}/files`,
+        `${API_PREFIX}/config/knowledgebases/${kbId}/files`,
         {
           method: 'POST',
           body: formData,
