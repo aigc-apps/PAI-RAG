@@ -14,11 +14,11 @@ from sqlalchemy import select
 
 def try_get_initial_model_from_env():
     endpoint = os.environ.get("PAIRAG_RAG__LLM__endpoint")
-    if not endpoint.endswith("/v1"):
-        endpoint = endpoint.rstrip("/") + "/v1"
-
     if not endpoint:
         return None
+
+    if not endpoint.endswith("/v1"):
+        endpoint = endpoint.rstrip("/") + "/v1"
 
     token = os.environ.get("PAIRAG_RAG__LLM__token") or "abc"
 
