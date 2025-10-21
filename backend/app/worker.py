@@ -1,10 +1,11 @@
 import traceback
-from common.knowledgebase.types import FileStatus
-from db.models.knowledgebase.file import KbFileEntity
 import dotenv
-from rag.split.file_split import split_file_tasks
 dotenv.load_dotenv()
 
+from common.knowledgebase.types import FileStatus
+from db.models.knowledgebase.file import KbFileEntity
+
+from rag.split.file_split import split_file_tasks
 from rag.chunk_helper import clear_useless_file_resources_async, delete_file_tasks_by_file_id_async, read_file_from_db, save_file_task_async, set_embedding_model_ready, update_file_status_async
 from utils.modelscope_utils import download_model_to_directory
 # Fix for macOS fork issues (like with ChromaDB)

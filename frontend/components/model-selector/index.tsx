@@ -73,10 +73,14 @@ export default function ModelSelector({
 
         if (!selectedModel.model_id) {
           // 如果没有选中的模型，默认选择第一个模型
-          const firstModel = modelGroups[0]?.models[0];
-          setCurrentModel(firstModel?.model_id);
-          if (firstModel) {
-            onModelChange(firstModel.id, modelGroups[0].id, firstModel.model_id);
+          for (const group of modelGroups) {
+            if (group.models.length > 0) {
+              const firstModel = group.models[0];
+              setCurrentModel(firstModel?.model_id);
+              if (firstModel) {
+                onModelChange(firstModel.id, group.id, firstModel.model_id);
+              }
+            }
           }
         }
         else {
