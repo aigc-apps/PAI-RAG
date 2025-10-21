@@ -52,13 +52,19 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int) -> None:
         await delete_file_tasks_by_file_id_async(file_id=file_id, kb_id=file_entity.kb_id)
         # Split file into small file tasks
         part_count = 0
+        num_tasks = 0
         for file_task in split_file_tasks(file_entity=file_entity):
+            num_tasks += 1
             part_count = file_task.file_part
             file_task = await save_file_task_async(task_entity=file_task)
             process_file_task.delay(task_id=file_task.id)
             logger.info(f"[WORKER] Enqueued file {file_id} part {file_task.file_part} with task {file_task.id} successfully.")
+
         chunk_ids_to_delete = await clear_useless_file_resources_async(file_id=file_id, kb_id=file_entity.kb_id, part_count=part_count)
         await kb_file_client.adelete_chunks_from_vectordb(kb_id=file_entity.kb_id, node_ids=chunk_ids_to_delete)
+        if num_tasks == 0:
+            await update_file_status_async(file_id=file_id, status=FileStatus.succeeded, failed_reason=None)
+            logger.info("No tasks enqueued. Mark file as completed.")
     except Exception:
         logger.error(f"[WORKER] Enqueueing file {file_id} failed, error: {traceback.format_exc()}")
         await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(traceback.format_exc()))

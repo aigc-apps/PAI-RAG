@@ -602,21 +602,24 @@ export default function KnowledgeBaseDetailPage(
     });
 
     try {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8682"; // 你的后端地址
+
       const res = await fetch(
-        `/api/config/knowledgebases/${kbId}/files`,
+        `${BACKEND_URL}/v1/config/knowledgebases/${kbId}/files`,
         {
           method: 'POST',
           body: formData,
         },
       );
-      if (!res.ok) {
-        alert('上传失败');
-        return;
-      }
       const upload_result = await res.json();
+      if (upload_result.code !== 200) {
+        throw new Error(upload_result.message);
+      }
       console.log('上传成功:', upload_result);
-    } catch (error) {
-      console.error('上传失败:', error);
+      toast.success("上传成功。")
+    } catch (error: any) {
+      console.error('上传失败:', error.message);
+      toast.error("上传失败: " + error.message);
     } finally {
       setUploading(false);
       // 清空文件选择框
