@@ -1,6 +1,5 @@
 import traceback
 import os
-from db.db_context import with_async_db_session
 import openai
 from typing import Dict, Optional, Type
 from chat.llm.llm_model import PaiLlm
@@ -9,8 +8,6 @@ from loguru import logger
 from common.encrypt_utils import decrypt_key, encrypt_key
 from config.providers.base_provider import BaseConfigProvider
 from db.models.llm import LlmModelEntity
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select
 
 def try_get_initial_model_from_env():
     endpoint = os.environ.get("PAIRAG_RAG__LLM__endpoint")
@@ -50,23 +47,6 @@ class LlmProvider(BaseConfigProvider):
         super()._load_entries(entries)
         for entry_id, entry in self.config_map.items():
             self.model_id_to_entry_id[entry.model_id] = entry_id
-
-    @with_async_db_session
-    async def full_load_from_db_async(self, session: AsyncSession):
-        entries = [LlmModelEntity.model_validate(entry) for entry in (await session.exec(select(LlmModelEntity))).all()]
-        default_model = try_get_initial_model_from_env()
-        if default_model and all([entry.base_url != default_model.base_url and entry.model != default_model.model for entry in entries]):
-            logger.info("Default model not initialized, inserting into db.")
-            try:
-                session.add(default_model)
-                await session.commit()
-            except Exception as ex:
-                logger.warning(f"Failed to add default model: {ex}.")
-                await session.rollback()
-            entries = [default_model] + entries
-
-        self._load_entries(entries)
-
     def add(self, entry: LlmModelEntity):
         super().add(entry)
         self.model_id_to_entry_id[entry.model_id] = entry.id
