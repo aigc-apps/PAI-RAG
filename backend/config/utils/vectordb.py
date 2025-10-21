@@ -181,8 +181,8 @@ def create_vector_db_connection_from_env() -> BaseVectorDbConnection:
         return TablestoreConnection(
             endpoint=endpoint,
             instance_name=instance_name,
-            ak=ak,
-            encrypted_sk=encrypt_key(sk),
+            ak=ak or "",
+            encrypted_sk=encrypt_key(sk) or "",
         )
     elif vector_db_type == VectorDbType.LOCAL:
         logger.info("Created local vector db connection.")

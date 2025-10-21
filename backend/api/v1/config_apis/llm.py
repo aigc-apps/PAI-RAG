@@ -65,22 +65,24 @@ async def get_llm_groups(
 ):
     llm_results = await session.exec(select(LlmModelEntity))
     llms = llm_results.all()
-    default_model = try_get_initial_model_from_env()
-    if default_model and all([entry.base_url != default_model.base_url and entry.model != default_model.model for entry in llms]):
-        try:
-            llm_provider.add(default_model)
-            session.add(default_model)
-            await session.commit()
-            await config_change_manager.notify_change_async(
-                event_source=ChangeEventSource.LLM,
-                source_id=default_model.id,
-                event_type=ChangeEventType.ADD,
-            )
-        except Exception as ex:
-            logger.warning(f"Failed to add default model: {ex}.")
-            await session.rollback()
+    if len(llms) == 0:
+        logger.info("trying to load default llms.")
+        default_model = try_get_initial_model_from_env()
+        if default_model and all([entry.base_url != default_model.base_url and entry.model != default_model.model for entry in llms]):
+            try:
+                llm_provider.add(default_model)
+                session.add(default_model)
+                await session.commit()
+                await config_change_manager.notify_change_async(
+                    event_source=ChangeEventSource.LLM,
+                    source_id=default_model.id,
+                    event_type=ChangeEventType.ADD,
+                )
+            except Exception as ex:
+                logger.warning(f"Failed to add default model: {ex}.")
+                await session.rollback()
 
-        llms = [default_model] + llms
+            llms = [default_model] + llms
 
     grouped_results = {}
     for llm in llms:
