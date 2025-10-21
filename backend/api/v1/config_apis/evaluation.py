@@ -267,7 +267,7 @@ async def upload_dataset_samples(
         logger.error(f"Failed to upload eval dataset: {traceback.format_exc()}")
         await session.rollback()
         return error_response(
-                code=404, message=f"Failed to save eval dataset to database: {e}"
+                code=400, message=f"评估数据集添加失败: {e}"
             )
 
 @evaluation_router.get("/{dataset_id}/samples")

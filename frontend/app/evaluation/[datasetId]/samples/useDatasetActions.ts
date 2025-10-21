@@ -68,14 +68,17 @@ export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
         body: formData,
       });
 
-      if (!res.ok) throw new Error('上传失败');
-
       const result = await res.json();
-      toast.success('上传成功');
-      return result.data;
-    } catch (error) {
-      console.error('上传失败:', error);
-      toast.error('上传失败');
+      if (result.code === 200) {
+        toast.success('上传成功');
+        return result.data;
+      }
+      else {
+        throw new Error(result.message);
+      }
+    } catch (error: any) {
+      console.error('上传失败:', error.message);
+      toast.error(`上传失败: ${error.message}`);
       throw error;
     }
   };
