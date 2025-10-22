@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { PhotoProvider, PhotoView } from "react-photo-view";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from "remark-gfm";
+import { MarkdownRenderer } from '@/components/customized/markdown/markdown';
 
 const JsonCodeBlock = ({
   jsonString,
@@ -135,6 +138,79 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
+  },
+});
+
+
+export type ChatDbArgs = {
+  query: string;
+};
+
+type ChatDbResult = {
+  result: string;
+  sql: string;
+};
+
+
+
+export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
+  toolName: 'chat-db',
+  render: ({ args, status, result }) => {
+    console.log('ChatDbTool 参数:', args);
+    console.log('ChatDbTool 状态:', status);
+
+    if (status.type === 'running') {
+      return (
+        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
+          >
+            <GlobeIcon className="size-4" /> 正在查询数据库: {args.query}{' '}
+          </Button>
+        </div>
+      );
+    } else if (status.type === 'complete') {
+      if (!result) {
+        return (
+          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+            <GlobeIcon className="h-4 w-4" />
+            <span>未能获取数据库结果</span>
+          </div>
+        );
+      }
+      const db_result = JSON.parse(result) as ChatDbResult;
+
+      return (
+        <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center justify-start h-7 w-full text-gray-600 text-xs gap-2 px-4 "
+              >
+                {' '}
+                <GlobeIcon className="size-4" /> 完成数据库查询: {args.query}{' '}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>
+                  查询结果
+                </SheetTitle>
+                <SheetDescription>Query: {args.query}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="pl-6 pr-2">
+                <MarkdownRenderer content={`数据结果\n\n${db_result.result}\n\nSQL:\n\n\`\`\`sql\n${db_result.sql}\n\`\`\``} />
+
                 </div>
               </div>
             </SheetContent>
@@ -571,6 +647,7 @@ const ToolUIWrapper: FC = () => {
       <ReadFileToollUI />
       <SearchFileToollUI />
       <SearchKbToolUI />
+      <ChatDbToolUI />
     </>
   );
 };

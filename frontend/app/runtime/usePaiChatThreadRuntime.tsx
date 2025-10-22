@@ -533,12 +533,12 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
     splitLocalRuntimeOptions(options);
 
   // load chat options
-  const { model, enable_agent, enable_search, mcp_ids, kb_ids, user_id } = useChatOptions();
+  const { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id } = useChatOptions();
 
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
       return useLocalThreadRuntime(
-        new MyModelAdapter({...otherOptions, body: { model, enable_agent, enable_search, mcp_ids, kb_ids, user_id }}),
+        new MyModelAdapter({...otherOptions, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id }}),
         localRuntimeOptions,
       );
     },

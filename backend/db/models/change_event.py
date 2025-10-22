@@ -23,6 +23,7 @@ class ChangeEventSource(str, Enum):
     GUARDRAIL = "guardrail"
     EVALUATION = "evaluation"
     VECTORDB = "vectordb"
+    CHATDB = "chatdb"
 
 
 

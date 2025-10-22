@@ -109,6 +109,9 @@ export function AppSidebar() {
                   <Link href="/config/search"><Search /> 搜索</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
+                  <Link href="/config/chatdb"><ShieldCheck /> ChatDB </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link href="/config/tracing"><SquareActivity /> 链路追踪</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
