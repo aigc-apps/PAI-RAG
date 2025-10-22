@@ -165,6 +165,7 @@ export class MyModelAdapter implements ChatModelAdapter {
         function: { name: string; arguments: string };
         state?: string;
         result?: string;
+        isError: boolean;
       };
     } = {};
 
@@ -240,6 +241,7 @@ export class MyModelAdapter implements ChatModelAdapter {
                   },
                   state: 'running',
                   result: undefined,
+                  isError: false,
                 };
               }
               // 更新 tool call
@@ -266,7 +268,8 @@ export class MyModelAdapter implements ChatModelAdapter {
             const lastKey = keys[keys.length - 1];
             if (currentToolCallMap[lastKey]) {
               currentToolCallMap[lastKey].state = 'complete';
-              currentToolCallMap[lastKey].result = chunk?.observation;
+              currentToolCallMap[lastKey].result = chunk?.observation?.result || chunk?.observation?.error;
+              currentToolCallMap[lastKey].isError = chunk?.observation?.error != null && chunk?.observation?.error.trim() !== '';
             } else {
               console.warn(`Tool call with ID ${lastKey} not found.`);
             }
@@ -298,7 +301,7 @@ export class MyModelAdapter implements ChatModelAdapter {
                     args: toolCall.function.arguments,
                     state: toolCall.state,
                     result: toolCall.result,
-                    isError: false,
+                    isError: toolCall.isError,
                   };
                 }
                 return null;

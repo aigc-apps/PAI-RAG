@@ -21,7 +21,7 @@ chatdb_router = APIRouter()
 
 
 @chatdb_router.post("", response_model=ResponseModel[ChatDbConfigEntity])
-async def add_chatbi_config(
+async def add_chatdb_config(
     new_db_config: ChatDbCreate,
     session: AsyncSession = Depends(get_session),
 ):

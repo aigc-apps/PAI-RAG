@@ -1,7 +1,8 @@
 import json
+import traceback
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from loguru import logger
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
 from chat.agent.base import BaseAgent
 from chat.agent.state import AgentState
 from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
@@ -112,9 +113,24 @@ class ActorWithPlan(BaseAgent):
                             )
                             async_fn = self.tool_fn_map[function_name]
                             logger.info(f"Calling tool {function_name} with args {function_args}.")
-                            tool_result = await call_tool_with_retry(async_fn, function_args)
-                            #logger.info(f"Get tool result {tool_result}.")
+                            try:
+                                tool_result = await call_tool_with_retry(async_fn, function_args)
+                                tool_content = tool_result.content
+                                tool_error = None
+                                message_content = tool_content
+                            except RetryError as retry_err:
+                                logger.error(f"Call tool failed: {traceback.format_exc()}")
+                                inner_exception = retry_err.last_attempt.exception()
+                                tool_content = None
+                                tool_error = f"工具调用失败: {inner_exception}"
+                                message_content = tool_error
+                            except Exception as ex:
+                                logger.error(f"Call tool failed: {traceback.format_exc()}")
+                                tool_content = None
+                                tool_error = f"工具调用失败: {ex}"
+                                message_content = tool_error
 
+                            #logger.info(f"Get tool result {tool_result}.")
                             messages.append(
                                 {
                                     "role": "assistant",
@@ -127,14 +143,14 @@ class ActorWithPlan(BaseAgent):
                             messages.append(
                                 {
                                     "role": "tool",
-                                    "content": tool_result.content,
+                                    "content": message_content,
                                     "tool_call_id": tool.id
                                 }
                             )
-
                             yield ToolResultChunk(
                                 tool=tool,
-                                result=tool_result.content,
+                                result=tool_content,
+                                error=tool_error
                             )
                 else:
                     break

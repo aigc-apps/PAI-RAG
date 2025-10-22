@@ -36,7 +36,7 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]
 
     if chat_request.enable_chatdb:
         mcp_tools.extend(chatdb_provider.get_db_tools())
-        logger.info("Loaded chat_bi tools.")
+        logger.info("Loaded chat_db tools.")
 
     mcp_tools.extend(await aget_kb_tools(chat_request))
 

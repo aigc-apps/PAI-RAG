@@ -6,7 +6,7 @@ from common.encrypt_utils import decrypt_key
 from db.models.chatdb.chatdb import ChatDbConfigEntity
 from config.providers.base_provider import BaseConfigProvider
 from config.providers.llm_provider import llm_provider
-from tools.chatbi.xiyan_client import XiyanClient
+from tools.chatdb.xiyan_client import XiyanClient
 from llama_index.core.tools import FunctionTool
 
 
