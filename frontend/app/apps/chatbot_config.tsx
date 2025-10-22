@@ -61,6 +61,7 @@ export interface Chatbot {
   description: string;
   enable_search: boolean;
   enable_agent: boolean;
+  enable_chatdb: boolean;
   mcp_ids: string[];
   kb_ids: string[];
   model_id: string;
@@ -87,6 +88,7 @@ const default_chat_config = {
   model_id: "",
   updated_at: "",
   enable_agent: false,
+  enable_chatdb: false,
   enable_input_guardrail: false,
   enable_output_guardrail: false,
   guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
@@ -464,6 +466,21 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             setBotConfig({
               ...botConfig,
               enable_search: checked,
+            });
+          }}
+        />
+      </div>
+      <div className="flex gap-6">
+        <Label htmlFor="enable_chatdb" className="w-[90px]">
+          启用ChatDB
+        </Label>
+        <Switch
+          id="enable_chatdb"
+          checked={botConfig.enable_chatdb}
+          onCheckedChange={(checked) => {
+            setBotConfig({
+              ...botConfig,
+              enable_chatdb: checked,
             });
           }}
         />

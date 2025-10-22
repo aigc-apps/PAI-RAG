@@ -106,6 +106,7 @@ async def update_chatbot(
     chatbot.model_id = new_chatbot.model_id or chatbot.model_id
     chatbot.enable_search = new_chatbot.enable_search
     chatbot.enable_agent = new_chatbot.enable_agent
+    chatbot.enable_chatdb = new_chatbot.enable_chatdb
     chatbot.kb_ids = new_chatbot.kb_ids
     chatbot.mcp_ids = new_chatbot.mcp_ids
     chatbot.description = new_chatbot.description

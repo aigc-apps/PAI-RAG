@@ -8,6 +8,7 @@ interface ChatOptions {
   model: string;
   enable_agent: boolean;
   enable_search: boolean;
+  enable_chatdb: boolean;
   user_id: string;
   mcp_ids: string[];           // mcp列表
   kb_ids: string[];            // 知识库列表
@@ -15,6 +16,7 @@ interface ChatOptions {
   updateModel: (model: string) => void;
   updateEnablePlanning: (planning: boolean) => void;
   updateEnableSearch: (search: boolean) => void;
+  updateEnableChatdb: (chatdb: boolean) => void;
   updateMcpIds: (mcp_ids: string[]) => void;
   updateKbIds: (kb_ids: string[]) => void;
   updateUser: (user_id: string) => void;
@@ -26,6 +28,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [model, setModel] = useState('');
   const [enablePlanning, setEnablePlanning] = useState(false);
   const [enableSearch, setEnableSearch] = useState(false);
+  const [enableChatdb, setEnableChatdb] = useState(false);
   const [mcpIds, setMcpIds] = useState<string[]>([]);
   const [kbIds, setKbIds] = useState<string[]>([]);
   const [user_id, setUserId] = useState<string>("");
@@ -51,11 +54,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setUserId(user_id);
   }
 
+  const updateEnableChatdb = (chatdb: boolean) => {
+    setEnableChatdb(chatdb);
+  }
+
   return (
     <ChatContext.Provider value={{ 
         model: model,
         enable_agent: enablePlanning, 
         enable_search: enableSearch,
+        enable_chatdb: enableChatdb,
         mcp_ids: mcpIds,
         kb_ids: kbIds,
         user_id: user_id,
@@ -64,7 +72,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         updateEnablePlanning,
         updateMcpIds,
         updateKbIds,
-        updateUser}}>
+        updateUser,
+        updateEnableChatdb,
+        }}>
       {children}
     </ChatContext.Provider>
   );

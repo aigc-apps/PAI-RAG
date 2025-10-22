@@ -33,7 +33,8 @@ class ReasoningChunk(TextChunk):
 
 
 class ToolResultChunk(TextChunk):
-    result: str
+    result: str | None
+    error: str | None = None # Tool出现错误，不影响主Loop
     tool: ChoiceDeltaToolCall
 
 

@@ -132,7 +132,10 @@ class Planner(BaseAgent):
                     response_gen = await actor.run_async(state)
                     async for chunk in response_gen:
                         if isinstance(chunk, ToolResultChunk):
-                            state.observations += chunk.result + "\n\n"
+                            if chunk.result:
+                                state.observations += chunk.result + "\n\n"
+                            if chunk.error:
+                                state.observations += chunk.error + "\n\n"
 
                         chunk.stage = ChunkStage.ACTING
                         yield chunk
@@ -176,7 +179,10 @@ class Planner(BaseAgent):
                         logger.info("Actor finished with respond-tool.")
                         break
                     elif isinstance(chunk, ToolResultChunk):
-                        state.observations += chunk.result + "\n\n"
+                        if chunk.result:
+                            state.observations += chunk.result + "\n\n"
+                        if chunk.error:
+                            state.observations += chunk.error + "\n\n"
 
                     if chunk.delta:
                         yield ReasoningChunk(
