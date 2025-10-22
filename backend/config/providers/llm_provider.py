@@ -1,11 +1,42 @@
 import traceback
+import os
+import openai
 from typing import Dict, Optional, Type
 from chat.llm.llm_model import PaiLlm
 from sqlmodel import Field, SQLModel
 from loguru import logger
-from common.encrypt_utils import decrypt_key
+from common.encrypt_utils import decrypt_key, encrypt_key
 from config.providers.base_provider import BaseConfigProvider
 from db.models.llm import LlmModelEntity
+
+def try_get_initial_model_from_env():
+    endpoint = os.environ.get("PAIRAG_RAG__LLM__endpoint")
+    if not endpoint:
+        return None
+
+    if not endpoint.endswith("/v1"):
+        endpoint = endpoint.rstrip("/") + "/v1"
+
+    token = os.environ.get("PAIRAG_RAG__LLM__token") or "abc"
+
+    client = openai.OpenAI(api_key=token, base_url=endpoint)
+    try:
+        logger.info(f"Try to load models from {endpoint}:{token}.")
+        models = client.models.list()
+        if len(models.data) > 0:
+            logger.info(f"Loaded default llm model {models.data[0].id}")
+            return LlmModelEntity.model_validate({
+                "base_url": endpoint,
+                "encrypted_api_key": encrypt_key(token),
+                "model": models.data[0].id,
+                "model_id": models.data[0].id,
+                "source": "OpenAI-Compatible",
+            })
+    except Exception as ex:
+        logger.warning(f"Load model list failed: {ex}")
+        pass
+
+    return None
 
 
 class LlmProvider(BaseConfigProvider):
@@ -16,7 +47,6 @@ class LlmProvider(BaseConfigProvider):
         super()._load_entries(entries)
         for entry_id, entry in self.config_map.items():
             self.model_id_to_entry_id[entry.model_id] = entry_id
-
     def add(self, entry: LlmModelEntity):
         super().add(entry)
         self.model_id_to_entry_id[entry.model_id] = entry.id

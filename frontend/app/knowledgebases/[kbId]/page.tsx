@@ -602,21 +602,25 @@ export default function KnowledgeBaseDetailPage(
     });
 
     try {
+      // 生产环境上传大文件直连
+      const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1"; // 你的后端地址
+      console.log("上传后端地址前缀: ", API_PREFIX)
       const res = await fetch(
-        `/api/config/knowledgebases/${kbId}/files`,
+        `${API_PREFIX}/config/knowledgebases/${kbId}/files`,
         {
           method: 'POST',
           body: formData,
         },
       );
-      if (!res.ok) {
-        alert('上传失败');
-        return;
-      }
       const upload_result = await res.json();
+      if (upload_result.code !== 200) {
+        throw new Error(upload_result.message);
+      }
       console.log('上传成功:', upload_result);
-    } catch (error) {
-      console.error('上传失败:', error);
+      toast.success("上传成功。")
+    } catch (error: any) {
+      console.error('上传失败:', error.message);
+      toast.error("上传失败: " + error.message);
     } finally {
       setUploading(false);
       // 清空文件选择框

@@ -80,6 +80,7 @@ class ChatAgentRequest(BaseModel):
     kb_ids: Optional[List[str]] = []
     enable_search: Optional[bool] = False
     enable_agent: Optional[bool] = False
+    enable_chatdb: Optional[bool] = False
     max_steps: Optional[int] = None
     user_id: Optional[str] = None
     enable_input_guardrail: Optional[bool] = False

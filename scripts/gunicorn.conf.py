@@ -1,4 +1,4 @@
 # gunicorn.conf.py
 workers = 1
 worker_class = "uvicorn.workers.UvicornWorker"
-timeout = 600
+timeout = 1800
