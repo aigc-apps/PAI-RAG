@@ -2,10 +2,6 @@
 name = "pairag"
 version = "2.0.0"
 requires-python = ">=3.11,<3.13"
-dependencies = [
-  "pai-llm-evals @ https://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/release/20251017/pai_llm_evals-0.1.0.2025101706-py3-none-any.whl",
-  "alibabacloud_paillmtrace20240311 @ https://sdk-portal-us-prod.oss-accelerate.aliyuncs.com/downloads/u-fac7f0bf-4203-417b-a325-9a093e0789fb-python-tea.zip"
-]
 
 [tool.poetry]
 name = "pairag"
@@ -84,8 +80,15 @@ redis = "^6.2.0"
 opentelemetry-exporter-otlp-proto-grpc = "^1.36.0"
 python-levenshtein = "^0.27.1"
 pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.0.14-py3-none-any.whl"}
+pai-llm-evals = {url = "https://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/release/20251017/pai_llm_evals-0.1.0.2025101706-py3-none-any.whl"}
+alibabacloud_paillmtrace20240311 = {url = "https://sdk-portal-us-prod.oss-accelerate.aliyuncs.com/downloads/u-fac7f0bf-4203-417b-a325-9a093e0789fb-python-tea.zip"}
 tavily-python = "^0.7.12"
 rapidfuzz = "3.14.1"
+
+[[tool.poetry.source]]
+name = "alibaba"
+url = "http://yum.tbsite.net/pypi/simple/"
+priority = "primary"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
