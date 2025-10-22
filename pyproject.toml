@@ -86,10 +86,5 @@ tavily-python = "^0.7.12"
 rapidfuzz = "3.14.1"
 xiyan-mcp-server = "^0.1.7"
 
-[[tool.poetry.source]]
-name = "alibaba"
-url = "http://yum.tbsite.net/pypi/simple/"
-priority = "primary"
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
