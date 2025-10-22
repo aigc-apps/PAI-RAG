@@ -1,6 +1,8 @@
+import traceback
 from typing import List, Optional, cast
 import uuid
-from chat.llm.models import DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_RETRIES, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_TIMEOUT, THINK_END_TAG, THINK_START_TAG, ChatResponseGenerator, ReasoningChunk, TextChunk
+from chat.llm.models import DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_RETRIES, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_TIMEOUT, THINK_END_TAG, THINK_START_TAG, ChatResponseGenerator, ErrorChunk, ReasoningChunk, TextChunk
+from loguru import logger
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionChunk, ChatCompletionToolParam
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
@@ -106,68 +108,75 @@ class PaiLlm():
             tool_calls: List[ChoiceDeltaToolCall] = []
             is_reasoning = True
 
-            response_gen = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                stream=True,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                tools=tools or None,
-                stream_options={"include_usage": True},
-                extra_body={"chat_template_kwargs":{"enable_thinking": self.enable_thinking}},
-                **kwargs,
-            )
+            if not tools:
+                kwargs.pop("tool_choice", None) # pop choice if tools not given
 
             # in case we get duplicate tool call ids, like gemini tool_id is {index}_{tool_name}
-            tool_tag =  uuid.uuid4().hex[:6]
-            async for chunk in response_gen:
-                chunk = cast(ChatCompletionChunk, chunk)
+            tool_tag = uuid.uuid4().hex[:6]
+            try:
+                response_gen = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    stream=True,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    tools=tools or None,
+                    stream_options={"include_usage": True},
+                    extra_body={"chat_template_kwargs":{"enable_thinking": self.enable_thinking}},
+                    **kwargs,
+                )
 
-                if not chunk.choices:
-                    if chunk.usage:
-                        yield TextChunk(usage=chunk.usage)
-                    continue
+                async for chunk in response_gen:
+                    chunk = cast(ChatCompletionChunk, chunk)
 
-                if chunk.choices[0].delta.tool_calls:
-                    tool_calls = update_tool_calls(tool_calls, chunk.choices[0].delta.tool_calls)
+                    if not chunk.choices:
+                        if chunk.usage:
+                            yield TextChunk(usage=chunk.usage)
+                        continue
 
-                for tool_call in tool_calls:
-                    if not tool_call.id.startswith(tool_tag):
-                        tool_call.id = tool_tag + tool_call.id
+                    if chunk.choices[0].delta.tool_calls:
+                        tool_calls = update_tool_calls(tool_calls, chunk.choices[0].delta.tool_calls)
 
-                delta = chunk.choices[0].delta.content or ""
-                if self.enable_thinking:
-                    reasoning_delta = ""
-                    if hasattr(chunk.choices[0].delta, "reasoning_content"):
-                        reasoning_delta = chunk.choices[0].delta.reasoning_content or ""
+                    for tool_call in tool_calls:
+                        if not tool_call.id.startswith(tool_tag):
+                            tool_call.id = tool_tag + tool_call.id
+
+                    delta = chunk.choices[0].delta.content or ""
+                    if self.enable_thinking:
+                        reasoning_delta = ""
+                        if hasattr(chunk.choices[0].delta, "reasoning_content"):
+                            reasoning_delta = chunk.choices[0].delta.reasoning_content or ""
+                        else:
+                            if is_reasoning and delta:
+                                end_pos = delta.find(THINK_END_TAG)
+                                if end_pos != -1:
+                                    reasoning_delta = delta[:end_pos]
+                                    delta = delta[end_pos + len(THINK_END_TAG):]
+                                    is_reasoning = False
+                                else:
+                                    reasoning_delta = delta.replace(THINK_START_TAG, "")
+                        if delta or tool_calls:
+                            yield TextChunk(
+                                delta=delta,
+                                tool_calls=tool_calls,
+                                usage=chunk.usage,
+                            )
+                        elif reasoning_delta:
+                            yield ReasoningChunk(
+                                delta=delta,
+                                reasoning_delta=reasoning_delta,
+                                tool_calls=tool_calls,
+                                usage=chunk.usage,
+                            )
                     else:
-                        if is_reasoning and delta:
-                            end_pos = delta.find(THINK_END_TAG)
-                            if end_pos != -1:
-                                reasoning_delta = delta[:end_pos]
-                                delta = delta[end_pos + len(THINK_END_TAG):]
-                                is_reasoning = False
-                            else:
-                                reasoning_delta = delta.replace(THINK_START_TAG, "")
-                    if delta or tool_calls:
                         yield TextChunk(
                             delta=delta,
                             tool_calls=tool_calls,
                             usage=chunk.usage,
                         )
-                    elif reasoning_delta:
-                        yield ReasoningChunk(
-                            delta=delta,
-                            reasoning_delta=reasoning_delta,
-                            tool_calls=tool_calls,
-                            usage=chunk.usage,
-                        )
-                else:
-                    yield TextChunk(
-                        delta=delta,
-                        tool_calls=tool_calls,
-                        usage=chunk.usage,
-                    )
+            except Exception as ex:
+                logger.error(f"Llm stream error: {traceback.format_exc()}")
+                yield ErrorChunk(delta=f"{ex}", exception=str(ex), error_type="llm")
 
         return gen()
 

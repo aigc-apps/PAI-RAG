@@ -1,9 +1,10 @@
 # chat/agent/actor.py
 
 import json
+import traceback
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from loguru import logger
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
 from chat.agent.base import BaseAgent
 from chat.agent.state import AgentState
 from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
@@ -68,31 +69,48 @@ class Actor(BaseAgent):
                 )
                 async_fn = self.tool_fn_map[tool_name]
                 logger.info(f"Calling tool {tool_name} with args {function_args}.")
-                tool_result = await call_tool_with_retry(async_fn, function_args)
+                try:
+                    tool_result = await call_tool_with_retry(async_fn, function_args)
+                    tool_content = tool_result.content
+                    tool_error = None
+                    message_content = tool_content
+                except RetryError as retry_err:
+                    logger.error(f"Call tool failed: {traceback.format_exc()}")
+                    inner_exception = retry_err.last_attempt.exception()
+                    tool_content = None
+                    tool_error = f"工具调用失败: {inner_exception}"
+                    message_content = tool_error
+                except Exception as ex:
+                    logger.error(f"Call tool failed: {traceback.format_exc()}")
+                    tool_content = None
+                    tool_error = f"工具调用失败: {ex}"
+                    message_content = tool_error
+
                 #logger.info(f"Get tool result {tool_result}.")
-
-
                 messages.append(
                     {
                         "role": "assistant",
                         "content": None,
-                        "tool_calls": [selected_tool]
+                        "tool_calls": [
+                            selected_tool
+                        ]
                     }
                 )
                 messages.append(
                     {
                         "role": "tool",
-                        "content": tool_result.content,
+                        "content": message_content,
                         "tool_call_id": selected_tool.id
                     }
                 )
-
                 yield ToolResultChunk(
                     tool=selected_tool,
-                    result=tool_result.content,
+                    result=tool_content,
+                    error=tool_error
                 )
+
                 state.current_tool_call = None
-                observations += tool_result.content + "\n\n"
+                observations += message_content + "\n\n"
             act_prompt = self.build_prompt(state)
             messages = [{"role": "system", "content": act_prompt}] + messages
 
@@ -147,27 +165,46 @@ class Actor(BaseAgent):
                     # 调用工具
                     async_fn = self.tool_fn_map[function_name]
                     logger.info(f"[{self.name}] Calling {function_name} with args: {function_args}")
-                    tool_result = await call_tool_with_retry(async_fn, function_args)
-                    logger.info(f"[{self.name}] Tool result: {tool_result.content[:200]}...")
+                    try:
+                        tool_result = await call_tool_with_retry(async_fn, function_args)
+                        tool_content = tool_result.content
+                        tool_error = None
+                        message_content = tool_content
+                    except RetryError as retry_err:
+                        logger.error(f"Call tool failed: {traceback.format_exc()}")
+                        inner_exception = retry_err.last_attempt.exception()
+                        tool_content = None
+                        tool_error = f"工具调用失败: {inner_exception}"
+                        message_content = tool_error
+                    except Exception as ex:
+                        logger.error(f"Call tool failed: {traceback.format_exc()}")
+                        tool_content = None
+                        tool_error = f"工具调用失败: {ex}"
+                        message_content = tool_error
 
-
-                    messages.append({
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [tool]
-                    })
-
-                    messages.append({
-                        "role": "tool",
-                        "content": tool_result.content,
-                        "tool_call_id": tool.id
-                    })
-
+                    #logger.info(f"Get tool result {tool_result}.")
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                tool
+                            ]
+                        }
+                    )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "content": message_content,
+                            "tool_call_id": tool.id
+                        }
+                    )
                     yield ToolResultChunk(
                         tool=tool,
-                        result=tool_result.content,
+                        result=tool_content,
+                        error=tool_error
                     )
-                    observations += tool_result.content + "\n\n"
+                    observations += message_content + "\n\n"
 
             # 超出步数保护
             if react_step > self.max_steps:

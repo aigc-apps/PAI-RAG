@@ -5924,6 +5924,102 @@ url = "http://yum.tbsite.net/pypi/simple"
 reference = "alibaba"
 
 [[package]]
+name = "llama-cloud"
+version = "0.1.6"
+description = ""
+optional = false
+python-versions = ">=3.8,<4"
+groups = ["main"]
+files = [
+    {file = "llama_cloud-0.1.6-py3-none-any.whl", hash = "sha256:43595081e03ff552fd18d9553fcaada897ff267456c0f89f4cb098b927dc4dc7"},
+    {file = "llama_cloud-0.1.6.tar.gz", hash = "sha256:21200f6fdd46e08455d34b136f645ce6b8c3800e0ae13d8077913171a921da5a"},
+]
+
+[package.dependencies]
+httpx = ">=0.20.0"
+pydantic = ">=1.10"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index"
+version = "0.12.38"
+description = "Interface between LLMs and your data"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "llama_index-0.12.38-py3-none-any.whl", hash = "sha256:b8662c770298856f1c76712b0eb527724e11ee27c0d34120679d50844db9c392"},
+    {file = "llama_index-0.12.38.tar.gz", hash = "sha256:97a19b92aaae54f559d4252f609c74dce4463d1ee312e3bcbc6a7d70d98a1bf8"},
+]
+
+[package.dependencies]
+llama-index-agent-openai = ">=0.4.0,<0.5"
+llama-index-cli = ">=0.4.1,<0.5"
+llama-index-core = ">=0.12.38,<0.13"
+llama-index-embeddings-openai = ">=0.3.0,<0.4"
+llama-index-indices-managed-llama-cloud = ">=0.4.0"
+llama-index-llms-openai = ">=0.3.0,<0.4"
+llama-index-multi-modal-llms-openai = ">=0.4.0,<0.5"
+llama-index-program-openai = ">=0.3.0,<0.4"
+llama-index-question-gen-openai = ">=0.3.0,<0.4"
+llama-index-readers-file = ">=0.4.0,<0.5"
+llama-index-readers-llama-parse = ">=0.4.0"
+nltk = ">3.8.1"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index-agent-openai"
+version = "0.4.8"
+description = "llama-index agent openai integration"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "llama_index_agent_openai-0.4.8-py3-none-any.whl", hash = "sha256:a03e8609ada0355b408d4173cd7663708f826f23328f9719fba00ea20b6851b6"},
+    {file = "llama_index_agent_openai-0.4.8.tar.gz", hash = "sha256:ba76f21e1b7f0f66e326dc419c2cc403cbb614ae28f7904540b1103695965f68"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.12.18,<0.13"
+llama-index-llms-openai = ">=0.3.0,<0.4"
+openai = ">=1.14.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index-cli"
+version = "0.4.1"
+description = "llama-index cli"
+optional = false
+python-versions = ">=3.9,<4.0"
+groups = ["main"]
+files = [
+    {file = "llama_index_cli-0.4.1-py3-none-any.whl", hash = "sha256:6dfc931aea5b90c256e476b48dfac76f48fb2308fdf656bb02ee1e4f2cab8b06"},
+    {file = "llama_index_cli-0.4.1.tar.gz", hash = "sha256:3f97f1f8f5f401dfb5b6bc7170717c176dcd981538017430073ef12ffdcbddfa"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.12.0,<0.13.0"
+llama-index-embeddings-openai = ">=0.3.0,<0.4.0"
+llama-index-llms-openai = ">=0.3.0,<0.4.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
 name = "llama-index-core"
 version = "0.12.42"
 description = "Interface between LLMs and your data"
@@ -6030,6 +6126,27 @@ url = "http://yum.tbsite.net/pypi/simple"
 reference = "alibaba"
 
 [[package]]
+name = "llama-index-indices-managed-llama-cloud"
+version = "0.6.3"
+description = "llama-index indices llama-cloud integration"
+optional = false
+python-versions = ">=3.9,<4.0"
+groups = ["main"]
+files = [
+    {file = "llama_index_indices_managed_llama_cloud-0.6.3-py3-none-any.whl", hash = "sha256:7f125602f624a2d321b6a4130cd98df35eb8c15818a159390755b2c13068f4ce"},
+    {file = "llama_index_indices_managed_llama_cloud-0.6.3.tar.gz", hash = "sha256:f09e4182cbc2a2bd75ae85cebb1681075247f0d91b931b094cac4315386ce87a"},
+]
+
+[package.dependencies]
+llama-cloud = ">=0.1.5"
+llama-index-core = ">=0.12.0,<0.13.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
 name = "llama-index-llms-openai"
 version = "0.3.44"
 description = "llama-index llms openai integration"
@@ -6066,6 +6183,119 @@ files = [
 llama-index-core = ">=0.12.0,<0.13.0"
 llama-index-llms-openai = ">=0.3.0,<0.4.0"
 transformers = ">=4.37.0,<5.0.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index-multi-modal-llms-openai"
+version = "0.4.3"
+description = "llama-index multi-modal-llms openai integration"
+optional = false
+python-versions = ">=3.9,<4.0"
+groups = ["main"]
+files = [
+    {file = "llama_index_multi_modal_llms_openai-0.4.3-py3-none-any.whl", hash = "sha256:1ceb42716472ac8bd5130afa29b793869d367946aedd02e48a3b03184e443ad1"},
+    {file = "llama_index_multi_modal_llms_openai-0.4.3.tar.gz", hash = "sha256:5e6ca54069d3d18c2f5f7ca34f3720fba1d1b9126482ad38feb0c858f4feb63b"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.12.3,<0.13.0"
+llama-index-llms-openai = ">=0.3.0,<0.4.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index-program-openai"
+version = "0.3.1"
+description = "llama-index program openai integration"
+optional = false
+python-versions = ">=3.9,<4.0"
+groups = ["main"]
+files = [
+    {file = "llama_index_program_openai-0.3.1-py3-none-any.whl", hash = "sha256:93646937395dc5318fd095153d2f91bd632b25215d013d14a87c088887d205f9"},
+    {file = "llama_index_program_openai-0.3.1.tar.gz", hash = "sha256:6039a6cdbff62c6388c07e82a157fe2edd3bbef0c5adf292ad8546bf4ec75b82"},
+]
+
+[package.dependencies]
+llama-index-agent-openai = ">=0.4.0,<0.5.0"
+llama-index-core = ">=0.12.0,<0.13.0"
+llama-index-llms-openai = ">=0.3.0,<0.4.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index-question-gen-openai"
+version = "0.3.0"
+description = "llama-index question_gen openai integration"
+optional = false
+python-versions = ">=3.9,<4.0"
+groups = ["main"]
+files = [
+    {file = "llama_index_question_gen_openai-0.3.0-py3-none-any.whl", hash = "sha256:9b60ec114273a63b50349948666e5744a8f58acb645824e07c979041e8fec598"},
+    {file = "llama_index_question_gen_openai-0.3.0.tar.gz", hash = "sha256:efd3b468232808e9d3474670aaeab00e41b90f75f52d0c9bfbf11207e0963d62"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.12.0,<0.13.0"
+llama-index-llms-openai = ">=0.3.0,<0.4.0"
+llama-index-program-openai = ">=0.3.0,<0.4.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index-readers-file"
+version = "0.4.8"
+description = "llama-index readers file integration"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "llama_index_readers_file-0.4.8-py3-none-any.whl", hash = "sha256:6cc64c70c3a9f5b146200a68c15b742e6f0d13b308a1c0dc6bb919e3b5fd4275"},
+    {file = "llama_index_readers_file-0.4.8.tar.gz", hash = "sha256:d2821b164c11453b7993456355a6c544631a0ae8656a646df9fc009f16cfb99f"},
+]
+
+[package.dependencies]
+beautifulsoup4 = ">=4.12.3,<5"
+llama-index-core = ">=0.12.0,<0.13"
+pandas = "*"
+pypdf = ">=5.1.0,<6"
+striprtf = ">=0.0.26,<0.0.27"
+
+[package.extras]
+pymupdf = ["pymupdf (>=1.23.21,<2)"]
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-index-readers-llama-parse"
+version = "0.4.0"
+description = "llama-index readers llama-parse integration"
+optional = false
+python-versions = ">=3.9,<4.0"
+groups = ["main"]
+files = [
+    {file = "llama_index_readers_llama_parse-0.4.0-py3-none-any.whl", hash = "sha256:574e48386f28d2c86c3f961ca4a4906910312f3400dd0c53014465bfbc6b32bf"},
+    {file = "llama_index_readers_llama_parse-0.4.0.tar.gz", hash = "sha256:e99ec56f4f8546d7fda1a7c1ae26162fb9acb7ebcac343b5abdb4234b4644e0f"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.12.0,<0.13.0"
+llama-parse = ">=0.5.0"
 
 [package.source]
 type = "legacy"
@@ -6240,6 +6470,28 @@ files = [
 [package.dependencies]
 llama-index-core = ">=0.12.0,<0.13.0"
 tablestore = ">=6.1.0"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "llama-parse"
+version = "0.5.20"
+description = "Parse files into RAG-Optimized formats."
+optional = false
+python-versions = ">=3.9,<4.0"
+groups = ["main"]
+files = [
+    {file = "llama_parse-0.5.20-py3-none-any.whl", hash = "sha256:9617edb3428d3218ea01f1708f0b6105f3ffef142fedbeb8c98d50082c37e226"},
+    {file = "llama_parse-0.5.20.tar.gz", hash = "sha256:649e256431d3753025b9a320bb03b76849ce4b5a1121394c803df543e6c1006f"},
+]
+
+[package.dependencies]
+click = ">=8.1.7,<9.0.0"
+llama-index-core = ">=0.11.0"
+pydantic = "!=2.10"
 
 [package.source]
 type = "legacy"
@@ -7339,6 +7591,54 @@ files = [
     {file = "mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505"},
     {file = "mypy_extensions-1.1.0.tar.gz", hash = "sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558"},
 ]
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
+name = "mysql-connector-python"
+version = "9.5.0"
+description = "A self-contained Python driver for communicating with MySQL servers, using an API that is compliant with the Python Database API Specification v2.0 (PEP 249)."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "mysql_connector_python-9.5.0-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:77d14c9fde90726de22443e8c5ba0912a4ebb632cc1ade52a349dacbac47b140"},
+    {file = "mysql_connector_python-9.5.0-cp310-cp310-macosx_14_0_x86_64.whl", hash = "sha256:4d603b55de310b9689bb3cb5e57fe97e98756e36d62f8f308f132f2c724f62b8"},
+    {file = "mysql_connector_python-9.5.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:48ffa71ba748afaae5c45ed9a085a72604368ce611fe81c3fdc146ef60181d51"},
+    {file = "mysql_connector_python-9.5.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:77c71df48293d3c08713ff7087cf483804c8abf41a4bb4aefea7317b752c8e9a"},
+    {file = "mysql_connector_python-9.5.0-cp310-cp310-win_amd64.whl", hash = "sha256:4f8d2d9d586c34dc9508a44d19cf30ccafabbbd12d7f8ab58da3af118636843c"},
+    {file = "mysql_connector_python-9.5.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:653e70cd10cf2d18dd828fae58dff5f0f7a5cf7e48e244f2093314dddf84a4b9"},
+    {file = "mysql_connector_python-9.5.0-cp311-cp311-macosx_14_0_x86_64.whl", hash = "sha256:5add93f60b3922be71ea31b89bc8a452b876adbb49262561bd559860dae96b3f"},
+    {file = "mysql_connector_python-9.5.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:20950a5e44896c03e3dc93ceb3a5e9b48c9acae18665ca6e13249b3fe5b96811"},
+    {file = "mysql_connector_python-9.5.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:7fdd3205b9242c284019310fa84437f3357b13f598e3f9b5d80d337d4a6406b8"},
+    {file = "mysql_connector_python-9.5.0-cp311-cp311-win_amd64.whl", hash = "sha256:c021d8b0830958b28712c70c53b206b4cf4766948dae201ea7ca588a186605e0"},
+    {file = "mysql_connector_python-9.5.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:a72c2ef9d50b84f3c567c31b3bf30901af740686baa2a4abead5f202e0b7ea61"},
+    {file = "mysql_connector_python-9.5.0-cp312-cp312-macosx_14_0_x86_64.whl", hash = "sha256:bd9ba5a946cfd3b3b2688a75135357e862834b0321ed936fd968049be290872b"},
+    {file = "mysql_connector_python-9.5.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:5ef7accbdf8b5f6ec60d2a1550654b7e27e63bf6f7b04020d5fb4191fb02bc4d"},
+    {file = "mysql_connector_python-9.5.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:a6e0a4a0274d15e3d4c892ab93f58f46431222117dba20608178dfb2cc4d5fd8"},
+    {file = "mysql_connector_python-9.5.0-cp312-cp312-win_amd64.whl", hash = "sha256:b6c69cb37600b7e22f476150034e2afbd53342a175e20aea887f8158fc5e3ff6"},
+    {file = "mysql_connector_python-9.5.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:1f5f7346b0d5edb2e994c1bd77b3f5eed88b0ca368ad6788d1012c7e56d7bf68"},
+    {file = "mysql_connector_python-9.5.0-cp313-cp313-macosx_14_0_x86_64.whl", hash = "sha256:07bf52591b4215cb4318b4617c327a6d84c31978c11e3255f01a627bcda2618e"},
+    {file = "mysql_connector_python-9.5.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:8972c1f960b30d487f34f9125ec112ea2b3200bd02c53e5e32ee7a43be6d64c1"},
+    {file = "mysql_connector_python-9.5.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:f6d32d7aa514d2f6f8709ba1e018314f82ab2acea2e6af30d04c1906fe9171b9"},
+    {file = "mysql_connector_python-9.5.0-cp313-cp313-win_amd64.whl", hash = "sha256:edd47048eb65c196b28aa9d2c0c6a017d8ca084a9a7041cd317301c829eb5a05"},
+    {file = "mysql_connector_python-9.5.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:6effda35df1a96d9a096f04468d40f2324ea36b34d0e9632e81daae8be97b308"},
+    {file = "mysql_connector_python-9.5.0-cp314-cp314-macosx_14_0_x86_64.whl", hash = "sha256:fd057bd042464eedbf5337d1ceea7f2a4ab075a1cf6d1d62ffd5184966a656dd"},
+    {file = "mysql_connector_python-9.5.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:2797dd7bbefb1d1669d984cfb284ea6b34401bbd9c1b3bf84e646d0bd3a82197"},
+    {file = "mysql_connector_python-9.5.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:a5fff063ed48281b7374a4da6b9ef4293d390c153f79b1589ee547ea08c92310"},
+    {file = "mysql_connector_python-9.5.0-cp314-cp314-win_amd64.whl", hash = "sha256:56104693478fd447886c470a6d0558ded0fe2577df44c18232a6af6a2bbdd3e9"},
+    {file = "mysql_connector_python-9.5.0-py2.py3-none-any.whl", hash = "sha256:ace137b88eb6fdafa1e5b2e03ac76ce1b8b1844b3a4af1192a02ae7c1a45bdee"},
+    {file = "mysql_connector_python-9.5.0.tar.gz", hash = "sha256:92fb924285a86d8c146ebd63d94f9eaefa548da7813bc46271508fdc6cc1d596"},
+]
+
+[package.extras]
+dns-srv = ["dnspython (==2.6.1)"]
+gssapi = ["gssapi (==1.8.3)"]
+telemetry = ["opentelemetry-api (==1.33.1)", "opentelemetry-exporter-otlp-proto-http (==1.33.1)", "opentelemetry-sdk (==1.33.1)"]
+webauthn = ["fido2 (==1.1.2)"]
 
 [package.source]
 type = "legacy"
@@ -10240,6 +10540,27 @@ url = "http://yum.tbsite.net/pypi/simple"
 reference = "alibaba"
 
 [[package]]
+name = "pymysql"
+version = "1.1.2"
+description = "Pure Python MySQL Driver"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "pymysql-1.1.2-py3-none-any.whl", hash = "sha256:e6b1d89711dd51f8f74b1631fe08f039e7d76cf67a42a323d3178f0f25762ed9"},
+    {file = "pymysql-1.1.2.tar.gz", hash = "sha256:4961d3e165614ae65014e361811a724e2044ad3ea3739de9903ae7c21f539f03"},
+]
+
+[package.extras]
+ed25519 = ["PyNaCl (>=1.4.0)"]
+rsa = ["cryptography"]
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
 name = "pyparsing"
 version = "3.2.5"
 description = "pyparsing - Classes and methods to define and execute parsing grammars"
@@ -10261,14 +10582,14 @@ reference = "alibaba"
 
 [[package]]
 name = "pypdf"
-version = "6.1.3"
+version = "5.9.0"
 description = "A pure-python PDF library capable of splitting, merging, cropping, and transforming PDF files"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "pypdf-6.1.3-py3-none-any.whl", hash = "sha256:eb049195e46f014fc155f566fa20e09d70d4646a9891164ac25fa0cbcfcdbcb5"},
-    {file = "pypdf-6.1.3.tar.gz", hash = "sha256:8d420d1e79dc1743f31a57707cabb6dcd5b17e8b9a302af64b30202c5700ab9d"},
+    {file = "pypdf-5.9.0-py3-none-any.whl", hash = "sha256:be10a4c54202f46d9daceaa8788be07aa8cd5ea8c25c529c50dd509206382c35"},
+    {file = "pypdf-5.9.0.tar.gz", hash = "sha256:30f67a614d558e495e1fbb157ba58c1de91ffc1718f5e0dfeb82a029233890a1"},
 ]
 
 [package.extras]
@@ -12616,6 +12937,23 @@ url = "http://yum.tbsite.net/pypi/simple"
 reference = "alibaba"
 
 [[package]]
+name = "striprtf"
+version = "0.0.26"
+description = "A simple library to convert rtf to text"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "striprtf-0.0.26-py3-none-any.whl", hash = "sha256:8c8f9d32083cdc2e8bfb149455aa1cc5a4e0a035893bedc75db8b73becb3a1bb"},
+    {file = "striprtf-0.0.26.tar.gz", hash = "sha256:fdb2bba7ac440072d1c41eab50d8d74ae88f60a8b6575c6e2c7805dc462093aa"},
+]
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
 name = "sympy"
 version = "1.13.1"
 description = "Computer algebra system (CAS) in Python"
@@ -14236,6 +14574,30 @@ url = "http://yum.tbsite.net/pypi/simple"
 reference = "alibaba"
 
 [[package]]
+name = "xiyan-mcp-server"
+version = "0.1.7"
+description = "A Model Context Protocol (MCP) server that utilizes XiyanSQL with databases. This server enables AI assistants to list tables, read data, and execute natural language queries"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "xiyan_mcp_server-0.1.7-py3-none-any.whl", hash = "sha256:a0e8ecdaaeb47cea9b5cde3e35a8174c5c1488f914ee495908d4af5678f99eb2"},
+    {file = "xiyan_mcp_server-0.1.7.tar.gz", hash = "sha256:1e94995ecdcbe738ae3c0dd8307fd8b5f251f079a8d8dac947bccf7f83d13dca"},
+]
+
+[package.dependencies]
+llama-index = "*"
+mcp = ">=1.0.0"
+mysql-connector-python = ">=9.1.0"
+pymysql = "*"
+sqlalchemy = "*"
+
+[package.source]
+type = "legacy"
+url = "http://yum.tbsite.net/pypi/simple"
+reference = "alibaba"
+
+[[package]]
 name = "xlrd"
 version = "2.0.2"
 description = "Library for developers to extract data from Microsoft Excel (tm) .xls spreadsheet files"
@@ -14731,4 +15093,4 @@ reference = "alibaba"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.13"
-content-hash = "a89dfc70d05e31840aff855cef9941804f0d22fa3a02c55ac24a02fb9dff39a5"
+content-hash = "ef1f2b2339a27cbb6537ae2c566729a8cb8e485a9520c96844cce73ce8796811"
