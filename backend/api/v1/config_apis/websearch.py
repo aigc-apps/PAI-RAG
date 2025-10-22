@@ -89,9 +89,17 @@ async def list_search_config(
         select(WebSearchConfigEntity).offset(offset).limit(limit)
     )).first()
 
+    if not search_config_result:
+        return WebSearchConfigRead(
+            type="aliyun",
+            endpoint="",
+            id="",
+            is_aliyun_empty=True,
+            is_tavily_empty=True,
+        )
 
     websearch_config = WebSearchConfigRead(
-        type=search_config_result.type,
+        type=search_config_result.type or "aliyun",
         endpoint=search_config_result.endpoint,
         search_count=search_config_result.search_count,
         id=search_config_result.id,

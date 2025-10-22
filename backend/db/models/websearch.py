@@ -5,11 +5,11 @@ from sqlmodel import Field, SQLModel
 class WebSearchConfig(SQLModel):
     type: str = Field(default=None) # tavily, aliyun
     search_count: int = Field(default=10)
-    endpoint: str = Field(default=None)
+    endpoint: str | None = Field(default=None)
 
 
 class WebSearchConfigRead(WebSearchConfig):
-    id: str = Field(default=None)
+    id: str | None = Field(default=None)
     is_aliyun_empty: bool = Field(default=False)
     is_tavily_empty: bool = Field(default=False)
 
