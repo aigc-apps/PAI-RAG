@@ -62,7 +62,7 @@ class AnalyticDBVectorStoreConfig(BaseVectorStoreConfig):
     account: str
     account_password: str
     namespace: str
-    collection: str
+    collection: str | None = None
 
 
 class HologresVectorStoreConfig(BaseVectorStoreConfig):
@@ -72,7 +72,7 @@ class HologresVectorStoreConfig(BaseVectorStoreConfig):
     user: str
     password: str
     database: str
-    table_name: str
+    table_name: str | None = None
     pre_delete_table: bool = False
 
 
@@ -83,7 +83,7 @@ class ElasticSearchVectorStoreConfig(BaseVectorStoreConfig):
     es_url: str
     es_user: str
     es_password: str
-    es_index: str
+    es_index: str | None = None
 
 
 class MilvusVectorStoreConfig(BaseVectorStoreConfig):
@@ -93,7 +93,7 @@ class MilvusVectorStoreConfig(BaseVectorStoreConfig):
     user: str
     password: str
     database: str
-    collection_name: str
+    collection_name: str | None = None
     sparse_embedding_type: SparseEmbeddingFunctionType = (
         SparseEmbeddingFunctionType.bm25
     )
@@ -107,7 +107,7 @@ class OpenSearchVectorStoreConfig(BaseVectorStoreConfig):
     instance_id: str
     username: str
     password: str
-    table_name: str
+    table_name: str | None = None
 
 
 class TablestoreVectorStoreConfig(BaseVectorStoreConfig):
@@ -116,9 +116,9 @@ class TablestoreVectorStoreConfig(BaseVectorStoreConfig):
     ] = SupportedVectorStoreType.tablestore
     endpoint: str
     instance_name: str
-    access_key_id: str
-    access_key_secret: str
-    table_name: str
+    access_key_id: str | None = None
+    access_key_secret: str | None = None
+    table_name: str | None = None
 
 
 class DashVectorVectorStoreConfig(BaseVectorStoreConfig):
@@ -127,7 +127,7 @@ class DashVectorVectorStoreConfig(BaseVectorStoreConfig):
     ] = SupportedVectorStoreType.dashvector
     endpoint: str
     api_key: str
-    collection_name: str
+    collection_name: str | None = None
     partition_name: str
 
 

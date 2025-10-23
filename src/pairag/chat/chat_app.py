@@ -1,3 +1,4 @@
+import traceback
 from pairag.chat.chat_context import set_context
 from pairag.chat.chat_flow import ChatFlow
 from pairag.core.rag_config import RagConfig
@@ -39,7 +40,11 @@ class ChatApp:
         init_instrument(self.config.trace)
         self.trace_key_maps = self.config.trace.user_args or {}
 
-        _ = resolve_vector_index(knowledgebase_manager.get_knowledgebase())
+        try:
+            _ = resolve_vector_index(knowledgebase_manager.get_knowledgebase())
+        except Exception as ex:
+            logger.warning(f"Try to init vector index failed: {traceback.format_exc()}")
+            pass
 
     def refresh(self, config: RagConfig):
         self.config = config
