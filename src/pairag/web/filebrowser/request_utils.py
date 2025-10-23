@@ -49,7 +49,18 @@ async def postprocess_middleware(request, call_next):
                 connect=500 * 60,
             )
         ) as session:
-            return await postprocess_middleware_to_filebrowser(session, request, url)
+            response = await postprocess_middleware_to_filebrowser(
+                session, request, url
+            )
+            for k in [
+                "Content-Length",
+                "content-length",
+                "Content-Encoding",
+                "content-encoding",
+            ]:
+                if k in response.headers:
+                    del response.headers[k]
+            return response
     else:
         response = await call_next(request)
         return response
