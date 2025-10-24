@@ -25,7 +25,7 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
     if eval_type == "ExactMatch":
         return ExactMatchEvaluator(
             case_sensitive=eval_config.get("case_sensitive", False),
-            ignore_punctuation=eval_config.get("case_sensitive", True)
+            ignore_punctuation=eval_config.get("ignore_punctuation", True)
         )
     elif eval_type == "LLMJudge":
         assert eval_llm is not None, "Must provide eval llm instance"
