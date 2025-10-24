@@ -79,7 +79,7 @@ redis = "^6.2.0"
 opentelemetry-exporter-otlp-proto-grpc = "^1.36.0"
 python-levenshtein = "^0.27.1"
 pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.0.14-py3-none-any.whl"}
-pai-llm-evals = {url = "https://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/release/20251023/pai_llm_evals-0.1.0.2025102312-py3-none-any.whl"}
+pai-llm-evals = {url = "https://pai-llm-evals.oss-cn-zhangjiakou.aliyuncs.com/sdk/package/release/20251023/pai_llm_evals-0.1.0.2025102317-py3-none-any.whl"}
 alibabacloud_paillmtrace20240311 = {url = "https://sdk-portal-us-prod.oss-accelerate.aliyuncs.com/downloads/u-4f1dd629-06f5-479e-b641-42cd3c39827d-python-tea.zip"}
 tavily-python = "^0.7.12"
 rapidfuzz = "3.14.1"
