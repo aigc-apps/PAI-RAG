@@ -11,10 +11,8 @@ from config.providers.chatbot_provider import chatbot_provider
 from openai.types.chat import ChatCompletionMessageParam
 import traceback
 from loguru import logger
-from concurrent.futures import ThreadPoolExecutor
 
 
-_EXECUTOR = ThreadPoolExecutor(max_workers=10)
 
 
 chat_agent_router = APIRouter()

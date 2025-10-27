@@ -125,8 +125,6 @@ class Actor(BaseAgent):
                 tool_calls = []
                 step_content = ""
 
-                print("*************messages******************", messages)
-
 
                 async for chunk in await self.invoke_llm_async(
                     messages=messages,

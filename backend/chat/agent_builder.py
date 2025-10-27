@@ -17,13 +17,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
 from pairag.file.store.file_store_helper import file_store
-from utils.tool_utils import get_binary_io_from_oss_url
+from utils.tool_utils import get_binary_content_from_oss_url
 from sqlmodel import select
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-
-
-_EXECUTOR = ThreadPoolExecutor(max_workers=10)
 
 async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]=[]) -> List[FunctionTool]:
     mcp_tools = []
@@ -77,17 +73,10 @@ async def aupload_upload_files_to_code_sandbox(session: AsyncSession, file_ids: 
     files = [(entity.file_path, entity.file_name) for entity in processed_file_entities]
     unique_kb_ids = list({entity.kb_id for entity in processed_file_entities})
     assert len(unique_kb_ids) == 1, "file_ids must be from the same knowledgebase"
-    loop = asyncio.get_event_loop()
     for file_path, file_name in files:
         file_url = file_store.get_url(file_path)
-        file_content = get_binary_io_from_oss_url(file_url)
-        _ = await loop.run_in_executor(
-                    _EXECUTOR,
-                    codesandbox_provider.tool.upload_data_file_to_sandbox,
-                    file_content,
-                    file_name,
-
-                )
+        file_content_bytes = get_binary_content_from_oss_url(file_url)
+        await codesandbox_provider.tool.aupload_data_file_to_sandbox(file_content_bytes, file_name)
 
 
 async def build_agent(chat_request: ChatAgentRequest) -> Planner:
@@ -111,8 +100,9 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
 
         code_sandbox_ready: asyncio.Future = asyncio.Future()
         if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
-            loop = asyncio.get_event_loop()
-            sandbox_init_task = loop.run_in_executor(_EXECUTOR, codesandbox_provider.tool.create_session_and_context)
+            sandbox_init_task = asyncio.create_task(
+        codesandbox_provider.tool.acreate_session_and_context()
+    )
 
             if code_sandbox_attachments:
                 logger.info(f"[Model] scheduling upload of {len(code_sandbox_attachments)} code sandbox attachments.")
