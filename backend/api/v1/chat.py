@@ -45,6 +45,7 @@ def parse_chat_request(chat_request: ChatAgentRequest) -> ChatAgentRequest:
             mcp_ids=chatbot.mcp_ids,
             enable_search=chatbot.enable_search,
             enable_agent=chatbot.enable_agent,
+            enable_chatdb=chatbot.enable_chatdb or False,
             kb_ids=chatbot.kb_ids,
             temperature=chat_request.temperature,
             max_tokens=chat_request.max_tokens,

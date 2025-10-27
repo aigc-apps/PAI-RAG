@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 import uuid
-from chat.llm.models import ChatResponseGenerator, ErrorChunk, ReasoningChunk, ToolResultChunk
+from chat.llm.models import ChatResponseGenerator, ErrorChunk, ReasoningChunk, ToolResultChunk, TextChunk
 from extensions.guardrail.guardrail_check import TextCheckResult
 from openai.types.chat import ChatCompletionChunk, ChatCompletion, ChatCompletionMessage
 from openai.types.completion_usage import CompletionUsage
@@ -34,7 +34,10 @@ def extract_citations(tool_chunk: ToolResultChunk):
     citations, citation_details = [], []
     tool_name = tool_chunk.tool.function.name or "dummy"
     if tool_name == "aliyun-websearch" or tool_name == "tavily-websearch" or tool_name.startswith("search-knowledgebase"):
-        tool_call_results = json.loads(tool_chunk.result).get("result", [])
+        if not tool_chunk.result:
+            return citations, citation_details
+
+        tool_call_results = json.loads(tool_chunk.result).get("result", []) or []
         citations = [r.get("url", "") for r in tool_call_results]
         citation_details = [
             {
@@ -108,7 +111,8 @@ async def convert_gen_to_stream_chat_completions(
                 )
             ],
             actions=[action.model_dump(mode="json") for action in chunk.tool_calls] if chunk.tool_calls else None,
-            observation=chunk.result if isinstance(chunk, ToolResultChunk) else None,
+            observation=chunk.model_dump(mode="json") if isinstance(chunk, ToolResultChunk) else None,
+            trace_id=chunk.trace_id if isinstance(chunk, TextChunk) else None,
             model=model,
             created=int(time.time()),
             citations=citations,

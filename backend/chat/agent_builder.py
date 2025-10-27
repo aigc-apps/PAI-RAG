@@ -6,9 +6,10 @@ from config.providers.llm_provider import llm_provider
 from config.providers.mcp_tool_provider import mcp_provider
 from config.providers.websearch_provider import websearch_provider
 from config.providers.code_sandbox_provider import codesandbox_provider
+from config.providers.chatdb_provider import chatdb_provider
 from llama_index.core.tools.function_tool import FunctionTool
 from loguru import logger
-from rag.knowledgebase_tool import aget_knowledgebase_tool
+from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from chat.tools.attachments.file_searcher import aget_file_searcher
 from chat.tools.visit_webpage import aget_visit_webpage_tool
 from utils.attachment_utils import is_attachment_truncated
@@ -45,6 +46,10 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]
         logger.info(f"[Model] selected mcp servers: {chat_request.mcp_ids}")
         mcp_tools.extend(await mcp_provider.get_mcp_tools_async(chat_request.mcp_ids))
         logger.info(f"[Model] mcp_tools: {mcp_tools}")
+
+    if chat_request.enable_chatdb:
+        mcp_tools.extend(chatdb_provider.get_db_tools())
+        logger.info("Loaded chat_db tools.")
 
     mcp_tools.extend(await aget_kb_tools(chat_request))
 

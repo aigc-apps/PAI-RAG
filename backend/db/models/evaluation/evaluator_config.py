@@ -16,7 +16,8 @@ class EvaluatorConfigEntity(EvaluatorConfigCreate, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
-        description="Reference to the evaluation task"
+        description="Reference to the evaluation task",
+        ondelete="CASCADE",
     )
 
     created_at: datetime = Field(

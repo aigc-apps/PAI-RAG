@@ -27,9 +27,8 @@ class CsvReader(BaseReader):
             "\n".join([f"{k}:{v}" for k, v in record.items()])
             for record in df.to_dict("records")
         ]
-
         metadata = file_item.metadata()
-        docs = [Document(text=text, metadata=metadata) for text in text_list]
+        docs = [Document(id_=file_item.id, text=text, metadata=metadata) for text in text_list]
 
         logger.info(
             f"Successfully read {len(docs)} documents from {file_item.file_name}"

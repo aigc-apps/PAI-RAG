@@ -27,7 +27,8 @@ class RunConfigEntity(RunConfigCreate, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
-        description="Reference to the evaluation task"
+        description="Reference to the evaluation task",
+        ondelete="CASCADE",
     )
     mcp_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     kb_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))

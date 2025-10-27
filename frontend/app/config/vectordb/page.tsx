@@ -16,12 +16,14 @@ import { Key, useEffect, useState } from "react";
 import { PostgresqlConfig, PostgresqlForm } from "./forms/postgresql";
 import { MilvusConfig, MilvusForm } from "./forms/milvus";
 import { ElasticConfig, ElasticsearchForm } from "./forms/elasticsearch";
+import { HologresConfig, HologresForm } from "./forms/hologres";
+import { OpensearchConfig, OpensearchForm } from "./forms/opensearch";
+import { TablestoreConfig, TablestoreForm } from "./forms/tablestore";
 import { toast } from "sonner";
-import { is } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type DBType = "local" | "postgresql" | "milvus" | "elasticsearch" ;
+type DBType = "local" | "postgresql" | "milvus" | "elasticsearch" | "hologres" | "opensearch" | "tablestore";
 
 const cache = new Map();
 
@@ -45,7 +47,10 @@ export default function VectorDBConsole() {
 
         const data = await res.json();
         setDbType(data.data.type);
-        setDb({...data.data.config, password: data.data.config.encrypted_password ? '******': undefined});
+        setDb({
+          ...data.data.config,
+          password: data.data.config.encrypted_password ? '******': undefined,
+          sk: data.data.config.encrypted_sk ? '******': undefined });
       } catch (err: any) {
         toast.error(err.message);
       }
@@ -65,7 +70,12 @@ export default function VectorDBConsole() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: dbType,
-            config: { ...db, type: dbType, password: db.password === '******' ? '' :  db.password},
+            config: {
+              ...db,
+              type: dbType,
+              password: db.password === '******' ? '' :  db.password,
+              sk: db.sk === '******' ? '' : db.sk
+            },
           }),
         });
 
@@ -87,13 +97,18 @@ export default function VectorDBConsole() {
   const testConnection = async () => { 
       setConnectionTesting(true);
       try {
-        console.log("链接测试： ", db);
+        console.log("连接测试： ", db);
         const res = await fetch(`/api/config/vectordb/connection_test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: dbType,
-            config: { ...db, type: dbType, password: db.password === '******' ? '' :  db.password},
+            config: {
+              ...db,
+              type: dbType,
+              password: db.password === '******' ? '' :  db.password,
+              sk: db.sk === '******' ? '' : db.sk
+            },
           }),
         });
 
@@ -121,6 +136,12 @@ export default function VectorDBConsole() {
         return <MilvusForm config={db as MilvusConfig} onValueChange={setDb} />;
       case "elasticsearch":
         return <ElasticsearchForm config={db as ElasticConfig} onValueChange={setDb} />;
+      case "hologres":
+        return <HologresForm config={db as HologresConfig} onValueChange={setDb} />;
+      case "opensearch":
+        return <OpensearchForm config={db as OpensearchConfig} onValueChange={setDb} />;
+      case "tablestore":
+        return <TablestoreForm config={db as TablestoreConfig} onValueChange={setDb} />;
       default:
         return <div>本地存储，无需额外配置。</div>;
     }
@@ -150,6 +171,9 @@ export default function VectorDBConsole() {
                 <SelectItem value="postgresql">PostgreSQL</SelectItem>
                 <SelectItem value="milvus">Milvus</SelectItem>
                 <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
+                <SelectItem value="hologres">Hologres</SelectItem>
+                <SelectItem value="opensearch">Opensearch</SelectItem>
+                <SelectItem value="tablestore">Tablestore</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -16,6 +16,7 @@ import {
   PencilIcon,
   RefreshCwIcon,
   SendHorizontalIcon,
+  DatabaseIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -51,7 +52,8 @@ export const Thread: FC<{
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
   const [kbLoading, setKbLoading] = useState(false);
   const [kbError, setKbError] = useState<string | null>(null);
-  const {kb_ids, mcp_ids, enable_search, enable_agent, updateEnableSearch, updateEnablePlanning, updateKbIds, updateMcpIds} = useChatOptions();
+  const {kb_ids, mcp_ids, enable_search, enable_agent, enable_chatdb, 
+    updateEnableSearch, updateEnablePlanning, updateKbIds, updateMcpIds, updateEnableChatdb} = useChatOptions();
 
   // 获取MCP配置
   useEffect(() => {
@@ -125,6 +127,9 @@ export const Thread: FC<{
     if (enable_agent) {
       newOptions.push('planning');
     }
+    if (enable_chatdb) {
+      newOptions.push('chatdb');
+    }
     if (kb_ids.length > 0) {
       newOptions.push('kb');
     }
@@ -141,6 +146,7 @@ export const Thread: FC<{
   ) => {
     updateEnableSearch(value.includes('search'));
     updateEnablePlanning(value.includes('planning'));
+    updateEnableChatdb(value.includes('chatdb'));
     setActiveTools(value);
   }
 
@@ -398,6 +404,13 @@ const Composer: FC<ComposerProps> = ({
                     }}
                   >
                     <LibraryBig /> 知识库
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="chatdb"
+                    aria-label="Toggle chatdb"
+                    className="!rounded-full px-6 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
+                  >
+                    <DatabaseIcon /> ChatDB
                   </ToggleGroupItem>
                 </ToggleGroup>
 

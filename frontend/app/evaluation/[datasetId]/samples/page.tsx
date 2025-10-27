@@ -224,8 +224,8 @@ export default function EvalDatasetsDetailsPage({
         if (!files?.length) return;
 
         const file = files[0];
-        if (file.size > 100 * 1024 * 1024) {
-            toast.error("文件大小超过 100MB");
+        if (file.size > 1000 * 1024 * 1024) {
+            toast.error("文件大小超过 1GB，请选择更小的文件。");
             return;
         }
 

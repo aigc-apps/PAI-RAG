@@ -3,8 +3,6 @@ import socket
 from functools import wraps
 from typing import Callable, AsyncGenerator
 from loguru import logger
-from pydantic.v1 import json as pydantic_v1_json
-from pydantic import json as pydantic_json
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -19,7 +17,6 @@ from opentelemetry.sdk.trace.export import (
 )
 from opentelemetry.trace import Span
 from opentelemetry.context import attach, detach
-from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
 from openinference.instrumentation.openai import OpenAIInstrumentor
 from openinference.semconv.trace import SpanAttributes
 
@@ -44,7 +41,7 @@ def init_instrument(config: TraceConfig):
 
     if not config.is_enabled():
         os.environ["TRACING_ENABLED"] = "false"
-        LlamaIndexInstrumentor().uninstrument()
+        OpenAIInstrumentor().uninstrument()
         trace_config = config
         logger.info("Tracing is DISABLED.")
         return
@@ -91,7 +88,6 @@ def init_instrument(config: TraceConfig):
 
         trace.set_tracer_provider(trace_provider)
 
-    LlamaIndexInstrumentor().instrument()
     OpenAIInstrumentor().instrument()
     os.environ["TRACING_ENABLED"] = "true"
     logger.info("Init trace successfully.")
@@ -107,9 +103,12 @@ def use_current_span(span: Span):
         async def wrapper(*args, **kwargs) -> AsyncGenerator:
             if span and span.is_recording():
                 ctx = trace.set_span_in_context(span)
+                trace_id = format(span.get_span_context().trace_id, '032x')
                 token = attach(ctx)
                 try:
                     async for item in func(*args, **kwargs):
+                        if hasattr(item, 'trace_id'):
+                            item.trace_id = trace_id
                         yield item
                 finally:
                     detach(token)
@@ -152,11 +151,3 @@ def gen_ai_semantic_conversion():
 
 
 gen_ai_semantic_conversion()
-
-
-# arize instrumentation uses: pydantic.v1.json.pydantic_encoder
-# but pydantic.v1.json.pydantic_encoder explicitly check v1
-# this caused llama-index obj fails pydantic/v1/json.py#L77
-# from pydantic.v1.main import BaseModel
-# if isinstance(obj, BaseModel):
-pydantic_v1_json.pydantic_encoder = pydantic_json.pydantic_encoder

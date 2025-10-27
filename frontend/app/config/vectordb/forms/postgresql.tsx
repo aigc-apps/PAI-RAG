@@ -46,14 +46,14 @@ export const PostgresqlForm: FC<PostgresqlConfigProps> = ({
       </div>
         <div className="space-y-2">
           <Label htmlFor="user">用户名</Label>
-          <Input id="user" type="string" value={db.user} onChange={(e) => {
+          <Input id="user" type="string" value={db.user || ''} onChange={(e) => {
             setDb({...db, user: e.target.value});
             onValueChange({ ...db, user: e.target.value })}
             } />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="user">密码</Label>
-          <Input id="password" type="password" value={db.password} onChange={(e) => {
+          <Label htmlFor="password">密码</Label>
+          <Input id="password" type="password" value={db.password  || ''} onChange={(e) => {
             setDb({...db, password: e.target.value});
             onValueChange({ ...db, password: e.target.value })}
             } />

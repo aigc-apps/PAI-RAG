@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { PhotoProvider, PhotoView } from "react-photo-view";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from "remark-gfm";
+import { MarkdownRenderer } from '@/components/customized/markdown/markdown';
 
 const JsonCodeBlock = ({
   jsonString,
@@ -44,20 +47,20 @@ export type SearchWebArgs = {
 
 type SearchWebResult = {
   result: {
-    title: string;
-    content: string;
-    url: string;
-    favicon: string;
-    hostname: string;
-    publish_time: string;
-    score: string;
-  }[];
+      title: string;
+      content: string;
+      url: string;
+      favicon: string;
+      hostname: string;
+      publish_time: string;
+      score: string;
+    }[],
 };
 
 
 export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'tavily-websearch',
-  render: ({ args, status, result }) => {
+  render: ({ args, status, result, isError }) => {
     console.log('TavilySearchTool 参数:', args);
     console.log('TavilySearchTool 状态:', status);
 
@@ -73,15 +76,16 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
         </div>
       );
     } else if (status.type === 'complete') {
-      if (!result) {
+      if (!result || isError) {
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500">
             <GlobeIcon className="h-4 w-4" />
-            <span>未能获取搜索结果</span>
+            <span>未能获取搜索结果. {result || ''}</span>
           </div>
         );
       }
       const search_result = JSON.parse(result) as SearchWebResult;
+
       return (
         <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
           <Sheet>
@@ -146,10 +150,85 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
 });
 
 
+export type ChatDbArgs = {
+  query: string;
+};
+
+type ChatDbResult = {
+  result: string;
+  sql: string;
+};
+
+
+
+export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
+  toolName: 'chat-db',
+  render: ({ args, status, result, isError }) => {
+    console.log('ChatDbTool 参数:', args);
+    console.log('ChatDbTool 状态:', status);
+    console.log('ChatDbTool 是否出错:', isError);
+    console.log('ChatDbTool 结果:', result);
+
+    if (status.type === 'running') {
+      return (
+        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
+          >
+            <GlobeIcon className="size-4" /> 正在查询数据库: {args.query}{' '}
+          </Button>
+        </div>
+      );
+    } else if (status.type === 'complete') {
+      if (!result || isError) {
+        return (
+          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+            <GlobeIcon className="h-4 w-4" />
+            <span>未能获取数据库结果。{result || ''}</span>
+          </div>
+        );
+      }
+      const db_result = JSON.parse(result) as ChatDbResult;
+
+      return (
+        <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center justify-start h-7 w-full text-gray-600 text-xs gap-2 px-4 "
+              >
+                {' '}
+                <GlobeIcon className="size-4" /> 完成数据库查询: {args.query}{' '}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>
+                  查询结果
+                </SheetTitle>
+                <SheetDescription>Query: {args.query}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
+                <div className="pl-6 pr-2">
+                <MarkdownRenderer content={`数据结果\n\n${db_result.result}\n\nSQL:\n\n\`\`\`sql\n${db_result.sql}\n\`\`\``} />
+
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      );
+    }
+  },
+});
+
+
 
 export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'planning-tool',
-  render: ({ args, status, result }) => {
+  render: ({ args, status, result, isError }) => {
 
     if (status.type === 'running') {
       return (
@@ -163,11 +242,11 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
         </div>
       );
     } else if (status.type === 'complete') {
-      if (!result) {
+      if (!result || isError) {
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500 mb-1">
             <ListTodoIcon className="h-4 w-4" />
-            <span>制定计划失败</span>
+            <span>制定计划失败 {result || ''}</span>
           </div>
         );
       }
@@ -218,7 +297,7 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
 
 export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'aliyun-websearch',
-  render: ({ args, status, result }) => {
+  render: ({ args, status, result, isError }) => {
     console.log('SearchWebToolUI 参数:', args);
     console.log('SearchWebToolUI 状态:', status);
 
@@ -234,11 +313,11 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
         </div>
       );
     } else if (status.type === 'complete') {
-      if (!result) {
+      if (!result || isError) {
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-400">
             <GlobeIcon className="h-4 w-4" />
-            <span>未能获取搜索结果</span>
+            <span>未能获取搜索结果 {result || ''}</span>
           </div>
         );
       }
@@ -316,7 +395,7 @@ export type ReadFileToolArgs = {
 
 export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
   toolName: 'read-file',
-  render: ({ args, status, result }) => {
+  render: ({ args, status, result, isError }) => {
     if (status.type === 'running') {
       return (
         <div className="h-7 bg-muted/50  cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
@@ -329,7 +408,7 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
         </div>
       );
     } else if (status.type === 'complete') {
-      if (!result) {
+      if (!result || isError) {
         return null;
       }
 
@@ -384,7 +463,7 @@ export const SearchFileToollUI = makeAssistantToolUI<
   string
 >({
   toolName: 'search-file',
-  render: ({ args, status, result }) => {
+  render: ({ args, status, result, isError }) => {
     console.log('SearchFileToollUI 参数:', args);
 
     if (status.type === 'running') {
@@ -399,7 +478,7 @@ export const SearchFileToollUI = makeAssistantToolUI<
         </div>
       );
     } else if (status.type === 'complete') {
-      if (!result) {
+      if (!result || isError) {
         return null;
       }
       const parsedResult = JSON.parse(result);
@@ -462,11 +541,12 @@ type SearchKbResult = {
     }[];
 
   }[];
+  error: string;
 };
 
 export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
   toolName: "search-knowledgebase",
-  render: ({ args, status, result }) => {
+  render: ({ args, status, result, isError }) => {
     console.log("SearchKbToolUI 参数:", args);
     console.log("SearchKbToolUI 状态:", status);
 
@@ -482,11 +562,11 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
         </div>
       );
     } else if (status.type === "complete") {
-      if (!result) {
+      if (!result || isError) {
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500">
             <GlobeIcon className="h-4 w-4" />
-            <span>未能获取搜索结果</span>
+            <span>未能获取搜索结果 {result || ''}</span>
           </div>
         );
       }
@@ -571,6 +651,7 @@ const ToolUIWrapper: FC = () => {
       <ReadFileToollUI />
       <SearchFileToollUI />
       <SearchKbToolUI />
+      <ChatDbToolUI />
     </>
   );
 };

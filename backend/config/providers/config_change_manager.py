@@ -48,6 +48,14 @@ class ConfigChangeManager:
         await init_db()
         logger.info("Initialized database tables.")
 
+        await llm_provider.full_load_from_db_async()
+        logger.info("Initialized llm models.")
+        await self.create_default_embedding_model()
+        await embedding_provider.full_load_from_db_async()
+        logger.info("Initialized embedding models.")
+        await knowledgebase_provider.full_load_from_db_async()
+        logger.info("Initialized knowledgebases.")
+
         if not self.worker_mode:
             from config.providers.mcp_tool_provider import mcp_provider
             from config.providers.websearch_provider import websearch_provider
@@ -57,6 +65,7 @@ class ConfigChangeManager:
             from config.providers.guardrail_provider import guardrail_provider
             from config.providers.vectordb_provider import vectordb_provider
             from config.providers.code_sandbox_provider import codesandbox_provider
+            from config.providers.chatdb_provider import chatdb_provider
 
             await mcp_provider.full_load_from_db_async()
             logger.info("Initialized mcp tools.")
@@ -74,6 +83,8 @@ class ConfigChangeManager:
             logger.info("Initialized vector db configs.")
             await codesandbox_provider.full_load_from_db_async()
             logger.info("Initialized code sandbox configs.")
+            await chatdb_provider.full_load_from_db_async()
+            logger.info("Initialized chatdb configs.")
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
@@ -83,6 +94,7 @@ class ConfigChangeManager:
         await self.create_default_chat_doc_kb()
         await knowledgebase_provider.full_load_from_db_async()
         logger.info("Initialized knowledgebases.")
+
 
 
         await self.create_builtin_gaia_dataset()
@@ -305,6 +317,9 @@ class ConfigChangeManager:
             case ChangeEventSource.CODESANDBOX:
                 from config.providers.code_sandbox_provider import codesandbox_provider
                 return codesandbox_provider
+            case ChangeEventSource.CHATDB:
+                from config.providers.chatdb_provider import chatdb_provider
+                return chatdb_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 

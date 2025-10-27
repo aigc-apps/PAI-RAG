@@ -3,7 +3,7 @@ from backend.chat.agent.actor_with_plan import ActorWithPlan
 from chat.agent.prompts import ACT_PROMPT, ACT_WITH_PLAN_PROMPT, PLAN_PROMPT, SUMMARY_PROMPT
 from chat.agent.summarizer import Summarizer
 from backend.chat.agent.actor import Actor
-from chat.llm.models import ChunkStage, ToolResultChunk
+from chat.llm.models import ChunkStage, ErrorChunk, ToolResultChunk
 from chat.llm.utils import parse_llm_json
 from chat.tools.plan_tool import aget_plan_tool, aget_respond_tool
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
@@ -14,7 +14,7 @@ from utils.constants import try_get_int_env
 from chat.agent.base import BaseAgent
 from chat.agent.state import AgentState
 from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
-from chat.llm.llm_model import PaiLlm, TextChunk, ReasoningChunk, ChatResponseGenerator
+from chat.llm.llm_model import PaiLlm, ReasoningChunk, ChatResponseGenerator
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.attachment_parser import parse_attachments_from_messages
@@ -25,8 +25,8 @@ MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环�
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
-    return await async_fn.acall(**fn_args)
-
+    from extensions.trace.pai_agent_wrapper import instrument_async_call
+    return await instrument_async_call(async_fn, fn_args)
 
 
 class PlanAgentPromptSet(BaseModel):
@@ -85,6 +85,11 @@ class Planner(BaseAgent):
                 messages=messages,
                 tools=tools_to_plan,
             ):
+                if isinstance(chunk, ErrorChunk):
+                    logger.info(f"Call llm failed: {chunk.error_message}")
+                    yield chunk
+                    return
+
                 if chunk.tool_calls:
                     selected_tool = chunk.tool_calls[0]
 
@@ -104,7 +109,7 @@ class Planner(BaseAgent):
             if selected_tool is None:
                 if not plan_delta:
                     logger.warning("Planner execute error, no direct response and no tool.")
-                    yield TextChunk(delta="抱歉，出现错误，请重试。")
+                    yield ErrorChunk(delta="抱歉，出现错误，请重试。")
                 return
 
 
@@ -128,7 +133,10 @@ class Planner(BaseAgent):
                     response_gen = await actor.run_async(state)
                     async for chunk in response_gen:
                         if isinstance(chunk, ToolResultChunk):
-                            state.observations += chunk.result + "\n\n"
+                            if chunk.result:
+                                state.observations += chunk.result + "\n\n"
+                            if chunk.error:
+                                state.observations += chunk.error + "\n\n"
 
                         chunk.stage = ChunkStage.ACTING
                         yield chunk
@@ -172,7 +180,10 @@ class Planner(BaseAgent):
                         logger.info("Actor finished with respond-tool.")
                         break
                     elif isinstance(chunk, ToolResultChunk):
-                        state.observations += chunk.result + "\n\n"
+                        if chunk.result:
+                            state.observations += chunk.result + "\n\n"
+                        if chunk.error:
+                            state.observations += chunk.error + "\n\n"
 
                     if chunk.delta:
                         yield ReasoningChunk(

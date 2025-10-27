@@ -7,7 +7,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
-from rag.knowledgebase_tool import kb_client
+from tools.knowledgebase.knowledgebase_tool import kb_tool
 from common.chat.models import RetrievalSetting
 
 @with_async_db_session
@@ -22,7 +22,7 @@ async def aget_file_retrieve_results_from_vector_store(session: AsyncSession, fi
     unique_kb_ids = list({entity.kb_id for entity in processed_file_entities})
     assert len(unique_kb_ids) == 1, "file_ids must be from the same knowledgebase"
 
-    node_results = await kb_client.aquery_for_attachments(
+    node_results = await kb_tool.aquery_for_attachments(
         query=query_str,
         knowledge_id=unique_kb_ids[0],
         retrieval_setting=RetrievalSetting(top_k=5, score_threshold=0.1),

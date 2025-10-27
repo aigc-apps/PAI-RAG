@@ -31,8 +31,11 @@ class LLMJudgeEvaluator(BaseEvaluator):
     async def _call_llm(self, prompt: str) -> str:
         """调用 LLM，返回原始响应文本"""
         try:
-            response = await self.llm.acomplete(prompt)
-            return response.text
+            content = ""
+            response_gen = await self.llm.astream_complete(prompt)
+            async for r in response_gen:
+                content += r.delta
+            return content
         except Exception as e:
             raise RuntimeError(f"LLM 调用失败: {str(e)}")
 

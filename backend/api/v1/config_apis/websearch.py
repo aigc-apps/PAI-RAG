@@ -89,17 +89,22 @@ async def list_search_config(
         select(WebSearchConfigEntity).offset(offset).limit(limit)
     )).first()
 
-    if search_config_result:
-        websearch_config = WebSearchConfigRead(
-            type=search_config_result.type,
-            endpoint=search_config_result.endpoint,
-            search_count=search_config_result.search_count,
-            id=search_config_result.id,
-            is_aliyun_empty=not search_config_result.encrypted_access_key_id,
-            is_tavily_empty=not search_config_result.encrypted_tavily_api_key,
+    if not search_config_result:
+        return WebSearchConfigRead(
+            type="aliyun",
+            endpoint="",
+            id="",
+            is_aliyun_empty=True,
+            is_tavily_empty=True,
         )
-    else:
-        logger.warning("No websearch config found.")
-        return [WebSearchConfigRead()]
+
+    websearch_config = WebSearchConfigRead(
+        type=search_config_result.type or "aliyun",
+        endpoint=search_config_result.endpoint,
+        search_count=search_config_result.search_count,
+        id=search_config_result.id,
+        is_aliyun_empty=not search_config_result.encrypted_access_key_id,
+        is_tavily_empty=not search_config_result.encrypted_tavily_api_key,
+    )
 
     return [websearch_config]

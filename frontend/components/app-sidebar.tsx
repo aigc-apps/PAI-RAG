@@ -21,6 +21,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import {
+  LassoSelectIcon,
   ChevronUp,
   MessageCircle,
   ChevronDown,
@@ -110,6 +111,9 @@ export function AppSidebar() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/config/code_sandbox"><Code /> Code沙箱</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/chatdb"><LassoSelectIcon /> ChatDB </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/config/tracing"><SquareActivity /> 链路追踪</Link>

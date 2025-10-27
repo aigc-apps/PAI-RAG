@@ -68,6 +68,7 @@ export interface ExperimentSampleDetails {
   input: string
   expected_output: string
   actual_output: string
+  trace_id: string
   status: string
   score: number
   reason: string

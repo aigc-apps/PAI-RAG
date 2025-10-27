@@ -2,7 +2,7 @@ from functools import wraps
 import json
 import os
 import time
-from typing import cast
+from typing import cast, Awaitable
 from chat.llm.models import ChatResponseGenerator, ReasoningChunk, TextChunk
 from opentelemetry.context import attach, detach
 from opentelemetry.trace import set_span_in_context
@@ -32,6 +32,9 @@ GEN_AI_SPAN_KIND = "gen_ai.span.kind"
 CHAIN = OpenInferenceSpanKindValues.CHAIN.value
 REASONING_CONTENT = "output.reasoning_content"
 
+TOOL_NAME = "gen_ai.tool.name"
+TOOL_DESCRIPTION = "gen_ai.tool.description"
+TOOL_PARAMETERS = "gen_ai.tool.parameters"
 STATUS_OK = Status(StatusCode.OK)
 
 
@@ -118,3 +121,29 @@ def pai_agent_wrapper(func):
             detach(token)
 
     return wrapper
+
+
+async def instrument_async_call(
+    async_fn: Awaitable,
+    fn_args: dict,
+) -> Awaitable:
+    """
+    Usage:
+        return await instrument_async_call(async_fn, fn_args)
+    """
+    with get_tracer().start_as_current_span(f"FunctionCall.{async_fn.metadata.name}") as span:
+        try:
+            span.set_attribute(GEN_AI_SPAN_KIND, "TOOL")
+            span.set_attribute(TOOL_NAME, async_fn.metadata.name)
+            span.set_attribute(TOOL_DESCRIPTION, async_fn.metadata.description)
+            span.set_attribute(TOOL_PARAMETERS, json.dumps(async_fn.metadata.fn_schema.model_json_schema(), ensure_ascii=False))
+            span.set_attribute(INPUT_VALUE, json.dumps(fn_args, ensure_ascii=False))
+
+            result = await async_fn.acall(**fn_args)
+            if hasattr(result, "content") and result.content is not None:
+                span.set_attribute(OUTPUT_VALUE, result.content)
+            return result
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            raise

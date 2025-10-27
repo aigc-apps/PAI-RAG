@@ -26,8 +26,10 @@ class KbChunkEntity(KbChunkModel, table=True):
     __tablename__ = "pai_knowledgebase_chunk"
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     # ref
-    file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id")
-    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id")
+    file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id", ondelete="CASCADE")
+    file_part: Optional[int] = Field(default=0) # file part index, if file is split into multiple parts
+    file_version: Optional[int] = Field(default=0)
+    kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id", ondelete="CASCADE")
     index: Optional[int] = Field(default=0) # chunk index
 
     created_at: datetime = Field(
@@ -38,13 +40,14 @@ class KbChunkEntity(KbChunkModel, table=True):
     )
 
 
-def create_chunk_from_text_node(kb_id: str, file_id: str, node: TextNode, index: int):
+def create_chunk_from_text_node(kb_id: str, file_id: str, file_part: int, node: TextNode, index: int):
     return KbChunkEntity(
         id=node.id_,
         knowledgebase_id=kb_id,
         file_id=file_id,
         kb_id=kb_id,
         text=node.text,
+        file_part=file_part,
         chunk_metadata=node.metadata,
         index=index,
     )

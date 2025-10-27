@@ -267,7 +267,7 @@ async def upload_dataset_samples(
         logger.error(f"Failed to upload eval dataset: {traceback.format_exc()}")
         await session.rollback()
         return error_response(
-                code=404, message=f"Failed to save eval dataset to database: {e}"
+                code=400, message=f"评估数据集添加失败: {e}"
             )
 
 @evaluation_router.get("/{dataset_id}/samples")
@@ -556,6 +556,27 @@ async def get_experiment_samples(
             size=pagination.size,
         ),
         message="获取评估实验执行详情信息成功",
+    )
+
+@evaluation_router.put("/{dataset_id}/experiments/{experiment_id}/samples")
+async def evaluate_experiment_sample(
+    dataset_id: str,
+    experiment_id: str,
+    experiment_sample_entity: ExperimentSampleEntity,
+    session: AsyncSession = Depends(get_session),
+):
+    import app.worker as background_worker
+    logger.info(f"evaluate_single_sample for dataset_id: {dataset_id}, exp_id: {experiment_id}, exp_run_id: {experiment_sample_entity.id}")
+    background_worker.execute_evaluation_task.delay(
+            dataset_id=dataset_id,
+            experiment_id=experiment_id,
+            exp_run_ids=[experiment_sample_entity.id],
+            is_evaluate_single_sample=True,
+        )
+
+    return success_response(
+        data="",
+        message="重新开始评估该样本"
     )
 
 

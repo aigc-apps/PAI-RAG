@@ -24,6 +24,7 @@ class ChangeEventSource(str, Enum):
     EVALUATION = "evaluation"
     VECTORDB = "vectordb"
     CODESANDBOX = "code_sandbox"
+    CHATDB = "chatdb"
 
 
 

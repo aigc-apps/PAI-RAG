@@ -254,6 +254,31 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   }, [datasetId, expId, pageSize]);
 
   // ========================
+  // 重新评估单条样本
+  // ========================
+  const updateEvaluation = async (id: string) => {
+    try {
+      const response = await fetch(
+        `/api/config/evaluation/${datasetId}/experiments/${expId}/samples`,
+        {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ id: id }),
+        }
+      );
+
+      if (response.ok) {
+        alert("重新评估已启动！");
+      } else {
+        alert("重新评估启动失败! ");
+      }
+    } catch (error) {
+      console.error("Re-evaluate failed:", error);
+      alert("网络错误，重新评估失败");
+    }
+  };
+
+  // ========================
   // 轮询优化（使用 useEffect + clearTimeout）
   // ========================
 
@@ -801,6 +826,13 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                             >
                               {isRowExpanded(sample.id) ? "收起" : "详情"}
                             </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateEvaluation(sample.id)}
+                            >
+                              重新评估
+                            </Button>
                           </TableCell>
                         </TableRow>
                         {expandedRows.includes(sample.id) && (
@@ -814,6 +846,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                                       <MessageSquare className="h-5 w-5 text-primary" /> 问答对评估
                                     </h4>
                                     <div className="space-y-4">
+                                    {sample.trace_id && (
+                                        <div className="space-y-2">
+                                          <div className="flex items-center gap-2">
+                                          <span className="font-medium text-gray-800 dark:text-gray-300">TraceId:</span>
+                                            <span className="text-muted-foreground text-sm">{sample.trace_id}</span>
+                                          </div>
+                                        </div>
+                                      )}
                                       <div className="space-y-2">
                                         <div className="flex items-center gap-2">
                                           <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-lg text-blue-800 dark:text-blue-300 font-medium flex items-center">

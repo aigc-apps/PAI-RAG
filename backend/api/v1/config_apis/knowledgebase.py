@@ -1,11 +1,13 @@
 ### Knowledgebase configuration API ###
 from datetime import datetime, timezone
+import time
 import traceback
 from typing import List, Optional
 from common.knowledgebase.types import FileStatus
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel, Field
 from db.models.knowledgebase.metadata import KbMetadataEntity, FileMetadataEntity
+from rag.split.excel_split import convert_xls_to_xlsx
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from rag.file_item_utils import to_file_entity
@@ -25,12 +27,11 @@ from config.providers.embedding_provider import embedding_provider
 from config.providers.knowledgebase_provider import knowledgebase_provider
 from pairag.file.store.file_store_helper import file_store
 from api.response_model import ResponseModel, PagedResult, success_response, error_response
-from rag.knowledgebase_tool import kb_client
+from tools.knowledgebase.knowledgebase_tool import MARKDOWN_IMAGE_PATTERN, kb_tool
 from loguru import logger
 import re
 from pairag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
-from rag.knowledgebase_tool import MARKDOWN_IMAGE_PATTERN
 
 knowledgebase_router = APIRouter()
 
@@ -222,6 +223,8 @@ async def upload_files(
     logger.info(f"Uploading files to {kb_id}.")
     import app.worker as background_worker
 
+    file_version = int(time.time())
+
     if not files:
         return error_response(code=400, message="没有上传任何文件。")
 
@@ -232,20 +235,25 @@ async def upload_files(
             logger.error(f"没找到知识库{kb_id}")
             return error_response(code=400, message=f"没有找到知识库 {kb_id}。")
 
-        file_names = []
         file_entities = []
-        for file in files:
-            file_name = file.filename
+        for single_file in files:
+            # Convert xls to xlsx
+            file_name = single_file.filename
+            file_data = single_file.file
+            if single_file.filename.endswith(".xls"):
+                file_data = convert_xls_to_xlsx(file_data)
+                file_name = file_name[:-4] + ".xlsx"
+
             destination_file_path = f"{kb_id}/docs/{file_name}"
             file_store.save(
-                file=file.file,
+                file=file_data,
                 file_path=destination_file_path,
             )
             file_item = FileItem.from_file(
-                file=file.file,
+                file=file_data,
                 file_path=destination_file_path,
                 kb_id=kb_id,
-                file_name=file.filename,
+                file_name=file_name,
             )
             file_entity = (
                 await session.exec(
@@ -261,12 +269,15 @@ async def upload_files(
                 file_entity.file_md5 = file_item.file_md5
                 file_entity.file_size = file_item.file_size
                 file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            file_entity.file_version = file_version
             session.add(file_entity)
+
+
             await session.commit()
             logger.info(f"Saved file {file_entity} successfully.")
-            background_worker.process_file.delay(file_entity.id)
+            background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version)
             logger.info(f"Queued {file_entity.id} job successfully.")
-            file_names.append(file.filename)
             file_entities.append(file_entity)
 
         return success_response(data=file_entities, message="文件上传成功")
@@ -337,10 +348,11 @@ async def reprocess_file(
         return error_response(code=404, message=f"没有在知识库{kb_id}中找到文件{file_id}。")
 
     file_entity.status = FileStatus.pending
+    file_entity.file_version = int(time.time())
     session.add(file_entity)
     await session.commit()
     logger.info(f"Re-process file {file_entity} successfully.")
-    background_worker.process_file.delay(file_entity.id)
+    background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version)
 
     return success_response(data=file_entity, message="文件入队成功。")
 
@@ -393,8 +405,7 @@ async def delete_file(
     )
     chunk_entities = chunks_res.all()
 
-    node_ids = [chunk_entity.id for chunk_entity in chunk_entities]
-    await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=node_ids)
+    await kb_tool.adelete_doc(kb_id=kb_id, file_id=file_id)
 
     await session.delete(file_entity)
     for chunk_entity in chunk_entities:
@@ -504,16 +515,16 @@ async def update_chunk(
         if kb_chunk.text != update_kb_chunk.text:
             kb_chunk.text = update_kb_chunk.text
             node = create_text_node_from_chunk(kb_chunk)
-            await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
-            await kb_client.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
+            await kb_tool.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
+            await kb_tool.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
             logger.info(f"Update chunk text for {kb_chunk.id}")
         # 更新chunk active 若false : delete; 若true : insert
         if kb_chunk.active != update_kb_chunk.active:
             if not update_kb_chunk.active:
-                await kb_client.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
+                await kb_tool.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=[kb_chunk.id])
             else:
                 node = create_text_node_from_chunk(kb_chunk)
-                await kb_client.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
+                await kb_tool.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
             kb_chunk.active = update_kb_chunk.active
             logger.info(f"Update chunk active to {kb_chunk.active} for {kb_chunk.id}")
         session.add(kb_chunk)

@@ -5,7 +5,7 @@ dotenv.load_dotenv()
 
 from loguru import logger
 from sqlmodel import SQLModel
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 from functools import wraps
@@ -37,7 +37,11 @@ def get_async_db_angine():
         encoded_db_password = quote_plus(db_password)
 
         db_url = f"postgresql+asyncpg://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}"
-        async_engine = create_async_engine(db_url, echo=False)
+        async_engine = create_async_engine(
+            db_url,
+            echo=False,
+            pool_pre_ping=True,
+            pool_recycle=300)
         logger.info(
             f"created async engine with {db_user}@{db_host}:{db_port}/{db_name}"
         )
@@ -58,18 +62,20 @@ def get_async_db_angine():
 
 
 async_engine = get_async_db_angine()
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
 
 
 async def init_db():
     async with async_engine.begin() as conn:
-        # await conn.run_sync(SQLModel.metadata.drop_all)
         await conn.run_sync(SQLModel.metadata.create_all)
 
 
 async def get_session():
-    AsyncSessionLocal = sessionmaker(
-        async_engine, class_=AsyncSession, expire_on_commit=False
-    )
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -77,11 +83,14 @@ async def get_session():
 def with_async_db_session(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        AsyncSessionLocal = sessionmaker(
-            async_engine, class_=AsyncSession, expire_on_commit=False
-        )
-        async with AsyncSessionLocal() as session:
+        session = AsyncSessionLocal()
+        try:
             kwargs["session"] = session
             return await func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Execution error: {e}")
+            raise
+        finally:
+            await session.close()
 
     return wrapper

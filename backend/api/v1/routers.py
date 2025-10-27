@@ -15,7 +15,9 @@ def add_config_router(app: FastAPI):
     from api.v1.config_apis.guardrail import guardrail_router
     from api.v1.config_apis.evaluation import evaluation_router
     from api.v1.config_apis.vectordb import vectordb_router
+
     from api.v1.config_apis.code_sandbox import code_sandbox_router
+    from api.v1.config_apis.chatdb import chatdb_router
 
     app.include_router(llm_router, prefix="/v1/config/llms")
     app.include_router(mcp_router, prefix="/v1/config/mcps")
@@ -30,7 +32,10 @@ def add_config_router(app: FastAPI):
     app.include_router(guardrail_router, prefix="/v1/config/guardrail")
     app.include_router(evaluation_router, prefix="/v1/config/evaluation")
     app.include_router(vectordb_router, prefix="/v1/config/vectordb")
+
     app.include_router(code_sandbox_router, prefix="/v1/config/code_sandbox")
+    app.include_router(chatdb_router, prefix="/v1/config/chatdb")
+
 
 def add_chat_router(app: FastAPI):
     from api.v1.chat import chat_agent_router

@@ -2,6 +2,9 @@ from urllib.parse import quote_plus
 from common.encrypt_utils import decrypt_key
 from common.knowledgebase.vectordb.base import BaseVectorDbConnection
 from common.knowledgebase.vectordb.elastic import ElasticsearchConnection
+from common.knowledgebase.vectordb.hologres import HologresConnection
+from common.knowledgebase.vectordb.opensearch import OpensearchConnection
+from common.knowledgebase.vectordb.tablestore import TablestoreConnection
 from common.knowledgebase.vectordb.local import LocalConnection
 from common.knowledgebase.vectordb.milvus import MilvusConnection
 from common.knowledgebase.vectordb.postgres import PostgresqlConnection
@@ -15,6 +18,10 @@ from rag.vector_store.local import LocalChromaVectorStore
 from rag.vector_store.elasticsearch import ElasticsearchStore
 from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
+from llama_index.vector_stores.hologres import HologresVectorStore
+from llama_index.vector_stores.alibabacloud_opensearch import AlibabaCloudOpenSearchConfig, AlibabaCloudOpenSearchStore
+import tablestore
+from llama_index.vector_stores.tablestore import TablestoreVectorStore
 
 def create_vector_store(
     kb_id: str,
@@ -77,6 +84,118 @@ def create_vector_store(
             hybrid_search=True,
             text_search_config="jiebacfg",
         )
+    elif isinstance(vector_db_connection, HologresConnection):
+        logger.info(
+            f"Creating HologresVectorStore for {kb_id} with url {vector_db_connection.host}:{vector_db_connection.port}/{vector_db_connection.database}."
+        )
+        password = quote_plus(decrypt_key(vector_db_connection.encrypted_password))
+        vector_store = HologresVectorStore.from_param(
+            host=vector_db_connection.host,
+            port=vector_db_connection.port,
+            database=vector_db_connection.database,
+            user=vector_db_connection.user,
+            password=password,
+            embedding_dimension=dimension,
+            table_name=kb_id,
+        )
+        return vector_store
+    elif isinstance(vector_db_connection, OpensearchConnection):
+        logger.info(
+            f"Creating OpensearchVectorStore for {kb_id} with endpoint {vector_db_connection.endpoint}, instance_id {vector_db_connection.instance_id}, username: {vector_db_connection.username}"
+        )
+
+        password = quote_plus(decrypt_key(vector_db_connection.encrypted_password))
+        output_fields = [
+            "file_name",
+            "file_path",
+            "file_type",
+            "image_url",
+            "text",
+            "doc_id",
+        ]
+
+        config = AlibabaCloudOpenSearchConfig(
+            endpoint=vector_db_connection.endpoint,
+            instance_id=vector_db_connection.instance_id,
+            username=vector_db_connection.username,
+            password=password,
+            table_name=kb_id[:20], # Opensearch 表名最长20
+            field_mapping=dict(zip(output_fields, output_fields)),
+        )
+
+        vector_store = AlibabaCloudOpenSearchStore(config)
+        return vector_store
+    elif isinstance(vector_db_connection, TablestoreConnection):
+        tablestore_store = TablestoreVectorStore(
+            endpoint=vector_db_connection.endpoint,
+            instance_name=vector_db_connection.instance_name,
+            access_key_id=vector_db_connection.ak,
+            access_key_secret=decrypt_key(vector_db_connection.encrypted_sk),
+            table_name=kb_id,
+            index_name="pairag_vector_store_ots_index_v1",
+            vector_dimension=dimension,
+            # metadata mapping is used to filter non-vector fields.
+            metadata_mappings=[
+                tablestore.FieldSchema(
+                    "file_name",
+                    tablestore.FieldType.KEYWORD,
+                    index=True,
+                    enable_sort_and_agg=True,
+                ),
+                tablestore.FieldSchema(
+                    "file_type",
+                    tablestore.FieldType.KEYWORD,
+                    index=True,
+                    enable_sort_and_agg=True,
+                ),
+                tablestore.FieldSchema(
+                    "file_size",
+                    tablestore.FieldType.LONG,
+                    index=True,
+                    enable_sort_and_agg=True,
+                ),
+                tablestore.FieldSchema(
+                    "file_path",
+                    tablestore.FieldType.TEXT,
+                    index=True,
+                    enable_sort_and_agg=False,
+                ),
+                tablestore.FieldSchema(
+                    "doc_id",
+                    tablestore.FieldType.TEXT,
+                    index=True,
+                    enable_sort_and_agg=False,
+                ),
+                tablestore.FieldSchema(
+                    "creation_date",
+                    tablestore.FieldType.DATE,
+                    index=True,
+                    enable_sort_and_agg=True,
+                    date_formats=[
+                        "yyyy-MM-dd",
+                        "yyyy-MM-dd HH:mm",
+                        "yyyy-MM-dd HH:mm:ss",
+                        "yyyy-MM-dd HH:mm:ss.SSS",
+                    ],
+                ),
+                tablestore.FieldSchema(
+                    "last_modified_date",
+                    tablestore.FieldType.DATE,
+                    index=True,
+                    enable_sort_and_agg=True,
+                    date_formats=[
+                        "yyyy-MM-dd",
+                        "yyyy-MM-dd HH:mm",
+                        "yyyy-MM-dd HH:mm:ss",
+                        "yyyy-MM-dd HH:mm:ss.SSS",
+                    ],
+                ),
+            ],
+        )
+        tablestore_store.create_table_if_not_exist()
+        tablestore_store.create_search_index_if_not_exist()
+        return tablestore_store
+
     elif isinstance(vector_db_connection, LocalConnection):
         logger.info(f"Creating LocalVectorStore for {kb_id} with port {DEFAULT_CHROMA_PORT}.")
         return LocalChromaVectorStore(
@@ -86,6 +205,11 @@ def create_vector_store(
         )
     else:
         raise ValueError(f"Unknown vector_db_connection: {vector_db_connection}.")
+
+
+async def cleanup_vector_store(vector_store: BasePydanticVectorStore):
+    if isinstance(vector_store, PGVectorStore):
+        await vector_store.close()
 
 
 def is_docid_filter_supported(vector_store: BasePydanticVectorStore) -> bool:
