@@ -13,15 +13,21 @@ from config.providers.base_provider import BaseConfigProvider
 from sqlmodel.ext.asyncio.session import AsyncSession
 from config.providers.embedding_provider import embedding_provider
 from config.providers.llm_provider import llm_provider
-from config.providers.knowledgebase_provider import knowledgebase_provider
 from config.providers.evaluation_provider import evaluation_provider
 from db.models.knowledgebase.embedding import (
     EmbeddingModelCreate,
     EmbeddingModelEntity,
     EmbeddingType,
 )
+from db.models.knowledgebase.knowledgebase import (
+    ChunkConfig,
+    KbEntity,
+    KnowledgebaseCreate,
+    RetrievalConfig,
+)
 from db.models.evaluation.dataset import DatasetCreate, DatasetEntity
 from db.models.evaluation.dataset import DatasetSampleEntity
+from config.providers.knowledgebase_provider import knowledgebase_provider
 from sqlalchemy.exc import IntegrityError
 from rag.evaluation_tool import eval_client
 
@@ -50,6 +56,7 @@ class ConfigChangeManager:
             from config.providers.chatbot_provider import chatbot_provider
             from config.providers.guardrail_provider import guardrail_provider
             from config.providers.vectordb_provider import vectordb_provider
+            from config.providers.code_sandbox_provider import codesandbox_provider
 
             await mcp_provider.full_load_from_db_async()
             logger.info("Initialized mcp tools.")
@@ -65,12 +72,15 @@ class ConfigChangeManager:
             logger.info("Initialized guardrail configs.")
             await vectordb_provider.full_load_from_db_async()
             logger.info("Initialized vector db configs.")
+            await codesandbox_provider.full_load_from_db_async()
+            logger.info("Initialized code sandbox configs.")
 
         await llm_provider.full_load_from_db_async()
         logger.info("Initialized llm models.")
         await self.create_default_embedding_model()
         await embedding_provider.full_load_from_db_async()
         logger.info("Initialized embedding models.")
+        await self.create_default_chat_doc_kb()
         await knowledgebase_provider.full_load_from_db_async()
         logger.info("Initialized knowledgebases.")
 
@@ -82,6 +92,42 @@ class ConfigChangeManager:
         self.initialized = True
         self.last_change_dt = current_dt
         logger.info(f"ConfigManager inited with worker_mode {self.worker_mode}, timestamp {self.last_change_dt}")
+
+
+    @with_async_db_session
+    async def create_default_chat_doc_kb(self, session: AsyncSession):
+        # create default chat doc kb if not exists
+        sql_results = await session.execute(
+        select(KbEntity).where(KbEntity.name == "default_chat_docs")
+        )
+        chat_doc_entities: List[KbEntity] = sql_results.all()
+        if len(chat_doc_entities) > 0:
+            logger.info("Default chat doc knowledgebase already exists.")
+            return
+
+        logger.info("Creating default chat doc knowledgebase.")
+        kb = KnowledgebaseCreate(
+            name="default_chat_docs",
+            description="聊天中生成的文档",
+            embedding_model="BAAI/bge-m3",
+        )
+        kb.chunk_config = (ChunkConfig()).model_dump()
+        kb.retrieval_config = (RetrievalConfig()).model_dump()
+        knowledgebase = KbEntity.model_validate(kb)
+        try:
+            knowledgebase_provider.add(knowledgebase)
+            session.add(knowledgebase)
+            await session.commit()
+            await session.refresh(knowledgebase)
+            await self.notify_change_async(
+                event_source=ChangeEventSource.KNOWLEDGEBASE,
+                source_id=knowledgebase.id,
+                event_type=ChangeEventType.ADD
+            )
+            logger.info("Default chat doc knowledgebase added to database.")
+        except IntegrityError as e:
+            logger.error(f"IntegrityError occurred when add default chat doc kb: {e.orig}")
+            await session.rollback()
 
     @with_async_db_session
     async def create_default_embedding_model(self, session: AsyncSession):
@@ -256,6 +302,9 @@ class ConfigChangeManager:
             case ChangeEventSource.VECTORDB:
                 from config.providers.vectordb_provider import vectordb_provider
                 return vectordb_provider
+            case ChangeEventSource.CODESANDBOX:
+                from config.providers.code_sandbox_provider import codesandbox_provider
+                return codesandbox_provider
             case _:
                 raise ValueError(f"Unknown event source: {event_source}")
 

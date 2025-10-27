@@ -15,3 +15,4 @@ from db.models.prompt import PromptModelEntity
 from db.models.change_event import ChangeEvent
 from db.models.chatbot import ChatBotEntity
 from db.models.guardrail import GuardrailConfigEntity
+from db.models.code_sandbox import CodeSandboxConfigEntity

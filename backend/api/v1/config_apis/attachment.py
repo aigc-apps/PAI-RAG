@@ -22,9 +22,11 @@ from db.models.knowledgebase.embedding import (
 )
 from config.providers.config_change_manager import config_change_manager
 from db.models.change_event import ChangeEventSource, ChangeEventType
+
 from loguru import logger
 
 attachments_router = APIRouter()
+
 
 
 @attachments_router.post("")

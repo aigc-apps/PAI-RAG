@@ -170,25 +170,35 @@ class PaiKnowledgebaseClient:
             return True
 
         try:
-            result = await parse_file(guard)
-            if result:
-                documents, nodes = result
-                old_chunk_ids, new_chunk_ids = await save_chunks(guard, nodes)
-                await update_file_status_async(
-                    file_id=file_item.id, status=FileStatus.persisting,
-                    is_attachment=is_attachment, documents=documents
-                )
-
-                await update_vector_store(guard)
-
-                if await guard.check_exists():  # 最后检查
-                    await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
+            if file_entity.file_extension not in [".xlsx"]:
+                result = await parse_file(guard)
+                if result:
+                    documents, nodes = result
+                    old_chunk_ids, new_chunk_ids = await save_chunks(guard, nodes)
                     await update_file_status_async(
-                        file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
+                        file_id=file_item.id, status=FileStatus.persisting,
+                        is_attachment=is_attachment, documents=documents
                     )
+
+                    await update_vector_store(guard)
+
+                    if await guard.check_exists():  # 最后检查
+                        await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
+                        await update_file_status_async(
+                            file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
+                        )
+                        logger.info(
+                            f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
+                        )
+            else:
+                if await guard.check_exists():
+                    await update_file_status_async(
+                                file_id=file_item.id, status=FileStatus.succeeded, is_attachment=is_attachment
+                            )
                     logger.info(
                         f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
                     )
+
         except Exception as e:
             if await guard.check_exists():  # 只有文件还存在时才更新状态
                 await update_file_status_async(

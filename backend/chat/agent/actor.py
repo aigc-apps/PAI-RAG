@@ -13,6 +13,7 @@ from extensions.trace.base import use_current_span
 from chat.agent.prompts import SUMMARY_PROMPT
 from common.chat.constants import MessageRole
 from opentelemetry import trace
+from utils.tool_utils import to_openai_tool
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -36,8 +37,11 @@ class Actor(BaseAgent):
         super().__init__(prompt, llm, tools, name)
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
+        # self.tool_metadata = [
+        #     tool.metadata.to_openai_tool() for tool in self.tools
+        # ]
         self.tool_metadata = [
-            tool.metadata.to_openai_tool() for tool in self.tools
+            to_openai_tool(tool.metadata) for tool in self.tools
         ]
 
 
@@ -101,6 +105,8 @@ class Actor(BaseAgent):
 
                 tool_calls = []
                 step_content = ""
+
+                print("*************messages******************", messages)
 
 
                 async for chunk in await self.invoke_llm_async(

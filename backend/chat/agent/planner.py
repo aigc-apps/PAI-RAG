@@ -18,6 +18,7 @@ from chat.llm.llm_model import PaiLlm, TextChunk, ReasoningChunk, ChatResponseGe
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.attachment_parser import parse_attachments_from_messages
+from utils.tool_utils import to_openai_tool
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
@@ -50,7 +51,7 @@ class Planner(BaseAgent):
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
         self.tool_metadata = [
-            tool.metadata.to_openai_tool() for tool in self.tools
+            to_openai_tool(tool.metadata) for tool in self.tools
         ]
 
     # internal tool for planning agent
