@@ -37,14 +37,12 @@ class CodeSandboxTool:
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._http_session is None or self._http_session.closed:
-            # 可以根据需要添加 timeout、connector 等配置
             self._http_session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=600)
             )
         return self._http_session
 
     async def aclose(self):
-        """关闭 aiohttp session，建议在应用退出时调用"""
         if self._http_session and not self._http_session.closed:
             await self._http_session.close()
 

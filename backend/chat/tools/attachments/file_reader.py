@@ -4,9 +4,12 @@ from llama_index.core.tools import FunctionTool
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
+from pairag.file.store.file_store_helper import file_store
 @with_async_db_session
 async def aget_file_content_from_db(session: AsyncSession, file_id: str):
     processed_file_entity = await session.get(KbFileEntity, file_id)
+    if processed_file_entity.file_extension in [".jpeg", ".png", ".jpg"]:
+        return file_store.get_url(processed_file_entity.file_path)
     if processed_file_entity.file_extension in [".xlsx"]:
         return "文件已读取成功"
     content =  processed_file_entity.file_content
