@@ -1,7 +1,7 @@
 ### Web search configuration API ###
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
@@ -10,7 +10,7 @@ from db.models.websearch import (
     WebSearchConfigCreate,
     WebSearchConfigEntity,
 )
-from api.response_model import error_response
+from api.response_model import ResponseModel, error_response, success_response
 from db.db_context import get_session
 from common.encrypt_utils import encrypt_key
 from sqlalchemy.exc import IntegrityError
@@ -22,7 +22,7 @@ from loguru import logger
 websearch_router = APIRouter()
 
 
-@websearch_router.post("", response_model=WebSearchConfigRead)
+@websearch_router.post("", response_model=ResponseModel[WebSearchConfigRead])
 async def add_search_config(
     new_search_config: WebSearchConfigCreate,
     session: AsyncSession = Depends(get_session),
@@ -66,20 +66,22 @@ async def add_search_config(
             event_type=ChangeEventType.UPDATE,
         )
 
-        return search_config
+        return success_response(data=search_config, message="更新搜索配置成功。")
     except IntegrityError as e:
         logger.error(f"IntegrityError occurred when add search config: {e.orig}")
         await session.rollback()
-        raise
+        raise error_response(
+            status_code=400, detail=f"Failed to add search config: {str(e)}"
+        )
     except Exception as e:
         logger.error(f"Failed to add search config: {str(e)}")
         await session.rollback()
-        raise HTTPException(
+        raise error_response(
             status_code=400, detail=f"Failed to add search config: {str(e)}"
         )
 
 
-@websearch_router.get("", response_model=List[WebSearchConfigRead])
+@websearch_router.get("", response_model=ResponseModel[List[WebSearchConfigRead]])
 async def list_search_config(
     session: AsyncSession = Depends(get_session),
     offset: int = 0,
@@ -90,13 +92,15 @@ async def list_search_config(
     )).first()
 
     if not search_config_result:
-        return WebSearchConfigRead(
-            type="aliyun",
-            endpoint="",
-            id="",
-            is_aliyun_empty=True,
-            is_tavily_empty=True,
-        )
+        return success_response(
+            data=[WebSearchConfigRead(
+                type="aliyun",
+                endpoint="",
+                id="",
+                is_aliyun_empty=True,
+                is_tavily_empty=True,
+            )],
+        message="查询检索配置成功")
 
     websearch_config = WebSearchConfigRead(
         type=search_config_result.type or "aliyun",
@@ -107,4 +111,4 @@ async def list_search_config(
         is_tavily_empty=not search_config_result.encrypted_tavily_api_key,
     )
 
-    return [websearch_config]
+    return success_response(data=[websearch_config], message="查询检索配置成功")
