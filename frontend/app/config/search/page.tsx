@@ -45,14 +45,14 @@ export default function SearchConfig() {
 
         if (!res.ok) throw new Error('加载配置失败');
 
-        const data = await res.json();
+        const data = (await res.json()).data[0];
         setAliyunHasKey(!data.is_aliyun_empty);
         setTavilyHasKey(!data.is_tavily_empty);
         setAliyunAK(MASK_API_KEY);
         setAliyunSK(MASK_API_KEY);
-        setEndpoint(data[0]?.endpoint || "")
-        setSearchCount(data[0]?.search_count || 10)
-        setSearchEngineType(data[0]?.type || 'aliyun')
+        setEndpoint(data?.endpoint || "")
+        setSearchCount(data?.search_count || 10)
+        setSearchEngineType(data?.type || 'aliyun')
         setTavilyApiKey(MASK_API_KEY)
       } catch (err: any) {
         toast.error(err.message);

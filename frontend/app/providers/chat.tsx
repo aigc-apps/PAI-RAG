@@ -8,18 +8,18 @@ interface ChatOptions {
   model: string;
   enable_agent: boolean;
   enable_search: boolean;
-  enable_chatdb: boolean;
-  user_id: string;
   mcp_ids: string[];           // mcp列表
   kb_ids: string[];            // 知识库列表
+  user_id: string;
+  enable_chatdb: boolean;
 
   updateModel: (model: string) => void;
   updateEnablePlanning: (planning: boolean) => void;
   updateEnableSearch: (search: boolean) => void;
-  updateEnableChatdb: (chatdb: boolean) => void;
   updateMcpIds: (mcp_ids: string[]) => void;
   updateKbIds: (kb_ids: string[]) => void;
   updateUser: (user_id: string) => void;
+  updateEnableChatdb: (chatdb: boolean) => void;
 }
 
 const ChatContext = createContext<ChatOptions | undefined>(undefined);
@@ -63,13 +63,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         model: model,
         enable_agent: enablePlanning, 
         enable_search: enableSearch,
-        enable_chatdb: enableChatdb,
         mcp_ids: mcpIds,
         kb_ids: kbIds,
         user_id: user_id,
+        enable_chatdb: enableChatdb,
         updateModel,
-        updateEnableSearch,
         updateEnablePlanning,
+        updateEnableSearch,
         updateMcpIds,
         updateKbIds,
         updateUser,

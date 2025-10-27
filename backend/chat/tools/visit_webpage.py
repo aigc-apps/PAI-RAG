@@ -1,6 +1,6 @@
 import json
 import re
-import requests
+import aiohttp
 import time
 import asyncio
 import tiktoken
@@ -34,18 +34,17 @@ def remove_images_and_links(text: str) -> str:
 async def jina_readpage(url: str) -> str:
     """使用 Jina Reader 读取网页内容"""
     max_retries = 3
-    timeout = 50
+    timeout = aiohttp.ClientTimeout(total=50)
 
     for attempt in range(max_retries):
         try:
-            response = requests.get(
-                f"https://r.jina.ai/{url.strip()}",
-                timeout=timeout
-            )
-            if response.status_code == 200:
-                return remove_images_and_links(response.text)
-            else:
-                logger.warning(f"Jina 返回非200状态码: {response.status_code} - {response.text}")
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(f"https://r.jina.ai/{url.strip()}") as response:
+                    text = await response.text()
+                    if response.status == 200:
+                        return remove_images_and_links(text)
+                    else:
+                        logger.warning(f"Jina 返回非200状态码: {response.status} - {text}")
         except Exception as e:
             logger.warning(f"Jina 请求失败 (尝试 {attempt + 1}): {e}")
             if attempt == max_retries - 1:
