@@ -765,15 +765,7 @@ async def create_evaluator_config(
 ):
     logger.info("Create eval_config_entity.")
     try:
-        eval_config_entity = EvaluatorConfigEntity(
-            name=eval_config.name,
-            type=eval_config.type,
-            dataset_id=dataset_id,
-            model_id=eval_config.model_id,
-            case_sensitive=eval_config.case_sensitive,
-            ignore_punctuation=eval_config.ignore_punctuation,
-        )
-
+        eval_config_entity = EvaluatorConfigEntity.from_create_entity(dataset_id, eval_config)
         session.add(eval_config_entity)
         await session.commit()
         logger.info(f"创建评估器设置 {eval_config_entity} 成功.")
@@ -800,19 +792,18 @@ async def update_evaluator_config(
             )
 
     try:
-        eval_config.name = new_eval_config.name
-        eval_config.type = new_eval_config.type
-        eval_config.model_id = new_eval_config.model_id
-        eval_config.case_sensitive = new_eval_config.case_sensitive
-        eval_config.ignore_punctuation = new_eval_config.ignore_punctuation
+        new_config = EvaluatorConfigEntity.from_create_entity(dataset_id, new_eval_config)
+        # Use new attributes except keeping these 3 originals
+        new_config.id = config_id
+        new_config.dataset_id = eval_config.dataset_id
+        new_config.created_at = eval_config.created_at
 
-
-        evaluation_provider.update(eval_config)
-        session.add(eval_config)
+        evaluation_provider.update(new_config)
+        session.add(new_config)
         await session.commit()
-        await session.refresh(eval_config)
+        await session.refresh(new_config)
 
-        return success_response(data=eval_config, message="更新评估器设置成功。")
+        return success_response(data=new_config, message="更新评估器设置成功。")
     except Exception:
         logger.error(
             f"Failed to update evaluator config {config_id}: {traceback.format_exc()}"
@@ -846,10 +837,14 @@ async def list_eval_configs(
         .limit(size)
     )
     eval_config_entities = eval_config_results.all()
+    read_entities = []
+    if eval_config_entities:
+        for c in eval_config_entities:
+            read_entities.append(c.to_read_entity())
 
     return success_response(
         data=PagedResult(
-            items=eval_config_entities,
+            items=read_entities,
             total=pagination.total,
             pages=pagination.pages,
             page=pagination.page,
@@ -872,8 +867,9 @@ async def get_eval_config_details(
                 code=404, message=f"获取评估器设置失败: '{config_id}'不存在。"
             )
 
+    read_entity = eval_config.to_read_entity()
     return success_response(
-            data=eval_config, message="获取评估器设置详情成功"
+            data=read_entity, message="获取评估器设置详情成功"
         )
 
 

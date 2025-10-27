@@ -367,7 +367,8 @@ class PaiEvaluationClient:
         if evaluator_config.type == "LLMJudge":
             eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
 
-        eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config.model_dump(), eval_llm)
+        evaluator_config_read = evaluator_config.to_read_entity()
+        eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config_read.model_dump(), eval_llm)
         logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
         if eval_res:
             logger.info(f"[WORKER] completed evaluation task for exp_run_id {exp_run_id} in background.")
