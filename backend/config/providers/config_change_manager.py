@@ -53,6 +53,7 @@ class ConfigChangeManager:
         await self.create_default_embedding_model()
         await embedding_provider.full_load_from_db_async()
         logger.info("Initialized embedding models.")
+        await self.create_default_chat_doc_kb()
         await knowledgebase_provider.full_load_from_db_async()
         logger.info("Initialized knowledgebases.")
 
@@ -86,14 +87,6 @@ class ConfigChangeManager:
             await chatdb_provider.full_load_from_db_async()
             logger.info("Initialized chatdb configs.")
 
-        await llm_provider.full_load_from_db_async()
-        logger.info("Initialized llm models.")
-        await self.create_default_embedding_model()
-        await embedding_provider.full_load_from_db_async()
-        logger.info("Initialized embedding models.")
-        await self.create_default_chat_doc_kb()
-        await knowledgebase_provider.full_load_from_db_async()
-        logger.info("Initialized knowledgebases.")
 
 
 
