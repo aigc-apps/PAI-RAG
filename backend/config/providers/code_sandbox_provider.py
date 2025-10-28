@@ -4,7 +4,7 @@ from sqlmodel import SQLModel
 from pydantic import Field
 from config.providers.base_provider import BaseConfigProvider
 from db.models.code_sandbox import CodeSandboxConfigEntity
-from chat.tools.code_tool import CodeSandboxTool
+from chat.tools.code_sandbox_tool import CodeSandboxTool
 from llama_index.core.tools import FunctionTool
 from loguru import logger
 import traceback

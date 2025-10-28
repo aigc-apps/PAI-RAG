@@ -11,7 +11,7 @@ from chat.tools.attachments.file_reader import aget_file_reader
 from chat.tools.attachments.image_parser import aget_image_parser_tool
 from chat.llm.models import ToolResultChunk, TextChunk
 from config.providers.code_sandbox_provider import codesandbox_provider
-from chat.tools.code_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
+from chat.tools.code_sandbox_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
 import os
 from loguru import logger
 
