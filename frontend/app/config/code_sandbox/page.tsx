@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch'; // 确保你有 Switch 组件
 
 export default function CodeSandboxConfig() {
   const [isEnabled, setIsEnabled] = useState(false);
-  const [configType, setConfigType] = useState('aliyun'); // 目前仅支持 aliyun
+  const [configType, setConfigType] = useState('aliyun-fc'); // 目前仅支持 aliyun-fc
   const [aliyunId, setAliyunId] = useState('');
   const [interpreterId, setInterpreterId] = useState('');
   const [timeoutDefault, setTimeoutDefault] = useState(50);
@@ -31,7 +31,7 @@ export default function CodeSandboxConfig() {
         const data = await res.json();
 
         setIsEnabled(data[0].enabled || false);
-        setConfigType(data[0].type || 'aliyun');
+        setConfigType(data[0].type || 'aliyun-fc');
         setAliyunId(data[0].aliyun_id || '');
         setInterpreterId(data[0].interpreter_id || '');
         setTimeoutDefault(data[0].timeout_default || 50);
@@ -105,10 +105,10 @@ export default function CodeSandboxConfig() {
                     <SelectValue placeholder="请选择沙箱类型" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="aliyun">阿里云沙箱</SelectItem>
+                    <SelectItem value="aliyun-fc">阿里云FC沙箱</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500 mt-1">当前仅支持阿里云沙箱</p>
+                <p className="text-xs text-gray-500 mt-1">当前仅支持阿里云FC沙箱</p>
               </div>
             </div>
 

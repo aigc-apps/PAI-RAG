@@ -1,5 +1,6 @@
 from typing import Generic, TypeVar, Optional
 from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
 
 T = TypeVar("T")
@@ -33,4 +34,5 @@ def success_response(code=200, data=None, message="操作成功"):
 
 
 def error_response(code=500, data=None, message="系统错误"):
-    return {"code": code, "message": message, "data": to_dict(data)}
+    # 更新status_code
+    return JSONResponse(status_code=code, content={"code": code, "message": message, "data": to_dict(data)})

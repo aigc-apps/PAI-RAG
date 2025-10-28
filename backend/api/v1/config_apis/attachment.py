@@ -26,6 +26,7 @@ from db.models.knowledgebase.embedding import (
 )
 from config.providers.config_change_manager import config_change_manager
 from db.models.change_event import ChangeEventSource, ChangeEventType
+from rag.chunk_helper import update_file_status_async
 
 from loguru import logger
 
@@ -101,7 +102,13 @@ async def create_attachment_file(
     session.add(file_task_entity)
     await session.commit()
 
-    await kb_file_client.process_file_async(file_task_entity.id, is_attachment=True)
+    # excel附件不入知识库
+    if file_entity.file_extension not in ['.xlsx']:
+        await kb_file_client.process_file_async(file_task_entity.id, is_attachment=True)
+    else:
+        await update_file_status_async(
+                file_id=file_item.id, task_id=file_task_entity.id, status=FileStatus.succeeded, is_attachment=True
+            )
     await session.refresh(file_entity)
     if file_entity.status == FileStatus.succeeded:
         return success_response(data=file_entity, message="文件上传成功")

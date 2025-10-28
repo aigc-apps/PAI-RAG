@@ -65,7 +65,7 @@ class CodeSandboxProvider(BaseConfigProvider):
             Params:
             - code: required, string, the Python code to execute.
             - To return any text-based result (e.g., numbers, strings, lists, DataFrame previews), you **must use `print()`**.
-                - For DataFrames, always use `print(df.head())` (or `print(df.head(N))`) to show a preview of the data. Do not rely on implicit display.
+                - For DataFrames, always use print() to show a preview of the data (e.g., `print(df.head())`, `print(df.head(N))`, `print(df.info())`,  `print(df.columns)`). Do not rely on implicit display.
             - For visualizations (e.g., Matplotlib, Seaborn):
                 - **Do not rely on `plt.show()`** — it does not produce any output in this environment.
                 - **You must explicitly save the plot to a file** using `plt.savefig('filename.png')` with a descriptive filename** that reflects the chart’s content, such as:

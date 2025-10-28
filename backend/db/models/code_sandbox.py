@@ -3,7 +3,7 @@ from sqlmodel import Field, SQLModel
 
 
 class CodeSandboxConfig(SQLModel):
-    type: str = Field(default='aliyun') # aliyun
+    type: str = Field(default='aliyun-fc') # aliyun-fc
 
 
 

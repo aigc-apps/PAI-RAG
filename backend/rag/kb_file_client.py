@@ -166,84 +166,86 @@ class KbFileClient:
             ):
                 return
 
-            if not (is_attachment and file_entity.file_extension in [".xlsx"]):
+            if is_attachment and file_entity.file_extension in [".xlsx"]:
+                logger.info(f"Skipping parsing for excel attachment file {file_item.file_name}.")
+                return
                 # parsing file
-                logger.info(f"Parsing file {file_item.file_name}.")
-                multimodal_llm = await get_multimodal_llm_from_db()
-                file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
-                documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
-                logger.info(f"Parsed {len(nodes)} documents.")
+            logger.info(f"Parsing file {file_item.file_name}.")
+            multimodal_llm = await get_multimodal_llm_from_db()
+            file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
+            documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
+            logger.info(f"Parsed {len(nodes)} documents.")
 
-                if not nodes:
-                    logger.warning(f"No nodes parsed from file {file_item.file_name}. Marking file as completed.")
-                    await update_file_status_async(
-                        file_id=file_item.id, task_id=task_id, status=FileStatus.succeeded, is_attachment=is_attachment
-                    )
-                    return
-
-                # saving chunks
-                if await should_cancel_file_task(
-                    file_id=file_id,
-                    kb_id=file_task.kb_id,
-                    file_part=file_task.file_part,
-                    file_version=file_task.file_version,
-                ):
-                    return
-
-                old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
-                    kb_id=kb_id, file_id=file_item.id, file_part=file_task.file_part, chunk_nodes=nodes
-                )
-                logger.info(f"Saved {len(new_chunk_ids)} chunks to database.")
-
-                # generate embedding
-                if await should_cancel_file_task(
-                    file_id=file_id,
-                    kb_id=file_task.kb_id,
-                    file_part=file_task.file_part,
-                    file_version=file_task.file_version,
-                ):
-                    return
-
+            if not nodes:
+                logger.warning(f"No nodes parsed from file {file_item.file_name}. Marking file as completed.")
                 await update_file_status_async(
-                    file_id=file_item.id, task_id=task_id, status=FileStatus.persisting,
-                    is_attachment=is_attachment, documents=documents
+                    file_id=file_item.id, task_id=task_id, status=FileStatus.succeeded, is_attachment=is_attachment
                 )
-                logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
-                embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
+                return
+
+            # saving chunks
+            if await should_cancel_file_task(
+                file_id=file_id,
+                kb_id=file_task.kb_id,
+                file_part=file_task.file_part,
+                file_version=file_task.file_version,
+            ):
+                return
+
+            old_chunk_ids, new_chunk_ids = await save_chunks_to_db_async(
+                kb_id=kb_id, file_id=file_item.id, file_part=file_task.file_part, chunk_nodes=nodes
+            )
+            logger.info(f"Saved {len(new_chunk_ids)} chunks to database.")
+
+            # generate embedding
+            if await should_cancel_file_task(
+                file_id=file_id,
+                kb_id=file_task.kb_id,
+                file_part=file_task.file_part,
+                file_version=file_task.file_version,
+            ):
+                return
+
+            await update_file_status_async(
+                file_id=file_item.id, task_id=task_id, status=FileStatus.persisting,
+                is_attachment=is_attachment, documents=documents
+            )
+            logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
+            embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
 
 
-                vector_connection = await get_vector_db_connection_from_db()
-                dimension = len(embed_model.get_text_embedding("0"))
+            vector_connection = await get_vector_db_connection_from_db()
+            dimension = len(embed_model.get_text_embedding("0"))
 
-                vector_store = create_vector_store(
-                    knowledgebase.id, dimension, vector_db_connection=vector_connection,
-                )
+            vector_store = create_vector_store(
+                knowledgebase.id, dimension, vector_db_connection=vector_connection,
+            )
 
-                if old_chunk_ids:
-                    try:
-                        await vector_store.adelete_nodes(node_ids=old_chunk_ids)
-                        logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
-                    except NotImplementedError:
-                        logger.warning("Will not remove previous data as vector store does not support removing nodes.")
-                        pass
+            if old_chunk_ids:
+                try:
+                    await vector_store.adelete_nodes(node_ids=old_chunk_ids)
+                    logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
+                except NotImplementedError:
+                    logger.warning("Will not remove previous data as vector store does not support removing nodes.")
+                    pass
 
-                for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
-                    batch_nodes = nodes[i:i + 1000]
-                    texts_to_embed = self.get_node_texts_for_embedding(batch_nodes)
-                    embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
-                    for j in range(len(batch_nodes)):
-                        batch_nodes[j].embedding = embeddings[j]
-                    if await should_cancel_file_task(
-                        file_id=file_id,
-                        kb_id=file_task.kb_id,
-                        file_part=file_task.file_part,
-                        file_version=file_task.file_version,
-                    ):
-                        return
-                    await vector_store.async_add(batch_nodes)
-                await cleanup_vector_store(vector_store)
-                logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
-                await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
+            for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
+                batch_nodes = nodes[i:i + 1000]
+                texts_to_embed = self.get_node_texts_for_embedding(batch_nodes)
+                embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
+                for j in range(len(batch_nodes)):
+                    batch_nodes[j].embedding = embeddings[j]
+                if await should_cancel_file_task(
+                    file_id=file_id,
+                    kb_id=file_task.kb_id,
+                    file_part=file_task.file_part,
+                    file_version=file_task.file_version,
+                ):
+                    return
+                await vector_store.async_add(batch_nodes)
+            await cleanup_vector_store(vector_store)
+            logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
+            await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
             await update_file_status_async(
                 file_id=file_item.id, task_id=task_id, status=FileStatus.succeeded, is_attachment=is_attachment
             )

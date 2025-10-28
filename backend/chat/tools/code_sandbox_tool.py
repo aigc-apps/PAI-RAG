@@ -307,6 +307,7 @@ class CodeSandboxTool:
         results = result.get("data", {}).get("results", [])
         stdout_lines = []
         stderr_lines = []
+        error_lines = []
         timed_out = False
 
         for item in results:
@@ -315,6 +316,8 @@ class CodeSandboxTool:
                 stdout_lines.append(item.get("text", ""))
             elif typ == "stderr":
                 stderr_lines.append(item.get("text", ""))
+            elif typ == "error":
+                error_lines.append(f"{item.get('name', '')}: {item.get('value', '')}")
             elif typ == "timeout":
                 timed_out = True
 
@@ -323,6 +326,8 @@ class CodeSandboxTool:
             parts.append("stdout:\n" + "".join(stdout_lines).rstrip())
         if stderr_lines:
             parts.append("stderr:\n" + "".join(stderr_lines).rstrip())
+        if error_lines:
+            parts.append("error:\n" + "\n".join(error_lines).rstrip())
         if timed_out or any("TimeoutError" in line for line in stderr_lines):
             parts.append("[PythonInterpreter Error] TimeoutError: Execution timed out.")
 

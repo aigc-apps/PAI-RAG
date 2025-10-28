@@ -138,7 +138,13 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
     for message in messages:
         if message.get("role") == "user":
             user_attachments.extend(message.get("attachments", []))
-    attachment_names = [attachment.get("name", "未知附件") for attachment in user_attachments]
+    attachment_names = []
+    for attachment in user_attachments:
+        name = attachment.get("name")
+        if not name:
+            logger.warning("Attachment missing 'name' field, skipping: %s", attachment)
+            continue
+        attachment_names.append(name)
     if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
         # 只在user message最后追加列出文件结果，不使用 tool_call / tool 消息
         attachment_names = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names]

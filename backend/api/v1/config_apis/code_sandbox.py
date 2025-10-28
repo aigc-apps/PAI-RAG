@@ -26,8 +26,8 @@ async def add_code_sandbox_config(
     new_code_sandbox_config: CodeSandboxConfigCreate,
     session: AsyncSession = Depends(get_session),
 ):
-    if new_code_sandbox_config.type not in ["aliyun"]:
-        return error_response(code=400, message="不支持的code sandbox类型，仅支持aliyun")
+    if new_code_sandbox_config.type not in ["aliyun-fc"]:
+        return error_response(code=400, message="不支持的code sandbox类型，仅支持aliyun-fc")
 
 
     aliyun_id = new_code_sandbox_config.aliyun_id
@@ -42,15 +42,10 @@ async def add_code_sandbox_config(
         logger.info(f"Adding new code sandbox config for type {new_code_sandbox_config.type}")
 
         code_sandbox_config = CodeSandboxConfigEntity.model_validate(
-            new_code_sandbox_config,
-            update={
-                "type": type,
-                "aliyun_id": aliyun_id,
-                "interpreter_id": interpreter_id,
-                "enabled": enabled,
-            },
+            new_code_sandbox_config
         )
     else:
+        logger.info("Updating code sandbox config")
         code_sandbox_config.aliyun_id = aliyun_id or code_sandbox_config.aliyun_id
         code_sandbox_config.interpreter_id = interpreter_id or code_sandbox_config.interpreter_id
         code_sandbox_config.type = type or code_sandbox_config.type
@@ -70,7 +65,7 @@ async def add_code_sandbox_config(
 
         return code_sandbox_config
     except IntegrityError as e:
-        logger.error(f"IntegrityError occurred when add code sandbox config: {e.orig}")
+        logger.error(f"IntegrityError occurred when add code sandbox config: {e}")
         await session.rollback()
         raise
     except Exception as e:
