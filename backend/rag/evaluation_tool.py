@@ -6,7 +6,7 @@ from db.models.evaluation.dataset import DatasetEntity
 from db.models.evaluation.dataset import DatasetSampleEntity
 from db.models.evaluation.experiment import ExperimentSampleEntity, ExperimentEntity
 from db.models.evaluation.run_config import RunConfigEntity
-from db.models.evaluation.evaluator_config import EvaluatorConfigEntity
+from db.models.evaluation.evaluator_config import EvaluatorConfigEntity, EvaluatorConfigRead
 from db.models.llm import LlmModelEntity
 from typing import List
 from datetime import datetime, timezone
@@ -367,7 +367,7 @@ class PaiEvaluationClient:
         if evaluator_config.type == "LLMJudge":
             eval_llm = await get_llm_model(model_id=evaluator_config.model_id)
 
-        evaluator_config_read = evaluator_config.to_read_entity()
+        evaluator_config_read = EvaluatorConfigRead.from_config_entity(evaluator_config)
         eval_res = await run_evaluator(dataset_sample_entity.input, output, dataset_sample_entity.expected_output, evaluator_config_read.model_dump(), eval_llm)
         logger.info(f"=== Evaluation output: {eval_res} === evaluator_config: {evaluator_config}")
         if eval_res:

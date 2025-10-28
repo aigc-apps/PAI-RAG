@@ -2,29 +2,26 @@ from datetime import datetime, timezone
 import uuid
 from typing import Any
 from copy import deepcopy
-import json
 from common.encrypt_utils import decrypt_key, encrypt_key
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, DateTime, JSON
 
-class EvaluatorConfigBase(SQLModel):
+class EvaluatorConfigCreate(SQLModel):
     name: str = Field(default="")
     type: str = Field(default="") # ExactMatch, LLMJudge
     model_id: str = Field(default="")
     case_sensitive: bool = Field(default=False)
     ignore_punctuation: bool = Field(default=False)
     # All miscellaneous configurations
-    misc_parameters: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    extra_parameters: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    # All sensitive parameter values will be stored as encrypted strings in db.
+    sensitive_parameters: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON))
 
 
-class EvaluatorConfigCreate(EvaluatorConfigBase):
-    # All sensitive configurations will be stored as an encrypted str in db.
-    sensitive_parameters: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
-
-
-class EvaluatorConfigTableBase(EvaluatorConfigBase):
+class EvaluatorConfigEntityBase(EvaluatorConfigCreate):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     dataset_id: str = Field(
+        default="",
         foreign_key="pai_dataset.id",
         description="Reference to the evaluation task",
         ondelete="CASCADE",
@@ -39,52 +36,46 @@ class EvaluatorConfigTableBase(EvaluatorConfigBase):
         sa_column=Column(DateTime)
     )
 
-
-class EvaluatorConfigRead(EvaluatorConfigTableBase):
-    sensitive_parameters: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
-
-
-class EvaluatorConfigEntity(EvaluatorConfigTableBase, table=True):
-    """id, name, misc, encrypted"""
+class EvaluatorConfigEntity(EvaluatorConfigEntityBase, table=True):
     __tablename__ = "pai_evaluator_config"
 
-    encrypted_parameters: str = Field(default='', description='encrypted str representation of sensitive parameter dict')
-
     @staticmethod
-    def from_create_entity(dataset_id: str, ecc: EvaluatorConfigCreate):
-        ece = EvaluatorConfigEntity()
-        ece.dataset_id = dataset_id
-        ece.name = ecc.name
-        ece.type = ecc.type
-        ece.model_id = ecc.model_id
-        ece.case_sensitive = ecc.case_sensitive
-        ece.ignore_punctuation = ecc.ignore_punctuation
-        ece.misc_parameters = deepcopy(ecc.misc_parameters)
-        if ecc.sensitive_parameters:
-            str_value = json.dumps(ecc.sensitive_parameters)
-            encrypted_params = encrypt_key(str_value)
-            ece.encrypted_parameters = encrypted_params
+    def from_create_entity(dataset_id: str, evaluator_config_create: EvaluatorConfigCreate):
+        ecte = EvaluatorConfigEntity()
+        ecte.dataset_id = dataset_id
+        ecte.name = evaluator_config_create.name
+        ecte.type = evaluator_config_create.type
+        ecte.model_id = evaluator_config_create.model_id
+        ecte.case_sensitive = evaluator_config_create.case_sensitive
+        ecte.ignore_punctuation = evaluator_config_create.ignore_punctuation
+        ecte.extra_parameters = deepcopy(evaluator_config_create.extra_parameters)
+        # encrypt the sensitive values
+        if evaluator_config_create.sensitive_parameters:
+            ecte.sensitive_parameters = {}
+            for k, v in evaluator_config_create.sensitive_parameters.items():
+                ecte.sensitive_parameters[k] = encrypt_key(v)
+            ecte._sensitive_data_is_encrypted = True
+        return ecte
 
-        return ece
 
-    def to_read_entity(self):
-        """decrypt encrypted params to sensitive params"""
+class EvaluatorConfigRead(EvaluatorConfigEntityBase):
+    @staticmethod
+    def from_config_entity(config_entity: EvaluatorConfigEntity):
         ecr = EvaluatorConfigRead()
-        ecr.id = self.id
-        ecr.dataset_id = self.dataset_id
-        ecr.name = self.name
-        ecr.type = self.type
-        ecr.model_id = self.model_id
-        ecr.case_sensitive = self.case_sensitive
-        ecr.ignore_punctuation = self.ignore_punctuation
-        ecr.misc_parameters = deepcopy(self.misc_parameters)
-        ecr.created_at = self.created_at
-        ecr.updated_at = self.updated_at
-        if self.encrypted_parameters:
-            decrypted_value = decrypt_key(self.encrypted_parameters)
-        else:
-            decrypted_value = '{}'
-
-        ecr.sensitive_parameters = json.loads(decrypted_value)
+        ecr.id = config_entity.id
+        ecr.dataset_id = config_entity.dataset_id
+        ecr.created_at = config_entity.created_at
+        ecr.updated_at = config_entity.updated_at
+        ecr.name = config_entity.name
+        ecr.type = config_entity.type
+        ecr.model_id = config_entity.model_id
+        ecr.case_sensitive = config_entity.case_sensitive
+        ecr.ignore_punctuation = config_entity.ignore_punctuation
+        ecr.extra_parameters = deepcopy(config_entity.extra_parameters)
+        # encrypt the sensitive values
+        if config_entity.sensitive_parameters:
+            ecr.sensitive_parameters = {}
+            for k, v in config_entity.sensitive_parameters.items():
+                ecr.sensitive_parameters[k] = decrypt_key(v)
 
         return ecr

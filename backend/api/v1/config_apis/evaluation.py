@@ -27,6 +27,7 @@ from config.providers.evaluation_provider import evaluation_provider
 from db.models.evaluation.evaluator_config import (
     EvaluatorConfigCreate,
     EvaluatorConfigEntity,
+    EvaluatorConfigRead,
 )
 from rag.evaluation_tool import eval_client
 
@@ -793,9 +794,8 @@ async def update_evaluator_config(
 
     try:
         new_config = EvaluatorConfigEntity.from_create_entity(dataset_id, new_eval_config)
-        # Use new attributes except keeping these 3 originals
+        # Use new attributes except keeping these 2 originals
         new_config.id = config_id
-        new_config.dataset_id = eval_config.dataset_id
         new_config.created_at = eval_config.created_at
 
         evaluation_provider.update(new_config)
@@ -840,7 +840,7 @@ async def list_eval_configs(
     read_entities = []
     if eval_config_entities:
         for c in eval_config_entities:
-            read_entities.append(c.to_read_entity())
+            read_entities.append(EvaluatorConfigRead.from_config_entity(c))
 
     return success_response(
         data=PagedResult(
@@ -867,7 +867,7 @@ async def get_eval_config_details(
                 code=404, message=f"获取评估器设置失败: '{config_id}'不存在。"
             )
 
-    read_entity = eval_config.to_read_entity()
+    read_entity = EvaluatorConfigRead.from_config_entity(eval_config)
     return success_response(
             data=read_entity, message="获取评估器设置详情成功"
         )
