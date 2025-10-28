@@ -15,3 +15,10 @@ docs
 .vscode
 .ruff_cache
 tests
+*.md
+*.ipynb
+notebooks/
+tmp/
+.cache
+.next/cache
+.DS_Store
