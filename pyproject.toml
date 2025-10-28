@@ -83,6 +83,7 @@ pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/pyth
 tavily-python = "^0.7.12"
 rapidfuzz = "3.14.1"
 xiyan-mcp-server = "^0.1.7"
+json5 = "^0.12.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
