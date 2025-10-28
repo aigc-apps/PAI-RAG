@@ -1,4 +1,4 @@
-# tools/codesandbox/code_sandbox_tool.py
+# tools/code_sandbox_tool.py
 import json
 import asyncio
 import aiohttp
@@ -15,6 +15,12 @@ from aiohttp import FormData
 from loguru import logger
 
 DEFAULT_CODE_SANDBOX_DIR_PATH = '/home/user'
+DEFAULT_CODE_SANDBOX_SYSTEM_FILES = ('.bash_logout', '.bashrc', '.profile')
+TRIPLE_QUOTE_PATTERN = re.compile(r'```[^\n]*\n(.+?)```', re.DOTALL)
+XML_CODE_PATTERN = re.compile(r'<code>(.*?)</code>', re.DOTALL)
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg'}
+ext_pattern = '|'.join(ext[1:] for ext in IMAGE_EXTENSIONS)
+MARKDOWN_IMG_PATTERN = re.compile(rf'(!\[[^\]]*\]\()([^\)]+\.(?:{ext_pattern}))(\))', re.IGNORECASE)
 
 
 class CodeSandboxTool:
@@ -36,7 +42,7 @@ class CodeSandboxTool:
         self._http_session: Optional[aiohttp.ClientSession] = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        if self._http_session is None or self._http_session.closed:
+        if not self._http_session or self._http_session.closed:
             self._http_session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=600)
             )
@@ -166,7 +172,7 @@ class CodeSandboxTool:
     async def alist_code_sandbox_dir_file_paths(self, file_dir_path: str):
         if not self.session_id:
             logger.error("Session ID not set. Cannot list dir files.")
-            return json.dumps({"data": ""}, ensure_ascii=False)
+            return json.dumps({"paths": ""}, ensure_ascii=False)
 
         headers_with_session = {
             "X-AgentRun-Session-ID": self.session_id,
@@ -185,13 +191,13 @@ class CodeSandboxTool:
                 result = await response.json()
         except Exception:
             logger.exception("Error listing sandbox files")
-            return json.dumps({"data": ""}, ensure_ascii=False)
+            return json.dumps({"paths": ""}, ensure_ascii=False)
 
         sandbox_file_paths = []
         if result and 'data' in result and 'entries' in result["data"]:
             sandbox_file_paths = [
                 item['path'] for item in result["data"]['entries']
-                if item['name'] not in ('.bash_logout', '.bashrc', '.profile')
+                if item['name'] not in DEFAULT_CODE_SANDBOX_SYSTEM_FILES
             ]
         return json.dumps({"data": ','.join(sandbox_file_paths)}, ensure_ascii=False)
 
@@ -200,11 +206,11 @@ class CodeSandboxTool:
             if isinstance(params, str):
                 params = json5.loads(params)
             code = params.get('code', '') or params.get('raw', '')
-            triple_match = re.search(r'```[^\n]*\n(.+?)```', code, re.DOTALL)
+            triple_match = TRIPLE_QUOTE_PATTERN.search(code)
             if triple_match:
                 code = triple_match.group(1)
             else:
-                xml_match = re.search(r'<code>(.*?)</code>', code, re.DOTALL)
+                xml_match = XML_CODE_PATTERN.search(code)
                 if xml_match:
                     code = xml_match.group(1)
             return code.strip()
@@ -214,9 +220,6 @@ class CodeSandboxTool:
             return ""
 
     async def areplace_code_sandbox_image_paths(self, final_result: str) -> str:
-        IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg'}
-        ext_pattern = '|'.join(ext[1:] for ext in IMAGE_EXTENSIONS)
-        MARKDOWN_IMG_PATTERN = re.compile(rf'(!\[[^\]]*\]\()([^\)]+\.(?:{ext_pattern}))(\))', re.IGNORECASE)
 
         replacements = []
 
@@ -331,12 +334,14 @@ class CodeSandboxTool:
         async def _wrapped_list_files(file_dir_path: str):
             return await self.alist_code_sandbox_dir_file_paths(file_dir_path)
 
+        description = f"""
+        列出 CodeSandbox 中指定目录（如 {DEFAULT_CODE_SANDBOX_DIR_PATH}）下的所有文件路径。
+        会自动过滤掉 {DEFAULT_CODE_SANDBOX_SYSTEM_FILES} 等系统文件。
+        输入应为一个目录路径字符串。
+        """
+
         return FunctionTool.from_defaults(
             async_fn=_wrapped_list_files,
             name="list-sandbox-files",
-            description=(
-                "列出 CodeSandbox 中指定目录（如 '/home/user'）下的所有文件路径。"
-                "会自动过滤掉 .bashrc、.bash_logout、.profile 等系统文件。"
-                "输入应为一个目录路径字符串。"
-            ),
+            description=description,
         )

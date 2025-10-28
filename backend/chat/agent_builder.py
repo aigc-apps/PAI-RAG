@@ -63,7 +63,7 @@ async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
     return kb_tools
 
 @with_async_db_session
-async def aupload_upload_files_to_code_sandbox(session: AsyncSession, file_ids: List[str]):
+async def aupload_files_to_code_sandbox(session: AsyncSession, file_ids: List[str]):
     file_res = await session.exec(
         select(KbFileEntity).where(
             KbFileEntity.id.in_(file_ids)
@@ -100,6 +100,7 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
 
         code_sandbox_ready: asyncio.Future = asyncio.Future()
         if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
+            # 1. 创建session和context
             sandbox_init_task = asyncio.create_task(
         codesandbox_provider.tool.acreate_session_and_context()
     )
@@ -112,7 +113,7 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
                         await sandbox_init_task
                         # 2. 上传文件
                         file_ids = [att["id"] for att in code_sandbox_attachments]
-                        await aupload_upload_files_to_code_sandbox(file_ids=file_ids)
+                        await aupload_files_to_code_sandbox(file_ids=file_ids)
                         # 3. 标记就绪
                         code_sandbox_ready.set_result(None)
                         logger.info("[Model] Code sandbox ready and files uploaded.")

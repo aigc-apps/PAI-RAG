@@ -12,14 +12,14 @@ import time
 import uuid
 from db.models.knowledgebase.file_task import KbFileTaskEntity
 import requests
-def to_openai_tool(tool_meatadata) -> Dict[str, Any]:
+def to_openai_tool(tool_metadata) -> Dict[str, Any]:
         """To OpenAI tool."""
         return {
             "type": "function",
             "function": {
-                "name": tool_meatadata.name,
-                "description": tool_meatadata.description,
-                "parameters": tool_meatadata.get_parameters_dict(),
+                "name": tool_metadata.name,
+                "description": tool_metadata.description,
+                "parameters": tool_metadata.get_parameters_dict(),
             },
         }
 

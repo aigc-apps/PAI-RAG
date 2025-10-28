@@ -174,7 +174,7 @@ class KbFileClient:
                 documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
                 logger.info(f"Parsed {len(nodes)} documents.")
 
-                if not nodes or len(nodes) == 0:
+                if not nodes:
                     logger.warning(f"No nodes parsed from file {file_item.file_name}. Marking file as completed.")
                     await update_file_status_async(
                         file_id=file_item.id, task_id=task_id, status=FileStatus.succeeded, is_attachment=is_attachment
