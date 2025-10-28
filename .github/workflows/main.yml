@@ -43,7 +43,6 @@ jobs:
           pip install poetry
           poetry env activate
           poetry install
-          poetry run pip install opentelemetry-exporter-otlp-proto-grpc protobuf==5.27.4
 
       - name: Run Linter
         shell: bash
