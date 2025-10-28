@@ -50,3 +50,7 @@ jobs:
           docker tag ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }} ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.TIME_VERSION_TAG }}
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.TIME_VERSION_TAG }}
           docker push ${{ env.REGISTRY }}/mybigpai/pairag:${{ env.IMAGE_TAG }}
+
+      - name: Free disk space
+        run: |
+          docker image prune --filter "until=168h" --force -a

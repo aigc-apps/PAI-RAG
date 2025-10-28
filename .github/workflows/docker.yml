@@ -61,4 +61,4 @@ jobs:
 
       - name: Free disk space
         run: |
-          docker system prune -a -f
+          docker image prune --filter "until=168h" --force -a

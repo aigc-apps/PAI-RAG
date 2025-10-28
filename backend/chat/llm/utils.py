@@ -96,8 +96,6 @@ async def convert_gen_to_stream_chat_completions(
 
         if isinstance(chunk, ToolResultChunk):
             citations, citation_details = extract_citations(chunk)
-        else:
-            citations, citation_details = [], []
 
         current_content += chunk.delta
         if checker and len(current_content) >= CHECK_OUTPUT_CHUNK_SIZE:
