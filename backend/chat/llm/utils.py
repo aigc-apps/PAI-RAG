@@ -33,22 +33,28 @@ def get_citation_source(tool_name: str) -> str:
 def extract_citations(tool_chunk: ToolResultChunk):
     citations, citation_details = [], []
     tool_name = tool_chunk.tool.function.name or "dummy"
+    seen_files = set()
     if tool_name == "aliyun-websearch" or tool_name == "tavily-websearch" or tool_name.startswith("search-knowledgebase"):
         if not tool_chunk.result:
             return citations, citation_details
 
         tool_call_results = json.loads(tool_chunk.result).get("result", []) or []
-        citations = [r.get("url", "") for r in tool_call_results]
-        citation_details = [
-            {
+
+        for result in tool_call_results:
+            file_name = result.get("title", "")
+            if not file_name or file_name in seen_files:
+                continue
+
+            citations.append(file_name)
+            citation_details.append({
                 "source": get_citation_source(tool_name),
-                "text": r["content"],
-                "name": r["title"],
-                "url": r["url"],
-                "score": r["score"],
-            }
-            for r in tool_call_results
-        ]
+                "text": result.get("content", ""),
+                "name": file_name,
+                "url": result.get("url", ""),
+                "score": result.get("score", 0),
+            })
+
+            seen_files.add(file_name)
 
     return citations, citation_details
 
