@@ -48,6 +48,7 @@ import {
   SearchIcon,
   ChevronDownIcon,
   RefreshCcwIcon,
+  Search,
 } from 'lucide-react';
 import { PreviewButton } from '@/app/knowledgebases/[kbId]/preview-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -123,13 +124,6 @@ interface SearchRecord {
   };
 }
 
-interface EmbeddingModel {
-  id: string;
-  model_id: string;
-  model_name: string;
-  type: string;
-}
-
 interface MetadataCondition {
   name: string;
   comparison_operator: string;
@@ -147,6 +141,10 @@ export default function KnowledgeBaseDetailPage(
   const [totalPages, setTotalPages] = useState(1);
   const fileSizePerPage = 10;
   const [kbquery, setKbQuery] = useState(''); //查询
+  const [fileQuery, setFileQuery] = useState('');
+  const fileQueryRef = useRef(fileQuery);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const statusRef = useRef(statusFilter);
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [searching, setSearching] = useState(false);
   const [logicalOperator, setLogicalOperator] = useState<string>('and');
@@ -181,8 +179,8 @@ export default function KnowledgeBaseDetailPage(
   const [activeRoleIds, setActiveRoleIds] = useState<string[]>([]);
   const [activeRoleNames, setActiveRoleNames] = useState<string[]>([]);
   const [user, setUser] = useState('');
-  
   const router = useRouter();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const default_comparator = [
     'contains',
@@ -250,18 +248,32 @@ export default function KnowledgeBaseDetailPage(
     pageRef.current = page;
   }, [page]);
 
+  useEffect(() => {
+    statusRef.current = statusFilter;
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fileQueryRef.current = fileQuery;
+  }, [fileQuery]);
+
 
   const fetchKbFiles = useCallback(async () => {
-    if (isRefreshing) {
-      console.log("list already refreshing.")
-      return;
+    // 取消上一次请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
-    console.log("Refreshing...");
-    const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}`;
+
+    // 创建新的 AbortController
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    console.log("Refreshing file list... query:", fileQueryRef.current, statusRef.current);
+
+    const filter = statusRef.current;
+    const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}&query=${fileQueryRef.current || ''}&status=${filter === 'all' ? '': filter}`;
 
     try {
-      isRefreshing = true;
-      const files_res = await fetch(url);
+      const files_res = await fetch(url, { signal: controller.signal, });
       if (!files_res.ok) throw new Error('获取知识库文件列表失败');
 
       const file_json_data = await files_res.json();
@@ -270,30 +282,16 @@ export default function KnowledgeBaseDetailPage(
       setKbFiles(data || []);
       setTotalPages(file_json_data.data.pages);
 
-      const kb_files = data as KnowledgeBaseFile[];
-      const files_unfinished = kb_files.some(
-        (file) => file.status !== 'succeeded' && file.status !== 'failed',
-      );
-
-      if (files_unfinished) {
-        console.log('存在未完成的文件，继续检查状态。');
-        setTimeout(() => {
-          isRefreshing = false;
-          fetchKbFiles(); // 依赖 ref 获取最新 page
-        }, 3000);
-      } else {
-        console.log('文件已上传完成。');
-      }
-      isRefreshing=false;
     } catch (err: any) {
-      isRefreshing = false;
-      toast.error(err.message);
+      if (err instanceof Error && err.name !== 'AbortError') {
+        toast.error(err.message);
+      }
     }
   }, [kbId]);
 
   useEffect(() => {
     fetchKbFiles();
-  }, [fetchKbFiles, page]);
+  }, [fetchKbFiles, page, statusFilter, fileQuery]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -828,12 +826,10 @@ export default function KnowledgeBaseDetailPage(
                           onChange={(e) => handleFileUpload(e.target.files)}
                           multiple
                         />
-
                         <Button
                           variant="outline"
                           className="ml-4 h-8"
                           onClick={() => {
-                            isRefreshing=false;
                             fetchKbFiles();
                             toast.success("刷新成功");
                           }}
@@ -850,16 +846,41 @@ export default function KnowledgeBaseDetailPage(
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {kbfiles && kbfiles.length > 0 ? (
                   <div>
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>文件名</TableHead>
+                          <TableHead>
+                            <div className="flex gap-2 items-center max-w-[400px]">                            文件名
+                          <Search className="h-6 w-6 text-muted-foreground" />
+                          <Input
+                            value={fileQuery}
+                            onChange={(e)=>{setFileQuery(e.target.value)}}
+                            type="search_files"
+                            placeholder="Search filename..."/>
+                            </div>
+                          </TableHead>
                           <TableHead>文件大小</TableHead>
                           <TableHead>上传时间</TableHead>
                           <TableHead>更新时间</TableHead>
-                          <TableHead>状态</TableHead>
+                          <TableHead>
+                            <div className="flex items-center">
+                              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                              <SelectTrigger className="w-[100px] bg-muted/50 hover:bg-muted">
+                                <SelectValue placeholder="全部状态" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">全部</SelectItem>
+                                <SelectItem value="succeeded"><span className="text-green-500">成功</span></SelectItem>
+                                <SelectItem value="failed"><span className="text-red-500">失败</span></SelectItem>
+                                <SelectItem value="pending"><span className="text-yellow-500">等待中</span></SelectItem>
+                                <SelectItem value="parsing"><span className="text-blue-500">解析中</span></SelectItem>
+                                <SelectItem value="persisting"><span className="text-blue-500">索引中</span></SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            </div>
+                          </TableHead>
                           <TableHead>操作</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -869,14 +890,16 @@ export default function KnowledgeBaseDetailPage(
                             <TableCell>
                               <Button
                                 variant="link"
-                                className="font-medium text-blue-600"
+                                className="font-medium text-blue-600 max-w-[360px]"
                                 onClick={() =>
                                   router.push(
                                     `/knowledgebases/${kbId}/files/${file.id}`,
                                   )
                                 }
-                              >
-                                {file.file_name}
+                              > 
+                              <span className="truncate block w-full text-left">
+                                {file.file_name}            
+                              </span>
                               </Button>
                             </TableCell>
                             <TableCell className="text-xs">
@@ -1353,7 +1376,8 @@ export default function KnowledgeBaseDetailPage(
                       </TableBody>
                     </Table>
                   </div>
-                ) : (
+                
+                { kbfiles.length === 0 && (
                   <p className="text-muted-foreground mx-auto">暂无文件</p>
                 )}
                 <PaginationComponent
