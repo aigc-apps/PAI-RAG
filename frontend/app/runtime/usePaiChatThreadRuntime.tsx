@@ -252,11 +252,32 @@ export class MyModelAdapter implements ChatModelAdapter {
               if (toolCall.function?.arguments) {
                 // 使用 jsonrepair 修复 JSON 格式
                 try {
-                  const jsonr = jsonrepair(toolCall.function.arguments);
-                  currentToolCallMap[toolCallId].function.arguments =
-                    JSON.parse(jsonr || '{}');
+                  const argumentsStr = toolCall.function.arguments;
+                  if (argumentsStr && typeof argumentsStr === 'string') {
+                    try {
+                      // 尝试使用 jsonrepair 修复 JSON
+                      const jsonr = jsonrepair(argumentsStr);
+                      currentToolCallMap[toolCallId].function.arguments =
+                        JSON.parse(jsonr || '{}');
+                    } catch (jsonrepairError) {
+                      console.warn('jsonrepair failed, trying direct JSON parse:', jsonrepairError);
+                      // 如果 jsonrepair 失败，尝试直接解析
+                      try {
+                        currentToolCallMap[toolCallId].function.arguments = JSON.parse(argumentsStr);
+                      } catch (parseError) {
+                        console.warn('Direct JSON parse also failed, using empty object string:', parseError);
+                        currentToolCallMap[toolCallId].function.arguments = '{}';
+                      }
+                    }
+                  } else {
+                    // 如果 arguments 不是字符串，转换为字符串
+                    currentToolCallMap[toolCallId].function.arguments = 
+                      typeof argumentsStr === 'object' ? JSON.stringify(argumentsStr) : String(argumentsStr || '{}');
+                  }
                 } catch (e) {
-                  console.error('JSON parse error:', e);
+                  console.error('Unexpected error processing arguments:', e);
+                  // 如果解析失败，使用空对象字符串作为默认值
+                  currentToolCallMap[toolCallId].function.arguments = '{}';
                 }
               }
               AddOrMergeToolCall(eventQueue, currentToolCallMap[toolCallId]);
