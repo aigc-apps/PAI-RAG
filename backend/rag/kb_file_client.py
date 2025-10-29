@@ -72,12 +72,14 @@ class KbFileClient:
     def get_node_texts_for_embedding(self, nodes) -> list[str]:
         texts = []
         for node in nodes:
-            base_text = f"{node.text}\n\nfile_name: {node.metadata['file_name']}"
+            base_text = f"filename: {node.metadata['file_name']}"
             chapter_name = node.metadata.get('chapter_name', '').strip()
             if chapter_name:
                 base_text += f"\n\nchapter_name: {chapter_name}"
 
-            texts.append(base_text[:1024])
+            base_text += f"\n\n{node.text}"
+
+            texts.append(base_text[:3000])
         return texts
 
     def create_file_parser(self, knowledgebase: KbEntity, multimodal_llm: Any = None):
