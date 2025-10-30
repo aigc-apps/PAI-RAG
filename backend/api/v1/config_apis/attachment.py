@@ -101,9 +101,14 @@ async def create_attachment_file(
         file_part=0,
         file_path=file_entity.file_path,
     )
-    session.add(file_entity)
-    session.add(file_task_entity)
-    await session.commit()
+    try:
+        session.add(file_entity)
+        session.add(file_task_entity)
+        await session.commit()
+    except Exception as e:
+        logger.error(f"Failed to save file {file_item.file_name} to database: {e}")
+        await session.rollback()
+        return error_response(code=500, data=file_entity, message=f"文件{file_item.file_name}上传失败: {e}")
 
     background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=True)
     logger.info(f"Enqueued file {file_item.file_name} for background processing...")
@@ -120,6 +125,17 @@ async def create_attachment_file(
             return error_response(code=500, data=file_entity, message=f"文件{file_item.file_name}上传失败")
         await asyncio.sleep(CHECK_INTERVAL)
 
-
+    # Cancel task when timeouts
+    file_entity.status = FileStatus.cancelled
+    file_entity.failed_reason = f"文件{file_item.file_name}上传超时。"
+    file_task_entity.status = FileStatus.cancelled
+    file_task_entity.failed_reason = f"文件{file_item.file_name}上传超时。"
+    try:
+        session.add(file_entity)
+        session.add(file_task_entity)
+        await session.commit()
+    except Exception as e:
+        logger.error(f"Failed to save file {file_item.file_name} to database: {e}")
+        await session.rollback()
 
     return error_response(code=400, data=file_entity, message=f"文件{file_item.file_name}上传超时。")
