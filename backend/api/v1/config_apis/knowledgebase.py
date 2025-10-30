@@ -291,43 +291,57 @@ async def upload_files(
 async def list_files(
     kb_id: str,
     file_name: Optional[str] = None,
+    query: Optional[str] = None,
+    status: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_session),
 ) :
-    if file_name:
-        kb_file = (await session.exec(
-            select(KbFileEntity).where(KbFileEntity.file_name == file_name)
-        )).first()
-        if kb_file is None:
-            return error_response(code=404, message=f"文件名'{file_name}'不存在")
+    try:
+        if file_name:
+            kb_file = (await session.exec(
+                select(KbFileEntity).where(KbFileEntity.file_name == file_name)
+            )).first()
+            if kb_file is None:
+                return error_response(code=404, message=f"文件名'{file_name}'不存在")
 
-        return success_response(data=kb_file, message="查询文件成功")
-    else:
-        total_results = await session.exec(
-            select(func.count())
-            .select_from(select(KbFileEntity).where(KbFileEntity.kb_id == kb_id))
-        )
-        total_num = total_results.one_or_none()
-        pagination = get_pagination_meta(page, size, total_num)
-        file_results = await session.exec(
-            select(KbFileEntity)
-            .where(KbFileEntity.kb_id == kb_id)
-            .order_by(KbFileEntity.updated_at.desc())
-            .offset(pagination.offset)
-            .limit(size)
-        )
-        file_entities = file_results.all()
+            return success_response(data=kb_file, message="查询文件成功")
+        else:
+            file_select_statement = select(KbFileEntity).where(
+                    KbFileEntity.kb_id == kb_id)
 
-        return success_response(
-            data=PagedResult(
-                items=file_entities,
-                total=pagination.total,
-                pages=pagination.pages,
-                page=pagination.page,
-                size=pagination.size,
-            ),
-            message="获取文件列表成功")
+            if query:
+                file_select_statement = file_select_statement.where(func.lower(KbFileEntity.file_name).like(func.lower(f"%{query}%")))
+
+            if status:
+                file_select_statement = file_select_statement.where(KbFileEntity.status == status)
+
+            count_statement = select(func.count()).select_from(file_select_statement)
+            total_results = await session.exec(count_statement)
+            total_num = total_results.one_or_none()
+            pagination = get_pagination_meta(page, size, total_num)
+
+            file_results = await session.exec(
+                file_select_statement
+                .order_by(KbFileEntity.updated_at.desc())
+                .offset(pagination.offset)
+                .limit(size)
+            )
+            file_entities = file_results.all()
+
+            return success_response(
+                data=PagedResult(
+                    items=file_entities,
+                    total=pagination.total,
+                    pages=pagination.pages,
+                    page=pagination.page,
+                    size=pagination.size,
+                ),
+                message="获取文件列表成功")
+    except Exception as ex:
+        logger.error(f"Failed to list files: {traceback.format_exc()}")
+        return error_response(code=400, message=f"获取文件列表失败: {ex}")
+
 
 @knowledgebase_router.put(
     "/{kb_id}/files/{file_id}", response_model=ResponseModel[KbFileEntity]
