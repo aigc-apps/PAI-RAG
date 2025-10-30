@@ -71,42 +71,36 @@ ENV VIRTUAL_ENV=/app/.venv \
 
 WORKDIR /app
 
-# Create a non-root user for better security
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app /var/log/nginx /var/lib/nginx
-
-# Switch to non-root user
-USER appuser
 
 # Set up PaddleOCR dependencies in a single layer
-RUN mkdir -p /home/appuser/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \
-    /home/appuser/.paddleocr/whl/rec/ch/ch_PP-OCRv4_rec_infer \
-    /home/appuser/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
+RUN mkdir -p /root/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \
+    /root/.paddleocr/whl/rec/ch/ch_PP-OCRv4_rec_infer \
+    /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
     && curl -L https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar \
         -o /tmp/ch_PP-OCRv4_det_infer.tar \
-    && tar xvf /tmp/ch_PP-OCRv4_det_infer.tar -C /home/appuser/.paddleocr/whl/det/ch/ \
+    && tar xvf /tmp/ch_PP-OCRv4_det_infer.tar -C /root/.paddleocr/whl/det/ch/ \
     && curl -L https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_rec_infer.tar \
         -o /tmp/ch_PP-OCRv4_rec_infer.tar \
-    && tar xvf /tmp/ch_PP-OCRv4_rec_infer.tar -C /home/appuser/.paddleocr/whl/rec/ch/ \
+    && tar xvf /tmp/ch_PP-OCRv4_rec_infer.tar -C /root/.paddleocr/whl/rec/ch/ \
     && curl -L https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar \
         -o /tmp/ch_ppocr_mobile_v2.0_cls_infer.tar \
-    && tar xvf /tmp/ch_ppocr_mobile_v2.0_cls_infer.tar -C /home/appuser/.paddleocr/whl/cls/ \
+    && tar xvf /tmp/ch_ppocr_mobile_v2.0_cls_infer.tar -C /root/.paddleocr/whl/cls/ \
     && rm -rf /tmp/*.tar
 
 
 # Copy virtual environment from builder
-COPY --chown=appuser:appuser --from=python-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+COPY --from=python-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 # Copy application files
 # Copy built frontend (already has node_modules removed and .next built)
-COPY --chown=appuser:appuser --from=frontend-builder /app/frontend /app/frontend
+COPY --from=frontend-builder /app/frontend /app/frontend
 
-COPY --chown=appuser:appuser model_repository ./model_repository
-COPY --chown=appuser:appuser resources ./resources
-COPY --chown=appuser:appuser scripts ./scripts
-COPY --chown=appuser:appuser backend ./backend
-COPY --chown=appuser:appuser alembic ./alembic
-COPY --chown=appuser:appuser alembic.ini ./
+COPY model_repository ./model_repository
+COPY resources ./resources
+COPY scripts ./scripts
+COPY backend ./backend
+COPY alembic ./alembic
+COPY alembic.ini ./
 
 # Expose ports
 EXPOSE 8680
