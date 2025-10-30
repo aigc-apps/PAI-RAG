@@ -34,7 +34,7 @@ app = Celery(
     backend=os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER,
 )
 
-async def enqueue_file_tasks_async(file_id: str, file_version: int) -> None:
+async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachment: bool = False) -> None:
     logger.info(f"[WORKER] Enqueueing file {file_id} in background.")
     await update_file_status_async(file_id=file_id, status=FileStatus.parsing, failed_reason=str(traceback.format_exc()))
 
@@ -57,7 +57,7 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int) -> None:
             num_tasks += 1
             part_count = file_task.file_part
             file_task = await save_file_task_async(task_entity=file_task)
-            process_file_task.delay(task_id=file_task.id)
+            process_file_task.delay(task_id=file_task.id, is_attachment=is_attachment)
             logger.info(f"[WORKER] Enqueued file {file_id} part {file_task.file_part} with task {file_task.id} successfully.")
 
         chunk_ids_to_delete = await clear_useless_file_resources_async(file_id=file_id, kb_id=file_entity.kb_id, part_count=part_count)
@@ -70,17 +70,17 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int) -> None:
         await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(traceback.format_exc()))
 
 @app.task(name="enqueue_file_tasks")
-def enqueue_file_tasks(file_id: str, file_version: int):
+def enqueue_file_tasks(file_id: str, file_version: int, is_attachment: bool = False):
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version))
+    loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment))
     logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
 
 # Enqueue file for processing, split into multiple tasks for large excels.
 @app.task(name="process_file_task")
-def process_file_task(task_id: str):
+def process_file_task(task_id: str, is_attachment: bool = False):
     loop = asyncio.get_event_loop()
     logger.info(f"Processing file {task_id}.")
-    loop.run_until_complete(kb_file_client.process_file_async(task_id=task_id))
+    loop.run_until_complete(kb_file_client.process_file_async(task_id=task_id, is_attachment=is_attachment))
     logger.info(f"Processed file {task_id} completed.")
 
 

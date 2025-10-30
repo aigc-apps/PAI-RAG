@@ -1,6 +1,7 @@
 ### Embedding configuration API ###
 import time
 import uuid
+import asyncio
 from db.models.knowledgebase.file_task import KbFileTaskEntity
 from fastapi import APIRouter, File, UploadFile, Form, Depends
 from db.models.knowledgebase.knowledgebase import (
@@ -19,7 +20,6 @@ from rag.file_item_utils import to_file_entity
 from db.models.knowledgebase.file import KbFileEntity
 from api.response_model import success_response, error_response
 from common.knowledgebase.types import FileStatus
-from rag.kb_file_client import kb_file_client
 from sqlmodel import select
 from db.models.knowledgebase.embedding import (
     EmbeddingModelEntity,
@@ -31,10 +31,16 @@ from loguru import logger
 attachments_router = APIRouter()
 
 
+MAX_CHECK_ATTEMPTS = 60
+CHECK_INTERVAL = 5
+
+
 @attachments_router.post("")
 async def create_attachment_file(
     file_id: str = Form(...), file: UploadFile = File(...), session: AsyncSession = Depends(get_session)
 ):
+    import app.worker as background_worker
+
     knowledgebase = knowledgebase_provider.get_knowledgebase_by_name("default_attachments")
     default_embedding_results = await session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.is_default == True)) # noqa: E712
     default_embedding_entities = default_embedding_results.all()
@@ -99,9 +105,21 @@ async def create_attachment_file(
     session.add(file_task_entity)
     await session.commit()
 
-    await kb_file_client.process_file_async(file_task_entity.id, is_attachment=True)
-    await session.refresh(file_entity)
-    if file_entity.status == FileStatus.succeeded:
-        return success_response(data=file_entity, message="文件上传成功")
-    else:
-        return error_response(data=file_entity, message="文件上传失败")
+    background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=True)
+    logger.info(f"Enqueued file {file_item.file_name} for background processing...")
+    attempt = 0
+    while attempt < MAX_CHECK_ATTEMPTS:
+        attempt += 1
+        logger.info(f"Checking file {file_item.file_name} processing status... Attempt {attempt} of {MAX_CHECK_ATTEMPTS}")
+        await session.refresh(file_entity)
+        if file_entity.status == FileStatus.succeeded:
+            logger.info(f"File {file_item.file_name} processing completed successfully")
+            return success_response(data=file_entity, message=f"文件{file_item.file_name}上传成功")
+        elif file_entity.status == FileStatus.failed:
+            logger.error(f"File {file_item.file_name} processing failed: {file_entity.failed_reason}.")
+            return error_response(code=500, data=file_entity, message=f"文件{file_item.file_name}上传失败")
+        await asyncio.sleep(CHECK_INTERVAL)
+
+
+
+    return error_response(code=400, data=file_entity, message=f"文件{file_item.file_name}上传超时。")
