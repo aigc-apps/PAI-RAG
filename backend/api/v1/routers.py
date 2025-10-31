@@ -43,5 +43,6 @@ def add_chat_router(app: FastAPI):
     app.include_router(chat_agent_router, prefix="/v1/chat/completions")
     app.include_router(thread_router, prefix="/v1/threads")
     app.include_router(retrieval_router, prefix="/v1/retrieval")
-    app.include_router(health_router, prefix="/v1/health")
     app.include_router(embedding_router, prefix="/v1/embeddings")
+
+    app.include_router(health_router, prefix="/health")
