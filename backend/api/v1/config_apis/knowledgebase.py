@@ -276,7 +276,7 @@ async def upload_files(
 
             await session.commit()
             logger.info(f"Saved file {file_entity} successfully.")
-            background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version)
+            background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False)
             logger.info(f"Queued {file_entity.id} job successfully.")
             file_entities.append(file_entity)
 
@@ -366,7 +366,7 @@ async def reprocess_file(
     session.add(file_entity)
     await session.commit()
     logger.info(f"Re-process file {file_entity} successfully.")
-    background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version)
+    background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False)
 
     return success_response(data=file_entity, message="文件入队成功。")
 
