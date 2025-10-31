@@ -1,11 +1,9 @@
 # agent/kb_retriever_node.py
-from langchain_openai import ChatOpenAI
-from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from datetime import datetime
+from langchain_core.messages import AIMessage
 from agent.tools.knowledge_base_tool import knowledge_base_search  # 导入自定义知识库检索工具
 from agent.react_executor import run_react_agent
-
+from agent.config import AgentConfig
+from agent.utils.helpers import extract_task_description
 
 # =========== 方式一：直接复用Langgraph封装的react agent ===========
 
@@ -44,16 +42,12 @@ from agent.react_executor import run_react_agent
 # =========== 方式二：基于langchain自己实现 react agent ===========
 
 async def kb_retriever_node(state):
-    task_desc = "No task provided."
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, SystemMessage):
-            task_desc = msg.content
-            break
+    task_desc = extract_task_description(state["messages"])
 
     final_answer = await run_react_agent(
         tools=[knowledge_base_search],
         task_description=task_desc,
-        language="中文",
+        language=AgentConfig.REACT_DEFAULT_LANGUAGE,
         system_prompt="你只能访问公司内部知识库，不得进行外部搜索或猜测。"
     )
 

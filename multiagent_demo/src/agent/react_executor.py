@@ -7,15 +7,16 @@ from langchain_core.messages import (
 from langchain_core.tools import BaseTool
 from typing import List, Sequence, Optional, Any
 from datetime import datetime
+from agent.config import AgentConfig
 
 async def run_react_agent(
     tools: Sequence[BaseTool],
     task_description: str,
     system_prompt: Optional[str] = None,
-    max_steps: int = 3,
-    model: str = "gpt-4o",
-    temperature: float = 0.0,
-    language: str = "中文"
+    max_steps: Optional[int] = None,
+    model: Optional[str] = None,
+    temperature: Optional[float] = None,
+    language: Optional[str] = None
 ) -> str:
     """
     通用 ReAct Agent 执行器，支持任意 LangChain 工具。
@@ -31,7 +32,13 @@ async def run_react_agent(
         
     Returns:
         str: 最终回答
-    """
+        """
+    # 使用配置的默认值
+    max_steps = max_steps if max_steps is not None else AgentConfig.REACT_MAX_STEPS
+    model = model if model is not None else AgentConfig.LLM_MODEL
+    temperature = temperature if temperature is not None else AgentConfig.LLM_TEMPERATURE
+    language = language if language is not None else AgentConfig.REACT_DEFAULT_LANGUAGE
+    
     # 初始化 LLM 并绑定工具
     llm = ChatOpenAI(model=model, temperature=temperature)
     llm_with_tools = llm.bind_tools(tools)

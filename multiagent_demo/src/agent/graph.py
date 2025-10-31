@@ -1,17 +1,14 @@
 from typing import Literal
 from langgraph.graph import StateGraph, START, END
-from langchain_openai import ChatOpenAI
 import asyncio
-from agent.nodes.supervisor_node import SupervisorState, _build_supervisor_subgraph
+from agent.nodes.supervisor_node import AgentState, _build_supervisor_subgraph
 from agent.nodes.researcher_node import researcher_node
 from agent.nodes.reporter_node import reporter_node
 from agent.nodes.mcp_node import amap_mcp_node
 from agent.nodes.kb_retriever_node import kb_retriever_node
-
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
 def _build_base_graph_agent():
     supervisor_agent = _build_supervisor_subgraph()
-    builder = StateGraph(SupervisorState)
+    builder = StateGraph(AgentState)
     builder.add_edge(START, "supervisor")
     
     # 关键：将整个子图作为一个节点

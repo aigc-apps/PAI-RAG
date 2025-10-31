@@ -1,7 +1,6 @@
 from typing import Literal, Optional
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from agent.models.plan_manager import PlanManager
 from agent.models.plan import Plan, SubTask, Status
 from langgraph.graph import MessagesState
@@ -10,10 +9,18 @@ from typing import List
 from langchain_core.messages import AIMessage
 from langchain_core.tools import StructuredTool
 from datetime import datetime
+from agent.config import AgentConfig
+from agent.utils.llm_factory import get_llm
 
-ENABLED_WORKERS = ["researcher", "kb_retriever", "reporter", "map_navigator"]
+ENABLED_WORKERS = AgentConfig.AgentRoles.all()
 
-class SupervisorState(MessagesState):
+
+class AgentState(MessagesState):
+    """Global state for the multi-agent system.
+    
+    This state is shared across all nodes in the agent graph, including
+    supervisor, researcher, kb_retriever, reporter, and map_navigator.
+    """
     plan: Optional[Plan] = None
     next: str = "supervisor"
     current_subtask_idx: Optional[int] = None
@@ -41,10 +48,9 @@ create_plan_tool = StructuredTool.from_function(
     args_schema=CreatePlanToolSchema,
 )
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
 # ===== 1. 自动完成上一个子任务 =====
-async def finalize_subtask(state: SupervisorState):
+async def finalize_subtask(state: AgentState):
     current_idx = state.get("current_subtask_idx")
     messages = state["messages"]
     plan = state.get("plan")
@@ -70,7 +76,7 @@ async def finalize_subtask(state: SupervisorState):
     }
 
 # ===== 2. Reason: 是否需要计划 =====
-async def reason_about_plan(state: SupervisorState):
+async def reason_about_plan(state: AgentState):
     plan = state.get("plan")
     pm = PlanManager(plan=plan)
 
@@ -84,7 +90,7 @@ async def reason_about_plan(state: SupervisorState):
     return result
 
 # ===== 3. Act: 创建计划（使用 tool_call）=====
-async def create_plan(state: SupervisorState):
+async def create_plan(state: AgentState):
     messages = state["messages"]
     goal = messages[0].content if messages else "No goal"
     
@@ -111,6 +117,7 @@ Ensure the plan is logical, minimally redundant, and leverages internal and exte
         HumanMessage(content=f"User goal: {goal}, please create a plan to achieve this goal using the same language as the user’s query.")
     ]
     
+    llm = get_llm()
     llm_with_tools = llm.bind_tools([create_plan_tool])
     response: AIMessage = await llm_with_tools.ainvoke(planning_messages)
     
@@ -149,7 +156,7 @@ Ensure the plan is logical, minimally redundant, and leverages internal and exte
     return {"plan": pm.current_plan, "supervisor_step": "check_completion"}
 
 # ===== 4. Check: 是否全部完成？ =====
-async def check_completion(state: SupervisorState):
+async def check_completion(state: AgentState):
     pm = PlanManager(plan=state.get("plan"))
     
     if pm.current_plan and all(st.state == Status.COMPLETED for st in pm.current_plan.subtasks):
@@ -163,7 +170,7 @@ async def check_completion(state: SupervisorState):
         return {"supervisor_step": "assign_next_subtask"}
 
 # ===== 5. Assign: 分配下一个子任务 =====
-async def assign_next_subtask(state: SupervisorState):
+async def assign_next_subtask(state: AgentState):
     pm = PlanManager(plan=state.get("plan"))
     if not pm.current_plan:
         return {"supervisor_step": "reason_about_plan"}
@@ -197,7 +204,7 @@ async def assign_next_subtask(state: SupervisorState):
     }
 
 def _build_supervisor_subgraph():
-    builder = StateGraph(SupervisorState)
+    builder = StateGraph(AgentState)
     
     builder.add_node("finalize_subtask", finalize_subtask)
     builder.add_node("reason_about_plan", reason_about_plan)
@@ -209,7 +216,7 @@ def _build_supervisor_subgraph():
 
     builder.add_edge("finalize_subtask", "reason_about_plan")
     
-    def route_after_reason(state: SupervisorState):
+    def route_after_reason(state: AgentState):
         return state["supervisor_step"]
     
     builder.add_conditional_edges(

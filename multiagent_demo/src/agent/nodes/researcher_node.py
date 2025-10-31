@@ -1,11 +1,11 @@
 # agent/researcher_node.py
 from langchain_tavily import TavilySearch
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from datetime import datetime
+from langchain_core.messages import AIMessage
 from agent.react_executor import run_react_agent
-from langchain.agents import create_agent
-tavily_search_tool = TavilySearch(max_results=5)
+from agent.config import AgentConfig
+from agent.utils.helpers import extract_task_description
+
+tavily_search_tool = TavilySearch(max_results=AgentConfig.TAVILY_MAX_RESULTS)
 
 # =========== 方式一：直接复用Langgraph封装的react agent ===========
 
@@ -36,17 +36,13 @@ tavily_search_tool = TavilySearch(max_results=5)
 
 async def researcher_node(state):
     # 提取任务
-    task_desc = "No task provided."
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, SystemMessage):
-            task_desc = msg.content
-            break
+    task_desc = extract_task_description(state["messages"])
 
     # 调用通用 ReAct 执行器
     final_answer = await run_react_agent(
         tools=[tavily_search_tool],
         task_description=task_desc,
-        language="中文"
+        language=AgentConfig.REACT_DEFAULT_LANGUAGE
     )
 
     print(f"Researcher finished: {final_answer[:100]}...")
@@ -60,7 +56,7 @@ async def researcher_node(state):
 # =========== 流式输出：直接复用Langgraph封装的react agent stream ===========
 
 # from langgraph.graph import StateGraph, START
-# from agent.nodes.supervisor_node import SupervisorState
+# from agent.nodes.supervisor_node import AgentState
 # import asyncio
 
 # llm = ChatOpenAI(model="gpt-4o", temperature=0)
@@ -94,7 +90,7 @@ async def researcher_node(state):
 #     测试流式输出
 #     """
 #     graph = (
-#         StateGraph(SupervisorState)
+#         StateGraph(AgentState)
 #         .add_node("researcher_node", stream_researcher_node)
 #         .add_edge(START, "researcher_node")
 #         .compile()

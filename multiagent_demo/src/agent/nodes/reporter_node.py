@@ -1,8 +1,6 @@
 # agent/reporter_node.py
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
-
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+from agent.utils.llm_factory import get_llm
 
 def extract_research_summary_for_reporter(state):
     """
@@ -55,6 +53,7 @@ async def reporter_node(state):
     {report_guidelines}
     """
     
+    llm = get_llm()
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     print(f"Reporter output: {response.content}")
     

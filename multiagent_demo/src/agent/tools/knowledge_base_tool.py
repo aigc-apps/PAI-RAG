@@ -1,6 +1,18 @@
 # tools/knowledge_base_tool.py
 import httpx
 from langchain_core.tools import tool
+from agent.config import AgentConfig
+
+_http_client = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """Get or create HTTP client with connection pooling."""
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=60)
+    return _http_client
+
 
 @tool
 async def knowledge_base_search(query: str) -> str:
@@ -13,23 +25,29 @@ async def knowledge_base_search(query: str) -> str:
     Returns:
         str: 知识库返回的文本结果，若失败则返回错误信息
     """
-    url = "http://rag.xxxx.cn-hangzhou.pai-eas.aliyuncs.com/v1/retrieval"
+    if not AgentConfig.KB_API_URL or not AgentConfig.KB_AUTHORIZATION:
+        return "知识库配置未设置，请配置 KB_API_URL 和 KB_AUTHORIZATION 环境变量。"
     
-    # Modify the authorization!!
+    url = AgentConfig.KB_API_URL
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "xxxxxx=="
+        "Authorization": AgentConfig.KB_AUTHORIZATION
     }
-    payload = {"knowledge_id": "kbc5f1a19c3fd0489fa48943850a59ced4","query": query}
+    payload = {
+        "knowledge_id": AgentConfig.KB_KNOWLEDGE_ID,
+        "query": query
+    }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            records = data.get("records", [])
-            if not records:
-                return "知识库中未找到相关信息。"
-            return "\n\n".join([r.get("content", "") for r in records])
+        client = get_http_client()
+        response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        records = data.get("records", [])
+        if not records:
+            return "知识库中未找到相关信息。"
+        return "\n\n".join([r.get("content", "") for r in records])
+    except httpx.HTTPStatusError as e:
+        return f"知识库检索失败: HTTP {e.response.status_code} - {e.response.text}"
     except Exception as e:
         return f"知识库检索失败: {str(e)}"
