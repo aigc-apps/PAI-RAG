@@ -90,24 +90,23 @@ async def create_attachment_file(
     file_entity : KbFileEntity = to_file_entity(file_item)
     file_entity.file_version = int(time.time())
     file_task_entity = KbFileTaskEntity(
-        id=uuid.uuid4().hex,
-        file_id=file_entity.id,
-        status=FileStatus.pending,
-        file_version=file_entity.file_version,
-        kb_id=file_entity.kb_id,
-        file_part=0,
-        file_path=file_entity.file_path,
-    )
+            id=uuid.uuid4().hex,
+            file_id=file_entity.id,
+            status=FileStatus.pending,
+            file_version=file_entity.file_version,
+            kb_id=file_entity.kb_id,
+            file_part=0,
+            file_path=file_entity.file_path,
+        )
     session.add(file_entity)
     session.add(file_task_entity)
     await session.commit()
-
     # excel附件不入知识库
     if file_entity.file_extension not in ['.xlsx']:
         await kb_file_client.process_file_async(file_task_entity.id, is_attachment=True)
     else:
         await update_file_status_async(
-                file_id=file_item.id, task_id=file_task_entity.id, status=FileStatus.succeeded, is_attachment=True
+                file_id=file_item.id, task_id=file_task_entity.id, status=FileStatus.succeeded, is_attachment=True, file_item=file_item
             )
     await session.refresh(file_entity)
     if file_entity.status == FileStatus.succeeded:

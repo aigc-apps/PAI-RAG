@@ -19,12 +19,6 @@ from db.models.knowledgebase.embedding import (
     EmbeddingModelEntity,
     EmbeddingType,
 )
-from db.models.knowledgebase.knowledgebase import (
-    ChunkConfig,
-    KbEntity,
-    KnowledgebaseCreate,
-    RetrievalConfig,
-)
 from db.models.evaluation.dataset import DatasetCreate, DatasetEntity
 from db.models.evaluation.dataset import DatasetSampleEntity
 from config.providers.knowledgebase_provider import knowledgebase_provider
@@ -53,7 +47,6 @@ class ConfigChangeManager:
         await self.create_default_embedding_model()
         await embedding_provider.full_load_from_db_async()
         logger.info("Initialized embedding models.")
-        await self.create_default_chat_doc_kb()
         await knowledgebase_provider.full_load_from_db_async()
         logger.info("Initialized knowledgebases.")
 
@@ -98,41 +91,6 @@ class ConfigChangeManager:
         self.last_change_dt = current_dt
         logger.info(f"ConfigManager inited with worker_mode {self.worker_mode}, timestamp {self.last_change_dt}")
 
-
-    @with_async_db_session
-    async def create_default_chat_doc_kb(self, session: AsyncSession):
-        # create default chat doc kb if not exists
-        sql_results = await session.execute(
-        select(KbEntity).where(KbEntity.name == "default_chat_docs")
-        )
-        chat_doc_entities: List[KbEntity] = sql_results.all()
-        if len(chat_doc_entities) > 0:
-            logger.info("Default chat doc knowledgebase already exists.")
-            return
-
-        logger.info("Creating default chat doc knowledgebase.")
-        kb = KnowledgebaseCreate(
-            name="default_chat_docs",
-            description="聊天中生成的文档",
-            embedding_model="BAAI/bge-m3",
-        )
-        kb.chunk_config = (ChunkConfig()).model_dump()
-        kb.retrieval_config = (RetrievalConfig()).model_dump()
-        knowledgebase = KbEntity.model_validate(kb)
-        try:
-            knowledgebase_provider.add(knowledgebase)
-            session.add(knowledgebase)
-            await session.commit()
-            await session.refresh(knowledgebase)
-            await self.notify_change_async(
-                event_source=ChangeEventSource.KNOWLEDGEBASE,
-                source_id=knowledgebase.id,
-                event_type=ChangeEventType.ADD
-            )
-            logger.info("Default chat doc knowledgebase added to database.")
-        except IntegrityError as e:
-            logger.error(f"IntegrityError occurred when add default chat doc kb: {e.orig}")
-            await session.rollback()
 
     @with_async_db_session
     async def create_default_embedding_model(self, session: AsyncSession):

@@ -1,7 +1,8 @@
 ### Code sandbox configuration API ###
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query
+import traceback
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
@@ -10,7 +11,7 @@ from db.models.code_sandbox import (
     CodeSandboxConfigCreate,
     CodeSandboxConfigEntity,
 )
-from api.response_model import error_response
+from api.response_model import success_response, error_response, ResponseModel
 from db.db_context import get_session
 from sqlalchemy.exc import IntegrityError
 from config.providers.config_change_manager import config_change_manager
@@ -21,7 +22,7 @@ from loguru import logger
 code_sandbox_router = APIRouter()
 
 
-@code_sandbox_router.post("", response_model=CodeSandboxConfigRead)
+@code_sandbox_router.post("", response_model=ResponseModel[CodeSandboxConfigRead])
 async def add_code_sandbox_config(
     new_code_sandbox_config: CodeSandboxConfigCreate,
     session: AsyncSession = Depends(get_session),
@@ -63,20 +64,18 @@ async def add_code_sandbox_config(
             event_type=ChangeEventType.UPDATE,
         )
 
-        return code_sandbox_config
+        return success_response(data=code_sandbox_config, message="添加代码沙盒配置成功。")
     except IntegrityError as e:
-        logger.error(f"IntegrityError occurred when add code sandbox config: {e}")
+        logger.error(f"IntegrityError occurred when add code sandbox config: {traceback.format_exc()}")
         await session.rollback()
-        raise
+        return error_response(code=400, message=f"Failed to add code sandbox config: {str(e)}")
     except Exception as e:
-        logger.error(f"Failed to add code sandbox config: {str(e)}")
+        logger.error(f"Failed to add code sandbox config: {traceback.format_exc()}")
         await session.rollback()
-        raise HTTPException(
-            status_code=400, detail=f"Failed to add code sandbox config: {str(e)}"
-        )
+        return error_response(code=400, message=f"Failed to add code sandbox config: {str(e)}")
 
 
-@code_sandbox_router.get("", response_model=List[CodeSandboxConfigRead])
+@code_sandbox_router.get("", response_model=ResponseModel[List[CodeSandboxConfigRead]])
 async def list_code_sandbox_config(
     session: AsyncSession = Depends(get_session),
     offset: int = 0,
@@ -97,6 +96,5 @@ async def list_code_sandbox_config(
         )
     else:
         logger.warning("No code sandbox config found.")
-        return [CodeSandboxConfigRead()]
 
-    return [code_sandbox_config]
+    return success_response(data=[code_sandbox_config], message="查询代码沙盒配置成功。")

@@ -18,6 +18,9 @@ from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.file import KbFileEntity
 from llama_index.core.schema import Document
 from config.providers.config_change_manager import config_change_manager
+from pairag.file.readers.excel2md_reader import Excel2MdReader
+from pairag.file.models.file_item import FileItem
+from chat.tools.attachments.file_reader import DEFAULT_ATTACHMENT_MAX_SIZE
 
 
 MAX_CACHE_SIZE = 3
@@ -155,13 +158,13 @@ async def update_file_status_async(
     failed_reason: str = None,
     is_attachment: bool = False,
     documents: List[Document] = None,
+    file_item: FileItem = None,
 ):
     file = await session.get(KbFileEntity, file_id)
-    if is_attachment and documents:
+    if is_attachment:
         if file.file_extension in [".xlsx"]:
-            file.file_content = "\n".join([doc.text for doc in documents])
-            file.file_content_length = len(file.file_content)
-        else:
+            documents = Excel2MdReader(chunk_size=DEFAULT_ATTACHMENT_MAX_SIZE).read(file_item)
+        if documents:
             file.file_content = documents[0].text
             file.file_content_length = len(documents[0].text)
 

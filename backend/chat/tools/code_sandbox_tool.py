@@ -6,8 +6,9 @@ import json5
 from typing import Optional, Union
 import re
 import os
+from functools import wraps
 from pairag.file.utils.image_utils import compress_image_if_needed
-from utils.tool_utils import aget_file_url_from_db
+from pairag.file.store.file_store_helper import file_store
 from llama_index.core.tools import FunctionTool
 import uuid
 from io import BytesIO
@@ -23,6 +24,24 @@ ext_pattern = '|'.join(ext[1:] for ext in IMAGE_EXTENSIONS)
 MARKDOWN_IMG_PATTERN = re.compile(rf'(!\[[^\]]*\]\()([^\)]+\.(?:{ext_pattern}))(\))', re.IGNORECASE)
 
 
+async def get_http_client_session(timeout: int = 600):
+    """异步生成器函数，用于获取 HTTP client session"""
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+        yield session
+
+
+def with_http_client_session(timeout: int = 600):
+    """装饰器，自动管理 HTTP client session 的生命周期"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+                kwargs["session"] = session
+                return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 class CodeSandboxTool:
     def __init__(
         self,
@@ -36,23 +55,23 @@ class CodeSandboxTool:
         self.interpreter_id = interpreter_id
         self.timeout_default = timeout_default
         self.base_url = f"https://{self.aliyun_id}.agentrun-data.cn-hangzhou.aliyuncs.com/2025-09-10/agents/code-interpreters/{self.interpreter_id}"
-        self.session_id: Optional[str] = None
-        self.context_id: Optional[str] = None
-        # 创建一个可复用的 aiohttp ClientSession
         self._http_session: Optional[aiohttp.ClientSession] = None
 
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if not self._http_session or self._http_session.closed:
+    async def _get_session(self, timeout: int = 600) -> aiohttp.ClientSession:
+        """获取 HTTP session，如果不存在或已关闭则创建新的"""
+        if self._http_session is None or self._http_session.closed:
             self._http_session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=600)
+                timeout=aiohttp.ClientTimeout(total=timeout)
             )
         return self._http_session
 
     async def aclose(self):
+        """关闭 HTTP session"""
         if self._http_session and not self._http_session.closed:
             await self._http_session.close()
 
     async def acreate_session_and_context(self):
+        # uuid v4,不能是数字开头
         s = str(uuid.uuid4())
         session_id = "a" + s[1:]
         headers_with_session = {
@@ -66,8 +85,8 @@ class CodeSandboxTool:
             "config": {}
         }
 
-        session = await self._get_session()
         url = f"{self.base_url}/contexts"
+        session = await self._get_session()
         try:
             async with session.post(
                 url,
@@ -82,40 +101,20 @@ class CodeSandboxTool:
         except Exception:
             logger.exception("Error in acreate_session_and_context")
             raise
+        if "data" in result and "id" in result["data"]:
+            context_id = result["data"]["id"]
+        else:
+            raise Exception("Failed to create context")
+        return session_id, context_id
 
-        self.session_id = session_id
-        self.context_id = result["data"]["id"]
-        return session_id, result["data"]["id"]
 
-    async def acleanup_session_and_context(self):
-        if not self.session_id or not self.context_id:
-            logger.warning("No active session/context to clean up.")
-            return
-
-        headers_with_session = {
-            "Content-Type": "application/json",
-            "X-AgentRun-Session-ID": self.session_id,
-        }
-
-        session = await self._get_session()
-        url = f"{self.base_url}/contexts/{self.context_id}"
-        try:
-            async with session.delete(url, headers=headers_with_session) as response:
-                if not response.ok:
-                    logger.warning(f"Cleanup failed: {response.status}")
-        except Exception:
-            logger.exception("Error during cleanup")
-
-        self.session_id = None
-        self.context_id = None
-
-    async def aupload_data_file_to_sandbox(self, file_content: bytes, file_name: str):
-        if not self.session_id:
+    async def aupload_data_file_to_sandbox(self, file_content: bytes, file_name: str, session_id: str):
+        if not session_id:
             logger.error("Session ID not set. Cannot upload file to sandbox.")
             return None
 
         headers_with_session = {
-            "X-AgentRun-Session-ID": self.session_id,
+            "X-AgentRun-Session-ID": session_id,
         }
         form = FormData()
         form.add_field(
@@ -145,13 +144,13 @@ class CodeSandboxTool:
             logger.exception(f"Failed to upload file {file_name} to sandbox")
             return None
 
-    async def adownload_result_from_sandbox(self, file_path: str):
-        if not self.session_id:
+    async def adownload_result_from_sandbox(self, file_path: str, session_id: str):
+        if not session_id:
             logger.error("Session ID not set. Cannot download file.")
             return None
 
         headers_with_session = {
-            "X-AgentRun-Session-ID": self.session_id,
+            "X-AgentRun-Session-ID": session_id,
         }
 
         session = await self._get_session()
@@ -169,15 +168,16 @@ class CodeSandboxTool:
             logger.exception(f"Failed to download file {file_path}")
             return None
 
-    async def alist_code_sandbox_dir_file_paths(self, file_dir_path: str):
-        if not self.session_id:
+    async def alist_code_sandbox_dir_file_paths(self, file_dir_path: str, session_id: str):
+        if not session_id:
             logger.error("Session ID not set. Cannot list dir files.")
             return json.dumps({"paths": ""}, ensure_ascii=False)
 
         headers_with_session = {
-            "X-AgentRun-Session-ID": self.session_id,
+            "X-AgentRun-Session-ID": session_id,
         }
 
+        result = None
         session = await self._get_session()
         try:
             async with session.get(
@@ -219,7 +219,7 @@ class CodeSandboxTool:
                 return params.strip()
             return ""
 
-    async def areplace_code_sandbox_image_paths(self, final_result: str) -> str:
+    async def areplace_code_sandbox_image_paths(self, final_result: str, session_id: str) -> str:
 
         replacements = []
 
@@ -236,7 +236,7 @@ class CodeSandboxTool:
             try:
                 local_filepath_full = os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, file_name)
 
-                image_blob = await self.adownload_result_from_sandbox(local_filepath_full)
+                image_blob = await self.adownload_result_from_sandbox(local_filepath_full, session_id)
                 if not isinstance(image_blob, bytes):
                     logger.warning(f"Download did not return bytes for {file_name}")
                     continue
@@ -249,7 +249,12 @@ class CodeSandboxTool:
                         logger.warning(f"Image compression failed for {file_name}, skipping.")
                         continue
 
-                url = await aget_file_url_from_db(file=image_file, file_name=file_name)
+                destination_file_path = f"default_chat_docs/docs/{file_name}"
+                file_store.save(
+                    file=image_file,
+                    file_path=destination_file_path,
+                )
+                url = await file_store.get_url(destination_file_path)
                 replacement = f"{prefix}{url}{suffix}"
                 replacements.append((match.start(), match.end(), replacement))
 
@@ -263,45 +268,45 @@ class CodeSandboxTool:
 
         return result
 
-    async def aexecute(self, code: str, timeout: Optional[int] = None) -> str:
+    async def aexecute(self, code: str, timeout: Optional[int] = None, session_id: str = None, context_id: str = None) -> str:
         code = self._extract_code(code)
         if not code:
             return "[Python Interpreter Error]: Empty or invalid code provided."
-        if not self.session_id or not self.context_id:
+        if not session_id or not context_id:
             return "[Python Interpreter Error]: Session or context not initialized."
 
         actual_timeout = timeout or self.timeout_default
         headers = {
             "Content-Type": "application/json",
-            "X-AgentRun-Session-ID": self.session_id,
-            "X-Acs-Parent-Id": self.aliyun_id,
+            "X-AgentRun-Session-ID": session_id,
         }
 
         payload = {"code": code}
-        url = f"{self.base_url}/contexts/{self.context_id}/execute"
+        url = f"{self.base_url}/contexts/{context_id}/execute"
 
-        session = await self._get_session()
-        try:
-            # aiohttp 的 timeout 是总超时（包括连接+读取）
-            timeout_obj = aiohttp.ClientTimeout(total=actual_timeout + 5)
-            async with session.post(
-                url,
-                headers=headers,
-                data=json.dumps(payload),
-                timeout=timeout_obj
-            ) as response:
-                if not response.ok:
-                    text = await response.text()
-                    logger.error(f"Execute failed: {response.status} {text}")
-                    raise Exception(f"HTTP {response.status}: {text}")
-                result = await response.json()
-        except asyncio.TimeoutError:
-            return "[PythonInterpreter Error] TimeoutError: Execution timed out."
-        except Exception as e:
-            logger.exception("Error during code execution")
-            return f"[Python Interpreter Error]: {str(e)}"
+        # aiohttp 的 timeout 是总超时（包括连接+读取）
+        timeout_obj = aiohttp.ClientTimeout(total=actual_timeout + 5)
+        result = None
+        # 对于 execute，使用动态 timeout 创建新的 session
+        async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+            try:
+                async with session.post(
+                    url,
+                    headers=headers,
+                    data=json.dumps(payload)
+                ) as response:
+                    if not response.ok:
+                        text = await response.text()
+                        logger.error(f"Execute failed: {response.status} {text}")
+                        raise Exception(f"HTTP {response.status}: {text}")
+                    result = await response.json()
+            except asyncio.TimeoutError:
+                return "[PythonInterpreter Error] TimeoutError: Execution timed out."
+            except Exception as e:
+                logger.exception("Error during code execution")
+                return f"[Python Interpreter Error]: {str(e)}"
 
-        if result.get("code") != "SUCCESS":
+        if result is None or result.get("code") != "SUCCESS":
             return f"[Python Interpreter Error]: API returned non-success code: {result.get('code')}"
 
         results = result.get("data", {}).get("results", [])
@@ -332,12 +337,12 @@ class CodeSandboxTool:
             parts.append("[PythonInterpreter Error] TimeoutError: Execution timed out.")
 
         final_result = "\n".join(parts).strip()
-        final_result = await self.areplace_code_sandbox_image_paths(final_result)
-        return final_result if final_result else "Finished execution."
+        final_result = await self.areplace_code_sandbox_image_paths(final_result, session_id)
+        return final_result if final_result else "Finished execution, but no result."
 
-    async def aget_list_directory_files_tool(self):
-        async def _wrapped_list_files(file_dir_path: str):
-            return await self.alist_code_sandbox_dir_file_paths(file_dir_path)
+    async def aget_list_directory_files_tool(self, session_id: str):
+        async def _wrapped_list_files(file_dir_path: str, session_id: str):
+            return await self.alist_code_sandbox_dir_file_paths(file_dir_path, session_id)
 
         description = f"""
         列出 CodeSandbox 中指定目录（如 {DEFAULT_CODE_SANDBOX_DIR_PATH}）下的所有文件路径。

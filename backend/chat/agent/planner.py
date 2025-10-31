@@ -53,6 +53,11 @@ class Planner(BaseAgent):
         self.tool_metadata = [
             to_openai_tool(tool.metadata) for tool in self.tools
         ]
+        self._code_sandbox_attachments = []
+
+    def set_code_sandbox_attachments(self, attachments: list):
+        """设置代码沙箱附件"""
+        self._code_sandbox_attachments = attachments or []
 
     # internal tool for planning agent
     async def get_plan_tool_meta(self) -> Dict[str, Any]:
@@ -129,6 +134,9 @@ class Planner(BaseAgent):
                         name="actor",
                         max_steps=self.max_steps
                     )
+                    # 设置代码沙箱附件
+                    if self._code_sandbox_attachments:
+                        actor.set_code_sandbox_attachments(self._code_sandbox_attachments)
 
                     response_gen = await actor.run_async(state)
                     async for chunk in response_gen:
@@ -167,6 +175,9 @@ class Planner(BaseAgent):
                     name="actor_with_plan",
                     max_steps=10,
                 )
+                # 设置代码沙箱附件
+                if self._code_sandbox_attachments:
+                    actor_with_plan.set_code_sandbox_attachments(self._code_sandbox_attachments)
                 summarizer = Summarizer(
                     self.prompt_set.summary_prompt,
                     llm=self.llm,
