@@ -24,6 +24,26 @@ import { PhotoProvider, PhotoView } from "react-photo-view";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from "remark-gfm";
 import { MarkdownRenderer } from '@/components/customized/markdown/markdown';
+import { jsonrepair } from 'jsonrepair';
+
+// Helper function to safely parse JSON with error handling
+const safeParseJSON = <T = any>(jsonString: string, fallback?: T): T => {
+  try {
+    return JSON.parse(jsonString) as T;
+  } catch (error) {
+    // If parsing fails, try to repair JSON using jsonrepair
+    try {
+      const repairedJson = jsonrepair(jsonString);
+      return JSON.parse(repairedJson) as T;
+    } catch (repairError) {
+      console.error('Failed to parse JSON:', error, repairError, 'Original string:', jsonString);
+      if (fallback !== undefined) {
+        return fallback;
+      }
+      throw new Error('Invalid JSON format');
+    }
+  }
+};
 
 const JsonCodeBlock = ({
   jsonString,
@@ -84,7 +104,13 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
           </div>
         );
       }
-      const search_result = JSON.parse(result) as SearchWebResult;
+      let search_result: SearchWebResult;
+      try {
+        search_result = safeParseJSON<SearchWebResult>(result);
+      } catch (error) {
+        console.error('Failed to parse SearchWeb result:', error);
+        search_result = { result: [] };
+      }
 
       return (
         <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
@@ -189,7 +215,13 @@ export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
           </div>
         );
       }
-      const db_result = JSON.parse(result) as ChatDbResult;
+      let db_result: ChatDbResult;
+      try {
+        db_result = safeParseJSON<ChatDbResult>(result);
+      } catch (error) {
+        console.error('Failed to parse ChatDb result:', error);
+        db_result = { result: '', sql: '' };
+      }
 
       return (
         <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
@@ -250,7 +282,19 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
           </div>
         );
       }
-      const plan_result = JSON.parse(result);
+      
+      let plan_result;
+      try {
+        plan_result = safeParseJSON(result);
+      } catch (error) {
+        console.error('Failed to parse plan result JSON:', error);
+        return (
+          <div className="flex items-center gap-2 text-sm font-medium text-red-500 mb-1">
+            <ListTodoIcon className="h-4 w-4" />
+            <span>解析计划结果失败</span>
+          </div>
+        );
+      }
       return (
         <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
           <Sheet>
@@ -321,7 +365,13 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
           </div>
         );
       }
-      const search_result = JSON.parse(result) as SearchWebResult;
+      let search_result: SearchWebResult;
+      try {
+        search_result = safeParseJSON<SearchWebResult>(result);
+      } catch (error) {
+        console.error('Failed to parse SearchWeb result:', error);
+        search_result = { result: [] };
+      }
       return (
         <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
           <Sheet>
@@ -412,7 +462,13 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
         return null;
       }
 
-      const parsedResult = JSON.parse(result);
+      let parsedResult;
+      try {
+        parsedResult = safeParseJSON(result);
+      } catch (error) {
+        console.error('Failed to parse ReadFile result:', error);
+        return null;
+      }
       console.log('ReadFileToolUI 结果:', parsedResult);
       console.log('ReadFileToolUI 参数:', args);
 
@@ -481,7 +537,13 @@ export const SearchFileToollUI = makeAssistantToolUI<
       if (!result || isError) {
         return null;
       }
-      const parsedResult = JSON.parse(result);
+      let parsedResult;
+      try {
+        parsedResult = safeParseJSON(result);
+      } catch (error) {
+        console.error('Failed to parse SearchFile result:', error);
+        return null;
+      }
       console.log('SearchFileToollUI 结果:', parsedResult);
 
       return (
@@ -570,7 +632,13 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
           </div>
         );
       }
-      const search_result = JSON.parse(result) as SearchKbResult;
+      let search_result: SearchKbResult;
+      try {
+        search_result = safeParseJSON<SearchKbResult>(result);
+      } catch (error) {
+        console.error('Failed to parse SearchKb result:', error);
+        search_result = { result: [], error: '' };
+      }
       return (
         <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors round-sm">
           <Sheet>

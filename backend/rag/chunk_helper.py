@@ -18,9 +18,8 @@ from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.file import KbFileEntity
 from llama_index.core.schema import Document
 from config.providers.config_change_manager import config_change_manager
-from pairag.file.readers.excel2md_reader import Excel2MdReader
-from pairag.file.models.file_item import FileItem
-from chat.tools.attachments.file_reader import DEFAULT_ATTACHMENT_MAX_SIZE
+from pairag.file.store.file_store_helper import file_store
+import pandas as pd
 
 
 MAX_CACHE_SIZE = 3
@@ -149,6 +148,35 @@ async def save_file_to_db(
         await session.rollback()
 
 
+
+@with_async_db_session
+async def update_file_content_async(
+    session: AsyncSession,
+    file_id: str,
+    is_attachment: bool = False,
+    documents: List[Document] = None,
+):
+    file = await session.get(KbFileEntity, file_id)
+    if is_attachment:
+        if file.file_extension in [".xlsx"]:
+            file_data = file_store.load(file.file_path)
+            df = pd.read_excel(file_data)
+            file.file_content = df.head(5).to_csv(index=False)
+            file.file_content_length = len(file.file_content)
+        if documents:
+            file.file_content = documents[0].text
+            file.file_content_length = len(documents[0].text)
+    try:
+        session.add(file)
+        await session.commit()
+        await session.flush()
+        logger.info(f"[FileHelper] Updated file {file_id} content.")
+    except Exception as e:
+        logger.error(f"[FileHelper] Error updating file {file_id} content: {e}")
+        await session.rollback()
+
+
+
 @with_async_db_session
 async def update_file_status_async(
     session: AsyncSession,
@@ -157,17 +185,8 @@ async def update_file_status_async(
     task_id: str = None,
     failed_reason: str = None,
     is_attachment: bool = False,
-    documents: List[Document] = None,
-    file_item: FileItem = None,
 ):
     file = await session.get(KbFileEntity, file_id)
-    if is_attachment:
-        if file.file_extension in [".xlsx"]:
-            documents = Excel2MdReader(chunk_size=DEFAULT_ATTACHMENT_MAX_SIZE).read(file_item)
-        if documents:
-            file.file_content = documents[0].text
-            file.file_content_length = len(documents[0].text)
-
     # try update task status first, if there are still other tasks not in the same status, skip updating file status.
     if task_id:
         task = await session.get(KbFileTaskEntity, task_id)

@@ -28,13 +28,16 @@ export default function CodeSandboxConfig() {
 
         if (!res.ok) throw new Error('加载配置失败');
 
-        const data = await res.json();
+        const response = await res.json();
+        const config = response?.data?.[0];
 
-        setIsEnabled(data[0].enabled || false);
-        setConfigType(data[0].type || 'aliyun-fc');
-        setAliyunId(data[0].aliyun_id || '');
-        setInterpreterId(data[0].interpreter_id || '');
-        setTimeoutDefault(data[0].timeout_default || 50);
+        if (config) {
+          setIsEnabled(config.enabled || false);
+          setConfigType(config.type || 'aliyun-fc');
+          setAliyunId(config.aliyun_id || '');
+          setInterpreterId(config.interpreter_id || '');
+          setTimeoutDefault(config.timeout_default || 50);
+        }
       } catch (err: any) {
         toast.error(err.message);
       }

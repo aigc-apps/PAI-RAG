@@ -2,7 +2,6 @@ from typing import Generic, TypeVar, Optional
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
-from fastapi.responses import JSONResponse
 
 
 T = TypeVar("T")

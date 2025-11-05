@@ -20,6 +20,7 @@ from rag.chunk_helper import (
     save_chunks_to_db_async,
     update_chunk_status_async,
     update_file_status_async,
+    update_file_content_async,
     should_cancel_file_task,
 )
 from tools.llm_utils import get_multimodal_llm_from_db
@@ -189,15 +190,12 @@ class KbFileClient:
                 file_version=file_task.file_version,
             ):
                 return
-
-            if is_attachment and file_entity.file_extension in [".xlsx"]:
-                logger.info(f"Skipping parsing for excel attachment file {file_item.file_name}.")
-                return
-                # parsing file
+            # parsing file
             logger.info(f"Parsing file {file_item.file_name}.")
             multimodal_llm = await get_multimodal_llm_from_db()
             file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
+            await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment)
             for node in nodes:
                 # 去除\x00字符，适配postgresql
                 node.text = sanitize_text(node.text)
@@ -236,7 +234,7 @@ class KbFileClient:
 
             await update_file_status_async(
                 file_id=file_item.id, task_id=task_id, status=FileStatus.persisting,
-                is_attachment=is_attachment, documents=documents
+                is_attachment=is_attachment
             )
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
             embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)

@@ -72,17 +72,21 @@ export const Thread: FC<{
         else {
           const data = await mcpRes.json();
 
-          const configs = data.data.items.map(
-            (cfg: any) =>
-              new McpEntry(
-                cfg.id,
-                cfg.name,
-                cfg.url,
-                cfg.type,
-                cfg.enabled ?? true,
-                mcp_ids.includes(cfg.id),
-              ),
-          );
+          // 确保 data.data.items 存在且是数组
+          const items = data?.data?.items || [];
+          const configs = items
+            .filter((cfg: any) => cfg != null) // 过滤掉 null 或 undefined
+            .map(
+              (cfg: any) =>
+                new McpEntry(
+                  cfg.id || '',
+                  cfg.name || '',
+                  cfg.url || '',
+                  cfg.type || '',
+                  cfg.enabled ?? true,
+                  mcp_ids.includes(cfg.id),
+                ),
+            );
           const enabledConfigs = configs.filter(
             (item: { enabled: boolean }) => item.enabled === true,
           );
@@ -97,16 +101,20 @@ export const Thread: FC<{
           const json_res = await kbRes.json();
           console.log('Load kb.', json_res);
 
-          const configs = json_res.data.items.map(
-            (cfg: any) =>
-              new KbSelection(
-                cfg.id,
-                cfg.name,
-                cfg.description,
-                kb_ids.includes(cfg.id),
-                cfg.updated_at,
-              ),
-          );
+          // 确保 json_res.data.items 存在且是数组
+          const items = json_res?.data?.items || [];
+          const configs = items
+            .filter((cfg: any) => cfg != null) // 过滤掉 null 或 undefined
+            .map(
+              (cfg: any) =>
+                new KbSelection(
+                  cfg.id || '',
+                  cfg.name || '',
+                  cfg.description || '',
+                  kb_ids.includes(cfg.id),
+                  cfg.updated_at || '',
+                ),
+            );
           console.log('all kb configs: ', configs);
           setKbConfigs(configs);
           setKbLoading(false);
