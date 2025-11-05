@@ -11,6 +11,8 @@ from common.knowledgebase.types import (
     FileStatus,
     VectorIndexRetrievalType,
 )
+import re
+
 from rag.chunk_helper import (
     get_embedding_from_db,
     get_file_task_async,
@@ -46,16 +48,38 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
 
 
 
+def sanitize_text(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+
+    # 1. 移除 NUL 和其他控制字符 (保留 \t \n \r)
+    # 允许 0x09 (tab), 0x0A (LF), 0x0D (CR)
+    text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', ' ', text)
+
+    # 2. 移除 Unicode 替换字符（解码失败标志）
+    text = text.replace('\uFFFD', ' ')
+
+    # 3. （可选）移除零宽字符
+    text = re.sub(r'[\u200B-\u200D\uFEFF]', ' ', text)
+
+    # 4. （可选）规范化换行：\r\n 或 \r → \n
+    text = re.sub(r'\r\n?', '\n', text)
+
+    return text
+
+
 class KbFileClient:
     def get_node_texts_for_embedding(self, nodes) -> list[str]:
         texts = []
         for node in nodes:
-            base_text = f"{node.text}\n\nfile_name: {node.metadata['file_name']}"
+            base_text = f"filename: {node.metadata['file_name']}"
             chapter_name = node.metadata.get('chapter_name', '').strip()
             if chapter_name:
                 base_text += f"\n\nchapter_name: {chapter_name}"
 
-            texts.append(base_text[:1024])
+            base_text += f"\n\n{node.text}"
+
+            texts.append(base_text[:3000])
         return texts
 
     def create_file_parser(self, knowledgebase: KbEntity, multimodal_llm: Any = None):
@@ -174,6 +198,10 @@ class KbFileClient:
             multimodal_llm = await get_multimodal_llm_from_db()
             file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
+            for node in nodes:
+                # 去除\x00字符，适配postgresql
+                node.text = sanitize_text(node.text)
+
             logger.info(f"Parsed {len(nodes)} documents.")
 
             if not nodes:
