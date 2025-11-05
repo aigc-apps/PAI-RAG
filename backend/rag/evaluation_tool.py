@@ -312,11 +312,10 @@ class PaiEvaluationClient:
             prompts=run_config_entity.prompts,
         )
         try:
-            import app.worker as background_worker
             logger.info(f"=== Agent Run Input {chat_request} ===")
             output, execution_metadata, trace_id, status = await run_agent(chat_request)
             logger.info(f"=== Agent output: {output} ===")
-            background_worker.evaluate_sample_result.delay(experiment_id=experiment_id,
+            await self.evaluate_sample_result(experiment_id=experiment_id,
                                                            exp_run_id=exp_run_id,
                                                            sample_id=exp_run_entity.sample_id,
                                                            trace_id=trace_id,

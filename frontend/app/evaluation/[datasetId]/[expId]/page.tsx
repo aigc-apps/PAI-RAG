@@ -969,7 +969,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                                                     <div className="ml-2 mb-2">
                                                       <span className="text-xs font-medium text-gray-600 dark:text-gray-400">观察结果:</span>
                                                       <div className="ml-2 mt-1 text-xs bg-white dark:bg-gray-700 rounded p-1 border border-border whitespace-pre-wrap h-[100px] overflow-y-auto">
-                                                        <p>{item.observation}</p>
+                                                        <p>{item.observation?.result}</p>
                                                       </div>
                                                     </div>
                                                   </div>
