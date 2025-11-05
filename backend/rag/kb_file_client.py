@@ -195,7 +195,7 @@ class KbFileClient:
             multimodal_llm = await get_multimodal_llm_from_db()
             file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
-            await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment)
+            await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment,documents=documents)
             for node in nodes:
                 # 去除\x00字符，适配postgresql
                 node.text = sanitize_text(node.text)
