@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import Any, List
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_fixed
 from llama_index.core.tools.function_tool import ToolOutput
@@ -25,6 +25,19 @@ class AttachmentInputData(BaseModel):
 async def call_tool_with_retry(async_fn, fn_args) -> ToolOutput:
     from extensions.trace.pai_agent_wrapper import instrument_async_call
     return await instrument_async_call(async_fn, fn_args)
+
+
+
+def append_text(user_message: Any, text: str):
+    assert "content" in user_message, "Message必须包含content字段"
+
+    if isinstance(user_message["content"], str):
+        user_message["content"] += text
+    else:
+        for block in user_message["content"]:
+            if block.get("type") == "text":
+                block["text"] += text
+                return
 
 
 async def parse_attachments_from_messages(messages: List[dict], question: str = ""):
@@ -73,7 +86,7 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                         reply_text += tool_result.content
 
                     # 只在user message最后追加文件读取结果，不使用 tool_call / tool 消息
-                    last_user_message["content"][0]["text"] += reply_text
+                    append_text(last_user_message, reply_text)
                     tool_call_chunks.append(
                         TextChunk(
                             tool_calls=[image_parser_tool_call],
@@ -120,7 +133,7 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                         reply_text = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {tool_result.content}"
 
                     # 只在user message最后追加文件读取结果，不使用 tool_call / tool 消息
-                    last_user_message["content"][0]["text"] += reply_text
+                    append_text(last_user_message, reply_text)
                     tool_call_chunks.append(
                         TextChunk(
                             tool_calls=[file_reader_tool_call],
@@ -150,7 +163,7 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
         attachment_names = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names]
         attachment_names = ','.join(attachment_names)
         reply_text = f"\n\n 以下是参考文件路径：\n\n {attachment_names}"
-        last_user_message["content"][0]["text"] += reply_text
+        append_text(last_user_message, reply_text)
 
     messages[-1] = last_user_message
 
