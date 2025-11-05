@@ -12,6 +12,10 @@ from db.models.knowledgebase.file import KbFileEntity
 from pairag.file.store.file_store_helper import file_store
 from loguru import logger
 import traceback
+from chat.tools.code_sandbox_exceptions import (
+    CodeSandboxException,
+    CodeSandboxNotConfiguredException,
+)
 
 # 全局单例
 codesandbox_provider: "CodeSandboxProvider"
@@ -90,12 +94,16 @@ class CodeSandboxProvider(BaseConfigProvider):
             context_id: str = None,
         ) -> str:
             if self.tool is None:
-                return "[CodeSandbox Error]: Not configured."
+                logger.error("CodeSandbox not configured")
+                raise CodeSandboxNotConfiguredException("Not configured")
             try:
                 return await self.tool.aexecute(code, timeout=timeout, session_id=session_id, context_id=context_id)
+            except CodeSandboxException as e:
+                logger.error(f"CodeSandbox execution failed: {e}")
+                raise
             except Exception as e:
                 logger.error(f"CodeSandbox execution failed: {e}")
-                return f"[CodeSandbox Error]: {str(e)}"
+                raise
 
         tool = FunctionTool.from_defaults(
         async_fn=aexecute_code,

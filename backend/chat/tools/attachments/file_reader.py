@@ -6,15 +6,12 @@ from db.db_context import with_async_db_session
 from db.models.knowledgebase.file import KbFileEntity
 from pairag.file.store.file_store_helper import file_store
 
-DEFAULT_ATTACHMENT_MAX_SIZE = 1000
 @with_async_db_session
 async def aget_file_content_from_db(session: AsyncSession, file_id: str):
     processed_file_entity = await session.get(KbFileEntity, file_id)
     if processed_file_entity.file_extension in [".jpeg", ".png", ".jpg"]:
         return file_store.get_url(processed_file_entity.file_path)
     content =  processed_file_entity.file_content
-    if processed_file_entity.file_content_length > DEFAULT_ATTACHMENT_MAX_SIZE and processed_file_entity.file_extension not in [".xlsx"]:
-        content = content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
     return content
 
 async def aget_file_content(file_id: str, file_name: str = None):
