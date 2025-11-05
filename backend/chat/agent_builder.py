@@ -5,6 +5,7 @@ from common.chat.models import ChatAgentRequest
 from config.providers.llm_provider import llm_provider
 from config.providers.mcp_tool_provider import mcp_provider
 from config.providers.websearch_provider import websearch_provider
+from config.providers.code_sandbox_provider import codesandbox_provider
 from config.providers.chatdb_provider import chatdb_provider
 from llama_index.core.tools.function_tool import FunctionTool
 from loguru import logger
@@ -28,6 +29,7 @@ async def aget_mcp_tools(chat_request: ChatAgentRequest, attachments: List[dict]
         # Add visit webpage tool
         visit_webpage_tool = await aget_visit_webpage_tool()
         mcp_tools.append(visit_webpage_tool)
+
 
     if len(chat_request.mcp_ids) > 0:
         logger.info(f"[Model] selected mcp servers: {chat_request.mcp_ids}")
@@ -57,8 +59,10 @@ async def aget_kb_tools(chat_request: ChatAgentRequest) -> List[FunctionTool]:
 async def build_agent(chat_request: ChatAgentRequest) -> Planner:
     try:
         attachments = []
+        code_sandbox_attachments = []
         for message in chat_request.messages:
             if message.get("role") == "user":
+                code_sandbox_attachments.extend(message.get("attachments", []))
                 for attachment in message.get("attachments", []):
                     if not str(attachment.get("contentType", "")).startswith(
                         "image/"
@@ -70,6 +74,10 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
 
         mcp_tools = await aget_mcp_tools(chat_request, attachments=attachments)
         llm: PaiLlm = llm_provider.get_llm_model(model_id=chat_request.model)
+
+        if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
+            code_interpreter_tool = codesandbox_provider.get_code_sandbox_tool()
+            mcp_tools.append(code_interpreter_tool)
 
         prompt_set = PlanAgentPromptSet()
         if chat_request.prompts:
@@ -84,6 +92,10 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
             tools=mcp_tools,
             name="Planner",
         )
+
+        # 设置代码沙箱附件到 runner 中
+        if code_sandbox_attachments:
+            runner.set_code_sandbox_attachments(code_sandbox_attachments)
 
         return runner
     except Exception as ex:

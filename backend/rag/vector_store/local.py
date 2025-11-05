@@ -180,10 +180,14 @@ class LocalChromaVectorStore(BasePydanticVectorStore):
             collection_kwargs=collection_kwargs or {},
         )
         if chroma_collection is None:
-            client = chromadb.HttpClient(host=host, port=port, ssl=ssl, headers=headers)
-            self._collection = client.get_or_create_collection(
-                name=collection_name, **collection_kwargs
-            )
+            try:
+                client = chromadb.HttpClient(host=host, port=port, ssl=ssl, headers=headers)
+                self._collection = client.get_or_create_collection(
+                    name=collection_name, **collection_kwargs
+                )
+            except Exception as e:
+                # 针对常见的 ChromaDB 连接错误提供更详细的错误信息
+                logger.error(f"Error creating ChromaDB collection: {str(e)}")
         else:
             self._collection = cast(Collection, chroma_collection)
 

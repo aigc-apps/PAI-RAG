@@ -26,14 +26,15 @@ from db.models.knowledgebase.embedding import (
 )
 from config.providers.config_change_manager import config_change_manager
 from db.models.change_event import ChangeEventSource, ChangeEventType
+
 from loguru import logger
 
 attachments_router = APIRouter()
 
 
+
 MAX_CHECK_ATTEMPTS = 60
 CHECK_INTERVAL = 5
-
 
 @attachments_router.post("")
 async def create_attachment_file(
@@ -110,7 +111,7 @@ async def create_attachment_file(
         await session.rollback()
         return error_response(code=500, data=file_entity, message=f"文件{file_item.file_name}上传失败: {e}")
 
-    background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=True)
+    background_worker.enqueue_attachments_file_tasks.delay(file_entity.id, file_entity.file_version, file_entity.file_extension, is_attachment=True)
     logger.info(f"Enqueued file {file_item.file_name} for background processing...")
     attempt = 0
     while attempt < MAX_CHECK_ATTEMPTS:

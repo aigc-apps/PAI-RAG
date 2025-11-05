@@ -18,6 +18,7 @@ from chat.llm.llm_model import PaiLlm, ReasoningChunk, ChatResponseGenerator
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.attachment_parser import parse_attachments_from_messages
+from utils.tool_utils import to_openai_tool
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
@@ -50,8 +51,13 @@ class Planner(BaseAgent):
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
         self.tool_metadata = [
-            tool.metadata.to_openai_tool() for tool in self.tools
+            to_openai_tool(tool.metadata) for tool in self.tools
         ]
+        self._code_sandbox_attachments = []
+
+    def set_code_sandbox_attachments(self, attachments: list):
+        """设置代码沙箱附件"""
+        self._code_sandbox_attachments = attachments or []
 
     # internal tool for planning agent
     async def get_plan_tool_meta(self) -> Dict[str, Any]:
@@ -128,6 +134,9 @@ class Planner(BaseAgent):
                         name="actor",
                         max_steps=self.max_steps
                     )
+                    # 设置代码沙箱附件
+                    if self._code_sandbox_attachments:
+                        actor.set_code_sandbox_attachments(self._code_sandbox_attachments)
 
                     response_gen = await actor.run_async(state)
                     async for chunk in response_gen:
@@ -166,6 +175,9 @@ class Planner(BaseAgent):
                     name="actor_with_plan",
                     max_steps=10,
                 )
+                # 设置代码沙箱附件
+                if self._code_sandbox_attachments:
+                    actor_with_plan.set_code_sandbox_attachments(self._code_sandbox_attachments)
                 summarizer = Summarizer(
                     self.prompt_set.summary_prompt,
                     llm=self.llm,

@@ -16,6 +16,7 @@ from db.models.prompt import PromptModelEntity
 from db.models.change_event import ChangeEvent
 from db.models.chatbot import ChatBotEntity
 from db.models.guardrail import GuardrailConfigEntity
+from db.models.code_sandbox import CodeSandboxConfigEntity
 from db.models.evaluation.dataset import DatasetEntity, DatasetSampleEntity
 from db.models.evaluation.evaluator_config import EvaluatorConfigEntity
 from db.models.evaluation.experiment import ExperimentEntity, ExperimentSampleEntity

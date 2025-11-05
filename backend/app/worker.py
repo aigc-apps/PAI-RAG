@@ -6,7 +6,7 @@ from common.knowledgebase.types import FileStatus
 from db.models.knowledgebase.file import KbFileEntity
 
 from rag.split.file_split import split_file_tasks
-from rag.chunk_helper import clear_useless_file_resources_async, delete_file_tasks_by_file_id_async, read_file_from_db, save_file_task_async, set_embedding_model_ready, update_file_status_async
+from rag.chunk_helper import clear_useless_file_resources_async, delete_file_tasks_by_file_id_async, read_file_from_db, save_file_task_async, set_embedding_model_ready, update_file_status_async, update_file_content_async
 from utils.modelscope_utils import download_model_to_directory
 # Fix for macOS fork issues (like with ChromaDB)
 # this forces the application to use spawn instead of fork
@@ -73,6 +73,16 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachmen
 def enqueue_file_tasks(file_id: str, file_version: int, is_attachment: bool = False):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment))
+    logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
+
+@app.task(name="enqueue_attachments_file_tasks")
+def enqueue_attachments_file_tasks(file_id: str, file_version: int, file_extension: str, is_attachment: bool = False):
+    loop = asyncio.get_event_loop()
+    if file_extension in [".xlsx"]:
+        loop.run_until_complete(update_file_content_async(file_id=file_id, is_attachment=is_attachment))
+        loop.run_until_complete(update_file_status_async(file_id=file_id, status=FileStatus.succeeded, is_attachment=is_attachment))
+    else:
+        loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment))
     logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
 
 # Enqueue file for processing, split into multiple tasks for large excels.

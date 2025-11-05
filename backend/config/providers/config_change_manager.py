@@ -13,7 +13,6 @@ from config.providers.base_provider import BaseConfigProvider
 from sqlmodel.ext.asyncio.session import AsyncSession
 from config.providers.embedding_provider import embedding_provider
 from config.providers.llm_provider import llm_provider
-from config.providers.knowledgebase_provider import knowledgebase_provider
 from config.providers.evaluation_provider import evaluation_provider
 from db.models.knowledgebase.embedding import (
     EmbeddingModelCreate,
@@ -22,6 +21,7 @@ from db.models.knowledgebase.embedding import (
 )
 from db.models.evaluation.dataset import DatasetCreate, DatasetEntity
 from db.models.evaluation.dataset import DatasetSampleEntity
+from config.providers.knowledgebase_provider import knowledgebase_provider
 from sqlalchemy.exc import IntegrityError
 from rag.evaluation_tool import eval_client
 
@@ -58,6 +58,7 @@ class ConfigChangeManager:
             from config.providers.chatbot_provider import chatbot_provider
             from config.providers.guardrail_provider import guardrail_provider
             from config.providers.vectordb_provider import vectordb_provider
+            from config.providers.code_sandbox_provider import codesandbox_provider
             from config.providers.chatdb_provider import chatdb_provider
 
             await mcp_provider.full_load_from_db_async()
@@ -74,8 +75,13 @@ class ConfigChangeManager:
             logger.info("Initialized guardrail configs.")
             await vectordb_provider.full_load_from_db_async()
             logger.info("Initialized vector db configs.")
+            await codesandbox_provider.full_load_from_db_async()
+            logger.info("Initialized code sandbox configs.")
             await chatdb_provider.full_load_from_db_async()
             logger.info("Initialized chatdb configs.")
+
+
+
 
         await self.create_builtin_gaia_dataset()
         await evaluation_provider.full_load_from_db_async()
@@ -84,6 +90,7 @@ class ConfigChangeManager:
         self.initialized = True
         self.last_change_dt = current_dt
         logger.info(f"ConfigManager inited with worker_mode {self.worker_mode}, timestamp {self.last_change_dt}")
+
 
     @with_async_db_session
     async def create_default_embedding_model(self, session: AsyncSession):
@@ -258,6 +265,9 @@ class ConfigChangeManager:
             case ChangeEventSource.VECTORDB:
                 from config.providers.vectordb_provider import vectordb_provider
                 return vectordb_provider
+            case ChangeEventSource.CODESANDBOX:
+                from config.providers.code_sandbox_provider import codesandbox_provider
+                return codesandbox_provider
             case ChangeEventSource.CHATDB:
                 from config.providers.chatdb_provider import chatdb_provider
                 return chatdb_provider

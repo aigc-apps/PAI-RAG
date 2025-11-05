@@ -10,7 +10,9 @@ from openai.types.chat.chat_completion_chunk import (
 from chat.tools.attachments.file_reader import aget_file_reader
 from chat.tools.attachments.image_parser import aget_image_parser_tool
 from chat.llm.models import ToolResultChunk, TextChunk
-
+from config.providers.code_sandbox_provider import codesandbox_provider
+from chat.tools.code_sandbox_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
+import os
 from loguru import logger
 
 
@@ -131,7 +133,26 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                         )
                     )
 
-        messages[-1] = last_user_message
+    # 列举code sandbox里的文件
+    user_attachments = []
+    for message in messages:
+        if message.get("role") == "user":
+            user_attachments.extend(message.get("attachments", []))
+    attachment_names = []
+    for attachment in user_attachments:
+        name = attachment.get("name")
+        if not name:
+            logger.warning("Attachment missing 'name' field, skipping: %s", attachment)
+            continue
+        attachment_names.append(name)
+    if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
+        # 只在user message最后追加列出文件结果，不使用 tool_call / tool 消息
+        attachment_names = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names]
+        attachment_names = ','.join(attachment_names)
+        reply_text = f"\n\n 以下是参考文件路径：\n\n {attachment_names}"
+        last_user_message["content"][0]["text"] += reply_text
+
+    messages[-1] = last_user_message
 
     return AttachmentInputData(
         messages=messages, chunks=tool_call_chunks

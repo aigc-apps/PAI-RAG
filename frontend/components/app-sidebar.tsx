@@ -1,5 +1,5 @@
 'use client';
-import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck } from 'lucide-react';
+import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck, Code } from 'lucide-react';
 import React from 'react';
 import {
   Sidebar,
@@ -108,6 +108,9 @@ export function AppSidebar() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/config/search"><Search /> 搜索</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/code_sandbox"><Code /> Code沙箱</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/config/chatdb"><LassoSelectIcon /> ChatDB </Link>
