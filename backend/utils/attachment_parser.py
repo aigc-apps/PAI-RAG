@@ -124,13 +124,12 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                         file_reader, file_reader_fn_args
                     )
                     logger.info(f"Get tool result {tool_result}.")
-                    attachment_file_entity = await read_file_from_db(file_id=attachment.get("id"))
                     reply_text = "\n\n 以下是附件的解析结果："
                     try:
                         result_data = json.loads(tool_result.content)
-                        reply_text = f"📄 文件“{attachment_file_entity.file_name}” (ID:{file_id}) 的内容如下：\n\n {result_data.get('data', '无内容')}"
+                        reply_text = result_data.get('data', '无内容')
                     except (json.JSONDecodeError, TypeError):
-                        reply_text = f"📄 文件“{attachment_file_entity.file_name}” (ID:{file_id}) 的内容如下：\n\n {tool_result.content}"
+                        reply_text = tool_result.content
 
                     # 只在user message最后追加文件读取结果，不使用 tool_call / tool 消息
                     append_text(last_user_message, reply_text)

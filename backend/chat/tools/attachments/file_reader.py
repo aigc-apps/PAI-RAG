@@ -12,12 +12,13 @@ async def aget_file_content_from_db(session: AsyncSession, file_id: str):
     if processed_file_entity.file_extension in [".jpeg", ".png", ".jpg"]:
         return file_store.get_url(processed_file_entity.file_path)
     content =  processed_file_entity.file_content
-    return content
+    return content, processed_file_entity.file_name
 
 async def aget_file_content(file_id: str):
     """Get read file tool"""
-    content = await aget_file_content_from_db(file_id=file_id)
-    return json.dumps({"data": content}, ensure_ascii=False)
+    content, file_name = await aget_file_content_from_db(file_id=file_id)
+    result = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {content}"
+    return json.dumps({"data": result}, ensure_ascii=False)
 
 
 async def aget_file_reader():
