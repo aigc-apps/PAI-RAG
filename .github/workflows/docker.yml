@@ -62,3 +62,4 @@ jobs:
       - name: Free disk space
         run: |
           docker image prune --filter "until=168h" --force -a
+          docker builder prune --filter "until=24h" -f

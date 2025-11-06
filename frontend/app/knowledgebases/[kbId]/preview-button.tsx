@@ -20,6 +20,7 @@ interface KnowledgeBaseFile {
   file_extension: string;
   file_metadata: {
     file_url: string;
+    is_local: boolean;
   };
   updated_at: string;
 }
@@ -46,6 +47,19 @@ export function PreviewButton({
       const json_data = await res.json();
       const kb_file_data = json_data.data;
 
+      // 将相对路径转换为完整的 HTTP 地址
+      if (kb_file_data?.file_metadata?.file_url) {
+        const fileUrl = kb_file_data.file_metadata.file_url;
+        // 如果是相对路径（以 /knowledgebases/localdata/ 开头），转换为完整 URL
+        if (fileUrl.startsWith('localdata/')) {
+          const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+          kb_file_data.file_metadata.file_url = `${baseUrl}/api/knowledgebases/${fileUrl}`;
+          kb_file_data.file_metadata.is_local = true;
+        } else {
+          kb_file_data.file_metadata.is_local = false;
+        }
+      }
+
       setKbFile(kb_file_data); // 更新状态
       console.log('知识库文件详情数据:', kb_file_data);
     } catch (err: any) {
@@ -71,6 +85,7 @@ export function PreviewButton({
           <DialogTitle>{kbfile?.file_name}</DialogTitle>
           <DialogDescription>文件预览</DialogDescription>
         </DialogHeader>
+        {loading ? <div>加载中...</div> :
         <div className="flex-grow overflow-y-auto">
           {kbfile?.file_extension === '.pdf' ? (
             <iframe
@@ -92,7 +107,7 @@ export function PreviewButton({
             kbfile?.file_extension === '.xlsx' ||
             kbfile?.file_extension === '.pptx' ? (
                 <iframe
-                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+                  src={kbfile?.file_metadata.is_local? kbfile?.file_metadata.file_url : `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
                     String(kbfile?.file_metadata.file_url),
                   )}`}
                   width="100%"
@@ -117,7 +132,7 @@ export function PreviewButton({
                     </a>
                   </div>
                 )}
-        </div>
+        </div>}
       </DialogContent>
     </Dialog>
   );

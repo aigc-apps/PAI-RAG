@@ -8,6 +8,8 @@ export async function POST(request: NextRequest) {
   // 删除 Next.js 自动添加的 header，避免冲突
   headers.delete('host');
   headers.delete('connection');
+  // 删除 content-length，让 fetch 自动计算正确的长度
+  headers.delete('content-length');
 
   const response = await fetch(`${BACKEND_URL}/v1/chat/completions`, {
     method: 'POST',

@@ -51,6 +51,8 @@ export async function proxyRequest(request: NextRequest) {
       // JSON 或其他：读取为 text，再传给 fetch
       const text = await request.text();
       body = text;
+      // 删除 content-length，让 fetch 自动计算正确的长度
+      headers.delete('content-length');
       // 如果是 JSON，确保 content-type 正确
       if (contentType && contentType.includes('application/json') && text) {
         try {
