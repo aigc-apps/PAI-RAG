@@ -11,6 +11,7 @@ from chat.tools.attachments.file_reader import aget_file_reader
 from chat.tools.attachments.image_parser import aget_image_parser_tool
 from chat.llm.models import ToolResultChunk, TextChunk
 from config.providers.code_sandbox_provider import codesandbox_provider
+from rag.chunk_helper import read_file_from_db
 from chat.tools.code_sandbox_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
 import os
 from loguru import logger
@@ -102,10 +103,8 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                     # for text attachments
                     file_reader = await aget_file_reader()
                     file_id = attachment.get("id")
-                    file_name = attachment.get("name", "未知附件")
                     file_reader_fn_args = {
-                        "file_id": file_id,
-                        "file_name": file_name,
+                        "file_id": file_id
                     }
                     file_reader_tool_call = ChoiceDeltaToolCall(
                         index=0,
@@ -128,9 +127,9 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                     reply_text = "\n\n 以下是附件的解析结果："
                     try:
                         result_data = json.loads(tool_result.content)
-                        reply_text = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {result_data.get('data', '无内容')}"
+                        reply_text = result_data.get('data', '无内容')
                     except (json.JSONDecodeError, TypeError):
-                        reply_text = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {tool_result.content}"
+                        reply_text = tool_result.content
 
                     # 只在user message最后追加文件读取结果，不使用 tool_call / tool 消息
                     append_text(last_user_message, reply_text)
@@ -153,7 +152,9 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
             user_attachments.extend(message.get("attachments", []))
     attachment_names = []
     for attachment in user_attachments:
-        name = attachment.get("name")
+        attachment_file_entity = await read_file_from_db(file_id=attachment.get("id"))
+
+        name = attachment_file_entity.file_name
         if not name:
             logger.warning("Attachment missing 'name' field, skipping: %s", attachment)
             continue
