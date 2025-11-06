@@ -171,7 +171,7 @@ async def update_file_content_async(
                 file.file_content = file.file_content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
             file.file_content_length = len(file.file_content)
         else:
-            file.file_content = None
+            file.file_content = ""
             file.file_content_length = 0
     try:
         session.add(file)
