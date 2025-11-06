@@ -38,9 +38,8 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                 if str(attachment.get("contentType")).startswith("image/"):
                     # for image attachments
                     image_parser = await aget_image_parser_tool()
-                    attachment_file_entity = await read_file_from_db(file_id=attachment.get("id"))
                     image_parser_fn_args = {
-                        "file_id": attachment_file_entity.id,
+                        "file_id": attachment.get("id"),
                         "question": question,
                     }
                     image_parser_tool_call = ChoiceDeltaToolCall(
@@ -90,11 +89,9 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                 else:
                     # for text attachments
                     file_reader = await aget_file_reader()
-                    attachment_file_entity = await read_file_from_db(file_id=attachment.get("id"))
-                    file_id = attachment_file_entity.id
+                    file_id = attachment.get("id")
                     file_reader_fn_args = {
-                        "file_id": attachment_file_entity.id,
-                        "file_name": attachment_file_entity.file_name,
+                        "file_id": file_id
                     }
                     file_reader_tool_call = ChoiceDeltaToolCall(
                         index=0,
@@ -114,6 +111,7 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                         file_reader, file_reader_fn_args
                     )
                     logger.info(f"Get tool result {tool_result}.")
+                    attachment_file_entity = await read_file_from_db(file_id=attachment.get("id"))
                     reply_text = "\n\n 以下是附件的解析结果："
                     try:
                         result_data = json.loads(tool_result.content)
