@@ -108,7 +108,8 @@ class CodeSandboxProvider(BaseConfigProvider):
         tool = FunctionTool.from_defaults(
         async_fn=aexecute_code,
         name="PythonInterpreter",
-        description="""Execute Python code via a secure REST API and return the execution output.
+        description="""Execute Python code with file system access and return the execution output. Only use it for complex math calculations, analyzing spreadsheets and visualizing analysis results.
+
             Params:
             - code: required, string, the Python code to execute.
                 - To return any text-based result (e.g., numbers, strings, lists, DataFrame previews), you **must use `print()`**.
