@@ -17,7 +17,7 @@ from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
 from chat.llm.llm_model import PaiLlm, ReasoningChunk, ChatResponseGenerator
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
-from utils.attachment_parser import parse_attachments_from_messages
+from utils.attachment_parser import parse_attachments
 from utils.tool_utils import to_openai_tool
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
@@ -76,11 +76,9 @@ class Planner(BaseAgent):
         @use_current_span(trace.get_current_span())
         async def gen():
             ## Start processing attachments in messages
-            attachment_input_data = await parse_attachments_from_messages(state.messages, state.user_query)
-            state.messages = attachment_input_data.messages
-            for chunk in attachment_input_data.chunks:
+            logger.info(f"Processing attachments in messages: {state.messages}")
+            async for chunk in parse_attachments(state):
                 yield chunk
-            ## End processing attachments
 
             selected_tool = None
             plan_delta = ""

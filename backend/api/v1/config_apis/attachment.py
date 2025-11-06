@@ -33,8 +33,8 @@ attachments_router = APIRouter()
 
 
 
-MAX_CHECK_ATTEMPTS = 60
-CHECK_INTERVAL = 5
+MAX_CHECK_ATTEMPTS = 100
+CHECK_INTERVAL = 3
 
 @attachments_router.post("")
 async def create_attachment_file(

@@ -3,6 +3,7 @@ import {
   PendingAttachment,
   CompleteAttachment,
 } from '@assistant-ui/react';
+import { toast } from 'sonner';
 
 export class UploadAttachmentAdapter implements AttachmentAdapter {
   public accept = '*/*';
@@ -30,6 +31,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
 
     const maxSize = 10 * 1024 * 1024; // 10MB limit
     if (file.size > maxSize) {
+      toast.error('File size exceeds 10MB limit');
       yield {
         id: fid,
         type: file.type.startsWith('image/') ? 'image' : 'document',
