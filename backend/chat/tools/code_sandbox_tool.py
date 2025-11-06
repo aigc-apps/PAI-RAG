@@ -14,6 +14,14 @@ import uuid
 from io import BytesIO
 from aiohttp import FormData
 from loguru import logger
+from chat.tools.code_sandbox_exceptions import (
+    CodeSandboxEmptyCodeException,
+    CodeSandboxNotInitializedException,
+    CodeSandboxTimeoutException,
+    CodeSandboxHTTPException,
+    CodeSandboxAPIException,
+    CodeSandboxExecutionException,
+)
 
 DEFAULT_CODE_SANDBOX_DIR_PATH = '/home/user'
 DEFAULT_CODE_SANDBOX_SYSTEM_FILES = ('.bash_logout', '.bashrc', '.profile')
@@ -202,19 +210,42 @@ class CodeSandboxTool:
         return json.dumps({"data": ','.join(sandbox_file_paths)}, ensure_ascii=False)
 
     def _extract_code(self, params: Union[str, dict]) -> str:
+        """
+        从输入参数中提取代码字符串。
+
+        支持多种输入格式：
+        1. 字符串格式：可以是 JSON5 格式的字符串，包含 'code' 或 'raw' 字段
+        2. 字典格式：包含 'code' 或 'raw' 字段的字典
+
+        支持多种代码包裹格式：
+        1. 三重引号格式：```python\ncode``` 或 ```\ncode```
+        2. XML 标签格式：<code>code</code>
+        3. 原始字符串格式：直接是代码字符串
+
+        Args:
+            params: 字符串或字典，包含要执行的代码
+
+        Returns:
+            提取并清理后的代码字符串。如果解析失败，返回原始字符串（去除首尾空格）或空字符串。
+        """
         try:
+            # 如果是字符串，先尝试解析为 JSON5 格式
             if isinstance(params, str):
                 params = json5.loads(params)
+            # 从字典中获取代码，优先使用 'code' 字段，其次使用 'raw' 字段
             code = params.get('code', '') or params.get('raw', '')
+            # 尝试匹配三重引号格式（```...```）
             triple_match = TRIPLE_QUOTE_PATTERN.search(code)
             if triple_match:
                 code = triple_match.group(1)
             else:
+                # 尝试匹配 XML 标签格式（<code>...</code>）
                 xml_match = XML_CODE_PATTERN.search(code)
                 if xml_match:
                     code = xml_match.group(1)
             return code.strip()
         except Exception:
+            # 如果解析失败，fallback 到原始字符串或返回空字符串
             if isinstance(params, str):
                 return params.strip()
             return ""
@@ -271,9 +302,11 @@ class CodeSandboxTool:
     async def aexecute(self, code: str, timeout: Optional[int] = None, session_id: str = None, context_id: str = None) -> str:
         code = self._extract_code(code)
         if not code:
-            return "[Python Interpreter Error]: Empty or invalid code provided."
+            logger.error("Empty or invalid code provided")
+            raise CodeSandboxEmptyCodeException("Empty or invalid code provided")
         if not session_id or not context_id:
-            return "[Python Interpreter Error]: Session or context not initialized."
+            logger.error("Session or context not initialized")
+            raise CodeSandboxNotInitializedException("Session or context not initialized")
 
         actual_timeout = timeout or self.timeout_default
         headers = {
@@ -298,16 +331,21 @@ class CodeSandboxTool:
                     if not response.ok:
                         text = await response.text()
                         logger.error(f"Execute failed: {response.status} {text}")
-                        raise Exception(f"HTTP {response.status}: {text}")
+                        raise CodeSandboxHTTPException(f"HTTP {response.status}: {text}")
                     result = await response.json()
             except asyncio.TimeoutError:
-                return "[PythonInterpreter Error] TimeoutError: Execution timed out."
+                logger.error("Execution timed out")
+                raise CodeSandboxTimeoutException("Execution timed out")
+            except (CodeSandboxHTTPException, CodeSandboxTimeoutException):
+                raise
             except Exception as e:
                 logger.exception("Error during code execution")
-                return f"[Python Interpreter Error]: {str(e)}"
+                raise CodeSandboxExecutionException(f"Error during code execution: {str(e)}") from e
 
         if result is None or result.get("code") != "SUCCESS":
-            return f"[Python Interpreter Error]: API returned non-success code: {result.get('code')}"
+            error_msg = f"API returned non-success code: {result.get('code') if result else 'None'}"
+            logger.error(error_msg)
+            raise CodeSandboxAPIException(error_msg)
 
         results = result.get("data", {}).get("results", [])
         stdout_lines = []
@@ -334,7 +372,8 @@ class CodeSandboxTool:
         if error_lines:
             parts.append("error:\n" + "\n".join(error_lines).rstrip())
         if timed_out or any("TimeoutError" in line for line in stderr_lines):
-            parts.append("[PythonInterpreter Error] TimeoutError: Execution timed out.")
+            logger.error("Execution timed out in results")
+            raise CodeSandboxTimeoutException("Execution timed out")
 
         final_result = "\n".join(parts).strip()
         final_result = await self.areplace_code_sandbox_image_paths(final_result, session_id)
