@@ -165,7 +165,6 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
                     attachment_names_in_message = ','.join(attachment_names_in_message)
                     reply_text = f"\n\n 可以参考以下文件路径回答用户问题：\n\n {attachment_names_in_message}"
                     append_text(message, reply_text)
-                messages[index] = message
 
     return AttachmentInputData(
         messages=messages, chunks=tool_call_chunks
