@@ -21,7 +21,7 @@ from config.providers.config_change_manager import config_change_manager
 from pairag.file.store.file_store_helper import file_store
 import pandas as pd
 
-
+DEFAULT_ATTACHMENT_MAX_SIZE = 1000
 MAX_CACHE_SIZE = 3
 embed_cache_dict = {}
 
@@ -161,11 +161,18 @@ async def update_file_content_async(
         if file.file_extension in [".xlsx"]:
             file_data = file_store.load(file.file_path)
             df = pd.read_excel(file_data)
-            file.file_content = df.head(5).to_csv(index=False)
+            file.file_content = df.head(10).to_csv(index=False)
+            if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE:
+                file.file_content = file.file_content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
             file.file_content_length = len(file.file_content)
-        if documents:
+        elif documents:
             file.file_content = documents[0].text
-            file.file_content_length = len(documents[0].text)
+            if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE:
+                file.file_content = file.file_content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
+            file.file_content_length = len(file.file_content)
+        else:
+            file.file_content = ""
+            file.file_content_length = 0
     try:
         session.add(file)
         await session.commit()
