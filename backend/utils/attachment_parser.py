@@ -147,26 +147,25 @@ async def parse_attachments_from_messages(messages: List[dict], question: str = 
 
     # 列举code sandbox里的文件
     user_attachments = []
-    for message in messages:
+    for index, message in enumerate(messages):
         if message.get("role") == "user":
-            user_attachments.extend(message.get("attachments", []))
-    attachment_names = []
-    for attachment in user_attachments:
-        attachment_file_entity = await read_file_from_db(file_id=attachment.get("id"))
-
-        name = attachment_file_entity.file_name
-        if not name:
-            logger.warning("Attachment missing 'name' field, skipping: %s", attachment)
-            continue
-        attachment_names.append(name)
-    if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
-        # 只在user message最后追加列出文件结果，不使用 tool_call / tool 消息
-        attachment_names = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names]
-        attachment_names = ','.join(attachment_names)
-        reply_text = f"\n\n 以下是参考文件路径：\n\n {attachment_names}"
-        append_text(last_user_message, reply_text)
-
-    messages[-1] = last_user_message
+            attachments_in_message = message.get("attachments", [])
+            attachment_names_in_message = []
+            if len(attachments_in_message) > 0:
+                for attachment in attachments_in_message:
+                    attachment_file_entity = await read_file_from_db(file_id=attachment.get("id"))
+                    name = attachment_file_entity.file_name
+                    if not name:
+                        logger.warning("Attachment missing 'name' field, skipping: %s", attachment)
+                        continue
+                    attachment_names_in_message.append(name)
+                if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
+                    # 只在user message最后追加列出文件结果，不使用 tool_call / tool 消息
+                    attachment_names_in_message = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names_in_message]
+                    attachment_names_in_message = ','.join(attachment_names_in_message)
+                    reply_text = f"\n\n 可以参考以下文件路径回答用户问题：\n\n {attachment_names_in_message}"
+                    append_text(message, reply_text)
+                messages[index] = message
 
     return AttachmentInputData(
         messages=messages, chunks=tool_call_chunks
