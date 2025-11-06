@@ -219,7 +219,7 @@ output
 *.local.yaml
 *.local.toml
 
-localdata/
+/localdata/
 docker/app_data
 model_repository/
 *.tmp
