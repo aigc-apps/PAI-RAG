@@ -84,7 +84,9 @@ export interface ExperimentSampleDetails {
       arguments: string
     }
     type: string
-    observation: string | null
+    observation: {
+      result: string | null
+    }
   }[]
   created_at: string
   started_at: string | null
