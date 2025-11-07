@@ -165,6 +165,13 @@ async def update_file_content_async(
             if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE:
                 file.file_content = file.file_content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
             file.file_content_length = len(file.file_content)
+        elif file.file_extension in [".csv"]:
+            file_data = file_store.load(file.file_path)
+            df = pd.read_csv(file_data)
+            file.file_content = df.head(10).to_csv(index=False)
+            if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE:
+                file.file_content = file.file_content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
+            file.file_content_length = len(file.file_content)
         elif documents:
             file.file_content = documents[0].text
             if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE:

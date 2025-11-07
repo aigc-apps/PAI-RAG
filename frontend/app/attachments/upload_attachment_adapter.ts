@@ -58,15 +58,11 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
         body: formData, // 自动设置 content-type 为 multipart/form-data
       });
 
-      if (!response.ok) {
-        throw new Error('上传失败');
-      }
-
       // 解析响应
       const result = await response.json();
       console.log('result', result);
-      if (result.code != 200) {
-        throw new Error('上传失败');
+      if (result.code !== 200) {
+        throw new Error(result.message);
       }
 
       // 返回成功状态
@@ -83,9 +79,10 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
         },
       } as PendingAttachment;
       return;
-    } catch (error) {
+    } catch (error: any) {
       // 返回失败状态
       console.log('error', error);
+      toast.error(error.message || '上传失败，请稍后重试');
       yield {
         id: fid,
         type: file.type.startsWith('image/') ? 'image' : 'document',
