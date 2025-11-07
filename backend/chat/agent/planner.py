@@ -79,6 +79,7 @@ class Planner(BaseAgent):
             logger.info(f"Processing attachments in messages: {state.messages}")
             async for chunk in parse_attachments(state):
                 yield chunk
+            logger.info("Processed attachments.")
 
             selected_tool = None
             plan_delta = ""
@@ -89,7 +90,7 @@ class Planner(BaseAgent):
                 tools=tools_to_plan,
             ):
                 if isinstance(chunk, ErrorChunk):
-                    logger.info(f"Call llm failed: {chunk.error_message}")
+                    logger.error(f"Call llm failed: {chunk.error_message}")
                     yield chunk
                     return
 
