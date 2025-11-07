@@ -20,6 +20,7 @@ export async function proxyRequest(request: NextRequest) {
   // 删除 Next.js 自动添加的 header，避免冲突
   headers.delete('host');
   headers.delete('connection');
+  headers.delete('content-length');
 
   let body;
   const contentType = headers.get('content-type');
@@ -51,8 +52,6 @@ export async function proxyRequest(request: NextRequest) {
       // JSON 或其他：读取为 text，再传给 fetch
       const text = await request.text();
       body = text;
-      // 删除 content-length，让 fetch 自动计算正确的长度
-      headers.delete('content-length');
       // 如果是 JSON，确保 content-type 正确
       if (contentType && contentType.includes('application/json') && text) {
         try {
