@@ -18,7 +18,6 @@ from chat.llm.llm_model import PaiLlm, ReasoningChunk, ChatResponseGenerator
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.attachment_parser import parse_attachments
-from utils.tool_utils import to_openai_tool
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
@@ -51,7 +50,7 @@ class Planner(BaseAgent):
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
         self.tool_metadata = [
-            to_openai_tool(tool.metadata) for tool in self.tools
+            tool.metadata.to_openai_tool(skip_length_check=True) for tool in self.tools
         ]
         self._code_sandbox_attachments = []
 
@@ -62,7 +61,7 @@ class Planner(BaseAgent):
     # internal tool for planning agent
     async def get_plan_tool_meta(self) -> Dict[str, Any]:
         plan_tool = await aget_plan_tool()
-        return plan_tool.metadata.to_openai_tool()
+        return plan_tool.metadata.to_openai_tool(skip_length_check=True)
 
     @pai_agent_wrapper
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:

@@ -36,7 +36,7 @@ class ActorWithPlan(BaseAgent):
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
         self.tool_metadata = [
-            tool.metadata.to_openai_tool() for tool in self.tools
+            tool.metadata.to_openai_tool(skip_length_check=True) for tool in self.tools
         ]
         # 用于跟踪单轮对话中的 sandbox 初始化状态
         self._sandbox_initialized = False

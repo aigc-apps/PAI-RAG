@@ -108,27 +108,24 @@ class CodeSandboxProvider(BaseConfigProvider):
         tool = FunctionTool.from_defaults(
         async_fn=aexecute_code,
         name="PythonInterpreter",
-        description="""Execute Python code with file system access and return the execution output. Only use it for complex math calculations, analyzing spreadsheets and visualizing analysis results.
+        description="""Execute Python code with file system access and return the execution output. Use this tool **only** for complex math, spreadsheet analysis, or data visualization.
 
-            Params:
-            - code: required, string, the Python code to execute.
-                - To return any text-based result (e.g., numbers, strings, lists, DataFrame previews), you **must use `print()`**.
-                    - For DataFrames, always use print() to show a preview of the data (e.g., `print(df.head())`, `print(df.head(N))`, `print(df.info())`,  `print(df.columns)`). Do not rely on implicit display.
-                - For visualizations (e.g., Matplotlib, Seaborn):
-                    - **Do not rely on `plt.show()`** — it does not produce any output in this environment.
-                    - **You must explicitly save the plot to a file** using `plt.savefig('filename.png')` with a descriptive filename** that reflects the chart’s content, such as:
-                        - `sales_by_channel_aug2024.png`
-                        - `user_growth_q3.png`
-                        - `temperature_vs_energy_consumption.png`
-                        Avoid generic names like `chart.png`, `plot.png`, or `output.png`.
-                    - - **To display the image in the response, print it as a Markdown image** using the same descriptive filename: (e.g., `print("Plot saved to: ![](sales_by_channel_aug2024.png)")`).
-                - Supported code formats: raw string, wrapped in triple backticks (python ... ), or wrapped in <code>...</code> XML tags.
-            - timeout: optional, integer, the maximum execution time in-seconds (default: 50). Must be a positive integer.
-            - session_id: default is session_id, string, the session id of the code sandbox.
-            - context_id: default is context_id, string, the context id of the code sandbox.
+                # Parameters
+                    - **`code`** (required, string): The Python code to execute.
+                        - To return any result (numbers, strings, lists, DataFrames, images), **use `print()`**.
+                            - For DataFrames, always use: `print(df.head())`, `print(df.info())`, `print(df.columns)`, etc. Do not rely on implicit display.
+                        - For visualizations (Matplotlib, Seaborn, etc.):
+                            - **Do not use `plt.show()`** — it has no effect.
+                            - **Save the plot** with a **descriptive filename**, e.g.: `sales_by_channel_aug2024.png`, `user_growth_q3.png` (Avoid generic names like `plot.png`.)
+                            - **Display the image** by printing a Markdown embed: `print("![Sales by Channel](sales_by_channel_aug2024.png)")`.
+                        - Code may be provided as a raw string, in triple backticks (```python ... ```), or in `<code>...</code>` tags.
 
-            Returns:
-            - A string containing the execution result.
+                    - **`timeout`** (optional, int): Max execution time in seconds (default: 50). Must be positive.
+                    - **`session_id`** (optional, string): Sandbox session ID (defaults to current session).
+                    - **`context_id`** (optional, string): Sandbox context ID (defaults to current context).
+
+                # Returns
+                    - A string containing all printed output from execution, including Markdown image references if plots are generated.
             """,
         )
         return tool

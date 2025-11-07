@@ -55,6 +55,6 @@ async def aget_simple_think_tool(cache_key: str):
     tools_name_to_fn[tool_name] = think_tool
     tool_metadata = think_tool.metadata
     tool_metadata.name = tool_name
-    openai_tools.append(tool_metadata.to_openai_tool())
+    openai_tools.append(tool_metadata.to_openai_tool(skip_length_check=True))
 
     return openai_tools, tools_name_to_fn
