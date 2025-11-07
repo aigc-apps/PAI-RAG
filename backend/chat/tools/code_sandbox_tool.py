@@ -285,7 +285,7 @@ class CodeSandboxTool:
                     file=image_file,
                     file_path=destination_file_path,
                 )
-                url = await file_store.get_url(destination_file_path)
+                url = file_store.get_url(destination_file_path)
                 replacement = f"{prefix}{url}{suffix}"
                 replacements.append((match.start(), match.end(), replacement))
 

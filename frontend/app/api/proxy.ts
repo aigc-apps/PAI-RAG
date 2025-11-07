@@ -64,12 +64,22 @@ export async function proxyRequest(request: NextRequest) {
     }
   }
 
+  // 创建 AbortController 用于超时控制
+  const timeoutMs = parseInt(process.env.PROXY_TIMEOUT_MS || '60000', 10); // 默认 60 秒
+  const controller = new AbortController();
+  let timeoutId: NodeJS.Timeout | null = null;
+
   try {
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     const res = await fetch(upstreamUrl.toString(), {
       method,
       headers,
       body,
+      signal: controller.signal,
     });
+
+    if (timeoutId) clearTimeout(timeoutId);
 
     // 读取响应数据
     const responseData = await res.blob(); // 通用处理（支持 JSON、text、binary）
@@ -84,8 +94,29 @@ export async function proxyRequest(request: NextRequest) {
       statusText: res.statusText,
       headers: responseHeaders,
     });
-  } catch (error) {
-    console.log("Proxy request failed: ", error)
-    return NextResponse.json({ error: 'Proxy request failed', message: error }, { status: 500 });
+  } catch (error: any) {
+    if (timeoutId) clearTimeout(timeoutId);
+    console.log("Proxy request failed: ", error);
+    
+    // 处理超时错误
+    if (error.name === 'AbortError' || error.code === 'UND_ERR_HEADERS_TIMEOUT') {
+      return NextResponse.json(
+        { 
+          error: 'Proxy request timeout', 
+          message: `Request exceeded timeout of ${timeoutMs}ms`,
+          details: error.message 
+        }, 
+        { status: 504 }
+      );
+    }
+    
+    return NextResponse.json(
+      { 
+        error: 'Proxy request failed', 
+        message: error.message || String(error),
+        details: error.cause?.message || error.stack 
+      }, 
+      { status: 500 }
+    );
   }
 }

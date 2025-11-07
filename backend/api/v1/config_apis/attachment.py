@@ -115,6 +115,7 @@ async def create_attachment_file(
     logger.info(f"Enqueued file {file_item.file_name} for background processing...")
     attempt = 0
     while attempt < MAX_CHECK_ATTEMPTS:
+        await asyncio.sleep(CHECK_INTERVAL)
         attempt += 1
         logger.info(f"Checking file {file_item.file_name} processing status... Attempt {attempt} of {MAX_CHECK_ATTEMPTS}")
         await session.refresh(file_entity)
@@ -123,8 +124,7 @@ async def create_attachment_file(
             return success_response(data=file_entity, message=f"文件{file_item.file_name}上传成功")
         elif file_entity.status == FileStatus.failed:
             logger.error(f"File {file_item.file_name} processing failed: {file_entity.failed_reason}.")
-            return error_response(code=500, data=file_entity, message=f"文件{file_item.file_name}上传失败")
-        await asyncio.sleep(CHECK_INTERVAL)
+            return error_response(code=500, data=file_entity, message=f"上传失败, 错误信息: {file_entity.failed_reason}")
 
     # Cancel task when timeouts
     file_entity.status = FileStatus.cancelled

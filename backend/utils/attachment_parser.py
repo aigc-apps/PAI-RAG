@@ -76,8 +76,10 @@ async def parse_attachments(state: AgentState):
                     # for text attachments
                     file_reader = await aget_file_reader()
                     file_id = attachment.get("id")
+                    file_name = attachment.get("name")
                     file_reader_fn_args = {
-                        "file_id": file_id
+                        "file_id": file_id,
+                        "file_name": file_name,
                     }
                     file_reader_tool_call = ChoiceDeltaToolCall(
                         index=0,

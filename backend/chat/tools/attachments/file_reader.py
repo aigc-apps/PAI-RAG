@@ -14,7 +14,7 @@ async def aget_file_content_from_db(session: AsyncSession, file_id: str):
     content =  processed_file_entity.file_content
     return content, processed_file_entity.file_name
 
-async def aget_file_content(file_id: str):
+async def aget_file_content(file_id: str, **kwargs):
     """Get read file tool"""
     content, file_name = await aget_file_content_from_db(file_id=file_id)
     result = f"📄 文件“{file_name}” (ID:{file_id}) 的内容如下：\n\n {content}"

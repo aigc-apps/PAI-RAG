@@ -83,12 +83,22 @@ def enqueue_file_tasks(file_id: str, file_version: int, is_attachment: bool = Fa
     loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment))
     logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
 
+
+
+async def process_attachments_content_async(file_id: str, file_extension: str,):
+    try:
+        await update_file_content_async(file_id=file_id, is_attachment=True)
+        await update_file_status_async(file_id=file_id, status=FileStatus.succeeded, is_attachment=True)
+    except Exception as ex:
+        logger.error(f"[WORKER] Process attachments content {file_id} failed, error: {traceback.format_exc()}")
+        await update_file_status_async(file_id=file_id, status=FileStatus.failed, is_attachment=True, failed_reason=str(ex))
+
+
 @app.task(name="enqueue_attachments_file_tasks")
 def enqueue_attachments_file_tasks(file_id: str, file_version: int, file_extension: str, is_attachment: bool = False):
     loop = asyncio.get_event_loop()
     if file_extension in [".xlsx", ".csv", ".jpg", ".png", ".jpeg", ".jsonl"]:
-        loop.run_until_complete(update_file_content_async(file_id=file_id, is_attachment=is_attachment))
-        loop.run_until_complete(update_file_status_async(file_id=file_id, status=FileStatus.succeeded, is_attachment=is_attachment))
+        loop.run_until_complete(process_attachments_content_async(file_id=file_id, file_extension=file_extension))
     else:
         loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment))
     logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
