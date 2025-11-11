@@ -74,5 +74,5 @@ Code 沙箱会在 AI 助手需要执行代码时自动启用。当用户请求�
 AI 助手会自动调用 Code 沙箱工具来执行相应的 Python 代码。
 
 ## 使用案例
-![]()
+![](images/code_sandbox/code_sandbox_example.jpg)
 

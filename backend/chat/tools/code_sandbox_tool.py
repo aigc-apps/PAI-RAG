@@ -3,7 +3,7 @@ import json
 import asyncio
 import aiohttp
 import json5
-from typing import Optional, Union
+from typing import Optional, Union, List
 import re
 import os
 from functools import wraps
@@ -22,6 +22,7 @@ from chat.tools.code_sandbox_exceptions import (
     CodeSandboxAPIException,
     CodeSandboxExecutionException,
 )
+from rag.chunk_helper import read_file_from_db
 
 DEFAULT_CODE_SANDBOX_DIR_PATH = '/home/user'
 DEFAULT_CODE_SANDBOX_SYSTEM_FILES = ('.bash_logout', '.bashrc', '.profile')
@@ -57,6 +58,7 @@ class CodeSandboxTool:
         interpreter_id: str,
         timeout_default: int = 50,
         enabled: bool = False,
+        code_sandbox_attachments: list = None,
     ):
         self.enabled = enabled
         self.aliyun_id = aliyun_id
@@ -64,6 +66,38 @@ class CodeSandboxTool:
         self.timeout_default = timeout_default
         self.base_url = f"https://{self.aliyun_id}.agentrun-data.cn-hangzhou.aliyuncs.com/2025-09-10/agents/code-interpreters/{self.interpreter_id}"
         self._http_session: Optional[aiohttp.ClientSession] = None
+        self._sandbox_initialized = False
+        self._sandbox_session_id = None
+        self._sandbox_context_id = None
+        self._code_sandbox_attachments = code_sandbox_attachments or []
+
+    async def _ensure_sandbox_initialized(self):
+        """确保 sandbox 已初始化，如果未初始化则进行初始化"""
+        if not self._sandbox_initialized:
+            try:
+                self._sandbox_session_id, self._sandbox_context_id = await self.initialize_sandbox_with_attachments(self._code_sandbox_attachments)
+                self._sandbox_initialized = True
+                logger.info("Sandbox initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize sandbox: {e}")
+                raise CodeSandboxNotInitializedException("Failed to initialize sandbox")
+
+    async def initialize_sandbox_with_attachments(self, code_sandbox_attachments: list = None):
+        """初始化 sandbox 并上传附件"""
+
+        # 1. 创建session和context
+        session_id, context_id = await self.acreate_session_and_context()
+
+        # 2. 如果有附件，上传文件
+        if code_sandbox_attachments:
+            logger.info(f"[Model] uploading {len(code_sandbox_attachments)} code sandbox attachments.")
+            file_ids = [att["id"] for att in code_sandbox_attachments]
+            await self.aupload_files_to_code_sandbox(file_ids=file_ids, session_id=session_id)
+            logger.info("[Model] Code sandbox ready and files uploaded.")
+        else:
+            logger.info("[Model] Code sandbox ready.")
+
+        return session_id, context_id
 
     async def _get_session(self, timeout: int = 600) -> aiohttp.ClientSession:
         """获取 HTTP session，如果不存在或已关闭则创建新的"""
@@ -74,9 +108,16 @@ class CodeSandboxTool:
         return self._http_session
 
     async def aclose(self):
-        """关闭 HTTP session"""
+        """关闭 HTTP session，确保所有连接都被正确关闭"""
         if self._http_session and not self._http_session.closed:
-            await self._http_session.close()
+            try:
+                # 关闭 session，这会关闭所有打开的连接
+                await self._http_session.close()
+            except Exception as e:
+                logger.warning(f"Error closing HTTP session: {e}")
+            finally:
+                # 确保引用被清除，即使关闭失败
+                self._http_session = None
 
     async def acreate_session_and_context(self):
         # uuid v4,不能是数字开头
@@ -106,9 +147,9 @@ class CodeSandboxTool:
                     logger.error(f"Failed to create context: {response.status} {text}")
                     response.raise_for_status()
                 result = await response.json()
-        except Exception:
+        except Exception as e:
             logger.exception("Error in acreate_session_and_context")
-            raise
+            raise CodeSandboxAPIException(f"Failed to create context: {e}")
         if "data" in result and "id" in result["data"]:
             context_id = result["data"]["id"]
         else:
@@ -116,7 +157,8 @@ class CodeSandboxTool:
         return session_id, context_id
 
 
-    async def aupload_data_file_to_sandbox(self, file_content: bytes, file_name: str, session_id: str):
+    async def aupload_data_file_to_sandbox(self, file_content: bytes, file_name: str, session_id: str = None):
+        session_id = session_id or self._sandbox_session_id
         if not session_id:
             logger.error("Session ID not set. Cannot upload file to sandbox.")
             return None
@@ -152,7 +194,8 @@ class CodeSandboxTool:
             logger.exception(f"Failed to upload file {file_name} to sandbox")
             return None
 
-    async def adownload_result_from_sandbox(self, file_path: str, session_id: str):
+    async def adownload_result_from_sandbox(self, file_path: str, session_id: str = None):
+        session_id = session_id or self._sandbox_session_id
         if not session_id:
             logger.error("Session ID not set. Cannot download file.")
             return None
@@ -176,7 +219,8 @@ class CodeSandboxTool:
             logger.exception(f"Failed to download file {file_path}")
             return None
 
-    async def alist_code_sandbox_dir_file_paths(self, file_dir_path: str, session_id: str):
+    async def alist_code_sandbox_dir_file_paths(self, file_dir_path: str, session_id: str = None):
+        session_id = session_id or self._sandbox_session_id
         if not session_id:
             logger.error("Session ID not set. Cannot list dir files.")
             return json.dumps({"paths": ""}, ensure_ascii=False)
@@ -250,7 +294,8 @@ class CodeSandboxTool:
                 return params.strip()
             return ""
 
-    async def areplace_code_sandbox_image_paths(self, final_result: str, session_id: str) -> str:
+    async def areplace_code_sandbox_image_paths(self, final_result: str, session_id: str = None) -> str:
+        session_id = session_id or self._sandbox_session_id
 
         replacements = []
 
@@ -301,6 +346,9 @@ class CodeSandboxTool:
 
     async def aexecute(self, code: str, timeout: Optional[int] = None, session_id: str = None, context_id: str = None) -> str:
         code = self._extract_code(code)
+        await self._ensure_sandbox_initialized()
+        session_id = session_id or self._sandbox_session_id
+        context_id = context_id or self._sandbox_context_id
         if not code:
             logger.error("Empty or invalid code provided")
             raise CodeSandboxEmptyCodeException("Empty or invalid code provided")
@@ -379,8 +427,9 @@ class CodeSandboxTool:
         final_result = await self.areplace_code_sandbox_image_paths(final_result, session_id)
         return final_result if final_result else "Finished execution, but no result."
 
-    async def aget_list_directory_files_tool(self, session_id: str):
-        async def _wrapped_list_files(file_dir_path: str, session_id: str):
+    async def aget_list_directory_files_tool(self, session_id: str = None):
+        async def _wrapped_list_files(file_dir_path: str, session_id: str = None):
+            session_id = session_id or self._sandbox_session_id
             return await self.alist_code_sandbox_dir_file_paths(file_dir_path, session_id)
 
         description = f"""
@@ -394,3 +443,13 @@ class CodeSandboxTool:
             name="list-sandbox-files",
             description=description,
         )
+
+    async def aupload_files_to_code_sandbox(self, file_ids: List[str], session_id: str = None):
+        session_id = session_id or self._sandbox_session_id
+        if not session_id:
+            logger.error("Session ID not set. Cannot upload files to sandbox.")
+            return None
+        for file_id in file_ids:
+            file_entity = await read_file_from_db(file_id=file_id)
+            file_content_bytes = file_store.load(file_entity.file_path)
+            await self.aupload_data_file_to_sandbox(file_content_bytes, file_entity.file_name, session_id)

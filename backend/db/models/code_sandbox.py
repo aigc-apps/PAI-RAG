@@ -3,7 +3,13 @@ from sqlmodel import Field, SQLModel
 
 
 class CodeSandboxConfig(SQLModel):
-    type: str = Field(default='aliyun-fc') # aliyun-fc
+    type: str = Field(default='aliyun-fc')
+    aliyun_id: str = Field(default=None)
+    interpreter_id: str = Field(default=None)
+    enabled: bool = Field(default=False)
+    timeout_default: int = Field(default=50)
+
+     # aliyun-fc
 
 
 
