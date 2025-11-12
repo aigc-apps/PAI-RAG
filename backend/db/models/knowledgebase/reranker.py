@@ -5,6 +5,7 @@ class RerankerModel(SQLModel):
     model_name: str = Field(default=None)
     base_url: str = Field(default=None)
     model_id: str = Field(default=None, unique=True)
+    type: str = Field(default="OpenAICompatible")  # 支持 "通义千问" 或 "OpenAICompatible"
 
 
 class RerankerModelCreate(RerankerModel):

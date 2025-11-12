@@ -12,6 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertTitle } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { AlertCircleIcon } from 'lucide-react';
 
 // 定义组件 props
@@ -29,6 +36,7 @@ interface RerankerConfig {
   model_name: string;
   api_key: string;
   base_url: string;
+  type?: string;
 }
 
 export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
@@ -106,6 +114,29 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="type" className="text-right">
+              模型类型
+            </Label>
+            <div className="col-span-3">
+              <Select
+                value={reranker?.type || 'OpenAICompatible'}
+                onValueChange={(value) =>
+                  setReranker((prev) => ({ ...prev, type: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择模型类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OpenAICompatible">OpenAICompatible</SelectItem>
+                  <SelectItem value="DashScope">DashScope</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_id" className="text-right">
               模型ID

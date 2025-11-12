@@ -80,8 +80,14 @@ class OpenAICompatibleReranker:
         # 发送异步请求
         try:
             async with aiohttp.ClientSession() as session:
+                if self.base_url.endswith("/v1/rerank"):
+                    endpoint = self.base_url
+                elif self.base_url.endswith("/v1"):
+                    endpoint = f"{self.base_url}/rerank"
+                else:
+                    endpoint = f"{self.base_url}/v1/rerank"
                 async with session.post(
-                    f"{self.base_url}/v1/rerank",
+                    endpoint,
                     headers=self.headers,
                     json=payload,
                     timeout=self.timeout
@@ -142,21 +148,25 @@ class OpenAICompatibleReranker:
 
 async def test_rerank():
     reranker = OpenAICompatibleReranker(
-        base_url="http:/demo.cn-hangzhou.pai-eas.aliyuncs.com/api/predict/qwen3_reranker",
-        model="Qwen3-Reranker-4B",
+        base_url="http://demo.cn-hangzhou.pai-eas.aliyuncs.com/api/predict/ranxia_qwen3_rerank_8b",
+        model="Qwen3-Reranker-8B",
         timeout=60,
-        api_key="=="
+        api_key="api_key"
     )
 
     try:
         result = await reranker.rerank(
-            query="中国首都是哪儿?",
+            query="如何优化数据库查询性能？有哪些具体的优化方法和技巧？",
             documents=[
-                "美国首都是华盛顿。",
-                "中国首都是北京。",
-                "今天是星期五。",
+                "数据库查询性能优化是提升应用响应速度的关键。可以通过创建合适的索引、优化SQL语句结构、使用查询缓存、分析执行计划等方式来提升查询效率。索引应该建立在经常用于WHERE、JOIN和ORDER BY的列上，但要避免过度索引。",
+        "Python是一种高级编程语言，具有简洁的语法和强大的功能。它广泛应用于Web开发、数据分析、人工智能等领域。Python的生态系统非常丰富，有大量的第三方库可以使用。",
+        "在MySQL中，可以通过EXPLAIN命令来分析SQL查询的执行计划。执行计划显示了数据库如何执行查询，包括使用的索引、表连接方式等信息。通过分析执行计划，可以找出性能瓶颈并进行优化。",
+        "数据库索引是一种数据结构，用于快速定位和访问数据库表中的数据。常见的索引类型包括B树索引、哈希索引等。索引可以显著提高查询速度，但会增加写入操作的开销，因为每次插入、更新或删除数据时都需要维护索引。",
+        "Redis是一个开源的内存数据结构存储系统，可以用作数据库、缓存和消息中间件。它支持多种数据结构，如字符串、列表、集合、有序集合等。Redis的读写性能非常高，常用于缓存热点数据。",
+        "SQL查询优化技巧包括：避免使用SELECT *，只查询需要的列；使用LIMIT限制返回结果数量；合理使用JOIN，避免笛卡尔积；在WHERE子句中使用索引列；避免在WHERE子句中使用函数，这会导致索引失效。",
+        "微服务架构是一种将应用程序构建为一套小型服务的方法，每个服务运行在自己的进程中，并通过轻量级机制（通常是HTTP API）进行通信。这种架构模式有助于提高系统的可扩展性和可维护性。",
             ],
-            top_n=3
+            top_n=6
         )
         print("重排序结果:", result)
     except Exception as e:

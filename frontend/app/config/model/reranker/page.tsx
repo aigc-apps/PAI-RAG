@@ -21,6 +21,7 @@ interface RerankerConfig {
   model_name: string;
   api_key: string;
   base_url: string;
+  type?: string;
 }
 
 const newrerankerconfig: RerankerConfig = {
@@ -29,6 +30,7 @@ const newrerankerconfig: RerankerConfig = {
   model_name: '',
   api_key: '',
   base_url: '',
+  type: 'OpenAICompatible',
 };
 export default function RerankerConfigPage() {
   const [editRerankerConfig, setEditRerankerConfig] =

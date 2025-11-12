@@ -1,22 +1,35 @@
 import traceback
-from typing import Dict, Type
+from typing import Dict, Type, Union
 from sqlmodel import Field, SQLModel
 from common.encrypt_utils import decrypt_key
 from db.models.knowledgebase.reranker import RerankerModelEntity
 from config.providers.base_provider import BaseConfigProvider
 from rag.rerank.reranker import OpenAICompatibleReranker
+from rag.rerank.dashscope_reranker import DashscopeReranker
 from loguru import logger
 
 
-def create_reranker_model(reranker_config: RerankerModelEntity) -> OpenAICompatibleReranker:
-    logger.info(
-        f"Creating OpenAI compatible reranker model  {reranker_config.model_name} with {reranker_config}."
-    )
-    return OpenAICompatibleReranker(
-        api_key=decrypt_key(reranker_config.encrypted_api_key),
-        model=reranker_config.model_name,
-        base_url=reranker_config.base_url,
-    )
+def create_reranker_model(reranker_config: RerankerModelEntity) -> Union[DashscopeReranker, OpenAICompatibleReranker]:
+    model_type = reranker_config.type or "OpenAICompatible"
+
+    if model_type == "DashScope":
+        logger.info(
+            f"Creating DashScope reranker model {reranker_config.model_name} with {reranker_config}."
+        )
+        return DashscopeReranker(
+            api_key=decrypt_key(reranker_config.encrypted_api_key),
+            model=reranker_config.model_name,
+            base_url=reranker_config.base_url,
+        )
+    else:
+        logger.info(
+            f"Creating OpenAI compatible reranker model {reranker_config.model_name} with {reranker_config}."
+        )
+        return OpenAICompatibleReranker(
+            api_key=decrypt_key(reranker_config.encrypted_api_key),
+            model=reranker_config.model_name,
+            base_url=reranker_config.base_url,
+        )
 
 
 class RerankerProvider(BaseConfigProvider):
@@ -49,7 +62,7 @@ class RerankerProvider(BaseConfigProvider):
     def _create_instance(self, config):
         return create_reranker_model(config)
 
-    def get_reranker_model(self, model_id: str) -> OpenAICompatibleReranker:
+    def get_reranker_model(self, model_id: str) -> Union[DashscopeReranker, OpenAICompatibleReranker]:
         id = self.model_id_to_entry_id.get(model_id)
         assert (
             id in self.config_map
