@@ -58,7 +58,7 @@ class CodeSandboxTool:
         interpreter_id: str,
         timeout_default: int = 50,
         enabled: bool = False,
-        code_sandbox_attachments: list = None,
+        code_sandbox_attachments_ids: list = None,
     ):
         self.enabled = enabled
         self.aliyun_id = aliyun_id
@@ -69,30 +69,29 @@ class CodeSandboxTool:
         self._sandbox_initialized = False
         self._sandbox_session_id = None
         self._sandbox_context_id = None
-        self._code_sandbox_attachments = code_sandbox_attachments or []
+        self._code_sandbox_attachments_ids = code_sandbox_attachments_ids or []
 
     async def _ensure_sandbox_initialized(self):
         """确保 sandbox 已初始化，如果未初始化则进行初始化"""
         if not self._sandbox_initialized:
             try:
-                self._sandbox_session_id, self._sandbox_context_id = await self.initialize_sandbox_with_attachments(self._code_sandbox_attachments)
+                self._sandbox_session_id, self._sandbox_context_id = await self.initialize_sandbox_with_attachments(self._code_sandbox_attachments_ids)
                 self._sandbox_initialized = True
                 logger.info("Sandbox initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize sandbox: {e}")
                 raise CodeSandboxNotInitializedException("Failed to initialize sandbox")
 
-    async def initialize_sandbox_with_attachments(self, code_sandbox_attachments: list = None):
+    async def initialize_sandbox_with_attachments(self, code_sandbox_attachments_ids: list = None):
         """初始化 sandbox 并上传附件"""
 
         # 1. 创建session和context
         session_id, context_id = await self.acreate_session_and_context()
 
         # 2. 如果有附件，上传文件
-        if code_sandbox_attachments:
-            logger.info(f"[Model] uploading {len(code_sandbox_attachments)} code sandbox attachments.")
-            file_ids = [att["id"] for att in code_sandbox_attachments]
-            await self.aupload_files_to_code_sandbox(file_ids=file_ids, session_id=session_id)
+        if code_sandbox_attachments_ids:
+            logger.info(f"[Model] uploading {len(code_sandbox_attachments_ids)} code sandbox attachments.")
+            await self.aupload_files_to_code_sandbox(file_ids=code_sandbox_attachments_ids, session_id=session_id)
             logger.info("[Model] Code sandbox ready and files uploaded.")
         else:
             logger.info("[Model] Code sandbox ready.")
@@ -453,3 +452,4 @@ class CodeSandboxTool:
             file_entity = await read_file_from_db(file_id=file_id)
             file_content_bytes = file_store.load(file_entity.file_path)
             await self.aupload_data_file_to_sandbox(file_content_bytes, file_entity.file_name, session_id)
+        logger.info(f"{len(file_ids)} files uploaded to sandbox successfully.")

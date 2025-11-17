@@ -49,13 +49,13 @@ class CodeSandboxProvider(BaseConfigProvider):
 
 
 
-    def get_code_sandbox_tool(self, code_sandbox_attachments: list = None):
+    def get_code_sandbox_tool(self, code_sandbox_attachments_ids: list = None):
         code_tool = CodeSandboxTool(
             aliyun_id=self.tool_config.aliyun_id,
             interpreter_id=self.tool_config.interpreter_id,
             timeout_default=self.tool_config.timeout_default,
             enabled=self.tool_config.enabled,
-            code_sandbox_attachments=code_sandbox_attachments,
+            code_sandbox_attachments_ids=code_sandbox_attachments_ids,
         )
         async def aexecute_code(
             code: str,

@@ -67,7 +67,7 @@ class Actor(BaseAgent):
                     try:
                         function_args = json.loads(selected_tool.function.arguments)
                     except json.JSONDecodeError:
-                        logger.error(f"[{self.name}] Invalid JSON args: {selected_tool.function.arguments}")
+                        logger.warning(f"[{self.name}] Invalid JSON args: {selected_tool.function.arguments}")
                         function_args = {}
                 else:
                     function_args = {}
@@ -164,7 +164,7 @@ class Actor(BaseAgent):
                     try:
                         function_args = json.loads(tool.function.arguments) if tool.function.arguments else {}
                     except json.JSONDecodeError:
-                        logger.error(f"[{self.name}] Invalid JSON args: {tool.function.arguments}")
+                        logger.warning(f"[{self.name}] Invalid JSON args: {tool.function.arguments}")
                         function_args = {}
 
                     yield TextChunk(tool_calls=[tool])
