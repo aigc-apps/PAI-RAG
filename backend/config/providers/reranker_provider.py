@@ -6,13 +6,14 @@ from db.models.knowledgebase.reranker import RerankerModelEntity
 from config.providers.base_provider import BaseConfigProvider
 from rag.rerank.reranker import OpenAICompatibleReranker
 from rag.rerank.dashscope_reranker import DashscopeReranker
+from db.models.knowledgebase.reranker import RerankerType
 from loguru import logger
 
 
 def create_reranker_model(reranker_config: RerankerModelEntity) -> Union[DashscopeReranker, OpenAICompatibleReranker]:
-    model_type = reranker_config.type or "OpenAICompatible"
+    model_type = reranker_config.type or RerankerType.OPENAI_LIKE
 
-    if model_type == "DashScope":
+    if model_type == RerankerType.DASHSCOPE:
         logger.info(
             f"Creating DashScope reranker model {reranker_config.model_name} with {reranker_config}."
         )

@@ -55,7 +55,15 @@ export default function RerankerConfigPage() {
         );
         if (!res.ok) throw new Error('获取Reranker模型列表失败');
         const json_data = await res.json();
-        const data = json_data.data.items;
+        // 转换后端返回的类型值到前端格式
+        const reverseTypeMapping: Record<string, string> = {
+          'openai_like': 'OpenAICompatible',
+          'dashscope': 'DashScope',
+        };
+        const data = json_data.data.items.map((item: RerankerConfig) => ({
+          ...item,
+          type: item.type ? (reverseTypeMapping[item.type] || item.type) : 'OpenAICompatible',
+        }));
         setRerankerConfigs(data); // 合并
         setTotalPages(json_data.data.pages);
       } catch (err: any) {

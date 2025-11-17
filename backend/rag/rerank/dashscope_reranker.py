@@ -1,8 +1,9 @@
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 import aiohttp
-import asyncio
+from utils.http_session import HttpSessionShared
+from rag.rerank.reranker import RerankResult
 
 
 class DashscopeReranker:
@@ -44,13 +45,25 @@ class DashscopeReranker:
             else:
                 self.headers["Authorization"] = f"Bearer {api_key}"
 
+        # 预先设置endpoint
+        # DashScope API端点
+        # 完整端点为: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
+        # 确保URL结尾有两个/text-rerank
+        # 如果base_url已经包含完整的endpoint路径，直接使用
+        if self.base_url.endswith("/text-rerank/text-rerank"):
+            self.endpoint = self.base_url
+        elif self.base_url.endswith("/text-rerank"):
+            self.endpoint = f"{self.base_url}/text-rerank"
+        else:
+            self.endpoint = f"{self.base_url}/text-rerank/text-rerank"
+
     async def rerank(
         self,
         query: str,
         documents: List[str],
         model: Optional[str] = None,
         top_n: Optional[int] = None
-    ) -> Dict[str, Any]:
+    ) -> List[RerankResult]:
         """
         执行文档重排序
 
@@ -61,7 +74,7 @@ class DashscopeReranker:
             top_n: 返回的最相关文档数量
 
         Returns:
-            API响应结果，格式为 {"results": [{"index": int, "relevance_score": float, "document": {"text": str}}]}
+            排序好的结果列表，每个结果包含index, score, doc字段
 
         Raises:
             ValueError: 参数验证失败时
@@ -92,43 +105,66 @@ class DashscopeReranker:
 
         # 发送异步请求
         try:
-            async with aiohttp.ClientSession() as session:
-                # DashScope API端点
-                # 完整端点为: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
-                # 确保URL结尾有两个/text-rerank
-                if self.base_url.endswith("/text-rerank/text-rerank"):
-                    endpoint = self.base_url
-                elif self.base_url.endswith("/text-rerank"):
-                    endpoint = f"{self.base_url}/text-rerank"
+            session = await HttpSessionShared.ensure_session()
+            async with session.post(
+                self.endpoint,
+                headers=self.headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
+            ) as response:
+                # 如果HTTP状态码不是200，抛出异常
+                if response.status != 200:
+                    try:
+                        error_data = await response.json()
+                        error_msg = error_data.get("message", f"HTTP {response.status}")
+                    except (json.JSONDecodeError, aiohttp.ClientError):
+                        error_msg = f"HTTP {response.status}"
+                    raise RuntimeError(f"API请求失败: {error_msg}")
+                response_data = await response.json()
+
+                # 检查API返回的错误
+                if "code" in response_data and response_data["code"]:
+                    error_msg = response_data.get("message", "未知错误")
+                    raise RuntimeError(f"DashScope API错误: {error_msg} (code: {response_data['code']})")
+
+                # 转换DashScope响应格式为兼容格式
+                # DashScope返回: {"output": {"results": [...]}, "usage": {...}, "request_id": "..."}
+                if "output" in response_data and "results" in response_data["output"]:
+                    raw_results = response_data["output"]["results"]
+                elif "results" in response_data:
+                    raw_results = response_data["results"]
                 else:
-                    endpoint = f"{self.base_url}/text-rerank/text-rerank"
+                    raise RuntimeError("响应格式错误: 未找到results字段")
 
-                async with session.post(
-                    endpoint,
-                    headers=self.headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=self.timeout)
-                ) as response:
-                    response_data = await response.json()
+                # 验证结果格式
+                if not isinstance(raw_results, list):
+                    raise RuntimeError("响应格式错误: results应该是列表")
 
-                    # 检查API返回的错误
-                    if "code" in response_data and response_data["code"]:
-                        error_msg = response_data.get("message", "未知错误")
-                        raise RuntimeError(f"DashScope API错误: {error_msg} (code: {response_data['code']})")
+                # 解析并构建结构化结果
+                rerank_results = []
+                for item in raw_results:
+                    index = item.get("index")
+                    if index is None:
+                        raise RuntimeError("响应格式错误: 结果中缺少index字段")
 
-                    # 如果HTTP状态码不是200，抛出异常
-                    if response.status != 200:
-                        error_msg = response_data.get("message", f"HTTP {response.status}")
-                        raise RuntimeError(f"API请求失败: {error_msg}")
-
-                    # 转换DashScope响应格式为兼容格式
-                    # DashScope返回: {"output": {"results": [...]}, "usage": {...}, "request_id": "..."}
-                    # 转换为: {"results": [...]}
-                    if "output" in response_data and "results" in response_data["output"]:
-                        return {"results": response_data["output"]["results"]}
+                    score = item.get("relevance_score", 0.0)
+                    # 提取文档文本
+                    if "document" in item and isinstance(item["document"], dict):
+                        doc = item["document"].get("text", "")
                     else:
-                        # 如果已经是兼容格式，直接返回
-                        return response_data
+                        # 如果没有document字段，使用原始documents中的文本
+                        doc = documents[index] if 0 <= index < len(documents) else ""
+
+                    rerank_results.append(RerankResult(
+                        index=index,
+                        score=score,
+                        doc=doc
+                    ))
+
+                # 确保结果按score降序排序
+                rerank_results.sort(key=lambda x: x.score, reverse=True)
+
+                return rerank_results
         except aiohttp.ClientError as e:
             raise RuntimeError(f"API请求失败: {str(e)}") from e
         except json.JSONDecodeError as e:
@@ -165,52 +201,13 @@ class DashscopeReranker:
 
         origin_nodes = result.nodes
         documents = [node.text for node in origin_nodes]
-        response_data = await self.rerank(query, documents, model, top_n)
+        rerank_results = await self.rerank(query, documents, model, top_n)
 
-        try:
-            return_nodes = []
-            return_similarities = []
-            for result_item in response_data["results"]:
-                # DashScope返回格式: {"index": int, "relevance_score": float, "document": {"text": str}}
-                index = result_item["index"]
-                node = origin_nodes[index]
-                node.metadata["rerank"] = True
-                return_nodes.append(node)
-                return_similarities.append(result_item["relevance_score"])
-            return VectorStoreQueryResult(nodes=return_nodes, similarities=return_similarities)
-        except (KeyError, IndexError) as e:
-            raise RuntimeError(f"响应解析失败: 无法从响应中提取结果 ({str(e)})") from e
-        except json.JSONDecodeError as e:
-            raise RuntimeError(f"响应解析失败: {str(e)}") from e
-
-
-async def test_rerank():
-    """测试DashScope reranker"""
-    # 需要设置环境变量 DASHSCOPE_API_KEY 或直接传入api_key
-    import os
-    api_key = os.getenv("DASHSCOPE_API_KEY", "your-api-key-here")
-
-    reranker = DashscopeReranker(
-        base_url="https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
-        model="qwen3-rerank",  # 或 "gte-rerank-v2"
-        timeout=60,
-        api_key=api_key
-    )
-
-    try:
-        result = await reranker.rerank(
-            query="中国首都是哪儿?",
-            documents=[
-                "美国首都是华盛顿。",
-                "中国首都是北京。",
-                "今天是星期五。",
-            ],
-            top_n=3
-        )
-        print("重排序结果:", result)
-    except Exception as e:
-        print(f"发生错误: {str(e)}")
-
-
-if __name__ == "__main__":
-    asyncio.run(test_rerank())
+        return_nodes = []
+        return_similarities = []
+        for rerank_result in rerank_results:
+            node = origin_nodes[rerank_result.index]
+            node.metadata["rerank"] = True
+            return_nodes.append(node)
+            return_similarities.append(rerank_result.score)
+        return VectorStoreQueryResult(nodes=return_nodes, similarities=return_similarities)

@@ -75,12 +75,23 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       : `/api/config/rerankers/${reranker.id}`;
     const updateMethod = isAdd ? 'POST' : 'PUT';
     if (reranker.api_key === '******') reranker.api_key = '';
-    console.log('updateMethod', isAdd, updateMethod, submit_url, reranker);
+    
+    // 转换前端类型值到后端期望的格式
+    const typeMapping: Record<string, string> = {
+      'OpenAICompatible': 'openai_like',
+      'DashScope': 'dashscope',
+    };
+    const submitData = {
+      ...reranker,
+      type: reranker.type ? (typeMapping[reranker.type] || reranker.type) : 'openai_like',
+    };
+    
+    console.log('updateMethod', isAdd, updateMethod, submit_url, submitData);
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reranker),
+        body: JSON.stringify(submitData),
       });
 
       if (!res.ok) {
@@ -88,7 +99,16 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         return;
       }
       const jsondata = await res.json();
-      onSaveSuccess(jsondata.data as RerankerConfig); // 触发回调
+      // 转换后端返回的类型值到前端格式
+      const reverseTypeMapping: Record<string, string> = {
+        'openai_like': 'OpenAICompatible',
+        'dashscope': 'DashScope',
+      };
+      const responseData = {
+        ...jsondata.data,
+        type: jsondata.data.type ? (reverseTypeMapping[jsondata.data.type] || jsondata.data.type) : 'OpenAICompatible',
+      };
+      onSaveSuccess(responseData as RerankerConfig); // 触发回调
       setIsOpen(false);
     } catch (err: any) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);

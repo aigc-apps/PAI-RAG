@@ -5,6 +5,7 @@ from db.models.knowledgebase.file import KbFileEntity
 import aiohttp
 from pydantic import BaseModel
 from loguru import logger
+from utils.http_session import HttpSessionShared
 
 BACKEND_PORT = os.environ.get("BACKEND_PORT", "8682")
 ATTACHMENT_UPLOAD_API = f"http://127.0.0.1:{BACKEND_PORT}/v1/config/attachments"
@@ -60,20 +61,20 @@ async def upload_gaia_attachment_file(
                     filename=file_name,
                 )
 
-                async with aiohttp.ClientSession() as _session:
-                    async with _session.post(ATTACHMENT_UPLOAD_API, data=form) as response:
-                        if response.status == 200:
-                            logger.info(f"Uploaded {file_name} successfully.")
-                            result = await response.json()
-                            return AttachmentFile(
-                                id=result["data"]["id"],
-                                name=result["data"]["file_name"],
-                                contentType=CONTENT_TYPE_MAP.get(
-                                    result["data"]["file_extension"], "text/plain"
-                                ),
-                            )
-                        else:
-                            logger.info(f"Failed to upload {file_name}")
-                            raise Exception(f"Failed to upload {file_name}")
+                session = await HttpSessionShared.ensure_session()
+                async with session.post(ATTACHMENT_UPLOAD_API, data=form) as response:
+                    if response.status == 200:
+                        logger.info(f"Uploaded {file_name} successfully.")
+                        result = await response.json()
+                        return AttachmentFile(
+                            id=result["data"]["id"],
+                            name=result["data"]["file_name"],
+                            contentType=CONTENT_TYPE_MAP.get(
+                                result["data"]["file_extension"], "text/plain"
+                            ),
+                        )
+                    else:
+                        logger.info(f"Failed to upload {file_name}")
+                        raise Exception(f"Failed to upload {file_name}")
         else:
             raise FileNotFoundError(f"File {file_name} with path {file_path} not found.")

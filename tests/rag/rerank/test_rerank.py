@@ -5,7 +5,7 @@ import pytest
 import os
 
 from rag.rerank.dashscope_reranker import DashscopeReranker
-from rag.rerank.reranker import OpenAICompatibleReranker
+from rag.rerank.reranker import OpenAICompatibleReranker, RerankResult
 
 
 @pytest.fixture
@@ -78,30 +78,30 @@ class TestDashscopeReranker:
         3. 相关性分数是有效的浮点数
         4. 返回结果格式正确
         """
-        result = await dashscope_reranker.rerank(
+        results = await dashscope_reranker.rerank(
             query=sample_query,
             documents=sample_documents,
             top_n=3
         )
 
         # 验证返回结果格式
-        assert "results" in result
-        assert isinstance(result["results"], list)
-        assert len(result["results"]) > 0
+        assert isinstance(results, list)
+        assert len(results) > 0
         
         # 验证每个结果的结构
-        for item in result["results"]:
-            assert "index" in item
-            assert "relevance_score" in item
-            assert isinstance(item["relevance_score"], (int, float))
-            assert 0 <= item["relevance_score"] <= 1  # 相关性分数通常在 0-1 之间
+        for item in results:
+            assert isinstance(item, RerankResult)
+            assert isinstance(item.index, int)
+            assert isinstance(item.score, (int, float))
+            assert 0 <= item.score <= 1  # 相关性分数通常在 0-1 之间
+            assert isinstance(item.doc, str)
         
         # 验证排序效果：分数应该从高到低
-        scores = [item["relevance_score"] for item in result["results"]]
+        scores = [item.score for item in results]
         assert scores == sorted(scores, reverse=True), "结果应该按相关性分数降序排列"
 
-        top_doc_text = sample_documents[result["results"][0]["index"]]
-        second_doc_text = sample_documents[result["results"][1]["index"]] 
+        top_doc_text = sample_documents[results[0].index]
+        second_doc_text = sample_documents[results[1].index] 
         assert top_doc_text == "数据库查询性能优化是提升应用响应速度的关键。可以通过创建合适的索引、优化SQL语句结构、使用查询缓存、分析执行计划等方式来提升查询效率。索引应该建立在经常用于WHERE、JOIN和ORDER BY的列上，但要避免过度索引。"
         assert second_doc_text == "SQL查询优化技巧包括：避免使用SELECT *，只查询需要的列；使用LIMIT限制返回结果数量；合理使用JOIN，避免笛卡尔积；在WHERE子句中使用索引列；避免在WHERE子句中使用函数，这会导致索引失效。"
 
@@ -123,28 +123,28 @@ class TestOpenAICompatibleReranker:
         3. 相关性分数是有效的浮点数
         4. 返回结果格式正确
         """
-        result = await openai_reranker.rerank(
+        results = await openai_reranker.rerank(
             query=sample_query,
             documents=sample_documents,
             top_n=6
         )
 
         # 验证返回结果格式
-        assert "results" in result
-        assert isinstance(result["results"], list)
-        assert len(result["results"]) > 0
+        assert isinstance(results, list)
+        assert len(results) > 0
         
         # 验证每个结果的结构
-        for item in result["results"]:
-            assert "index" in item
-            assert "relevance_score" in item
-            assert isinstance(item["relevance_score"], (int, float))
+        for item in results:
+            assert isinstance(item, RerankResult)
+            assert isinstance(item.index, int)
+            assert isinstance(item.score, (int, float))
+            assert isinstance(item.doc, str)
         
         # 验证排序效果：分数应该从高到低
-        scores = [item["relevance_score"] for item in result["results"]]
+        scores = [item.score for item in results]
         assert scores == sorted(scores, reverse=True), "结果应该按相关性分数降序排列"
-        
-        top_doc_text = sample_documents[result["results"][0]["index"]]
-        second_doc_text = sample_documents[result["results"][1]["index"]] 
+
+        top_doc_text = sample_documents[results[0].index]
+        second_doc_text = sample_documents[results[1].index]
         assert top_doc_text == "数据库查询性能优化是提升应用响应速度的关键。可以通过创建合适的索引、优化SQL语句结构、使用查询缓存、分析执行计划等方式来提升查询效率。索引应该建立在经常用于WHERE、JOIN和ORDER BY的列上，但要避免过度索引。"
         assert second_doc_text == "SQL查询优化技巧包括：避免使用SELECT *，只查询需要的列；使用LIMIT限制返回结果数量；合理使用JOIN，避免笛卡尔积；在WHERE子句中使用索引列；避免在WHERE子句中使用函数，这会导致索引失效。"

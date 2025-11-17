@@ -1,8 +1,17 @@
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
+from dataclasses import dataclass
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 import aiohttp
-import asyncio
+from utils.http_session import HttpSessionShared
+
+
+@dataclass
+class RerankResult:
+    """重排序结果"""
+    index: int
+    score: float
+    doc: str
 
 class OpenAICompatibleReranker:
     """
@@ -38,13 +47,20 @@ class OpenAICompatibleReranker:
         if api_key:
             self.headers["Authorization"] = api_key
 
+        if self.base_url.endswith("/v1/rerank"):
+            self.endpoint = self.base_url
+        elif self.base_url.endswith("/v1"):
+            self.endpoint = f"{self.base_url}/rerank"
+        else:
+            self.endpoint = f"{self.base_url}/v1/rerank"
+
     async def rerank(
         self,
         query: str,
         documents: List[str],
         model: Optional[str] = None,
         top_n: Optional[int] = None
-    ) -> Dict[str, Any]:
+    ) -> List[RerankResult]:
         """
         执行文档重排序
 
@@ -55,7 +71,7 @@ class OpenAICompatibleReranker:
             top_n: 返回的最相关文档数量
 
         Returns:
-            API响应结果
+            排序好的结果列表，每个结果包含index, score, doc字段
 
         Raises:
             ValueError: 参数验证失败时
@@ -79,21 +95,49 @@ class OpenAICompatibleReranker:
 
         # 发送异步请求
         try:
-            async with aiohttp.ClientSession() as session:
-                if self.base_url.endswith("/v1/rerank"):
-                    endpoint = self.base_url
-                elif self.base_url.endswith("/v1"):
-                    endpoint = f"{self.base_url}/rerank"
-                else:
-                    endpoint = f"{self.base_url}/v1/rerank"
-                async with session.post(
-                    endpoint,
-                    headers=self.headers,
-                    json=payload,
-                    timeout=self.timeout
-                ) as response:
-                    response.raise_for_status()
-                    return await response.json()
+            session = await HttpSessionShared.ensure_session()
+            async with session.post(
+                self.endpoint,
+                headers=self.headers,
+                json=payload,
+                timeout=self.timeout
+            ) as response:
+                response.raise_for_status()
+                response_data = await response.json()
+
+                # 解析响应并返回排序好的结果
+                if "results" not in response_data:
+                    raise RuntimeError("响应格式错误: 未找到results字段")
+
+                raw_results = response_data["results"]
+                if not isinstance(raw_results, list):
+                    raise RuntimeError("响应格式错误: results应该是列表")
+
+                # 解析并构建结构化结果
+                rerank_results = []
+                for item in raw_results:
+                    index = item.get("index")
+                    if index is None:
+                        raise RuntimeError("响应格式错误: 结果中缺少index字段")
+
+                    score = item.get("relevance_score", 0.0)
+                    # 提取文档文本
+                    if "document" in item and isinstance(item["document"], dict):
+                        doc = item["document"].get("text", "")
+                    else:
+                        # 如果没有document字段，使用原始documents中的文本
+                        doc = documents[index] if 0 <= index < len(documents) else ""
+
+                    rerank_results.append(RerankResult(
+                        index=index,
+                        score=score,
+                        doc=doc
+                    ))
+
+                # 确保结果按score降序排序
+                rerank_results.sort(key=lambda x: x.score, reverse=True)
+
+                return rerank_results
         except aiohttp.ClientError as e:
             raise RuntimeError(f"API请求失败: {str(e)}") from e
         except json.JSONDecodeError as e:
@@ -131,46 +175,13 @@ class OpenAICompatibleReranker:
 
         origin_nodes = result.nodes
         documents=[node.text for node in origin_nodes]
-        response_data = await self.rerank(query, documents, model, top_n)
+        rerank_results = await self.rerank(query, documents, model, top_n)
 
-        try:
-            return_nodes = []
-            return_similarities = []
-            for result in response_data["results"]:
-                node = origin_nodes[result["index"]]
-                node.metadata["rerank"] = True
-                return_nodes.append(node)
-                return_similarities.append(result["relevance_score"])
-            return VectorStoreQueryResult(nodes=return_nodes, similarities=return_similarities)
-        except json.JSONDecodeError as e:
-            raise RuntimeError(f"响应解析失败: {str(e)}") from e
-
-
-async def test_rerank():
-    reranker = OpenAICompatibleReranker(
-        base_url="http://demo.cn-hangzhou.pai-eas.aliyuncs.com/api/predict/ranxia_qwen3_rerank_8b",
-        model="Qwen3-Reranker-8B",
-        timeout=60,
-        api_key="api_key"
-    )
-
-    try:
-        result = await reranker.rerank(
-            query="如何优化数据库查询性能？有哪些具体的优化方法和技巧？",
-            documents=[
-                "数据库查询性能优化是提升应用响应速度的关键。可以通过创建合适的索引、优化SQL语句结构、使用查询缓存、分析执行计划等方式来提升查询效率。索引应该建立在经常用于WHERE、JOIN和ORDER BY的列上，但要避免过度索引。",
-        "Python是一种高级编程语言，具有简洁的语法和强大的功能。它广泛应用于Web开发、数据分析、人工智能等领域。Python的生态系统非常丰富，有大量的第三方库可以使用。",
-        "在MySQL中，可以通过EXPLAIN命令来分析SQL查询的执行计划。执行计划显示了数据库如何执行查询，包括使用的索引、表连接方式等信息。通过分析执行计划，可以找出性能瓶颈并进行优化。",
-        "数据库索引是一种数据结构，用于快速定位和访问数据库表中的数据。常见的索引类型包括B树索引、哈希索引等。索引可以显著提高查询速度，但会增加写入操作的开销，因为每次插入、更新或删除数据时都需要维护索引。",
-        "Redis是一个开源的内存数据结构存储系统，可以用作数据库、缓存和消息中间件。它支持多种数据结构，如字符串、列表、集合、有序集合等。Redis的读写性能非常高，常用于缓存热点数据。",
-        "SQL查询优化技巧包括：避免使用SELECT *，只查询需要的列；使用LIMIT限制返回结果数量；合理使用JOIN，避免笛卡尔积；在WHERE子句中使用索引列；避免在WHERE子句中使用函数，这会导致索引失效。",
-        "微服务架构是一种将应用程序构建为一套小型服务的方法，每个服务运行在自己的进程中，并通过轻量级机制（通常是HTTP API）进行通信。这种架构模式有助于提高系统的可扩展性和可维护性。",
-            ],
-            top_n=6
-        )
-        print("重排序结果:", result)
-    except Exception as e:
-        print(f"发生错误: {str(e)}")
-
-if __name__ == "__main__":
-    asyncio.run(test_rerank())
+        return_nodes = []
+        return_similarities = []
+        for rerank_result in rerank_results:
+            node = origin_nodes[rerank_result.index]
+            node.metadata["rerank"] = True
+            return_nodes.append(node)
+            return_similarities.append(rerank_result.score)
+        return VectorStoreQueryResult(nodes=return_nodes, similarities=return_similarities)
