@@ -20,6 +20,14 @@ class OpenAICompatibleReranker:
     支持与Jina/Cohere兼容的rerank API
     """
 
+    # Qwen3-Reranker 模型列表，这些模型需要使用特殊的格式
+    QWEN3_RERANKER_MODELS = ["Qwen3-Reranker-8B", "Qwen3-Reranker-4B", "Qwen3-Reranker-0.6B"]
+
+    # Qwen3-Reranker 特殊格式的 prefix 和 suffix
+    QWEN3_PREFIX = '<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
+    QWEN3_SUFFIX = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    QWEN3_INSTRUCTION = "Given a web search query, retrieve relevant passages that answer the query"
+
     def __init__(
         self,
         base_url: str = "http://127.0.0.1:8000",
@@ -54,6 +62,7 @@ class OpenAICompatibleReranker:
         else:
             self.endpoint = f"{self.base_url}/v1/rerank"
 
+
     async def rerank(
         self,
         query: str,
@@ -83,11 +92,28 @@ class OpenAICompatibleReranker:
             raise ValueError("查询内容不能为空")
         if not documents:
             raise ValueError("文档列表不能为空")
+
+        model = model or self.model
+
+        use_qwen3_format = model in self.QWEN3_RERANKER_MODELS
+
+        # 根据模型类型格式化 query 和 documents
+        if use_qwen3_format:
+            # 格式化 query: {prefix}<Instruct>: {instruction}\n<Query>: {query}\n
+            formatted_query = f"{self.QWEN3_PREFIX}<Instruct>: {self.QWEN3_INSTRUCTION}\n<Query>: {query}\n"
+            # 格式化 documents: <Document>: {doc}{suffix}
+            formatted_documents = [
+                f"<Document>: {doc}{self.QWEN3_SUFFIX}" for doc in documents
+            ]
+        else:
+            formatted_query = query
+            formatted_documents = documents
+
         # 构造请求数据
         payload = {
-            "model": model or self.model,
-            "query": query,
-            "documents": documents,
+            "model": model,
+            "query": formatted_query,
+            "documents": formatted_documents,
         }
 
         if top_n is not None:
@@ -127,6 +153,19 @@ class OpenAICompatibleReranker:
                     else:
                         # 如果没有document字段，使用原始documents中的文本
                         doc = documents[index] if 0 <= index < len(documents) else ""
+
+                    # 如果是 Qwen3-Reranker 模型，需要从返回的 text 中提取原始内容
+                    # 去掉 <Document>: 前缀和 suffix
+                    if use_qwen3_format and doc:
+                        # 去掉 <Document>: 前缀
+                        if doc.startswith("<Document>:"):
+                            doc = doc[len("<Document>:"):].lstrip()
+                        # 去掉 suffix
+                        if doc.endswith(self.QWEN3_SUFFIX):
+                            doc = doc[:-len(self.QWEN3_SUFFIX)].rstrip()
+                        # 如果仍然没有找到原始内容，使用原始 documents 中的文本
+                        if not doc:
+                            doc = documents[index] if 0 <= index < len(documents) else ""
 
                     rerank_results.append(RerankResult(
                         index=index,

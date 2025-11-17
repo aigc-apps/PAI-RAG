@@ -117,9 +117,9 @@ class DashscopeReranker:
                     try:
                         error_data = await response.json()
                         error_msg = error_data.get("message", f"HTTP {response.status}")
-                    except (json.JSONDecodeError, aiohttp.ClientError):
-                        error_msg = f"HTTP {response.status}"
-                    raise RuntimeError(f"API请求失败: {error_msg}")
+                    except Exception as e:
+                        error_msg = f"HTTP {response.status} with {str(e)}"
+                    raise RuntimeError(f"API请求失败: {error_msg} ")
                 response_data = await response.json()
 
                 # 检查API返回的错误
@@ -134,11 +134,11 @@ class DashscopeReranker:
                 elif "results" in response_data:
                     raw_results = response_data["results"]
                 else:
-                    raise RuntimeError("响应格式错误: 未找到results字段")
+                    raise RuntimeError(f"响应格式错误: 未找到results字段 from {response_data}")
 
                 # 验证结果格式
                 if not isinstance(raw_results, list):
-                    raise RuntimeError("响应格式错误: results应该是列表")
+                    raise RuntimeError(f"响应格式错误: results应该是列表 from {response_data}")
 
                 # 解析并构建结构化结果
                 rerank_results = []
