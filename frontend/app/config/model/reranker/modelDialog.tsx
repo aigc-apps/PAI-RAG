@@ -149,8 +149,8 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                   <SelectValue placeholder="选择模型类型" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="OpenAICompatible">OpenAICompatible</SelectItem>
-                  <SelectItem value="DashScope">DashScope</SelectItem>
+                  <SelectItem value="OpenAICompatible">OpenAI Like</SelectItem>
+                  <SelectItem value="DashScope">通义千问</SelectItem>
                 </SelectContent>
               </Select>
             </div>

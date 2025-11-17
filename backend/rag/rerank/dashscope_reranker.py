@@ -4,6 +4,7 @@ from llama_index.core.vector_stores.types import VectorStoreQueryResult
 import aiohttp
 from utils.http_session import HttpSessionShared
 from rag.rerank.reranker import RerankResult
+from loguru import logger
 
 
 class DashscopeReranker:
@@ -117,9 +118,10 @@ class DashscopeReranker:
                     try:
                         error_data = await response.json()
                         error_msg = error_data.get("message", f"HTTP {response.status}")
+                        raise RuntimeError(f"API请求失败: {error_msg} from {response.status}")
                     except Exception as e:
-                        error_msg = f"HTTP {response.status} with {str(e)}"
-                    raise RuntimeError(f"API请求失败: {error_msg} ")
+                        logger.error(f"API请求失败: {str(e)}")
+                        raise
                 response_data = await response.json()
 
                 # 检查API返回的错误
