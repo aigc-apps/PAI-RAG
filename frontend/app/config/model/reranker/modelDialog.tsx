@@ -12,6 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertTitle } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { AlertCircleIcon } from 'lucide-react';
 
 // 定义组件 props
@@ -29,6 +36,7 @@ interface RerankerConfig {
   model_name: string;
   api_key: string;
   base_url: string;
+  type?: string;
 }
 
 export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
@@ -67,12 +75,23 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       : `/api/config/rerankers/${reranker.id}`;
     const updateMethod = isAdd ? 'POST' : 'PUT';
     if (reranker.api_key === '******') reranker.api_key = '';
-    console.log('updateMethod', isAdd, updateMethod, submit_url, reranker);
+    
+    // 转换前端类型值到后端期望的格式
+    const typeMapping: Record<string, string> = {
+      'OpenAICompatible': 'openai_like',
+      'DashScope': 'dashscope',
+    };
+    const submitData = {
+      ...reranker,
+      type: reranker.type ? (typeMapping[reranker.type] || reranker.type) : 'openai_like',
+    };
+    
+    console.log('updateMethod', isAdd, updateMethod, submit_url, submitData);
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reranker),
+        body: JSON.stringify(submitData),
       });
 
       if (!res.ok) {
@@ -80,7 +99,16 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         return;
       }
       const jsondata = await res.json();
-      onSaveSuccess(jsondata.data as RerankerConfig); // 触发回调
+      // 转换后端返回的类型值到前端格式
+      const reverseTypeMapping: Record<string, string> = {
+        'openai_like': 'OpenAICompatible',
+        'dashscope': 'DashScope',
+      };
+      const responseData = {
+        ...jsondata.data,
+        type: jsondata.data.type ? (reverseTypeMapping[jsondata.data.type] || jsondata.data.type) : 'OpenAICompatible',
+      };
+      onSaveSuccess(responseData as RerankerConfig); // 触发回调
       setIsOpen(false);
     } catch (err: any) {
       setSaveErrorMsg(`${updateMethod} 请求失败`);
@@ -106,6 +134,29 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="type" className="text-right">
+              模型类型
+            </Label>
+            <div className="col-span-3">
+              <Select
+                value={reranker?.type || 'OpenAICompatible'}
+                onValueChange={(value) =>
+                  setReranker((prev) => ({ ...prev, type: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择模型类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OpenAICompatible">OpenAI Like</SelectItem>
+                  <SelectItem value="DashScope">通义千问</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_id" className="text-right">
               模型ID

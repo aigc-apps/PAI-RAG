@@ -17,6 +17,7 @@ from app.log_middleware import CustomLoggingMiddleware
 from config.providers.config_change_manager import config_change_manager
 from contextlib import asynccontextmanager
 from utils.format_logging import format_logging
+from utils.http_session import HttpSessionShared
 from loguru import logger
 
 format_logging()
@@ -25,6 +26,7 @@ format_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
+    await HttpSessionShared.ensure_session()
     await config_change_manager.init_configuration()
     asyncio.create_task(config_change_manager.monitor_changes_async())
 
@@ -43,6 +45,7 @@ async def lifespan(app: FastAPI):
         stop_event.set()
         sync_sqlite_store()
         sqlite_thread.join(timeout=10)
+    await HttpSessionShared.cleanup()
     logger.info("Application shutting down...")
 
 
