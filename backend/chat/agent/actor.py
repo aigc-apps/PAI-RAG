@@ -13,9 +13,7 @@ from chat.llm.models import TextChunk, ChatResponseGenerator, ToolResultChunk
 from extensions.trace.base import use_current_span
 from chat.agent.prompts import SUMMARY_PROMPT
 from common.chat.constants import MessageRole
-from config.providers.code_sandbox_provider import codesandbox_provider
 from opentelemetry import trace
-from utils.tool_utils import to_openai_tool
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -40,17 +38,9 @@ class Actor(BaseAgent):
         super().__init__(prompt, llm, tools, name)
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
-        # self.tool_metadata = [
-        #     tool.metadata.to_openai_tool() for tool in self.tools
-        # ]
         self.tool_metadata = [
-            to_openai_tool(tool.metadata) for tool in self.tools
+            tool.metadata.to_openai_tool(skip_length_check=True) for tool in self.tools
         ]
-        # 用于跟踪单轮对话中的 sandbox 初始化状态
-        self._sandbox_initialized = False
-        self._sandbox_session_id = None
-        self._sandbox_context_id = None
-        self._code_sandbox_attachments = []
 
 
     def build_prompt(self, state: AgentState) -> str:
@@ -58,20 +48,8 @@ class Actor(BaseAgent):
             context_variables=state.format_context_str(),
         )
 
-    def set_code_sandbox_attachments(self, attachments: list):
-        """设置代码沙箱附件"""
-        self._code_sandbox_attachments = attachments or []
 
-    async def _ensure_sandbox_initialized(self):
-        """确保 sandbox 已初始化，如果未初始化则进行初始化"""
-        if not self._sandbox_initialized:
-            try:
-                self._sandbox_session_id, self._sandbox_context_id = await codesandbox_provider.initialize_sandbox_with_attachments(self._code_sandbox_attachments)
-                self._sandbox_initialized = True
-                logger.info("[Actor] Sandbox initialized successfully")
-            except Exception as e:
-                logger.error(f"[Actor] Failed to initialize sandbox: {e}")
-                raise e
+
 
     @pai_agent_wrapper
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:
@@ -86,7 +64,11 @@ class Actor(BaseAgent):
                 tool_name = selected_tool.function.name
 
                 if selected_tool.function.arguments:
+                    try:
                         function_args = json.loads(selected_tool.function.arguments)
+                    except json.JSONDecodeError:
+                        logger.warning(f"[{self.name}] Invalid JSON args: {selected_tool.function.arguments}")
+                        function_args = {}
                 else:
                     function_args = {}
 
@@ -96,10 +78,6 @@ class Actor(BaseAgent):
                 async_fn = self.tool_fn_map[tool_name]
                 logger.info(f"Calling tool {tool_name} with args {function_args}.")
                 try:
-                    if tool_name == "PythonInterpreter":
-                            await self._ensure_sandbox_initialized()
-                            function_args['session_id'] = self._sandbox_session_id
-                            function_args['context_id'] = self._sandbox_context_id
                     tool_result = await call_tool_with_retry(async_fn, function_args)
                     tool_content = tool_result.content
                     tool_error = None
@@ -186,7 +164,7 @@ class Actor(BaseAgent):
                     try:
                         function_args = json.loads(tool.function.arguments) if tool.function.arguments else {}
                     except json.JSONDecodeError:
-                        logger.error(f"[{self.name}] Invalid JSON args: {tool.function.arguments}")
+                        logger.warning(f"[{self.name}] Invalid JSON args: {tool.function.arguments}")
                         function_args = {}
 
                     yield TextChunk(tool_calls=[tool])
@@ -195,10 +173,6 @@ class Actor(BaseAgent):
                     async_fn = self.tool_fn_map[function_name]
                     logger.info(f"[{self.name}] Calling {function_name} with args: {function_args}")
                     try:
-                        if function_name == "PythonInterpreter":
-                            await self._ensure_sandbox_initialized()
-                            function_args['session_id'] = self._sandbox_session_id
-                            function_args['context_id'] = self._sandbox_context_id
                         tool_result = await call_tool_with_retry(async_fn, function_args)
                         tool_content = tool_result.content
                         tool_error = None

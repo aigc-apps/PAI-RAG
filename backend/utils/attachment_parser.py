@@ -222,7 +222,7 @@ async def parse_attachments(state: AgentState):
                         continue
 
                     attachment_names_in_message.append(name)
-                if codesandbox_provider.tool and codesandbox_provider.tool.enabled and attachment_names_in_message:
+                if codesandbox_provider.tool_config and codesandbox_provider.tool_config.enabled and attachment_names_in_message:
                     # 只在user message最后追加列出文件结果，不使用 tool_call / tool 消息
                     attachment_names_in_message = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names_in_message]
                     attachment_names_in_message = ','.join(attachment_names_in_message)
