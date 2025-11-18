@@ -71,12 +71,6 @@ class CodeSandboxProvider(BaseConfigProvider):
             except Exception as e:
                 logger.error(f"CodeSandbox execution failed: {e}")
                 raise
-            finally:
-                # 确保关闭 HTTP session，避免连接泄漏
-                try:
-                    await code_tool.aclose()
-                except Exception as close_error:
-                    logger.warning(f"Failed to close CodeSandbox session: {close_error}")
 
         tool = FunctionTool.from_defaults(
         async_fn=aexecute_code,
