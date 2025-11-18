@@ -1,48 +1,35 @@
 import json
 from typing import List, Optional
-from dataclasses import dataclass
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 import aiohttp
 from utils.http_session import HttpSessionShared
+from rag.rerank.reranker import RerankResult
+from loguru import logger
 
 
-@dataclass
-class RerankResult:
-    """重排序结果"""
-    index: int
-    score: float
-    doc: str
-
-class OpenAICompatibleReranker:
+class DashscopeReranker:
     """
-    OpenAI兼容的Reranker
+    DashScope兼容的Reranker
 
-    支持与Jina/Cohere兼容的rerank API
+    支持阿里云DashScope文本排序API
+    参考文档: https://help.aliyun.com/zh/model-studio/text-rerank-api
     """
-
-    # Qwen3-Reranker 模型列表，这些模型需要使用特殊的格式
-    QWEN3_RERANKER_MODELS = ["Qwen3-Reranker-8B", "Qwen3-Reranker-4B", "Qwen3-Reranker-0.6B"]
-
-    # Qwen3-Reranker 特殊格式的 prefix 和 suffix
-    QWEN3_PREFIX = '<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
-    QWEN3_SUFFIX = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
-    QWEN3_INSTRUCTION = "Given a web search query, retrieve relevant passages that answer the query"
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8000",
-        model: str = "BAAI/bge-reranker-base",
+        base_url: str = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+        model: str = "qwen3-rerank",
         timeout: int = 30,
         api_key: Optional[str] = None
     ):
         """
-        初始化Reranker客户端
+        初始化DashScope Reranker客户端
 
         Args:
-            base_url: API基础URL
-            model: 默认模型名称
+            base_url: API基础URL，默认为DashScope端点
+            model: 默认模型名称，支持 "qwen3-rerank" 或 "gte-rerank-v2"
             timeout: 请求超时时间（秒）
-            api_key: 可选API密钥（如果服务需要）
+            api_key: DashScope API密钥，格式为 "sk-xxxx" 或完整 "Bearer sk-xxxx"
         """
         self.base_url = base_url.rstrip('/')
         self.model = model
@@ -53,15 +40,23 @@ class OpenAICompatibleReranker:
             "Accept": "application/json"
         }
         if api_key:
-            self.headers["Authorization"] = api_key
+            # 确保Authorization格式为 "Bearer {api_key}"
+            if api_key.startswith("Bearer "):
+                self.headers["Authorization"] = api_key
+            else:
+                self.headers["Authorization"] = f"Bearer {api_key}"
 
-        if self.base_url.endswith("/v1/rerank"):
+        # 预先设置endpoint
+        # DashScope API端点
+        # 完整端点为: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
+        # 确保URL结尾有两个/text-rerank
+        # 如果base_url已经包含完整的endpoint路径，直接使用
+        if self.base_url.endswith("/text-rerank/text-rerank"):
             self.endpoint = self.base_url
-        elif self.base_url.endswith("/v1"):
-            self.endpoint = f"{self.base_url}/rerank"
+        elif self.base_url.endswith("/text-rerank"):
+            self.endpoint = f"{self.base_url}/text-rerank"
         else:
-            self.endpoint = f"{self.base_url}/v1/rerank"
-
+            self.endpoint = f"{self.base_url}/text-rerank/text-rerank"
 
     async def rerank(
         self,
@@ -74,9 +69,9 @@ class OpenAICompatibleReranker:
         执行文档重排序
 
         Args:
-            query: 查询语句
-            documents: 需要排序的文档列表
-            model: 覆盖默认模型
+            query: 查询语句，最大长度不能超过4,000个Token
+            documents: 需要排序的文档列表，最多包含500个文档，每个文档长度不超过4,000个Token
+            model: 覆盖默认模型，支持 "qwen3-rerank" 或 "gte-rerank-v2"
             top_n: 返回的最相关文档数量
 
         Returns:
@@ -84,7 +79,6 @@ class OpenAICompatibleReranker:
 
         Raises:
             ValueError: 参数验证失败时
-            requests.exceptions.RequestException: 网络请求相关异常
             RuntimeError: API返回错误时
         """
         # 参数验证
@@ -92,32 +86,23 @@ class OpenAICompatibleReranker:
             raise ValueError("查询内容不能为空")
         if not documents:
             raise ValueError("文档列表不能为空")
+        if len(documents) > 500:
+            raise ValueError("文档数量不能超过500个")
 
-        model = model or self.model
-
-        use_qwen3_format = model in self.QWEN3_RERANKER_MODELS
-
-        # 根据模型类型格式化 query 和 documents
-        if use_qwen3_format:
-            # 格式化 query: {prefix}<Instruct>: {instruction}\n<Query>: {query}\n
-            formatted_query = f"{self.QWEN3_PREFIX}<Instruct>: {self.QWEN3_INSTRUCTION}\n<Query>: {query}\n"
-            # 格式化 documents: <Document>: {doc}{suffix}
-            formatted_documents = [
-                f"<Document>: {doc}{self.QWEN3_SUFFIX}" for doc in documents
-            ]
-        else:
-            formatted_query = query
-            formatted_documents = documents
-
-        # 构造请求数据
+        # 构造DashScope格式的请求数据
         payload = {
-            "model": model,
-            "query": formatted_query,
-            "documents": formatted_documents,
+            "model": model or self.model,
+            "input": {
+                "query": query,
+                "documents": documents
+            },
+            "parameters": {
+                "return_documents": True
+            }
         }
 
         if top_n is not None:
-            payload["top_n"] = top_n
+            payload["parameters"]["top_n"] = top_n
 
         # 发送异步请求
         try:
@@ -126,18 +111,36 @@ class OpenAICompatibleReranker:
                 self.endpoint,
                 headers=self.headers,
                 json=payload,
-                timeout=self.timeout
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
             ) as response:
-                response.raise_for_status()
+                # 如果HTTP状态码不是200，抛出异常
+                if response.status != 200:
+                    try:
+                        error_data = await response.json()
+                        error_msg = error_data.get("message", f"HTTP {response.status}")
+                        raise RuntimeError(f"API请求失败: {error_msg} from {response.status}")
+                    except Exception as e:
+                        logger.error(f"API请求失败: {str(e)}")
+                        raise
                 response_data = await response.json()
 
-                # 解析响应并返回排序好的结果
-                if "results" not in response_data:
-                    raise RuntimeError("响应格式错误: 未找到results字段")
+                # 检查API返回的错误
+                if "code" in response_data and response_data["code"]:
+                    error_msg = response_data.get("message", "未知错误")
+                    raise RuntimeError(f"DashScope API错误: {error_msg} (code: {response_data['code']})")
 
-                raw_results = response_data["results"]
+                # 转换DashScope响应格式为兼容格式
+                # DashScope返回: {"output": {"results": [...]}, "usage": {...}, "request_id": "..."}
+                if "output" in response_data and "results" in response_data["output"]:
+                    raw_results = response_data["output"]["results"]
+                elif "results" in response_data:
+                    raw_results = response_data["results"]
+                else:
+                    raise RuntimeError(f"响应格式错误: 未找到results字段 from {response_data}")
+
+                # 验证结果格式
                 if not isinstance(raw_results, list):
-                    raise RuntimeError("响应格式错误: results应该是列表")
+                    raise RuntimeError(f"响应格式错误: results应该是列表 from {response_data}")
 
                 # 解析并构建结构化结果
                 rerank_results = []
@@ -153,19 +156,6 @@ class OpenAICompatibleReranker:
                     else:
                         # 如果没有document字段，使用原始documents中的文本
                         doc = documents[index] if 0 <= index < len(documents) else ""
-
-                    # 如果是 Qwen3-Reranker 模型，需要从返回的 text 中提取原始内容
-                    # 去掉 <Document>: 前缀和 suffix
-                    if use_qwen3_format and doc:
-                        # 去掉 <Document>: 前缀
-                        if doc.startswith("<Document>:"):
-                            doc = doc[len("<Document>:"):].lstrip()
-                        # 去掉 suffix
-                        if doc.endswith(self.QWEN3_SUFFIX):
-                            doc = doc[:-len(self.QWEN3_SUFFIX)].rstrip()
-                        # 如果仍然没有找到原始内容，使用原始 documents 中的文本
-                        if not doc:
-                            doc = documents[index] if 0 <= index < len(documents) else ""
 
                     rerank_results.append(RerankResult(
                         index=index,
@@ -199,11 +189,10 @@ class OpenAICompatibleReranker:
             model: 覆盖默认模型
 
         Returns:
-            API响应结果
+            重排序后的VectorStoreQueryResult
 
         Raises:
             ValueError: 参数验证失败时
-            requests.exceptions.RequestException: 网络请求相关异常
             RuntimeError: API返回错误时
         """
         # 参数验证
@@ -213,7 +202,7 @@ class OpenAICompatibleReranker:
             raise ValueError("VectorStoreQueryResult列表不能为空")
 
         origin_nodes = result.nodes
-        documents=[node.text for node in origin_nodes]
+        documents = [node.text for node in origin_nodes]
         rerank_results = await self.rerank(query, documents, model, top_n)
 
         return_nodes = []

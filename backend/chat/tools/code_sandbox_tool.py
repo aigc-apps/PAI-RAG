@@ -14,6 +14,7 @@ import uuid
 from io import BytesIO
 from aiohttp import FormData
 from loguru import logger
+from utils.http_session import HttpSessionShared
 from chat.tools.code_sandbox_exceptions import (
     CodeSandboxEmptyCodeException,
     CodeSandboxNotInitializedException,
@@ -34,8 +35,8 @@ MARKDOWN_IMG_PATTERN = re.compile(rf'(!\[[^\]]*\]\()([^\)]+\.(?:{ext_pattern}))(
 
 async def get_http_client_session(timeout: int = 600):
     """异步生成器函数，用于获取 HTTP client session"""
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
-        yield session
+    session = await HttpSessionShared.ensure_session()
+    yield session
 
 
 def with_http_client_session(timeout: int = 600):
@@ -43,9 +44,9 @@ def with_http_client_session(timeout: int = 600):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
-                kwargs["session"] = session
-                return await func(*args, **kwargs)
+            session = await HttpSessionShared.ensure_session()
+            kwargs["session"] = session
+            return await func(*args, **kwargs)
         return wrapper
     return decorator
 
@@ -63,20 +64,10 @@ class CodeSandboxTool:
         self.interpreter_id = interpreter_id
         self.timeout_default = timeout_default
         self.base_url = f"https://{self.aliyun_id}.agentrun-data.cn-hangzhou.aliyuncs.com/2025-09-10/agents/code-interpreters/{self.interpreter_id}"
-        self._http_session: Optional[aiohttp.ClientSession] = None
 
     async def _get_session(self, timeout: int = 600) -> aiohttp.ClientSession:
-        """获取 HTTP session，如果不存在或已关闭则创建新的"""
-        if self._http_session is None or self._http_session.closed:
-            self._http_session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=timeout)
-            )
-        return self._http_session
-
-    async def aclose(self):
-        """关闭 HTTP session"""
-        if self._http_session and not self._http_session.closed:
-            await self._http_session.close()
+        """获取 HTTP session，使用共享的 session"""
+        return await HttpSessionShared.ensure_session()
 
     async def acreate_session_and_context(self):
         # uuid v4,不能是数字开头
@@ -320,27 +311,28 @@ class CodeSandboxTool:
         # aiohttp 的 timeout 是总超时（包括连接+读取）
         timeout_obj = aiohttp.ClientTimeout(total=actual_timeout + 5)
         result = None
-        # 对于 execute，使用动态 timeout 创建新的 session
-        async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-            try:
-                async with session.post(
-                    url,
-                    headers=headers,
-                    data=json.dumps(payload)
-                ) as response:
-                    if not response.ok:
-                        text = await response.text()
-                        logger.error(f"Execute failed: {response.status} {text}")
-                        raise CodeSandboxHTTPException(f"HTTP {response.status}: {text}")
-                    result = await response.json()
-            except asyncio.TimeoutError:
-                logger.error("Execution timed out")
-                raise CodeSandboxTimeoutException("Execution timed out")
-            except (CodeSandboxHTTPException, CodeSandboxTimeoutException):
-                raise
-            except Exception as e:
-                logger.exception("Error during code execution")
-                raise CodeSandboxExecutionException(f"Error during code execution: {str(e)}") from e
+        # 使用共享 session，但请求时指定动态 timeout
+        session = await HttpSessionShared.ensure_session()
+        try:
+            async with session.post(
+                url,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=timeout_obj
+            ) as response:
+                if not response.ok:
+                    text = await response.text()
+                    logger.error(f"Execute failed: {response.status} {text}")
+                    raise CodeSandboxHTTPException(f"HTTP {response.status}: {text}")
+                result = await response.json()
+        except asyncio.TimeoutError:
+            logger.error("Execution timed out")
+            raise CodeSandboxTimeoutException("Execution timed out")
+        except (CodeSandboxHTTPException, CodeSandboxTimeoutException):
+            raise
+        except Exception as e:
+            logger.exception("Error during code execution")
+            raise CodeSandboxExecutionException(f"Error during code execution: {str(e)}") from e
 
         if result is None or result.get("code") != "SUCCESS":
             error_msg = f"API returned non-success code: {result.get('code') if result else 'None'}"
