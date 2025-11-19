@@ -178,7 +178,6 @@ class PaiKnowledgebaseTool:
         logger.info(f"Get retrieval config: {retrieval_config}.")
 
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
-        query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
 
         embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
@@ -192,16 +191,22 @@ class PaiKnowledgebaseTool:
             # fail fast as no docs filtered.
             return []
 
-        top_k = retrieval_config.top_k
-        if retrieval_setting and retrieval_setting.top_k is not None:
-            top_k = retrieval_setting.top_k
-        # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
-        if retrieval_config.enable_rerank:
-            reranker_top_k = top_k
-            top_k = 2 * top_k
-        similarity_threshold = retrieval_config.similarity_threshold
-        if retrieval_setting and retrieval_setting.score_threshold is not None:
-            similarity_threshold = retrieval_setting.score_threshold
+        # 获取配置值，优先使用 retrieval_setting，如果为 None 则使用 retrieval_config
+        def get_value(attr: str):
+            setting_val = getattr(retrieval_setting, attr, None) if retrieval_setting else None
+            config_val = getattr(retrieval_config, attr)
+            return setting_val if setting_val is not None else config_val
+
+        query_mode = retrieval_type_to_search_mode(get_value('retrieval_mode'))
+
+        vector_weight = get_value('vector_weight')
+        top_k = get_value('top_k')
+        similarity_threshold = get_value('similarity_threshold')
+        enable_rerank = get_value('enable_rerank')
+
+        reranker_top_k = None
+        if enable_rerank:
+            reranker_top_k = get_value('rerank_top_k')
 
         # 直接按doc_id过滤
         if is_docid_filter_supported(vector_store=vector_store):
@@ -212,7 +217,7 @@ class PaiKnowledgebaseTool:
                 doc_ids=document_ids,
                 query_str=query,
                 mode=query_mode,
-                alpha=retrieval_config.vector_weight,
+                alpha=vector_weight,
             )
         else:
             # 使用llama_index filters 过滤
@@ -233,7 +238,7 @@ class PaiKnowledgebaseTool:
                 similarity_top_k=top_k,
                 query_str=query,
                 mode=query_mode,
-                alpha=retrieval_config.vector_weight,
+                alpha=vector_weight,
                 filters=metadata_filters,
             )
 
@@ -246,9 +251,9 @@ class PaiKnowledgebaseTool:
             kb_cache.delete(key) # 删除缓存，强制重新创建
             raise
 
-        if retrieval_config.enable_rerank and len(query_result.nodes) > 0 and query:
+        if enable_rerank and len(query_result.nodes) > 0 and query:
             raranker_model = reranker_provider.get_reranker_model(
-                retrieval_config.rerank_model
+                get_value('rerank_model')
             )
             query_result = await raranker_model.vector_store_rerank(
                 query=query,
@@ -298,7 +303,6 @@ class PaiKnowledgebaseTool:
             knowledgebase.retrieval_config
         )
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
-        query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
 
         embed_model = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
@@ -307,16 +311,22 @@ class PaiKnowledgebaseTool:
         query_embedding = await embed_model.aget_query_embedding(query)
 
 
-        top_k = retrieval_config.top_k
-        if retrieval_setting and retrieval_setting.top_k is not None:
-            top_k = retrieval_setting.top_k
-        # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
-        if retrieval_config.enable_rerank:
-            reranker_top_k = top_k
-            top_k = 2 * top_k
-        similarity_threshold = retrieval_config.similarity_threshold
-        if retrieval_setting and retrieval_setting.score_threshold is not None:
-            similarity_threshold = retrieval_setting.score_threshold
+        # 获取配置值，优先使用 retrieval_setting，如果为 None 则使用 retrieval_config
+        def get_value(attr: str):
+            setting_val = getattr(retrieval_setting, attr, None) if retrieval_setting else None
+            config_val = getattr(retrieval_config, attr)
+            return setting_val if setting_val is not None else config_val
+
+        query_mode = retrieval_type_to_search_mode(get_value('retrieval_mode'))
+
+        vector_weight = get_value('vector_weight')
+        top_k = get_value('top_k')
+        similarity_threshold = get_value('similarity_threshold')
+        enable_rerank = get_value('enable_rerank')
+
+        reranker_top_k = None
+        if enable_rerank:
+            reranker_top_k = get_value('rerank_top_k')
 
         vector_query = VectorStoreQuery(
             query_embedding=query_embedding,
@@ -324,7 +334,7 @@ class PaiKnowledgebaseTool:
             doc_ids=document_ids,
             query_str=query,
             mode=query_mode,
-            alpha=retrieval_config.vector_weight,
+            alpha=vector_weight,
         )
 
         try:
@@ -335,9 +345,9 @@ class PaiKnowledgebaseTool:
             kb_cache.delete(key) # 删除缓存，强制重新创建
             raise
 
-        if retrieval_config.enable_rerank:
+        if enable_rerank and len(query_result.nodes) > 0 and query:
             raranker_model = reranker_provider.get_reranker_model(
-                retrieval_config.rerank_model
+                get_value('rerank_model')
             )
             query_result = await raranker_model.vector_store_rerank(
                 query=query,
