@@ -19,8 +19,7 @@ context_prompt_str = """
 
 caption_prompt_str = """
 # 任务
-请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头。
-
+请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头， 不要超过300个字符。
 """
 
 
@@ -55,7 +54,7 @@ class ImageCaptionTool:
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[
-                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成详细的描述和标签。"),
+                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成简洁完整的描述和标签。"),
                 ],
             ),
             ChatMessage(
