@@ -114,6 +114,10 @@ import { Role } from '@/app/config/role/role';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { SearchCode, TextSearch, ScanSearch, ChevronDownIcon as ChevronDown, ChevronUpIcon as ChevronUp, Save } from 'lucide-react';
 
 interface KnowledgeBaseFile {
   id: string;
@@ -217,6 +221,19 @@ export default function KnowledgeBaseDetailPage(
   const [user, setUser] = useState('');
   const router = useRouter();
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // 检索设置状态
+  const [retrievalSetting, setRetrievalSetting] = useState<{
+    retrieval_mode?: string;
+    vector_weight?: number;
+    enable_rerank?: boolean;
+    rerank_model?: string;
+    top_k?: number;
+    similarity_threshold?: number;
+    rerank_top_k?: number;
+  }>({});
+  const [rerankerModels, setRerankerModels] = useState<Array<{id: string; model_id: string; model_name: string}>>([]);
+  const [retrievalSettingOpen, setRetrievalSettingOpen] = useState(true);
 
   const default_comparator = [
     'contains',
@@ -266,6 +283,7 @@ export default function KnowledgeBaseDetailPage(
         query: kbquery,
         user_id: user,
         knowledge_id: kbId,
+        retrieval_setting: retrievalSetting,
         metadata_condition: {
           conditions: metadataConditions,
           logical_operator: logicalOperator,
@@ -348,9 +366,10 @@ export default function KnowledgeBaseDetailPage(
   useEffect(() => {
     const fetchKbConfigs = async () => {
       try {
-        const [kbRes, metaRes] = await Promise.all([
+        const [kbRes, metaRes, rerankerRes] = await Promise.all([
           fetch(`/api/config/knowledgebases/${kbId}`),
           fetch(`/api/config/knowledgebases/${kbId}/metadata`),
+          fetch(`/api/config/rerankers`),
         ]);
 
         if (!kbRes.ok) throw new Error('获取知识库配置失败');
@@ -359,6 +378,19 @@ export default function KnowledgeBaseDetailPage(
 
         setKnowledgeBase(kb_data); // 更新状态
         console.log('知识库详情数据:', kb_data);
+
+        // 初始化检索设置，从 knowledgebase.retrieval_config 获取默认值
+        if (kb_data?.retrieval_config) {
+          setRetrievalSetting({
+            retrieval_mode: kb_data.retrieval_config.retrieval_mode || 'hybrid',
+            vector_weight: kb_data.retrieval_config.vector_weight ?? 0.5,
+            enable_rerank: kb_data.retrieval_config.enable_rerank ?? false,
+            rerank_model: kb_data.retrieval_config.rerank_model || '',
+            top_k: kb_data.retrieval_config.top_k ?? 5,
+            similarity_threshold: kb_data.retrieval_config.similarity_threshold ?? 0.2,
+            rerank_top_k: kb_data.retrieval_config.rerank_top_k ?? 5,
+          });
+        }
 
         if (!metaRes.ok) throw new Error('获取知识库元数据失败');
         const metadata_json = await metaRes.json();
@@ -371,6 +403,12 @@ export default function KnowledgeBaseDetailPage(
 
         setMetadataValueTypes({ ...valueTypes, '': 'string' });
         setMetadataConfigs(metadata_data);
+
+        // 获取重排序模型列表
+        if (rerankerRes.ok) {
+          const rerankerData = (await rerankerRes.json())?.data?.items || [];
+          setRerankerModels(rerankerData);
+        }
       } catch (err: any) {
         toast.error(err.message);
       }
@@ -384,6 +422,57 @@ export default function KnowledgeBaseDetailPage(
 
   const handleSaveSuccess = (kb: KbConfig) => {
       toast.success("知识库配置保存成功");
+  };
+
+  const handleSaveRetrievalSetting = async () => {
+    try {
+      // 构建retrieval_config对象，使用当前检索设置的值，如果没有则使用知识库的默认值
+      const retrieval_config = {
+        retrieval_mode: retrievalSetting.retrieval_mode || knowledgebase?.retrieval_config?.retrieval_mode || 'hybrid',
+        top_k: retrievalSetting.top_k ?? knowledgebase?.retrieval_config?.top_k ?? 5,
+        similarity_threshold: retrievalSetting.similarity_threshold ?? knowledgebase?.retrieval_config?.similarity_threshold ?? 0.2,
+        vector_weight: retrievalSetting.vector_weight ?? knowledgebase?.retrieval_config?.vector_weight ?? 0.5,
+        enable_rerank: retrievalSetting.enable_rerank ?? knowledgebase?.retrieval_config?.enable_rerank ?? false,
+        rerank_model: retrievalSetting.rerank_model || knowledgebase?.retrieval_config?.rerank_model || '',
+        rerank_top_k: retrievalSetting.rerank_top_k ?? knowledgebase?.retrieval_config?.rerank_top_k ?? 5,
+      };
+
+      // 调用更新知识库接口，只更新retrieval_config
+      const res = await fetch(`/api/config/knowledgebases/${kbId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          retrieval_config: retrieval_config,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`保存检索设置失败: ${errorText}`);
+      }
+
+      const jsonData = await res.json();
+      
+      // 更新本地知识库配置
+      if (jsonData.data) {
+        setKnowledgeBase(jsonData.data);
+        // 同时更新检索设置的默认值，使用保存后的值
+        setRetrievalSetting({
+          retrieval_mode: jsonData.data.retrieval_config?.retrieval_mode || 'hybrid',
+          vector_weight: jsonData.data.retrieval_config?.vector_weight ?? 0.5,
+          enable_rerank: jsonData.data.retrieval_config?.enable_rerank ?? false,
+          rerank_model: jsonData.data.retrieval_config?.rerank_model || '',
+          top_k: jsonData.data.retrieval_config?.top_k ?? 5,
+          similarity_threshold: jsonData.data.retrieval_config?.similarity_threshold ?? 0.2,
+          rerank_top_k: jsonData.data.retrieval_config?.rerank_top_k ?? 5,
+        });
+      }
+
+      toast.success("检索设置已保存至知识库配置");
+    } catch (err: any) {
+      console.error('保存检索设置失败:', err);
+      toast.error(err.message || '保存检索设置失败');
+    }
   };
 
 
@@ -1719,247 +1808,485 @@ export default function KnowledgeBaseDetailPage(
             ></KbConfigCard>
           </TabsContent>
           <TabsContent value="retrieval_test" className="py-4">
-            <div className="space-y-4">
-              {/* 搜索框和按钮 */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                <div className="flex-1 min-w-[200px] max-w-[640px]">
-                  <Input
-                    type="text"
-                    id="search_query"
-                    placeholder="请输入查询内容"
-                    onChange={handleQueryInputChange}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleSearchSubmit();
-                      }
-                    }}
-                    className="w-full"
-                  />
-                </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline">
-                      <FilterIcon />
-                      元数据
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[450px]">
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <RadioGroup
-                          value={logicalOperator}
-                          onValueChange={(value) => setLogicalOperator(value)}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <p className="text-muted-foreground text-sm">
-                              逻辑操作符
-                            </p>
-
-                            <RadioGroupItem value="and" id="r1" />
-                            <Label htmlFor="r1">AND</Label>
-                            <RadioGroupItem value="or" id="r2" />
-                            <Label htmlFor="r2">OR</Label>
-                          </div>
-                        </RadioGroup>
+            <div className="flex gap-4 h-full">
+              {/* 左侧：查询输入和检索设置 */}
+              <div className="flex flex-col w-[450px] shrink-0 h-full justify-between">
+                {/* 检索测试输入区域 - 左上角 */}
+                <Card className="flex-[4] flex flex-col min-h-0 mb-3">
+                  <CardHeader className="pb-4 flex-shrink-0">
+                    <CardTitle className="text-lg">检索测试</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex-1 flex flex-col min-h-0">
+                    {/* 搜索框和按钮 */}
+                    <div className="flex flex-col gap-3 flex-1">
+                      <div className="flex-1 min-w-[200px]">
+                        <Input
+                          type="text"
+                          id="search_query"
+                          placeholder="请输入查询内容"
+                          onChange={handleQueryInputChange}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSearchSubmit();
+                            }
+                          }}
+                          className="w-full h-28 text-lg"
+                        />
                       </div>
-                      <div className="grid gap-2">
-                        <div className="space-y-2">
-                          {metadataConditions.map((condition, i) => (
-                            <div
-                              className="flex items-center space-x-2"
-                              key={i}
-                            >
-                              <div>
-                                <Select
-                                  value={condition.name}
-                                  onValueChange={(value) => {
-                                    setConditionName(i, value);
-                                  }}
+                      <div className="flex flex-wrap gap-2 flex-shrink-0">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline">
+                              <FilterIcon />
+                              元数据
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[450px]">
+                            <div className="grid gap-4">
+                              <div className="space-y-2">
+                                <RadioGroup
+                                  value={logicalOperator}
+                                  onValueChange={(value) => setLogicalOperator(value)}
                                 >
-                                  <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
-                                    <SelectValue placeholder="名称" />
-                                  </SelectTrigger>
-                                  <SelectContent className="text-xs">
-                                    <SelectGroup>
-                                      {metadataConfigs.map((metadata) => (
-                                        <SelectItem
-                                          key={metadata.name}
-                                          value={metadata.name}
+                                  <div className="flex items-center space-x-2">
+                                    <p className="text-muted-foreground text-sm">
+                                      逻辑操作符
+                                    </p>
+
+                                    <RadioGroupItem value="and" id="r1" />
+                                    <Label htmlFor="r1">AND</Label>
+                                    <RadioGroupItem value="or" id="r2" />
+                                    <Label htmlFor="r2">OR</Label>
+                                  </div>
+                                </RadioGroup>
+                              </div>
+                              <div className="grid gap-2">
+                                <div className="space-y-2">
+                                  {metadataConditions.map((condition, i) => (
+                                    <div
+                                      className="flex items-center space-x-2"
+                                      key={i}
+                                    >
+                                      <div>
+                                        <Select
+                                          value={condition.name}
+                                          onValueChange={(value) => {
+                                            setConditionName(i, value);
+                                          }}
                                         >
-                                          {metadata.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectGroup>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                <Select
-                                  value={condition.comparison_operator}
-                                  onValueChange={(value) => {
-                                    setConditionOp(i, value);
-                                  }}
-                                >
-                                  <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
-                                    <SelectValue placeholder="规则" />
-                                  </SelectTrigger>
-                                  <SelectContent className="w-[80px] text-xs">
-                                    <SelectGroup>
-                                      {default_comparator.map((op) => (
-                                        <SelectItem key={op} value={op}>
-                                          {op}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectGroup>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div>
-                                {metadataValueTypes[condition.name] ===
-                                'datetime' ? (
-                                    <DatetimeInput
-                                      value={
-                                        typeof condition.value === 'number'
-                                          ? condition.value
-                                          : parseFloat(condition.value)
-                                      }
-                                      width="sm"
-                                      onValueChange={(value) => {
-                                        setConditionValue(i, value);
-                                      }}
-                                    />
-                                  ) : (
-                                    <Input
-                                      className="w-128px"
-                                      value={condition.value.toString()}
-                                      onChange={(e) =>
-                                        setConditionValue(i, e.target.value)
-                                      }
-                                    />
-                                  )}
-                              </div>
-                              <div>
+                                          <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                            <SelectValue placeholder="名称" />
+                                          </SelectTrigger>
+                                          <SelectContent className="text-xs">
+                                            <SelectGroup>
+                                              {metadataConfigs.map((metadata) => (
+                                                <SelectItem
+                                                  key={metadata.name}
+                                                  value={metadata.name}
+                                                >
+                                                  {metadata.name}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectGroup>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div>
+                                        <Select
+                                          value={condition.comparison_operator}
+                                          onValueChange={(value) => {
+                                            setConditionOp(i, value);
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                            <SelectValue placeholder="规则" />
+                                          </SelectTrigger>
+                                          <SelectContent className="w-[80px] text-xs">
+                                            <SelectGroup>
+                                              {default_comparator.map((op) => (
+                                                <SelectItem key={op} value={op}>
+                                                  {op}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectGroup>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div>
+                                        {metadataValueTypes[condition.name] ===
+                                        'datetime' ? (
+                                            <DatetimeInput
+                                              value={
+                                                typeof condition.value === 'number'
+                                                  ? condition.value
+                                                  : parseFloat(condition.value)
+                                              }
+                                              width="sm"
+                                              onValueChange={(value) => {
+                                                setConditionValue(i, value);
+                                              }}
+                                            />
+                                          ) : (
+                                            <Input
+                                              className="w-128px"
+                                              value={condition.value.toString()}
+                                              onChange={(e) =>
+                                                setConditionValue(i, e.target.value)
+                                              }
+                                            />
+                                          )}
+                                      </div>
+                                      <div>
+                                        <Button
+                                          variant="outline"
+                                          onClick={() => {
+                                            deleteCondition(i);
+                                          }}
+                                          className="w-6"
+                                        >
+                                          <Trash2Icon className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                                 <Button
-                                  variant="outline"
-                                  onClick={() => {
-                                    deleteCondition(i);
-                                  }}
-                                  className="w-6"
+                                  variant="secondary"
+                                  onClick={addCondition}
+                                  className="h-6 text-xs"
                                 >
-                                  <Trash2Icon className="w-4 h-4" />
+                                  新增过滤规则
                                 </Button>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          </PopoverContent>
+                        </Popover>
+                        <Input
+                          className="w-30 text-xs"
+                          placeholder="输入user_id"
+                          value={user}
+                          onChange={(e) => {
+                            setUser(e.target.value);
+                          }}
+                        />
                         <Button
-                          variant="secondary"
-                          onClick={addCondition}
-                          className="h-6 text-xs"
+                          type="button"
+                          onClick={handleSearchSubmit}
+                          className="whitespace-nowrap"
                         >
-                          新增过滤规则
+                          <SearchIcon />
+                          开始查询
                         </Button>
                       </div>
                     </div>
-                  </PopoverContent>
-                </Popover>
-                <Input
-                  className="w-30 text-xs"
-                  placeholder="输入user_id"
-                  value={user}
-                  onChange={(e) => {
-                    setUser(e.target.value);
-                  }}
-                />
-                <Button
-                  type="button"
-                  onClick={handleSearchSubmit}
-                  className="whitespace-nowrap"
-                >
-                  <SearchIcon />
-                  开始查询
-                </Button>
-              </div>
-              {/* 搜索结果提示 */}
-              {searching && (
-                <div className="flex items-center space-x-4">
-                  <Skeleton className="h-12 w-12 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-[250px]" />
-                    <Skeleton className="h-4 w-[200px]" />
-                  </div>
-                </div>
-              )}
-              {!searching && searchrecords.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <h2>没有找到相关的切片</h2>
-                  <p className="mt-2 text-sm">尝试调整搜索条件</p>
-                </div>
-              )}
-              {!searching && (
-                <div className="gap-6 p-4 w-full">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {searchrecords.map((chunk, i) => (
-                      <Card
-                        key={i}
-                        className="flex flex-col max-h-64 gap-0 pb-0 py-4"
+                  </CardContent>
+                </Card>
+
+                {/* 检索设置板块 - 左下角 */}
+                <Card className={`flex-[0.8] overflow-y-auto text-xs min-h-0 ${!retrievalSettingOpen ? 'p-0' : ''}`}>
+                  <CardHeader className={retrievalSettingOpen ? "pb-2 px-3 pt-3" : "py-0 px-3"}>
+                    <div className="flex items-center justify-between h-7">
+                      <CardTitle className="text-lg">检索设置</CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0"
+                        onClick={() => setRetrievalSettingOpen(!retrievalSettingOpen)}
                       >
-                        <CardHeader className="gap-1 pb-0 ">
-                          <CardTitle className="flex justify-start">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
-                                {i + 1}
-                              </Badge>
-                              <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
-                                分数: {chunk.score.toFixed(4)}
-                              </Badge>
-                              <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
-                                {chunk.title}
-                              </Badge>
-                              {chunk.metadata.rerank && (
-                                <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full">
-                                  Rerank
-                                </Badge>
-                              )}
-                            </div>
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-3 pb-2 mt-1 mb-1">
-                          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
-                            {chunk.content}
+                        {retrievalSettingOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  {retrievalSettingOpen && (
+                    <CardContent className="space-y-2 px-3 pb-3">
+                      {/* 检索策略 */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2 items-center">
+                          <Label className="w-[80px] text-xs">检索策略</Label>
+                          <ToggleGroup
+                            type="single"
+                            value={retrievalSetting.retrieval_mode || 'hybrid'}
+                            onValueChange={(value) => {
+                              setRetrievalSetting((prev) => ({
+                                ...prev,
+                                retrieval_mode: value,
+                              }));
+                            }}
+                            variant="outline"
+                            className="flex gap-x-1 overflow-visible"
+                          >
+                            <ToggleGroupItem
+                              value="vector"
+                              aria-label="向量检索"
+                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                            >
+                              <ScanSearch className="w-2 h-2 mr-0.5" />
+                              向量检索
+                            </ToggleGroupItem>
+                            <ToggleGroupItem
+                              value="fulltext"
+                              aria-label="全文检索"
+                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                            >
+                              <TextSearch className="w-2 h-2 mr-0.5" />
+                              全文检索
+                            </ToggleGroupItem>
+                            <ToggleGroupItem
+                              value="hybrid"
+                              aria-label="混合检索"
+                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                            >
+                              <SearchCode className="w-2 h-2 mr-0.5" />
+                              混合检索
+                            </ToggleGroupItem>
+                          </ToggleGroup>
+                        </div>
+                        {retrievalSetting.retrieval_mode === 'hybrid' && (
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="vector_weight" className="w-[80px] text-xs">
+                              向量权重
+                            </Label>
+                            <Slider
+                              id="vector_weight"
+                              className="w-40"
+                              min={0}
+                              max={1}
+                              step={0.1}
+                              value={[retrievalSetting.vector_weight ?? 0.5]}
+                              onValueChange={(value) =>
+                                setRetrievalSetting((prev) => ({
+                                  ...prev,
+                                  vector_weight: value[0],
+                                }))
+                              }
+                            />
+                            <span className="w-10 text-right text-xs font-medium">
+                              {retrievalSetting.vector_weight ?? 0.5}
+                            </span>
                           </div>
-                        </CardContent>
-                        <CardFooter className="shrink-0 gap-2">
-                          {chunk.metadata?.images_info?.length > 0 && (
-                            <div className="flex gap-2 mt-4">
-                              {chunk.metadata.images_info.map((meta, index) => (
-                                <PhotoProvider
-                                  key={index}
-                                  maskOpacity={0.8}
-                                  overlayRender={() => {
-                                    return (
-                                      <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
-                                        <div>图片描述：{meta.desc}</div>
-                                      </div>
-                                    );
-                                  }}
-                                >
-                                  <PhotoView key={index} src={meta.url}>
-                                    <img
-                                      src={meta.url}
-                                      className="w-10 h-10 object-cover rounded-md cursor-pointer"
-                                    />
-                                  </PhotoView>
-                                </PhotoProvider>
-                              ))}
+                        )}
+                      </div>
+
+                      {/* Top-K 和相似度阈值 */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2 items-center">
+                          <Label htmlFor="top_k" className="w-[80px] text-xs">
+                            Top-K
+                          </Label>
+                          <Slider
+                            className="w-40"
+                            defaultValue={[5]}
+                            max={100}
+                            min={1}
+                            step={1}
+                            value={[retrievalSetting.top_k ?? 5]}
+                            onValueChange={(value: number[]) => {
+                              setRetrievalSetting((prev) => ({
+                                ...prev,
+                                top_k: value[0],
+                              }));
+                            }}
+                          />
+                          <span className="font-medium w-10 text-xs">
+                            {retrievalSetting.top_k ?? 5}
+                          </span>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <Label htmlFor="similarity_threshold" className="w-[80px] text-xs">
+                            相似度阈值
+                          </Label>
+                          <Slider
+                            className="w-40"
+                            defaultValue={[0.2]}
+                            max={1}
+                            min={0}
+                            step={0.01}
+                            value={[retrievalSetting.similarity_threshold ?? 0.2]}
+                            onValueChange={(value: number[]) => {
+                              setRetrievalSetting((prev) => ({
+                                ...prev,
+                                similarity_threshold: value[0],
+                              }));
+                            }}
+                          />
+                          <span className="font-medium w-10 text-xs">
+                            {retrievalSetting.similarity_threshold?.toFixed(2) ?? '0.20'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 开启重排序 */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2 items-center">
+                          <Label className="w-[80px] text-xs">开启重排序</Label>
+                          <Checkbox
+                            id="enable_rerank"
+                            checked={retrievalSetting.enable_rerank ?? false}
+                            onCheckedChange={(checked) => {
+                              setRetrievalSetting((prev) => ({
+                                ...prev,
+                                enable_rerank: Boolean(checked),
+                              }));
+                            }}
+                            className="h-3.5 w-3.5"
+                          />
+                        </div>
+                        {retrievalSetting.enable_rerank && (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="rerank_model" className="w-[80px] text-xs">
+                                重排序模型
+                              </Label>
+                              <Select
+                                value={retrievalSetting.rerank_model || ''}
+                                onValueChange={(value) => {
+                                  setRetrievalSetting((prev) => ({
+                                    ...prev,
+                                    rerank_model: value,
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger className="w-40 h-7 text-xs">
+                                  <SelectValue placeholder="请选择重排序模型" />
+                                </SelectTrigger>
+                                <SelectContent className="text-xs">
+                                  <SelectGroup>
+                                    {rerankerModels.map((model) => (
+                                      <SelectItem key={model.id} value={model.model_id} className="text-xs">
+                                        {model.model_id}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
                             </div>
-                          )}
-                        </CardFooter>
-                      </Card>
-                    ))}
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="rerank_top_k" className="w-[80px] text-xs">
+                                Rerank-Top-K
+                              </Label>
+                              <Slider
+                                className="w-40"
+                                defaultValue={[5]}
+                                max={20}
+                                min={1}
+                                step={1}
+                                value={[retrievalSetting.rerank_top_k ?? 5]}
+                                onValueChange={(value: number[]) => {
+                                  setRetrievalSetting((prev) => ({
+                                    ...prev,
+                                    rerank_top_k: value[0],
+                                  }));
+                                }}
+                              />
+                              <span className="font-medium ml-2 text-xs">
+                                {retrievalSetting.rerank_top_k ?? 5}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      
+                      {/* 保存按钮 */}
+                      <div className="flex flex-col items-end pt-2 border-t gap-1">
+                        <Button
+                          type="button"
+                          onClick={handleSaveRetrievalSetting}
+                          className="whitespace-nowrap h-7 text-xs px-3 bg-gray-600 hover:bg-gray-700 text-white"
+                          size="sm"
+                        >
+                          <Save className="w-3 h-3 mr-1" />
+                          保存至知识库设置
+                        </Button>
+                        <p className="text-xs text-muted-foreground">保存后会更改知识库检索配置</p>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              </div>
+
+              {/* 右侧：查询结果 */}
+              <div className="flex-1 overflow-y-auto">
+                {/* 搜索结果提示 */}
+                {searching && (
+                  <div className="flex items-center space-x-4 p-4">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-[250px]" />
+                      <Skeleton className="h-4 w-[200px]" />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                {!searching && searchrecords.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <h2>没有找到相关的切片</h2>
+                    <p className="mt-2 text-sm">尝试调整搜索条件</p>
+                  </div>
+                )}
+                {!searching && (
+                  <div className="gap-6 p-4 w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {searchrecords.map((chunk, i) => (
+                        <Card
+                          key={i}
+                          className="flex flex-col max-h-64 gap-0 pb-0 py-4"
+                        >
+                          <CardHeader className="gap-1 pb-0 ">
+                            <CardTitle className="flex justify-start">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
+                                  {i + 1}
+                                </Badge>
+                                <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
+                                  分数: {chunk.score.toFixed(4)}
+                                </Badge>
+                                <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
+                                  {chunk.title}
+                                </Badge>
+                                {chunk.metadata.rerank && (
+                                  <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full">
+                                    Rerank
+                                  </Badge>
+                                )}
+                              </div>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-3 pb-2 mt-1 mb-1">
+                            <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
+                              {chunk.content}
+                            </div>
+                          </CardContent>
+                          <CardFooter className="shrink-0 gap-2">
+                            {chunk.metadata?.images_info?.length > 0 && (
+                              <div className="flex gap-2 mt-4">
+                                {chunk.metadata.images_info.map((meta, index) => (
+                                  <PhotoProvider
+                                    key={index}
+                                    maskOpacity={0.8}
+                                    overlayRender={() => {
+                                      return (
+                                        <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                                          <div>图片描述：{meta.desc}</div>
+                                        </div>
+                                      );
+                                    }}
+                                  >
+                                    <PhotoView key={index} src={meta.url}>
+                                      <img
+                                        src={meta.url}
+                                        className="w-10 h-10 object-cover rounded-md cursor-pointer"
+                                      />
+                                    </PhotoView>
+                                  </PhotoProvider>
+                                ))}
+                              </div>
+                            )}
+                          </CardFooter>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </TabsContent>
         </Tabs>
