@@ -96,6 +96,7 @@ export interface KbConfig {
     similarity_threshold: number; // 相似度分数阈值
     enable_rerank: boolean;
     rerank_model?: string; // rerank模型名称
+    rerank_top_k?: number; // Rerank-Top-K 值
     vector_weight?: number; // 向量检索权重（仅 hybrid 时使用）
   };
 }
@@ -370,9 +371,9 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           </Label>
           <Slider
             className="w-60"
-            defaultValue={[1]}
+            defaultValue={[5]}
             max={100}
-            min={1}
+            min={0}
             step={1}
             value={[kb.retrieval_config.top_k]}
             onValueChange={(value: number[]) => {
@@ -502,37 +503,64 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             }}
           />
           {kb.retrieval_config.enable_rerank && (
-            <div className="flex ml-20">
-              <Label htmlFor="rerank_model" className="w-[100px]">
-                重排序模型
-                <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                defaultValue={kb.retrieval_config.rerank_model}
-                onValueChange={(value) => {
-                  setKb((prev) => ({
-                    ...prev,
-                    retrieval_config: {
-                      ...prev.retrieval_config,
-                      rerank_model: value,
-                    },
-                  }));
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="请选择重排序模型" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {rerankermodels.map((model) => (
-                      <SelectItem key={model.id} value={model.model_id}>
-                        {model.model_id}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="flex ml-20">
+                <Label htmlFor="rerank_model" className="w-[100px]">
+                  重排序模型
+                  <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  defaultValue={kb.retrieval_config.rerank_model}
+                  onValueChange={(value) => {
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        rerank_model: value,
+                      },
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="请选择重排序模型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {rerankermodels.map((model) => (
+                        <SelectItem key={model.id} value={model.model_id}>
+                          {model.model_id}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex ml-20">
+                <Label htmlFor="rerank_top_k" className="w-[100px]">
+                  Rerank-Top-K
+                </Label>
+                <Slider
+                  className="w-60"
+                  defaultValue={[5]}
+                  max={10}
+                  min={0}
+                  step={1}
+                  value={[kb.retrieval_config.rerank_top_k ?? 5]}
+                  onValueChange={(value: number[]) => {
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        rerank_top_k: value[0],
+                      },
+                    }));
+                  }}
+                />
+                <span className="font-medium ml-2">
+                  {kb.retrieval_config.rerank_top_k ?? 5}
+                </span>
+              </div>
+            </>
           )}
         </div>
         {!isCreate && (

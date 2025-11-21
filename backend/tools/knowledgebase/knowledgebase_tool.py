@@ -178,7 +178,6 @@ class PaiKnowledgebaseTool:
         logger.info(f"Get retrieval config: {retrieval_config}.")
 
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
-        query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
 
         embed_model:BaseEmbedding = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
@@ -192,16 +191,33 @@ class PaiKnowledgebaseTool:
             # fail fast as no docs filtered.
             return []
 
+        retrieval_mode = retrieval_config.retrieval_mode
+        if retrieval_setting and retrieval_setting.retrieval_mode:
+            retrieval_mode = retrieval_setting.retrieval_mode
+        query_mode = retrieval_type_to_search_mode(retrieval_mode)
+
+
+        vector_weight = retrieval_config.vector_weight
+        if retrieval_setting and retrieval_setting.vector_weight is not None:
+            vector_weight = retrieval_setting.vector_weight
+
         top_k = retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
-        # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
-        if retrieval_config.enable_rerank:
-            reranker_top_k = top_k
-            top_k = 2 * top_k
+
         similarity_threshold = retrieval_config.similarity_threshold
-        if retrieval_setting and retrieval_setting.score_threshold is not None:
-            similarity_threshold = retrieval_setting.score_threshold
+        if retrieval_setting and retrieval_setting.similarity_threshold is not None:
+            similarity_threshold = retrieval_setting.similarity_threshold
+
+        enable_rerank = retrieval_config.enable_rerank
+        if retrieval_setting and retrieval_setting.enable_rerank is not None:
+            enable_rerank = retrieval_setting.enable_rerank
+
+        reranker_top_k = None
+        if enable_rerank:
+            reranker_top_k = retrieval_config.rerank_top_k
+            if retrieval_setting and retrieval_setting.rerank_top_k is not None:
+                reranker_top_k = retrieval_setting.rerank_top_k
 
         # 直接按doc_id过滤
         if is_docid_filter_supported(vector_store=vector_store):
@@ -212,7 +228,7 @@ class PaiKnowledgebaseTool:
                 doc_ids=document_ids,
                 query_str=query,
                 mode=query_mode,
-                alpha=retrieval_config.vector_weight,
+                alpha=vector_weight,
             )
         else:
             # 使用llama_index filters 过滤
@@ -233,7 +249,7 @@ class PaiKnowledgebaseTool:
                 similarity_top_k=top_k,
                 query_str=query,
                 mode=query_mode,
-                alpha=retrieval_config.vector_weight,
+                alpha=vector_weight,
                 filters=metadata_filters,
             )
 
@@ -246,10 +262,11 @@ class PaiKnowledgebaseTool:
             kb_cache.delete(key) # 删除缓存，强制重新创建
             raise
 
-        if retrieval_config.enable_rerank and len(query_result.nodes) > 0 and query:
-            raranker_model = reranker_provider.get_reranker_model(
-                retrieval_config.rerank_model
-            )
+        if enable_rerank and len(query_result.nodes) > 1 and query:
+            rerank_model = retrieval_config.rerank_model
+            if retrieval_setting and retrieval_setting.rerank_model:
+                rerank_model = retrieval_setting.rerank_model
+            raranker_model = reranker_provider.get_reranker_model(rerank_model)
             query_result = await raranker_model.vector_store_rerank(
                 query=query,
                 result=query_result,
@@ -298,7 +315,6 @@ class PaiKnowledgebaseTool:
             knowledgebase.retrieval_config
         )
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
-        query_mode = retrieval_type_to_search_mode(retrieval_config.retrieval_mode)
 
         embed_model = embedding_provider.get_embedding_model(
             knowledgebase.embedding_model
@@ -306,17 +322,32 @@ class PaiKnowledgebaseTool:
 
         query_embedding = await embed_model.aget_query_embedding(query)
 
+        retrieval_mode = retrieval_config.retrieval_mode
+        if retrieval_setting and retrieval_setting.retrieval_mode:
+            retrieval_mode = retrieval_setting.retrieval_mode
+        query_mode = retrieval_type_to_search_mode(retrieval_mode)
+
+        vector_weight = retrieval_config.vector_weight
+        if retrieval_setting and retrieval_setting.vector_weight is not None:
+            vector_weight = retrieval_setting.vector_weight
 
         top_k = retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
-        # Optimization: we can double top_k when rerank model is given, otherwise reranking will be weak.
-        if retrieval_config.enable_rerank:
-            reranker_top_k = top_k
-            top_k = 2 * top_k
+
         similarity_threshold = retrieval_config.similarity_threshold
-        if retrieval_setting and retrieval_setting.score_threshold is not None:
-            similarity_threshold = retrieval_setting.score_threshold
+        if retrieval_setting and retrieval_setting.similarity_threshold is not None:
+            similarity_threshold = retrieval_setting.similarity_threshold
+
+        enable_rerank = retrieval_config.enable_rerank
+        if retrieval_setting and retrieval_setting.enable_rerank is not None:
+            enable_rerank = retrieval_setting.enable_rerank
+
+        reranker_top_k = None
+        if enable_rerank:
+            reranker_top_k = retrieval_config.rerank_top_k
+            if retrieval_setting and retrieval_setting.rerank_top_k is not None:
+                reranker_top_k = retrieval_setting.rerank_top_k
 
         vector_query = VectorStoreQuery(
             query_embedding=query_embedding,
@@ -324,7 +355,7 @@ class PaiKnowledgebaseTool:
             doc_ids=document_ids,
             query_str=query,
             mode=query_mode,
-            alpha=retrieval_config.vector_weight,
+            alpha=vector_weight,
         )
 
         try:
@@ -335,10 +366,11 @@ class PaiKnowledgebaseTool:
             kb_cache.delete(key) # 删除缓存，强制重新创建
             raise
 
-        if retrieval_config.enable_rerank:
-            raranker_model = reranker_provider.get_reranker_model(
-                retrieval_config.rerank_model
-            )
+        if enable_rerank and len(query_result.nodes) > 1 and query:
+            rerank_model = retrieval_config.rerank_model
+            if retrieval_setting and retrieval_setting.rerank_model:
+                rerank_model = retrieval_setting.rerank_model
+            raranker_model = reranker_provider.get_reranker_model(rerank_model)
             query_result = await raranker_model.vector_store_rerank(
                 query=query,
                 result=query_result,

@@ -12,9 +12,10 @@ from common.knowledgebase.constants import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_SIMILARITY_THRESHOLD,
     DEFAULT_SIMILARITY_TOP_K,
+    DEFAULT_RERANK_SIMILARITY_TOP_K,
 )
 from common.knowledgebase.types import VectorIndexRetrievalType
-
+from typing import Optional
 
 class ChunkConfig(SQLModel):
     chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE)
@@ -32,6 +33,7 @@ class RetrievalConfig(SQLModel):
     vector_weight: float = Field(default=0.5)
     enable_rerank: bool = Field(default=False)
     rerank_model: str = Field(default="")
+    rerank_top_k: Optional[int] = Field(default=DEFAULT_RERANK_SIMILARITY_TOP_K)
 
 
 class KnowledgebaseCreate(SQLModel):

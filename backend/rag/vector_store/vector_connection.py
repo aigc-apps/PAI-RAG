@@ -16,12 +16,12 @@ from loguru import logger
 from rag.vector_store.local_chroma_service import DEFAULT_CHROMA_PORT
 from rag.vector_store.local import LocalChromaVectorStore
 from rag.vector_store.elasticsearch import ElasticsearchStore
-from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
 from llama_index.vector_stores.hologres import HologresVectorStore
 from llama_index.vector_stores.alibabacloud_opensearch import AlibabaCloudOpenSearchConfig, AlibabaCloudOpenSearchStore
 import tablestore
 from llama_index.vector_stores.tablestore import TablestoreVectorStore
+from elasticsearch.helpers.vectorstore import AsyncDenseVectorStrategy
 
 def create_vector_store(
     kb_id: str,
@@ -60,9 +60,8 @@ def create_vector_store(
             es_password=decrypt_key(vector_db_connection.encrypted_password),
             dim=dimension,
             retrieval_strategy=AsyncDenseVectorStrategy(
-                hybrid=True, rrf={"window_size": 50}
+                hybrid=True, rrf=False
             ),
-
         )
     elif isinstance(vector_db_connection, PostgresqlConnection):
         logger.info(
