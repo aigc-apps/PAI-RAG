@@ -72,22 +72,6 @@ ENV VIRTUAL_ENV=/app/.venv \
 WORKDIR /app
 
 
-# Set up PaddleOCR dependencies in a single layer
-RUN mkdir -p /root/.paddleocr/whl/det/ch/ch_PP-OCRv4_det_infer \
-    /root/.paddleocr/whl/rec/ch/ch_PP-OCRv4_rec_infer \
-    /root/.paddleocr/whl/cls/ch_ppocr_mobile_v2.0_cls_infer \
-    && curl -L https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar \
-        -o /tmp/ch_PP-OCRv4_det_infer.tar \
-    && tar xvf /tmp/ch_PP-OCRv4_det_infer.tar -C /root/.paddleocr/whl/det/ch/ \
-    && curl -L https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_rec_infer.tar \
-        -o /tmp/ch_PP-OCRv4_rec_infer.tar \
-    && tar xvf /tmp/ch_PP-OCRv4_rec_infer.tar -C /root/.paddleocr/whl/rec/ch/ \
-    && curl -L https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar \
-        -o /tmp/ch_ppocr_mobile_v2.0_cls_infer.tar \
-    && tar xvf /tmp/ch_ppocr_mobile_v2.0_cls_infer.tar -C /root/.paddleocr/whl/cls/ \
-    && rm -rf /tmp/*.tar
-
-
 # Copy virtual environment from builder
 COPY --from=python-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
