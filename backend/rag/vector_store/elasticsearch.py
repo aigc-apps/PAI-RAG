@@ -18,8 +18,6 @@ from llama_index.core.vector_stores.utils import (
 )
 from elasticsearch.helpers.vectorstore import AsyncVectorStore
 from elasticsearch.helpers.vectorstore import (
-    AsyncBM25Strategy,
-    AsyncSparseVectorStrategy,
     AsyncDenseVectorStrategy,
     AsyncRetrievalStrategy,
     DistanceMetric,
@@ -85,38 +83,6 @@ def _to_llama_similarities(scores: List[float]) -> List[float]:
         return [1.0 if max_score > 0 else 0.0 for _ in scores]
     return [(x - min_score) / (max_score - min_score) for x in scores]
 
-
-def _mode_must_match_retrieval_strategy(
-    mode: VectorStoreQueryMode, retrieval_strategy: AsyncRetrievalStrategy
-) -> None:
-    """
-    Different retrieval strategies require different ways of indexing that must be known at the
-    time of adding data. The query mode is known at query time. This function checks if the
-    retrieval strategy (and way of indexing) is compatible with the query mode and raises and
-    exception in the case of a mismatch.
-    """
-    if mode == VectorStoreQueryMode.DEFAULT:
-        # it's fine to not specify an explicit other mode
-        return
-
-    mode_retrieval_dict = {
-        VectorStoreQueryMode.SPARSE: AsyncSparseVectorStrategy,
-        VectorStoreQueryMode.TEXT_SEARCH: AsyncBM25Strategy,
-        VectorStoreQueryMode.HYBRID: AsyncDenseVectorStrategy,
-    }
-
-    required_strategy = mode_retrieval_dict.get(mode)
-    if not required_strategy:
-        raise NotImplementedError(f"query mode {mode} currently not supported")
-
-    if not isinstance(retrieval_strategy, required_strategy):
-        raise ValueError(
-            f"query mode {mode} incompatible with retrieval strategy {type(retrieval_strategy)}, "
-            f"expected {required_strategy}"
-        )
-
-    if mode == VectorStoreQueryMode.HYBRID and not retrieval_strategy.hybrid:
-        raise ValueError("to enable hybrid mode, it must be set in retrieval strategy")
 
 
 # 相比llamaindex版本改动：
@@ -204,7 +170,7 @@ class ElasticsearchStore(BasePydanticVectorStore):
     distance_strategy: Optional[DISTANCE_STRATEGIES] = "COSINE"
     retrieval_strategy: AsyncRetrievalStrategy
 
-    _store = PrivateAttr()
+    _store_params = PrivateAttr()  # 保存创建 store 的参数，不预先创建 store
 
     def __init__(
         self,
@@ -234,7 +200,8 @@ class ElasticsearchStore(BasePydanticVectorStore):
 
         if retrieval_strategy is None:
             retrieval_strategy = AsyncDenseVectorStrategy(
-                distance=DistanceMetric[distance_strategy]
+                distance=DistanceMetric[distance_strategy],
+                hybrid=True,
             )
 
         base_metadata_mappings = {
@@ -261,6 +228,7 @@ class ElasticsearchStore(BasePydanticVectorStore):
             retrieval_strategy=retrieval_strategy,
         )
 
+        # 创建通用的 store，在查询时通过 custom_query 动态调整
         self._store = AsyncVectorStore(
             user_agent=get_user_agent(),
             client=es_client,
@@ -521,9 +489,15 @@ class ElasticsearchStore(BasePydanticVectorStore):
         Raises:
             Exception: If AsyncElasticsearch query fails.
 
-        """
-        _mode_must_match_retrieval_strategy(query.mode, self.retrieval_strategy)
+        Note:
+            For hybrid search mode, you can set the boost parameter by passing `alpha` in VectorStoreQuery.
+            The `alpha` parameter controls the weight of vector search (alpha) vs text search (1 - alpha).
+            For example:
+                - alpha=0.7 means vector search weight is 0.7, text search weight is 0.3
+                - alpha=0.5 means equal weights for both
+            The boost values are automatically applied to knn and text match queries in the query body.
 
+        """
         if query.doc_ids:
             filter = [{"bool": {"must": [{"terms": {"metadata.doc_id": query.doc_ids}}]}}]
         elif query.filters is not None and len(query.filters.legacy_filters()) > 0:
@@ -531,14 +505,155 @@ class ElasticsearchStore(BasePydanticVectorStore):
         else:
             filter = es_filter or []
 
-        hits = await self._store.search(
-            query=query.query_str,
-            query_vector=query.query_embedding,
-            k=query.similarity_top_k,
-            num_candidates=query.similarity_top_k * 10,
-            filter=filter,
-            custom_query=custom_query,
-        )
+        if query.mode in [VectorStoreQueryMode.DEFAULT, VectorStoreQueryMode.HYBRID]:
+            if query.query_embedding is None:
+                logger.info(f"{query.mode} mode requires query_embedding, but it is None")
+                raise ValueError(f"{query.mode} mode requires query_embedding")
+
+        # 定义辅助函数：只保留文本查询，移除 knn
+        def text_only_query(query_body: Dict, vector_query: Optional[VectorStoreQuery] = None) -> Dict:
+            if custom_query:
+                query_body = custom_query(query_body, vector_query)
+            # 移除 knn，只保留文本查询
+            if "knn" in query_body:
+                del query_body["knn"]
+            if "retriever" in query_body:
+                del query_body["retriever"]
+            return query_body
+
+        # 定义辅助函数：只保留 knn 查询，移除文本查询
+        def dense_only_query(query_body: Dict, vector_query: Optional[VectorStoreQuery] = None) -> Dict:
+            if custom_query:
+                query_body = custom_query(query_body, vector_query)
+            # 移除文本查询，只保留 knn
+            if "query" in query_body:
+                del query_body["query"]
+            if "retriever" in query_body:
+                del query_body["retriever"]
+            return query_body
+
+        if query.mode == VectorStoreQueryMode.DEFAULT:
+            hits = await self._store.search(
+                query=None,
+                query_vector=query.query_embedding,
+                k=query.similarity_top_k,
+                num_candidates=query.similarity_top_k * 10,
+                filter=filter,
+                custom_query=dense_only_query,
+            )
+        elif query.mode == VectorStoreQueryMode.TEXT_SEARCH:
+            hits = await self._store.search(
+                query=query.query_str,
+                query_vector=None,
+                k=query.similarity_top_k,
+                num_candidates=query.similarity_top_k * 10,
+                filter=filter,
+                custom_query=text_only_query,
+            )
+
+            # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
+            if hits:
+                text_scores = [hit.get("_score", 0.0) for hit in hits]
+                normalized_text_scores = _to_llama_similarities(text_scores)
+                for hit, normalized_score in zip(hits, normalized_text_scores):
+                    hit["_score"] = normalized_score
+                logger.info(f"TEXT_SEARCH mode: Normalized scores - min={min(text_scores) if text_scores else 'N/A'}, max={max(text_scores) if text_scores else 'N/A'}")
+        else:
+            # HYBRID 模式：并发执行 text 和 dense 搜索
+            text_hits_task = self._store.search(
+                query=query.query_str,
+                query_vector=None,
+                k=query.similarity_top_k,
+                num_candidates=query.similarity_top_k * 10,
+                filter=filter,
+                custom_query=text_only_query,
+            )
+
+            dense_hits_task = self._store.search(
+                query=None,
+                query_vector=query.query_embedding,
+                k=query.similarity_top_k,
+                num_candidates=query.similarity_top_k * 10,
+                filter=filter,
+                custom_query=dense_only_query,
+            )
+
+            text_hits, dense_hits = await asyncio.gather(text_hits_task, dense_hits_task)
+
+            logger.info(f"HYBRID mode: Received {len(text_hits)} text hits and {len(dense_hits)} dense hits")
+
+            # 对 text_hits 的分数进行 min-max 归一化
+            if text_hits:
+                text_scores = [hit.get("_score", 0.0) for hit in text_hits]
+                normalized_text_scores = _to_llama_similarities(text_scores)
+                for hit, normalized_score in zip(text_hits, normalized_text_scores):
+                    hit["_score"] = normalized_score
+                logger.info(f"HYBRID mode: Normalized text scores - min={min(text_scores) if text_scores else 'N/A'}, max={max(text_scores) if text_scores else 'N/A'}")
+
+            # 获取权重
+            vector_weight = 0.5  # 默认权重
+            text_weight = 0.5
+
+            if hasattr(query, "alpha") and query.alpha is not None:
+                vector_weight = float(query.alpha)
+                text_weight = 1 - vector_weight
+
+            logger.info(
+                f"HYBRID mode: Merging with weights - vector_weight={vector_weight}, text_weight={text_weight}"
+            )
+
+            # 合并结果：使用字典去重，key 为 _id，value 为 (hit, text_score, dense_score)
+            merged_hits = {}  # _id -> (hit, text_score, dense_score)
+
+            # 处理 text 搜索结果（已归一化）
+            for hit in text_hits:
+                hit_id = hit["_id"]
+                normalized_score = hit.get("_score", 0.0)
+                weighted_score = normalized_score * text_weight  # 应用权重
+
+                if hit_id not in merged_hits:
+                    merged_hits[hit_id] = (hit, weighted_score, None)
+                else:
+                    # 如果已存在，更新 text 分数
+                    existing_hit, existing_text_score, existing_dense_score = merged_hits[hit_id]
+                    merged_hits[hit_id] = (existing_hit, weighted_score, existing_dense_score)
+
+            # 处理 dense 搜索结果
+            for hit in dense_hits:
+                hit_id = hit["_id"]
+                raw_score = hit.get("_score", 0.0)
+                weighted_score = raw_score * vector_weight  # 应用权重
+
+                if hit_id not in merged_hits:
+                    merged_hits[hit_id] = (hit, None, weighted_score)
+                else:
+                    # 如果已存在，更新 dense 分数
+                    existing_hit, existing_text_score, existing_dense_score = merged_hits[hit_id]
+                    merged_hits[hit_id] = (existing_hit, existing_text_score, weighted_score)
+
+            # 计算最终分数并更新 hit
+            for hit_id, (hit, text_score, dense_score) in merged_hits.items():
+                if text_score is not None and dense_score is not None:
+                    # 两个搜索都找到了，使用加权求和
+                    final_score = text_score + dense_score
+                elif text_score is not None:
+                    # 只有 text 搜索找到
+                    final_score = text_score
+                elif dense_score is not None:
+                    # 只有 dense 搜索找到
+                    final_score = dense_score
+                else:
+                    # 理论上不应该发生
+                    final_score = 0.0
+
+                hit["_score"] = final_score
+
+            # 转换为列表并按分数排序
+            hits = [hit for hit, _, _ in merged_hits.values()]
+            hits.sort(key=lambda x: x.get("_score", 0.0), reverse=True)
+            hits = hits[:query.similarity_top_k]  # 取 top_k
+
+            logger.info(f"HYBRID mode: Merged to {len(hits)} unique hits")
 
         top_k_nodes = []
         top_k_ids = []
@@ -548,12 +663,13 @@ class ElasticsearchStore(BasePydanticVectorStore):
             node = convert_es_hit_to_node(hit, self.text_field)
             top_k_nodes.append(node)
             top_k_ids.append(hit["_id"])
-            top_k_scores.append(hit["_score"])
+            raw_score = hit.get("_score", 0.0)
+            top_k_scores.append(raw_score)
 
         return VectorStoreQueryResult(
             nodes=top_k_nodes,
             ids=top_k_ids,
-            similarities=_to_llama_similarities(top_k_scores),
+            similarities=top_k_scores,
         )
 
     def get_nodes(
