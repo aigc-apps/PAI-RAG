@@ -220,6 +220,8 @@ output
 *.local.toml
 
 /localdata/
+/backend/localdata/
+
 docker/app_data
 model_repository/
 *.tmp
@@ -237,3 +239,5 @@ config.json
 
 # redis
 *.rdb
+
+debug/

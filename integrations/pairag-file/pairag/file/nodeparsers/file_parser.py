@@ -13,11 +13,12 @@ from pairag.file.readers.html_reader import HtmlReader
 from pairag.file.readers.image_reader import ImageReader
 from pairag.file.readers.jsonl2md_reader import Json2MdReader
 from pairag.file.readers.markdown_reader import MarkdownReader
-from pairag.file.readers.pdf_reader import MineruPdfReader
+from pairag.file.readers.mineru_reader import MineruPdfReader
 from pairag.file.readers.pptx_reader import PptxReader
 from pairag.file.readers.text_reader import TextReader
-from pairag.file.readers.online_pdf_reader import OnlinePdfReader
+from pairag.file.readers.simple_pdf_reader import SimplePdfReader
 from pairag.file.nodeparsers.pai_markdown_parser import MarkdownNodeParser
+from pairag.file.nodeparsers.positional_markdown_parser import PositionalMarkdownNodeParser
 from pairag.file.store.base import BaseFileStore
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.constants import (
@@ -30,6 +31,7 @@ from pairag.file.utils.image_utils import MARKDOWN_IMAGE_PATTERN, markdown_image
 from llama_index.core.bridge.pydantic import Field, BaseModel
 from typing import Optional
 import re
+import os
 
 
 IMAGE_DOC_TYPES = set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"])
@@ -60,6 +62,12 @@ class ChunkConfig(BaseModel):
     separator: str = Field(default=DEFAULT_SENTENCE_SEPARATOR)
 
 
+class ReaderConfig(BaseModel):
+    enable_mineru: bool = Field(default=False)
+    mineru_endpoint: str = Field(default="")
+    mineru_token: str = Field(default="")
+
+
 def node_id_func(i: int, doc: BaseNode) -> str:
     return uuid.uuid4().hex
 
@@ -69,11 +77,14 @@ class FileParser:
         self,
         file_store: BaseFileStore,
         image_caption_tool: ImageCaptionTool = None,
+        reader_config: Optional[ReaderConfig] = ReaderConfig(),
         chunk_config: Optional[ChunkConfig] = ChunkConfig(),
     ):
         self.file_store = file_store
         self.image_caption_tool = image_caption_tool
         self.chunk_config = chunk_config
+        self.reader_config = reader_config
+
 
     def _get_reader(
             self,
@@ -85,7 +96,7 @@ class FileParser:
                 case ".docx":
                     return DocxReader(file_store=self.file_store)
                 case ".pdf":
-                    return OnlinePdfReader(file_store=self.file_store)
+                    return SimplePdfReader(extract_images=False, file_store=self.file_store)
                 case ".md":
                     return MarkdownReader(file_store=self.file_store)
                 case ".txt":
@@ -134,10 +145,19 @@ class FileParser:
                         image_caption_tool=self.image_caption_tool,
                     )
                 case ".pdf":
-                    return MineruPdfReader(
-                        file_store=self.file_store,
-                        image_caption_tool=self.image_caption_tool,
-                    )
+                    if self.reader_config.enable_mineru or os.environ.get("ENABLE_MINERU", "false").lower() == "true":
+                        return MineruPdfReader(
+                            endpoint=self.reader_config.mineru_endpoint,
+                            token=self.reader_config.mineru_token,
+                            file_store=self.file_store,
+                            image_caption_tool=self.image_caption_tool,
+                        )
+                    else:
+                        return SimplePdfReader(
+                            extract_images=True,
+                            file_store=self.file_store,
+                            image_caption_tool=self.image_caption_tool,
+                        )
                 case ".htm":
                     return HtmlReader(
                         file_store=self.file_store,
@@ -227,8 +247,16 @@ class FileParser:
                     paragraph_separator=chunk_config.separator,
                     include_metadata=False,
                 )
-                if doc_type in DOC_TYPES_CONVERT_TO_MD:
-                    # markdown格式(pdf, md, html, doc 等)
+                if doc_type == ".pdf":
+                    # 需要计算bbox
+                    positional_md_node_parser = PositionalMarkdownNodeParser(
+                        chunk_size=chunk_config.chunk_size,
+                        chunk_overlap=chunk_config.chunk_overlap,
+                        id_func=node_id_func,
+                    )
+                    chunks = positional_md_node_parser.get_nodes_from_documents([doc_node])
+                elif doc_type in DOC_TYPES_CONVERT_TO_MD:
+                    # markdown格式(md, html, doc 等)
                     md_node_parser = MarkdownNodeParser(
                         chunk_size=chunk_config.chunk_size,
                         chunk_overlap=chunk_config.chunk_overlap,
@@ -243,7 +271,7 @@ class FileParser:
                 )
 
             for chunk in chunks:
-                chunk.metadata = doc_node.metadata
+                chunk.metadata.update(doc_node.metadata)
                 chunk.metadata["doc_id"] = doc_node.id_
                 chunk.relationships = {
                             NodeRelationship.SOURCE: RelatedNodeInfo(

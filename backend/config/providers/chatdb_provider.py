@@ -8,6 +8,7 @@ from config.providers.base_provider import BaseConfigProvider
 from config.providers.llm_provider import llm_provider
 from tools.chatdb.xiyan_client import XiyanClient
 from llama_index.core.tools import FunctionTool
+from loguru import logger
 
 
 class ChatDbProvider(BaseConfigProvider):
@@ -16,7 +17,12 @@ class ChatDbProvider(BaseConfigProvider):
 
 
     def _load(self, entry: ChatDbConfigEntity):
-        llm_model = llm_provider.get_llm_model(model_id=entry.model_id)
+        try:
+            llm_model = llm_provider.get_llm_model(model_id=entry.model_id)
+        except Exception as e:
+            logger.error(f"Error getting llm model {entry.model_id} for chatdb: {e}")
+            return
+
         self.client = XiyanClient(
             dialect=entry.dialect,
             host=entry.host,

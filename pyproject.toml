@@ -78,12 +78,11 @@ llama-index-vector-stores-postgres = "^0.5.4"
 llama-index-llms-openai-like = "0.3.0"
 redis = "^6.2.0"
 opentelemetry-exporter-otlp-proto-grpc = "^1.36.0"
-python-levenshtein = "^0.27.1"
-pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.0.14-py3-none-any.whl"}
 tavily-python = "^0.7.12"
-rapidfuzz = "3.14.1"
+rapidfuzz = "^3.14.1"
 xiyan-mcp-server = "^0.1.7"
 json5 = "^0.12.1"
+pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.0-py3-none-any.whl"}
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
