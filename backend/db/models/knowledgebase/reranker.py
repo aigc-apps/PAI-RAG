@@ -1,10 +1,19 @@
 import uuid
 from sqlmodel import Field, SQLModel
+from typing import Optional
+from enum import Enum
+
+
+# 支持openai_like和dashscope两种模式
+class RerankerType(str, Enum):
+    OPENAI_LIKE = "openai_like"
+    DASHSCOPE = "dashscope"
 
 class RerankerModel(SQLModel):
     model_name: str = Field(default=None)
     base_url: str = Field(default=None)
     model_id: str = Field(default=None, unique=True)
+    type: Optional[str] = Field(default=RerankerType.OPENAI_LIKE)
 
 
 class RerankerModelCreate(RerankerModel):

@@ -8,6 +8,7 @@ from functools import partial
 from typing import List, Union, Annotated
 from llama_index.core.tools import FunctionTool
 from loguru import logger
+from utils.http_session import HttpSessionShared
 
 TRUNCATE_TOKEN_MAXLENGTH = 5000
 
@@ -38,13 +39,13 @@ async def jina_readpage(url: str) -> str:
 
     for attempt in range(max_retries):
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"https://r.jina.ai/{url.strip()}") as response:
-                    text = await response.text()
-                    if response.status == 200:
-                        return remove_images_and_links(text)
-                    else:
-                        logger.warning(f"Jina 返回非200状态码: {response.status} - {text}")
+            session = await HttpSessionShared.ensure_session()
+            async with session.get(f"https://r.jina.ai/{url.strip()}", timeout=timeout) as response:
+                text = await response.text()
+                if response.status == 200:
+                    return remove_images_and_links(text)
+                else:
+                    logger.warning(f"Jina 返回非200状态码: {response.status} - {text}")
         except Exception as e:
             logger.warning(f"Jina 请求失败 (尝试 {attempt + 1}): {e}")
             if attempt == max_retries - 1:

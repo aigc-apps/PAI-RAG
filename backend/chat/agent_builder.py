@@ -75,8 +75,9 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
         mcp_tools = await aget_mcp_tools(chat_request, attachments=attachments)
         llm: PaiLlm = llm_provider.get_llm_model(model_id=chat_request.model)
 
-        if codesandbox_provider.tool and codesandbox_provider.tool.enabled:
-            code_interpreter_tool = codesandbox_provider.get_code_sandbox_tool()
+        if codesandbox_provider.tool_config and codesandbox_provider.tool_config.enabled:
+            code_sandbox_attachments_ids = [att["id"] for att in code_sandbox_attachments]
+            code_interpreter_tool = codesandbox_provider.get_code_sandbox_tool(code_sandbox_attachments_ids=code_sandbox_attachments_ids)
             mcp_tools.append(code_interpreter_tool)
 
         prompt_set = PlanAgentPromptSet()
@@ -92,10 +93,6 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
             tools=mcp_tools,
             name="Planner",
         )
-
-        # 设置代码沙箱附件到 runner 中
-        if code_sandbox_attachments:
-            runner.set_code_sandbox_attachments(code_sandbox_attachments)
 
         return runner
     except Exception as ex:

@@ -116,6 +116,7 @@ async def update_reranker(
     reranker_model.model_id = new_reranker.model_id or reranker_model.model_id
     reranker_model.model_name = new_reranker.model_name or reranker_model.model_name
     reranker_model.base_url = new_reranker.base_url or reranker_model.base_url
+    reranker_model.type = new_reranker.type or reranker_model.type
     reranker_model.encrypted_api_key = (
         encrypt_key(new_reranker.api_key)
         if new_reranker.api_key
