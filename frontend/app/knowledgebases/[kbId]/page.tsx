@@ -38,6 +38,17 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 import {
   Loader2,
@@ -49,14 +60,27 @@ import {
   ChevronDownIcon,
   RefreshCcwIcon,
   Search,
+  MoreVertical,
+  Upload,
 } from 'lucide-react';
-import { PreviewButton } from '@/app/knowledgebases/[kbId]/preview-button';
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { MarkdownViewer } from '@/app/knowledgebases/[kbId]/viewer/markdown-viewer';
+import { JsonlViewer } from '@/app/knowledgebases/[kbId]/viewer/jsonl-viewer';
+import { HtmlViewer } from '@/app/knowledgebases/[kbId]/viewer/html-viewer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { PlusIcon, FilterIcon } from 'lucide-react';
 import * as Toast from '@radix-ui/react-toast';
 import { KbConfig, KbConfigCard, MetadataConfig } from '../kbconfig';
 import { formatFileSize, formatBeijingTime } from '../utils/utils';
+import { FileStatusFilter } from '@/components/customized/file-status-filter';
 import {
   Select,
   SelectContent,
@@ -73,6 +97,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import {
   Popover,
@@ -99,8 +124,11 @@ interface KnowledgeBaseFile {
   created_at: string;
   updated_at: string;
   failed_reason: string;
+  file_extension?: string;
   file_metadata: {
     [key: string]: any;
+    file_url?: string;
+    is_local?: boolean;
   };
 }
 
@@ -145,6 +173,14 @@ export default function KnowledgeBaseDetailPage(
   const fileQueryRef = useRef(fileQuery);
   const [statusFilter, setStatusFilter] = useState('all');
   const statusRef = useRef(statusFilter);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<KnowledgeBaseFile | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState<Record<string, boolean>>({});
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [searching, setSearching] = useState(false);
   const [logicalOperator, setLogicalOperator] = useState<string>('and');
@@ -289,9 +325,20 @@ export default function KnowledgeBaseDetailPage(
     }
   }, [kbId]);
 
+  // 页面和状态筛选变化时立即获取数据
   useEffect(() => {
     fetchKbFiles();
-  }, [fetchKbFiles, page, statusFilter, fileQuery]);
+  }, [fetchKbFiles, page, statusFilter]);
+
+  // 搜索关键词变化时触发搜索（带防抖）
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setPage(1); // 搜索时重置到第一页
+      fetchKbFiles();
+    }, 300); // 300ms 防抖
+
+    return () => clearTimeout(timeoutId);
+  }, [fileQuery, fetchKbFiles]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -377,6 +424,97 @@ export default function KnowledgeBaseDetailPage(
     }
   };
 
+  const handleBatchDeleteFiles = async () => {
+    if (selectedFiles.size === 0) {
+      toast.error("请至少选择一个文件");
+      setShowBatchDeleteDialog(false);
+      return;
+    }
+
+    setShowBatchDeleteDialog(false);
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/config/knowledgebases/${kbId}/files/batch_delete`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            file_id_list: Array.from(selectedFiles),
+          }),
+        },
+      );
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `批量删除失败`);
+      }
+      const result = await res.json();
+      toast.success(result.message || `成功删除 ${selectedFiles.size} 个文件`);
+      setSelectedFiles(new Set()); // 清空选择
+    } catch (error: any) {
+      toast.error(error.message || "批量删除失败");
+    } finally {
+      setDeleting(false);
+      fetchKbFiles();
+    }
+  };
+
+  const handleSelectFile = (fileId: string, checked: boolean) => {
+    setSelectedFiles((prev) => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(fileId);
+      } else {
+        newSet.delete(fileId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedFiles(new Set(kbfiles.map((file) => file.id)));
+    } else {
+      setSelectedFiles(new Set());
+    }
+  };
+
+  const isAllSelected = kbfiles.length > 0 && selectedFiles.size === kbfiles.length;
+
+  const loadPreviewContent = async (fileId: string) => {
+    setPreviewLoading(true);
+    setPreviewError('');
+    try {
+      const res = await fetch(
+        `/api/config/knowledgebases/${kbId}/files/${fileId}`,
+      );
+      if (!res.ok) throw new Error('获取知识库文件失败');
+      const json_data = await res.json();
+      const kb_file_data = json_data.data;
+
+      // 将相对路径转换为完整的 HTTP 地址
+      if (kb_file_data?.file_metadata?.file_url) {
+        const fileUrl = kb_file_data.file_metadata.file_url;
+        // 如果是相对路径（以 localdata/ 开头），转换为完整 URL
+        if (fileUrl.startsWith('localdata/')) {
+          const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+          kb_file_data.file_metadata.file_url = `${baseUrl}/api/knowledgebases/${fileUrl}`;
+          kb_file_data.file_metadata.is_local = true;
+        } else {
+          kb_file_data.file_metadata.is_local = false;
+        }
+      }
+
+      setPreviewFile(kb_file_data);
+    } catch (err: any) {
+      setPreviewError(err?.message || '加载失败');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const handleSaveFileSource = async (file_id: string) => {
     try {
       const res = await fetch(
@@ -398,6 +536,7 @@ export default function KnowledgeBaseDetailPage(
         fileObj.file_source = fileSource;
       }
       setFileSourceOpen((prev) => ({ ...prev, [file_id]: false }));
+      toast.success("源链接保存成功");
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -577,6 +716,7 @@ export default function KnowledgeBaseDetailPage(
       alert('文件列表为空！');
       return;
     }
+    setUploadDialogOpen(false); // 关闭Dialog
     setUploading(true);
 
     // 文件校验 (Demo功能，后续调整优化)
@@ -747,250 +887,308 @@ export default function KnowledgeBaseDetailPage(
 
   return (
     <div className="flex flex-col h-screen pt-0 space-y-0">
-      <div className="px-4 py-2 flex">
-        <div className="gap-1 flex items-center">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Button
-                    variant="link"
-                    className="px-0"
-                    onClick={() => router.push('/knowledgebases')}
-                  >
-                    知识库
-                  </Button>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{knowledgebase.name}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
-        <div className="max-w-120 ml-auto ">
-          <div className="gap-3 text-xs">
-            <span className="font-medium">ID: </span>
-            {knowledgebase.id}
-          </div>
-          <div className="gap-3 text-xs truncate">
-            <span className="font-medium">描述: </span>
-            {knowledgebase.description}
-          </div>
+      <div className="absolute top-2 left-12 py-0 flex items-center z-10">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Button
+                  variant="link"
+                  className="px-0"
+                  onClick={() => router.push('/knowledgebases')}
+                >
+                  知识库
+                </Button>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{knowledgebase.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="flex gap-2 items-center ml-4">
+          <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">
+            ID: {knowledgebase.id}
+          </Badge>
+          {knowledgebase.description && (
+            <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground max-w-[200px] truncate">
+              {knowledgebase.description}
+            </Badge>
+          )}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="flex-1 overflow-y-auto px-2 py-6">
         <Tabs defaultValue="details">
-          <TabsList className="py-4 bg-muted rounded-lg flex-none">
-            <TabsTrigger value="details" className="p-4">
-              文件管理
+          <TabsList className="py-0 bg-muted rounded-lg flex-none">
+            <TabsTrigger value="details" className="py-1 px-2">
+              <span className="text-xs">文件管理</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="p-4">
-              知识库设置
+            <TabsTrigger value="settings" className="py-1 px-2">
+              <span className="text-xs">知识库设置</span>
             </TabsTrigger>
-            <TabsTrigger value="retrieval_test" className="p-4">
-              检索测试
+            <TabsTrigger value="retrieval_test" className="py-1 px-2">
+              <span className="text-xs">检索测试</span>
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="details" className="py-3">
-            <Card className="mb-4">
-              <CardHeader>
-                <CardTitle>
-                  <div className="flex items-center">
-                    <div className="flex items-center justify-between w-full">
+          <TabsContent value="details" className="py-2">
+            <div className="mb-4 rounded-lg">
+              <div className="flex items-center justify-between w-full mb-4">
+                <div className="flex gap-2 items-center pl-2">
+                 <Search className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={fileQuery}
+                    onChange={(e)=>{setFileQuery(e.target.value)}}
+                    type="search_files"
+                    placeholder="搜索..."
+                    className="h-6 text-xs w-40"/>
+
+                  {selectedFiles.size > 0 && (
+                    <>
                       <Button
-                        onClick={() =>
-                          document.getElementById('file-upload')?.click()
-                        }
-                        disabled={uploading} // 上传时禁用按钮
+                        variant="outline"
+                        className="h-6 text-xs bg-rose-100 text-rose-700 hover:bg-rose-200 hover:text-rose-800 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/40"
+                        onClick={() => setShowBatchDeleteDialog(true)}
+                        disabled={deleting}
                       >
-                        {uploading ? (
+                        {deleting ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            上传中...
+                            删除中...
                           </>
                         ) : (
                           <>
-                            上传文件
-                            <PlusIcon className="mr-2 h-6 w-6" />
+                            <Trash2Icon className="mr-2 h-4 w-4" />
+                            批量删除 ({selectedFiles.size})
                           </>
                         )}
                       </Button>
-                      <div className="flex gap-2 items-center">
-                        <input
-                          id="file-upload"
-                          type="file"
-                          className="hidden"
-                          ref={fileInputRef}
-                          onChange={(e) => handleFileUpload(e.target.files)}
-                          multiple
-                        />
-                        <Button
-                          variant="outline"
-                          className="ml-4 h-8"
-                          onClick={() => {
-                            fetchKbFiles();
-                            toast.success("刷新成功");
-                          }}
-                        > 刷新
-                          <RefreshCcwIcon/>
-                        </Button>
-                        <div className="text-xs text-muted-foreground ">
-                          支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html,
-                          jsonl, jpg, jpeg, png{' '}
-                        </div>
+                      <AlertDialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>确认批量删除？</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              您即将删除 {selectedFiles.size} 个文件，此操作无法撤销。请仔细核对之后再确认。
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>取消</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleBatchDeleteFiles}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              确认删除
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-2 items-center">
+                <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="default"
+                        className="h-6 text-xs"
+                        disabled={uploading}
+                        onClick={() => setUploadDialogOpen(true)}
+                      >
+                        <Upload className="h-3 w-3" /> 上传文件
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>上传文件</DialogTitle>
+                      </DialogHeader>
+                      <div 
+                        className="flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors"
+                        onClick={() => {
+                          document.getElementById('file-upload')?.click();
+                        }}
+                      >
+                        <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                        <p className="text-sm text-muted-foreground text-center">
+                          支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          点击选择文件
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <div>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={(e) => handleFileUpload(e.target.files)}
+                        multiple
+                      />
+                    </DialogContent>
+                  </Dialog>
+
+                  <Button
+                    variant="outline"
+                    className="h-6 text-xs"
+                    onClick={() => {
+                      fetchKbFiles();
+                      toast.success("刷新成功");
+                    }}
+                  > 
+                    <RefreshCcwIcon className="h-3 w-3"/> 刷新
+                  </Button>
+                </div>
+              </div>
+              <div>
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                        <TableRow className='border-border/30 border-y'>
+                          <TableHead className="w-12">
+                            <Checkbox
+                              checked={isAllSelected}
+                              onCheckedChange={handleSelectAll}
+                            />
+                          </TableHead>
                           <TableHead>
-                            <div className="flex gap-2 items-center max-w-[400px]">                            文件名
-                          <Search className="h-6 w-6 text-muted-foreground" />
-                          <Input
-                            value={fileQuery}
-                            onChange={(e)=>{setFileQuery(e.target.value)}}
-                            type="search_files"
-                            placeholder="Search filename..."/>
+                            <div className="flex gap-2 items-center max-w-[400px] text-xs text-muted-foreground">
+                               文件名
                             </div>
                           </TableHead>
-                          <TableHead>文件大小</TableHead>
-                          <TableHead>上传时间</TableHead>
-                          <TableHead>更新时间</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">文件大小</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">更新时间</TableHead>
                           <TableHead>
-                            <div className="flex items-center">
-                              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                              <SelectTrigger className="w-[100px] bg-muted/50 hover:bg-muted">
-                                <SelectValue placeholder="全部状态" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">全部</SelectItem>
-                                <SelectItem value="succeeded"><span className="text-green-500">成功</span></SelectItem>
-                                <SelectItem value="failed"><span className="text-red-500">失败</span></SelectItem>
-                                <SelectItem value="pending"><span className="text-yellow-500">等待中</span></SelectItem>
-                                <SelectItem value="parsing"><span className="text-blue-500">解析中</span></SelectItem>
-                                <SelectItem value="persisting"><span className="text-blue-500">索引中</span></SelectItem>
-                              </SelectContent>
-                            </Select>
-
-                            </div>
+                            <FileStatusFilter 
+                              value={statusFilter as 'all' | 'succeeded' | 'failed' | 'pending' | 'parsing' | 'persisting'}
+                              onValueChange={setStatusFilter}
+                            />
                           </TableHead>
-                          <TableHead>操作</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">操作</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {kbfiles.map((file) => (
-                          <TableRow key={file.id}>
-                            <TableCell>
-                              <Button
-                                variant="link"
-                                className="font-medium text-blue-600 max-w-[360px]"
-                                onClick={() =>
-                                  router.push(
-                                    `/knowledgebases/${kbId}/files/${file.id}`,
-                                  )
+                          <TableRow 
+                            key={file.id}
+                            className="cursor-pointer hover:bg-muted/100 transition-colors h-8 border-border/30"
+                            onClick={(e) => {
+                              // 如果点击的是checkbox或操作按钮，不跳转
+                              const target = e.target as HTMLElement;
+                              if (target.closest('button') || target.closest('input[type="checkbox"]') || target.closest('[role="menuitem"]')) {
+                                return;
+                              }
+                              router.push(
+                                `/knowledgebases/${kbId}/files/${file.id}`,
+                              );
+                            }}
+                            title="点击查看切片"
+                          >
+                            <TableCell className="py-1" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={selectedFiles.has(file.id)}
+                                onCheckedChange={(checked) =>
+                                  handleSelectFile(file.id, checked as boolean)
                                 }
-                              > 
-                              <span className="truncate block w-full text-left">
+                              />
+                            </TableCell>
+                            <TableCell className="p-1">
+                              <span className="truncate block w-full text-left font-medium text-xs">
                                 {file.file_name}            
                               </span>
-                              </Button>
                             </TableCell>
-                            <TableCell className="text-xs">
+                            <TableCell className="text-xs p-1">
                               {formatFileSize(Number(file.file_size))}
                             </TableCell>
-                            <TableCell className="text-xs">
-                              {formatBeijingTime(file.created_at)}
-                            </TableCell>
-                            <TableCell className="text-xs">
+                            <TableCell className="text-xs p-1">
                               {formatBeijingTime(file.updated_at)}
                             </TableCell>
-                            <TableCell className="text-xs">
+                            <TableCell className="text-xs p-1">
                               {file.status === 'pending' ? (
-                                <div className="flex items-center text-yellow-500">
-                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                                   等待解析
-                                </div>
+                                </Badge>
                               ) : file.status === 'parsing' ? (
-                                <div className="flex items-center text-blue-500">
-                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
+                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                                   解析中
-                                </div>
+                                </Badge>
                               ) : file.status === 'persisting' ? (
-                                <div className="flex items-center text-blue-500">
-                                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
+                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                                   索引中
-                                </div>
+                                </Badge>
                               ) : file.status === 'succeeded' ? (
-                                <div className="flex items-center text-green-500">
-                                  <CheckCircle className="mr-1 h-4 w-4" />
+                                <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400">
+                                  <CheckCircle className="mr-1 h-3 w-3" />
                                   解析成功
-                                </div>
+                                </Badge>
                               ) : file.status === 'failed' ? (
-                                    <HoverCard>
-                                      <HoverCardTrigger asChild>
-                                        <div className="flex items-center text-red-500">
-                                          <XCircle className="mr-1 h-4 w-4" />
-                                          解析失败
-                                        </div>
-                                      </HoverCardTrigger>
-                                      <HoverCardContent className="w-80">
-                                        错误原因: {file.failed_reason}
-                                      </HoverCardContent>
-                                    </HoverCard>
-
+                                <HoverCard>
+                                  <HoverCardTrigger asChild>
+                                    <Badge variant="secondary" className="bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 cursor-pointer">
+                                      <XCircle className="mr-1 h-3 w-3" />
+                                      解析失败
+                                    </Badge>
+                                  </HoverCardTrigger>
+                                  <HoverCardContent className="w-80">
+                                    错误原因: {file.failed_reason}
+                                  </HoverCardContent>
+                                </HoverCard>
                               ) : (
-                                <span>{file.status}</span> // 兜底显示原始状态
+                                <Badge variant="secondary">{file.status}</Badge>
                               )}
                             </TableCell>
-                            <TableCell className="gap-1">
-                              <PreviewButton
-                                kbId={kbId}
-                                fileId={file.id}
-                              />
-
-                              <Popover
-                                open={fileSourceOpen[file.id] ?? false}
-                                onOpenChange={(open) => {
-                                  if (open) {
-                                    setFileSource(file.file_source);
-                                  }
-                                  setFileSourceOpen((prev) => ({
-                                    ...prev,
-                                    [file.id]: open,
-                                  }));
-                                }}
-                              >
-                              <Button
-                                variant="link"
-                                className="text-sm text-blue-600 pl-3 pr-0"
-                                onClick={() =>
-                                  router.push(
-                                    `/knowledgebases/${kbId}/files/${file.id}`,
-                                  )
-                                }
-                              >
-                                切片
-                              </Button>
-
-                              <Sheet open={openRole} onOpenChange={setOpenRole}>
-                                <SheetTrigger asChild>
-                                  <Button
-                                    variant="link"
-                                    onClick={() => {
-                                      checkFileRole(file.id);
-                                    }}
-                                    className="text-sm text-blue-600 pl-3 pr-0"
-                                  >
-                                    权限
-                                  </Button>
-                                </SheetTrigger>
+                            <TableCell className="gap-1 p-1" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-2">
+                                <DropdownMenu
+                                  open={dropdownOpen[file.id] || false}
+                                  onOpenChange={(open) => {
+                                    setDropdownOpen(prev => ({
+                                      ...prev,
+                                      [file.id]: open
+                                    }));
+                                  }}
+                                >
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      className="h-8 w-8 p-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                    >
+                                      <MoreVertical className="h-3 w-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setDropdownOpen(prev => ({
+                                          ...prev,
+                                          [file.id]: false
+                                        }));
+                                        setPreviewFile(file);
+                                        setPreviewOpen(true);
+                                        loadPreviewContent(file.id);
+                                      }}
+                                    >
+                                      <span className="text-xs font-medium">查看文件</span>
+                                    </DropdownMenuItem>
+                                    <Sheet open={openRole} onOpenChange={setOpenRole}>
+                                      <SheetTrigger asChild>
+                                        <DropdownMenuItem
+                                          onSelect={(e) => {
+                                            e.preventDefault();
+                                            setDropdownOpen(prev => ({
+                                              ...prev,
+                                              [file.id]: false
+                                            }));
+                                            checkFileRole(file.id);
+                                          }}
+                                        >
+                                          <span className="text-xs font-medium">权限设置</span>
+                                        </DropdownMenuItem>
+                                      </SheetTrigger>
                                 <SheetContent>
                                   <SheetHeader>
                                     <SheetTitle>文档权限设置</SheetTitle>
@@ -1097,18 +1295,23 @@ export default function KnowledgeBaseDetailPage(
                                     </Button>
                                   </div>
                                 </SheetContent>
-                              </Sheet>
-                              <Sheet>
-                                <SheetTrigger asChild>
-                                  <Button
-                                    variant="link"
-                                    className="text-sm text-blue-600 pl-3 pr-0"
-                                    onClick={() => handleOpenMetadata(file.id)}
-                                  >
-                                    元数据
-                                  </Button>
-                                </SheetTrigger>
-                                <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
+                                    </Sheet>
+                                    <Sheet>
+                                      <SheetTrigger asChild>
+                                        <DropdownMenuItem
+                                          onSelect={(e) => {
+                                            e.preventDefault();
+                                            setDropdownOpen(prev => ({
+                                              ...prev,
+                                              [file.id]: false
+                                            }));
+                                            handleOpenMetadata(file.id);
+                                          }}
+                                        >
+                                          <span className="text-xs font-medium">元数据</span>
+                                        </DropdownMenuItem>
+                                      </SheetTrigger>
+                                      <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
                                   <SheetHeader>
                                     {isEditingMetadata ? (
                                       <SheetTitle>编辑元数据</SheetTitle>
@@ -1321,72 +1524,190 @@ export default function KnowledgeBaseDetailPage(
                                     </SheetClose>
                                   </SheetFooter>
                                 </SheetContent>
-                              </Sheet>
-
-                                                              <PopoverTrigger asChild>
-                                  <Button
-                                    variant="link"
-                                    className="text-sm text-blue-600 pl-3 pr-0"
-                                  >
-                                    源链接
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-160">
-                                  <div className="flex gap-3">
-                                    <Label>{file.file_name}</Label>
-                                    <Input
-                                      type="text"
-                                      className="w-130"
-                                      placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
-                                      value={fileSource || ''}
-                                      onChange={(e) => {
-                                        setFileSource(e.target.value);
+                                    </Sheet>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setDropdownOpen(prev => ({
+                                          ...prev,
+                                          [file.id]: false
+                                        }));
+                                        setFileSourceOpen((prev) => ({
+                                          ...prev,
+                                          [file.id]: true,
+                                        }));
                                       }}
-                                    />
-                                    <Button
-                                      onClick={() =>
-                                        handleSaveFileSource(file.id)
-                                      }
                                     >
-                                      {' '}
-                                      保存{' '}
-                                    </Button>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-
-                              <Button
-                                variant="link"
-                                className="text-sm text-blue-600 pr-0"
-                                onClick={() => handleReprocessFile(file.id)}
-                              >
-                                  重新解析
-                              </Button>
-
-                              <Button
-                                variant="link"
-                                className="text-sm text-blue-600"
-                                onClick={() => handleDeleteFile(file.id)}
-                              >
-                                  删除
-                              </Button>
+                                      <span className="text-xs font-medium">源链接</span>
+                                    </DropdownMenuItem>
+                                    <Dialog
+                                      open={fileSourceOpen[file.id] ?? false}
+                                    >
+                                      <DialogContent className="sm:max-w-md">
+                                        <DialogHeader>
+                                          <DialogTitle>设置源链接</DialogTitle>
+                                          <DialogDescription>
+                                            {file.file_name}
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="flex flex-col gap-4 py-4">
+                                          <div className="flex flex-col gap-2">
+                                            <Label>源链接</Label>
+                                            <Input
+                                              type="text"
+                                              placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
+                                              value={fileSource || ''}
+                                              onChange={(e) => {
+                                                setFileSource(e.target.value);
+                                              }}
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                              setFileSourceOpen((prev) => ({
+                                                ...prev,
+                                                [file.id]: false,
+                                              }));
+                                            }}
+                                          >
+                                            取消
+                                          </Button>
+                                          <Button
+                                            onClick={() => {
+                                              handleSaveFileSource(file.id);
+                                              setFileSourceOpen((prev) => ({
+                                                ...prev,
+                                                [file.id]: false,
+                                              }));
+                                              setDropdownOpen(prev => ({
+                                                ...prev,
+                                                [file.id]: false,
+                                              }));
+                                            }}
+                                          >
+                                            保存
+                                          </Button>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setDropdownOpen(prev => ({
+                                          ...prev,
+                                          [file.id]: false
+                                        }));
+                                        handleReprocessFile(file.id);
+                                      }}
+                                    >
+                                      <span className="text-xs font-medium">重新解析</span> 
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setDropdownOpen(prev => ({
+                                          ...prev,
+                                          [file.id]: false
+                                        }));
+                                        handleDeleteFile(file.id);
+                                      }}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <span className="text-xs font-medium">删除</span> 
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
+                  
+                  {/* 预览对话框 */}
+                  <Dialog open={previewOpen} onOpenChange={(open) => {
+                    if (!open) {
+                      setPreviewOpen(false);
+                      setPreviewFile(null);
+                    }
+                  }}>
+                    <DialogContent className="flex flex-col h-[calc(100%-10rem)] !max-w-[calc(100%-20rem)]">
+                      <DialogHeader className="flex-none h-1/10">
+                        <DialogTitle>{previewFile?.file_name}</DialogTitle>
+                        <DialogDescription>文件预览</DialogDescription>
+                      </DialogHeader>
+                      {previewLoading ? (
+                        <div className="flex items-center justify-center h-full">
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        </div>
+                      ) : previewError ? (
+                        <div className="text-red-500">{previewError}</div>
+                      ) : (
+                        <div className="flex-grow overflow-y-auto">
+                          {previewFile?.file_extension === '.pdf' ? (
+                            <iframe
+                              src={previewFile?.file_metadata?.file_url}
+                              width="100%"
+                              height="100%"
+                              title="PDF预览"
+                            ></iframe>
+                          ) : previewFile?.file_extension === '.jpg' ||
+                            previewFile?.file_extension === '.png' ||
+                            previewFile?.file_extension === '.jpeg' ? (
+                            <img
+                              src={previewFile?.file_metadata?.file_url}
+                              width="100%"
+                              height="100%"
+                              title="图片预览"
+                            ></img>
+                          ) : previewFile?.file_extension === '.docx' ||
+                            previewFile?.file_extension === '.xlsx' ||
+                            previewFile?.file_extension === '.pptx' ? (
+                            <iframe
+                              src={previewFile?.file_metadata?.is_local ? previewFile?.file_metadata?.file_url : `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+                                String(previewFile?.file_metadata?.file_url),
+                              )}`}
+                              width="100%"
+                              height="100%"
+                              title="文件预览"
+                            />
+                          ) : previewFile?.file_extension === '.md' ||
+                            previewFile?.file_extension === '.txt' ? (
+                            <MarkdownViewer file_url={previewFile?.file_metadata?.file_url || ''} />
+                          ) : previewFile?.file_extension === '.jsonl' ? (
+                            <JsonlViewer file_url={previewFile?.file_metadata?.file_url || ''} />
+                          ) : previewFile?.file_extension === '.html' ? (
+                            <HtmlViewer file_url={previewFile?.file_metadata?.file_url || ''} />
+                          ) : (
+                            <div>
+                              暂不支持此格式文件的在线预览，请直接下载查看
+                              <a
+                                href={previewFile?.file_metadata?.file_url}
+                                className="text-blue-500 hover:underline ml-2"
+                              >
+                                下载文件
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </DialogContent>
+                  </Dialog>
                 
                 { kbfiles.length === 0 && (
-                  <p className="text-muted-foreground mx-auto">暂无文件</p>
+                  <p className="text-muted-foreground mx-auto text-xs py-15 text-center bg-gray-50 rounded-lg">暂无文件</p>
                 )}
                 <PaginationComponent
                   currentPage={page}
                   totalPages={totalPages}
                   onPageChange={handlePageChange}
                 />
-              </CardContent>
-            </Card>
+              </div>
           </TabsContent>
           <TabsContent value="settings" className="py-4">
             <KbConfigCard

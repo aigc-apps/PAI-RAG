@@ -117,7 +117,7 @@ export function PaginationComponent({
   };
 
   return (
-    <Pagination>
+    <Pagination className="pt-6">
       <PaginationContent>
         {/* 首页 */}
         <PaginationItem>
@@ -125,13 +125,14 @@ export function PaginationComponent({
             onClick={() => onPageChange(1)}
             isActive={Boolean(currentPage === 1)}
           >
-            首页
+            <span className="text-xs font-medium">首页</span>
           </PaginationLink>
         </PaginationItem>
 
         {/* 上一页 */}
         <PaginationItem>
           <PaginationPrevious
+            className="text-xs font-medium"
             onClick={() => onPageChange(currentPage - 1)}
             isActive={currentPage === 1}
           />
@@ -145,6 +146,7 @@ export function PaginationComponent({
         {/* 下一页 */}
         <PaginationItem>
           <PaginationNext
+            className="text-xs font-medium"
             onClick={() => onPageChange(currentPage + 1)}
             isActive={currentPage === totalPages}
           />
@@ -158,7 +160,7 @@ export function PaginationComponent({
             onClick={() => onPageChange(totalPages)}
             isActive={currentPage === totalPages}
           >
-            末页
+            <span className="text-xs font-medium">末页</span>
           </PaginationLink>
         </PaginationItem>
       </PaginationContent>
