@@ -189,6 +189,7 @@ export default function KnowledgeBaseDetailPage(
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [searching, setSearching] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({}); // 展开的卡片索引
   const [logicalOperator, setLogicalOperator] = useState<string>('and');
   const [metadataConditions, setMetadataConditions] = useState<
     MetadataCondition[]
@@ -1958,14 +1959,15 @@ export default function KnowledgeBaseDetailPage(
               onCancel={() => {}}
             ></KbConfigCard>
           </TabsContent>
-          <TabsContent value="retrieval_test" className="py-2">
-            <div className="flex gap-3 h-full">
+          <TabsContent value="retrieval_test" className="py-2 flex flex-col h-full min-h-0">
+            <div className="flex gap-3 flex-1 min-h-0 overflow-hidden">
               {/* 左侧：查询输入和检索设置 */}
-              <div className="flex flex-col w-[450px] shrink-0 h-full justify-between">
+              <div className="flex flex-col w-[400px] shrink-0 h-full justify-between overflow-y-auto">
                 {/* 检索测试输入区域 - 左上角 */}
                 <Card className="flex-[4] flex flex-col min-h-0 mb-2">
-                  <CardHeader className="pb-2 flex-shrink-0">
-                  <div className="flex-1 min-w-[200px]">
+                  <CardHeader className="flex-shrink-0">
+                    <div className="flex-1 min-w-[200px] relative">
+                        <SearchIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                         <Input
                           type="text"
                           id="search_query"
@@ -1976,7 +1978,7 @@ export default function KnowledgeBaseDetailPage(
                               handleSearchSubmit();
                             }
                           }}
-                          className="w-full text-xs"
+                          className="w-full text-xs pl-8"
                         />
                       </div>
                   </CardHeader>
@@ -2359,7 +2361,7 @@ export default function KnowledgeBaseDetailPage(
               </div>
 
               {/* 右侧：查询结果 */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-h-0">
                 {/* 搜索结果提示 */}
                 {searching && (
                   <div className="flex items-center space-x-3 p-3">
@@ -2377,41 +2379,57 @@ export default function KnowledgeBaseDetailPage(
                   </div>
                 )}
                 {!searching && (
-                  <div className="gap-3 p-2 w-full">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {searchrecords.map((chunk, i) => (
+                  <div className="flex flex-col gap-2 w-full max-w-full overflow-x-hidden pb-4">
+                    {searchrecords.map((chunk, i) => {
+                      const isExpanded = expandedCards[i] || false;
+                      return (
                         <Card
                           key={i}
-                          className="flex flex-col max-h-64 gap-0 pb-0 py-2"
+                          className="w-full max-w-full border shadow-none hover:bg-muted/50 transition-colors cursor-pointer py-2 gap-1 overflow-hidden"
+                          onClick={() => {
+                            setExpandedCards(prev => ({
+                              ...prev,
+                              [i]: !prev[i]
+                            }));
+                          }}
                         >
-                          <CardHeader className="gap-1 pb-1">
-                            <CardTitle className="flex justify-start">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full text-xs h-5">
+                          <CardHeader className="px-3 py-0">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
                                   {i + 1}
                                 </Badge>
-                                <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full text-xs h-5">
+                                <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
                                   分数: {chunk.score.toFixed(4)}
                                 </Badge>
-                                <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full text-xs h-5">
+                                <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
                                   {chunk.title}
                                 </Badge>
                                 {chunk.metadata.rerank && (
-                                  <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full text-xs h-5">
+                                  <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
                                     Rerank
                                   </Badge>
                                 )}
                               </div>
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-2 p-2 pb-1 mt-1 mb-1">
-                            <div className="whitespace-pre-wrap break-words text-xs leading-relaxed whitespace-normal pr-2">
-                              {chunk.content}
+                              {isExpanded ? (
+                                <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                              )}
                             </div>
-                          </CardContent>
-                          <CardFooter className="shrink-0 gap-2">
+                          </CardHeader>
+                          <CardContent 
+                            className={`px-3 pb-0 overflow-hidden transition-all duration-200 ${
+                              isExpanded ? 'max-h-none' : ''
+                            }`}
+                          >
+                            <div className={`text-xs leading-relaxed break-words ${
+                              !isExpanded ? 'line-clamp-3' : ''
+                            }`}>
+                              {chunk.content.replace(/\n/g, '\\n')}
+                            </div>
                             {chunk.metadata?.images_info?.length > 0 && (
-                              <div className="flex gap-2 mt-2">
+                              <div className="flex gap-2 mt-2 flex-wrap">
                                 {chunk.metadata.images_info.map((meta, index) => (
                                   <PhotoProvider
                                     key={index}
@@ -2434,10 +2452,11 @@ export default function KnowledgeBaseDetailPage(
                                 ))}
                               </div>
                             )}
-                          </CardFooter>
+                          </CardContent>
                         </Card>
-                      ))}
-                    </div>
+                      );
+                    })}
+                    <p className="text-xs text-center text-muted-foreground pt-4 pb-4"> 没有更多内容了 </p>
                   </div>
                 )}
               </div>
