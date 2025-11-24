@@ -64,6 +64,9 @@ import {
   MoreVertical,
   Upload,
   InfoIcon,
+  Database,
+  Edit,
+  Pencil,
 } from 'lucide-react';
 import {
   Dialog,
@@ -217,6 +220,13 @@ export default function KnowledgeBaseDetailPage(
   const [availableMetadataKeys, setAvailableMetadataKeys] = useState<string[]>(
     [],
   );
+  const [metadataConfigDialogOpen, setMetadataConfigDialogOpen] = useState(false);
+  const [metadataEditDialogOpen, setMetadataEditDialogOpen] = useState(false);
+  const [editingMetadataConfig, setEditingMetadataConfig] = useState<MetadataConfig | null>(null);
+  const [newMetadataName, setNewMetadataName] = useState('');
+  const [newMetadataValueType, setNewMetadataValueType] = useState('string');
+  const [newMetadataDesc, setNewMetadataDesc] = useState('');
+  const [metadataError, setMetadataError] = useState('');
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
@@ -368,6 +378,23 @@ export default function KnowledgeBaseDetailPage(
     setPage(newPage);
   };
 
+  const fetchMetadataConfigs = useCallback(async () => {
+    try {
+      const metaRes = await fetch(`/api/config/knowledgebases/${kbId}/metadata`);
+      if (!metaRes.ok) throw new Error('获取知识库元数据失败');
+      const metadata_json = await metaRes.json();
+      const metadata_data = metadata_json.data as MetadataConfig[];
+      const valueTypes = Object.fromEntries(
+        metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
+      ) as { [key: string]: string };
+
+      setMetadataValueTypes({ ...valueTypes, '': 'string' });
+      setMetadataConfigs(metadata_data);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }, [kbId]);
+
   useEffect(() => {
     const fetchKbConfigs = async () => {
       try {
@@ -419,7 +446,7 @@ export default function KnowledgeBaseDetailPage(
       }
     };
     fetchKbConfigs();
-  }, []);
+  }, [kbId]);
 
   if (!knowledgebase) {
     return <div className="p-6">加载中...</div>;
@@ -916,7 +943,86 @@ export default function KnowledgeBaseDetailPage(
     return metadataConfigs.filter((metadata) => metadata.name === name)[0].id;
   };
 
+  // 格式化 datetime 类型的 metadata 值为可读的日期时间字符串
+  const formatDatetimeMetadata = (value: any): string => {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+    
+    // 将秒级时间戳转换为 Date 对象
+    let timestamp: number;
+    if (typeof value === 'number') {
+      timestamp = value;
+    } else {
+      const parsed = parseFloat(String(value));
+      if (isNaN(parsed)) {
+        return String(value); // 如果无法解析，返回原始值
+      }
+      timestamp = parsed;
+    }
+    
+    // 将秒级时间戳转换为 Date 对象
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) {
+      return String(value); // 如果日期无效，返回原始值
+    }
+    
+    // 格式化为本地日期时间字符串
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  };
+
+  const validateMetadataValue = (value: any, valueType: string, name: string): { valid: boolean; error?: string; convertedValue?: any } => {
+    if (value === '' || value === null || value === undefined) {
+      return { valid: false, error: `元数据 '${name}' 的值不能为空` };
+    }
+
+    if (valueType === 'string') {
+      return { valid: true, convertedValue: String(value) };
+    } else if (valueType === 'number') {
+      const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+      if (isNaN(numValue)) {
+        return { valid: false, error: `元数据 '${name}' 的值 '${value}' 不是有效的数字` };
+      }
+      return { valid: true, convertedValue: numValue };
+    } else if (valueType === 'datetime') {
+      // datetime类型需要是timestamp的float value
+      let timestamp: number;
+      if (typeof value === 'number') {
+        timestamp = value;
+      } else if (typeof value === 'string') {
+        // 尝试解析为数字
+        const parsed = parseFloat(value);
+        if (!isNaN(parsed)) {
+          timestamp = parsed;
+        } else {
+          // 尝试解析为日期字符串
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            timestamp = date.getTime(); // 转换为秒级时间戳
+          } else {
+            return { valid: false, error: `元数据 '${name}' 的值 '${value}' 不是有效的时间戳或日期` };
+          }
+        }
+      } else if (value instanceof Date) {
+        timestamp = value.getTime(); // 转换为秒级时间戳
+      } else {
+        return { valid: false, error: `元数据 '${name}' 的值类型不正确` };
+      }
+      return { valid: true, convertedValue: timestamp };
+    }
+    return { valid: true, convertedValue: value };
+  };
+
   const saveEditMetadata = async () => {
+    console.log('saveEditMetadata: ', editingMetadata);
     if (!currentMetadataFileId) return;
     
     const hasEmptyEntry = Object.keys(editingMetadata).some(
@@ -928,15 +1034,22 @@ export default function KnowledgeBaseDetailPage(
     }
 
     try {
-      const metadata_enties = Object.keys(editingMetadata)
-        .filter((name) => !default_metadata_keys.includes(name))
-        .map((name) => ({
+      // 验证所有metadata值是否符合类型要求
+      const metadata_entries = [];
+      for (const name of Object.keys(editingMetadata).filter((name) => !default_metadata_keys.includes(name))) {
+        const valueType = metadataValueTypes[name] || 'string';
+        const validation = validateMetadataValue(editingMetadata[name], valueType, name);
+        if (!validation.valid) {
+          setMetadataEditError(validation.error || '元数据值验证失败');
+          return;
+        }
+        metadata_entries.push({
           name: name,
-          metadata_id: get_metadata_id(name),
-          value: editingMetadata[name],
-        }));
+          value: validation.convertedValue,
+        });
+      }
       const bodyData = {
-        entries: metadata_enties,
+        entries: metadata_entries,
       };
       const res = await fetch(
         `/api/config/knowledgebases/${kbId}/files/${currentMetadataFileId}/metadata`,
@@ -957,6 +1070,8 @@ export default function KnowledgeBaseDetailPage(
       updated_kbfiles[target_file_index] = file_result;
       setKbFiles(updated_kbfiles);
       console.log('更新文件成功：', updated_kbfiles);
+      // 重新获取metadata列表以获取最新的count信息
+      await fetchMetadataConfigs();
       setIsEditingMetadata(false);
       setMetadataDialogOpen(false);
       setCurrentMetadataFileId('');
@@ -966,6 +1081,109 @@ export default function KnowledgeBaseDetailPage(
       toast.error(error.message || '保存metadata失败');
     } finally {
       setMetadataEditError('');
+    }
+  };
+
+  const handleAddMetadataConfig = async () => {
+    if (!newMetadataName) {
+      setMetadataError('必须填入元数据名称。');
+      return;
+    }
+
+    if (metadataConfigs.some((config) => config.name === newMetadataName)) {
+      setMetadataError(`元数据名称 '${newMetadataName}' 已经存在。`);
+      return;
+    }
+
+    const metadata_url = `/api/config/knowledgebases/${kbId}/metadata`;
+    try {
+      const res = await fetch(metadata_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kb_id: kbId,
+          name: newMetadataName,
+          value_type: newMetadataValueType,
+          description: newMetadataDesc,
+        }),
+      });
+      if (!res.ok) throw new Error(`保存metadata失败: ${await res.text()}`);
+      // 重新获取metadata列表以获取最新的count信息
+      await fetchMetadataConfigs();
+      setNewMetadataName('');
+      setMetadataError('');
+      setNewMetadataValueType('string');
+      setNewMetadataDesc('');
+      setMetadataEditDialogOpen(false);
+      toast.success('添加元数据成功');
+    } catch (err: any) {
+      console.log('保存知识库失败', err.message);
+      setMetadataError(err.message);
+    }
+  };
+
+  const handleRemoveMetadataEntry = async (id: string) => {
+    const metadata_url = `/api/config/knowledgebases/${kbId}/metadata/${id}`;
+    try {
+      const res = await fetch(metadata_url, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(`删除metadata失败: ${await res.text()}`);
+
+      // 重新获取metadata列表以获取最新的count信息
+      await fetchMetadataConfigs();
+      toast.success('删除元数据成功');
+    } catch (err: any) {
+      console.log('删除元数据失败。', err.message);
+      toast.error(err.message || '删除元数据失败');
+    }
+  };
+
+  const handleEditMetadataConfig = (metadata: MetadataConfig) => {
+    setEditingMetadataConfig(metadata);
+    setNewMetadataName(metadata.name);
+    setNewMetadataValueType(metadata.value_type);
+    setNewMetadataDesc(metadata.description || '');
+    setMetadataError('');
+    setMetadataEditDialogOpen(true);
+  };
+
+  const handleUpdateMetadataConfig = async () => {
+    if (!editingMetadataConfig) return;
+    if (!newMetadataName) {
+      setMetadataError('必须填入元数据名称。');
+      return;
+    }
+
+    if (metadataConfigs.some((config) => config.name === newMetadataName && config.id !== editingMetadataConfig.id)) {
+      setMetadataError(`元数据名称 '${newMetadataName}' 已经存在。`);
+      return;
+    }
+
+    const metadata_url = `/api/config/knowledgebases/${kbId}/metadata/${editingMetadataConfig.id}`;
+    try {
+      const res = await fetch(metadata_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newMetadataName,
+          value_type: newMetadataValueType,
+          description: newMetadataDesc,
+        }),
+      });
+      if (!res.ok) throw new Error(`更新metadata失败: ${await res.text()}`);
+      // 重新获取metadata列表以获取最新的count信息
+      await fetchMetadataConfigs();
+      setMetadataEditDialogOpen(false);
+      setEditingMetadataConfig(null);
+      setNewMetadataName('');
+      setMetadataError('');
+      setNewMetadataValueType('string');
+      setNewMetadataDesc('');
+      toast.success('更新元数据成功');
+    } catch (err: any) {
+      console.log('更新元数据失败', err.message);
+      setMetadataError(err.message);
     }
   };
 
@@ -1218,6 +1436,13 @@ export default function KnowledgeBaseDetailPage(
                     }}
                   > 
                     <RefreshCcwIcon className="h-3 w-3"/> 刷新
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-6 text-xs"
+                    onClick={() => setMetadataConfigDialogOpen(true)}
+                  > 
+                    <Database className="h-3 w-3"/> 元数据
                   </Button>
                 </div>
               </div>
@@ -1512,9 +1737,9 @@ export default function KnowledgeBaseDetailPage(
                         </DialogDescription>
                       </DialogHeader>
                       <div className="grid flex-1 auto-rows-min gap-3 py-2">
-                        <div className="space-y-2 text-xs">
+                        <div className="text-xs">
                           {isEditingMetadata ? (
-                            <Label htmlFor="sheet-custom-meta" className="text-xs">
+                            <Label htmlFor="sheet-custom-meta" className="text-xs pb-3">
                               自定义
                               <Button
                                 variant="secondary"
@@ -1587,31 +1812,49 @@ export default function KnowledgeBaseDetailPage(
                                       'datetime' ? (
                                         <Input
                                           type={
-                                            metadataValueTypes[key]
+                                            metadataValueTypes[key] === 'number' ? 'number' : 'text'
                                           }
                                           className="w-[280px] border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
                                           value={
-                                            editingMetadata[key]
+                                            editingMetadata[key] ?? ''
                                           }
                                           onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            const valueType = metadataValueTypes[key] || 'string';
+                                            let processedValue: any = inputValue;
+                                            
+                                            // 对于number类型，尝试转换为数字
+                                            if (valueType === 'number' && inputValue !== '') {
+                                              const numValue = parseFloat(inputValue);
+                                              processedValue = isNaN(numValue) ? inputValue : numValue;
+                                            }
+                                            
                                             setEditingMetadata({
                                               ...editingMetadata,
-                                              [key]: e.target.value,
+                                              [key]: processedValue,
                                             });
                                           }}
                                         />
                                       ) : (
                                         <DatetimeInput
                                           value={
-                                            editingMetadata[key]
+                                            (() => {
+                                              const val = editingMetadata[key];
+                                              if (val === null || val === undefined || val === '') {
+                                                return new Date().getTime(); // 默认当前时间（毫秒）
+                                              }
+                                              const timestamp = typeof val === 'number' ? val : parseFloat(String(val));
+                                              return isNaN(timestamp) ? new Date().getTime() : timestamp;
+                                            })()
                                           }
                                           width="md"
                                           onValueChange={(
                                             value,
                                           ) => {
+                                            console.log('time input value', value);
                                             setEditingMetadata({
                                               ...editingMetadata,
-                                              [key]: value,
+                                              [key]: value,                                    
                                             });
                                           }}
                                         />
@@ -1645,7 +1888,9 @@ export default function KnowledgeBaseDetailPage(
                                   </div>
                                   <div className="max-w-xs shrink-0">
                                     <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
-                                      {editingMetadata[key]}
+                                      {metadataValueTypes[key] === 'datetime' 
+                                        ? formatDatetimeMetadata(editingMetadata[key])
+                                        : editingMetadata[key]}
                                     </div>
                                   </div>
                                 </div>
@@ -1669,7 +1914,9 @@ export default function KnowledgeBaseDetailPage(
                                 </div>
                                 <div className="max-w-xs shrink-0">
                                   <div className="system-xs-regular py-1 text-text-secondary truncate">
-                                    {editingMetadata[key]}
+                                    {metadataValueTypes[key] === 'datetime' 
+                                      ? formatDatetimeMetadata(editingMetadata[key])
+                                      : editingMetadata[key]}
                                   </div>
                                 </div>
                               </div>
@@ -2070,12 +2317,17 @@ export default function KnowledgeBaseDetailPage(
                                         'datetime' ? (
                                             <DatetimeInput
                                               value={
-                                                typeof condition.value === 'number'
-                                                  ? condition.value
-                                                  : parseFloat(condition.value)
+                                                (() => {
+                                                  const val = typeof condition.value === 'number'
+                                                    ? condition.value
+                                                    : parseFloat(condition.value);
+                                                  // 将秒级时间戳转换为毫秒级（DatetimeInput 期望毫秒级）
+                                                  return isNaN(val) ? new Date().getTime() : val;
+                                                })()
                                               }
                                               width="sm"
                                               onValueChange={(value) => {
+                                                // 将毫秒级时间戳转换为秒级（后端存储秒级）
                                                 setConditionValue(i, value);
                                               }}
                                             />
@@ -2464,6 +2716,190 @@ export default function KnowledgeBaseDetailPage(
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* 元数据管理Dialog */}
+      <Dialog open={metadataConfigDialogOpen} onOpenChange={setMetadataConfigDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm">元数据配置</DialogTitle>
+            <DialogDescription className="text-xs">
+              管理知识库的元数据配置
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7 w-full"
+              onClick={() => {
+                setNewMetadataName('');
+                setNewMetadataValueType('string');
+                setNewMetadataDesc('');
+                setMetadataError('');
+                setEditingMetadataConfig(null);
+                setMetadataEditDialogOpen(true);
+              }}
+            >
+              <PlusIcon className="h-3 w-3 mr-1" /> 添加元数据
+            </Button>
+            <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
+              {metadataConfigs.length === 0 ? (
+                <div className="text-center py-4 text-xs text-muted-foreground">
+                  暂无元数据配置
+                </div>
+              ) : (
+                metadataConfigs.map((metadata) => (
+                  <div
+                    key={metadata.id}
+                    className="flex items-center justify-between p-2 border rounded hover:bg-muted/50 group h-8"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-xs font-medium truncate">{metadata.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {metadata.value_type}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {metadata.count ?? 0} docs
+                      </span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => handleEditMetadataConfig(metadata)}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                        onClick={() => handleRemoveMetadataEntry(metadata.id)}
+                      >
+                        <Trash2Icon className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 添加/编辑元数据Dialog */}
+      <Dialog open={metadataEditDialogOpen} onOpenChange={(open) => {
+        setMetadataEditDialogOpen(open);
+        if (!open) {
+          setEditingMetadataConfig(null);
+          setNewMetadataName('');
+          setNewMetadataValueType('string');
+          setNewMetadataDesc('');
+          setMetadataError('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {editingMetadataConfig ? '编辑元数据' : '添加元数据'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              请设定一个元数据名称（英文和数字），如city, category，用于在知识库内检索。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="metadata_key" className="text-xs">元数据名称</Label>
+              <Input
+                id="metadata_key"
+                className="h-6 text-xs"
+                value={newMetadataName}
+                onChange={(e) => setNewMetadataName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="metadata_value_type" className="text-xs">
+                值类型
+              </Label>
+              <Select
+                value={newMetadataValueType}
+                onValueChange={(value) => setNewMetadataValueType(value)}
+              >
+                <SelectTrigger className="w-[180px] h-6 text-xs">
+                  <SelectValue placeholder="选择值类型" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectGroup>
+                    <SelectLabel className="text-xs">值类型</SelectLabel>
+                    <SelectItem value="string" className="text-xs h-5">
+                      String
+                    </SelectItem>
+                    <SelectItem value="number" className="text-xs h-5">
+                      Number
+                    </SelectItem>
+                    <SelectItem value="datetime" className="text-xs h-5">
+                      DateTime
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="metadata_desc" className="text-xs">元数据描述</Label>
+              <Input
+                id="metadata_desc"
+                className="h-6 text-xs"
+                placeholder="输入元数据相关描述。"
+                value={newMetadataDesc}
+                onChange={(e) => setNewMetadataDesc(e.target.value)}
+              />
+            </div>
+          </div>
+          {metadataError ? (
+            <Alert variant="destructive" className="text-xs py-2">
+              <AlertCircleIcon className="h-3 w-3" />
+              <AlertTitle className="text-xs">操作失败</AlertTitle>
+              <AlertDescription className="text-xs">
+                <p>{metadataError}</p>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => {
+                setMetadataEditDialogOpen(false);
+                setEditingMetadataConfig(null);
+                setNewMetadataName('');
+                setNewMetadataValueType('string');
+                setNewMetadataDesc('');
+                setMetadataError('');
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => {
+                if (editingMetadataConfig) {
+                  handleUpdateMetadataConfig();
+                } else {
+                  handleAddMetadataConfig();
+                }
+              }}
+            >
+              保存
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
