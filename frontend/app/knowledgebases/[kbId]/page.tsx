@@ -115,7 +115,6 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Slider } from '@/components/ui/slider';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { SearchCode, TextSearch, ScanSearch, ChevronDownIcon as ChevronDown, ChevronUpIcon as ChevronUp, Save } from 'lucide-react';
 
@@ -192,9 +191,8 @@ export default function KnowledgeBaseDetailPage(
     MetadataCondition[]
   >([]);
   const [fileSource, setFileSource] = useState('');
-  const [fileSourceOpen, setFileSourceOpen] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [fileSourceOpen, setFileSourceOpen] = useState(false);
+  const [currentFileId, setCurrentFileId] = useState<string>('');
   const { kbId } = use(params);
 
   let isRefreshing = false;
@@ -204,6 +202,8 @@ export default function KnowledgeBaseDetailPage(
   const [editingMetadata, setEditingMetadata] = useState<{ [k: string]: any }>(
     {},
   );
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+  const [currentMetadataFileId, setCurrentMetadataFileId] = useState<string>('');
   const [metadataConfigs, setMetadataConfigs] = useState<MetadataConfig[]>([]);
   const [metadataValueTypes, setMetadataValueTypes] = useState<{
     [k: string]: any;
@@ -214,7 +214,7 @@ export default function KnowledgeBaseDetailPage(
   );
 
   const [roles, setRoles] = useState<Role[]>([]);
-  const [openRole, setOpenRole] = useState(false);
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [editRoleFileId, setEditRoleFileId] = useState('');
   const [activeRoleIds, setActiveRoleIds] = useState<string[]>([]);
   const [activeRoleNames, setActiveRoleNames] = useState<string[]>([]);
@@ -604,10 +604,12 @@ export default function KnowledgeBaseDetailPage(
     }
   };
 
-  const handleSaveFileSource = async (file_id: string) => {
+  const handleSaveFileSource = async () => {
+    if (!currentFileId) return;
+    
     try {
       const res = await fetch(
-        `/api/config/knowledgebases/${kbId}/files/${file_id}/source`,
+        `/api/config/knowledgebases/${kbId}/files/${currentFileId}/source`,
         {
           method: 'POST',
           headers: {
@@ -620,11 +622,12 @@ export default function KnowledgeBaseDetailPage(
       );
       if (!res.ok) throw new Error('源链接保存失败');
 
-      const fileObj = kbfiles.filter((file) => file.id === file_id)[0];
+      const fileObj = kbfiles.filter((file) => file.id === currentFileId)[0];
       if (fileObj) {
         fileObj.file_source = fileSource;
       }
-      setFileSourceOpen((prev) => ({ ...prev, [file_id]: false }));
+      setFileSourceOpen(false);
+      setCurrentFileId('');
       toast.success("源链接保存成功");
     } catch (error: any) {
       toast.error(error.message);
@@ -661,6 +664,7 @@ export default function KnowledgeBaseDetailPage(
   const handleOpenMetadata = async (file_id: string) => {
     setMetadataEditError('');
     setIsEditingMetadata(false);
+    setCurrentMetadataFileId(file_id);
     try {
       const file_res = await fetch(
         `/api/config/knowledgebases/${kbId}/files/${file_id}`,
@@ -673,6 +677,7 @@ export default function KnowledgeBaseDetailPage(
         .filter((name) => !(name in file_json.data.file_metadata));
       setAvailableMetadataKeys(usable_metadata_keys);
       console.log('可用的metadata名称：', usable_metadata_keys);
+      setMetadataDialogOpen(true);
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -769,6 +774,7 @@ export default function KnowledgeBaseDetailPage(
 
       setActiveRoleIds(role_ids);
       setActiveRoleNames(role_names);
+      setRoleDialogOpen(true);
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -793,7 +799,9 @@ export default function KnowledgeBaseDetailPage(
         return;
       }
       console.log('更新文件角色成功：', await roleRes.json());
-      setOpenRole(false);
+      setRoleDialogOpen(false);
+      setEditRoleFileId('');
+      toast.success("权限设置保存成功");
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -864,7 +872,9 @@ export default function KnowledgeBaseDetailPage(
     return metadataConfigs.filter((metadata) => metadata.name === name)[0].id;
   };
 
-  const saveEditMetadata = async (file_id: string) => {
+  const saveEditMetadata = async () => {
+    if (!currentMetadataFileId) return;
+    
     const hasEmptyEntry = Object.keys(editingMetadata).some(
       (key) => editingMetadata[key] === '',
     );
@@ -885,7 +895,7 @@ export default function KnowledgeBaseDetailPage(
         entries: metadata_enties,
       };
       const res = await fetch(
-        `/api/config/knowledgebases/${kbId}/files/${file_id}/metadata`,
+        `/api/config/knowledgebases/${kbId}/files/${currentMetadataFileId}/metadata`,
         {
           method: 'POST',
           body: JSON.stringify(bodyData),
@@ -898,14 +908,18 @@ export default function KnowledgeBaseDetailPage(
       const file_result = (await res.json()).data as KnowledgeBaseFile;
       const updated_kbfiles = kbfiles;
       const target_file_index = updated_kbfiles.findIndex(
-        (file) => file.id === file_id,
+        (file) => file.id === currentMetadataFileId,
       );
       updated_kbfiles[target_file_index] = file_result;
       setKbFiles(updated_kbfiles);
       console.log('更新文件成功：', updated_kbfiles);
       setIsEditingMetadata(false);
+      setMetadataDialogOpen(false);
+      setCurrentMetadataFileId('');
+      toast.success("元数据保存成功");
     } catch (error: any) {
       console.log('保存metadata失败', error);
+      toast.error(error.message || '保存metadata失败');
     } finally {
       setMetadataEditError('');
     }
@@ -1263,357 +1277,6 @@ export default function KnowledgeBaseDetailPage(
                                     >
                                       <span className="text-xs font-medium">查看文件</span>
                                     </DropdownMenuItem>
-                                    <Sheet open={openRole} onOpenChange={setOpenRole}>
-                                      <SheetTrigger asChild>
-                                        <DropdownMenuItem
-                                          onSelect={(e) => {
-                                            e.preventDefault();
-                                            setDropdownOpen(prev => ({
-                                              ...prev,
-                                              [file.id]: false
-                                            }));
-                                            checkFileRole(file.id);
-                                          }}
-                                        >
-                                          <span className="text-xs font-medium">权限设置</span>
-                                        </DropdownMenuItem>
-                                      </SheetTrigger>
-                                <SheetContent>
-                                  <SheetHeader>
-                                    <SheetTitle>文档权限设置</SheetTitle>
-                                  </SheetHeader>
-                                  <div className="grid flex-1 auto-rows-min gap-6 px-4">
-                                    <div>
-                                      {activeRoleNames.length > 0 ? (
-                                        <div>
-                                          <div className="text-sm">
-                                            以下角色有查看/搜索该文档的权限
-                                          </div>
-
-                                          <div className="flex pt-3 gap-1.5 items-center">
-                                            {activeRoleNames.map((name) => (
-                                              <Badge
-                                                variant="secondary"
-                                                className="h-6"
-                                                key={name}
-                                              >
-                                                {name}
-                                              </Badge>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div>
-                                          所有角色都有查看/搜索该文档的权限。添加角色来限制文档访问。
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="grid gap-3">
-                                      <div className="flex">
-                                        <Label
-                                          htmlFor="kb_selection"
-                                          className="w-[90px]"
-                                        >
-                                          角色选择
-                                        </Label>
-                                        <div className="pl-6 pr-6">
-                                          {roles.length > 0 ? (
-                                            <DropdownMenu modal={true}>
-                                              <DropdownMenuTrigger asChild>
-                                                <Button
-                                                  variant="outline"
-                                                  className="text-sm text-muted-foreground"
-                                                >
-                                                  已选{activeRoleIds.length}
-                                                  个，可多选 <ChevronDownIcon />
-                                                </Button>
-                                              </DropdownMenuTrigger>
-                                              <DropdownMenuContent className="w-56">
-                                                <DropdownMenuLabel>
-                                                  角色
-                                                </DropdownMenuLabel>
-                                                <DropdownMenuSeparator />
-                                                {roles.map((role) => (
-                                                  <DropdownMenuCheckboxItem
-                                                    key={role.id}
-                                                    checked={activeRoleIds.includes(
-                                                      role.id,
-                                                    )}
-                                                    onCheckedChange={(
-                                                      checked,
-                                                    ) =>
-                                                      handleRoleSelect(
-                                                        role.id,
-                                                        role.name,
-                                                        checked,
-                                                      )
-                                                    }
-                                                    onSelect={(e) =>
-                                                      e.preventDefault()
-                                                    }
-                                                  >
-                                                    {role.name}
-                                                  </DropdownMenuCheckboxItem>
-                                                ))}
-                                              </DropdownMenuContent>
-                                            </DropdownMenu>
-                                          ) : (
-                                            <div>
-                                              <p className="text-sm text-muted-foreground">
-                                                尚未配置角色信息，前往`权限控制`设置。
-                                              </p>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-col gap-4 pb-6 px-6">
-                                    <Button onClick={saveFilePermission}>
-                                      保存
-                                    </Button>
-                                    <Button onClick={clearAllRoles}>
-                                      重置（设为所有角色可访问）
-                                    </Button>
-
-                                    <Button
-                                      variant="outline"
-                                      onClick={() => setOpenRole(false)}
-                                    >
-                                      取消
-                                    </Button>
-                                  </div>
-                                </SheetContent>
-                                    </Sheet>
-                                    <Sheet>
-                                      <SheetTrigger asChild>
-                                        <DropdownMenuItem
-                                          onSelect={(e) => {
-                                            e.preventDefault();
-                                            setDropdownOpen(prev => ({
-                                              ...prev,
-                                              [file.id]: false
-                                            }));
-                                            handleOpenMetadata(file.id);
-                                          }}
-                                        >
-                                          <span className="text-xs font-medium">元数据</span>
-                                        </DropdownMenuItem>
-                                      </SheetTrigger>
-                                      <SheetContent className="sm:max-w-[750px] w-[600px] sm:w-[540px]">
-                                  <SheetHeader>
-                                    {isEditingMetadata ? (
-                                      <SheetTitle>编辑元数据</SheetTitle>
-                                    ) : (
-                                      <SheetTitle>查看元数据</SheetTitle>
-                                    )}
-                                  </SheetHeader>
-                                  <div className="grid flex-1 auto-rows-min gap-2 px-4">
-                                    <div className="space-y-1 text-xs">
-                                      {isEditingMetadata ? (
-                                        <Label htmlFor="sheet-custom-meta">
-                                          自定义
-                                          <Button
-                                            variant="secondary"
-                                            className="w-16 h-5"
-                                            onClick={handAddFileMetadata}
-                                          >
-                                            <PlusIcon className="h-3 w-3" />
-                                            添加
-                                          </Button>
-                                        </Label>
-                                      ) : (
-                                        <Label htmlFor="sheet-custom-meta">
-                                          自定义
-                                        </Label>
-                                      )}
-                                      {Object.keys(editingMetadata).filter(
-                                        (key: string) =>
-                                          !default_metadata_keys.includes(key),
-                                      ).length === 0 && (
-                                        <p>
-                                          当前没有配置自定义元数据，点击编辑添加。
-                                        </p>
-                                      )}
-                                      {isEditingMetadata
-                                        ? Object.keys(editingMetadata)
-                                          .filter(
-                                            (key: string) =>
-                                              !default_metadata_keys.includes(
-                                                key,
-                                              ),
-                                          )
-                                          .map((key: string) => (
-                                            <div
-                                              className="flex items-start space-x-2"
-                                              key={key}
-                                            >
-                                              {key !== '' ? (
-                                                <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
-                                                  {key}
-                                                </div>
-                                              ) : (
-                                                <Select
-                                                  onValueChange={(value) =>
-                                                    selectMetadataKey(value)
-                                                  }
-                                                  defaultOpen={true}
-                                                >
-                                                  <SelectTrigger className="w-[88px] h-4 text-xs system-xs-medium w-[128px] shrink-0 items-center">
-                                                    <SelectValue placeholder="选择元数据名称" />
-                                                  </SelectTrigger>
-                                                  <SelectContent className="w-[88px] text-xs">
-                                                    <SelectGroup>
-                                                      {availableMetadataKeys.map(
-                                                        (m_key) => (
-                                                          <SelectItem
-                                                            key={m_key}
-                                                            value={m_key}
-                                                          >
-                                                            {m_key}
-                                                          </SelectItem>
-                                                        ),
-                                                      )}
-                                                    </SelectGroup>
-                                                  </SelectContent>
-                                                </Select>
-                                              )}
-                                              <div className="flex space-x-2 max-w-xs shrink-0">
-                                                {metadataValueTypes[key] !==
-                                                  'datetime' ? (
-                                                    <Input
-                                                      type={
-                                                        metadataValueTypes[key]
-                                                      }
-                                                      className="w-[280px] border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
-                                                      value={
-                                                        editingMetadata[key]
-                                                      }
-                                                      onChange={(e) => {
-                                                        setEditingMetadata({
-                                                          ...editingMetadata,
-                                                          [key]: e.target.value,
-                                                        });
-                                                      }}
-                                                    />
-                                                  ) : (
-                                                    <DatetimeInput
-                                                      value={
-                                                        editingMetadata[key]
-                                                      }
-                                                      width="md"
-                                                      onValueChange={(
-                                                        value,
-                                                      ) => {
-                                                        setEditingMetadata({
-                                                          ...editingMetadata,
-                                                          [key]: value,
-                                                        });
-                                                      }}
-                                                    />
-                                                  )}
-                                                <Button
-                                                  variant="outline"
-                                                  className="w-3 h-3 pl-3 pr-0"
-                                                  onClick={() =>
-                                                    handleDeleteMetadata(key)
-                                                  }
-                                                >
-                                                  <Trash2Icon className="h-3 w-3" />
-                                                </Button>
-                                              </div>
-                                            </div>
-                                          ))
-                                        : Object.keys(editingMetadata)
-                                          .filter(
-                                            (key: string) =>
-                                              !default_metadata_keys.includes(
-                                                key,
-                                              ),
-                                          )
-                                          .map((key: string) => (
-                                            <div
-                                              className="flex items-start space-x-2"
-                                              key={key}
-                                            >
-                                              <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
-                                                {key}
-                                              </div>
-                                              <div className="max-w-xs shrink-0">
-                                                <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
-                                                  {editingMetadata[key]}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          ))}
-                                    </div>
-                                    <div className="text-xs">
-                                      <Label htmlFor="sheet-custom-meta">
-                                        内置元数据
-                                      </Label>
-                                      {Object.keys(editingMetadata)
-                                        .filter((key) =>
-                                          default_metadata_keys.includes(key),
-                                        )
-                                        .map((key) => (
-                                          <div
-                                            className="flex items-start space-x-2"
-                                            key={key}
-                                          >
-                                            <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
-                                              {key}
-                                            </div>
-                                            <div className="max-w-xs shrink-0">
-                                              <div className="system-xs-regular py-1 text-text-secondary truncate">
-                                                {editingMetadata[key]}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ))}
-                                    </div>
-                                  </div>
-                                  <SheetFooter>
-                                    {metadataEditError !== '' && (
-                                      <Alert variant="destructive">
-                                        <AlertCircleIcon />
-                                        <AlertDescription>
-                                          <p>{metadataEditError}</p>
-                                        </AlertDescription>
-                                      </Alert>
-                                    )}
-                                    {isEditingMetadata ? (
-                                      <Button
-                                        type="button"
-                                        onClick={() =>
-                                          saveEditMetadata(file.id)
-                                        }
-                                      >
-                                        保存
-                                      </Button>
-                                    ) : (
-                                      <Button
-                                        type="button"
-                                        onClick={() =>
-                                          setIsEditingMetadata(true)
-                                        }
-                                      >
-                                        编辑
-                                      </Button>
-                                    )}
-
-                                    <SheetClose asChild>
-                                      <Button
-                                        variant="outline"
-                                        onClick={() =>
-                                          setIsEditingMetadata(false)
-                                        }
-                                      >
-                                        Close
-                                      </Button>
-                                    </SheetClose>
-                                  </SheetFooter>
-                                </SheetContent>
-                                    </Sheet>
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
@@ -1621,67 +1284,37 @@ export default function KnowledgeBaseDetailPage(
                                           ...prev,
                                           [file.id]: false
                                         }));
-                                        setFileSourceOpen((prev) => ({
+                                        checkFileRole(file.id);
+                                      }}
+                                    >
+                                      <span className="text-xs font-medium">权限设置</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setDropdownOpen(prev => ({
                                           ...prev,
-                                          [file.id]: true,
+                                          [file.id]: false
                                         }));
+                                        handleOpenMetadata(file.id);
+                                      }}
+                                    >
+                                      <span className="text-xs font-medium">元数据</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        setDropdownOpen(prev => ({
+                                          ...prev,
+                                          [file.id]: false
+                                        }));
+                                        setCurrentFileId(file.id);
+                                        setFileSource(file.file_source || '');
+                                        setFileSourceOpen(true);
                                       }}
                                     >
                                       <span className="text-xs font-medium">源链接</span>
                                     </DropdownMenuItem>
-                                    <Dialog
-                                      open={fileSourceOpen[file.id] ?? false}
-                                    >
-                                      <DialogContent className="sm:max-w-md">
-                                        <DialogHeader>
-                                          <DialogTitle>设置源链接</DialogTitle>
-                                          <DialogDescription>
-                                            {file.file_name}
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="flex flex-col gap-4 py-4">
-                                          <div className="flex flex-col gap-2">
-                                            <Label>源链接</Label>
-                                            <Input
-                                              type="text"
-                                              placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
-                                              value={fileSource || ''}
-                                              onChange={(e) => {
-                                                setFileSource(e.target.value);
-                                              }}
-                                            />
-                                          </div>
-                                        </div>
-                                        <div className="flex justify-end gap-2">
-                                          <Button
-                                            variant="outline"
-                                            onClick={() => {
-                                              setFileSourceOpen((prev) => ({
-                                                ...prev,
-                                                [file.id]: false,
-                                              }));
-                                            }}
-                                          >
-                                            取消
-                                          </Button>
-                                          <Button
-                                            onClick={() => {
-                                              handleSaveFileSource(file.id);
-                                              setFileSourceOpen((prev) => ({
-                                                ...prev,
-                                                [file.id]: false,
-                                              }));
-                                              setDropdownOpen(prev => ({
-                                                ...prev,
-                                                [file.id]: false,
-                                              }));
-                                            }}
-                                          >
-                                            保存
-                                          </Button>
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
@@ -1718,6 +1351,445 @@ export default function KnowledgeBaseDetailPage(
                     </Table>
                   </div>
                   
+                  {/* 源链接设置对话框 */}
+                  <Dialog
+                    open={fileSourceOpen}
+                    onOpenChange={(open) => {
+                      setFileSourceOpen(open);
+                      if (!open) {
+                        setCurrentFileId('');
+                        setFileSource('');
+                      }
+                    }}
+                  >
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm">设置源链接</DialogTitle>
+                        <DialogDescription className="text-xs">
+                          {kbfiles.find(f => f.id === currentFileId)?.file_name || ''}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex flex-col gap-3 py-2">
+                        <div className="flex flex-col gap-2">
+                          <Label className="text-xs">源链接</Label>
+                          <Input
+                            type="text"
+                            placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
+                            value={fileSource || ''}
+                            onChange={(e) => {
+                              setFileSource(e.target.value);
+                            }}
+                            className="text-xs h-7"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={handleSaveFileSource}
+                          size="sm"
+                          className="text-xs h-7"
+                        >
+                          保存
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            setFileSourceOpen(false);
+                            setCurrentFileId('');
+                            setFileSource('');
+                          }}
+                        >
+                          取消
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* 元数据设置对话框 */}
+                  <Dialog
+                    open={metadataDialogOpen}
+                    onOpenChange={(open) => {
+                      setMetadataDialogOpen(open);
+                      if (!open) {
+                        setCurrentMetadataFileId('');
+                        setIsEditingMetadata(false);
+                        setEditingMetadata({});
+                        setMetadataEditError('');
+                      }
+                    }}
+                  >
+                    <DialogContent className="sm:max-w-[750px] w-[600px] sm:w-[540px] max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        {isEditingMetadata ? (
+                          <DialogTitle className="text-sm">编辑元数据</DialogTitle>
+                        ) : (
+                          <DialogTitle className="text-sm">查看元数据</DialogTitle>
+                        )}
+                        <DialogDescription className="text-xs">
+                          {kbfiles.find(f => f.id === currentMetadataFileId)?.file_name || ''}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid flex-1 auto-rows-min gap-3 py-2">
+                        <div className="space-y-2 text-xs">
+                          {isEditingMetadata ? (
+                            <Label htmlFor="sheet-custom-meta" className="text-xs">
+                              自定义
+                              <Button
+                                variant="secondary"
+                                className="w-16 h-5 text-xs"
+                                onClick={handAddFileMetadata}
+                              >
+                                <PlusIcon className="h-3 w-3" />
+                                添加
+                              </Button>
+                            </Label>
+                          ) : (
+                            <Label htmlFor="sheet-custom-meta" className="text-xs">
+                              自定义
+                            </Label>
+                          )}
+                          {Object.keys(editingMetadata).filter(
+                            (key: string) =>
+                              !default_metadata_keys.includes(key),
+                          ).length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              当前没有配置自定义元数据，点击编辑添加。
+                            </p>
+                          )}
+                          {isEditingMetadata
+                            ? Object.keys(editingMetadata)
+                              .filter(
+                                (key: string) =>
+                                  !default_metadata_keys.includes(
+                                    key,
+                                  ),
+                              )
+                              .map((key: string) => (
+                                <div
+                                  className="flex space-x-2 items-center"
+                                  key={key}
+                                >
+                                  {key !== '' ? (
+                                    <div className="flex h-4 w-[128px] items-center truncate py-1">
+                                      <span>{key}</span>
+                                    </div>
+                                  ) : (
+                                    <Select
+                                      onValueChange={(value) =>
+                                        selectMetadataKey(value)
+                                      }
+                                      defaultOpen={true}
+                                    >
+                                      <SelectTrigger className="w-[120px] h-6 min-h-6 text-xs data-[size=default]:h-6 data-[size=sm]:h-6">
+                                        <SelectValue placeholder="选择元数据" />
+                                      </SelectTrigger>
+                                      <SelectContent className="w-[88px] text-xs">
+                                        <SelectGroup>
+                                          {availableMetadataKeys.map(
+                                            (m_key) => (
+                                              <SelectItem
+                                                key={m_key}
+                                                value={m_key}
+                                                className="text-xs h-5"
+                                              >
+                                                {m_key}
+                                              </SelectItem>
+                                            ),
+                                          )}
+                                        </SelectGroup>
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                  <div className="flex space-x-2 max-w-xs shrink-0">
+                                    {metadataValueTypes[key] !==
+                                      'datetime' ? (
+                                        <Input
+                                          type={
+                                            metadataValueTypes[key]
+                                          }
+                                          className="w-[280px] border-transparent focus:shadow-xs radius-md h-5 grow p-0.5 text-xs rounded-md"
+                                          value={
+                                            editingMetadata[key]
+                                          }
+                                          onChange={(e) => {
+                                            setEditingMetadata({
+                                              ...editingMetadata,
+                                              [key]: e.target.value,
+                                            });
+                                          }}
+                                        />
+                                      ) : (
+                                        <DatetimeInput
+                                          value={
+                                            editingMetadata[key]
+                                          }
+                                          width="md"
+                                          onValueChange={(
+                                            value,
+                                          ) => {
+                                            setEditingMetadata({
+                                              ...editingMetadata,
+                                              [key]: value,
+                                            });
+                                          }}
+                                        />
+                                      )}
+                                    <Button
+                                      variant="outline"
+                                      className="w-3 h-3 pl-3 pr-0"
+                                      onClick={() =>
+                                        handleDeleteMetadata(key)
+                                      }
+                                    >
+                                      <Trash2Icon className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))
+                            : Object.keys(editingMetadata)
+                              .filter(
+                                (key: string) =>
+                                  !default_metadata_keys.includes(
+                                    key,
+                                  ),
+                              )
+                              .map((key: string) => (
+                                <div
+                                  className="flex items-start space-x-2"
+                                  key={key}
+                                >
+                                  <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                    {key}
+                                  </div>
+                                  <div className="max-w-xs shrink-0">
+                                    <div className="system-xs-regular py-1 text-text-secondary max-w-xs truncate">
+                                      {editingMetadata[key]}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                        </div>
+                        <div className="text-xs">
+                          <Label htmlFor="sheet-custom-meta" className="text-xs pb-2">
+                            内置元数据
+                          </Label>
+                          {Object.keys(editingMetadata)
+                            .filter((key) =>
+                              default_metadata_keys.includes(key),
+                            )
+                            .map((key) => (
+                              <div
+                                className="flex items-start space-x-2"
+                                key={key}
+                              >
+                                <div className="system-xs-medium w-[128px] shrink-0 items-center truncate py-1 text-text-tertiary font-semibold">
+                                  {key}
+                                </div>
+                                <div className="max-w-xs shrink-0">
+                                  <div className="system-xs-regular py-1 text-text-secondary truncate">
+                                    {editingMetadata[key]}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {metadataEditError !== '' && (
+                          <Alert variant="destructive" className="text-xs py-2">
+                            <AlertCircleIcon className="h-3 w-3" />
+                            <AlertDescription className="text-xs">
+                              <p>{metadataEditError}</p>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        <div className="flex gap-2 justify-end">
+                          {isEditingMetadata ? (
+                            <Button
+                              type="button"
+                              onClick={saveEditMetadata}
+                              size="sm"
+                              className="text-xs h-7"
+                            >
+                              保存
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              onClick={() =>
+                                setIsEditingMetadata(true)
+                              }
+                              size="sm"
+                              className="text-xs h-7"
+                            >
+                              编辑
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => {
+                              setMetadataDialogOpen(false);
+                              setCurrentMetadataFileId('');
+                              setIsEditingMetadata(false);
+                              setEditingMetadata({});
+                              setMetadataEditError('');
+                            }}
+                          >
+                            关闭
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* 权限设置对话框 */}
+                  <Dialog
+                    open={roleDialogOpen}
+                    onOpenChange={(open) => {
+                      setRoleDialogOpen(open);
+                      if (!open) {
+                        setEditRoleFileId('');
+                        setActiveRoleIds([]);
+                        setActiveRoleNames([]);
+                      }
+                    }}
+                  >
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-sm">文档权限设置</DialogTitle>
+                        <DialogDescription className="text-xs">
+                          {kbfiles.find(f => f.id === editRoleFileId)?.file_name || ''}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid flex-1 auto-rows-min gap-4 py-1">
+                        <div>
+                          {activeRoleNames.length > 0 ? (
+                            <div>
+                              <div className="text-xs">
+                                以下角色有查看/搜索该文档的权限
+                              </div>
+
+                              <div className="flex pt-3 gap-1.5 items-center">
+                                {activeRoleNames.map((name) => (
+                                  <Badge
+                                    variant="secondary"
+                                    className="h-5 text-xs"
+                                    key={name}
+                                  >
+                                    {name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              所有角色都有查看/搜索该文档的权限。添加角色来限制文档访问。
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid gap-1">
+                          <div className="flex items-center">
+                            <Label
+                              htmlFor="kb_selection"
+                              className="w-[90px] text-xs"
+                            >
+                              角色选择
+                            </Label>
+                            <div className=" pr-2 flex items-center gap-8">
+                              {roles.length > 0 ? (
+                                <>
+                                  <DropdownMenu modal={true}>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        className="text-xs text-muted-foreground h-7"
+                                      >
+                                        已选{activeRoleIds.length}
+                                        个，可多选 <ChevronDownIcon className="h-3 w-3" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="w-56">
+                                      <DropdownMenuLabel className="text-xs">
+                                        角色
+                                      </DropdownMenuLabel>
+                                      <DropdownMenuSeparator />
+                                      {roles.map((role) => (
+                                        <DropdownMenuCheckboxItem
+                                          key={role.id}
+                                          checked={activeRoleIds.includes(
+                                            role.id,
+                                          )}
+                                          onCheckedChange={(
+                                            checked,
+                                          ) =>
+                                            handleRoleSelect(
+                                              role.id,
+                                              role.name,
+                                              checked,
+                                            )
+                                          }
+                                          onSelect={(e) =>
+                                            e.preventDefault()
+                                          }
+                                          className="text-xs"
+                                        >
+                                          {role.name}
+                                        </DropdownMenuCheckboxItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                  {activeRoleIds.length > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 text-xs text-muted-foreground"
+                                      onClick={clearAllRoles}
+                                      title="清空所有角色"
+                                    >
+                                      清空选择<XCircle className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </>
+                              ) : (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">
+                                    尚未配置角色信息，前往`权限控制`设置。
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            setRoleDialogOpen(false);
+                            setEditRoleFileId('');
+                            setActiveRoleIds([]);
+                            setActiveRoleNames([]);
+                          }}
+                        >
+                          取消
+                        </Button>
+                        <Button 
+                          onClick={saveFilePermission}
+                          size="sm"
+                          className="text-xs h-7"
+                        >
+                          保存
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
                   {/* 预览对话框 */}
                   <Dialog open={previewOpen} onOpenChange={(open) => {
                     if (!open) {
@@ -1798,7 +1870,7 @@ export default function KnowledgeBaseDetailPage(
                 />
               </div>
           </TabsContent>
-          <TabsContent value="settings" className="py-4">
+          <TabsContent value="settings" className="py-2">
             <KbConfigCard
               isCreate={false}
               kbConfig={knowledgebase}
@@ -1807,18 +1879,18 @@ export default function KnowledgeBaseDetailPage(
               onCancel={() => {}}
             ></KbConfigCard>
           </TabsContent>
-          <TabsContent value="retrieval_test" className="py-4">
-            <div className="flex gap-4 h-full">
+          <TabsContent value="retrieval_test" className="py-2">
+            <div className="flex gap-3 h-full">
               {/* 左侧：查询输入和检索设置 */}
               <div className="flex flex-col w-[450px] shrink-0 h-full justify-between">
                 {/* 检索测试输入区域 - 左上角 */}
-                <Card className="flex-[4] flex flex-col min-h-0 mb-3">
-                  <CardHeader className="pb-4 flex-shrink-0">
-                    <CardTitle className="text-lg">检索测试</CardTitle>
+                <Card className="flex-[4] flex flex-col min-h-0 mb-2">
+                  <CardHeader className="pb-2 flex-shrink-0">
+                    <CardTitle className="text-sm">检索测试</CardTitle>
                   </CardHeader>
                   <CardContent className="flex-1 flex flex-col min-h-0">
                     {/* 搜索框和按钮 */}
-                    <div className="flex flex-col gap-3 flex-1">
+                    <div className="flex flex-col gap-2 flex-1">
                       <div className="flex-1 min-w-[200px]">
                         <Input
                           type="text"
@@ -1830,33 +1902,33 @@ export default function KnowledgeBaseDetailPage(
                               handleSearchSubmit();
                             }
                           }}
-                          className="w-full h-28 text-lg"
+                          className="w-full h-24 text-xs"
                         />
                       </div>
                       <div className="flex flex-wrap gap-2 flex-shrink-0">
                         <Popover>
                           <PopoverTrigger asChild>
-                            <Button variant="outline">
-                              <FilterIcon />
+                            <Button variant="outline" size="sm" className="text-xs h-7">
+                              <FilterIcon className="h-3 w-3" />
                               元数据
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[450px]">
-                            <div className="grid gap-4">
+                            <div className="grid gap-3">
                               <div className="space-y-2">
                                 <RadioGroup
                                   value={logicalOperator}
                                   onValueChange={(value) => setLogicalOperator(value)}
                                 >
                                   <div className="flex items-center space-x-2">
-                                    <p className="text-muted-foreground text-sm">
+                                    <p className="text-muted-foreground text-xs">
                                       逻辑操作符
                                     </p>
 
                                     <RadioGroupItem value="and" id="r1" />
-                                    <Label htmlFor="r1">AND</Label>
+                                    <Label htmlFor="r1" className="text-xs">AND</Label>
                                     <RadioGroupItem value="or" id="r2" />
-                                    <Label htmlFor="r2">OR</Label>
+                                    <Label htmlFor="r2" className="text-xs">OR</Label>
                                   </div>
                                 </RadioGroup>
                               </div>
@@ -1874,7 +1946,7 @@ export default function KnowledgeBaseDetailPage(
                                             setConditionName(i, value);
                                           }}
                                         >
-                                          <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                          <SelectTrigger className="h-6 text-xs w-[120px]">
                                             <SelectValue placeholder="名称" />
                                           </SelectTrigger>
                                           <SelectContent className="text-xs">
@@ -1883,6 +1955,7 @@ export default function KnowledgeBaseDetailPage(
                                                 <SelectItem
                                                   key={metadata.name}
                                                   value={metadata.name}
+                                                  className="text-xs h-5"
                                                 >
                                                   {metadata.name}
                                                 </SelectItem>
@@ -1898,13 +1971,13 @@ export default function KnowledgeBaseDetailPage(
                                             setConditionOp(i, value);
                                           }}
                                         >
-                                          <SelectTrigger className="h-4 text-xs system-xs-medium shrink-0 items-center">
+                                          <SelectTrigger className="h-6 text-xs w-[80px]">
                                             <SelectValue placeholder="规则" />
                                           </SelectTrigger>
                                           <SelectContent className="w-[80px] text-xs">
                                             <SelectGroup>
                                               {default_comparator.map((op) => (
-                                                <SelectItem key={op} value={op}>
+                                                <SelectItem key={op} value={op} className="text-xs h-5">
                                                   {op}
                                                 </SelectItem>
                                               ))}
@@ -1928,7 +2001,7 @@ export default function KnowledgeBaseDetailPage(
                                             />
                                           ) : (
                                             <Input
-                                              className="w-128px"
+                                              className="w-32 h-6 text-xs"
                                               value={condition.value.toString()}
                                               onChange={(e) =>
                                                 setConditionValue(i, e.target.value)
@@ -1942,9 +2015,10 @@ export default function KnowledgeBaseDetailPage(
                                           onClick={() => {
                                             deleteCondition(i);
                                           }}
-                                          className="w-6"
+                                          className="w-6 h-6 p-0"
+                                          size="sm"
                                         >
-                                          <Trash2Icon className="w-4 h-4" />
+                                          <Trash2Icon className="w-3 h-3" />
                                         </Button>
                                       </div>
                                     </div>
@@ -1954,6 +2028,7 @@ export default function KnowledgeBaseDetailPage(
                                   variant="secondary"
                                   onClick={addCondition}
                                   className="h-6 text-xs"
+                                  size="sm"
                                 >
                                   新增过滤规则
                                 </Button>
@@ -1962,7 +2037,7 @@ export default function KnowledgeBaseDetailPage(
                           </PopoverContent>
                         </Popover>
                         <Input
-                          className="w-30 text-xs"
+                          className="w-30 text-xs h-7"
                           placeholder="输入user_id"
                           value={user}
                           onChange={(e) => {
@@ -1972,9 +2047,10 @@ export default function KnowledgeBaseDetailPage(
                         <Button
                           type="button"
                           onClick={handleSearchSubmit}
-                          className="whitespace-nowrap"
+                          className="whitespace-nowrap text-xs h-7"
+                          size="sm"
                         >
-                          <SearchIcon />
+                          <SearchIcon className="h-3 w-3" />
                           开始查询
                         </Button>
                       </div>
@@ -1984,9 +2060,9 @@ export default function KnowledgeBaseDetailPage(
 
                 {/* 检索设置板块 - 左下角 */}
                 <Card className={`flex-[0.8] overflow-y-auto text-xs min-h-0 ${!retrievalSettingOpen ? 'p-0' : ''}`}>
-                  <CardHeader className={retrievalSettingOpen ? "pb-2 px-3 pt-3" : "py-0 px-3"}>
-                    <div className="flex items-center justify-between h-7">
-                      <CardTitle className="text-lg">检索设置</CardTitle>
+                  <CardHeader className={retrievalSettingOpen ? "pb-2 px-3 pt-2" : "py-0 px-3"}>
+                    <div className="flex items-center justify-between h-6">
+                      <CardTitle className="text-sm">检索设置</CardTitle>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1998,7 +2074,7 @@ export default function KnowledgeBaseDetailPage(
                     </div>
                   </CardHeader>
                   {retrievalSettingOpen && (
-                    <CardContent className="space-y-2 px-3 pb-3">
+                    <CardContent className="space-y-2 px-3 pb-2">
                       {/* 检索策略 */}
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2 items-center">
@@ -2146,13 +2222,13 @@ export default function KnowledgeBaseDetailPage(
                                   }));
                                 }}
                               >
-                                <SelectTrigger className="w-40 h-7 text-xs">
+                                <SelectTrigger className="w-40 h-6 text-xs">
                                   <SelectValue placeholder="请选择重排序模型" />
                                 </SelectTrigger>
                                 <SelectContent className="text-xs">
                                   <SelectGroup>
                                     {rerankerModels.map((model) => (
-                                      <SelectItem key={model.id} value={model.model_id} className="text-xs">
+                                      <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
                                         {model.model_id}
                                       </SelectItem>
                                     ))}
@@ -2191,7 +2267,7 @@ export default function KnowledgeBaseDetailPage(
                         <Button
                           type="button"
                           onClick={handleSaveRetrievalSetting}
-                          className="whitespace-nowrap h-7 text-xs px-3 bg-gray-600 hover:bg-gray-700 text-white"
+                          className="whitespace-nowrap h-6 text-xs px-2 bg-gray-600 hover:bg-gray-700 text-white"
                           size="sm"
                         >
                           <Save className="w-3 h-3 mr-1" />
@@ -2208,63 +2284,63 @@ export default function KnowledgeBaseDetailPage(
               <div className="flex-1 overflow-y-auto">
                 {/* 搜索结果提示 */}
                 {searching && (
-                  <div className="flex items-center space-x-4 p-4">
-                    <Skeleton className="h-12 w-12 rounded-full" />
+                  <div className="flex items-center space-x-3 p-3">
+                    <Skeleton className="h-8 w-8 rounded-full" />
                     <div className="space-y-2">
-                      <Skeleton className="h-4 w-[250px]" />
-                      <Skeleton className="h-4 w-[200px]" />
+                      <Skeleton className="h-3 w-[250px]" />
+                      <Skeleton className="h-3 w-[200px]" />
                     </div>
                   </div>
                 )}
                 {!searching && searchrecords.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <h2>没有找到相关的切片</h2>
-                    <p className="mt-2 text-sm">尝试调整搜索条件</p>
+                  <div className="text-center py-6 text-gray-500">
+                    <h2 className="text-sm">没有找到相关的切片</h2>
+                    <p className="mt-2 text-xs">尝试调整搜索条件</p>
                   </div>
                 )}
                 {!searching && (
-                  <div className="gap-6 p-4 w-full">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="gap-3 p-2 w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {searchrecords.map((chunk, i) => (
                         <Card
                           key={i}
-                          className="flex flex-col max-h-64 gap-0 pb-0 py-4"
+                          className="flex flex-col max-h-64 gap-0 pb-0 py-2"
                         >
-                          <CardHeader className="gap-1 pb-0 ">
+                          <CardHeader className="gap-1 pb-1">
                             <CardTitle className="flex justify-start">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full text-xs h-5">
                                   {i + 1}
                                 </Badge>
-                                <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full">
+                                <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full text-xs h-5">
                                   分数: {chunk.score.toFixed(4)}
                                 </Badge>
-                                <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full">
+                                <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full text-xs h-5">
                                   {chunk.title}
                                 </Badge>
                                 {chunk.metadata.rerank && (
-                                  <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full">
+                                  <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full text-xs h-5">
                                     Rerank
                                   </Badge>
                                 )}
                               </div>
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-3 pb-2 mt-1 mb-1">
-                            <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
+                          <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-2 p-2 pb-1 mt-1 mb-1">
+                            <div className="whitespace-pre-wrap break-words text-xs leading-relaxed whitespace-normal pr-2">
                               {chunk.content}
                             </div>
                           </CardContent>
                           <CardFooter className="shrink-0 gap-2">
                             {chunk.metadata?.images_info?.length > 0 && (
-                              <div className="flex gap-2 mt-4">
+                              <div className="flex gap-2 mt-2">
                                 {chunk.metadata.images_info.map((meta, index) => (
                                   <PhotoProvider
                                     key={index}
                                     maskOpacity={0.8}
                                     overlayRender={() => {
                                       return (
-                                        <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                                        <div className="absolute left-0 bottom-0 p-3 w-full min-h-30 text-xs text-slate-300 z-50 bg-black/50">
                                           <div>图片描述：{meta.desc}</div>
                                         </div>
                                       );
@@ -2273,7 +2349,7 @@ export default function KnowledgeBaseDetailPage(
                                     <PhotoView key={index} src={meta.url}>
                                       <img
                                         src={meta.url}
-                                        className="w-10 h-10 object-cover rounded-md cursor-pointer"
+                                        className="w-8 h-8 object-cover rounded-md cursor-pointer"
                                       />
                                     </PhotoView>
                                   </PhotoProvider>

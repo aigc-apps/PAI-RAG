@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "pairag-file"
-version = "2.1.0"
+version = "2.1.2"
 requires-python = ">=3.11,<3.13"
 
 [tool.poetry]
@@ -49,7 +49,6 @@ docx2txt = "^0.9"
 markdownify = "^1.2.0"
 rapidfuzz = "^3.14.3"
 fastpdf4llm = "0.1.4"
-pypinyin = "^0.51.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

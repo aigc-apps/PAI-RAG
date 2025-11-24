@@ -78,6 +78,7 @@ interface KbFileChunk {
   text: string;
   chunk_metadata: {
     images_info: Array<ImageInfo>;
+    token_count?: number;
   };
   status: string;
   active: boolean;
@@ -315,20 +316,29 @@ export default function KnowledgeBaseFileChunksPage(
                   <Card key={chunk.id} className="h-70 px-2 pt-3 pb-1 gap-2">
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
-                        <Badge className={activeMap[String(chunk.active)]}>
-                          {chunk.active ? '已激活' : '未激活'}
-                        </Badge>
-                        <Switch
-                          checked={chunk.active}
-                          className="ml-auto rounded-full transition-color"
-                          onCheckedChange={() => handleActivateToggle(chunk)}
-                        />
-                        <button
-                          className="text-black-500 hover:text-black-700 px-2"
-                          onClick={() => handleEditClick(chunk)}
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <Badge className={activeMap[String(chunk.active)]}>
+                            {chunk.active ? '已启用' : '未启用'}
+                          </Badge>
+                          {chunk.chunk_metadata?.token_count !== undefined && (
+                            <Badge variant="outline" className="text-xs">
+                              tokens: {chunk.chunk_metadata.token_count}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={chunk.active}
+                            className="rounded-full transition-color"
+                            onCheckedChange={() => handleActivateToggle(chunk)}
+                          />
+                          <button
+                            className="text-black-500 hover:text-black-700 px-2"
+                            onClick={() => handleEditClick(chunk)}
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                        </div>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-2 pb-2">

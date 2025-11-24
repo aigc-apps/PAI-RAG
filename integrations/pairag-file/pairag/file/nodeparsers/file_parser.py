@@ -21,6 +21,7 @@ from pairag.file.nodeparsers.pai_markdown_parser import MarkdownNodeParser
 from pairag.file.nodeparsers.positional_markdown_parser import PositionalMarkdownNodeParser
 from pairag.file.store.base import BaseFileStore
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
+from pairag.file.utils.tokenization import estimate_tokens_in_text
 from pairag.file.utils.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
@@ -278,6 +279,8 @@ class FileParser:
                                 node_id=doc_node.id_, metadata={}
                             ),
                         }
+                if "token_count" not in chunk.metadata:
+                    chunk.metadata["token_count"] = estimate_tokens_in_text(chunk.text)
             splitted_nodes.extend(chunks)
 
         for node in splitted_nodes:
