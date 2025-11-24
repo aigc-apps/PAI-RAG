@@ -59,9 +59,11 @@ import {
   SearchIcon,
   ChevronDownIcon,
   RefreshCcwIcon,
+  CirclePlayIcon,
   Search,
   MoreVertical,
   Upload,
+  InfoIcon,
 } from 'lucide-react';
 import {
   Dialog,
@@ -178,6 +180,7 @@ export default function KnowledgeBaseDetailPage(
   const statusRef = useRef(statusFilter);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
+  const [showBatchReprocessDialog, setShowBatchReprocessDialog] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<KnowledgeBaseFile | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -198,6 +201,7 @@ export default function KnowledgeBaseDetailPage(
   let isRefreshing = false;
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [editingMetadata, setEditingMetadata] = useState<{ [k: string]: any }>(
     {},
@@ -524,13 +528,14 @@ export default function KnowledgeBaseDetailPage(
     setDeleting(true);
     try {
       const res = await fetch(
-        `/api/config/knowledgebases/${kbId}/files/batch_delete`,
+        `/api/config/knowledgebases/${kbId}/files/batch`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            operation: 'delete',
             file_id_list: Array.from(selectedFiles),
           }),
         },
@@ -546,6 +551,44 @@ export default function KnowledgeBaseDetailPage(
       toast.error(error.message || "批量删除失败");
     } finally {
       setDeleting(false);
+      fetchKbFiles();
+    }
+  };
+
+  const handleBatchReprocessFiles = async () => {
+    if (selectedFiles.size === 0) {
+      toast.error("请至少选择一个文件");
+      setShowBatchReprocessDialog(false);
+      return;
+    }
+
+    setShowBatchReprocessDialog(false);
+    setReprocessing(true);
+    try {
+      const res = await fetch(
+        `/api/config/knowledgebases/${kbId}/files/batch`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            operation: 'reprocess',
+            file_id_list: Array.from(selectedFiles),
+          }),
+        },
+      );
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `批量重新解析失败`);
+      }
+      const result = await res.json();
+      toast.success(result.message || `成功将 ${selectedFiles.size} 个文件加入重新处理队列`);
+      setSelectedFiles(new Set()); // 清空选择
+    } catch (error: any) {
+      toast.error(error.message || "批量重新解析失败");
+    } finally {
+      setReprocessing(false);
       fetchKbFiles();
     }
   };
@@ -1050,6 +1093,24 @@ export default function KnowledgeBaseDetailPage(
                     <>
                       <Button
                         variant="outline"
+                        className="h-6 text-xs"
+                        onClick={() => setShowBatchReprocessDialog(true)}
+                        disabled={reprocessing}
+                      >
+                        {reprocessing ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            处理中...
+                          </>
+                        ) : (
+                          <>
+                            <CirclePlayIcon className="mr-2 h-4 w-4" />
+                            批量重新解析 ({selectedFiles.size})
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
                         className="h-6 text-xs bg-rose-100 text-rose-700 hover:bg-rose-200 hover:text-rose-800 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/40"
                         onClick={() => setShowBatchDeleteDialog(true)}
                         disabled={deleting}
@@ -1066,6 +1127,24 @@ export default function KnowledgeBaseDetailPage(
                           </>
                         )}
                       </Button>
+                      <AlertDialog open={showBatchReprocessDialog} onOpenChange={setShowBatchReprocessDialog}>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>确认批量重新解析？</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              您即将重新解析 {selectedFiles.size} 个文件，这些文件将被重新处理并更新。请确认是否继续？
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>取消</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleBatchReprocessFiles}
+                            >
+                              确认重新解析
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                       <AlertDialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
                         <AlertDialogContent>
                           <AlertDialogHeader>
@@ -1886,12 +1965,7 @@ export default function KnowledgeBaseDetailPage(
                 {/* 检索测试输入区域 - 左上角 */}
                 <Card className="flex-[4] flex flex-col min-h-0 mb-2">
                   <CardHeader className="pb-2 flex-shrink-0">
-                    <CardTitle className="text-sm">检索测试</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex-1 flex flex-col min-h-0">
-                    {/* 搜索框和按钮 */}
-                    <div className="flex flex-col gap-2 flex-1">
-                      <div className="flex-1 min-w-[200px]">
+                  <div className="flex-1 min-w-[200px]">
                         <Input
                           type="text"
                           id="search_query"
@@ -1902,9 +1976,13 @@ export default function KnowledgeBaseDetailPage(
                               handleSearchSubmit();
                             }
                           }}
-                          className="w-full h-24 text-xs"
+                          className="w-full text-xs"
                         />
                       </div>
+                  </CardHeader>
+                  <CardContent className="flex-1 flex flex-col min-h-0">
+                    {/* 搜索框和按钮 */}
+                    <div className="flex flex-col gap-2 flex-1">
                       <div className="flex flex-wrap gap-2 flex-shrink-0">
                         <Popover>
                           <PopoverTrigger asChild>
@@ -2059,8 +2137,8 @@ export default function KnowledgeBaseDetailPage(
                 </Card>
 
                 {/* 检索设置板块 - 左下角 */}
-                <Card className={`flex-[0.8] overflow-y-auto text-xs min-h-0 ${!retrievalSettingOpen ? 'p-0' : ''}`}>
-                  <CardHeader className={retrievalSettingOpen ? "pb-2 px-3 pt-2" : "py-0 px-3"}>
+                <Card className={`flex-[0.8] overflow-y-auto text-xs min-h-0 p-2`}>
+                  <CardHeader className="px-3 pt-2">
                     <div className="flex items-center justify-between h-6">
                       <CardTitle className="text-sm">检索设置</CardTitle>
                       <Button
@@ -2074,7 +2152,7 @@ export default function KnowledgeBaseDetailPage(
                     </div>
                   </CardHeader>
                   {retrievalSettingOpen && (
-                    <CardContent className="space-y-2 px-3 pb-2">
+                    <CardContent className="space-y-4 px-3 pb-2">
                       {/* 检索策略 */}
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2 items-center">
@@ -2089,36 +2167,36 @@ export default function KnowledgeBaseDetailPage(
                               }));
                             }}
                             variant="outline"
-                            className="flex gap-x-1 overflow-visible"
+                            className="flex gap-x-2 overflow-visible"
                           >
                             <ToggleGroupItem
                               value="vector"
                               aria-label="向量检索"
-                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-6"
                             >
-                              <ScanSearch className="w-2 h-2 mr-0.5" />
+                              <ScanSearch className="w-2 h-2" />
                               向量检索
                             </ToggleGroupItem>
                             <ToggleGroupItem
                               value="fulltext"
                               aria-label="全文检索"
-                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-6"
                             >
-                              <TextSearch className="w-2 h-2 mr-0.5" />
+                              <TextSearch className="w-2 h-2" />
                               全文检索
                             </ToggleGroupItem>
                             <ToggleGroupItem
                               value="hybrid"
                               aria-label="混合检索"
-                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-6"
                             >
-                              <SearchCode className="w-2 h-2 mr-0.5" />
+                              <SearchCode className="w-2 h-2" />
                               混合检索
                             </ToggleGroupItem>
                           </ToggleGroup>
                         </div>
                         {retrievalSetting.retrieval_mode === 'hybrid' && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 pt-1">
                             <Label htmlFor="vector_weight" className="w-[80px] text-xs">
                               向量权重
                             </Label>
@@ -2263,17 +2341,17 @@ export default function KnowledgeBaseDetailPage(
                       </div>
                       
                       {/* 保存按钮 */}
-                      <div className="flex flex-col items-end pt-2 border-t gap-1">
+                      <div className="flex items-center border-t gap-3 pt-3">
                         <Button
                           type="button"
                           onClick={handleSaveRetrievalSetting}
-                          className="whitespace-nowrap h-6 text-xs px-2 bg-gray-600 hover:bg-gray-700 text-white"
+                          className="whitespace-nowrap h-8 text-xs px-2 hover:bg-gray-700 text-white"
                           size="sm"
                         >
                           <Save className="w-3 h-3 mr-1" />
-                          保存至知识库设置
+                          应用到知识库设置
                         </Button>
-                        <p className="text-xs text-muted-foreground">保存后会更改知识库检索配置</p>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1"><InfoIcon className="w-4 h-4" />保存后会更改知识库检索配置</div>
                       </div>
                     </CardContent>
                   )}

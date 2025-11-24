@@ -485,6 +485,159 @@ class BatchDeleteFilesRequest(BaseModel):
     file_id_list: List[str] = Field(..., description="要删除的文件ID列表")
 
 
+class BatchOperationRequest(BaseModel):
+    operation: str = Field(..., description="操作类型: 'delete' 或 'reprocess'")
+    file_id_list: List[str] = Field(..., description="要操作的文件ID列表")
+
+
+@knowledgebase_router.post("/{kb_id}/files/batch", response_model=ResponseModel[dict])
+async def batch_operations(
+    kb_id: str,
+    request: BatchOperationRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    批量操作知识库中的文件
+    支持的操作：
+    - delete: 批量删除文件
+    - reprocess: 批量重新处理文件
+    """
+    if not request.file_id_list:
+        return error_response(code=400, message="文件ID列表不能为空。")
+
+    if request.operation not in ["delete", "reprocess"]:
+        return error_response(
+            code=400,
+            message=f"不支持的操作类型: {request.operation}。支持的操作: delete, reprocess"
+        )
+
+    # 验证所有文件是否存在
+    file_res = await session.exec(
+        select(KbFileEntity).where(
+            KbFileEntity.id.in_(request.file_id_list),
+            KbFileEntity.kb_id == kb_id
+        )
+    )
+    file_entities = file_res.all()
+    found_file_ids = {entity.id for entity in file_entities}
+    not_found_ids = [file_id for file_id in request.file_id_list if file_id not in found_file_ids]
+
+    if not_found_ids:
+        return error_response(
+            code=404,
+            message=f"以下文件在知识库{kb_id}中不存在: {', '.join(not_found_ids)}"
+        )
+
+    if request.operation == "delete":
+        return await _batch_delete_files(kb_id, file_entities, request.file_id_list, session)
+    elif request.operation == "reprocess":
+        return await _batch_reprocess_files(kb_id, file_entities, session)
+
+
+async def _batch_delete_files(
+    kb_id: str,
+    file_entities: List[KbFileEntity],
+    file_id_list: List[str],
+    session: AsyncSession,
+) -> ResponseModel[dict]:
+    """
+    批量删除文件的内部实现
+    """
+    # 查询所有文件的chunks
+    chunks_res = await session.exec(
+        select(KbChunkEntity).where(
+            KbChunkEntity.file_id.in_(file_id_list),
+            KbChunkEntity.kb_id == kb_id
+        )
+    )
+    chunk_entities = chunks_res.all()
+    chunk_ids = [chunk.id for chunk in chunk_entities]
+    total_chunks_deleted = len(chunk_entities)
+
+    try:
+        # 删除向量库中的chunks
+        if chunk_ids:
+            await kb_tool.adelete_chunks_from_vectordb(kb_id=kb_id, node_ids=chunk_ids)
+            logger.info(f"Deleted {len(chunk_ids)} chunks from vector store for kb {kb_id}")
+
+        # 删除数据库中的chunk_entities
+        for chunk_entity in chunk_entities:
+            await session.delete(chunk_entity)
+
+        # 删除数据库中的file_entities
+        for file_entity in file_entities:
+            await session.delete(file_entity)
+
+        # 提交所有删除操作
+        await session.commit()
+
+        logger.info(
+            f"Batch delete files@{kb_id}: deleted {len(file_id_list)} files, "
+            f"{total_chunks_deleted} chunks in total."
+        )
+
+        return success_response(
+            data={
+                "deleted_count": len(file_id_list),
+                "total_chunks_deleted": total_chunks_deleted,
+            },
+            message=f"成功删除 {len(file_id_list)} 个文件，共删除 {total_chunks_deleted} 个切片。"
+        )
+
+    except Exception as e:
+        await session.rollback()
+        logger.exception(f"Failed to batch delete files@{kb_id}: {e}")
+        return error_response(code=500, message=f"批量删除失败: {str(e)}")
+
+
+async def _batch_reprocess_files(
+    kb_id: str,
+    file_entities: List[KbFileEntity],
+    session: AsyncSession,
+) -> ResponseModel[dict]:
+    """
+    批量重新处理文件的内部实现
+    """
+    import app.worker as background_worker
+
+    file_version = int(time.time())
+    reprocessed_count = 0
+
+    try:
+        for file_entity in file_entities:
+            file_entity.status = FileStatus.pending
+            file_entity.file_version = file_version
+            session.add(file_entity)
+            reprocessed_count += 1
+
+        await session.commit()
+
+        # 为每个文件入队处理任务
+        for file_entity in file_entities:
+            background_worker.enqueue_file_tasks.delay(
+                file_entity.id,
+                file_entity.file_version,
+                is_attachment=False
+            )
+            logger.info(f"Queued file {file_entity.id} for reprocessing.")
+
+        logger.info(
+            f"Batch reprocess files@{kb_id}: queued {reprocessed_count} files for reprocessing."
+        )
+
+        return success_response(
+            data={
+                "reprocessed_count": reprocessed_count,
+            },
+            message=f"成功将 {reprocessed_count} 个文件加入重新处理队列。"
+        )
+
+    except Exception as e:
+        await session.rollback()
+        logger.exception(f"Failed to batch reprocess files@{kb_id}: {e}")
+        return error_response(code=500, message=f"批量重新处理失败: {str(e)}")
+
+
 @knowledgebase_router.post("/{kb_id}/files/batch_delete")
 async def batch_delete_files(
     kb_id: str,
