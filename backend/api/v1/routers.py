@@ -41,12 +41,14 @@ def add_chat_router(app: FastAPI):
     from api.v1.chat import chat_agent_router
     from api.v1.thread import thread_router
     from api.v1.retrieval import retrieval_router
+    from api.v1.retrieval_tool_api import retrieval_tool_router
     from api.v1.healthcheck import health_router
     from api.v1.embed import embedding_router
 
     app.include_router(chat_agent_router, prefix="/v1/chat/completions")
     app.include_router(thread_router, prefix="/v1/threads")
     app.include_router(retrieval_router, prefix="/v1/retrieval")
+    app.include_router(retrieval_tool_router, prefix="/v1/tools/retrieval")
     app.include_router(embedding_router, prefix="/v1/embeddings")
 
     app.include_router(health_router, prefix="/health")
