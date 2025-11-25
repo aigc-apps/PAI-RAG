@@ -5,7 +5,7 @@ from common.knowledgebase.types import SUPPORTED_VECTOR_DB_TYPES
 from config.providers.vectordb_provider import DEFAULT_VECTOR_ID, create_vector_db_connection_from_dict, vectordb_provider
 from config.utils.vectordb import create_vector_db_connection_from_env
 from fastapi import APIRouter, Depends
-from rag.vector_store.vector_connection import create_vector_store
+from rag.vector_store.vector_connection import create_vector_store, cleanup_vector_store
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.vectordb import (
@@ -18,6 +18,42 @@ from loguru import logger
 
 
 vectordb_router = APIRouter()
+
+
+async def _cleanup_cached_vector_stores():
+    """
+    Clean up all cached vector stores in kb_cache to ensure connections are properly closed.
+    This should be called before updating vector db config to prevent connection leaks.
+    """
+    try:
+        from tools.knowledgebase.knowledgebase_tool import kb_cache
+        from rag.vector_store.vector_connection import cleanup_vector_store
+
+        # 获取所有缓存的向量存储
+        # LruCache 内部使用 OrderedDict，每个条目是 (value, valid_ts) 的元组
+        cached_items = []
+        if hasattr(kb_cache, 'cache'):
+            with kb_cache.lock:  # 使用锁确保线程安全
+                cached_items = [
+                    (key, entry[0])  # entry[0] 是 value，entry[1] 是 valid_ts
+                    for key, entry in kb_cache.cache.items()
+                ]
+
+        if cached_items:
+            logger.info(f"Cleaning up {len(cached_items)} cached vector stores due to vector db config change.")
+            # 清理所有缓存的向量存储
+            for key, vector_store in cached_items:
+                try:
+                    await cleanup_vector_store(vector_store)
+                except Exception as e:
+                    logger.warning(f"Error cleaning up cached vector store {key}: {e}")
+
+            # 清空缓存（需要在锁内操作）
+            with kb_cache.lock:
+                kb_cache.cache.clear()
+            logger.info("Cleared all cached vector stores.")
+    except Exception as e:
+        logger.warning(f"Error cleaning up cached vector stores: {e}")
 
 
 @vectordb_router.post("", response_model=ResponseModel[VectorDbConfig])
@@ -61,6 +97,10 @@ async def add_vector_db_config(
     try:
         await session.commit()
         await session.refresh(existing_vector_config)
+
+        # 在更新配置前，清理所有缓存的向量存储，确保连接被正确关闭
+        await _cleanup_cached_vector_stores()
+
         vectordb_provider.update(existing_vector_config)
         await config_change_manager.notify_change_async(
             event_source=ChangeEventSource.VECTORDB,
@@ -119,6 +159,7 @@ async def connection_test(
 
 
     vector_connection = create_vector_db_connection_from_dict(test_config.config)
+    vector_store = None
     try:
         from llama_index.core.schema import TextNode
         from llama_index.core.vector_stores import VectorStoreQuery
@@ -152,3 +193,7 @@ async def connection_test(
         return error_response(
             code=400, message=f"测试向量库连接失败: {e}"
         )
+    finally:
+        # 确保无论成功还是失败都清理连接，避免连接泄漏
+        if vector_store is not None:
+            await cleanup_vector_store(vector_store)

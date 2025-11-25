@@ -1,13 +1,15 @@
 from functools import partial
 from typing import List, Optional
+import asyncio
 from config.providers.vectordb_provider import vectordb_provider
-from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
+from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator, VectorStoreQueryResult
 from llama_index.core.tools import FunctionTool
 
 from common.chat.models import RetrievalSetting
 from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
 from common.knowledgebase.types import (
     VectorIndexRetrievalType,
+    is_fulltext_supported,
 )
 from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition, query_file_ids_with_metadata_filter
 from rag.chunk_helper import (
@@ -17,6 +19,7 @@ from rag.vector_store.vector_connection import (
     create_vector_store,
     is_docid_filter_supported,
 )
+from rag.rerank.weight_reranker import WeightReranker, _to_llama_similarities
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from config.providers.knowledgebase_provider import knowledgebase_provider
@@ -50,6 +53,64 @@ def get_kb_cache_key(knowledgebase: KbEntity):
     vector_str = vector_connection.model_dump_json()
     key_str = f"{knowledgebase.id}--{knowledgebase.embedding_model}--{vector_str}"
     return key_str
+
+
+def merge_vector_store_results(
+    text_result: VectorStoreQueryResult,
+    dense_result: VectorStoreQueryResult,
+) -> VectorStoreQueryResult:
+    """
+    合并两个 VectorStoreQueryResult，去重后返回合并结果。
+    用于 reranker 场景，需要先合并再去重。
+
+    Args:
+        text_result: 文本搜索结果
+        dense_result: 向量搜索结果
+
+    Returns:
+        合并并去重后的 VectorStoreQueryResult
+    """
+    # 使用字典去重，key 为 node_id
+    merged_nodes = {}  # node_id -> (node, similarity, node_id)
+
+    # 处理 text 搜索结果
+    for i, node in enumerate(text_result.nodes):
+        node_id = text_result.ids[i] if i < len(text_result.ids) else node.node_id
+        similarity = text_result.similarities[i] if i < len(text_result.similarities) else 0.0
+
+        if node_id not in merged_nodes:
+            merged_nodes[node_id] = (node, similarity, node_id)
+        else:
+            # 如果已存在，保留相似度更高的
+            existing_node, existing_similarity, existing_id = merged_nodes[node_id]
+            if similarity > existing_similarity:
+                merged_nodes[node_id] = (node, similarity, node_id)
+
+    # 处理 dense 搜索结果
+    for i, node in enumerate(dense_result.nodes):
+        node_id = dense_result.ids[i] if i < len(dense_result.ids) else node.node_id
+        similarity = dense_result.similarities[i] if i < len(dense_result.similarities) else 0.0
+
+        if node_id not in merged_nodes:
+            merged_nodes[node_id] = (node, similarity, node_id)
+        else:
+            # 如果已存在，保留相似度更高的
+            existing_node, existing_similarity, existing_id = merged_nodes[node_id]
+            if similarity > existing_similarity:
+                merged_nodes[node_id] = (node, similarity, node_id)
+
+    merged_items = list(merged_nodes.values())
+    merged_items.sort(key=lambda x: x[1], reverse=True)
+
+    top_k_nodes = [item[0] for item in merged_items]
+    top_k_scores = [item[1] for item in merged_items]
+    top_k_ids = [item[2] for item in merged_items]
+
+    return VectorStoreQueryResult(
+        nodes=top_k_nodes,
+        ids=top_k_ids,
+        similarities=top_k_scores,
+    )
 
 
 # 在线的知识库工具
@@ -194,6 +255,19 @@ class PaiKnowledgebaseTool:
         retrieval_mode = retrieval_config.retrieval_mode
         if retrieval_setting and retrieval_setting.retrieval_mode:
             retrieval_mode = retrieval_setting.retrieval_mode
+
+        # 检查向量数据库是否支持全文检索和混合检索
+        vector_db_type = vectordb_provider.get_vector_db_type()
+
+        if not is_fulltext_supported(vector_db_type):
+            # 如果不支持全文检索，强制使用向量检索
+            if retrieval_mode in [VectorIndexRetrievalType.fulltext, VectorIndexRetrievalType.hybrid]:
+                logger.warning(
+                    f"Vector database type {vector_db_type} does not support {retrieval_mode} retrieval. "
+                    f"Falling back to vector retrieval."
+                )
+                retrieval_mode = VectorIndexRetrievalType.vector
+
         query_mode = retrieval_type_to_search_mode(retrieval_mode)
 
 
@@ -219,59 +293,155 @@ class PaiKnowledgebaseTool:
             if retrieval_setting and retrieval_setting.rerank_top_k is not None:
                 reranker_top_k = retrieval_setting.rerank_top_k
 
-        # 直接按doc_id过滤
-        if is_docid_filter_supported(vector_store=vector_store):
-            logger.info("Using doc_id as filters.")
-            vector_query = VectorStoreQuery(
-                query_embedding=query_embedding,
-                similarity_top_k=top_k,
-                doc_ids=document_ids,
-                query_str=query,
-                mode=query_mode,
-                alpha=vector_weight,
-            )
+        if query_mode == VectorStoreQueryMode.HYBRID:
+            if is_docid_filter_supported(vector_store=vector_store):
+                text_query = VectorStoreQuery(
+                    query_embedding=query_embedding,
+                    similarity_top_k=top_k,
+                    doc_ids=document_ids,
+                    query_str=query,
+                    mode=VectorStoreQueryMode.TEXT_SEARCH,
+                )
+                dense_query = VectorStoreQuery(
+                    query_embedding=query_embedding,
+                    similarity_top_k=top_k,
+                    doc_ids=document_ids,
+                    query_str=query,
+                    mode=VectorStoreQueryMode.DEFAULT,
+                )
+            else:
+                metadata_filters = MetadataFilters(
+                    condition=FilterCondition.AND,
+                    filters=[
+                        MetadataFilter(
+                            key="doc_id",
+                            value=document_ids,
+                            operator=FilterOperator.IN,
+                        )
+                    ],
+                )
+                text_query = VectorStoreQuery(
+                    query_embedding=query_embedding,
+                    similarity_top_k=top_k,
+                    query_str=query,
+                    mode=VectorStoreQueryMode.TEXT_SEARCH,
+                    filters=metadata_filters,
+                )
+                dense_query = VectorStoreQuery(
+                    query_embedding=query_embedding,
+                    similarity_top_k=top_k,
+                    query_str=query,
+                    mode=VectorStoreQueryMode.DEFAULT,
+                    filters=metadata_filters,
+                )
+
+            try:
+                text_result_task = vector_store.aquery(text_query)
+                dense_result_task = vector_store.aquery(dense_query)
+                text_result, dense_result = await asyncio.gather(text_result_task, dense_result_task)
+
+                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
+                if text_result.similarities:
+                    text_scores = text_result.similarities
+                    normalized_text_scores = _to_llama_similarities(text_scores)
+                    text_result.similarities = normalized_text_scores
+                    logger.info(f"TEXT_SEARCH mode: Normalized scores - min={min(text_scores) if text_scores else 'N/A'}, max={max(text_scores) if text_scores else 'N/A'}")
+
+                logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
+            except Exception as e:
+                logger.error(f"Failed to query vector store: {e}")
+                key = get_kb_cache_key(knowledgebase)
+                kb_cache.delete(key) # 删除缓存，强制重新创建
+                raise
+
+            # 根据 enable_rerank 决定使用 reranker 还是 weight_reranker
+            if enable_rerank and len(text_result.nodes) + len(dense_result.nodes) > 1 and query:
+                merged_result = merge_vector_store_results(text_result, dense_result)
+                logger.info(f"HYBRID mode: Merged to {len(merged_result.nodes)} unique nodes for reranker.")
+
+                rerank_model = retrieval_config.rerank_model
+                if retrieval_setting and retrieval_setting.rerank_model:
+                    rerank_model = retrieval_setting.rerank_model
+                raranker_model = reranker_provider.get_reranker_model(rerank_model)
+                query_result = await raranker_model.vector_store_rerank(
+                    query=query,
+                    result=merged_result,
+                    top_n=reranker_top_k)
+                logger.info(f"Reranked {len(query_result.nodes)} nodes.")
+            else:
+                text_weight = 1 - vector_weight
+                reranker = WeightReranker(
+                    vector_weight=vector_weight,
+                    text_weight=text_weight,
+                )
+                query_result = reranker.rerank(
+                    text_result=text_result,
+                    dense_result=dense_result,
+                    top_k=top_k,
+                )
+                logger.info(f"HYBRID mode: Weight reranked to {len(query_result.nodes)} nodes.")
         else:
-            # 使用llama_index filters 过滤
-            metadata_filters = MetadataFilters(
-                condition=FilterCondition.AND,
-                filters=[
-                    MetadataFilter(
-                        key="doc_id",
-                        value=document_ids,
-                        operator=FilterOperator.IN,
-                    )
-                ],
-            )
-            logger.info(f"Using metadata filters {metadata_filters}.")
+            # 直接按doc_id过滤
+            if is_docid_filter_supported(vector_store=vector_store):
+                logger.info("Using doc_id as filters.")
+                vector_query = VectorStoreQuery(
+                    query_embedding=query_embedding,
+                    similarity_top_k=top_k,
+                    doc_ids=document_ids,
+                    query_str=query,
+                    mode=query_mode,
+                    alpha=vector_weight,
+                )
+            else:
+                # 使用llama_index filters 过滤
+                metadata_filters = MetadataFilters(
+                    condition=FilterCondition.AND,
+                    filters=[
+                        MetadataFilter(
+                            key="doc_id",
+                            value=document_ids,
+                            operator=FilterOperator.IN,
+                        )
+                    ],
+                )
+                logger.info(f"Using metadata filters {metadata_filters}.")
 
-            vector_query = VectorStoreQuery(
-                query_embedding=query_embedding,
-                similarity_top_k=top_k,
-                query_str=query,
-                mode=query_mode,
-                alpha=vector_weight,
-                filters=metadata_filters,
-            )
+                vector_query = VectorStoreQuery(
+                    query_embedding=query_embedding,
+                    similarity_top_k=top_k,
+                    query_str=query,
+                    mode=query_mode,
+                    alpha=vector_weight,
+                    filters=metadata_filters,
+                )
 
-        try:
-            query_result = await vector_store.aquery(vector_query)
-            logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
-        except Exception as e:
-            logger.error(f"Failed to query vector store: {e}")
-            key = get_kb_cache_key(knowledgebase)
-            kb_cache.delete(key) # 删除缓存，强制重新创建
-            raise
+            try:
+                query_result = await vector_store.aquery(vector_query)
 
-        if enable_rerank and len(query_result.nodes) > 1 and query:
-            rerank_model = retrieval_config.rerank_model
-            if retrieval_setting and retrieval_setting.rerank_model:
-                rerank_model = retrieval_setting.rerank_model
-            raranker_model = reranker_provider.get_reranker_model(rerank_model)
-            query_result = await raranker_model.vector_store_rerank(
-                query=query,
-                result=query_result,
-                top_n=reranker_top_k)
-            logger.info(f"Reranked {len(query_result.nodes)} nodes.")
+                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
+                if query_mode == VectorStoreQueryMode.TEXT_SEARCH and query_result.similarities:
+                    text_scores = query_result.similarities
+                    normalized_text_scores = _to_llama_similarities(text_scores)
+                    query_result.similarities = normalized_text_scores
+                    logger.info(f"TEXT_SEARCH mode: Normalized scores - min={min(text_scores) if text_scores else 'N/A'}, max={max(text_scores) if text_scores else 'N/A'}")
+
+                logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+            except Exception as e:
+                logger.error(f"Failed to query vector store: {e}")
+                key = get_kb_cache_key(knowledgebase)
+                kb_cache.delete(key) # 删除缓存，强制重新创建
+                raise
+
+            if enable_rerank and len(query_result.nodes) > 1 and query:
+                rerank_model = retrieval_config.rerank_model
+                if retrieval_setting and retrieval_setting.rerank_model:
+                    rerank_model = retrieval_setting.rerank_model
+                raranker_model = reranker_provider.get_reranker_model(rerank_model)
+                query_result = await raranker_model.vector_store_rerank(
+                    query=query,
+                    result=query_result,
+                    top_n=reranker_top_k)
+                logger.info(f"Reranked {len(query_result.nodes)} nodes.")
 
         result_nodes = []
         file_ids = []
@@ -325,6 +495,19 @@ class PaiKnowledgebaseTool:
         retrieval_mode = retrieval_config.retrieval_mode
         if retrieval_setting and retrieval_setting.retrieval_mode:
             retrieval_mode = retrieval_setting.retrieval_mode
+
+        # 检查向量数据库是否支持全文检索和混合检索
+        vector_db_type = vectordb_provider.get_vector_db_type()
+
+        if not is_fulltext_supported(vector_db_type):
+            # 如果不支持全文检索，强制使用向量检索
+            if retrieval_mode in [VectorIndexRetrievalType.fulltext, VectorIndexRetrievalType.hybrid]:
+                logger.warning(
+                    f"Vector database type {vector_db_type} does not support {retrieval_mode} retrieval. "
+                    f"Falling back to vector retrieval."
+                )
+                retrieval_mode = VectorIndexRetrievalType.vector
+
         query_mode = retrieval_type_to_search_mode(retrieval_mode)
 
         vector_weight = retrieval_config.vector_weight
@@ -349,32 +532,105 @@ class PaiKnowledgebaseTool:
             if retrieval_setting and retrieval_setting.rerank_top_k is not None:
                 reranker_top_k = retrieval_setting.rerank_top_k
 
-        vector_query = VectorStoreQuery(
-            query_embedding=query_embedding,
-            similarity_top_k=top_k,
-            doc_ids=document_ids,
-            query_str=query,
-            mode=query_mode,
-            alpha=vector_weight,
-        )
+        if query_mode == VectorStoreQueryMode.HYBRID:
+            # 创建 text 和 dense 查询
+            text_query = VectorStoreQuery(
+                query_embedding=query_embedding,
+                similarity_top_k=top_k,
+                doc_ids=document_ids,
+                query_str=query,
+                mode=VectorStoreQueryMode.TEXT_SEARCH,
+            )
+            dense_query = VectorStoreQuery(
+                query_embedding=query_embedding,
+                similarity_top_k=top_k,
+                doc_ids=document_ids,
+                query_str=query,
+                mode=VectorStoreQueryMode.DEFAULT,
+            )
 
-        try:
-            query_result = await vector_store.aquery(vector_query)
-        except Exception as e:
-            logger.error(f"Failed to query vector store: {e}")
-            key = get_kb_cache_key(knowledgebase)
-            kb_cache.delete(key) # 删除缓存，强制重新创建
-            raise
+            try:
+                text_result_task = vector_store.aquery(text_query)
+                dense_result_task = vector_store.aquery(dense_query)
+                text_result, dense_result = await asyncio.gather(text_result_task, dense_result_task)
 
-        if enable_rerank and len(query_result.nodes) > 1 and query:
-            rerank_model = retrieval_config.rerank_model
-            if retrieval_setting and retrieval_setting.rerank_model:
-                rerank_model = retrieval_setting.rerank_model
-            raranker_model = reranker_provider.get_reranker_model(rerank_model)
-            query_result = await raranker_model.vector_store_rerank(
-                query=query,
-                result=query_result,
-                top_n=reranker_top_k)
+                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
+                if text_result.similarities:
+                    text_scores = text_result.similarities
+                    normalized_text_scores = _to_llama_similarities(text_scores)
+                    text_result.similarities = normalized_text_scores
+                    logger.info(f"TEXT_SEARCH mode: Normalized scores - min={min(text_scores) if text_scores else 'N/A'}, max={max(text_scores) if text_scores else 'N/A'}")
+
+                logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
+            except Exception as e:
+                logger.error(f"Failed to query vector store: {e}")
+                key = get_kb_cache_key(knowledgebase)
+                kb_cache.delete(key) # 删除缓存，强制重新创建
+                raise
+
+            # 根据 enable_rerank 决定使用 reranker 还是 weight_reranker
+            if enable_rerank and len(text_result.nodes) + len(dense_result.nodes) > 1 and query:
+                # 合并两个结果并去重
+                merged_result = merge_vector_store_results(text_result, dense_result)
+                logger.info(f"HYBRID mode: Merged to {len(merged_result.nodes)} unique nodes for reranker.")
+
+                rerank_model = retrieval_config.rerank_model
+                if retrieval_setting and retrieval_setting.rerank_model:
+                    rerank_model = retrieval_setting.rerank_model
+                raranker_model = reranker_provider.get_reranker_model(rerank_model)
+                query_result = await raranker_model.vector_store_rerank(
+                    query=query,
+                    result=merged_result,
+                    top_n=reranker_top_k)
+                logger.info(f"Reranked {len(query_result.nodes)} nodes.")
+            else:
+                # 使用 weight_reranker 合并结果
+                text_weight = 1 - vector_weight
+                reranker = WeightReranker(
+                    vector_weight=vector_weight,
+                    text_weight=text_weight,
+                )
+                query_result = reranker.rerank(
+                    text_result=text_result,
+                    dense_result=dense_result,
+                    top_k=top_k,
+                )
+                logger.info(f"HYBRID mode: Weight reranked to {len(query_result.nodes)} nodes.")
+        else:
+            vector_query = VectorStoreQuery(
+                query_embedding=query_embedding,
+                similarity_top_k=top_k,
+                doc_ids=document_ids,
+                query_str=query,
+                mode=query_mode,
+                alpha=vector_weight,
+            )
+
+            try:
+                query_result = await vector_store.aquery(vector_query)
+
+                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
+                if query_mode == VectorStoreQueryMode.TEXT_SEARCH and query_result.similarities:
+                    text_scores = query_result.similarities
+                    normalized_text_scores = _to_llama_similarities(text_scores)
+                    query_result.similarities = normalized_text_scores
+                    logger.info(f"TEXT_SEARCH mode: Normalized scores - min={min(text_scores) if text_scores else 'N/A'}, max={max(text_scores) if text_scores else 'N/A'}")
+            except Exception as e:
+                logger.error(f"Failed to query vector store: {e}")
+                key = get_kb_cache_key(knowledgebase)
+                kb_cache.delete(key) # 删除缓存，强制重新创建
+                raise
+
+            if enable_rerank and len(query_result.nodes) > 1 and query:
+                rerank_model = retrieval_config.rerank_model
+                if retrieval_setting and retrieval_setting.rerank_model:
+                    rerank_model = retrieval_setting.rerank_model
+                raranker_model = reranker_provider.get_reranker_model(rerank_model)
+                query_result = await raranker_model.vector_store_rerank(
+                    query=query,
+                    result=query_result,
+                    top_n=reranker_top_k)
+                logger.info(f"Reranked {len(query_result.nodes)} nodes.")
 
         result_nodes = []
         for i, node in enumerate(query_result.nodes):

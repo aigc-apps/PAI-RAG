@@ -207,8 +207,53 @@ def create_vector_store(
 
 
 async def cleanup_vector_store(vector_store: BasePydanticVectorStore):
+    """
+    Clean up vector store connections.
+    For PGVectorStore, safely close the connection to avoid greenlet errors and connection leaks.
+    For AlibabaCloudOpenSearchStore, close aiohttp connections to avoid connection leaks.
+    """
     if isinstance(vector_store, PGVectorStore):
-        await vector_store.close()
+        try:
+            # 优先关闭引擎连接池，这会关闭所有连接池中的连接
+            # 这样可以避免连接泄漏，即使 close() 方法失败
+            if hasattr(vector_store, '_engine') and vector_store._engine:
+                try:
+                    # dispose(close=True) 会关闭所有连接并清理连接池
+                    await vector_store._engine.dispose(close=True)
+                except Exception as e:
+                    logger.debug(f"Error disposing engine: {e}")
+
+            # 然后尝试关闭所有会话（如果 close_all 可用）
+            # 注意：这可能会因为 greenlet 错误而失败，但我们已经关闭了引擎
+            try:
+                await vector_store.close()
+            except Exception as e:
+                # 捕获关闭时的错误，避免 greenlet 相关错误影响主流程
+                # 由于我们已经关闭了引擎，这个错误通常可以安全忽略
+                logger.debug(f"Error calling close() on PGVectorStore (usually safe to ignore): {e}")
+
+        except Exception as e:
+            # 捕获所有其他错误，避免影响主流程
+            logger.warning(f"Error cleaning up PGVectorStore connections: {e}")
+    elif isinstance(vector_store, AlibabaCloudOpenSearchStore):
+        try:
+            # 关闭 AlibabaCloudOpenSearchStore 的 aiohttp 连接
+            if hasattr(vector_store, '_client') and vector_store._client:
+                try:
+                    if hasattr(vector_store._client, 'close'):
+                        await vector_store._client.close()
+                    if hasattr(vector_store._client, '_connector') and vector_store._client._connector:
+                        await vector_store._client._connector.close()
+                except Exception as e:
+                    logger.debug(f"Error closing AlibabaCloudOpenSearchStore client: {e}")
+            # 尝试调用 close 方法（如果存在）
+            if hasattr(vector_store, 'close'):
+                try:
+                    await vector_store.close()
+                except Exception as e:
+                    logger.debug(f"Error calling close() on AlibabaCloudOpenSearchStore: {e}")
+        except Exception as e:
+            logger.warning(f"Error cleaning up AlibabaCloudOpenSearchStore connections: {e}")
 
 
 def is_docid_filter_supported(vector_store: BasePydanticVectorStore) -> bool:

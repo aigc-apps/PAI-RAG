@@ -131,13 +131,20 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
   const [metadata_configs, setMetadataConfigs] =
     useState<MetadataConfig[]>(metadataConfigs);
+  const [vectorDbType, setVectorDbType] = useState<string>('local');
+  
+  // 不支持全文检索和混合检索的向量数据库类型列表
+  const VECTOR_DB_TYPES_WITHOUT_FULLTEXT = ['local', 'opensearch', 'hologres'];
+  
+  const isFulltextSupported = !VECTOR_DB_TYPES_WITHOUT_FULLTEXT.includes(vectorDbType);
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [embRes, rerankerRes] = await Promise.all([
+        const [embRes, rerankerRes, vectordbRes] = await Promise.all([
           fetch(`/api/config/embeddings`),
           fetch(`/api/config/rerankers`),
+          fetch(`/api/config/vectordb`),
         ]);
 
         const embData = (await embRes.json())?.data.items || [];
@@ -147,6 +154,27 @@ export const KbConfigCard: FC<KbConfigProps> = ({
         const rerankerData = (await rerankerRes.json())?.data.items || [];
         console.log('rerankerData', rerankerData);
         setRerankerModels([...rerankerData]);
+        
+        // 获取向量数据库类型
+        if (vectordbRes.ok) {
+          const vectordbData = (await vectordbRes.json())?.data;
+          if (vectordbData?.type) {
+            setVectorDbType(vectordbData.type);
+            // 如果当前检索模式不支持，回退到向量检索
+            const currentIsFulltextSupported = !VECTOR_DB_TYPES_WITHOUT_FULLTEXT.includes(vectordbData.type);
+            const currentRetrievalMode = kb.retrieval_config?.retrieval_mode || 'hybrid';
+            if (!currentIsFulltextSupported && (currentRetrievalMode === 'fulltext' || currentRetrievalMode === 'hybrid')) {
+              setKb((prev) => ({
+                ...prev,
+                retrieval_config: {
+                  ...prev.retrieval_config,
+                  retrieval_mode: 'vector',
+                },
+              }));
+              setIndexType('vector');
+            }
+          }
+        }
       } catch (err: any) {
         setModelError(err || '加载失败');
       } finally {
@@ -440,22 +468,26 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               <ScanSearch />
               向量检索
             </ToggleGroupItem>
-            <ToggleGroupItem
-              value="fulltext"
-              aria-label="全文检索"
-              className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-            >
-              <TextSearch />
-              全文检索
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="hybrid"
-              aria-label="混合检索"
-              className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-            >
-              <SearchCode />
-              混合检索
-            </ToggleGroupItem>
+            {isFulltextSupported && (
+              <ToggleGroupItem
+                value="fulltext"
+                aria-label="全文检索"
+                className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+              >
+                <TextSearch />
+                全文检索
+              </ToggleGroupItem>
+            )}
+            {isFulltextSupported && (
+              <ToggleGroupItem
+                value="hybrid"
+                aria-label="混合检索"
+                className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+              >
+                <SearchCode />
+                混合检索
+              </ToggleGroupItem>
+            )}
           </ToggleGroup>
 
           {indexType === 'hybrid' && (
