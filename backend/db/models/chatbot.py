@@ -3,13 +3,13 @@ import uuid
 from sqlmodel import Field, SQLModel
 from pydantic import field_validator
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, JSON
+from sqlalchemy import Column, DateTime, JSON, Text
 from typing import List, Optional
 
 
 class ChatBotCreate(SQLModel):
     app_id: str = Field(default=None)
-    description: Optional[str] = Field(default=None)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
     model_id: str = Field(default=None)
     mcp_ids: List[str] = Field(default=[])
     kb_ids: List[str] = Field(default=[])

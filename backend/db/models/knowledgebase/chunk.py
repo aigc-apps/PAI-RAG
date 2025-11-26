@@ -2,14 +2,14 @@ from datetime import datetime, timezone
 from typing import Optional
 import uuid
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, JSON, DateTime
+from sqlalchemy import Column, JSON, DateTime, Text
 from llama_index.core.schema import TextNode
 from common.knowledgebase.types import ChunkStatus
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 
 
 class KbChunkModel(SQLModel):
-    text: str = Field(default=None)
+    text: str = Field(default=None, sa_column=Column(Text))
     chunk_metadata: dict = Field(default={}, sa_column=Column("chunk_metadata", JSON))
 
     status: ChunkStatus = Field(default=ChunkStatus.pending)

@@ -18,20 +18,19 @@ def get_async_db_angine():
     # 从环境变量中读取数据库配置
     if not os.path.exists("./localdata"):
         os.makedirs("./localdata")
-    db_type= os.getenv("DB_TYPE", "sqlite")
+    db_type = os.getenv("DB_TYPE", "sqlite")
     db_name = os.getenv("DB_NAME")
     db_user = os.getenv("DB_USER")
     db_password = os.getenv("DB_PASSWORD")
     db_host = os.getenv("DB_HOST", "localhost")
-    db_port = os.getenv("DB_PORT", 5432)
+    db_port = os.getenv("DB_PORT")
 
     if db_type == "postgresql":
         assert db_name, "Postgres db_name不能为空。"
         assert db_host, "Postgres db_host不能为空。"
-        assert db_name, "Postgres db_name不能为空。"
-        assert db_user, "Postgres db_user你们为空。"
+        assert db_user, "Postgres db_user不能为空。"
         assert db_password, "Postgres db_password不能为空。"
-        assert db_port, "Postgres db_port不能为空。"
+        db_port = int(db_port) if db_port else 5432
 
         encoded_db_user = quote_plus(db_user)
         encoded_db_password = quote_plus(db_password)
@@ -44,6 +43,34 @@ def get_async_db_angine():
             pool_recycle=300)
         logger.info(
             f"created async engine with {db_user}@{db_host}:{db_port}/{db_name}"
+        )
+
+        return async_engine
+    elif db_type == "mysql":
+        assert db_name, "MySQL db_name不能为空。"
+        assert db_host, "MySQL db_host不能为空。"
+        assert db_user, "MySQL db_user不能为空。"
+        assert db_password, "MySQL db_password不能为空。"
+        db_port = int(db_port) if db_port else 3306
+
+        encoded_db_user = quote_plus(db_user)
+        encoded_db_password = quote_plus(db_password)
+
+        db_url = f"mysql+aiomysql://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}?charset=utf8mb4"
+        async_engine = create_async_engine(
+            db_url,
+            echo=False,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            pool_size=10,
+            max_overflow=20,
+            connect_args={
+                "charset": "utf8mb4",
+                "use_unicode": True,
+            },
+        )
+        logger.info(
+            f"created async engine with MySQL {db_user}@{db_host}:{db_port}/{db_name}"
         )
 
         return async_engine

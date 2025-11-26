@@ -28,7 +28,13 @@ def create_vector_store(
     dimension: int,
     vector_db_connection: BaseVectorDbConnection,
 ) -> BasePydanticVectorStore:
+    table_name = kb_id
+
     if isinstance(vector_db_connection, MilvusConnection):
+        # milvus collection name should starts with non-numeric character
+        if len(kb_id) <= 32:
+            table_name = "kb"+ kb_id
+
         milvus_url = (
             f"http://{vector_db_connection.host.strip('/')}:{vector_db_connection.port}/{vector_db_connection.database}"
         )
@@ -39,7 +45,7 @@ def create_vector_store(
         return MilvusVectorStore(
             uri=milvus_url,
             token=token,
-            collection_name=kb_id,
+            collection_name=table_name,
             dim=dimension,
             enable_sparse=True,
             similarity_metric="cosine",
@@ -55,7 +61,7 @@ def create_vector_store(
         )
         return ElasticsearchStore(
             es_url=vector_db_connection.endpoint,
-            index_name=kb_id,
+            index_name=table_name,
             es_user=vector_db_connection.user,
             es_password=decrypt_key(vector_db_connection.encrypted_password),
             dim=dimension,
@@ -78,7 +84,7 @@ def create_vector_store(
             connection_string=conn_str,
             async_connection_string=async_conn_str,
             schema_name="public",
-            table_name=kb_id,
+            table_name=table_name,
             embed_dim=dimension,
             hybrid_search=True,
             text_search_config="jiebacfg",
@@ -95,7 +101,7 @@ def create_vector_store(
             user=vector_db_connection.user,
             password=password,
             embedding_dimension=dimension,
-            table_name=kb_id,
+            table_name=table_name,
         )
         return vector_store
     elif isinstance(vector_db_connection, OpensearchConnection):
@@ -118,7 +124,7 @@ def create_vector_store(
             instance_id=vector_db_connection.instance_id,
             username=vector_db_connection.username,
             password=password,
-            table_name=kb_id[:20], # Opensearch 表名最长20
+            table_name=table_name[:20], # Opensearch 表名最长20
             field_mapping=dict(zip(output_fields, output_fields)),
         )
 
@@ -130,7 +136,7 @@ def create_vector_store(
             instance_name=vector_db_connection.instance_name,
             access_key_id=vector_db_connection.ak,
             access_key_secret=decrypt_key(vector_db_connection.encrypted_sk),
-            table_name=kb_id,
+            table_name=table_name,
             index_name="pairag_vector_store_ots_index_v1",
             vector_dimension=dimension,
             # metadata mapping is used to filter non-vector fields.
