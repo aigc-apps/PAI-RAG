@@ -1,29 +1,14 @@
 from enum import Enum
+from rag.vector_store.local import LocalChromaVectorStore
+from llama_index.vector_stores.alibabacloud_opensearch import AlibabaCloudOpenSearchStore
+from llama_index.vector_stores.hologres import HologresVectorStore
+from llama_index.core.vector_stores.types import BasePydanticVectorStore
 
 
 class VectorIndexRetrievalType(str, Enum):
     vector = "vector"
     fulltext = "fulltext"
     hybrid = "hybrid"
-
-
-def is_fulltext_supported(vector_db_type: str) -> bool:
-    """
-    Check if the vector database type supports fulltext and hybrid retrieval.
-
-    Args:
-        vector_db_type: The vector database type string
-
-    Returns:
-        True if fulltext/hybrid retrieval is supported, False otherwise
-    """
-    from common.knowledgebase.types import VectorDbType, VECTOR_DB_TYPES_WITHOUT_FULLTEXT
-    try:
-        db_type_enum = VectorDbType(vector_db_type.lower())
-        return db_type_enum not in VECTOR_DB_TYPES_WITHOUT_FULLTEXT
-    except ValueError:
-        # 如果类型不在枚举中，默认支持（向后兼容）
-        return True
 
 
 class FileStatus(str, Enum):
@@ -65,8 +50,12 @@ SUPPORTED_VECTOR_DB_TYPES = [
 ]
 
 # 不支持全文检索和混合检索的向量数据库类型列表
-VECTOR_DB_TYPES_WITHOUT_FULLTEXT = [
-    VectorDbType.LOCAL,
-    VectorDbType.OPENSEARCH,
-    VectorDbType.HOLOGRES,
-]
+FULLTEXT_UNSUPPORTED_VECTOR_STORE_TYPES = (
+    LocalChromaVectorStore,
+    AlibabaCloudOpenSearchStore,
+    HologresVectorStore,
+)
+
+def is_fulltext_supported_by_vector_store(vector_store: BasePydanticVectorStore) -> bool:
+    """Determine whether the active vector store can execute fulltext/hybrid queries."""
+    return not isinstance(vector_store, FULLTEXT_UNSUPPORTED_VECTOR_STORE_TYPES)

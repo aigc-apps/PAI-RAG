@@ -15,7 +15,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import SQLModel
 from db.models.vectordb import VectorDbConfig
 from config.providers.base_provider import BaseConfigProvider
-from config.utils.vectordb import get_value_from_multiple_envs, VECTORDB_TYPE_KEYS
 from pydantic import Field
 
 
@@ -59,18 +58,6 @@ def create_vector_db_connection_from_dict(config: dict) -> BaseVectorDbConnectio
 class VectorDbProvider(BaseConfigProvider):
     config_map: Dict[str, VectorDbConfig] = Field(default={})
     entity_class: Type[SQLModel] = VectorDbConfig
-
-    def get_vector_db_type(self):
-        vector_db_config = self.config_map.get(DEFAULT_VECTOR_ID)
-        if vector_db_config is None:
-            vector_db_type = get_value_from_multiple_envs(
-            VECTORDB_TYPE_KEYS, default="local"
-        ).lower()
-        else:
-            vector_db_type = vector_db_config.config.get("type", "local")
-
-        return vector_db_type
-
     def get_vector_db_connection(self):
         vector_db_config = self.config_map.get(DEFAULT_VECTOR_ID)
         if vector_db_config is None:

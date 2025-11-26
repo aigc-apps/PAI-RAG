@@ -27,31 +27,14 @@ async def _cleanup_cached_vector_stores():
     """
     try:
         from tools.knowledgebase.knowledgebase_tool import kb_cache
-        from rag.vector_store.vector_connection import cleanup_vector_store
 
-        # 获取所有缓存的向量存储
-        # LruCache 内部使用 OrderedDict，每个条目是 (value, valid_ts) 的元组
-        cached_items = []
-        if hasattr(kb_cache, 'cache'):
-            with kb_cache.lock:  # 使用锁确保线程安全
-                cached_items = [
-                    (key, entry[0])  # entry[0] 是 value，entry[1] 是 valid_ts
-                    for key, entry in kb_cache.cache.items()
-                ]
-
-        if cached_items:
-            logger.info(f"Cleaning up {len(cached_items)} cached vector stores due to vector db config change.")
-            # 清理所有缓存的向量存储
-            for key, vector_store in cached_items:
-                try:
-                    await cleanup_vector_store(vector_store)
-                except Exception as e:
-                    logger.warning(f"Error cleaning up cached vector store {key}: {e}")
-
-            # 清空缓存（需要在锁内操作）
-            with kb_cache.lock:
-                kb_cache.cache.clear()
-            logger.info("Cleared all cached vector stores.")
+        cache_size = kb_cache.size()
+        if cache_size > 0:
+            logger.info(
+                f"Clearing {cache_size} cached vector stores due to vector db config change."
+            )
+        kb_cache.clear()
+        logger.info("Cleared all cached vector stores.")
     except Exception as e:
         logger.warning(f"Error cleaning up cached vector stores: {e}")
 

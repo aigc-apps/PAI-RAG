@@ -148,30 +148,10 @@ async def update_knowledgebase(
         # 清理缓存的向量存储，确保连接被正确关闭
         try:
             from tools.knowledgebase.knowledgebase_tool import kb_cache
-            from rag.vector_store.vector_connection import cleanup_vector_store
 
-            # 获取所有缓存的向量存储
-            cached_items = []
-            if hasattr(kb_cache, 'cache'):
-                with kb_cache.lock:
-                    cached_items = [
-                        (key, entry[0])  # entry[0] 是 value，entry[1] 是 valid_ts
-                        for key, entry in kb_cache.cache.items()
-                        if entry and len(entry) > 0
-                    ]
-
-            # 清理与当前知识库相关的向量存储
-            for key, vector_store in cached_items:
-                if knowledgebase.id in key:  # 只清理当前知识库的缓存
-                    try:
-                        await cleanup_vector_store(vector_store)
-                    except Exception as e:
-                        logger.warning(f"Error cleaning up cached vector store {key}: {e}")
-                    # 删除缓存项
-                    with kb_cache.lock:
-                        kb_cache.cache.pop(key, None)
+            kb_cache.clear()
         except Exception as e:
-            logger.warning(f"Error cleaning up cached vector stores during knowledgebase update: {e}")
+            logger.warning(f"Error clearing kb_cache during knowledgebase update: {e}")
 
         await config_change_manager.notify_change_async(
             event_source=ChangeEventSource.KNOWLEDGEBASE,
