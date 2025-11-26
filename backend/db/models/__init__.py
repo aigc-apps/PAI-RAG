@@ -22,3 +22,4 @@ from db.models.evaluation.evaluator_config import EvaluatorConfigEntity
 from db.models.evaluation.experiment import ExperimentEntity, ExperimentSampleEntity
 from db.models.evaluation.run_config import RunConfigEntity
 from db.models.vectordb import VectorDbConfig
+from db.models.chatdb.chatdb import ChatDbConfigEntity

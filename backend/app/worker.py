@@ -36,7 +36,7 @@ app = Celery(
 
 async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachment: bool = False) -> None:
     logger.info(f"[WORKER] Enqueueing file {file_id} in background.")
-    await update_file_status_async(file_id=file_id, status=FileStatus.parsing, failed_reason=str(traceback.format_exc()))
+    await update_file_status_async(file_id=file_id, status=FileStatus.parsing)
 
     try:
         file_entity: KbFileEntity = await read_file_from_db(file_id=file_id)
@@ -71,7 +71,7 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachmen
         chunk_ids_to_delete = await clear_useless_file_resources_async(file_id=file_id, kb_id=file_entity.kb_id, part_count=part_count)
         await kb_file_client.adelete_chunks_from_vectordb(kb_id=file_entity.kb_id, node_ids=chunk_ids_to_delete)
         if num_tasks == 0:
-            await update_file_status_async(file_id=file_id, status=FileStatus.succeeded, failed_reason=None)
+            await update_file_status_async(file_id=file_id, status=FileStatus.succeeded)
             logger.info("No tasks enqueued. Mark file as completed.")
     except Exception:
         logger.error(f"[WORKER] Enqueueing file {file_id} failed, error: {traceback.format_exc()}")

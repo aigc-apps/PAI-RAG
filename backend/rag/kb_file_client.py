@@ -1,5 +1,5 @@
 import traceback
-from typing import Any, List
+from typing import List
 from config.providers.vectordb_provider import get_vector_db_connection_from_db
 from db.models.knowledgebase.file_task import KbFileTaskEntity
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
@@ -23,7 +23,7 @@ from rag.chunk_helper import (
     update_file_content_async,
     should_cancel_file_task,
 )
-from tools.llm_utils import get_multimodal_llm_from_db
+from tools.llm_utils import get_llm_from_db
 from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
@@ -83,11 +83,14 @@ class KbFileClient:
             texts.append(base_text[:3000])
         return texts
 
-    def create_file_parser(self, knowledgebase: KbEntity, multimodal_llm: Any = None):
-        image_caption_tool = None
-        if multimodal_llm:
-            image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+    async def create_file_parser(self, knowledgebase: KbEntity):
         chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
+
+        image_caption_tool = None
+        if chunk_config.image_caption_model:
+            multimodal_llm = await get_llm_from_db(model_id=chunk_config.image_caption_model)
+            image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+
         file_parser = FileParser(
             file_store=file_store,
             image_caption_tool=image_caption_tool,
@@ -192,8 +195,7 @@ class KbFileClient:
                 return
             # parsing file
             logger.info(f"Parsing file {file_item.file_name}.")
-            multimodal_llm = await get_multimodal_llm_from_db()
-            file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
+            file_parser = await self.create_file_parser(knowledgebase)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
             await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment,documents=documents)
             for node in nodes:

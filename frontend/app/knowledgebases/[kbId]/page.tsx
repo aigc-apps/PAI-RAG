@@ -192,6 +192,7 @@ export default function KnowledgeBaseDetailPage(
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null); // 搜索错误信息
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({}); // 展开的卡片索引
   const [logicalOperator, setLogicalOperator] = useState<string>('and');
   const [metadataConditions, setMetadataConditions] = useState<
@@ -288,29 +289,60 @@ export default function KnowledgeBaseDetailPage(
 
   const handleSearchSubmit = async () => {
     setSearching(true);
+    setSearchError(null);
+    setSearchRecords([]);
     console.log('handleSearchSubmit');
-    const search_result = await fetch(`/api/retrieval`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: kbquery,
-        user_id: user,
-        knowledge_id: kbId,
-        retrieval_setting: retrievalSetting,
-        metadata_condition: {
-          conditions: metadataConditions,
-          logical_operator: logicalOperator,
-        },
-      }),
-    });
-    if (!search_result.ok) throw new Error('搜索知识库失败');
 
-    const search_json = await search_result.json();
-    console.log('搜索知识库结果:', search_json);
-    setSearchRecords(search_json.records);
-    setSearching(false);
+    try {
+      const search_result = await fetch(`/api/retrieval`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: kbquery,
+          user_id: user,
+          knowledge_id: kbId,
+          retrieval_setting: retrievalSetting,
+          metadata_condition: {
+            conditions: metadataConditions,
+            logical_operator: logicalOperator,
+          },
+        }),
+      });
+
+      const search_json = await search_result.json();
+      console.log('搜索知识库结果:', search_json);
+
+      // 检查响应中的 status_code 或 code 字段
+      const statusCode = search_json.status_code || search_json.code;
+      if (statusCode && statusCode !== 200) {
+        const errorMessage = search_json.message || search_json.error || '搜索失败';
+        setSearchError(`错误 ${statusCode}: ${errorMessage}`);
+        setSearchRecords([]);
+        setSearching(false);
+        return;
+      }
+
+      // 检查 HTTP 状态码
+      if (!search_result.ok) {
+        const errorMessage = search_json.message || search_json.error || `HTTP ${search_result.status}: 搜索知识库失败`;
+        setSearchError(errorMessage);
+        setSearchRecords([]);
+        setSearching(false);
+        return;
+      }
+
+      // 成功情况
+      setSearchRecords(search_json.records || []);
+      setSearchError(null);
+    } catch (err: any) {
+      const errorMessage = err.message || '搜索知识库失败';
+      setSearchError(errorMessage);
+      setSearchRecords([]);
+    } finally {
+      setSearching(false);
+    }
   };
 
   useEffect(() => {
@@ -395,65 +427,68 @@ export default function KnowledgeBaseDetailPage(
     }
   }, [kbId]);
 
-  useEffect(() => {
-    const fetchKbConfigs = async () => {
-      try {
-        const [kbRes, metaRes, rerankerRes] = await Promise.all([
-          fetch(`/api/config/knowledgebases/${kbId}`),
-          fetch(`/api/config/knowledgebases/${kbId}/metadata`),
-          fetch(`/api/config/rerankers`),
-        ]);
+  const fetchKbConfigs = useCallback(async () => {
+    try {
+      const [kbRes, metaRes, rerankerRes] = await Promise.all([
+        fetch(`/api/config/knowledgebases/${kbId}`),
+        fetch(`/api/config/knowledgebases/${kbId}/metadata`),
+        fetch(`/api/config/rerankers`),
+      ]);
 
-        if (!kbRes.ok) throw new Error('获取知识库配置失败');
-        const json_data = await kbRes.json();
-        const kb_data = json_data.data;
+      if (!kbRes.ok) throw new Error('获取知识库配置失败');
+      const json_data = await kbRes.json();
+      const kb_data = json_data.data;
 
-        setKnowledgeBase(kb_data); // 更新状态
-        console.log('知识库详情数据:', kb_data);
+      setKnowledgeBase(kb_data); // 更新状态
+      console.log('知识库详情数据:', kb_data);
 
-        // 初始化检索设置，从 knowledgebase.retrieval_config 获取默认值
-        if (kb_data?.retrieval_config) {
-          setRetrievalSetting({
-            retrieval_mode: kb_data.retrieval_config.retrieval_mode || 'hybrid',
-            vector_weight: kb_data.retrieval_config.vector_weight ?? 0.5,
-            enable_rerank: kb_data.retrieval_config.enable_rerank ?? false,
-            rerank_model: kb_data.retrieval_config.rerank_model || '',
-            top_k: kb_data.retrieval_config.top_k ?? 5,
-            similarity_threshold: kb_data.retrieval_config.similarity_threshold ?? 0.2,
-            rerank_top_k: kb_data.retrieval_config.rerank_top_k ?? 5,
-          });
-        }
-
-        if (!metaRes.ok) throw new Error('获取知识库元数据失败');
-        const metadata_json = await metaRes.json();
-        const metadata_data = metadata_json.data as MetadataConfig[];
-        const valueTypes = Object.fromEntries(
-          metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
-        ) as { [key: string]: string };
-
-        console.log('知识库元数据: ', metadata_data, valueTypes);
-
-        setMetadataValueTypes({ ...valueTypes, '': 'string' });
-        setMetadataConfigs(metadata_data);
-
-        // 获取重排序模型列表
-        if (rerankerRes.ok) {
-          const rerankerData = (await rerankerRes.json())?.data?.items || [];
-          setRerankerModels(rerankerData);
-        }
-      } catch (err: any) {
-        toast.error(err.message);
+      // 初始化检索设置，从 knowledgebase.retrieval_config 获取默认值
+      if (kb_data?.retrieval_config) {
+        setRetrievalSetting({
+          retrieval_mode: kb_data.retrieval_config.retrieval_mode || 'hybrid',
+          vector_weight: kb_data.retrieval_config.vector_weight ?? 0.5,
+          enable_rerank: kb_data.retrieval_config.enable_rerank ?? false,
+          rerank_model: kb_data.retrieval_config.rerank_model || '',
+          top_k: kb_data.retrieval_config.top_k ?? 5,
+          similarity_threshold: kb_data.retrieval_config.similarity_threshold ?? 0.2,
+          rerank_top_k: kb_data.retrieval_config.rerank_top_k ?? 5,
+        });
       }
-    };
-    fetchKbConfigs();
+
+      if (!metaRes.ok) throw new Error('获取知识库元数据失败');
+      const metadata_json = await metaRes.json();
+      const metadata_data = metadata_json.data as MetadataConfig[];
+      const valueTypes = Object.fromEntries(
+        metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
+      ) as { [key: string]: string };
+
+      console.log('知识库元数据: ', metadata_data, valueTypes);
+
+      setMetadataValueTypes({ ...valueTypes, '': 'string' });
+      setMetadataConfigs(metadata_data);
+
+      // 获取重排序模型列表
+      if (rerankerRes.ok) {
+        const rerankerData = (await rerankerRes.json())?.data?.items || [];
+        setRerankerModels(rerankerData);
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }, [kbId]);
+
+  useEffect(() => {
+    fetchKbConfigs();
+  }, [fetchKbConfigs]);
 
   if (!knowledgebase) {
     return <div className="p-6">加载中...</div>;
   }
 
-  const handleSaveSuccess = (kb: KbConfig) => {
-      toast.success("知识库配置保存成功");
+  const handleSaveSuccess = async (kb: KbConfig) => {
+    toast.success("知识库配置保存成功");
+    // 刷新知识库配置信息
+    await fetchKbConfigs();
   };
 
   const handleSaveRetrievalSetting = async () => {
@@ -2201,7 +2236,6 @@ export default function KnowledgeBaseDetailPage(
             <KbConfigCard
               isCreate={false}
               kbConfig={knowledgebase}
-              metadataConfigs={metadataConfigs}
               onSaveSuccess={handleSaveSuccess}
               onCancel={() => {}}
             ></KbConfigCard>
@@ -2624,7 +2658,18 @@ export default function KnowledgeBaseDetailPage(
                     </div>
                   </div>
                 )}
-                {!searching && searchrecords.length === 0 && (
+                {!searching && searchError && (
+                  <div className="p-6">
+                    <Alert variant="destructive">
+                      <AlertCircleIcon className="h-4 w-4" />
+                      <AlertTitle className="text-sm">检索失败</AlertTitle>
+                      <AlertDescription className="text-xs mt-2">
+                        {searchError}
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )}
+                {!searching && !searchError && searchrecords.length === 0 && (
                   <div className="text-center py-6 text-gray-500">
                     <h2 className="text-sm">没有找到相关的切片</h2>
                     <p className="mt-2 text-xs">尝试调整搜索条件</p>
@@ -2708,7 +2753,10 @@ export default function KnowledgeBaseDetailPage(
                         </Card>
                       );
                     })}
-                    <p className="text-xs text-center text-muted-foreground pt-4 pb-4"> 没有更多内容了 </p>
+                    { searchrecords.length > 0 && (
+                      <p className="text-xs text-center text-muted-foreground pt-4 pb-4"> 没有更多内容了 </p>
+                    )}
+
                   </div>
                 )}
               </div>
