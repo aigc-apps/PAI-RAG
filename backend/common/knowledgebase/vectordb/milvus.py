@@ -12,4 +12,4 @@ class MilvusConnection(BaseVectorDbConnection):
     port: int = 19530
     user: str
     encrypted_password: str
-    database: str
+    database: str = "default"

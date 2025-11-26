@@ -1,7 +1,7 @@
 // app/config/vectordb/forms/milvus.tsx
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FC, useState } from "react";
+import { FC, useState, useEffect } from "react";
 
 export interface MilvusConfig {
   host: string;
@@ -20,7 +20,24 @@ export const MilvusForm: FC<MilvusConfigProps> = ({
   config,
   onValueChange
 }) => {
-  const [db, setDb] = useState<MilvusConfig>(config);
+  const [db, setDb] = useState<MilvusConfig>({
+    ...config,
+    database: config.database || 'default'
+  });
+  
+  // 初始化时确保 database 有值，并在 config 变化时更新
+  useEffect(() => {
+    const updatedDb = {
+      ...config,
+      database: config.database || 'default'
+    };
+    setDb(updatedDb);
+    // 只在 database 缺失时才通知父组件，避免无限循环
+    if (!config.database) {
+      onValueChange(updatedDb);
+    }
+  }, [config]);
+  
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -40,8 +57,9 @@ export const MilvusForm: FC<MilvusConfigProps> = ({
       <div className="space-y-2">
         <Label htmlFor="database">数据库名</Label>
         <Input id="database"  value={db.database || 'default'} onChange={(e) => {
-          setDb({...db, database: e.target.value});
-          onValueChange({ ...db, database: e.target.value });
+          const value = e.target.value || 'default';
+          setDb({...db, database: value});
+          onValueChange({ ...db, database: value });
         }} />
       </div>
         <div className="space-y-2">

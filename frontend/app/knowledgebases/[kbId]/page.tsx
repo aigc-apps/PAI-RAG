@@ -250,6 +250,12 @@ export default function KnowledgeBaseDetailPage(
   }>({});
   const [rerankerModels, setRerankerModels] = useState<Array<{id: string; model_id: string; model_name: string}>>([]);
   const [retrievalSettingOpen, setRetrievalSettingOpen] = useState(true);
+  const [vectorDbType, setVectorDbType] = useState<string>('local');
+  
+  // 不支持全文检索和混合检索的向量数据库类型列表
+  const VECTOR_DB_TYPES_WITHOUT_FULLTEXT = ['local', 'opensearch', 'hologres'];
+  
+  const isFulltextSupported = !VECTOR_DB_TYPES_WITHOUT_FULLTEXT.includes(vectorDbType);
 
   const default_comparator = [
     'contains',
@@ -420,6 +426,8 @@ export default function KnowledgeBaseDetailPage(
         metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
       ) as { [key: string]: string };
 
+      console.log('知识库元数据: ', metadata_data, valueTypes);
+
       setMetadataValueTypes({ ...valueTypes, '': 'string' });
       setMetadataConfigs(metadata_data);
     } catch (err: any) {
@@ -429,10 +437,11 @@ export default function KnowledgeBaseDetailPage(
 
   const fetchKbConfigs = useCallback(async () => {
     try {
-      const [kbRes, metaRes, rerankerRes] = await Promise.all([
+      const [kbRes, metaRes, rerankerRes, vectordbRes] = await Promise.all([
         fetch(`/api/config/knowledgebases/${kbId}`),
         fetch(`/api/config/knowledgebases/${kbId}/metadata`),
         fetch(`/api/config/rerankers`),
+        fetch(`/api/config/vectordb`),
       ]);
 
       if (!kbRes.ok) throw new Error('获取知识库配置失败');
@@ -442,10 +451,28 @@ export default function KnowledgeBaseDetailPage(
       setKnowledgeBase(kb_data); // 更新状态
       console.log('知识库详情数据:', kb_data);
 
+      // 获取向量数据库类型
+      let currentVectorDbType = 'local';
+      if (vectordbRes.ok) {
+        const vectordbData = (await vectordbRes.json())?.data;
+        if (vectordbData?.type) {
+          currentVectorDbType = vectordbData.type;
+          setVectorDbType(currentVectorDbType);
+        }
+      }
+      
+      // 检查是否支持全文检索
+      const currentIsFulltextSupported = !VECTOR_DB_TYPES_WITHOUT_FULLTEXT.includes(currentVectorDbType);
+      
       // 初始化检索设置，从 knowledgebase.retrieval_config 获取默认值
       if (kb_data?.retrieval_config) {
+        let retrievalMode = kb_data.retrieval_config.retrieval_mode || 'hybrid';
+        // 如果向量数据库不支持全文检索，且当前模式是全文检索或混合检索，则回退到向量检索
+        if (!currentIsFulltextSupported && (retrievalMode === 'fulltext' || retrievalMode === 'hybrid')) {
+          retrievalMode = 'vector';
+        }
         setRetrievalSetting({
-          retrieval_mode: kb_data.retrieval_config.retrieval_mode || 'hybrid',
+          retrieval_mode: retrievalMode,
           vector_weight: kb_data.retrieval_config.vector_weight ?? 0.5,
           enable_rerank: kb_data.retrieval_config.enable_rerank ?? false,
           rerank_model: kb_data.retrieval_config.rerank_model || '',
@@ -455,6 +482,7 @@ export default function KnowledgeBaseDetailPage(
         });
       }
 
+      // 处理元数据
       if (!metaRes.ok) throw new Error('获取知识库元数据失败');
       const metadata_json = await metaRes.json();
       const metadata_data = metadata_json.data as MetadataConfig[];
@@ -2465,48 +2493,28 @@ export default function KnowledgeBaseDetailPage(
                               <ScanSearch className="w-2 h-2" />
                               向量检索
                             </ToggleGroupItem>
-                            <ToggleGroupItem
-                              value="fulltext"
-                              aria-label="全文检索"
-                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-6"
-                            >
-                              <TextSearch className="w-2 h-2" />
-                              全文检索
-                            </ToggleGroupItem>
-                            <ToggleGroupItem
-                              value="hybrid"
-                              aria-label="混合检索"
-                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-6"
-                            >
-                              <SearchCode className="w-2 h-2" />
-                              混合检索
-                            </ToggleGroupItem>
+                            {isFulltextSupported && (
+                              <ToggleGroupItem
+                                value="fulltext"
+                                aria-label="全文检索"
+                                className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                              >
+                                <TextSearch className="w-2 h-2 mr-0.5" />
+                                全文检索
+                              </ToggleGroupItem>
+                            )}
+                            {isFulltextSupported && (
+                              <ToggleGroupItem
+                                value="hybrid"
+                                aria-label="混合检索"
+                                className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                              >
+                                <SearchCode className="w-2 h-2 mr-0.5" />
+                                混合检索
+                              </ToggleGroupItem>
+                            )}
                           </ToggleGroup>
                         </div>
-                        {retrievalSetting.retrieval_mode === 'hybrid' && (
-                          <div className="flex items-center gap-2 pt-1">
-                            <Label htmlFor="vector_weight" className="w-[80px] text-xs">
-                              向量权重
-                            </Label>
-                            <Slider
-                              id="vector_weight"
-                              className="w-40"
-                              min={0}
-                              max={1}
-                              step={0.1}
-                              value={[retrievalSetting.vector_weight ?? 0.5]}
-                              onValueChange={(value) =>
-                                setRetrievalSetting((prev) => ({
-                                  ...prev,
-                                  vector_weight: value[0],
-                                }))
-                              }
-                            />
-                            <span className="w-10 text-right text-xs font-medium">
-                              {retrievalSetting.vector_weight ?? 0.5}
-                            </span>
-                          </div>
-                        )}
                       </div>
 
                       {/* Top-K 和相似度阈值 */}
@@ -2555,6 +2563,35 @@ export default function KnowledgeBaseDetailPage(
                             {retrievalSetting.similarity_threshold?.toFixed(2) ?? '0.20'}
                           </span>
                         </div>
+                        {retrievalSetting.retrieval_mode === 'hybrid' && !retrievalSetting.enable_rerank && (
+                          <div className="flex gap-2 items-center">
+                            <Label htmlFor="vector_weight" className="w-[80px] text-xs">
+                              向量权重
+                            </Label>
+                            <Slider
+                              id="vector_weight"
+                              className="w-40"
+                              min={0}
+                              max={1}
+                              step={0.1}
+                              value={[retrievalSetting.vector_weight ?? 0.5]}
+                              onValueChange={(value) =>
+                                setRetrievalSetting((prev) => ({
+                                  ...prev,
+                                  vector_weight: value[0],
+                                }))
+                              }
+                            />
+                            <span className="w-10 text-right text-xs font-medium">
+                              {retrievalSetting.vector_weight ?? 0.5}
+                            </span>
+                          </div>
+                        )}
+                        {retrievalSetting.retrieval_mode === 'hybrid' && !retrievalSetting.enable_rerank && (
+                          <p className="text-xs text-muted-foreground ml-[88px]">
+                            向量权重仅在未开启重排序时生效
+                          </p>
+                        )}
                       </div>
 
                       {/* 开启重排序 */}
@@ -2633,6 +2670,7 @@ export default function KnowledgeBaseDetailPage(
                         <Button
                           type="button"
                           onClick={handleSaveRetrievalSetting}
+
                           className="whitespace-nowrap h-8 text-xs px-2 hover:bg-gray-700 text-white"
                           size="sm"
                         >

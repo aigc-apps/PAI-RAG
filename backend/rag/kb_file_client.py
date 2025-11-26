@@ -28,7 +28,7 @@ from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
-    cleanup_vector_store,
+    cleanup_vector_store_async,
     create_vector_store,
 )
 from llama_index.core.embeddings import BaseEmbedding
@@ -117,12 +117,14 @@ class KbFileClient:
         vector_store = create_vector_store(
             knowledgebase.id, dimension, vector_db_connection=vector_connection,
         )
-        await vector_store.adelete_nodes(node_ids=node_ids)
-        await cleanup_vector_store(vector_store)
-
-        logger.info(
-            f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
-        )
+        try:
+            await vector_store.adelete_nodes(node_ids=node_ids)
+            logger.info(
+                f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
+            )
+        finally:
+            # 确保无论成功还是失败都清理连接，避免连接泄漏
+            await cleanup_vector_store_async(vector_store)
 
 
     # process file item, status -> processing
@@ -249,29 +251,34 @@ class KbFileClient:
                 knowledgebase.id, dimension, vector_db_connection=vector_connection,
             )
 
-            if old_chunk_ids:
-                try:
-                    await vector_store.adelete_nodes(node_ids=old_chunk_ids)
-                    logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
-                except NotImplementedError:
-                    logger.warning("Will not remove previous data as vector store does not support removing nodes.")
-                    pass
+            try:
+                if old_chunk_ids:
+                    try:
+                        await vector_store.adelete_nodes(node_ids=old_chunk_ids)
+                        logger.info(f"Removed {len(old_chunk_ids)} from vector store.")
+                    except NotImplementedError:
+                        logger.warning("Will not remove previous data as vector store does not support removing nodes.")
+                        pass
 
-            for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
-                batch_nodes = nodes[i:i + 1000]
-                texts_to_embed = self.get_node_texts_for_embedding(batch_nodes)
-                embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
-                for j in range(len(batch_nodes)):
-                    batch_nodes[j].embedding = embeddings[j]
-                if await should_cancel_file_task(
-                    file_id=file_id,
-                    kb_id=file_task.kb_id,
-                    file_part=file_task.file_part,
-                    file_version=file_task.file_version,
-                ):
-                    return
-                await vector_store.async_add(batch_nodes)
-            await cleanup_vector_store(vector_store)
+                for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
+                    batch_nodes = nodes[i:i + 1000]
+                    texts_to_embed = self.get_node_texts_for_embedding(batch_nodes)
+                    embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
+                    for j in range(len(batch_nodes)):
+                        batch_nodes[j].embedding = embeddings[j]
+                    if await should_cancel_file_task(
+                        file_id=file_id,
+                        kb_id=file_task.kb_id,
+                        file_part=file_task.file_part,
+                        file_version=file_task.file_version,
+                    ):
+                        # 在返回前清理连接，避免连接泄漏
+                        await cleanup_vector_store_async(vector_store)
+                        return
+                    await vector_store.async_add(batch_nodes)
+            finally:
+                # 确保无论成功还是失败都清理连接，避免连接泄漏
+                await cleanup_vector_store_async(vector_store)
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
             await update_file_status_async(
