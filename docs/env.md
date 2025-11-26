@@ -8,16 +8,35 @@
 
 ### 2.数据库配置
 
-推荐使用Aliyun PostgreSQL数据库部署，默认使用本地sqlite3数据库（数据保存在本地，不支持多实例访问，重启会失效，挂载OSS目录可以实现持久化存储）
+PAI-RAG 支持三种数据库类型：SQLite（默认）、PostgreSQL 和 MySQL。
+
+**SQLite（默认）**
+- 适合开发、测试和小规模部署场景
+- 数据保存在本地，不支持多实例访问
+- 配置方式：无需额外配置，或设置 `DB_TYPE=sqlite`
+
+**PostgreSQL**
+- 推荐用于生产环境，提供更好的并发性能和事务支持
+- 配置方式：设置 `DB_TYPE=postgresql` 并填写以下连接信息
+
+**MySQL**
+- 适合需要与现有 MySQL 基础设施集成的场景
+- **重要：MySQL 数据库必须使用 utf8mb4 编码**
+- 配置方式：设置 `DB_TYPE=mysql` 并填写以下连接信息
 
 | 名称 | 取值 | 说明 |
 | - | - | - |
-| DB_TYPE | enum, `sqlite3`/`postgresql` | 默认为`sqlite3`，只有postgresql才需要填写下面的连接信息 |
-| DB_HOST | STRING | HOST 地址，推荐使用VPC内网直连 |
-| DB_PORT | STRING | 端口，默认为5432 |
+| DB_TYPE | enum, `sqlite`/`postgresql`/`mysql` | 默认为`sqlite`，`postgresql` 和 `mysql` 需要填写下面的连接信息 |
+| DB_HOST | STRING | HOST 地址，推荐使用VPC内网直连，默认为 `localhost` |
+| DB_PORT | STRING | 端口，PostgreSQL 默认为 `5432`，MySQL 默认为 `3306` |
 | DB_USER | STRING | 用户名 |
 | DB_PASSWORD | STRING | 密码 | 
 | DB_NAME | STRING | 数据库名称 |
+
+**MySQL 数据库创建示例：**
+```sql
+CREATE DATABASE your_database_name CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
 
 
 ### 3. 文件存储配置

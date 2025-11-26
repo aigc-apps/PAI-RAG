@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import uuid
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, JSON, DateTime
+from sqlalchemy import Column, JSON, DateTime, Text
 from typing import Optional, List
 
 class ExperimentCreate(SQLModel):
@@ -34,7 +34,8 @@ class ExperimentEntity(SQLModel, table=True):
     )
     description: Optional[str] = Field(
         default=None,
-        description="Description of the experiment"
+        description="Description of the experiment",
+        sa_column=Column(Text),
     )
     samples_count: Optional[int] = Field(
         default=0,
@@ -88,7 +89,8 @@ class ExperimentSampleEntity(SQLModel, table=True):
     )
     actual_output: Optional[str] = Field(
         default=None,
-        description="The actual output from model during experiment"
+        description="The actual output from model during experiment",
+        sa_column=Column(Text),
     )
     trace_id: Optional[str] = Field(
         default="",
@@ -104,11 +106,13 @@ class ExperimentSampleEntity(SQLModel, table=True):
     )
     reason: Optional[str] = Field(
         default=None,
-        description="Reason for the evaluation score (if applicable)"
+        description="Reason for the evaluation score (if applicable)",
+        sa_column=Column(Text),
     )
     error_message: Optional[str] = Field(
         default=None,
-        description="Error details if status is error"
+        description="Error details if status is error",
+        sa_column=Column(Text),
     )
     execution_metadata: Optional[List[dict]] = Field(
         default=[],

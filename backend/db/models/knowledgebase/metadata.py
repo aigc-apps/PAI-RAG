@@ -3,7 +3,7 @@ import re
 import uuid
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, DateTime, Enum, UniqueConstraint
+from sqlalchemy import Column, DateTime, Enum, UniqueConstraint, Text
 
 
 class MetadataValueType(str, Enum):
@@ -15,7 +15,7 @@ class MetadataValueType(str, Enum):
 class KbMetadataEntityCreate(SQLModel):
     name: str = Field(default=None, min_length=3, max_length=50)
     value_type: str = Field(default=MetadataValueType.STRING)
-    description: str = Field(default='')
+    description: str = Field(default='', sa_column=Column(Text))
 
     @field_validator("name")
     def validate_metadata_name_format(cls, v):
@@ -42,7 +42,7 @@ class KbMetadataEntity(SQLModel, table=True):
 
     name: str = Field(default=None, min_length=3, max_length=50)
     value_type: str = Field(default=MetadataValueType.STRING)
-    description: str = Field(default=None)
+    description: str = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
