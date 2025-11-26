@@ -126,8 +126,6 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const [modelerror, setModelError] = useState(''); // 错误信息
 
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
-  const [metadata_configs, setMetadataConfigs] =
-    useState<MetadataConfig[]>(metadataConfigs);
   const [vectorDbType, setVectorDbType] = useState<string>('local');
   
   // 不支持全文检索和混合检索的向量数据库类型列表

@@ -208,37 +208,25 @@ def create_vector_store(
         raise ValueError(f"Unknown vector_db_connection: {vector_db_connection}.")
 
 
-async def cleanup_vector_store(vector_store: BasePydanticVectorStore):
-    if isinstance(vector_store, PGVectorStore):
-        # PGVectorStore.close() 会调用 close_all()，这会关闭所有 SQLAlchemy 会话，
-        # 包括应用自身的数据库连接，导致连接泄漏警告。
-        # 连接会在超时后自动关闭，或者当对象被垃圾回收时，连接池会处理。
-        logger.debug("Skipping cleanup for PGVectorStore - connection pool will manage lifecycle")
-        return
+async def cleanup_vector_store_async(vector_store: BasePydanticVectorStore):
     try:
         await vector_store.close()
     except Exception as e:
         logger.warning(f"Error closing vector store: {e}")
 
 
-async def _cleanup_vector_store_async(vector_store: BasePydanticVectorStore):
-    try:
-        await cleanup_vector_store(vector_store)
-    except Exception as exc:
-        logger.warning(f"Failed to cleanup cached vector store: {exc}")
 
-
-def schedule_vector_store_cleanup(vector_store: BasePydanticVectorStore):
+def cleanup_vector_store(vector_store: BasePydanticVectorStore):
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        asyncio.run(_cleanup_vector_store_async(vector_store))
+        asyncio.run(cleanup_vector_store_async(vector_store))
         return
 
     if loop.is_running():
-        loop.create_task(_cleanup_vector_store_async(vector_store))
+        loop.create_task(cleanup_vector_store_async(vector_store))
     else:
-        asyncio.run(_cleanup_vector_store_async(vector_store))
+        asyncio.run(cleanup_vector_store_async(vector_store))
 
 
 def is_docid_filter_supported(vector_store: BasePydanticVectorStore) -> bool:

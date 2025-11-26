@@ -416,53 +416,6 @@ export default function KnowledgeBaseDetailPage(
     setPage(newPage);
   };
 
-  useEffect(() => {
-    const fetchKbConfigs = async () => {
-      try {
-        const [kbRes, metaRes, rerankerRes, vectordbRes] = await Promise.all([
-          fetch(`/api/config/knowledgebases/${kbId}`),
-          fetch(`/api/config/knowledgebases/${kbId}/metadata`),
-          fetch(`/api/config/rerankers`),
-          fetch(`/api/config/vectordb`),
-        ]);
-
-        if (!kbRes.ok) throw new Error('获取知识库配置失败');
-        const json_data = await kbRes.json();
-        const kb_data = json_data.data;
-
-        setKnowledgeBase(kb_data); // 更新状态
-        console.log('知识库详情数据:', kb_data);
-
-        // 获取向量数据库类型
-        let currentVectorDbType = 'local';
-        if (vectordbRes.ok) {
-          const vectordbData = (await vectordbRes.json())?.data;
-          if (vectordbData?.type) {
-            currentVectorDbType = vectordbData.type;
-            setVectorDbType(currentVectorDbType);
-          }
-        }
-        
-        // 检查是否支持全文检索
-        const currentIsFulltextSupported = !VECTOR_DB_TYPES_WITHOUT_FULLTEXT.includes(currentVectorDbType);
-        
-        // 初始化检索设置，从 knowledgebase.retrieval_config 获取默认值
-        if (kb_data?.retrieval_config) {
-          let retrievalMode = kb_data.retrieval_config.retrieval_mode || 'hybrid';
-          // 如果向量数据库不支持全文检索，且当前模式是全文检索或混合检索，则回退到向量检索
-          if (!currentIsFulltextSupported && (retrievalMode === 'fulltext' || retrievalMode === 'hybrid')) {
-            retrievalMode = 'vector';
-          }
-          setRetrievalSetting({
-            retrieval_mode: retrievalMode,
-            vector_weight: kb_data.retrieval_config.vector_weight ?? 0.5,
-            enable_rerank: kb_data.retrieval_config.enable_rerank ?? false,
-            rerank_model: kb_data.retrieval_config.rerank_model || '',
-            top_k: kb_data.retrieval_config.top_k ?? 5,
-            similarity_threshold: kb_data.retrieval_config.similarity_threshold ?? 0.2,
-            rerank_top_k: kb_data.retrieval_config.rerank_top_k ?? 5,
-          });
-        }
   const fetchMetadataConfigs = useCallback(async () => {
     try {
       const metaRes = await fetch(`/api/config/knowledgebases/${kbId}/metadata`);
@@ -473,6 +426,8 @@ export default function KnowledgeBaseDetailPage(
         metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
       ) as { [key: string]: string };
 
+      console.log('知识库元数据: ', metadata_data, valueTypes);
+
       setMetadataValueTypes({ ...valueTypes, '': 'string' });
       setMetadataConfigs(metadata_data);
     } catch (err: any) {
@@ -480,16 +435,54 @@ export default function KnowledgeBaseDetailPage(
     }
   }, [kbId]);
 
-        // 获取重排序模型列表
-        if (rerankerRes.ok) {
-          const rerankerData = (await rerankerRes.json())?.data?.items || [];
-          setRerankerModels(rerankerData);
+  const fetchKbConfigs = useCallback(async () => {
+    try {
+      const [kbRes, metaRes, rerankerRes, vectordbRes] = await Promise.all([
+        fetch(`/api/config/knowledgebases/${kbId}`),
+        fetch(`/api/config/knowledgebases/${kbId}/metadata`),
+        fetch(`/api/config/rerankers`),
+        fetch(`/api/config/vectordb`),
+      ]);
+
+      if (!kbRes.ok) throw new Error('获取知识库配置失败');
+      const json_data = await kbRes.json();
+      const kb_data = json_data.data;
+
+      setKnowledgeBase(kb_data); // 更新状态
+      console.log('知识库详情数据:', kb_data);
+
+      // 获取向量数据库类型
+      let currentVectorDbType = 'local';
+      if (vectordbRes.ok) {
+        const vectordbData = (await vectordbRes.json())?.data;
+        if (vectordbData?.type) {
+          currentVectorDbType = vectordbData.type;
+          setVectorDbType(currentVectorDbType);
         }
-        
-      } catch (err: any) {
-        toast.error(err.message);
+      }
+      
+      // 检查是否支持全文检索
+      const currentIsFulltextSupported = !VECTOR_DB_TYPES_WITHOUT_FULLTEXT.includes(currentVectorDbType);
+      
+      // 初始化检索设置，从 knowledgebase.retrieval_config 获取默认值
+      if (kb_data?.retrieval_config) {
+        let retrievalMode = kb_data.retrieval_config.retrieval_mode || 'hybrid';
+        // 如果向量数据库不支持全文检索，且当前模式是全文检索或混合检索，则回退到向量检索
+        if (!currentIsFulltextSupported && (retrievalMode === 'fulltext' || retrievalMode === 'hybrid')) {
+          retrievalMode = 'vector';
+        }
+        setRetrievalSetting({
+          retrieval_mode: retrievalMode,
+          vector_weight: kb_data.retrieval_config.vector_weight ?? 0.5,
+          enable_rerank: kb_data.retrieval_config.enable_rerank ?? false,
+          rerank_model: kb_data.retrieval_config.rerank_model || '',
+          top_k: kb_data.retrieval_config.top_k ?? 5,
+          similarity_threshold: kb_data.retrieval_config.similarity_threshold ?? 0.2,
+          rerank_top_k: kb_data.retrieval_config.rerank_top_k ?? 5,
+        });
       }
 
+      // 处理元数据
       if (!metaRes.ok) throw new Error('获取知识库元数据失败');
       const metadata_json = await metaRes.json();
       const metadata_data = metadata_json.data as MetadataConfig[];

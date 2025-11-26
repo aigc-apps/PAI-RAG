@@ -37,13 +37,13 @@ class LruCache:
                 return None
             value, valid_ts = entry
             if time.time() > valid_ts:
-                evicted_value = value
-                self.cache.pop(key, None)
+                entry = self.cache.pop(key, None)
+                if entry:
+                    evicted_value = entry[0]
             else:
                 self.cache.move_to_end(key)
                 return value
-        if evicted_value is not None:
-            self._call_on_delete(evicted_value)
+        self._call_on_delete(evicted_value)
         return None
 
     def delete(self, key):
@@ -52,8 +52,7 @@ class LruCache:
             entry = self.cache.pop(key, None)
         if entry:
             evicted_value = entry[0]
-        if evicted_value is not None:
-            self._call_on_delete(evicted_value)
+        self._call_on_delete(evicted_value)
 
     def put(self, key, value, ttl=DEFAULT_EXPIRATION_TIME):
         evicted_value = None
@@ -65,8 +64,7 @@ class LruCache:
                     _, evicted_entry = self.cache.popitem(last=False)
                     evicted_value = evicted_entry[0]
             self.cache[key] = (value, time.time() + ttl)
-        if evicted_value is not None:
-            self._call_on_delete(evicted_value)
+        self._call_on_delete(evicted_value)
 
     def put_if_not_exists(self, key, value, ttl=DEFAULT_EXPIRATION_TIME):
         logger.info(
@@ -83,8 +81,7 @@ class LruCache:
                     evicted_value = evicted_entry[0]
                 self.cache[key] = (value, time.time() + ttl)
                 success = True
-        if evicted_value is not None:
-            self._call_on_delete(evicted_value)
+        self._call_on_delete(evicted_value)
         return success
 
     def __contains__(self, key):
@@ -100,18 +97,13 @@ class LruCache:
 
     def clear_expired(self):
         """Remove all expired items"""
-        expired_values = []
         with self.lock:
             now = time.time()
             keys_to_remove = [
                 k for k, (_, valid_ts) in self.cache.items() if now > valid_ts
             ]
-            for key in keys_to_remove:
-                entry = self.cache.pop(key, None)
-                if entry:
-                    expired_values.append(entry[0])
-        for value in expired_values:
-            self._call_on_delete(value)
+        for key in keys_to_remove:
+            self.delete(key)
 
     def size(self):
         with self.lock:
@@ -125,6 +117,7 @@ class LruCache:
             self.cache.clear()
         for value in values_to_release:
             self._call_on_delete(value)
+        logger.info(f"Successfully cleared cache, released {len(values_to_release)} value instances")
 
 
 lru_cache = LruCache()

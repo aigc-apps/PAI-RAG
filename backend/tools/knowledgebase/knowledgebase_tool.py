@@ -2,7 +2,7 @@ from functools import partial
 from typing import List, Optional
 import asyncio
 from config.providers.vectordb_provider import vectordb_provider
-from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
+from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, VectorStoreQueryResult, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
 
 from common.chat.models import RetrievalSetting
@@ -16,7 +16,7 @@ from rag.chunk_helper import (
     get_file_id_source_map,
 )
 from rag.vector_store.vector_connection import (
-    schedule_vector_store_cleanup,
+    cleanup_vector_store,
     create_vector_store,
     is_docid_filter_supported,
 )
@@ -47,7 +47,7 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
         return VectorStoreQueryMode.DEFAULT
 
 
-kb_cache = LruCache(maxsize=100, on_delete_func=schedule_vector_store_cleanup)
+kb_cache = LruCache(maxsize=100, on_delete_func=cleanup_vector_store)
 
 def get_kb_cache_key(knowledgebase: KbEntity):
     vector_connection = vectordb_provider.get_vector_db_connection()
@@ -140,6 +140,86 @@ class PaiKnowledgebaseTool:
             texts.append(base_text[:3000])
         return texts
 
+    async def _execute_vector_store_query(
+        self,
+        vector_store: BasePydanticVectorStore,
+        knowledgebase: KbEntity,
+        query: str,
+        query_embedding: List[float],
+        document_ids: List[str],
+        query_mode: VectorStoreQueryMode,
+        top_k: int,
+        use_docid_filter: bool = True,
+    ) -> tuple[Optional[VectorStoreQueryResult], Optional[VectorStoreQueryResult]]:
+        """
+        执行向量存储查询，返回 text_result 和 dense_result。
+        """
+        text_result = None
+        dense_result = None
+
+        metadata_filters = None
+        if not use_docid_filter:
+            metadata_filters = MetadataFilters(
+                condition=FilterCondition.AND,
+                filters=[
+                    MetadataFilter(
+                        key="doc_id",
+                        value=document_ids,
+                        operator=FilterOperator.IN,
+                    )
+                ],
+            )
+            logger.info(f"Using metadata filters {metadata_filters}.")
+        else:
+            logger.info("Using doc_id as filters.")
+
+        def _build_query_kwargs(mode: VectorStoreQueryMode):
+            kwargs = {
+                "query_embedding": query_embedding,
+                "similarity_top_k": top_k,
+                "query_str": query,
+                "mode": mode,
+            }
+            if use_docid_filter:
+                kwargs["doc_ids"] = document_ids
+            else:
+                kwargs["filters"] = metadata_filters
+            return kwargs
+
+        try:
+            if query_mode == VectorStoreQueryMode.HYBRID:
+                # 混合模式：并行执行文本搜索和向量搜索
+                text_query = VectorStoreQuery(**_build_query_kwargs(VectorStoreQueryMode.TEXT_SEARCH))
+                dense_query = VectorStoreQuery(**_build_query_kwargs(VectorStoreQueryMode.DEFAULT))
+
+                text_result_task = vector_store.aquery(text_query)
+                dense_result_task = vector_store.aquery(dense_query)
+                text_result, dense_result = await asyncio.gather(text_result_task, dense_result_task)
+
+                logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
+            else:
+                vector_query = VectorStoreQuery(**_build_query_kwargs(query_mode))
+                query_result = await vector_store.aquery(vector_query)
+
+                if query_mode == VectorStoreQueryMode.TEXT_SEARCH:
+                    text_result = query_result
+                else:
+                    dense_result = query_result
+
+                logger.info(f"{query_mode} mode: Retrieved {len(query_result.nodes)} nodes.")
+
+            # TEXT_SEARCH 模式的分数归一化
+            if text_result and text_result.similarities:
+                text_result.similarities = min_max_normalize_scores(text_result.similarities)
+
+        except Exception as e:
+            logger.error(f"Failed to query vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key)
+            raise
+
+        return text_result, dense_result
+
 
     async def ainsert_chunks_to_vectordb(
         self,
@@ -176,10 +256,10 @@ class PaiKnowledgebaseTool:
     ) -> List[NodeWithScore]:
         logger.info(f"Starting to query knowledgebase {knowledge_id} with query: {query}.")
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(knowledge_id)
-        retrieval_config = RetrievalConfig.model_validate(
+        kb_retrieval_config = RetrievalConfig.model_validate(
             knowledgebase.retrieval_config
         )
-        logger.info(f"Get retrieval config: {retrieval_config}.")
+        logger.info(f"Get kb retrieval config: {kb_retrieval_config}.")
 
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
 
@@ -195,7 +275,7 @@ class PaiKnowledgebaseTool:
             # fail fast as no docs filtered.
             return []
 
-        retrieval_mode = retrieval_config.retrieval_mode
+        retrieval_mode = kb_retrieval_config.retrieval_mode
         if retrieval_setting and retrieval_setting.retrieval_mode:
             retrieval_mode = retrieval_setting.retrieval_mode
 
@@ -212,153 +292,53 @@ class PaiKnowledgebaseTool:
         query_mode = retrieval_type_to_search_mode(retrieval_mode)
 
 
-        vector_weight = retrieval_config.vector_weight
+        vector_weight = kb_retrieval_config.vector_weight
         if retrieval_setting and retrieval_setting.vector_weight is not None:
             vector_weight = retrieval_setting.vector_weight
 
-        top_k = retrieval_config.top_k
+        top_k = kb_retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
 
-        similarity_threshold = retrieval_config.similarity_threshold
+        similarity_threshold = kb_retrieval_config.similarity_threshold
         if retrieval_setting and retrieval_setting.similarity_threshold is not None:
             similarity_threshold = retrieval_setting.similarity_threshold
 
-        enable_rerank = retrieval_config.enable_rerank
+        enable_rerank = kb_retrieval_config.enable_rerank
         if retrieval_setting and retrieval_setting.enable_rerank is not None:
             enable_rerank = retrieval_setting.enable_rerank
 
         rerank_top_k = None
         if enable_rerank:
-            rerank_top_k = retrieval_config.rerank_top_k
+            rerank_top_k = kb_retrieval_config.rerank_top_k
             if retrieval_setting and retrieval_setting.rerank_top_k is not None:
                 rerank_top_k = retrieval_setting.rerank_top_k
 
-        text_result = None
-        dense_result = None
-
-        if query_mode == VectorStoreQueryMode.HYBRID:
-            if is_docid_filter_supported(vector_store=vector_store):
-                text_query = VectorStoreQuery(
-                    query_embedding=query_embedding,
-                    similarity_top_k=top_k,
-                    doc_ids=document_ids,
-                    query_str=query,
-                    mode=VectorStoreQueryMode.TEXT_SEARCH,
-                )
-                dense_query = VectorStoreQuery(
-                    query_embedding=query_embedding,
-                    similarity_top_k=top_k,
-                    doc_ids=document_ids,
-                    query_str=query,
-                    mode=VectorStoreQueryMode.DEFAULT,
-                )
-            else:
-                metadata_filters = MetadataFilters(
-                    condition=FilterCondition.AND,
-                    filters=[
-                        MetadataFilter(
-                            key="doc_id",
-                            value=document_ids,
-                            operator=FilterOperator.IN,
-                        )
-                    ],
-                )
-                text_query = VectorStoreQuery(
-                    query_embedding=query_embedding,
-                    similarity_top_k=top_k,
-                    query_str=query,
-                    mode=VectorStoreQueryMode.TEXT_SEARCH,
-                    filters=metadata_filters,
-                )
-                dense_query = VectorStoreQuery(
-                    query_embedding=query_embedding,
-                    similarity_top_k=top_k,
-                    query_str=query,
-                    mode=VectorStoreQueryMode.DEFAULT,
-                    filters=metadata_filters,
-                )
-
-            try:
-                text_result_task = vector_store.aquery(text_query)
-                dense_result_task = vector_store.aquery(dense_query)
-                text_result, dense_result = await asyncio.gather(text_result_task, dense_result_task)
-
-                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
-                if text_result.similarities:
-                    text_scores = text_result.similarities
-                    normalized_text_scores = min_max_normalize_scores(text_scores)
-                    text_result.similarities = normalized_text_scores
-
-                logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
-            except Exception as e:
-                logger.error(f"Failed to query vector store: {e}")
-                key = get_kb_cache_key(knowledgebase)
-                kb_cache.delete(key) # 删除缓存，强制重新创建
-                raise
-        else:
-            if is_docid_filter_supported(vector_store=vector_store):
-                logger.info("Using doc_id as filters.")
-                vector_query = VectorStoreQuery(
-                    query_embedding=query_embedding,
-                    similarity_top_k=top_k,
-                    doc_ids=document_ids,
-                    query_str=query,
-                    mode=query_mode,
-                    alpha=vector_weight,
-                )
-            else:
-                metadata_filters = MetadataFilters(
-                    condition=FilterCondition.AND,
-                    filters=[
-                        MetadataFilter(
-                            key="doc_id",
-                            value=document_ids,
-                            operator=FilterOperator.IN,
-                        )
-                    ],
-                )
-                logger.info(f"Using metadata filters {metadata_filters}.")
-                vector_query = VectorStoreQuery(
-                    query_embedding=query_embedding,
-                    similarity_top_k=top_k,
-                    query_str=query,
-                    mode=query_mode,
-                    alpha=vector_weight,
-                    filters=metadata_filters,
-                )
-
-            try:
-                query_result = await vector_store.aquery(vector_query)
-
-                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
-                if query_mode == VectorStoreQueryMode.TEXT_SEARCH and query_result.similarities:
-                    text_scores = query_result.similarities
-                    normalized_text_scores = min_max_normalize_scores(text_scores)
-                    query_result.similarities = normalized_text_scores
-                    text_result = query_result
-                else:
-                    dense_result = query_result
-                logger.info(f"{query_mode} mode: Retrieved {len(query_result.nodes)} nodes.")
-            except Exception as e:
-                logger.error(f"Failed to query vector store: {e}")
-                key = get_kb_cache_key(knowledgebase)
-                kb_cache.delete(key) # 删除缓存，强制重新创建
-                raise
+        text_result, dense_result = await self._execute_vector_store_query(
+            vector_store=vector_store,
+            knowledgebase=knowledgebase,
+            query=query,
+            query_embedding=query_embedding,
+            document_ids=document_ids,
+            query_mode=query_mode,
+            top_k=top_k,
+            use_docid_filter=is_docid_filter_supported(vector_store=vector_store),
+        )
 
 
         # 根据 enable_rerank设置rerank_model
-        rerank_model = None
         total_result_nodes = 0
         if text_result:
             total_result_nodes += len(text_result.nodes)
         if dense_result:
             total_result_nodes += len(dense_result.nodes)
+
+        rerank_model = None
         if enable_rerank and total_result_nodes > 1 and query:
-            rerank_model = retrieval_config.rerank_model
+            rerank_model_id = kb_retrieval_config.rerank_model
             if retrieval_setting and retrieval_setting.rerank_model:
-                rerank_model = retrieval_setting.rerank_model
-            rerank_model = reranker_provider.get_reranker_model(rerank_model)
+                rerank_model_id = retrieval_setting.rerank_model
+            rerank_model = reranker_provider.get_reranker_model(rerank_model_id)
         try:
             query_result = await arerank_fusion(
                 query=query,
@@ -413,7 +393,7 @@ class PaiKnowledgebaseTool:
 
         logger.info(f"Starting to query knowledgebase {knowledge_id} with query: {query}.")
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(knowledge_id)
-        retrieval_config = RetrievalConfig.model_validate(
+        kb_retrieval_config = RetrievalConfig.model_validate(
             knowledgebase.retrieval_config
         )
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
@@ -424,7 +404,7 @@ class PaiKnowledgebaseTool:
 
         query_embedding = await embed_model.aget_query_embedding(query)
 
-        retrieval_mode = retrieval_config.retrieval_mode
+        retrieval_mode = kb_retrieval_config.retrieval_mode
         if retrieval_setting and retrieval_setting.retrieval_mode:
             retrieval_mode = retrieval_setting.retrieval_mode
 
@@ -440,102 +420,52 @@ class PaiKnowledgebaseTool:
 
         query_mode = retrieval_type_to_search_mode(retrieval_mode)
 
-        vector_weight = retrieval_config.vector_weight
+        vector_weight = kb_retrieval_config.vector_weight
         if retrieval_setting and retrieval_setting.vector_weight is not None:
             vector_weight = retrieval_setting.vector_weight
 
-        top_k = retrieval_config.top_k
+        top_k = kb_retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
 
-        similarity_threshold = retrieval_config.similarity_threshold
+        similarity_threshold = kb_retrieval_config.similarity_threshold
         if retrieval_setting and retrieval_setting.similarity_threshold is not None:
             similarity_threshold = retrieval_setting.similarity_threshold
 
-        enable_rerank = retrieval_config.enable_rerank
+        enable_rerank = kb_retrieval_config.enable_rerank
         if retrieval_setting and retrieval_setting.enable_rerank is not None:
             enable_rerank = retrieval_setting.enable_rerank
 
         rerank_top_k = None
         if enable_rerank:
-            rerank_top_k = retrieval_config.rerank_top_k
+            rerank_top_k = kb_retrieval_config.rerank_top_k
             if retrieval_setting and retrieval_setting.rerank_top_k is not None:
                 rerank_top_k = retrieval_setting.rerank_top_k
 
-        if query_mode == VectorStoreQueryMode.HYBRID:
-            # 创建 text 和 dense 查询
-            text_query = VectorStoreQuery(
-                query_embedding=query_embedding,
-                similarity_top_k=top_k,
-                doc_ids=document_ids,
-                query_str=query,
-                mode=VectorStoreQueryMode.TEXT_SEARCH,
-            )
-            dense_query = VectorStoreQuery(
-                query_embedding=query_embedding,
-                similarity_top_k=top_k,
-                doc_ids=document_ids,
-                query_str=query,
-                mode=VectorStoreQueryMode.DEFAULT,
-            )
+        text_result, dense_result = await self._execute_vector_store_query(
+            vector_store=vector_store,
+            knowledgebase=knowledgebase,
+            query=query,
+            query_embedding=query_embedding,
+            document_ids=document_ids,
+            query_mode=query_mode,
+            top_k=top_k,
+            use_docid_filter=True,
+        )
 
-            try:
-                text_result_task = vector_store.aquery(text_query)
-                dense_result_task = vector_store.aquery(dense_query)
-                text_result, dense_result = await asyncio.gather(text_result_task, dense_result_task)
-
-                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
-                if text_result.similarities:
-                    text_scores = text_result.similarities
-                    normalized_text_scores = min_max_normalize_scores(text_scores)
-                    text_result.similarities = normalized_text_scores
-
-                logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
-            except Exception as e:
-                logger.error(f"Failed to query vector store: {e}")
-                key = get_kb_cache_key(knowledgebase)
-                kb_cache.delete(key) # 删除缓存，强制重新创建
-                raise
-        else:
-            vector_query = VectorStoreQuery(
-                query_embedding=query_embedding,
-                similarity_top_k=top_k,
-                doc_ids=document_ids,
-                query_str=query,
-                mode=query_mode,
-                alpha=vector_weight,
-            )
-
-            try:
-                query_result = await vector_store.aquery(vector_query)
-
-                # 对 TEXT_SEARCH 模式的分数进行 min-max 归一化
-                if query_mode == VectorStoreQueryMode.TEXT_SEARCH and query_result.similarities:
-                    text_scores = query_result.similarities
-                    normalized_text_scores = min_max_normalize_scores(text_scores)
-                    query_result.similarities = normalized_text_scores
-                    text_result = query_result
-                else:
-                    dense_result = query_result
-                logger.info(f"{query_mode} mode: Retrieved {len(query_result.nodes)} nodes.")
-            except Exception as e:
-                logger.error(f"Failed to query vector store: {e}")
-                key = get_kb_cache_key(knowledgebase)
-                kb_cache.delete(key) # 删除缓存，强制重新创建
-                raise
-
-         # 根据 enable_rerank设置rerank_model
-        rerank_model = None
+        # 根据 enable_rerank设置rerank_model
         total_result_nodes = 0
         if text_result:
             total_result_nodes += len(text_result.nodes)
         if dense_result:
             total_result_nodes += len(dense_result.nodes)
+
+        rerank_model = None
         if enable_rerank and total_result_nodes > 1 and query:
-            rerank_model = retrieval_config.rerank_model
+            rerank_model_id = kb_retrieval_config.rerank_model
             if retrieval_setting and retrieval_setting.rerank_model:
-                rerank_model = retrieval_setting.rerank_model
-            rerank_model = reranker_provider.get_reranker_model(rerank_model)
+                rerank_model_id = retrieval_setting.rerank_model
+            rerank_model = reranker_provider.get_reranker_model(rerank_model_id)
         try:
             query_result = await arerank_fusion(
                 query=query,

@@ -5,7 +5,7 @@ from common.knowledgebase.types import SUPPORTED_VECTOR_DB_TYPES
 from config.providers.vectordb_provider import DEFAULT_VECTOR_ID, create_vector_db_connection_from_dict, vectordb_provider
 from config.utils.vectordb import create_vector_db_connection_from_env
 from fastapi import APIRouter, Depends
-from rag.vector_store.vector_connection import create_vector_store, cleanup_vector_store
+from rag.vector_store.vector_connection import create_vector_store, cleanup_vector_store_async
 from sqlmodel.ext.asyncio.session import AsyncSession
 from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.vectordb import (
@@ -33,7 +33,7 @@ async def _cleanup_cached_vector_stores():
             logger.info(
                 f"Clearing {cache_size} cached vector stores due to vector db config change."
             )
-        kb_cache.clear()
+            kb_cache.clear()
         logger.info("Cleared all cached vector stores.")
     except Exception as e:
         logger.warning(f"Error cleaning up cached vector stores: {e}")
@@ -179,4 +179,4 @@ async def connection_test(
     finally:
         # 确保无论成功还是失败都清理连接，避免连接泄漏
         if vector_store is not None:
-            await cleanup_vector_store(vector_store)
+            await cleanup_vector_store_async(vector_store)

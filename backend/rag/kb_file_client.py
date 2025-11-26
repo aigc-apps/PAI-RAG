@@ -28,7 +28,7 @@ from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from rag.vector_store.vector_connection import (
-    cleanup_vector_store,
+    cleanup_vector_store_async,
     create_vector_store,
 )
 from llama_index.core.embeddings import BaseEmbedding
@@ -124,7 +124,7 @@ class KbFileClient:
             )
         finally:
             # 确保无论成功还是失败都清理连接，避免连接泄漏
-            await cleanup_vector_store(vector_store)
+            await cleanup_vector_store_async(vector_store)
 
 
     # process file item, status -> processing
@@ -273,12 +273,12 @@ class KbFileClient:
                         file_version=file_task.file_version,
                     ):
                         # 在返回前清理连接，避免连接泄漏
-                        await cleanup_vector_store(vector_store)
+                        await cleanup_vector_store_async(vector_store)
                         return
                     await vector_store.async_add(batch_nodes)
             finally:
                 # 确保无论成功还是失败都清理连接，避免连接泄漏
-                await cleanup_vector_store(vector_store)
+                await cleanup_vector_store_async(vector_store)
             logger.info(f"Finished inserting {len(nodes)} into knowledgebase {kb_id}.")
             await update_chunk_status_async(chunk_ids=new_chunk_ids, status=ChunkStatus.succeeded)
             await update_file_status_async(

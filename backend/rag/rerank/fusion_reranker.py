@@ -46,11 +46,7 @@ def weight_rerank(
     logger.info(
         f"weight_reranker: Received {len(text_result.nodes)} text nodes "
         f"and {len(dense_result.nodes)} dense nodes"
-    )
-
-    logger.info(
-        f"weight_reranker: Merging with weights - "
-        f"vector_weight={vector_weight}, text_weight={text_weight}"
+         f"weight_reranker: Merging with weights vector_weight={vector_weight}"
     )
     ids=list(text_result.ids)
     nodes=list(text_result.nodes)
