@@ -23,7 +23,7 @@ from rag.chunk_helper import (
     update_file_content_async,
     should_cancel_file_task,
 )
-from tools.llm_utils import get_multimodal_llm_from_db
+from tools.llm_utils import get_llm_from_db
 from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
@@ -192,7 +192,9 @@ class KbFileClient:
                 return
             # parsing file
             logger.info(f"Parsing file {file_item.file_name}.")
-            multimodal_llm = await get_multimodal_llm_from_db()
+            multimodal_llm = None
+            if knowledgebase.chunk_config.image_caption_model:
+                multimodal_llm = get_llm_from_db(model_id=knowledgebase.chunk_config.image_caption_model)
             file_parser = self.create_file_parser(knowledgebase, multimodal_llm=multimodal_llm)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
             await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment,documents=documents)

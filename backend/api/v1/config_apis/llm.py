@@ -1,4 +1,5 @@
 import traceback
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -106,16 +107,28 @@ async def get_llm_groups(
 async def get_llms(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    vision_support: Optional[bool] = Query(default=None, description="过滤支持vision的多模态大模型，None表示不过滤"),
     session: AsyncSession = Depends(get_session),
 ):
+    # Build base query
+    base_query = select(LlmModelEntity)
+
+    # Add vision_support filter if provided
+    if vision_support is not None:
+        base_query = base_query.where(LlmModelEntity.vision_support == vision_support)
+
+    # Get total count with filter
     total_results = await session.exec(
-        select(func.count()).select_from(
-            select(LlmModelEntity)
-        )
+        select(func.count()).select_from(base_query)
     )
     total_num = total_results.one_or_none()
+
     pagination = get_pagination_meta(page, size, total_num)
-    sql_results = await session.exec(select(LlmModelEntity).offset(pagination.offset).limit(size))
+
+    # Get paginated results with filter
+    sql_results = await session.exec(
+        base_query.offset(pagination.offset).limit(size)
+    )
     llm_entities = sql_results.all()
     llm_models = [
         LlmModelRead.model_validate(

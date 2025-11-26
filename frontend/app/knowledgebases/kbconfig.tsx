@@ -89,6 +89,7 @@ export interface KbConfig {
     separator: string; // 切片标识符
     chunk_size: string; // 切片大小
     chunk_overlap: string; // 切片重叠大小
+    image_caption_model?: string; // 图片理解模型ID
   };
   embedding_model: string; //向量模型名称
   retrieval_config: {
@@ -127,6 +128,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const [metadataError, setMetadataError] = useState('');
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [rerankermodels, setRerankerModels] = useState<RerankerModel[]>([]);
+  const [visionModels, setVisionModels] = useState<Array<{ id: string; model_id: string; model: string }>>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(''); // 错误信息
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
@@ -136,9 +138,10 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const [embRes, rerankerRes] = await Promise.all([
+        const [embRes, rerankerRes, visionRes] = await Promise.all([
           fetch(`/api/config/embeddings`),
           fetch(`/api/config/rerankers`),
+          fetch(`/api/config/llms?vision_support=true&size=1000`),
         ]);
 
         const embData = (await embRes.json())?.data.items || [];
@@ -148,6 +151,10 @@ export const KbConfigCard: FC<KbConfigProps> = ({
         const rerankerData = (await rerankerRes.json())?.data.items || [];
         console.log('rerankerData', rerankerData);
         setRerankerModels([...rerankerData]);
+
+        const visionData = (await visionRes.json())?.data.items || [];
+        console.log('visionData', visionData);
+        setVisionModels(visionData.map((m: any) => ({ id: m.id, model_id: m.model_id, model: m.model })));
       } catch (err: any) {
         setModelError(err || '加载失败');
       } finally {
@@ -342,6 +349,41 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             max="200"
           />
           <p className="text-xs text-muted-foreground">推荐值: 50</p>
+        </div>
+
+        <div className="flex gap-3 px-4 items-center pt-3">
+          <Label htmlFor="imageCaptionModel" className="w-[100px] text-xs">
+            图片理解模型
+          </Label>
+          <Select
+            value={kb.chunk_config.image_caption_model || ''}
+            onValueChange={(value) => {
+              setKb((prev) => ({
+                ...prev,
+                chunk_config: {
+                  ...prev.chunk_config,
+                  image_caption_model: value || undefined,
+                },
+              }));
+            }}
+          >
+            <SelectTrigger className="w-60 h-6 text-xs">
+              <SelectValue placeholder="请选择图片理解模型（可选）" />
+            </SelectTrigger>
+            <SelectContent className="text-xs">
+              <SelectGroup>
+                <SelectItem value="" className="text-xs h-5">
+                  不使用图片理解模型
+                </SelectItem>
+                {visionModels.map((model) => (
+                  <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                    {model.model_id} ({model.model})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">用于理解图片内容</p>
         </div>
 
         <div className="flex gap-3 px-4 items-center pt-3">
