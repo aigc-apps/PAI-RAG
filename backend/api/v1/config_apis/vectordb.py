@@ -170,6 +170,7 @@ async def connection_test(
         results = await vector_store.aquery(vector_query)
         assert len(results.nodes) >= 1, "Query vector store failed."
 
+        logger.info("Test vector store connection success.")
         return success_response(data={}, message="测试成功。")
     except Exception as e:
         logger.error(f"测试向量库连接失败: {traceback.format_exc()}")

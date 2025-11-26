@@ -11,7 +11,7 @@ from common.knowledgebase.vectordb.postgres import PostgresqlConnection
 import asyncio
 
 from llama_index.vector_stores.milvus import MilvusVectorStore
-from llama_index.vector_stores.postgres import PGVectorStore
+from rag.vector_store.pg_vector import PGVectorStore
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from loguru import logger
 
