@@ -1,22 +1,26 @@
 from functools import partial
 from typing import List, Optional
+import asyncio
 from config.providers.vectordb_provider import vectordb_provider
-from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
+from llama_index.core.vector_stores.types import VectorStoreQueryMode, VectorStoreQuery, VectorStoreQueryResult, MetadataFilters, MetadataFilter, FilterCondition, FilterOperator
 from llama_index.core.tools import FunctionTool
 
 from common.chat.models import RetrievalSetting
 from db.models.knowledgebase.knowledgebase import KbEntity, RetrievalConfig
 from common.knowledgebase.types import (
     VectorIndexRetrievalType,
+    is_fulltext_supported_by_vector_store,
 )
 from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition, query_file_ids_with_metadata_filter
 from rag.chunk_helper import (
     get_file_id_source_map,
 )
 from rag.vector_store.vector_connection import (
+    cleanup_vector_store,
     create_vector_store,
     is_docid_filter_supported,
 )
+from rag.rerank.fusion_reranker import arerank_fusion, min_max_normalize_scores
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from config.providers.knowledgebase_provider import knowledgebase_provider
@@ -43,7 +47,7 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
         return VectorStoreQueryMode.DEFAULT
 
 
-kb_cache = LruCache(maxsize=100)
+kb_cache = LruCache(maxsize=100, on_delete_func=cleanup_vector_store)
 
 def get_kb_cache_key(knowledgebase: KbEntity):
     vector_connection = vectordb_provider.get_vector_db_connection()
@@ -136,6 +140,86 @@ class PaiKnowledgebaseTool:
             texts.append(base_text[:3000])
         return texts
 
+    async def _execute_vector_store_query(
+        self,
+        vector_store: BasePydanticVectorStore,
+        knowledgebase: KbEntity,
+        query: str,
+        query_embedding: List[float],
+        document_ids: List[str],
+        query_mode: VectorStoreQueryMode,
+        top_k: int,
+        use_docid_filter: bool = True,
+    ) -> tuple[Optional[VectorStoreQueryResult], Optional[VectorStoreQueryResult]]:
+        """
+        执行向量存储查询，返回 text_result 和 dense_result。
+        """
+        text_result = None
+        dense_result = None
+
+        metadata_filters = None
+        if not use_docid_filter:
+            metadata_filters = MetadataFilters(
+                condition=FilterCondition.AND,
+                filters=[
+                    MetadataFilter(
+                        key="doc_id",
+                        value=document_ids,
+                        operator=FilterOperator.IN,
+                    )
+                ],
+            )
+            logger.info(f"Using metadata filters {metadata_filters}.")
+        else:
+            logger.info("Using doc_id as filters.")
+
+        def _build_query_kwargs(mode: VectorStoreQueryMode):
+            kwargs = {
+                "query_embedding": query_embedding,
+                "similarity_top_k": top_k,
+                "query_str": query,
+                "mode": mode,
+            }
+            if use_docid_filter:
+                kwargs["doc_ids"] = document_ids
+            else:
+                kwargs["filters"] = metadata_filters
+            return kwargs
+
+        try:
+            if query_mode == VectorStoreQueryMode.HYBRID:
+                # 混合模式：并行执行文本搜索和向量搜索
+                text_query = VectorStoreQuery(**_build_query_kwargs(VectorStoreQueryMode.TEXT_SEARCH))
+                dense_query = VectorStoreQuery(**_build_query_kwargs(VectorStoreQueryMode.DEFAULT))
+
+                text_result_task = vector_store.aquery(text_query)
+                dense_result_task = vector_store.aquery(dense_query)
+                text_result, dense_result = await asyncio.gather(text_result_task, dense_result_task)
+
+                logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
+            else:
+                vector_query = VectorStoreQuery(**_build_query_kwargs(query_mode))
+                query_result = await vector_store.aquery(vector_query)
+
+                if query_mode == VectorStoreQueryMode.TEXT_SEARCH:
+                    text_result = query_result
+                else:
+                    dense_result = query_result
+
+                logger.info(f"{query_mode} mode: Retrieved {len(query_result.nodes)} nodes.")
+
+            # TEXT_SEARCH 模式的分数归一化
+            if text_result and text_result.similarities:
+                text_result.similarities = min_max_normalize_scores(text_result.similarities)
+
+        except Exception as e:
+            logger.error(f"Failed to query vector store: {e}")
+            key = get_kb_cache_key(knowledgebase)
+            kb_cache.delete(key)
+            raise
+
+        return text_result, dense_result
+
 
     async def ainsert_chunks_to_vectordb(
         self,
@@ -172,10 +256,10 @@ class PaiKnowledgebaseTool:
     ) -> List[NodeWithScore]:
         logger.info(f"Starting to query knowledgebase {knowledge_id} with query: {query}.")
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(knowledge_id)
-        retrieval_config = RetrievalConfig.model_validate(
+        kb_retrieval_config = RetrievalConfig.model_validate(
             knowledgebase.retrieval_config
         )
-        logger.info(f"Get retrieval config: {retrieval_config}.")
+        logger.info(f"Get kb retrieval config: {kb_retrieval_config}.")
 
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
 
@@ -191,87 +275,85 @@ class PaiKnowledgebaseTool:
             # fail fast as no docs filtered.
             return []
 
-        retrieval_mode = retrieval_config.retrieval_mode
+        retrieval_mode = kb_retrieval_config.retrieval_mode
         if retrieval_setting and retrieval_setting.retrieval_mode:
             retrieval_mode = retrieval_setting.retrieval_mode
+
+        # 检查当前的 vector store 是否支持全文检索和混合检索
+        if not is_fulltext_supported_by_vector_store(vector_store):
+            # 如果不支持全文检索，强制使用向量检索
+            if retrieval_mode in [VectorIndexRetrievalType.fulltext, VectorIndexRetrievalType.hybrid]:
+                store_name = vector_store.__class__.__name__
+                logger.warning(
+                    f"Vector store {store_name} does not support {retrieval_mode} retrieval. Falling back to vector retrieval."
+                )
+                retrieval_mode = VectorIndexRetrievalType.vector
+
         query_mode = retrieval_type_to_search_mode(retrieval_mode)
 
 
-        vector_weight = retrieval_config.vector_weight
+        vector_weight = kb_retrieval_config.vector_weight
         if retrieval_setting and retrieval_setting.vector_weight is not None:
             vector_weight = retrieval_setting.vector_weight
 
-        top_k = retrieval_config.top_k
+        top_k = kb_retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
 
-        similarity_threshold = retrieval_config.similarity_threshold
+        similarity_threshold = kb_retrieval_config.similarity_threshold
         if retrieval_setting and retrieval_setting.similarity_threshold is not None:
             similarity_threshold = retrieval_setting.similarity_threshold
 
-        enable_rerank = retrieval_config.enable_rerank
+        enable_rerank = kb_retrieval_config.enable_rerank
         if retrieval_setting and retrieval_setting.enable_rerank is not None:
             enable_rerank = retrieval_setting.enable_rerank
 
-        reranker_top_k = None
+        rerank_top_k = None
         if enable_rerank:
-            reranker_top_k = retrieval_config.rerank_top_k
+            rerank_top_k = kb_retrieval_config.rerank_top_k
             if retrieval_setting and retrieval_setting.rerank_top_k is not None:
-                reranker_top_k = retrieval_setting.rerank_top_k
+                rerank_top_k = retrieval_setting.rerank_top_k
 
-        # 直接按doc_id过滤
-        if is_docid_filter_supported(vector_store=vector_store):
-            logger.info("Using doc_id as filters.")
-            vector_query = VectorStoreQuery(
-                query_embedding=query_embedding,
-                similarity_top_k=top_k,
-                doc_ids=document_ids,
-                query_str=query,
-                mode=query_mode,
-                alpha=vector_weight,
-            )
-        else:
-            # 使用llama_index filters 过滤
-            metadata_filters = MetadataFilters(
-                condition=FilterCondition.AND,
-                filters=[
-                    MetadataFilter(
-                        key="doc_id",
-                        value=document_ids,
-                        operator=FilterOperator.IN,
-                    )
-                ],
-            )
-            logger.info(f"Using metadata filters {metadata_filters}.")
+        text_result, dense_result = await self._execute_vector_store_query(
+            vector_store=vector_store,
+            knowledgebase=knowledgebase,
+            query=query,
+            query_embedding=query_embedding,
+            document_ids=document_ids,
+            query_mode=query_mode,
+            top_k=top_k,
+            use_docid_filter=is_docid_filter_supported(vector_store=vector_store),
+        )
 
-            vector_query = VectorStoreQuery(
-                query_embedding=query_embedding,
-                similarity_top_k=top_k,
-                query_str=query,
-                mode=query_mode,
-                alpha=vector_weight,
-                filters=metadata_filters,
-            )
 
+        # 根据 enable_rerank设置rerank_model
+        total_result_nodes = 0
+        if text_result:
+            total_result_nodes += len(text_result.nodes)
+        if dense_result:
+            total_result_nodes += len(dense_result.nodes)
+
+        rerank_model = None
+        if enable_rerank and total_result_nodes > 1 and query:
+            rerank_model_id = kb_retrieval_config.rerank_model
+            if retrieval_setting and retrieval_setting.rerank_model:
+                rerank_model_id = retrieval_setting.rerank_model
+            rerank_model = reranker_provider.get_reranker_model(rerank_model_id)
         try:
-            query_result = await vector_store.aquery(vector_query)
-            logger.info(f"Retrieved {len(query_result.nodes)} nodes from vector index.")
+            query_result = await arerank_fusion(
+                query=query,
+                text_result=text_result,
+                dense_result=dense_result,
+                rerank_model=rerank_model,
+                vector_weight=vector_weight,
+                top_k=top_k,
+                rerank_top_k=rerank_top_k)
+            logger.info(f"Reranked {len(query_result.nodes)} nodes.")
         except Exception as e:
-            logger.error(f"Failed to query vector store: {e}")
+            logger.error(f"Failed to rerank: {e}")
             key = get_kb_cache_key(knowledgebase)
             kb_cache.delete(key) # 删除缓存，强制重新创建
             raise
-
-        if enable_rerank and len(query_result.nodes) > 1 and query:
-            rerank_model = retrieval_config.rerank_model
-            if retrieval_setting and retrieval_setting.rerank_model:
-                rerank_model = retrieval_setting.rerank_model
-            raranker_model = reranker_provider.get_reranker_model(rerank_model)
-            query_result = await raranker_model.vector_store_rerank(
-                query=query,
-                result=query_result,
-                top_n=reranker_top_k)
-            logger.info(f"Reranked {len(query_result.nodes)} nodes.")
 
         result_nodes = []
         file_ids = []
@@ -311,7 +393,7 @@ class PaiKnowledgebaseTool:
 
         logger.info(f"Starting to query knowledgebase {knowledge_id} with query: {query}.")
         knowledgebase = await knowledgebase_provider.aget_knowledgebase(knowledge_id)
-        retrieval_config = RetrievalConfig.model_validate(
+        kb_retrieval_config = RetrievalConfig.model_validate(
             knowledgebase.retrieval_config
         )
         vector_store: BasePydanticVectorStore = self.create_vector_store_from_knowledgebase(knowledgebase)
@@ -322,59 +404,85 @@ class PaiKnowledgebaseTool:
 
         query_embedding = await embed_model.aget_query_embedding(query)
 
-        retrieval_mode = retrieval_config.retrieval_mode
+        retrieval_mode = kb_retrieval_config.retrieval_mode
         if retrieval_setting and retrieval_setting.retrieval_mode:
             retrieval_mode = retrieval_setting.retrieval_mode
+
+        # 检查当前的 vector store 是否支持全文检索和混合检索
+        if not is_fulltext_supported_by_vector_store(vector_store):
+            # 如果不支持全文检索，强制使用向量检索
+            if retrieval_mode in [VectorIndexRetrievalType.fulltext, VectorIndexRetrievalType.hybrid]:
+                store_name = vector_store.__class__.__name__
+                logger.warning(
+                    f"Vector store {store_name} does not support {retrieval_mode} retrieval. Falling back to vector retrieval."
+                )
+                retrieval_mode = VectorIndexRetrievalType.vector
+
         query_mode = retrieval_type_to_search_mode(retrieval_mode)
 
-        vector_weight = retrieval_config.vector_weight
+        vector_weight = kb_retrieval_config.vector_weight
         if retrieval_setting and retrieval_setting.vector_weight is not None:
             vector_weight = retrieval_setting.vector_weight
 
-        top_k = retrieval_config.top_k
+        top_k = kb_retrieval_config.top_k
         if retrieval_setting and retrieval_setting.top_k is not None:
             top_k = retrieval_setting.top_k
 
-        similarity_threshold = retrieval_config.similarity_threshold
+        similarity_threshold = kb_retrieval_config.similarity_threshold
         if retrieval_setting and retrieval_setting.similarity_threshold is not None:
             similarity_threshold = retrieval_setting.similarity_threshold
 
-        enable_rerank = retrieval_config.enable_rerank
+        enable_rerank = kb_retrieval_config.enable_rerank
         if retrieval_setting and retrieval_setting.enable_rerank is not None:
             enable_rerank = retrieval_setting.enable_rerank
 
-        reranker_top_k = None
+        rerank_top_k = None
         if enable_rerank:
-            reranker_top_k = retrieval_config.rerank_top_k
+            rerank_top_k = kb_retrieval_config.rerank_top_k
             if retrieval_setting and retrieval_setting.rerank_top_k is not None:
-                reranker_top_k = retrieval_setting.rerank_top_k
+                rerank_top_k = retrieval_setting.rerank_top_k
 
-        vector_query = VectorStoreQuery(
+        text_result, dense_result = await self._execute_vector_store_query(
+            vector_store=vector_store,
+            knowledgebase=knowledgebase,
+            query=query,
             query_embedding=query_embedding,
-            similarity_top_k=top_k,
-            doc_ids=document_ids,
-            query_str=query,
-            mode=query_mode,
-            alpha=vector_weight,
+            document_ids=document_ids,
+            query_mode=query_mode,
+            top_k=top_k,
+            use_docid_filter=True,
         )
 
+        # 根据 enable_rerank设置rerank_model
+        total_result_nodes = 0
+        if text_result:
+            total_result_nodes += len(text_result.nodes)
+        if dense_result:
+            total_result_nodes += len(dense_result.nodes)
+
+        rerank_model = None
+        if enable_rerank and total_result_nodes > 1 and query:
+            rerank_model_id = kb_retrieval_config.rerank_model
+            if retrieval_setting and retrieval_setting.rerank_model:
+                rerank_model_id = retrieval_setting.rerank_model
+            rerank_model = reranker_provider.get_reranker_model(rerank_model_id)
         try:
-            query_result = await vector_store.aquery(vector_query)
+            query_result = await arerank_fusion(
+                query=query,
+                text_result=text_result,
+                dense_result=dense_result,
+                rerank_model=rerank_model,
+                vector_weight=vector_weight,
+                top_k=top_k,
+                rerank_top_k=rerank_top_k)
+            logger.info(f"Reranked {len(query_result.nodes)} nodes.")
         except Exception as e:
-            logger.error(f"Failed to query vector store: {e}")
+            logger.error(f"Failed to rerank: {e}")
             key = get_kb_cache_key(knowledgebase)
             kb_cache.delete(key) # 删除缓存，强制重新创建
             raise
 
-        if enable_rerank and len(query_result.nodes) > 1 and query:
-            rerank_model = retrieval_config.rerank_model
-            if retrieval_setting and retrieval_setting.rerank_model:
-                rerank_model = retrieval_setting.rerank_model
-            raranker_model = reranker_provider.get_reranker_model(rerank_model)
-            query_result = await raranker_model.vector_store_rerank(
-                query=query,
-                result=query_result,
-                top_n=reranker_top_k)
+
 
         result_nodes = []
         for i, node in enumerate(query_result.nodes):

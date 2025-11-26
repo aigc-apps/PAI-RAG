@@ -194,6 +194,14 @@ async def update_knowledgebase(
         await session.commit()
         await session.refresh(knowledgebase)
 
+        # 清理缓存的向量存储，确保连接被正确关闭
+        try:
+            from tools.knowledgebase.knowledgebase_tool import kb_cache
+
+            kb_cache.clear()
+        except Exception as e:
+            logger.warning(f"Error clearing kb_cache during knowledgebase update: {e}")
+
         await config_change_manager.notify_change_async(
             event_source=ChangeEventSource.KNOWLEDGEBASE,
             event_type=ChangeEventType.UPDATE,

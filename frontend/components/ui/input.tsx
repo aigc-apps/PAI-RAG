@@ -2,7 +2,14 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+function Input({ className, type, value, ...props }: React.ComponentProps<"input">) {
+  // 只有在 value prop 明确存在时才设置为受控组件
+  // 如果 value 是 undefined（没有传递），保持非受控状态
+  // 如果 value 是 null 或空字符串，使用空字符串作为受控值
+  const inputProps = value !== undefined 
+    ? { ...props, value: value ?? "" }
+    : props
+  
   return (
     <input
       type={type}
@@ -13,7 +20,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
         "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
         className
       )}
-      {...props}
+      {...inputProps}
     />
   )
 }

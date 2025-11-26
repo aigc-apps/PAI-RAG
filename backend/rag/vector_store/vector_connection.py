@@ -8,6 +8,8 @@ from common.knowledgebase.vectordb.tablestore import TablestoreConnection
 from common.knowledgebase.vectordb.local import LocalConnection
 from common.knowledgebase.vectordb.milvus import MilvusConnection
 from common.knowledgebase.vectordb.postgres import PostgresqlConnection
+import asyncio
+
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
@@ -206,9 +208,25 @@ def create_vector_store(
         raise ValueError(f"Unknown vector_db_connection: {vector_db_connection}.")
 
 
-async def cleanup_vector_store(vector_store: BasePydanticVectorStore):
-    if isinstance(vector_store, PGVectorStore):
+async def cleanup_vector_store_async(vector_store: BasePydanticVectorStore):
+    try:
         await vector_store.close()
+    except Exception as e:
+        logger.warning(f"Error closing vector store: {e}")
+
+
+
+def cleanup_vector_store(vector_store: BasePydanticVectorStore):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(cleanup_vector_store_async(vector_store))
+        return
+
+    if loop.is_running():
+        loop.create_task(cleanup_vector_store_async(vector_store))
+    else:
+        asyncio.run(cleanup_vector_store_async(vector_store))
 
 
 def is_docid_filter_supported(vector_store: BasePydanticVectorStore) -> bool:
