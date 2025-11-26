@@ -46,22 +46,24 @@ from db.models import (
 
 def get_sync_db_engine():
     # 从环境变量中读取数据库配置
+    # 支持三种数据库类型：sqlite（默认）、postgresql、mysql
+    # MySQL 必须使用 utf8mb4 编码，建议创建数据库时设置：
+    # CREATE DATABASE your_database_name CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     if not os.path.exists("./localdata"):
         os.makedirs("./localdata")
-    db_type= os.getenv("DB_TYPE", "sqlite")
+    db_type = os.getenv("DB_TYPE", "sqlite")
     db_name = os.getenv("DB_NAME")
     db_user = os.getenv("DB_USER")
     db_password = os.getenv("DB_PASSWORD")
     db_host = os.getenv("DB_HOST", "localhost")
-    db_port = os.getenv("DB_PORT", 5432)
+    db_port = os.getenv("DB_PORT")
 
     if db_type == "postgresql":
         assert db_name, "Postgres db_name不能为空。"
         assert db_host, "Postgres db_host不能为空。"
-        assert db_name, "Postgres db_name不能为空。"
-        assert db_user, "Postgres db_user你们为空。"
+        assert db_user, "Postgres db_user不能为空。"
         assert db_password, "Postgres db_password不能为空。"
-        assert db_port, "Postgres db_port不能为空。"
+        db_port = int(db_port) if db_port else 5432
 
         encoded_db_user = quote_plus(db_user)
         encoded_db_password = quote_plus(db_password)
@@ -69,7 +71,31 @@ def get_sync_db_engine():
         db_url = f"postgresql+psycopg2://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}"
         engine = create_engine(db_url, echo=False)
         logger.info(
-            f"created sync engine with {db_user}@{db_host}:{db_port}/{db_name}"
+            f"created sync engine with PostgreSQL {db_user}@{db_host}:{db_port}/{db_name}"
+        )
+
+        return engine
+    elif db_type == "mysql":
+        assert db_name, "MySQL db_name不能为空。"
+        assert db_host, "MySQL db_host不能为空。"
+        assert db_user, "MySQL db_user不能为空。"
+        assert db_password, "MySQL db_password不能为空。"
+        db_port = int(db_port) if db_port else 3306
+
+        encoded_db_user = quote_plus(db_user)
+        encoded_db_password = quote_plus(db_password)
+
+        # MySQL 使用 pymysql 驱动，并设置 utf8mb4 编码
+        db_url = f"mysql+pymysql://{encoded_db_user}:{encoded_db_password}@{db_host}:{db_port}/{db_name}?charset=utf8mb4"
+        engine = create_engine(
+            db_url,
+            echo=False,
+            connect_args={
+                "charset": "utf8mb4",
+            },
+        )
+        logger.info(
+            f"created sync engine with MySQL {db_user}@{db_host}:{db_port}/{db_name} (utf8mb4)"
         )
 
         return engine
