@@ -8,7 +8,6 @@ from common.knowledgebase.types import FileStatus
 
 
 class MetadataEntry(BaseModel):
-    metadata_id: str
     name: str
     value: str | int | float
 

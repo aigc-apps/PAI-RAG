@@ -10,8 +10,8 @@ import tempfile
 import json
 import re
 import io
+import hashlib
 from markdownify import markdownify
-import pypinyin
 from fastpdf4llm import ContentBlock
 from pairag.file.readers.base import BaseReader
 from pairag.file.utils.font_utils import infer_mineru_api_title_level
@@ -25,51 +25,23 @@ from llama_index.core.schema import Document
 from pairag.file.utils.async_helper import run_sync
 
 
-def sanitize_filename(filename: str, replacement: str = '_', convert_chinese_to_pinyin: bool = True) -> str:
+def sanitize_filename(filename: str) -> str:
     """
-    替换文件名中的特殊字符和空白符号为指定字符，并将中文转换为拼音
-    
-    Args:
-        filename: 原始文件名
-        replacement: 替换字符，默认为下划线
-        convert_chinese_to_pinyin: 是否将中文转换为拼音，默认为True
-    
-    Returns:
-        str: 清理后的文件名
+    使用文件名计算hash值，避免所有特殊字符问题。
+    保留原始文件的扩展名。
     """
-    # 如果启用中文转拼音，先转换中文部分
-    if convert_chinese_to_pinyin:
-        try:
-            from pypinyin import lazy_pinyin, Style
-            # 将中文转换为拼音（不带声调，小写）
-            # 使用正则表达式匹配中文字符并替换为拼音
-            def replace_chinese(match):
-                chinese_text = match.group(0)
-                pinyin_list = lazy_pinyin(chinese_text, style=Style.NORMAL)
-                return ''.join(pinyin_list)
-            
-            # 匹配中文字符（包括中文标点）
-            filename = re.sub(r'[\u4e00-\u9fff]+', replace_chinese, filename)
-        except ImportError:
-            # 如果 pypinyin 未安装，记录警告但继续处理
-            logger.warning("pypinyin not installed, skipping Chinese to pinyin conversion. Install with: pip install pypinyin")
-        except Exception as e:
-            logger.warning(f"Error converting Chinese to pinyin: {e}, using original filename")
+    # 分离文件名和扩展名
+    name, ext = os.path.splitext(filename)
     
-    # Windows和Unix系统中的非法字符
-    invalid_chars = r'[<>:"/\\|?*\x00-\x1f\s]'
+    # 计算文件名的hash值（使用SHA256，取前16位）
+    hash_obj = hashlib.sha256(filename.encode('utf-8'))
+    hash_hex = hash_obj.hexdigest()[:16]
     
-    # 替换非法字符和空白字符
-    sanitized = re.sub(invalid_chars, replacement, filename)
-    
-    # 处理常见的问题字符
-    # 移除开头和结尾的替换字符和点
-    sanitized = sanitized.strip(f'{replacement}.')
-    
-    # 替换连续的替换字符为单个字符
-    sanitized = re.sub(f'{re.escape(replacement)}+', replacement, sanitized)
-    
-    return sanitized
+    # 如果有扩展名，保留它；否则返回hash值
+    if ext:
+        return f"{hash_hex}{ext}"
+    else:
+        return hash_hex
 
 
 def extract_api_result(

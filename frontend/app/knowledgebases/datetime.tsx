@@ -1,5 +1,5 @@
 'use client';
-import { FC, useState } from 'react';
+import { FC, useState, useEffect } from 'react';
 import * as React from 'react';
 import { format } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
@@ -11,6 +11,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
 
 interface DatetimeProps {
   value: number;
@@ -24,19 +25,41 @@ export const DatetimeInput: FC<DatetimeProps> = ({
   width,
   onValueChange,
 }) => {
-  let initialDate = new Date();
-  if (value !== undefined) {
-    initialDate = new Date(value);
-  }
-  initialDate.setHours(0);
-  initialDate.setMinutes(0);
-  initialDate.setSeconds(0);
+  const getInitialDate = () => {
+    if (value !== undefined && value !== null) {
+      return new Date(value);
+    }
+    return new Date();
+  };
 
+  const getInitialTime = (date: Date) => {
+    return date.toTimeString().substring(0, 8);
+  };
 
-  const initalTime = '00:00:00';
+  const initialDate = getInitialDate();
+  const initialTime = getInitialTime(initialDate);
+
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState<Date>(initialDate);
-  const [time, setTime] = useState(initalTime);
+  const [time, setTime] = useState(initialTime);
+
+  // 当 value prop 变化时，更新内部状态（仅在弹窗关闭时）
+  useEffect(() => {
+    if (!open && value !== undefined && value !== null) {
+      const newDate = new Date(value);
+      setDate(newDate);
+      setTime(getInitialTime(newDate));
+    }
+  }, [value, open]);
+
+  // 当弹窗打开时，根据当前 value 更新 date 和 time
+  useEffect(() => {
+    if (open) {
+      const currentDate = value !== undefined && value !== null ? new Date(value) : new Date();
+      setDate(currentDate);
+      setTime(getInitialTime(currentDate));
+    }
+  }, [open, value]);
 
   const handleSaveDate = (newDate: Date) => {
     console.log('选择日期: ', newDate);
@@ -74,6 +97,9 @@ export const DatetimeInput: FC<DatetimeProps> = ({
       open={open}
       onOpenChange={(newOpen) => {
         setOpen(newOpen);
+        if (!newOpen) {
+          saveValue();
+        }
       }}
       modal={true}
     >
@@ -106,7 +132,20 @@ export const DatetimeInput: FC<DatetimeProps> = ({
           </Button>
         )}
       </PopoverTrigger>
-      <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+      <PopoverContent className="w-auto overflow-hidden p-0 relative" align="start">
+        <div className="flex items-center pt-2 px-2 gap-2">
+          <Label className="text-xs">Time</Label>
+          <Input
+            type="time"
+            step="1"
+            value={time}
+            onChange={(e) => handleSaveTime(e.target.value)}
+            className="pointer-events-auto w-30 h-6" // 很重要，不然会失去焦点，无法交互
+          />
+          <Button variant="outline" className="text-xs h-6" onClick={setNow}>
+            now
+          </Button>  
+        </div>
         <Calendar
           className="pointer-events-auto"
           mode="single"
@@ -118,21 +157,6 @@ export const DatetimeInput: FC<DatetimeProps> = ({
             }
           }}
         />
-        <div className="flex items-center">
-          <Input
-            type="time"
-            step="1"
-            defaultValue={time}
-            onChange={(e) => handleSaveTime(e.target.value)}
-            className="pointer-events-auto" // 很重要，不然会失去焦点，无法交互
-          />
-          <Button variant="link" onClick={setNow}>
-            now
-          </Button>
-          <Button variant="default" className="h-8" onClick={saveValue}>
-            OK
-          </Button>
-        </div>
       </PopoverContent>
     </Popover>
   );

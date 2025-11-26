@@ -25,6 +25,7 @@ export default function KnowledgeBaseCreatePage() {
       separator: '\n\n',
       chunk_size: '1000',
       chunk_overlap: '50',
+      image_caption_model: undefined,
     },
     embedding_model: 'BAAI/bge-m3',
     retrieval_config: {
@@ -94,7 +95,6 @@ export default function KnowledgeBaseCreatePage() {
       <div className="flex-1 overflow-y-auto">
         <KbConfigCard
           kbConfig={kbConfig}
-          metadataConfigs={[]}
           isCreate={true}
           onSaveSuccess={handleCreateSuccess}
           onCancel={handleCancel}

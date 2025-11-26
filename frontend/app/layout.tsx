@@ -47,7 +47,7 @@ export default function RootLayout({
               <AppSidebar />
               <SidebarInset>
                   <div className="h-screen w-full overflow-hidden">
-                    <SidebarTrigger className="w-10 pt-2"/>
+                    <SidebarTrigger className="w-10 pt-5"/>
                     <div className="w-full pt-0">
                         {children}
                         <Toaster duration={3000} position='top-right'/>

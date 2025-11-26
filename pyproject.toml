@@ -23,7 +23,7 @@ packages = [
 [tool.poetry.dependencies]
 python = ">=3.11.0,<3.13"
 fastapi = "0.115.2"
-uvicorn = "^0.29.0"
+uvicorn = "^0.31.1"
 llama-index-core = "^0.12.12"
 llama-index-llms-openai = "0.3.44"
 llama-index-vector-stores-analyticdb = "^0.3.0"
@@ -48,7 +48,7 @@ asyncpg = "^0.29.0"
 pgvector = "^0.3.2"
 pre-commit = "^3.8.0"
 bs4 = "^0.0.2"
-httpx = "0.27.0"
+httpx = "^0.28.1"
 peft = "^0.12.0"
 anyio = "^4.6.2.post1"
 sqlparse = "^0.5.3"
@@ -65,7 +65,7 @@ loguru = "^0.7.3"
 llama-index-vector-stores-tablestore = "^0.2.2"
 opentelemetry-sdk = "^1.33.1"
 sqlmodel = "^0.0.24"
-mcp = "^1.9.3"
+mcp = {extras = ["cli"], version = "^1.22.0"}
 llama-index-tools-mcp = "^0.2.5"
 # with bug fix, ref: https://github.com/Arize-ai/openinference/pull/2241
 openinference-instrumentation-openai = "^0.1.39"
@@ -82,7 +82,7 @@ tavily-python = "^0.7.12"
 rapidfuzz = "^3.14.1"
 xiyan-mcp-server = "^0.1.7"
 json5 = "^0.12.1"
-pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.0-py3-none-any.whl"}
+pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.3-py3-none-any.whl"}
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
