@@ -95,7 +95,6 @@ export default function KnowledgeBaseCreatePage() {
       <div className="flex-1 overflow-y-auto">
         <KbConfigCard
           kbConfig={kbConfig}
-          metadataConfigs={[]}
           isCreate={true}
           onSaveSuccess={handleCreateSuccess}
           onCancel={handleCancel}

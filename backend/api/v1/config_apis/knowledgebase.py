@@ -33,6 +33,7 @@ from loguru import logger
 import re
 from pairag.file.models.file_item import FileItem
 from api.v1.utils.paginate import get_pagination_meta
+from memory.utils import estimate_tokens_in_text
 
 knowledgebase_router = APIRouter()
 
@@ -836,3 +837,86 @@ async def update_chunk(
     except Exception as ex:
         logger.error(f"Failed to update knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {ex}")
         return error_response(message=f"更新知识库切片失败：{ex}")
+
+
+class AddChunkRequest(BaseModel):
+    text: str = Field(..., description="Chunk text content")
+    chunk_metadata: dict = Field(default={}, description="Chunk metadata")
+
+
+@knowledgebase_router.post("/{kb_id}/files/{file_id}/chunks", response_model=ResponseModel[KbChunkEntity])
+async def add_chunk(
+    kb_id: str,
+    file_id: str,
+    request: AddChunkRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Add a new chunk to a file.
+
+    - chunk_text: The text content of the chunk
+    - active: Defaults to True
+    - chunk_index: Automatically set to max(index) + 1 for the file
+    - chunk_metadata: Combines file_metadata + token_count
+    """
+    try:
+        # Validate knowledge base exists
+        kb_entity = await session.get(KbEntity, kb_id)
+        if kb_entity is None:
+            return error_response(code=404, message=f"知识库 {kb_id} 不存在。")
+
+        # Validate file exists
+        file_entity = await session.get(KbFileEntity, file_id)
+        if file_entity is None:
+            return error_response(code=404, message=f"文件 {file_id} 不存在。")
+
+        # Validate file belongs to knowledge base
+        if file_entity.kb_id != kb_id:
+            return error_response(code=400, message=f"文件 {file_id} 不属于知识库 {kb_id}。")
+
+        # Get max index for the file
+        max_index_result = await session.exec(
+            select(func.max(KbChunkEntity.index))
+            .where(
+                KbChunkEntity.kb_id == kb_id,
+                KbChunkEntity.file_id == file_id,
+            )
+        )
+        max_index = max_index_result.one_or_none() or -1
+        new_index = max_index + 1
+
+
+        # Build chunk_metadata: file_metadata + token_count
+        chunk_metadata = request.chunk_metadata or {}
+        chunk_metadata.update(file_entity.file_metadata or {})
+        chunk_metadata["doc_id"] = file_entity.id
+
+        # Calculate token_count
+        token_count = estimate_tokens_in_text(request.text)
+        chunk_metadata["token_count"] = token_count
+
+        # Create new chunk entity
+        new_chunk = KbChunkEntity(
+            kb_id=kb_id,
+            file_id=file_id,
+            text=request.text,
+            chunk_metadata=chunk_metadata,
+            index=new_index,
+            active=True,
+            file_part=0,
+            file_version=file_entity.file_version or 0,
+        )
+        session.add(new_chunk)
+        await session.commit()
+        await session.refresh(new_chunk)
+        logger.info(f"Inserted new chunk {new_chunk.id}, text: {request.text}, into database.")
+        node = create_text_node_from_chunk(new_chunk)
+        await kb_tool.ainsert_chunks_to_vectordb(kb_id=kb_id, nodes=[node])
+        logger.info(f"Inserted new chunk {new_chunk.id} into vector store.")
+
+        return success_response(data=new_chunk, message="添加切片成功。")
+
+    except Exception as ex:
+        await session.rollback()
+        logger.exception(f"Failed to add chunk to knowledgebase {kb_id} / file {file_id}: {ex}")
+        return error_response(code=500, message=f"添加切片失败：{str(ex)}")

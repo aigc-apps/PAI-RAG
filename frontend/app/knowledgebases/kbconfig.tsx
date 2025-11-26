@@ -105,7 +105,6 @@ export interface KbConfig {
 
 interface KbConfigProps {
   kbConfig: KbConfig;
-  metadataConfigs: MetadataConfig[];
   isCreate: boolean;
   onSaveSuccess: (kb: KbConfig) => void;
   onCancel: () => void;
@@ -114,26 +113,19 @@ interface KbConfigProps {
 // 知识库配置卡片
 export const KbConfigCard: FC<KbConfigProps> = ({
   kbConfig,
-  metadataConfigs,
   isCreate,
   onSaveSuccess,
   onCancel,
 }) => {
   const [kb, setKb] = useState<KbConfig>(kbConfig);
   const [indexType, setIndexType] = useState('vector');
-  const [metadataOpen, setMetadataOpen] = useState(false);
-  const [metadataName, setmetadataName] = useState('');
-  const [metadataValueType, setMetadataValueType] = useState('string');
-  const [metadataDesc, setMetadataDesc] = useState('');
-  const [metadataError, setMetadataError] = useState('');
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [rerankermodels, setRerankerModels] = useState<RerankerModel[]>([]);
   const [visionModels, setVisionModels] = useState<Array<{ id: string; model_id: string; model: string }>>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(''); // 错误信息
+
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
-  const [metadata_configs, setMetadataConfigs] =
-    useState<MetadataConfig[]>(metadataConfigs);
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
@@ -171,6 +163,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
       ? `/api/config/knowledgebases`
       : `/api/config/knowledgebases/${kb.id}`;
     const updateMethod = isCreate ? 'POST' : 'PUT';
+    kb.retrieval_config.enable_rerank = kb.retrieval_config.rerank_model && kb.retrieval_config.rerank_model.length > 0  ? true : false;
     try {
       const res = await fetch(submit_url, {
         method: updateMethod,
@@ -188,78 +181,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     }
   };
 
-  const handleRemoveMetadataEntry = async (id: string) => {
-    if (metadata_configs != null) {
-      const metadata_url = `/api/config/knowledgebases/${kb.id}/metadata/${id}`;
-      try {
-        const res = await fetch(metadata_url, {
-          method: 'DELETE',
-        });
-        if (!res.ok) throw new Error(`删除metadata失败: ${await res.text()}`);
 
-        const updated_metadata_configs = metadata_configs.filter(
-          (config: any) => config.id !== id,
-        );
-        setMetadataConfigs(updated_metadata_configs);
-
-        console.log('删除的元数据：', id);
-      } catch (err: any) {
-        console.log('删除元数据失败。', err.message);
-      }
-    }
-  };
-
-  const handleAddMetadataConfig = async () => {
-    if (!metadataName) {
-      setMetadataError('必须填入元数据名称。');
-      return;
-    }
-    const updated_metadata_configs = metadata_configs || [];
-
-    if (
-      updated_metadata_configs.some((config) => config.name === metadataName)
-    ) {
-      setMetadataError(`元数据名称 '${metadataName}' 已经存在.`);
-      return;
-    }
-
-    const metadata_url = `/api/config/knowledgebases/${kb.id}/metadata`;
-    try {
-      const res = await fetch(metadata_url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kb_id: kb.id,
-          name: metadataName,
-          value_type: metadataValueType,
-          description: metadataDesc,
-        }), // 包装为数组
-      });
-      if (!res.ok) throw new Error(`保存metadata失败: ${await res.text()}`);
-      const new_metadata_json = await res.json();
-      const new_metadata = new_metadata_json.data as MetadataConfig;
-      updated_metadata_configs.push(new_metadata);
-      setMetadataConfigs(updated_metadata_configs);
-      console.log('添加元数据成功.');
-    } catch (err: any) {
-      console.log('保存知识库失败', err.message);
-      setSaveErrorMsg(err.message);
-    } finally {
-      setmetadataName('');
-      setMetadataError('');
-      setMetadataValueType('string');
-      setMetadataDesc('');
-      setMetadataOpen(false);
-    }
-  };
-
-  function handleCancelMetadataConfig() {
-    setmetadataName('');
-    setMetadataError('');
-    setMetadataValueType('string');
-    setMetadataDesc('');
-    console.log('清空metadata信息');
-  }
 
   return (
     <div className="h-200 overflow-y-auto">
@@ -356,13 +278,13 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             图片理解模型
           </Label>
           <Select
-            value={kb.chunk_config.image_caption_model || ''}
+            value={kb.chunk_config.image_caption_model || 'DISABLED'}
             onValueChange={(value) => {
               setKb((prev) => ({
                 ...prev,
                 chunk_config: {
                   ...prev.chunk_config,
-                  image_caption_model: value || undefined,
+                  image_caption_model: value !== "DISABLED" ? value: undefined,
                 },
               }));
             }}
@@ -372,7 +294,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             </SelectTrigger>
             <SelectContent className="text-xs">
               <SelectGroup>
-                <SelectItem value="" className="text-xs h-5">
+                <SelectItem value="DISABLED" className="text-xs h-5">
                   不使用图片理解模型
                 </SelectItem>
                 {visionModels.map((model) => (

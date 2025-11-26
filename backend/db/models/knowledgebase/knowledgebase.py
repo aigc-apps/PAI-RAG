@@ -22,7 +22,7 @@ class ChunkConfig(SQLModel):
     chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP)
     parser_type: str = Field(default=DEFAULT_PARSER_TYPE)
     separator: str = Field(default=DEFAULT_SENTENCE_SEPARATOR)
-    image_caption_model: str = Field(default=None)
+    image_caption_model: Optional[str] = Field(default=None)
 
 
 class RetrievalConfig(SQLModel):
