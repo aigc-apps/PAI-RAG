@@ -1,0 +1,148 @@
+"""Weight reranker for merging text and dense search results."""
+from typing import Union
+from rag.rerank.reranker import OpenAICompatibleReranker
+from rag.rerank.dashscope_reranker import DashscopeReranker
+from logging import getLogger
+from typing import List
+
+from llama_index.core.vector_stores.types import VectorStoreQueryResult
+
+logger = getLogger(__name__)
+
+
+def min_max_normalize_scores(scores: List[float]) -> List[float]:
+    """Normalize scores to [0, 1] range using min-max normalization."""
+    if not scores:
+        return []
+    min_score = min(scores)
+    max_score = max(scores)
+    if max_score == min_score:
+        return [1.0 if max_score > 0 else 0.0 for _ in scores]
+    logger.info(f"TEXT_SEARCH mode: Normalized scores - min={min(scores) if scores else 'N/A'}, max={max(scores) if scores else 'N/A'}")
+    return [(x - min_score) / (max_score - min_score) for x in scores]
+
+
+
+
+
+def weight_rerank(
+    text_result: VectorStoreQueryResult,
+    dense_result: VectorStoreQueryResult,
+    vector_weight: float = 0.5,
+    top_k: int = 10,
+) -> VectorStoreQueryResult:
+    """
+    Merge text and dense search results using weighted sum.
+
+    Args:
+        text_result: Text search results
+        dense_result: Dense vector search results
+        top_k: Number of top results to return
+
+    Returns:
+        Merged VectorStoreQueryResult
+    """
+    text_weight = 1 - vector_weight
+    logger.info(
+        f"weight_reranker: Received {len(text_result.nodes)} text nodes "
+        f"and {len(dense_result.nodes)} dense nodes"
+         f"weight_reranker: Merging with weights vector_weight={vector_weight}"
+    )
+    ids=list(text_result.ids)
+    nodes=list(text_result.nodes)
+    scores=[score * text_weight for score in text_result.similarities]
+    id_index_map = {id: i for i, id in enumerate(text_result.ids)}
+
+
+    # 合并dense score
+    for i, node in enumerate(dense_result.nodes):
+        node_id = node.node_id
+        if node_id in id_index_map:
+            node_index = id_index_map[node_id]
+            scores[node_index] += dense_result.similarities[i] * vector_weight
+        else:
+            ids.append(node.node_id)
+            scores.append(dense_result.similarities[i] * vector_weight)
+            nodes.append(node)
+
+
+    ids, nodes, scores = zip(*sorted(zip(ids, nodes, scores), key=lambda x: x[2], reverse=True))
+    ids, nodes, scores = map(list, (ids, nodes, scores))
+
+    top_k_nodes = nodes[:top_k]
+    top_k_scores = scores[:top_k]
+    top_k_ids = ids[:top_k]
+    return VectorStoreQueryResult(
+        nodes=top_k_nodes,
+        ids=top_k_ids,
+        similarities=top_k_scores,
+    )
+
+def merge_vector_store_results_by_text(text_result: VectorStoreQueryResult, dense_result: VectorStoreQueryResult) -> VectorStoreQueryResult:
+    """
+    合并两个 VectorStoreQueryResult，去重后返回合并结果。
+    用于 reranker 场景，需要先合并再去重。
+
+    Args:
+        text_result: 文本搜索结果
+        dense_result: 向量搜索结果
+
+    Returns:
+        合并并去重后的 VectorStoreQueryResult
+    """
+    merged_nodes = {}
+    for node, similarity in zip(text_result.nodes, text_result.similarities):
+        merged_nodes[node.text] = (node, similarity, node.node_id)
+
+    for node, similarity in zip(dense_result.nodes, dense_result.similarities):
+        merged_nodes.setdefault(node.text, (node, similarity, node.node_id))
+
+    if merged_nodes:
+        nodes, similarities, ids = map(
+            list, zip(*merged_nodes.values())
+        )
+    else:
+        nodes, similarities, ids = [], [], []
+
+    return VectorStoreQueryResult(
+        nodes=nodes,
+        ids=ids,
+        similarities=similarities,
+    )
+
+
+
+async def arerank_fusion(
+    query: str = None,
+    text_result: VectorStoreQueryResult = None,
+    dense_result: VectorStoreQueryResult = None,
+    rerank_model: Union[DashscopeReranker, OpenAICompatibleReranker] = None,
+    vector_weight: float = 0.5,
+    top_k: int = 10,
+    rerank_top_k: int = 10,
+) -> VectorStoreQueryResult:
+    if not text_result:
+        if not rerank_model:
+            return dense_result
+        else:
+            return await rerank_model.vector_store_rerank(
+                query=query,
+                result=dense_result,
+                top_n=rerank_top_k)
+    elif not dense_result:
+        if not rerank_model:
+            return text_result
+        else:
+            return await rerank_model.vector_store_rerank(
+                query=query,
+                result=text_result,
+                top_n=rerank_top_k)
+    else:
+        if not rerank_model:
+            return weight_rerank(text_result, dense_result, vector_weight,top_k)
+        else:
+            merged_result = merge_vector_store_results_by_text(text_result, dense_result)
+            return await rerank_model.vector_store_rerank(
+                            query=query,
+                            result=merged_result,
+                        top_n=rerank_top_k)

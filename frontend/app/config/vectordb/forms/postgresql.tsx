@@ -20,7 +20,13 @@ export const PostgresqlForm: FC<PostgresqlConfigProps> = ({
   config,
   onValueChange
 }) => {
-  const [db, setDb] = useState<PostgresqlConfig>(config);
+  const [db, setDb] = useState<PostgresqlConfig>({
+    host: config.host || '',
+    port: config.port || '5432',
+    user: config.user || '',
+    password: config.password || '',
+    database: config.database || '',
+  });
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -32,14 +38,14 @@ export const PostgresqlForm: FC<PostgresqlConfigProps> = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="port">端口</Label>
-        <Input id="port" type="number" value={db.port || 5432} onChange={(e) => {
+        <Input id="port" type="number" value={db.port || '5432'} onChange={(e) => {
           setDb({...db, port: e.target.value});
           onValueChange({ ...db, port: e.target.value });
         }} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="database">数据库名</Label>
-        <Input id="database"  value={db.database} onChange={(e) => {
+        <Input id="database" value={db.database || ''} onChange={(e) => {
           setDb({...db, database: e.target.value});
           onValueChange({ ...db, database: e.target.value });
         }} />

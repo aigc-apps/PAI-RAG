@@ -58,7 +58,6 @@ def create_vector_db_connection_from_dict(config: dict) -> BaseVectorDbConnectio
 class VectorDbProvider(BaseConfigProvider):
     config_map: Dict[str, VectorDbConfig] = Field(default={})
     entity_class: Type[SQLModel] = VectorDbConfig
-
     def get_vector_db_connection(self):
         vector_db_config = self.config_map.get(DEFAULT_VECTOR_ID)
         if vector_db_config is None:

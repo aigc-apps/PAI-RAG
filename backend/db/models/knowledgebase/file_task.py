@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 import uuid
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, DateTime, UniqueConstraint
+from sqlalchemy import Column, DateTime, UniqueConstraint, Text
 from common.knowledgebase.types import FileStatus
 
 
@@ -14,11 +14,11 @@ class KbFileTaskEntity(SQLModel, table=True):
     kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id", ondelete="CASCADE")
     file_id: str = Field(default=None, foreign_key="pai_knowledgebase_file.id", ondelete="CASCADE")
     file_part: int = Field(default=0) # file part index, if file is split into multiple parts
-    file_path: str = Field(default=None)
+    file_path: str = Field(default=None, sa_column=Column(Text))
     file_version: Optional[int] = Field(default=0)
 
     status: str = Field(default=FileStatus.pending)
-    failed_reason: str | None = Field(default=None)
+    failed_reason: str | None = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_column=Column(DateTime)

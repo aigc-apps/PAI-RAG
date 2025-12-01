@@ -3,12 +3,11 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, JSON, DateTime, UniqueConstraint
+from sqlalchemy import Column, JSON, DateTime, UniqueConstraint, Text
 from common.knowledgebase.types import FileStatus
 
 
 class MetadataEntry(BaseModel):
-    metadata_id: str
     name: str
     value: str | int | float
 
@@ -25,12 +24,12 @@ class KbFileEntity(SQLModel, table=True):
     kb_id: str = Field(default=None, foreign_key="pai_knowledgebase.id", ondelete="CASCADE")
     # for attachment files, we need to store the message_id, file_content and file_content_length
     message_id: str = Field(default=None)
-    file_content: str = Field(default=None)
+    file_content: str = Field(default=None, sa_column=Column(Text))
     file_content_length: int = Field(default=0)
 
     file_source: Optional[str] = Field(default=None)
     file_name: str = Field(default=None)
-    file_path: str = Field(default=None)
+    file_path: str = Field(default=None, sa_column=Column(Text))
     file_extension: str = Field(default=None)
     file_size: int = Field(default=None)
     file_md5: str = Field(default=None)
@@ -38,7 +37,7 @@ class KbFileEntity(SQLModel, table=True):
     file_version: Optional[int] = Field(default=0)
 
     status: str = Field(default=FileStatus.pending)
-    failed_reason: str | None = Field(default=None)
+    failed_reason: str | None = Field(default=None, sa_column=Column(Text))
     active: bool = Field(default=True)
 
     created_at: datetime = Field(

@@ -3,7 +3,7 @@ import { GlobeIcon } from '@radix-ui/react-icons';
 import type { FC } from 'react';
 import { makeAssistantToolUI } from '@assistant-ui/react';
 import React, { useState, useEffect } from 'react';
-import { PaperclipIcon, Search, FileSearch, FileText, ListTodoIcon, BookCheckIcon } from 'lucide-react';
+import { PaperclipIcon, Search, FileSearch, FileText, ListTodoIcon, BookCheckIcon, Code2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -19,6 +19,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import ReactMarkdown from 'react-markdown';
@@ -54,6 +59,20 @@ const JsonCodeBlock = ({
     <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-2 font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
       <code className="language-json whitespace-pre-wrap break-words">
         {jsonString ?? ''}
+      </code>
+    </pre>
+  );
+};
+
+const PythonCodeBlock = ({
+  code,
+}: {
+  code: string | null | undefined;
+}) => {
+  return (
+    <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-3 rounded-md font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
+      <code className="language-python whitespace-pre-wrap break-words">
+        {code ?? ''}
       </code>
     </pre>
   );
@@ -710,6 +729,194 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
   },
 });
 
+/* Python Interpreter Tool UI */
+
+export type PythonInterpreterArgs = {
+  code: string;
+};
+
+export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs, string>({
+  toolName: 'PythonInterpreter',
+  render: ({ args, status, result, isError }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [savedCode, setSavedCode] = useState('');
+    const [codeGenerated, setCodeGenerated] = useState(false); // 标记代码是否已生成完成
+
+    // 当状态从 running 变为 complete 时，先展开显示结果，3秒后自动收起
+    useEffect(() => {
+      if (status.type === 'complete') {
+        setIsOpen(true); // complete 时先展开显示结果
+        // 3秒后自动收起
+        const timer = setTimeout(() => {
+          setIsOpen(false);
+        }, 3000);
+        return () => clearTimeout(timer);
+      } else if (status.type === 'running') {
+        // running 时立即展开，不等待代码
+        setIsOpen(true);
+        // 重置代码生成状态
+        setCodeGenerated(false);
+      }
+    }, [status.type]);
+
+    // 提取代码，并保存最后一次有效的代码值（使用 useMemo 优化性能）
+    const extractCode = React.useMemo(() => {
+      if (!args) return '';
+      
+      // 检查是否是空对象
+      if (typeof args === 'object' && Object.keys(args).length === 0) {
+        return '';
+      }
+      
+      if (typeof args === 'object' && 'code' in args) {
+        const code = typeof args.code === 'string' ? args.code : String(args.code || '');
+        // 只有当代码不为空时才返回
+        if (code && code.trim()) {
+          return code;
+        }
+      } else if (typeof args === 'string') {
+        const argsString: string = args as string; // Store as string to preserve type
+        try {
+          const parsed = safeParseJSON(argsString);
+          if (parsed && typeof parsed === 'object' && 'code' in parsed) {
+            const code = typeof parsed.code === 'string' ? parsed.code : String(parsed.code || '');
+            if (code && code.trim()) {
+              return code;
+            }
+          }
+          // 如果不是 JSON 格式，可能是直接的代码字符串
+          if (argsString.trim() && argsString !== '{}') {
+            return argsString;
+          }
+        } catch {
+          // 如果解析失败，可能是直接的代码字符串
+          if (argsString.trim() && argsString !== '{}') {
+            return argsString;
+          }
+        }
+      }
+      return '';
+    }, [args]);
+
+    // 更新保存的代码（只在有有效代码时更新）
+    useEffect(() => {
+      if (extractCode && extractCode.trim()) {
+        setSavedCode(extractCode);
+      }
+    }, [extractCode]);
+
+    // 使用保存的代码或当前代码（优先使用当前代码，如果为空则使用保存的代码）
+    const codeToShow = extractCode && extractCode.trim() ? extractCode : savedCode;
+
+    // 检测代码是否生成完成（代码稳定不再变化）
+    useEffect(() => {
+      if (status.type === 'running' && codeToShow && codeToShow.trim()) {
+        // 延迟1.5秒后认为代码已生成完成（代码在这段时间内没有变化）
+        // 每次代码变化时，定时器会重置，只有代码稳定1.5秒后才认为生成完成
+        const timer = setTimeout(() => {
+          setCodeGenerated(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      } else {
+        // 如果代码为空或状态不是running，重置状态
+        setCodeGenerated(false);
+      }
+    }, [codeToShow, status.type]);
+
+    if (status.type === 'running') {
+      return (
+        <div className="mb-1 rounded transition-colors">
+          <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+            <div className="h-7 bg-muted/50 cursor-pointer hover:bg-muted/100 rounded transition-colors">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
+                >
+                  <Code2 className="size-4" /> 正在调用工具: PythonInterpreter
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent className="mt-2">
+              <div className="rounded-md border border-border bg-background p-2 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold mb-2 text-muted-foreground">生成执行代码:</p>
+                  {codeToShow && codeToShow.trim() ? (
+                    <PythonCodeBlock code={codeToShow} />
+                  ) : (
+                    <div className="bg-muted/30 rounded p-3 text-sm text-muted-foreground italic">
+                      代码加载中...
+                    </div>
+                  )}
+                </div>
+                {/* 如果代码已生成完成，显示运行中提示 */}
+                {codeToShow && codeToShow.trim() && codeGenerated && (
+                  <div className="bg-muted/50 rounded p-3 text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                    <span>⚙️</span>
+                    <span>代码运行中...</span>
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      );
+    } else if (status.type === 'complete') {
+      const parsedResult = (typeof result === 'object' && result !== null && 'content' in result) 
+        ? (result as any).content?.[0]?.text ?? result 
+        : result;
+      
+      return (
+        <div className="mb-1 rounded transition-colors">
+          <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+            <div className="h-7 bg-muted/50 cursor-pointer hover:bg-muted/100 rounded transition-colors">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
+                >
+                  <Code2 className="size-4" /> 完成工具调用: PythonInterpreter
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent className="mt-2">
+              <div className="rounded-md border border-border bg-background p-2 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold mb-2 text-muted-foreground">生成执行代码:</p>
+                  {codeToShow && codeToShow.trim() ? (
+                    <PythonCodeBlock code={codeToShow} />
+                  ) : (
+                    <div className="bg-muted/30 rounded p-3 text-sm text-muted-foreground italic">
+                      代码未提供
+                    </div>
+                  )}
+                </div>
+                {parsedResult !== undefined && (
+                  <div className="border-t border-dashed pt-3">
+                    <p className="text-xs font-semibold mb-2 text-muted-foreground">执行结果:</p>
+                    <div className="bg-muted/30 rounded p-2 text-sm whitespace-pre-wrap break-words">
+                      {typeof parsedResult === 'string' ? parsedResult : JSON.stringify(parsedResult, null, 2)}
+                    </div>
+                  </div>
+                )}
+                {isError && (
+                  <div className="border-t border-dashed pt-3">
+                    <p className="text-xs font-semibold mb-2 text-red-500">错误:</p>
+                    <div className="bg-red-50 dark:bg-red-950/20 rounded p-2 text-sm text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">
+                      {typeof parsedResult === 'string' ? parsedResult : JSON.stringify(parsedResult, null, 2)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      );
+    }
+    return null;
+  },
+});
+
 const ToolUIWrapper: FC = () => {
   return (
     <>
@@ -720,6 +927,7 @@ const ToolUIWrapper: FC = () => {
       <SearchFileToollUI />
       <SearchKbToolUI />
       <ChatDbToolUI />
+      <PythonInterpreterToolUI />
     </>
   );
 };

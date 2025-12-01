@@ -1,6 +1,6 @@
 import re
 from bs4 import BeautifulSoup
-import html2text
+from markdownify import markdownify
 from loguru import logger
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
@@ -135,31 +135,34 @@ class HtmlReader(BaseReader):
         for match in image_matches:
             full_match = match.group(0)  # 整个匹配
             image_url = match.group(1)  # 捕获的URL
-            image_file, image_name = get_image_from_url(image_url)
-            if image_name:
-                save_image_name = save_name_template.format(image_name)
+            if self.image_caption_tool and isinstance(self.file_store, OssFileStore):
+                image_file, image_name = get_image_from_url(image_url)
+                if image_name:
+                    save_image_name = save_name_template.format(image_name)
 
-                try:
-                    self.file_store.save(image_file, save_image_name)
-                    image_alt_text = self.image_caption_tool.extract_url(
-                        self.file_store.get_url(save_image_name)
-                    )
-                    cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                    
-                    image_text = to_markdown_image_text(save_image_name, cleaned_alt)
-                    content = content.replace(
-                        full_match,
-                        image_text,
-                    )
-                    saved_images.append(save_image_name)
+                    try:
+                        self.file_store.save(image_file, save_image_name)
+                        image_alt_text = self.image_caption_tool.extract_url(
+                            self.file_store.get_url(save_image_name)
+                        )
+                        cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                        
+                        image_text = to_markdown_image_text(save_image_name, cleaned_alt)
+                        content = content.replace(
+                            full_match,
+                            image_text,
+                        )
+                        saved_images.append(save_image_name)
 
-                    logger.info(
-                        f"Successfully saved image {save_image_name} from URL: {image_url}"
-                    )
-                except Exception as ex:
-                    logger.exception(
-                        f"Failed to save image from URL: {image_url}. Error: {ex}"
-                    )
+                        logger.info(
+                            f"Successfully saved image {save_image_name} from URL: {image_url}"
+                        )
+                    except Exception as ex:
+                        logger.exception(
+                            f"Failed to save image from URL: {image_url}. Error: {ex}"
+                        )
+            else:
+                content = content.replace(full_match, "") # 移除图片链接
 
         return content, saved_images
 
@@ -172,29 +175,21 @@ class HtmlReader(BaseReader):
             html_content = file_item.file.read().decode("utf-8")
 
             modified_html, tables = self._extract_tables(html_content)
-            h = html2text.HTML2Text()
-
-            # 配置 html2text 对象
-            h.ignore_links = True  # 是否忽略链接
-            h.ignore_images = False  # 是否忽略图片
-            # h.escape_all = True  # 是否转义所有特殊字符
-            h.body_width = 0  # 设置行宽为 0 表示不限制行宽
 
             # 将 HTML 转换为 Markdown
-            markdown_content = h.handle(modified_html)
+            markdown_content = markdownify(modified_html)
             for table in tables:
                 table_markdown = self._convert_table_to_markdown(table) + "\n\n"
                 placeholder = f"<!-- TABLE_PLACEHOLDER_{id(table)} -->"
                 markdown_content = markdown_content.replace(placeholder, table_markdown)
 
             images = []
-            if isinstance(self.file_store, OssFileStore) and self.image_caption_tool:
-                markdown_content, images = self._replace_image_paths(
-                    markdown_content, file_item.kb_id + "/images/{}"
-                )
-                logger.info(
-                    f"Successfully read {file_item.file_name} with images {images}."
-                )
+            markdown_content, images = self._replace_image_paths(
+                markdown_content, file_item.kb_id + "/images/{}"
+            )
+            logger.info(
+                f"Successfully read {file_item.file_name} with images {images}."
+            )
 
             metadata = file_item.metadata()
 

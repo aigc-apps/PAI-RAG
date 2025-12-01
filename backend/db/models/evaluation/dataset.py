@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 import uuid
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, JSON, DateTime
+from sqlalchemy import Column, JSON, DateTime, Text
 from typing import Optional
 
 class DatasetCreate(SQLModel):
     name: str = Field(default=None)
-    description: str = Field(default=None)
+    description: str = Field(default=None, sa_column=Column(Text))
     type: str = Field(default="") # "built-in" or "custom"
 
 class DatasetEntity(DatasetCreate, table=True):
@@ -33,11 +33,13 @@ class DatasetSampleEntity(SQLModel, table=True):
         ondelete="CASCADE",
     )
     input: str = Field(
-        description="The user input/query for evaluation"
+        description="The user input/query for evaluation",
+        sa_column=Column(Text),
     )
     expected_output: Optional[str] = Field(
         default=None,
-        description="The expected/correct response for this input"
+        description="The expected/correct response for this input",
+        sa_column=Column(Text),
     )
     eval_metadata: Optional[dict] = Field(default={}, sa_column=Column("eval_metadata", JSON))
     created_at: datetime = Field(

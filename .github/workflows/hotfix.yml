@@ -32,7 +32,7 @@ jobs:
 
       - name: Copy local models
         run: |
-          cp -r /home/ecs-user/model_repository_0918 ./model_repository
+          cp -r /home/ecs-user/model_repository_1121 ./model_repository
 
       - name: Extract version
         run: |

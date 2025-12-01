@@ -9,7 +9,6 @@ from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
 from chat.llm.llm_model import PaiLlm
 from chat.llm.models import TextChunk, ChatResponseGenerator, ToolResultChunk
 from extensions.trace.base import use_current_span
-from config.providers.code_sandbox_provider import codesandbox_provider
 from opentelemetry import trace
 
 
@@ -36,13 +35,8 @@ class ActorWithPlan(BaseAgent):
         self.max_steps = max_steps
         self.tool_fn_map = {tool.metadata.name: tool for tool in self.tools}
         self.tool_metadata = [
-            tool.metadata.to_openai_tool() for tool in self.tools
+            tool.metadata.to_openai_tool(skip_length_check=True) for tool in self.tools
         ]
-        # 用于跟踪单轮对话中的 sandbox 初始化状态
-        self._sandbox_initialized = False
-        self._sandbox_session_id = None
-        self._sandbox_context_id = None
-        self._code_sandbox_attachments = []
 
     def build_prompt(self, state: AgentState) -> str:
         plan_list = ""
@@ -59,20 +53,6 @@ class ActorWithPlan(BaseAgent):
             **state.context_variables,
         )
 
-    def set_code_sandbox_attachments(self, attachments: list):
-        """设置代码沙箱附件"""
-        self._code_sandbox_attachments = attachments or []
-
-    async def _ensure_sandbox_initialized(self):
-        """确保 sandbox 已初始化，如果未初始化则进行初始化"""
-        if not self._sandbox_initialized:
-            try:
-                self._sandbox_session_id, self._sandbox_context_id = await codesandbox_provider.initialize_sandbox_with_attachments(self._code_sandbox_attachments)
-                self._sandbox_initialized = True
-                logger.info("[ActorWithPlan] Sandbox initialized successfully")
-            except Exception as e:
-                logger.error(f"[ActorWithPlan] Failed to initialize sandbox: {e}")
-                raise e
 
 
     @pai_agent_wrapper
@@ -136,10 +116,6 @@ class ActorWithPlan(BaseAgent):
                             async_fn = self.tool_fn_map[function_name]
                             logger.info(f"Calling tool {function_name} with args {function_args}.")
                             try:
-                                if function_name == "PythonInterpreter":
-                                    await self._ensure_sandbox_initialized()
-                                    function_args['session_id'] = self._sandbox_session_id
-                                    function_args['context_id'] = self._sandbox_context_id
                                 tool_result = await call_tool_with_retry(async_fn, function_args)
                                 tool_content = tool_result.content
                                 tool_error = None

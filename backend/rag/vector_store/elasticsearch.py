@@ -18,8 +18,6 @@ from llama_index.core.vector_stores.utils import (
 )
 from elasticsearch.helpers.vectorstore import AsyncVectorStore
 from elasticsearch.helpers.vectorstore import (
-    AsyncBM25Strategy,
-    AsyncSparseVectorStrategy,
     AsyncDenseVectorStrategy,
     AsyncRetrievalStrategy,
     DistanceMetric,
@@ -74,49 +72,6 @@ def _to_elasticsearch_filter(
                 }
             )
         return {"bool": {"must": operands}}
-
-
-def _to_llama_similarities(scores: List[float]) -> List[float]:
-    if not scores:
-        return []
-    min_score = min(scores)
-    max_score = max(scores)
-    if max_score == min_score:
-        return [1.0 if max_score > 0 else 0.0 for _ in scores]
-    return [(x - min_score) / (max_score - min_score) for x in scores]
-
-
-def _mode_must_match_retrieval_strategy(
-    mode: VectorStoreQueryMode, retrieval_strategy: AsyncRetrievalStrategy
-) -> None:
-    """
-    Different retrieval strategies require different ways of indexing that must be known at the
-    time of adding data. The query mode is known at query time. This function checks if the
-    retrieval strategy (and way of indexing) is compatible with the query mode and raises and
-    exception in the case of a mismatch.
-    """
-    if mode == VectorStoreQueryMode.DEFAULT:
-        # it's fine to not specify an explicit other mode
-        return
-
-    mode_retrieval_dict = {
-        VectorStoreQueryMode.SPARSE: AsyncSparseVectorStrategy,
-        VectorStoreQueryMode.TEXT_SEARCH: AsyncBM25Strategy,
-        VectorStoreQueryMode.HYBRID: AsyncDenseVectorStrategy,
-    }
-
-    required_strategy = mode_retrieval_dict.get(mode)
-    if not required_strategy:
-        raise NotImplementedError(f"query mode {mode} currently not supported")
-
-    if not isinstance(retrieval_strategy, required_strategy):
-        raise ValueError(
-            f"query mode {mode} incompatible with retrieval strategy {type(retrieval_strategy)}, "
-            f"expected {required_strategy}"
-        )
-
-    if mode == VectorStoreQueryMode.HYBRID and not retrieval_strategy.hybrid:
-        raise ValueError("to enable hybrid mode, it must be set in retrieval strategy")
 
 
 # 相比llamaindex版本改动：
@@ -204,7 +159,7 @@ class ElasticsearchStore(BasePydanticVectorStore):
     distance_strategy: Optional[DISTANCE_STRATEGIES] = "COSINE"
     retrieval_strategy: AsyncRetrievalStrategy
 
-    _store = PrivateAttr()
+    _store_params = PrivateAttr()  # 保存创建 store 的参数，不预先创建 store
 
     def __init__(
         self,
@@ -234,7 +189,8 @@ class ElasticsearchStore(BasePydanticVectorStore):
 
         if retrieval_strategy is None:
             retrieval_strategy = AsyncDenseVectorStrategy(
-                distance=DistanceMetric[distance_strategy]
+                distance=DistanceMetric[distance_strategy],
+                hybrid=True,
             )
 
         base_metadata_mappings = {
@@ -261,6 +217,7 @@ class ElasticsearchStore(BasePydanticVectorStore):
             retrieval_strategy=retrieval_strategy,
         )
 
+        # 创建通用的 store，在查询时通过 custom_query 动态调整
         self._store = AsyncVectorStore(
             user_agent=get_user_agent(),
             client=es_client,
@@ -521,9 +478,15 @@ class ElasticsearchStore(BasePydanticVectorStore):
         Raises:
             Exception: If AsyncElasticsearch query fails.
 
-        """
-        _mode_must_match_retrieval_strategy(query.mode, self.retrieval_strategy)
+        Note:
+            For hybrid search mode, you can set the boost parameter by passing `alpha` in VectorStoreQuery.
+            The `alpha` parameter controls the weight of vector search (alpha) vs text search (1 - alpha).
+            For example:
+                - alpha=0.7 means vector search weight is 0.7, text search weight is 0.3
+                - alpha=0.5 means equal weights for both
+            The boost values are automatically applied to knn and text match queries in the query body.
 
+        """
         if query.doc_ids:
             filter = [{"bool": {"must": [{"terms": {"metadata.doc_id": query.doc_ids}}]}}]
         elif query.filters is not None and len(query.filters.legacy_filters()) > 0:
@@ -531,14 +494,58 @@ class ElasticsearchStore(BasePydanticVectorStore):
         else:
             filter = es_filter or []
 
-        hits = await self._store.search(
-            query=query.query_str,
-            query_vector=query.query_embedding,
-            k=query.similarity_top_k,
-            num_candidates=query.similarity_top_k * 10,
-            filter=filter,
-            custom_query=custom_query,
-        )
+        if query.mode == VectorStoreQueryMode.DEFAULT:
+            if query.query_embedding is None:
+                logger.info(f"{query.mode} mode requires query_embedding, but it is None")
+                raise ValueError(f"{query.mode} mode requires query_embedding")
+        elif query.mode == VectorStoreQueryMode.HYBRID:
+            raise ValueError(
+                "HYBRID mode is no longer supported in aquery. "
+            )
+
+
+        # 定义辅助函数：只保留文本查询，移除 knn
+        def text_only_query(query_body: Dict, vector_query: Optional[VectorStoreQuery] = None) -> Dict:
+            if custom_query:
+                query_body = custom_query(query_body, vector_query)
+            # 移除 knn，只保留文本查询
+            if "knn" in query_body:
+                del query_body["knn"]
+            if "retriever" in query_body:
+                del query_body["retriever"]
+            return query_body
+
+        # 定义辅助函数：只保留 knn 查询，移除文本查询
+        def dense_only_query(query_body: Dict, vector_query: Optional[VectorStoreQuery] = None) -> Dict:
+            if custom_query:
+                query_body = custom_query(query_body, vector_query)
+            # 移除文本查询，只保留 knn
+            if "query" in query_body:
+                del query_body["query"]
+            if "retriever" in query_body:
+                del query_body["retriever"]
+            return query_body
+
+        if query.mode == VectorStoreQueryMode.DEFAULT:
+            hits = await self._store.search(
+                query=None,
+                query_vector=query.query_embedding,
+                k=query.similarity_top_k,
+                num_candidates=query.similarity_top_k * 10,
+                filter=filter,
+                custom_query=dense_only_query,
+            )
+        elif query.mode == VectorStoreQueryMode.TEXT_SEARCH:
+            hits = await self._store.search(
+                query=query.query_str,
+                query_vector=None,
+                k=query.similarity_top_k,
+                num_candidates=query.similarity_top_k * 10,
+                filter=filter,
+                custom_query=text_only_query,
+            )
+        else:
+            raise ValueError(f"Unsupported query mode: {query.mode}")
 
         top_k_nodes = []
         top_k_ids = []
@@ -548,12 +555,13 @@ class ElasticsearchStore(BasePydanticVectorStore):
             node = convert_es_hit_to_node(hit, self.text_field)
             top_k_nodes.append(node)
             top_k_ids.append(hit["_id"])
-            top_k_scores.append(hit["_score"])
+            raw_score = hit.get("_score", 0.0)
+            top_k_scores.append(raw_score)
 
         return VectorStoreQueryResult(
             nodes=top_k_nodes,
             ids=top_k_ids,
-            similarities=_to_llama_similarities(top_k_scores),
+            similarities=top_k_scores,
         )
 
     def get_nodes(

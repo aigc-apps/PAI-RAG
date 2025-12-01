@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import uuid
 from pydantic import model_validator
-from sqlalchemy import Column, DateTime, UniqueConstraint
+from sqlalchemy import Column, DateTime, UniqueConstraint, Text
 from sqlmodel import Field, SQLModel
 
 
@@ -12,7 +12,7 @@ class PermissionEntity(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     name: str = Field(default=None)
     role_id: str = Field(default=None, foreign_key="pai_roles.id", ondelete="CASCADE")
-    description: str | None = Field(default=None)
+    description: str | None = Field(default=None, sa_column=Column(Text))
 
     @model_validator(mode='after')
     def set_defaults(self):
@@ -25,7 +25,7 @@ class RoleEntity(SQLModel, table=True):
     __tablename__ = "pai_roles"
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     name: str = Field(default=None, unique=True)
-    description: str | None = Field(default=None)
+    description: str | None = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

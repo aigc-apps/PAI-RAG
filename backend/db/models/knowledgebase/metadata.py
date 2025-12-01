@@ -3,13 +3,33 @@ import re
 import uuid
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, DateTime, Enum, UniqueConstraint
+from sqlalchemy import Column, DateTime, Enum, UniqueConstraint, Text
 
 
 class MetadataValueType(str, Enum):
     STRING = "string"
     NUMBER = "number"
     DATETIME = "datetime"
+
+
+class KbMetadataEntityCreate(SQLModel):
+    name: str = Field(default=None, min_length=3, max_length=50)
+    value_type: str = Field(default=MetadataValueType.STRING)
+    description: str = Field(default='', sa_column=Column(Text))
+
+    @field_validator("name")
+    def validate_metadata_name_format(cls, v):
+        # 使用正则表达式检查是否只包含字母、数字、下划线和短横线，且长度 3-50
+        if not re.fullmatch(r'^[A-Za-z0-9_-]{3,50}$', v):
+            raise ValueError('Metadata name must be 3-50 characters long and contain only letters, numbers, underscores, and hyphens.')
+        return v
+
+    @field_validator("value_type")
+    def validate_metadata_value_type(cls, v):
+        if v not in [MetadataValueType.STRING, MetadataValueType.NUMBER, MetadataValueType.DATETIME]:
+            raise ValueError('Metadata value type must be string, number, or datetime.')
+        return v
+
 
 
 class KbMetadataEntity(SQLModel, table=True):
@@ -22,7 +42,7 @@ class KbMetadataEntity(SQLModel, table=True):
 
     name: str = Field(default=None, min_length=3, max_length=50)
     value_type: str = Field(default=MetadataValueType.STRING)
-    description: str = Field(default=None)
+    description: str = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
@@ -34,7 +54,7 @@ class KbMetadataEntity(SQLModel, table=True):
     )
 
     @field_validator("name")
-    def validate_username_format(cls, v):
+    def validate_metadata_name_format(cls, v):
         # 使用正则表达式检查是否只包含字母、数字、下划线和短横线，且长度 3-50
         if not re.fullmatch(r'^[A-Za-z0-9_-]{3,50}$', v):
             raise ValueError('Username must be 3-50 characters long and contain only letters, numbers, underscores, and hyphens.')

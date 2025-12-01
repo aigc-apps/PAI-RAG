@@ -65,17 +65,22 @@ export default function VectorDBConsole() {
 
   const saveConnection = async () => { 
       try {
+        const config: Record<string, any> = {
+          ...db,
+          type: dbType,
+          password: db.password === '******' ? '' :  db.password,
+          sk: db.sk === '******' ? '' : db.sk
+        };
+        // 如果是 milvus 类型且 database 字段缺失，设置默认值
+        if (dbType === 'milvus' && !config.database) {
+          config.database = 'default';
+        }
         const res = await fetch(`/api/config/vectordb`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: dbType,
-            config: {
-              ...db,
-              type: dbType,
-              password: db.password === '******' ? '' :  db.password,
-              sk: db.sk === '******' ? '' : db.sk
-            },
+            config,
           }),
         });
 
@@ -98,17 +103,22 @@ export default function VectorDBConsole() {
       setConnectionTesting(true);
       try {
         console.log("连接测试： ", db);
+        const config: Record<string, any> = {
+          ...db,
+          type: dbType,
+          password: db.password === '******' ? '' :  db.password,
+          sk: db.sk === '******' ? '' : db.sk
+        };
+        // 如果是 milvus 类型且 database 字段缺失，设置默认值
+        if (dbType === 'milvus' && !config.database) {
+          config.database = 'default';
+        }
         const res = await fetch(`/api/config/vectordb/connection_test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: dbType,
-            config: {
-              ...db,
-              type: dbType,
-              password: db.password === '******' ? '' :  db.password,
-              sk: db.sk === '******' ? '' : db.sk
-            },
+            config,
           }),
         });
 

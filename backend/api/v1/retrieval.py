@@ -22,23 +22,28 @@ async def retrieval(
         return error_response(
             code=404, message=f"找不到知识库{retrieval_request.knowledge_id}"
         )
-
-    node_results = await kb_tool.aquery(
-        query=retrieval_request.query,
-        user_id=retrieval_request.user_id,
-        knowledge_id=retrieval_request.knowledge_id,
-        retrieval_setting=retrieval_request.retrieval_setting,
-        metadata_condition=retrieval_request.metadata_condition,
-    )
-    logger.info(
-        f"Retrieved {len(node_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledge_id}."
-    )
-    records = []
-    for score_node in node_results:
-        records.append(DocRecord(
-            content=score_node.node.get_content(),
-            score=score_node.score,
-            title=score_node.node.metadata.get("file_name", "null"),
-            metadata=score_node.node.metadata,
-        ))
-    return JSONResponse(status_code=200, content={"records": to_dict(records)})
+    try:
+        node_results = await kb_tool.aquery(
+            query=retrieval_request.query,
+            user_id=retrieval_request.user_id,
+            knowledge_id=retrieval_request.knowledge_id,
+            retrieval_setting=retrieval_request.retrieval_setting,
+            metadata_condition=retrieval_request.metadata_condition,
+        )
+        logger.info(
+            f"Retrieved {len(node_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledge_id}."
+        )
+        records = []
+        for score_node in node_results:
+            records.append(DocRecord(
+                content=score_node.node.get_content(),
+                score=score_node.score,
+                title=score_node.node.metadata.get("file_name", "null"),
+                metadata=score_node.node.metadata,
+            ))
+        return JSONResponse(status_code=200, content={"records": to_dict(records)})
+    except Exception as e:
+        logger.error(f"Failed to retrieve: {e}")
+        return error_response(
+            code=500, message=f"Failed to retrieve: {e}"
+        )

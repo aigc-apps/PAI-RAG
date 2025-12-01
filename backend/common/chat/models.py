@@ -1,6 +1,7 @@
 from typing import Dict, Literal, Union, List, Any, Optional, Sequence
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, Field
+from common.knowledgebase.types import VectorIndexRetrievalType
 
 
 DEFAULT_GUARDRAIL_ADVICE = "作为人工智能助手，我无法回应包含不当或敏感信息的内容。"
@@ -58,8 +59,13 @@ class NewRetrievalResponse(BaseModel):
 
 
 class RetrievalSetting(BaseModel):
+    retrieval_mode: Optional[VectorIndexRetrievalType] = None
+    vector_weight: Optional[float] = None
+    enable_rerank: Optional[bool] = None
+    rerank_model: Optional[str] = None
     top_k: Optional[int] = None
-    score_threshold: Optional[float] = 0.4
+    similarity_threshold: Optional[float] = None
+    rerank_top_k: Optional[int] = None
 
 
 class RetrievalRequest(BaseModel):

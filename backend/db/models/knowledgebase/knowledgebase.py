@@ -3,7 +3,7 @@ import re
 import uuid
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, JSON, DateTime
+from sqlalchemy import Column, JSON, DateTime, Text
 from common.knowledgebase.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
@@ -12,15 +12,17 @@ from common.knowledgebase.constants import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_SIMILARITY_THRESHOLD,
     DEFAULT_SIMILARITY_TOP_K,
+    DEFAULT_RERANK_SIMILARITY_TOP_K,
 )
 from common.knowledgebase.types import VectorIndexRetrievalType
-
+from typing import Optional
 
 class ChunkConfig(SQLModel):
     chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE)
     chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP)
     parser_type: str = Field(default=DEFAULT_PARSER_TYPE)
     separator: str = Field(default=DEFAULT_SENTENCE_SEPARATOR)
+    image_caption_model: Optional[str] = Field(default=None)
 
 
 class RetrievalConfig(SQLModel):
@@ -32,11 +34,12 @@ class RetrievalConfig(SQLModel):
     vector_weight: float = Field(default=0.5)
     enable_rerank: bool = Field(default=False)
     rerank_model: str = Field(default="")
+    rerank_top_k: Optional[int] = Field(default=DEFAULT_RERANK_SIMILARITY_TOP_K)
 
 
 class KnowledgebaseCreate(SQLModel):
     name: str = Field(default=None)
-    description: str = Field(default=None)
+    description: str = Field(default=None, sa_column=Column(Text))
     embedding_model: str = Field(default=None)
     chunk_config: ChunkConfig | None = Field(default=None)
     retrieval_config: RetrievalConfig | None = Field(default=None)
@@ -46,10 +49,9 @@ class KnowledgebaseCreate(SQLModel):
 class KbEntity(SQLModel, table=True):
     __tablename__ = "pai_knowledgebase"
 
-    # Note: "kb" is used as a prefix to ensure a valid collection name (in Milvus).
-    id: str = Field(default_factory=lambda: "kb" + uuid.uuid4().hex, primary_key=True)
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
     name: str = Field(default=None, unique=True)
-    description: str = Field(default=None)
+    description: str = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

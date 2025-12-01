@@ -1,7 +1,8 @@
 'use client';
 import React, { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit } from 'lucide-react';
+import { ArrowLeft, Edit, Plus } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -78,6 +79,7 @@ interface KbFileChunk {
   text: string;
   chunk_metadata: {
     images_info: Array<ImageInfo>;
+    token_count?: number;
   };
   status: string;
   active: boolean;
@@ -119,6 +121,10 @@ export default function KnowledgeBaseFileChunksPage(
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editText, setEditText] = useState('');
   const [selectedChunk, setSelectedChunk] = useState<KbFileChunk | null>(null);
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [newChunkText, setNewChunkText] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
 
   const router = useRouter();
 
@@ -237,6 +243,50 @@ export default function KnowledgeBaseFileChunksPage(
     }
   };
 
+  const handleAddChunk = async () => {
+    if (!newChunkText.trim()) {
+      alert('请输入切片文本');
+      return;
+    }
+
+    setIsAdding(true);
+    try {
+      const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: newChunkText,
+          chunk_metadata: {},
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '添加切片失败');
+      }
+
+      // 重置状态
+      setNewChunkText('');
+      setIsAddOpen(false);
+
+      // 刷新切片列表
+      const res = await fetch(
+        `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
+      );
+      if (res.ok) {
+        const json_data = await res.json();
+        setKbFileChunks(json_data.data.items || []);
+        setTotalPages(json_data.data.pages);
+      }
+    } catch (err: any) {
+      console.error('添加切片失败:', err);
+      alert(err.message || '添加切片失败');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-full">
       <div className="flex-none">
@@ -279,17 +329,27 @@ export default function KnowledgeBaseFileChunksPage(
               </BreadcrumbList>
             </Breadcrumb>
           </div>
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-8 w-8"
+                onClick={() =>
+                  router.push(`/knowledgebases/${knowledgebase.id}`)
+                }
+              >
+                <ArrowLeft />
+              </Button>
+              <h1 className="text-xl font-medium pl-2">文件切片列表</h1>
+            </div>
             <Button
-              variant="outline"
-              className="h-8 w-8"
-              onClick={() =>
-                router.push(`/knowledgebases/${knowledgebase.id}`)
-              }
+              variant="default"
+              className="h-8"
+              onClick={() => setIsAddOpen(true)}
             >
-              <ArrowLeft />
+              <Plus className="w-4 h-4 mr-1" />
+              新建切片
             </Button>
-            <h1 className="text-xl font-medium pl-2">文件切片列表</h1>
           </div>
         </div>
       </div>
@@ -315,20 +375,29 @@ export default function KnowledgeBaseFileChunksPage(
                   <Card key={chunk.id} className="h-70 px-2 pt-3 pb-1 gap-2">
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
-                        <Badge className={activeMap[String(chunk.active)]}>
-                          {chunk.active ? '已激活' : '未激活'}
-                        </Badge>
-                        <Switch
-                          checked={chunk.active}
-                          className="ml-auto rounded-full transition-color"
-                          onCheckedChange={() => handleActivateToggle(chunk)}
-                        />
-                        <button
-                          className="text-black-500 hover:text-black-700 px-2"
-                          onClick={() => handleEditClick(chunk)}
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <Badge className={activeMap[String(chunk.active)]}>
+                            {chunk.active ? '已启用' : '未启用'}
+                          </Badge>
+                          {chunk.chunk_metadata?.token_count !== undefined && (
+                            <Badge variant="outline" className="text-xs">
+                              tokens: {chunk.chunk_metadata.token_count}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={chunk.active}
+                            className="rounded-full transition-color"
+                            onCheckedChange={() => handleActivateToggle(chunk)}
+                          />
+                          <button
+                            className="text-black-500 hover:text-black-700 px-2"
+                            onClick={() => handleEditClick(chunk)}
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                        </div>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-2 pb-2">
@@ -377,10 +446,10 @@ export default function KnowledgeBaseFileChunksPage(
           </DialogHeader>
           <div className="py-4">
             <Label className="block mb-2 text-sm font-medium">文本内容</Label>
-            <textarea
+            <Textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
-              className="w-full h-40 p-2 border rounded-md"
+              className="w-full h-40"
               placeholder="请输入新内容"
             />
           </div>
@@ -389,6 +458,39 @@ export default function KnowledgeBaseFileChunksPage(
               取消
             </Button>
             <Button onClick={handleSaveEdit}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>新建切片</DialogTitle>
+            <DialogDescription>输入切片文本内容</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label className="block mb-2 text-sm font-medium">切片文本</Label>
+            <Textarea
+              value={newChunkText}
+              onChange={(e) => setNewChunkText(e.target.value)}
+              className="w-full h-40"
+              placeholder="请输入切片文本内容"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddOpen(false);
+                setNewChunkText('');
+              }}
+              disabled={isAdding}
+            >
+              取消
+            </Button>
+            <Button onClick={handleAddChunk} disabled={isAdding || !newChunkText.trim()}>
+              {isAdding ? '保存中...' : '保存'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

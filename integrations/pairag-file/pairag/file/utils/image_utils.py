@@ -77,4 +77,7 @@ def to_markdown_image_text(image_url: str, alt: Optional[str] = "") -> str:
     return f'\n![{alt}]({image_url})\n'
 
 def markdown_image_text_to_chunk(image_url: str, alt: Optional[str] = "") -> str:
-    return f"![]({image_url})\n图片的描述: {alt}"
+    if alt:
+        return f"![]({image_url})\n图片的描述: {alt}"
+    else:
+        return f"![]({image_url})\n"
