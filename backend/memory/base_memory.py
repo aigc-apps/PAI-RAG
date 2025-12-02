@@ -11,7 +11,7 @@ from memory.utils import (
     get_last_n_msgs_skip_first,
     get_tokenizer,
 )
-from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.bridge.pydantic import Field, BaseModel
 from collections import deque
 from loguru import logger

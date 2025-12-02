@@ -1,4 +1,4 @@
-from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from typing import List, Tuple, Any
 from transformers import AutoTokenizer
 
