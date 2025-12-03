@@ -5469,13 +5469,13 @@ files = [
 
 [[package]]
 name = "pairag-file"
-version = "2.1.10"
+version = "2.1.11"
 description = "PAI-RAG file processing library."
 optional = false
 python-versions = ">=3.11,<3.13"
 groups = ["main"]
 files = [
-    {file = "pairag_file-2.1.10-py3-none-any.whl", hash = "sha256:e4df4fca7e37a0878b36549325e8bc96bb164aba1a5df5f941fe607726a13ada"},
+    {file = "pairag_file-2.1.11-py3-none-any.whl", hash = "sha256:1cdb2605a52ae83b16b6fa17b6543c1106faa325a9f1276264b3a7ae3f9635ed"},
 ]
 
 [package.dependencies]
@@ -5498,13 +5498,14 @@ pydantic = ">=2.7.0,<3.0.0"
 python-docx = ">=1.2.0,<2.0.0"
 python-pptx = ">=1.0.2,<2.0.0"
 rapidfuzz = ">=3.14.3,<4.0.0"
+tabulate = ">=0.9.0,<0.10.0"
 torch = ">=2.6.0,<3.0.0"
 transformers = "4.51.3"
 xlrd = ">=2.0.2,<3.0.0"
 
 [package.source]
 type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.10-py3-none-any.whl"
+url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.11-py3-none-any.whl"
 
 [[package]]
 name = "pandas"
@@ -8166,6 +8167,21 @@ six = ">=1.11.0"
 urllib3 = ">=1.14"
 
 [[package]]
+name = "tabulate"
+version = "0.9.0"
+description = "Pretty-print tabular data"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f"},
+    {file = "tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c"},
+]
+
+[package.extras]
+widechars = ["wcwidth"]
+
+[[package]]
 name = "tavily-python"
 version = "0.7.13"
 description = "Python wrapper for the Tavily API"
@@ -9573,4 +9589,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.13"
-content-hash = "3066897cef1350a21cf08b062291c48e3b64ec0373ec0afc0540ed13a204ce06"
+content-hash = "e564e4bb3e55e939c77f27570564e2a2009e5cac1cf6ef51cef854db04a73334"

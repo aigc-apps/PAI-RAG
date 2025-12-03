@@ -2,10 +2,18 @@ from llama_index.core.node_parser.interface import TextSplitter
 from typing import (
     List,
     Callable,
+    Sequence,
+    Any,
 )
 from llama_index.core.schema import BaseNode
 from pairag.file.utils.tokenization import get_tokenizer
 from llama_index.core.bridge.pydantic import Field
+from llama_index.core.utils import get_tqdm_iterable
+from llama_index.core.schema import (
+    BaseNode,
+    MetadataMode,
+)
+from llama_index.core.node_parser.node_utils import build_nodes_from_splits
 from loguru import logger
 
 class TokenTextSplitter(TextSplitter):
@@ -61,4 +69,17 @@ class TokenTextSplitter(TextSplitter):
             start_idx += chunk_size - self.chunk_overlap
         
         return splits
+
+    def _parse_nodes(
+        self, nodes: Sequence[BaseNode], show_progress: bool = False, **kwargs: Any
+    ) -> List[BaseNode]:
+        all_nodes: List[BaseNode] = []
+        nodes_with_progress = get_tqdm_iterable(nodes, show_progress, "Parsing nodes")
+        for node in nodes_with_progress:
+            splits = self.split_text(node.get_content(metadata_mode=MetadataMode.NONE))
+            node.metadata.pop("content_list", None)
+            all_nodes.extend(
+                build_nodes_from_splits(splits, node, id_func=self.id_func)
+            )
+        return all_nodes
 
