@@ -17,6 +17,7 @@ from pairag.file.readers.mineru_reader import MineruPdfReader
 from pairag.file.readers.pptx_reader import PptxReader
 from pairag.file.readers.text_reader import TextReader
 from pairag.file.readers.simple_pdf_reader import SimplePdfReader
+from pairag.file.nodeparsers.token_parser import TokenTextSplitter
 from pairag.file.nodeparsers.pai_markdown_parser import MarkdownNodeParser
 from pairag.file.nodeparsers.positional_markdown_parser import PositionalMarkdownNodeParser
 from pairag.file.store.base import BaseFileStore
@@ -239,6 +240,13 @@ class FileParser:
                         text=doc_node.text,
                     )
                 )
+            elif chunk_config.parser_type == "Token":
+                parser = TokenTextSplitter(
+                    chunk_size=chunk_config.chunk_size,
+                    chunk_overlap=chunk_config.chunk_overlap,
+                    id_func=node_id_func,
+                )
+                chunks = parser.get_nodes_from_documents([doc_node])
             else:
                 logger.info(f"Start splitting document: {doc_node.metadata['file_name']} with id {doc_node.id_}")
                 parser = SentenceSplitter(
@@ -261,6 +269,8 @@ class FileParser:
                     md_node_parser = MarkdownNodeParser(
                         chunk_size=chunk_config.chunk_size,
                         chunk_overlap=chunk_config.chunk_overlap,
+                        paragraph_separator=chunk_config.separator,
+                        base_parser=parser,
                         id_func=node_id_func,
                     )
                     chunks = md_node_parser.get_nodes_from_documents([doc_node])

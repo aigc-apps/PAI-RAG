@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "pairag-file"
-version = "2.1.7"
+version = "2.1.10"
 description = "PAI-RAG file processing library."
 authors = []
 readme = "README.md"
