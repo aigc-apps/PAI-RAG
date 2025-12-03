@@ -21,7 +21,7 @@ export default function KnowledgeBaseCreatePage() {
     name: '',
     description: '',
     chunk_config: {
-      parser_type: 'Structured',
+      parser_type: 'structure',
       separator: '\n\n',
       chunk_size: '1000',
       chunk_overlap: '50',

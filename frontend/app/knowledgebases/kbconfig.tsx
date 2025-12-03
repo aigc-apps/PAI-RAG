@@ -21,6 +21,7 @@ import {
   AlertCircleIcon,
   CirclePlus,
   Trash2Icon,
+  HelpCircle,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -57,6 +58,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface EmbeddingModel {
   id: string;
@@ -253,9 +260,23 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
         {/* 分段设置卡片 */}
         <div className="flex gap-3 items-start pt-3">
-          <Label className="w-[100px] text-xs pt-2">
-            分段设置
-          </Label>
+          <div className="flex items-center gap-1 w-[100px] pt-2">
+            <Label className="text-xs">
+              分段设置
+            </Label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-xs">
+                    分段设置参数对以下文件类型无效：.csv, .xlsx, .xls, .jsonl
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <Card className="flex-1">
             <CardContent className="space-y-4 pt-6">
             <div className="flex gap-3 items-center">
@@ -264,7 +285,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 <span className="text-destructive">*</span>
               </Label>
               <Select
-                value={kb.chunk_config.parser_type || 'Structured'}
+                value={kb.chunk_config.parser_type || 'structure'}
                 onValueChange={(value) => {
                   setKb((prev) => ({
                     ...prev,
@@ -280,11 +301,11 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectGroup>
-                    <SelectItem value="Structured" className="text-xs h-5">
-                      结构化（Structured）
+                    <SelectItem value="structure" className="text-xs h-5">
+                      结构化(structure)
                     </SelectItem>
-                    <SelectItem value="Token" className="text-xs h-5">
-                      按Token（Token）
+                    <SelectItem value="token" className="text-xs h-5">
+                      按token
                     </SelectItem>
                   </SelectGroup>
                 </SelectContent>

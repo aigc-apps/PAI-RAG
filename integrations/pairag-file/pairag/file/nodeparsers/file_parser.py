@@ -240,7 +240,7 @@ class FileParser:
                         text=doc_node.text,
                     )
                 )
-            elif chunk_config.parser_type == "Token":
+            elif chunk_config.parser_type == "token":
                 parser = TokenTextSplitter(
                     chunk_size=chunk_config.chunk_size,
                     chunk_overlap=chunk_config.chunk_overlap,
