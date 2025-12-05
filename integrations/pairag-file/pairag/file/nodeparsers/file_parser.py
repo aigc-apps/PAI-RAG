@@ -3,7 +3,7 @@ from loguru import logger
 from typing import List
 from llama_index.core.schema import Document, BaseNode, TextNode
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
-from llama_index.core.node_parser import SentenceSplitter
+from pairag.file.nodeparsers.sentence_parser import SentenceSplitter
 from pairag.file.models.file_item import FileItem
 from pairag.file.readers.base import BaseReader
 from pairag.file.readers.csv2md_reader import Csv2MdReader
