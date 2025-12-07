@@ -482,8 +482,14 @@ class RagService:
         if not file_entity:
             raise ValueError(f"文件 '{file_id}' 不存在。")
 
+        chunk_metadata = chunk_metadata or file_entity.file_metadata
+
         chunk_service = await self._get_chunk_service()
-        return await chunk_service.create_chunk(kb_id, file_id, text, chunk_metadata)
+        chunk = await chunk_service.create_chunk(kb_id, file_id, text, chunk_metadata)
+
+        kb_node = create_text_node_from_chunk(chunk)
+        await self.ainsert(kb_id=kb_id, nodes=[kb_node])
+        return chunk
 
 
     async def update_chunk(self, kb_id: str, file_id: str, chunk_id: str, chunk: KbChunkEntity) -> KbChunkEntity:
@@ -498,7 +504,7 @@ class RagService:
             chunk: Chunk data
         """
         chunk_service = await self._get_chunk_service()
-        kb_chunk = await chunk_service.update_chunk(kb_id, file_id, chunk_id, chunk)
+        kb_chunk = await chunk_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, new_chunk=chunk)
         kb_node = create_text_node_from_chunk(kb_chunk)
 
         await self.adelete(kb_id=kb_id, node_ids=[kb_chunk.id])

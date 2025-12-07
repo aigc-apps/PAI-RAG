@@ -432,10 +432,10 @@ async def update_chunk(
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        kb_chunk = await rag_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, update_kb_chunk=update_kb_chunk)
+        kb_chunk = await rag_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, chunk=update_kb_chunk)
         return success_response(data=kb_chunk, message="更新知识库切片成功。")
     except Exception as ex:
-        logger.error(f"Failed to update knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {ex}")
+        logger.error(f"Failed to update knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {traceback.format_exc()}")
         raise ApiException(code=500, message=f"更新知识库切片失败：{str(ex)}")
 
 
