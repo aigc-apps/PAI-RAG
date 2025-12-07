@@ -34,7 +34,7 @@ class KbMetadataEntityCreate(SQLModel):
 
 class KbMetadataEntity(SQLModel, table=True):
     __tablename__ = "pai_knowledgebase_metadata"
-    __table_args__ = (UniqueConstraint("id", "kb_id", name="unique_kb_metadata"),)
+    __table_args__ = (UniqueConstraint("name", "kb_id", name="unique_kb_metadata"),)
 
     # metadata id
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, min_length=3, max_length=50, primary_key=True)

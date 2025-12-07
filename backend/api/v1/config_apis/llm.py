@@ -1,22 +1,20 @@
 import traceback
 from typing import Optional
+import os
+import openai
 from fastapi import APIRouter, Depends, Query
-from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.llm import LlmModelCreate, LlmModelRead, LlmModelEntity
-from db.db_context import get_session
+from db.db_context import get_db_session
 from common.encrypt_utils import encrypt_key
-from sqlalchemy.exc import IntegrityError
-from config.providers.config_change_manager import config_change_manager
-from config.providers.llm_provider import llm_provider, try_get_initial_model_from_env
-from api.v1.utils.paginate import get_pagination_meta
-from api.response_model import PagedResult, success_response, error_response, ResponseModel
+from common.chat.response_model import success_response, ResponseModel
+from service.model.llm_service import LlmService
+from service.injection import get_llm_service
+from api.api_exception import ApiException
 from loguru import logger
 
 ### LLM Configuration API ###
 llm_router = APIRouter()
-
 
 llm_url_group_map = {
     "https://dashscope.aliyuncs.com/compatible-mode/v1": "通义千问",
@@ -24,83 +22,92 @@ llm_url_group_map = {
 }
 
 
+def try_get_initial_model_from_env():
+    endpoint = os.environ.get("PAIRAG_RAG__LLM__endpoint")
+    if not endpoint:
+        return None
+
+    if not endpoint.endswith("/v1"):
+        endpoint = endpoint.rstrip("/") + "/v1"
+
+    token = os.environ.get("PAIRAG_RAG__LLM__token") or "abc"
+
+    client = openai.OpenAI(api_key=token, base_url=endpoint)
+    try:
+        logger.info(f"Try to load models from {endpoint}:{token}.")
+        models = client.models.list()
+        if len(models.data) > 0:
+            logger.info(f"Loaded default llm model {models.data[0].id}")
+            return LlmModelEntity.model_validate({
+                "base_url": endpoint,
+                "encrypted_api_key": encrypt_key(token),
+                "model": models.data[0].id,
+                "model_id": models.data[0].id,
+                "source": "OpenAI-Compatible",
+            })
+    except Exception as ex:
+        logger.warning(f"Load model list failed: {ex}")
+        pass
+
+    return None
+
+
 @llm_router.post("", response_model=ResponseModel[LlmModelRead])
 async def create_llm(
-    llm_data: LlmModelCreate, session: AsyncSession = Depends(get_session)
+    llm_data: LlmModelCreate,
+    session: AsyncSession = Depends(get_db_session),
+    llm_service: LlmService = Depends(get_llm_service),
 ):
-    encrypted_api_key = encrypt_key(llm_data.api_key)
-    llm = LlmModelEntity.model_validate(
-        llm_data, update={"encrypted_api_key": encrypted_api_key}
-    )
-    llm.source = llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")
-    session.add(llm)
+    logger.info(f"Creating LLM: {llm_data}.")
     try:
-        llm_provider.add(llm)
-        await session.commit()
-        await session.refresh(llm)
-        await config_change_manager.notify_change_async(
-            event_source=ChangeEventSource.LLM,
-            source_id=llm.id,
-            event_type=ChangeEventType.ADD,
-        )
+        llm_entity = await llm_service.create_llm(llm_data)
 
-        return success_response(data=llm, message="LLM创建成功。")
-    except IntegrityError as e:
-        logger.error(f"IntegrityError occurred when add llm: {e.orig}")
-        await session.rollback()
-
-        if "UniqueViolationError" in str(e.orig):
-            return error_response(code=400, message=f"模型id {llm_data.model_id} 已经存在.")
-        else:
-            return error_response(code=400, message=f"模型创建失败: {e}")
+        return success_response(data=llm_entity, message="LLM创建成功。")
+    except ValueError as e:
+        logger.error(f"Failed to create llm: {traceback.format_exc()}")
+        raise ApiException(code=400, message=f"LLM创建失败: '{e}'.")
     except Exception as e:
-        logger.error(f"Failed to add llm config: {traceback.format_exc()}")
-        await session.rollback()
-        return error_response(code=400, message=f"模型创建失败: {e}")
+        logger.error(f"Failed to create llm: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"LLM创建失败: '{e}'.")
 
 
 
 @llm_router.get("/groups")
 async def get_llm_groups(
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
+    llm_service: LlmService = Depends(get_llm_service),
 ):
-    llm_results = await session.exec(select(LlmModelEntity))
-    llms = llm_results.all()
-    if len(llms) == 0:
-        logger.info("trying to load default llms.")
-        default_model = try_get_initial_model_from_env()
-        if default_model and all([entry.base_url != default_model.base_url and entry.model != default_model.model for entry in llms]):
-            try:
-                llm_provider.add(default_model)
-                session.add(default_model)
-                await session.commit()
-                await config_change_manager.notify_change_async(
-                    event_source=ChangeEventSource.LLM,
-                    source_id=default_model.id,
-                    event_type=ChangeEventType.ADD,
-                )
-            except Exception as ex:
-                logger.warning(f"Failed to add default model: {ex}.")
-                await session.rollback()
+    logger.info("Getting LLM groups.")
+    try:
+        llm_entities = await llm_service.get_all_llms()
 
-            llms = [default_model] + llms
+        if len(llm_entities) == 0:
+            logger.info("trying to load default llms.")
+            default_model = try_get_initial_model_from_env()
 
-    grouped_results = {}
-    for llm in llms:
-        if not llm.model:
-            continue
+            if default_model:
+                await llm_service.create_llm(default_model)
+                llm_entities = [default_model]
 
-        group_name = llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")
-        if group_name not in grouped_results:
-            grouped_results[group_name] = {
-                "id": len(grouped_results),
-                "label": group_name,
-                "models": [],
-            }
+        grouped_results = {}
+        for llm in llm_entities:
+            if not llm.model:
+                continue
 
-        grouped_results[group_name]["models"].append(llm)
+            group_name = llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")
+            if group_name not in grouped_results:
+                grouped_results[group_name] = {
+                    "id": len(grouped_results),
+                    "label": group_name,
+                    "models": [],
+                }
 
-    return {"groups": list(grouped_results.values())}
+            grouped_results[group_name]["models"].append(llm)
+
+        return success_response(data={"groups": list(grouped_results.values())}, message="获取LLM模型组成功")
+    except Exception as e:
+        logger.error(f"Failed to get llm groups: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"获取LLM模型组失败: '{e}'.")
 
 
 @llm_router.get("")
@@ -108,112 +115,61 @@ async def get_llms(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     vision_support: Optional[bool] = Query(default=None, description="过滤支持vision的多模态大模型，None表示不过滤"),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
+    llm_service: LlmService = Depends(get_llm_service),
 ):
-    # Build base query
-    base_query = select(LlmModelEntity)
-
-    # Add vision_support filter if provided
-    if vision_support is not None:
-        base_query = base_query.where(LlmModelEntity.vision_support == vision_support)
-
-    # Get total count with filter
-    total_results = await session.exec(
-        select(func.count()).select_from(base_query)
-    )
-    total_num = total_results.one_or_none()
-
-    pagination = get_pagination_meta(page, size, total_num)
-
-    # Get paginated results with filter
-    sql_results = await session.exec(
-        base_query.offset(pagination.offset).limit(size)
-    )
-    llm_entities = sql_results.all()
-    llm_models = [
-        LlmModelRead.model_validate(
-            llm,
-            update={"source": llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")},
-        )
-        for llm in llm_entities
-    ]
-
-    return success_response(
-        data=PagedResult(
-            items=llm_models,
-            total=pagination.total,
-            pages=pagination.pages,
-            page=pagination.page,
-            size=pagination.size,
-        ),
-        message="获取LLM模型列表成功")
+    logger.info(f"Getting LLMs with page: {page}, size: {size}, vision_support: {vision_support}.")
+    try:
+        llm_entities = await llm_service.list_llms(page=page, size=size, vision_support=vision_support)
+        return success_response(data=llm_entities, message="获取LLM模型列表成功")
+    except Exception as e:
+        logger.error(f"Failed to get llms: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"获取LLM模型列表失败: '{e}'.")
 
 
 @llm_router.get("/{llm_id}", response_model=ResponseModel[LlmModelRead])
-async def read_llm(llm_id: str, session: AsyncSession = Depends(get_session)):
-    llm = await session.get(LlmModelEntity, llm_id)
-    if not llm:
-        return error_response(code=404, message=f"没有找到ID为'{llm_id}'的大模型配置。")
-
-    return success_response(data=llm, message="获取LLM模型成功")
+async def read_llm(
+    llm_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    llm_service: LlmService = Depends(get_llm_service),
+):
+    logger.info(f"Getting LLM: {llm_id}.")
+    try:
+        llm_entity = await llm_service.get_llm(llm_id=llm_id)
+        if not llm_entity:
+            raise ApiException.not_found(llm_id, "LLM")
+        return success_response(data=llm_entity, message="获取LLM模型成功")
+    except Exception as e:
+        logger.error(f"Failed to get llm: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"获取LLM模型失败: '{e}'.")
 
 
 @llm_router.put("/{llm_id}", response_model=ResponseModel[LlmModelRead])
 async def update_llm(
     llm_id: str,
     update_llm: LlmModelCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
+    llm_service: LlmService = Depends(get_llm_service),
 ):
-    llm = await session.get(LlmModelEntity, llm_id)
-    if not llm:
-        return error_response(code=404, message=f"LLM'{llm_id}'不存在。")
-
-    logger.info(f"update_llm {update_llm}.")
-    llm.model_id = update_llm.model_id or llm.model_id
-    llm.base_url = update_llm.base_url or llm.base_url
-    llm.context_window = update_llm.context_window or llm.context_window
-    llm.model = update_llm.model or llm.model
-    llm.temperature = update_llm.temperature or llm.temperature
-    llm.encrypted_api_key = (
-        encrypt_key(update_llm.api_key) if update_llm.api_key else llm.encrypted_api_key
-    )
-    llm.enabled = update_llm.enabled
-    llm.vision_support = update_llm.vision_support
-    llm.enable_thinking = update_llm.enable_thinking
-
-    logger.info(f"Updating LLM {llm_id} to {llm}.")
-    session.add(llm)
-
-    llm_provider.update(llm)
-    await session.commit()
-    await session.refresh(llm)
-
-    await config_change_manager.notify_change_async(
-        event_source=ChangeEventSource.LLM,
-        source_id=llm.id,
-        event_type=ChangeEventType.UPDATE,
-    )
-
-    return success_response(data=llm, message="LLM更新成功。")
+    logger.info(f"Updating LLM: {llm_id} with data: {update_llm}.")
+    try:
+        llm_entity = await llm_service.update_llm(llm_id=llm_id, update_data=update_llm)
+        return success_response(data=llm_entity, message="LLM更新成功。")
+    except Exception as e:
+        logger.error(f"Failed to update llm: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"LLM更新失败: '{e}'.")
 
 
 @llm_router.delete("/{llm_id}")
 async def delete_llm(
     llm_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
+    llm_service: LlmService = Depends(get_llm_service),
 ):
-    llm = await session.get(LlmModelEntity, llm_id)
-    if not llm:
-        return error_response(code=404, message=f"LLM'{llm_id}'不存在。")
-
-    llm_provider.delete(llm_id)
-    await session.delete(llm)
-    await session.commit()
-    await config_change_manager.notify_change_async(
-        event_source=ChangeEventSource.LLM,
-        source_id=llm_id,
-        event_type=ChangeEventType.DELETE,
-    )
-
-    logger.info(f"模型ID {llm_id} 删除成功。")
-    return success_response(code=200, message=f"大模型ID '{llm_id}' 删除成功。")
+    logger.info(f"Deleting LLM: {llm_id}.")
+    try:
+        await llm_service.delete_llm(llm_id=llm_id)
+        return success_response(message="LLM删除成功。")
+    except Exception as e:
+        logger.error(f"Failed to delete llm: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"LLM删除失败: '{e}'.")

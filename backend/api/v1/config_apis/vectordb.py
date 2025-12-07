@@ -1,19 +1,18 @@
 ### Vector db configuration API ###
 
 import traceback
-from common.knowledgebase.types import SUPPORTED_VECTOR_DB_TYPES
-from config.providers.vectordb_provider import DEFAULT_VECTOR_ID, create_vector_db_connection_from_dict, vectordb_provider
-from config.utils.vectordb import create_vector_db_connection_from_env
+
 from fastapi import APIRouter, Depends
-from rag.vector_store.vector_connection import create_vector_store, cleanup_vector_store_async
+from rag.vector_store.vector_connection import cleanup_vector_store_async
+from service.factory.vectordb_factory import create_vector_store
+
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.models.change_event import ChangeEventSource, ChangeEventType
-from db.models.vectordb import (
-    VectorDbConfig,
-)
-from api.response_model import ResponseModel, error_response, success_response
-from db.db_context import get_session
-from config.providers.config_change_manager import config_change_manager
+from db.models.vectordb import VectorDbConfig
+from common.chat.response_model import ResponseModel, success_response
+from db.db_context import get_db_session
+from service.knowledgebase.vectordb_service import VectordbService
+from service.injection import get_vectordb_service
+from api.api_exception import ApiException
 from loguru import logger
 
 
@@ -42,113 +41,66 @@ async def _cleanup_cached_vector_stores():
 @vectordb_router.post("", response_model=ResponseModel[VectorDbConfig])
 async def add_vector_db_config(
     new_config: VectorDbConfig,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
+    vectordb_service: VectordbService = Depends(get_vectordb_service),
 ):
-    if new_config.type not in SUPPORTED_VECTOR_DB_TYPES:
-        return error_response(code=400, message=f"不支持的搜索引擎类型，当前仅支持{','.join(SUPPORTED_VECTOR_DB_TYPES)}。")
-
-    new_config.config["type"] = new_config.type
-    existing_vector_config = await session.get(VectorDbConfig, DEFAULT_VECTOR_ID)
-    if existing_vector_config is None:
-        logger.info(f"Adding new vectordb config for type {new_config.type}")
-        if not new_config.config.get("password"):
-            env_connection = create_vector_db_connection_from_env()
-            new_config.config["encrypted_password"] = env_connection.model_dump().get("encrypted_password")
-        if not new_config.config.get("sk"):
-            env_connection = create_vector_db_connection_from_env()
-            new_config.config["encrypted_sk"] = env_connection.model_dump().get("encrypted_sk")
-
-        existing_vector_config = VectorDbConfig(
-            id=DEFAULT_VECTOR_ID,
-            type=new_config.type,
-            config=create_vector_db_connection_from_dict(new_config.config).model_dump(),
-        )
-    else:
-        existing_vector_config.type = new_config.type
-        if not new_config.config.get("password"):
-            new_config.config["encrypted_password"] = existing_vector_config.config.get(
-                "encrypted_password"
-            )
-        if not new_config.config.get("sk"):
-            new_config.config["encrypted_sk"] = existing_vector_config.config.get(
-                "encrypted_sk"
-            )
-
-        existing_vector_config.config = create_vector_db_connection_from_dict(new_config.config).model_dump()
-
-    session.add(existing_vector_config)
     try:
+        # Ensure type is set in config
+        new_config.config["type"] = new_config.type
+
+        # Create or update config using service
+        existing_vector_config = await vectordb_service.create_or_update_vectordb_config(
+            new_config
+        )
         await session.commit()
         await session.refresh(existing_vector_config)
 
         # 在更新配置前，清理所有缓存的向量存储，确保连接被正确关闭
         await _cleanup_cached_vector_stores()
 
-        vectordb_provider.update(existing_vector_config)
-        await config_change_manager.notify_change_async(
-            event_source=ChangeEventSource.VECTORDB,
-            source_id=existing_vector_config.id,
-            event_type=ChangeEventType.UPDATE,
+        return success_response(
+            data=existing_vector_config, message="更新向量数据库成功"
         )
-
-        return success_response(data=existing_vector_config, message="更新向量数据库成功")
-    except Exception as e:
-        logger.error(f"Failed to add search config: {traceback.format_exc()}")
+    except ValueError as e:
+        logger.error(f"Failed to add vector db config: {str(e)}")
         await session.rollback()
-        return error_response(code=500, message=f"更新向量数据库失败: {e}")
+        raise ApiException(code=400, message=str(e))
+    except Exception as e:
+        logger.error(f"Failed to add vector db config: {traceback.format_exc()}")
+        await session.rollback()
+        raise ApiException(code=500, message=f"更新向量数据库失败: {e}")
 
 
 @vectordb_router.get("", response_model=ResponseModel[VectorDbConfig])
 async def get_vector_config(
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
+    vectordb_service: VectordbService = Depends(get_vectordb_service),
 ):
-    vector_config = await session.get(VectorDbConfig, DEFAULT_VECTOR_ID)
-    if vector_config is None:
-        connection = create_vector_db_connection_from_env()
-        vector_config = VectorDbConfig(
-            id=DEFAULT_VECTOR_ID,
-            type=connection.type.value,
-            config=connection.model_dump(),
-        )
-
-
-    return success_response(
-        data=vector_config,
-        message="查询向量数据库成功"
-    )
+    try:
+        vector_config = await vectordb_service.get_vectordb_config()
+        return success_response(data=vector_config, message="查询向量数据库成功")
+    except Exception as e:
+        logger.error(f"Failed to get vector config: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"查询向量数据库失败: {e}")
 
 
 @vectordb_router.post("/connection_test", response_model=ResponseModel[dict])
 async def connection_test(
     test_config: VectorDbConfig,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
+    vectordb_service: VectordbService = Depends(get_vectordb_service),
 ):
-    if test_config.type != "local":
-        if not test_config.config.get("password"):
-            existing_vector_config = await session.get(VectorDbConfig, DEFAULT_VECTOR_ID)
-            if existing_vector_config is not None:
-                test_config.config["encrypted_password"] = existing_vector_config.config.get("encrypted_password")
-            else:
-                env_connection = create_vector_db_connection_from_env()
-                test_config.config["encrypted_password"] = env_connection.model_dump().get("encrypted_password")
-
-        if not test_config.config.get("sk"):
-            existing_vector_config = await session.get(VectorDbConfig, DEFAULT_VECTOR_ID)
-            if existing_vector_config is not None:
-                test_config.config["encrypted_sk"] = existing_vector_config.config.get("encrypted_sk")
-            else:
-                env_connection = create_vector_db_connection_from_env()
-                test_config.config["encrypted_sk"] = env_connection.model_dump().get("encrypted_sk")
+    # Prepare test config by filling in encrypted fields
+    test_config = await vectordb_service.prepare_test_config(test_config)
 
 
-    vector_connection = create_vector_db_connection_from_dict(test_config.config)
     vector_store = None
     try:
         from llama_index.core.schema import TextNode
         from llama_index.core.vector_stores import VectorStoreQuery
         import numpy as np
         vector_store = create_vector_store(
-            "connectiontest", 1024, vector_db_connection=vector_connection,
+            "connectiontest", 1024, test_config,
         )
         embedding = list(np.random.rand(1024)) # convert to list for JSON serializable (HologresVectorStore requirement)
         node = TextNode(
@@ -173,9 +125,7 @@ async def connection_test(
         return success_response(data={}, message="测试成功。")
     except Exception as e:
         logger.error(f"测试向量库连接失败: {traceback.format_exc()}")
-        return error_response(
-            code=400, message=f"测试向量库连接失败: {e}"
-        )
+        raise ApiException(code=400, message=f"测试向量库连接失败: {e}")
     finally:
         # 确保无论成功还是失败都清理连接，避免连接泄漏
         if vector_store is not None:

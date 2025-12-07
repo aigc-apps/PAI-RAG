@@ -14,3 +14,15 @@ DEFAULT_RERANK_SIMILARITY_THRESHOLD = 0.5
 
 
 DEFAULT_KNOWLEDGEBASE_PATH = "localdata/knowledgebases"
+ATTACHMENT_KNOWLEDGEBASE_NAME = "default_attachments"
+DEFAULT_VECTOR_ID = "default_vectordb"
+
+
+DEFAULT_METADATA_KEYS = [
+    "file_name",
+    "file_path",
+    "file_size",
+    "file_extension",
+    "file_url",
+    "doc_id",
+  ]

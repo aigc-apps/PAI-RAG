@@ -1,22 +1,26 @@
-from chat.agent.state import AgentState
-from chat.agent_builder import build_agent
-from chat.llm.models import ChatResponseGenerator
-from chat.llm.utils import convert_gen_to_stream_chat_completions, convert_gen_to_chat_completions, error_chunk_gen
-from config.providers.guardrail_provider import guardrail_provider
+from agent.state import AgentState
+from common.llm.models import ChatResponseGenerator
+from common.llm.utils import convert_gen_to_stream_chat_completions, convert_gen_to_chat_completions, error_chunk_gen
 from fastapi import APIRouter
 from sse_starlette import EventSourceResponse
-from common.chat.models import DEFAULT_GUARDRAIL_ADVICE, ChatAgentRequest
-from config.providers.llm_provider import llm_provider
-from config.providers.chatbot_provider import chatbot_provider
+from common.chat.models import ChatAgentRequest
 from openai.types.chat import ChatCompletionMessageParam
 import traceback
+from service.tool.codesandbox_service import CodesandboxService
+from service.tool.chatapp_service import ChatappService
+from service.tool.guardrail_service import GuardrailService
+from db.db_context import get_db_session
+from service.injection import get_agent_service, get_chatapp_service, get_guardrail_service, get_llm_service, get_codesandbox_service
+from fastapi import Depends
+from sqlmodel.ext.asyncio.session import AsyncSession
+from service.factory.extension_factory import create_guardrail_checker
 from loguru import logger
-
-
+from service.agent.agent_service import AgentService
+from service.model.llm_service import LlmService
+from extensions.guardrail.guardrail_check import GuardrailChecker
 
 
 chat_agent_router = APIRouter()
-
 
 
 def extract_user_message(raw_msg: ChatCompletionMessageParam) -> str:
@@ -30,34 +34,6 @@ def extract_user_message(raw_msg: ChatCompletionMessageParam) -> str:
             user_content += block.get("text", "")
         return user_content
 
-def parse_chat_request(chat_request: ChatAgentRequest) -> ChatAgentRequest:
-    if chat_request.model in llm_provider.model_id_to_entry_id:
-        return chat_request
-
-    if chat_request.model in chatbot_provider.app_id_to_entry_id:
-        chatbot = chatbot_provider.get_chatbot(chat_request.model)
-        new_chat_request = ChatAgentRequest(
-            model=chatbot.model_id,
-            messages=chat_request.messages,
-            stream=chat_request.stream,
-            mcp_ids=chatbot.mcp_ids,
-            enable_search=chatbot.enable_search,
-            enable_agent=chatbot.enable_agent,
-            enable_chatdb=chatbot.enable_chatdb or False,
-            kb_ids=chatbot.kb_ids,
-            temperature=chat_request.temperature,
-            max_tokens=chat_request.max_tokens,
-            enable_input_guardrail=chatbot.enable_input_guardrail,
-            enable_output_guardrail=chatbot.enable_output_guardrail,
-            guardrail_hint=chatbot.guardrail_hint or DEFAULT_GUARDRAIL_ADVICE,
-            prompts=chatbot.prompts,
-            user_id=chat_request.user_id,
-        )
-        logger.info(f"正在调用应用{chat_request.model}: {new_chat_request}")
-        return new_chat_request
-
-    raise ValueError(f"Unknown model id: {chat_request.model}")
-
 
 async def generate_reponse(
     chunk_gen: ChatResponseGenerator,
@@ -65,6 +41,7 @@ async def generate_reponse(
     stream: bool,
     enable_output_check: bool = False,
     guardrail_hint: str | None = None,
+    checker: GuardrailChecker | None = None,
 ):
     if stream:
         return EventSourceResponse(
@@ -73,6 +50,7 @@ async def generate_reponse(
                 chunk_gen,
                 enable_output_check,
                 guardrail_hint,
+                checker,
             ),
             media_type="text/event-stream",
         )
@@ -82,42 +60,54 @@ async def generate_reponse(
             chunk_gen,
             enable_output_check,
             guardrail_hint,
+            checker,
         )
 
 
 @chat_agent_router.post("")
-async def chat(chat_request: ChatAgentRequest):
-    logger.info(f"Chat agent body: {chat_request}")
-
+async def chat(
+    chat_request: ChatAgentRequest,
+    session: AsyncSession = Depends(get_db_session),
+    code_sandbox_service: CodesandboxService = Depends(get_codesandbox_service),
+    guardrail_service: GuardrailService = Depends(get_guardrail_service),
+    llm_service: LlmService = Depends(get_llm_service),
+    chatapp_service: ChatappService = Depends(get_chatapp_service),
+    agent_service: AgentService = Depends(get_agent_service),
+):
+    logger.info(f"Chat agent body: {chat_request}.")
     try:
-        new_chat_request = parse_chat_request(chat_request) # 利用chatbot信息
-        agent = await build_agent(new_chat_request)
-        state = AgentState.from_messages(
-            messages=new_chat_request.messages,
-            enable_agent=new_chat_request.enable_agent,
-        )
-
+        agent = await agent_service.create_agent(chat_request)
         # 创建审核器
-        checker = guardrail_provider.get_checker()
+        checker = None
+        guardrail_config = await guardrail_service.get_guardrail_config_or_create()
+        if guardrail_config:
+            checker = create_guardrail_checker(guardrail_config)
 
         # 输入护栏检测
-        if new_chat_request.enable_input_guardrail:
+        if chat_request.enable_input_guardrail:
             user_message = extract_user_message(chat_request.messages[-1])
+            if not checker:
+                raise ValueError("Guardrail checker config not found.")
             check_result = await checker.acheck_input(text=user_message)
             if check_result.reject:
                 return await generate_reponse(
-                    error_chunk_gen(message=check_result.advice or new_chat_request.guardrail_hint),
+                    error_chunk_gen(message=check_result.advice or chat_request.guardrail_hint),
                     model=chat_request.model,
                     stream=chat_request.stream,
                 )
 
-        async_response_gen = await agent.run_async(state=state)
+        async_response_gen = await agent.run_async(
+            state=AgentState.from_messages(
+                messages=chat_request.messages,
+                enable_agent=chat_request.enable_agent,
+            )
+        )
         return await generate_reponse(
             async_response_gen,
             model=chat_request.model,
             stream=chat_request.stream,
-            enable_output_check=new_chat_request.enable_output_guardrail,
-            guardrail_hint=new_chat_request.guardrail_hint,
+            enable_output_check=chat_request.enable_output_guardrail,
+            guardrail_hint=chat_request.guardrail_hint,
         )
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")

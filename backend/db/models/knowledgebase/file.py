@@ -17,7 +17,7 @@ class MetadataEntryData(BaseModel):
 
 
 class KbFileEntity(SQLModel, table=True):
-    __table_args__ = (UniqueConstraint("kb_id", "message_id", "file_name", name="unique_kb_file"),)
+    __table_args__ = (UniqueConstraint("kb_id", "message_id", "file_path", name="unique_kb_file"),)
 
     __tablename__ = "pai_knowledgebase_file"
     id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)

@@ -12,10 +12,10 @@ from db.sqlite_store import sync_sqlite_store_task, stop_event, sync_sqlite_stor
 from utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 
+from api.api_exception import ApiException, api_exception_handler
 import api.v1.mcp_server_middleware as mcp_middleware
 from rag.vector_store.local_chroma_service import LocalChromaService
 from app.log_middleware import CustomLoggingMiddleware
-from config.providers.config_change_manager import config_change_manager
 from contextlib import asynccontextmanager
 from utils.format_logging import format_logging
 from utils.http_session import HttpSessionShared
@@ -30,8 +30,10 @@ async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
 
     await HttpSessionShared.ensure_session()
-    await config_change_manager.init_configuration()
-    asyncio.create_task(config_change_manager.monitor_changes_async())
+    from db.db_context import init_db
+
+    await init_db()
+    logger.info("Initialized database tables.")
 
     sqlite_thread = None
     if os.getenv("DB_TYPE", "sqlite") != "postgresql":
@@ -73,6 +75,7 @@ def configure(app: FastAPI):
         allow_credentials=False,
     )
     app.add_middleware(CustomLoggingMiddleware)
+    app.add_exception_handler(ApiException, api_exception_handler)
 
 
 app = FastAPI(lifespan=lifespan)

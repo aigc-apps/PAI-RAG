@@ -68,7 +68,7 @@ export default function ModelSelector({
             };
           }),
         };
-        const modelGroups = [chatbotGroup, ...data.groups];
+        const modelGroups = [chatbotGroup, ...data.data.groups];
         setModelGroups(modelGroups);
 
         if (!selectedModel.model_id) {

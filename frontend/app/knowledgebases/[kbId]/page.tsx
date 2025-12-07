@@ -421,7 +421,8 @@ export default function KnowledgeBaseDetailPage(
       const metaRes = await fetch(`/api/config/knowledgebases/${kbId}/metadata`);
       if (!metaRes.ok) throw new Error('获取知识库元数据失败');
       const metadata_json = await metaRes.json();
-      const metadata_data = metadata_json.data as MetadataConfig[];
+      const metadata_data = metadata_json.data.items as MetadataConfig[];
+      console.log('metadata_data', metadata_data);
       const valueTypes = Object.fromEntries(
         metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
       ) as { [key: string]: string };
@@ -485,7 +486,7 @@ export default function KnowledgeBaseDetailPage(
       // 处理元数据
       if (!metaRes.ok) throw new Error('获取知识库元数据失败');
       const metadata_json = await metaRes.json();
-      const metadata_data = metadata_json.data as MetadataConfig[];
+      const metadata_data = metadata_json.data.items as MetadataConfig[];
       const valueTypes = Object.fromEntries(
         metadata_data.map((metadata) => [metadata.name, metadata.value_type]),
       ) as { [key: string]: string };

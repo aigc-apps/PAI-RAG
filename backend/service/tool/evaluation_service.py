@@ -1,0 +1,1110 @@
+"""Evaluation Service layer for database operations."""
+
+from typing import Optional, List, Dict
+from sqlmodel import select, func
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.exc import IntegrityError
+from loguru import logger
+
+from db.models.evaluation.dataset import DatasetEntity, DatasetCreate, DatasetSampleEntity
+from db.models.evaluation.experiment import (
+    ExperimentEntity,
+    ExperimentSampleEntity,
+    ExperimentCreate,
+)
+from db.models.evaluation.run_config import RunConfigEntity, RunConfigCreate
+from db.models.evaluation.evaluator_config import (
+    EvaluatorConfigEntity,
+    EvaluatorConfigCreate,
+)
+from common.chat.response_model import PagedResult
+
+
+class EvaluationService:
+    """Service layer for Evaluation entity CRUD operations using dependency injection."""
+
+    def __init__(self, session: AsyncSession):
+        """
+        Initialize EvaluationService with a database session.
+
+        Args:
+            session: Database session (injected dependency)
+        """
+        self.session = session
+
+    # ========== Dataset Operations ==========
+
+    async def get_dataset(self, dataset_id: str) -> Optional[DatasetEntity]:
+        """
+        Get a single Dataset entity by ID.
+
+        Args:
+            dataset_id: Dataset entity ID
+
+        Returns:
+            DatasetEntity if found, None otherwise
+        """
+        return await self.session.get(DatasetEntity, dataset_id)
+
+    async def list_datasets(
+        self,
+        page: int = 1,
+        size: int = 10,
+    ) -> PagedResult[List[Dict]]:
+        """
+        List Dataset entities with pagination and statistics.
+
+        Args:
+            page: Page number (1-indexed)
+            size: Page size
+
+        Returns:
+            PagedResult containing list of DatasetEntity with dataset_count and experiments_count
+        """
+        # Subquery 1: count samples per dataset_id
+        dataset_count_subq = (
+            select(
+                DatasetSampleEntity.dataset_id,
+                func.count(DatasetSampleEntity.id).label("dataset_count"),
+            )
+            .group_by(DatasetSampleEntity.dataset_id)
+            .subquery()
+        )
+
+        # Subquery 2: count experiments per dataset_id
+        experiment_count_subq = (
+            select(
+                ExperimentEntity.dataset_id,
+                func.count(ExperimentEntity.id).label("experiments_count"),
+            )
+            .group_by(ExperimentEntity.dataset_id)
+            .subquery()
+        )
+
+        # Main query: LEFT JOIN to get counts
+        query = (
+            select(
+                DatasetEntity,
+                func.coalesce(dataset_count_subq.c.dataset_count, 0).label(
+                    "dataset_count"
+                ),
+                func.coalesce(experiment_count_subq.c.experiments_count, 0).label(
+                    "experiments_count"
+                ),
+            )
+            .outerjoin(
+                dataset_count_subq, DatasetEntity.id == dataset_count_subq.c.dataset_id
+            )
+            .outerjoin(
+                experiment_count_subq,
+                DatasetEntity.id == experiment_count_subq.c.dataset_id,
+            )
+            .order_by(DatasetEntity.created_at.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+
+        # Get total count
+        total_results = await self.session.exec(
+            select(func.count()).select_from(DatasetEntity)
+        )
+        total = total_results.one_or_none() or 0
+
+        # Execute main query
+        results = await self.session.exec(query)
+        eval_entities_with_counts = results.all()
+
+        # Build result list with counts
+        items = []
+        for eval_entity, dataset_count, experiments_count in eval_entities_with_counts:
+            item = eval_entity.model_dump()
+            item["dataset_count"] = dataset_count
+            item["experiments_count"] = experiments_count
+            items.append(item)
+
+        # Calculate pages
+        pages = (total + size - 1) // size if total > 0 else 0
+
+        return PagedResult(
+            items=items,
+            total=total,
+            pages=pages,
+            page=page,
+            size=size,
+        )
+
+    async def create_dataset(self, dataset_data: DatasetCreate) -> DatasetEntity:
+        """
+        Create a new Dataset entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_data: Dataset creation data
+
+        Returns:
+            Created DatasetEntity (not yet committed)
+
+        Raises:
+            ValueError: If name already exists (IntegrityError converted)
+        """
+        dataset = DatasetEntity.model_validate(dataset_data)
+        self.session.add(dataset)
+
+        try:
+            # Flush to get the ID, but don't commit
+            await self.session.flush()
+            await self.session.refresh(dataset)
+
+            logger.info(f"Created Dataset entity: {dataset.id} (name: {dataset.name})")
+            return dataset
+
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating Dataset: {e.orig}")
+
+            if "UniqueViolationError" in str(e.orig):
+                raise ValueError(
+                    f"数据集名称 '{dataset_data.name}' 已经存在。"
+                ) from e
+            else:
+                raise ValueError(f"数据集创建失败: {e}") from e
+
+    async def update_dataset(
+        self, dataset_id: str, update_data: DatasetCreate
+    ) -> DatasetEntity:
+        """
+        Update an existing Dataset entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_id: Dataset entity ID
+            update_data: Updated Dataset data
+
+        Returns:
+            Updated DatasetEntity (not yet committed)
+
+        Raises:
+            ValueError: If Dataset entity not found
+        """
+        dataset = await self.session.get(DatasetEntity, dataset_id)
+        if not dataset:
+            raise ValueError(f"数据集 '{dataset_id}' 不存在。")
+
+        logger.info(f"Updating Dataset {dataset_id} with data: {update_data}")
+
+        # Update fields
+        if update_data.name is not None:
+            dataset.name = update_data.name
+        if update_data.description is not None:
+            dataset.description = update_data.description
+        if update_data.type is not None:
+            dataset.type = update_data.type
+
+        self.session.add(dataset)
+
+        # Flush to ensure changes are staged
+        await self.session.flush()
+        await self.session.refresh(dataset)
+
+        logger.info(f"Updated Dataset entity: {dataset.id} (name: {dataset.name})")
+        return dataset
+
+    async def delete_dataset(self, dataset_id: str) -> None:
+        """
+        Delete a Dataset entity.
+        Note: This will cascade delete related samples, experiments, etc.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_id: Dataset entity ID
+
+        Raises:
+            ValueError: If Dataset entity not found
+        """
+        dataset = await self.session.get(DatasetEntity, dataset_id)
+        if not dataset:
+            raise ValueError(f"数据集 '{dataset_id}' 不存在。")
+
+        # Delete from database (staged, not committed)
+        # CASCADE will handle related entities
+        await self.session.delete(dataset)
+
+        # Flush to ensure deletion is staged
+        await self.session.flush()
+
+        logger.info(f"Deleted Dataset entity: {dataset_id} (name: {dataset.name})")
+
+    # ========== DatasetSample Operations ==========
+
+    async def get_dataset_sample(
+        self, sample_id: str
+    ) -> Optional[DatasetSampleEntity]:
+        """
+        Get a single DatasetSample entity by ID.
+
+        Args:
+            sample_id: DatasetSample entity ID
+
+        Returns:
+            DatasetSampleEntity if found, None otherwise
+        """
+        return await self.session.get(DatasetSampleEntity, sample_id)
+
+    async def list_dataset_samples(
+        self,
+        dataset_id: str,
+        page: int = 1,
+        size: int = 10,
+    ) -> PagedResult[List[DatasetSampleEntity]]:
+        """
+        List DatasetSample entities with pagination.
+
+        Args:
+            dataset_id: Dataset ID
+            page: Page number (1-indexed)
+            size: Page size
+
+        Returns:
+            PagedResult containing list of DatasetSampleEntity and pagination metadata
+        """
+        # Build base query
+        base_query = select(DatasetSampleEntity).where(
+            DatasetSampleEntity.dataset_id == dataset_id
+        )
+
+        # Get total count
+        count_query = select(func.count()).select_from(base_query)
+        total_result = await self.session.exec(count_query)
+        total = total_result.one_or_none() or 0
+
+        # Get paginated results
+        offset = (page - 1) * size
+        paginated_query = (
+            base_query.order_by(DatasetSampleEntity.created_at.desc())
+            .offset(offset)
+            .limit(size)
+        )
+        results = await self.session.exec(paginated_query)
+        samples = list(results.all())
+
+        # Calculate pages
+        pages = (total + size - 1) // size if total > 0 else 0
+
+        return PagedResult(
+            items=samples,
+            total=total,
+            pages=pages,
+            page=page,
+            size=size,
+        )
+
+    async def create_dataset_sample(
+        self,
+        dataset_id: str,
+        input: str,
+        expected_output: Optional[str] = None,
+        eval_metadata: Optional[dict] = None,
+    ) -> DatasetSampleEntity:
+        """
+        Create a new DatasetSample entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_id: Dataset ID
+            input: Sample input
+            expected_output: Optional expected output
+            eval_metadata: Optional evaluation metadata
+
+        Returns:
+            Created DatasetSampleEntity (not yet committed)
+        """
+        sample = DatasetSampleEntity(
+            dataset_id=dataset_id,
+            input=input,
+            expected_output=expected_output,
+            eval_metadata=eval_metadata or {},
+        )
+
+        self.session.add(sample)
+
+        try:
+            # Flush to get the ID, but don't commit
+            await self.session.flush()
+            await self.session.refresh(sample)
+
+            logger.info(f"Created DatasetSample entity: {sample.id}")
+            return sample
+
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating DatasetSample: {e.orig}")
+            raise ValueError(f"数据样本创建失败: {e}") from e
+
+    async def update_dataset_sample(
+        self,
+        sample_id: str,
+        input: Optional[str] = None,
+        expected_output: Optional[str] = None,
+        eval_metadata: Optional[dict] = None,
+    ) -> DatasetSampleEntity:
+        """
+        Update an existing DatasetSample entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            sample_id: DatasetSample entity ID
+            input: Updated input
+            expected_output: Updated expected output
+            eval_metadata: Updated evaluation metadata
+
+        Returns:
+            Updated DatasetSampleEntity (not yet committed)
+
+        Raises:
+            ValueError: If DatasetSample entity not found
+        """
+        sample = await self.session.get(DatasetSampleEntity, sample_id)
+        if not sample:
+            raise ValueError(f"数据样本 '{sample_id}' 不存在。")
+
+        logger.info(f"Updating DatasetSample {sample_id}")
+
+        # Update fields
+        if input is not None:
+            sample.input = input
+        if expected_output is not None:
+            sample.expected_output = expected_output
+        if eval_metadata is not None:
+            sample.eval_metadata = eval_metadata
+
+        self.session.add(sample)
+
+        # Flush to ensure changes are staged
+        await self.session.flush()
+        await self.session.refresh(sample)
+
+        logger.info(f"Updated DatasetSample entity: {sample.id}")
+        return sample
+
+    async def delete_dataset_sample(self, sample_id: str) -> None:
+        """
+        Delete a DatasetSample entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            sample_id: DatasetSample entity ID
+
+        Raises:
+            ValueError: If DatasetSample entity not found
+        """
+        sample = await self.session.get(DatasetSampleEntity, sample_id)
+        if not sample:
+            raise ValueError(f"数据样本 '{sample_id}' 不存在。")
+
+        # Delete from database (staged, not committed)
+        await self.session.delete(sample)
+
+        # Flush to ensure deletion is staged
+        await self.session.flush()
+
+        logger.info(f"Deleted DatasetSample entity: {sample_id}")
+
+    async def get_dataset_samples(
+        self, dataset_id: str, sample_ids: List[str]
+    ) -> List[DatasetSampleEntity]:
+        """
+        Get multiple DatasetSample entities by IDs.
+
+        Args:
+            dataset_id: Dataset ID
+            sample_ids: List of sample IDs
+
+        Returns:
+            List of DatasetSampleEntity
+        """
+        if not sample_ids:
+            return []
+
+        statement = select(DatasetSampleEntity).where(
+            DatasetSampleEntity.id.in_(sample_ids),
+            DatasetSampleEntity.dataset_id == dataset_id,
+        )
+        results = await self.session.exec(statement)
+        return list(results.all())
+
+    async def batch_create_dataset_samples(
+        self,
+        dataset_id: str,
+        samples: List[Dict],
+    ) -> List[DatasetSampleEntity]:
+        """
+        Batch create DatasetSample entities.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_id: Dataset ID
+            samples: List of sample dicts with keys: input, expected_output, eval_metadata
+
+        Returns:
+            List of created DatasetSampleEntity (not yet committed)
+        """
+        dataset_samples = []
+        for sample_data in samples:
+            sample = DatasetSampleEntity(
+                dataset_id=dataset_id,
+                input=sample_data["input"],
+                expected_output=sample_data.get("expected_output"),
+                eval_metadata=sample_data.get("metadata") or {},
+            )
+            self.session.add(sample)
+            dataset_samples.append(sample)
+
+        try:
+            # Flush to get IDs, but don't commit
+            await self.session.flush()
+            for sample in dataset_samples:
+                await self.session.refresh(sample)
+
+            logger.info(
+                f"Created {len(dataset_samples)} DatasetSample entities for dataset {dataset_id}"
+            )
+            return dataset_samples
+
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when batch creating DatasetSamples: {e.orig}")
+            raise ValueError(f"批量创建数据样本失败: {e}") from e
+
+    # ========== Experiment Operations ==========
+
+    async def get_experiment(
+        self, experiment_id: str
+    ) -> Optional[ExperimentEntity]:
+        """
+        Get a single Experiment entity by ID.
+
+        Args:
+            experiment_id: Experiment entity ID
+
+        Returns:
+            ExperimentEntity if found, None otherwise
+        """
+        return await self.session.get(ExperimentEntity, experiment_id)
+
+    async def list_experiments(
+        self,
+        dataset_id: str,
+        page: int = 1,
+        size: int = 10,
+    ) -> PagedResult[List[ExperimentEntity]]:
+        """
+        List Experiment entities with pagination.
+
+        Args:
+            dataset_id: Dataset ID
+            page: Page number (1-indexed)
+            size: Page size
+
+        Returns:
+            PagedResult containing list of ExperimentEntity and pagination metadata
+        """
+        # Build base query
+        base_query = select(ExperimentEntity).where(
+            ExperimentEntity.dataset_id == dataset_id
+        )
+
+        # Get total count
+        count_query = select(func.count()).select_from(base_query)
+        total_result = await self.session.exec(count_query)
+        total = total_result.one_or_none() or 0
+
+        # Get paginated results
+        offset = (page - 1) * size
+        paginated_query = (
+            base_query.order_by(ExperimentEntity.created_at.desc())
+            .offset(offset)
+            .limit(size)
+        )
+        results = await self.session.exec(paginated_query)
+        experiments = list(results.all())
+
+        # Calculate pages
+        pages = (total + size - 1) // size if total > 0 else 0
+
+        return PagedResult(
+            items=experiments,
+            total=total,
+            pages=pages,
+            page=page,
+            size=size,
+        )
+
+    async def create_experiment(
+        self, dataset_id: str, experiment_data: ExperimentCreate
+    ) -> tuple[ExperimentEntity, List[str]]:
+        """
+        Create a new Experiment entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_id: Dataset ID
+            experiment_data: Experiment creation data
+
+        Returns:
+            Tuple of (Created ExperimentEntity, List of created ExperimentSampleEntity IDs) (not yet committed)
+
+        Raises:
+            ValueError: If sample_ids are invalid
+        """
+        if not experiment_data.sample_ids or len(experiment_data.sample_ids) == 0:
+            raise ValueError("没有选择任何数据集样本。")
+
+        # Validate sample_ids exist and belong to dataset_id
+        dataset_sample_results = await self.session.exec(
+            select(DatasetSampleEntity)
+            .where(DatasetSampleEntity.id.in_(experiment_data.sample_ids))
+            .where(DatasetSampleEntity.dataset_id == dataset_id)
+        )
+        dataset_sample_entities = list(dataset_sample_results.all())
+
+        if len(dataset_sample_entities) == 0:
+            raise ValueError(f"没有找到数据集 {dataset_id} 的数据样本。")
+
+        if len(dataset_sample_entities) != len(experiment_data.sample_ids):
+            missing_ids = set(experiment_data.sample_ids) - {
+                d.id for d in dataset_sample_entities
+            }
+            raise ValueError(f"以下样本ID不存在: {missing_ids}")
+
+        # Create experiment entity
+        experiment_entity = ExperimentEntity(
+            dataset_id=dataset_id,
+            name=experiment_data.name,
+            samples_count=len(dataset_sample_entities),
+            run_config_id=experiment_data.run_config_id,
+            evaluator_config_id=experiment_data.evaluator_config_id,
+            description=experiment_data.description or "Experiment created via API",
+            status="pending",
+        )
+
+        self.session.add(experiment_entity)
+
+        try:
+            # Flush to get the ID, but don't commit
+            await self.session.flush()
+            await self.session.refresh(experiment_entity)
+
+            # Create experiment sample entities
+            exp_sample_ids = []
+            for sample_id in experiment_data.sample_ids:
+                exp_run_entity = ExperimentSampleEntity(
+                    experiment_id=experiment_entity.id,
+                    dataset_id=dataset_id,
+                    sample_id=sample_id,
+                    status="pending",
+                )
+                self.session.add(exp_run_entity)
+                exp_sample_ids.append(exp_run_entity.id)
+
+            # Flush again to get all IDs
+            await self.session.flush()
+
+            logger.info(
+                f"Created Experiment entity: {experiment_entity.id} (name: {experiment_entity.name})"
+            )
+            return experiment_entity, exp_sample_ids
+
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating Experiment: {e.orig}")
+            raise ValueError(f"实验创建失败: {e}") from e
+
+    async def delete_experiment(self, experiment_id: str) -> None:
+        """
+        Delete an Experiment entity.
+        Note: This will cascade delete related experiment samples.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            experiment_id: Experiment entity ID
+
+        Raises:
+            ValueError: If Experiment entity not found
+        """
+        experiment = await self.session.get(ExperimentEntity, experiment_id)
+        if not experiment:
+            raise ValueError(f"实验 '{experiment_id}' 不存在。")
+
+        # Delete from database (staged, not committed)
+        # CASCADE will handle related experiment samples
+        await self.session.delete(experiment)
+
+        # Flush to ensure deletion is staged
+        await self.session.flush()
+
+        logger.info(f"Deleted Experiment entity: {experiment_id} (name: {experiment.name})")
+
+    async def get_experiment_samples(
+        self,
+        experiment_id: str,
+        page: int = 1,
+        size: int = 10,
+    ) -> PagedResult[List[ExperimentSampleEntity]]:
+        """
+        List ExperimentSample entities with pagination.
+
+        Args:
+            experiment_id: Experiment ID
+            page: Page number (1-indexed)
+            size: Page size
+
+        Returns:
+            PagedResult containing list of ExperimentSampleEntity and pagination metadata
+        """
+        # Build base query
+        base_query = select(ExperimentSampleEntity).where(
+            ExperimentSampleEntity.experiment_id == experiment_id
+        )
+
+        # Get total count
+        count_query = select(func.count()).select_from(base_query)
+        total_result = await self.session.exec(count_query)
+        total = total_result.one_or_none() or 0
+
+        # Get paginated results
+        offset = (page - 1) * size
+        paginated_query = (
+            base_query.order_by(ExperimentSampleEntity.created_at.desc())
+            .offset(offset)
+            .limit(size)
+        )
+        results = await self.session.exec(paginated_query)
+        samples = list(results.all())
+
+        # Calculate pages
+        pages = (total + size - 1) // size if total > 0 else 0
+
+        return PagedResult(
+            items=samples,
+            total=total,
+            pages=pages,
+            page=page,
+            size=size,
+        )
+
+    async def evaluate_experiment_sample(
+        self,
+        experiment_id: str,
+        experiment_sample_id: str,
+        status: Optional[str] = None,
+        output: Optional[str] = None,
+        score: Optional[float] = None,
+        error: Optional[str] = None,
+    ) -> ExperimentSampleEntity:
+        """
+        Update an ExperimentSample entity (typically for re-evaluation).
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            experiment_id: Experiment ID
+            experiment_sample_id: ExperimentSample entity ID
+            status: Updated status
+            output: Updated output
+            score: Updated score
+            error: Updated error message
+
+        Returns:
+            Updated ExperimentSampleEntity (not yet committed)
+
+        Raises:
+            ValueError: If ExperimentSample entity not found
+        """
+        experiment_sample = await self.session.get(
+            ExperimentSampleEntity, experiment_sample_id
+        )
+        if not experiment_sample:
+            raise ValueError(
+                f"实验样本 '{experiment_sample_id}' 不存在。"
+            )
+
+        if experiment_sample.experiment_id != experiment_id:
+            raise ValueError(
+                f"实验样本 '{experiment_sample_id}' 不属于实验 '{experiment_id}'。"
+            )
+
+        logger.info(f"Updating ExperimentSample {experiment_sample_id}")
+
+        # Update fields
+        if status is not None:
+            experiment_sample.status = status
+        if output is not None:
+            experiment_sample.output = output
+        if score is not None:
+            experiment_sample.score = score
+        if error is not None:
+            experiment_sample.error = error
+
+        self.session.add(experiment_sample)
+
+        # Flush to ensure changes are staged
+        await self.session.flush()
+        await self.session.refresh(experiment_sample)
+
+        logger.info(f"Updated ExperimentSample entity: {experiment_sample.id}")
+        return experiment_sample
+
+    # ========== RunConfig Operations ==========
+
+    async def get_run_config(self, config_id: str) -> Optional[RunConfigEntity]:
+        """
+        Get a single RunConfig entity by ID.
+
+        Args:
+            config_id: RunConfig entity ID
+
+        Returns:
+            RunConfigEntity if found, None otherwise
+        """
+        return await self.session.get(RunConfigEntity, config_id)
+
+    async def list_run_configs(
+        self,
+        dataset_id: str,
+        page: int = 1,
+        size: int = 10,
+    ) -> PagedResult[List[RunConfigEntity]]:
+        """
+        List RunConfig entities with pagination.
+
+        Args:
+            dataset_id: Dataset ID
+            page: Page number (1-indexed)
+            size: Page size
+
+        Returns:
+            PagedResult containing list of RunConfigEntity and pagination metadata
+        """
+        # Build base query
+        base_query = select(RunConfigEntity).where(
+            RunConfigEntity.dataset_id == dataset_id
+        )
+
+        # Get total count
+        count_query = select(func.count()).select_from(base_query)
+        total_result = await self.session.exec(count_query)
+        total = total_result.one_or_none() or 0
+
+        # Get paginated results
+        offset = (page - 1) * size
+        paginated_query = (
+            base_query.order_by(RunConfigEntity.created_at.desc())
+            .offset(offset)
+            .limit(size)
+        )
+        results = await self.session.exec(paginated_query)
+        configs = list(results.all())
+
+        # Calculate pages
+        pages = (total + size - 1) // size if total > 0 else 0
+
+        return PagedResult(
+            items=configs,
+            total=total,
+            pages=pages,
+            page=page,
+            size=size,
+        )
+
+    async def create_run_config(
+        self, dataset_id: str, config_data: RunConfigCreate
+    ) -> RunConfigEntity:
+        """
+        Create a new RunConfig entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_id: Dataset ID
+            config_data: RunConfig creation data
+
+        Returns:
+            Created RunConfigEntity (not yet committed)
+        """
+        run_config_entity = RunConfigEntity(
+            name=config_data.name,
+            dataset_id=dataset_id,
+            model_id=config_data.model_id,
+            mcp_ids=config_data.mcp_ids,
+            kb_ids=config_data.kb_ids,
+            enable_search=config_data.enable_search,
+            enable_vision=config_data.enable_vision,
+            enable_agent=config_data.enable_agent,
+            enable_input_guardrail=config_data.enable_input_guardrail,
+            enable_output_guardrail=config_data.enable_output_guardrail,
+            guardrail_hint=config_data.guardrail_hint,
+            prompts=config_data.prompts,
+        )
+
+        self.session.add(run_config_entity)
+
+        try:
+            # Flush to get the ID, but don't commit
+            await self.session.flush()
+            await self.session.refresh(run_config_entity)
+
+            logger.info(
+                f"Created RunConfig entity: {run_config_entity.id} (name: {run_config_entity.name})"
+            )
+            return run_config_entity
+
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating RunConfig: {e.orig}")
+            raise ValueError(f"运行配置创建失败: {e}") from e
+
+    async def update_run_config(
+        self, config_id: str, update_data: RunConfigCreate
+    ) -> RunConfigEntity:
+        """
+        Update an existing RunConfig entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            config_id: RunConfig entity ID
+            update_data: Updated RunConfig data
+
+        Returns:
+            Updated RunConfigEntity (not yet committed)
+
+        Raises:
+            ValueError: If RunConfig entity not found
+        """
+        run_config = await self.session.get(RunConfigEntity, config_id)
+        if not run_config:
+            raise ValueError(f"运行配置 '{config_id}' 不存在。")
+
+        logger.info(f"Updating RunConfig {config_id} with data: {update_data}")
+
+        # Update fields
+        if update_data.name is not None:
+            run_config.name = update_data.name
+        if update_data.model_id is not None:
+            run_config.model_id = update_data.model_id
+        if update_data.mcp_ids is not None:
+            run_config.mcp_ids = update_data.mcp_ids
+        if update_data.kb_ids is not None:
+            run_config.kb_ids = update_data.kb_ids
+        if update_data.enable_search is not None:
+            run_config.enable_search = update_data.enable_search
+        if update_data.enable_vision is not None:
+            run_config.enable_vision = update_data.enable_vision
+        if update_data.enable_agent is not None:
+            run_config.enable_agent = update_data.enable_agent
+        if update_data.enable_input_guardrail is not None:
+            run_config.enable_input_guardrail = update_data.enable_input_guardrail
+        if update_data.enable_output_guardrail is not None:
+            run_config.enable_output_guardrail = update_data.enable_output_guardrail
+        if update_data.guardrail_hint is not None:
+            run_config.guardrail_hint = update_data.guardrail_hint
+        if update_data.prompts is not None:
+            run_config.prompts = update_data.prompts
+
+        self.session.add(run_config)
+
+        # Flush to ensure changes are staged
+        await self.session.flush()
+        await self.session.refresh(run_config)
+
+        logger.info(f"Updated RunConfig entity: {run_config.id} (name: {run_config.name})")
+        return run_config
+
+    async def delete_run_config(self, config_id: str) -> None:
+        """
+        Delete a RunConfig entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            config_id: RunConfig entity ID
+
+        Raises:
+            ValueError: If RunConfig entity not found
+        """
+        run_config = await self.session.get(RunConfigEntity, config_id)
+        if not run_config:
+            raise ValueError(f"运行配置 '{config_id}' 不存在。")
+
+        # Delete from database (staged, not committed)
+        await self.session.delete(run_config)
+
+        # Flush to ensure deletion is staged
+        await self.session.flush()
+
+        logger.info(f"Deleted RunConfig entity: {config_id} (name: {run_config.name})")
+
+    # ========== EvaluatorConfig Operations ==========
+
+    async def get_evaluator_config(
+        self, config_id: str
+    ) -> Optional[EvaluatorConfigEntity]:
+        """
+        Get a single EvaluatorConfig entity by ID.
+
+        Args:
+            config_id: EvaluatorConfig entity ID
+
+        Returns:
+            EvaluatorConfigEntity if found, None otherwise
+        """
+        return await self.session.get(EvaluatorConfigEntity, config_id)
+
+    async def list_evaluator_configs(
+        self,
+        dataset_id: str,
+        page: int = 1,
+        size: int = 10,
+    ) -> PagedResult[List[EvaluatorConfigEntity]]:
+        """
+        List EvaluatorConfig entities with pagination.
+
+        Args:
+            dataset_id: Dataset ID
+            page: Page number (1-indexed)
+            size: Page size
+
+        Returns:
+            PagedResult containing list of EvaluatorConfigEntity and pagination metadata
+        """
+        # Build base query
+        base_query = select(EvaluatorConfigEntity).where(
+            EvaluatorConfigEntity.dataset_id == dataset_id
+        )
+
+        # Get total count
+        count_query = select(func.count()).select_from(base_query)
+        total_result = await self.session.exec(count_query)
+        total = total_result.one_or_none() or 0
+
+        # Get paginated results
+        offset = (page - 1) * size
+        paginated_query = (
+            base_query.order_by(EvaluatorConfigEntity.created_at.desc())
+            .offset(offset)
+            .limit(size)
+        )
+        results = await self.session.exec(paginated_query)
+        configs = list(results.all())
+
+        # Calculate pages
+        pages = (total + size - 1) // size if total > 0 else 0
+
+        return PagedResult(
+            items=configs,
+            total=total,
+            pages=pages,
+            page=page,
+            size=size,
+        )
+
+    async def create_evaluator_config(
+        self, dataset_id: str, config_data: EvaluatorConfigCreate
+    ) -> EvaluatorConfigEntity:
+        """
+        Create a new EvaluatorConfig entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            dataset_id: Dataset ID
+            config_data: EvaluatorConfig creation data
+
+        Returns:
+            Created EvaluatorConfigEntity (not yet committed)
+        """
+        eval_config_entity = EvaluatorConfigEntity(
+            name=config_data.name,
+            type=config_data.type,
+            dataset_id=dataset_id,
+            model_id=config_data.model_id,
+            case_sensitive=config_data.case_sensitive,
+            ignore_punctuation=config_data.ignore_punctuation,
+        )
+
+        self.session.add(eval_config_entity)
+
+        try:
+            # Flush to get the ID, but don't commit
+            await self.session.flush()
+            await self.session.refresh(eval_config_entity)
+
+            logger.info(
+                f"Created EvaluatorConfig entity: {eval_config_entity.id} (name: {eval_config_entity.name})"
+            )
+            return eval_config_entity
+
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating EvaluatorConfig: {e.orig}")
+            raise ValueError(f"评估器配置创建失败: {e}") from e
+
+    async def update_evaluator_config(
+        self, config_id: str, update_data: EvaluatorConfigCreate
+    ) -> EvaluatorConfigEntity:
+        """
+        Update an existing EvaluatorConfig entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            config_id: EvaluatorConfig entity ID
+            update_data: Updated EvaluatorConfig data
+
+        Returns:
+            Updated EvaluatorConfigEntity (not yet committed)
+
+        Raises:
+            ValueError: If EvaluatorConfig entity not found
+        """
+        eval_config = await self.session.get(EvaluatorConfigEntity, config_id)
+        if not eval_config:
+            raise ValueError(f"评估器配置 '{config_id}' 不存在。")
+
+        logger.info(f"Updating EvaluatorConfig {config_id} with data: {update_data}")
+
+        # Update fields
+        if update_data.name is not None:
+            eval_config.name = update_data.name
+        if update_data.type is not None:
+            eval_config.type = update_data.type
+        if update_data.model_id is not None:
+            eval_config.model_id = update_data.model_id
+        if update_data.case_sensitive is not None:
+            eval_config.case_sensitive = update_data.case_sensitive
+        if update_data.ignore_punctuation is not None:
+            eval_config.ignore_punctuation = update_data.ignore_punctuation
+
+        self.session.add(eval_config)
+
+        # Flush to ensure changes are staged
+        await self.session.flush()
+        await self.session.refresh(eval_config)
+
+        logger.info(
+            f"Updated EvaluatorConfig entity: {eval_config.id} (name: {eval_config.name})"
+        )
+        return eval_config
+
+    async def delete_evaluator_config(self, config_id: str) -> None:
+        """
+        Delete an EvaluatorConfig entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            config_id: EvaluatorConfig entity ID
+
+        Raises:
+            ValueError: If EvaluatorConfig entity not found
+        """
+        eval_config = await self.session.get(EvaluatorConfigEntity, config_id)
+        if not eval_config:
+            raise ValueError(f"评估器配置 '{config_id}' 不存在。")
+
+        # Delete from database (staged, not committed)
+        await self.session.delete(eval_config)
+
+        # Flush to ensure deletion is staged
+        await self.session.flush()
+
+        logger.info(
+            f"Deleted EvaluatorConfig entity: {config_id} (name: {eval_config.name})"
+        )

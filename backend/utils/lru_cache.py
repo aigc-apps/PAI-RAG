@@ -13,10 +13,10 @@ DEFAULT_EXPIRATION_TIME = 60 * 60 * 24
 class LruCache:
     def __init__(
         self,
-        maxsize=DEFAULT_CACHE_CAPACITY,
+        max_size=DEFAULT_CACHE_CAPACITY,
         on_delete_func: Optional[Callable[[Any], Any]] = None,
     ):
-        self.maxsize = maxsize
+        self.max_size = max_size
         self.cache = OrderedDict()
         self.lock = threading.Lock()
         self.on_delete_func = on_delete_func
@@ -60,7 +60,7 @@ class LruCache:
             if key in self.cache:
                 self.cache.move_to_end(key)
             else:
-                if len(self.cache) >= self.maxsize:
+                if len(self.cache) >= self.max_size:
                     _, evicted_entry = self.cache.popitem(last=False)
                     evicted_value = evicted_entry[0]
             self.cache[key] = (value, time.time() + ttl)
@@ -76,7 +76,7 @@ class LruCache:
                 self.cache.move_to_end(key)
                 return False
             else:
-                if len(self.cache) >= self.maxsize:
+                if len(self.cache) >= self.max_size:
                     _, evicted_entry = self.cache.popitem(last=False)
                     evicted_value = evicted_entry[0]
                 self.cache[key] = (value, time.time() + ttl)

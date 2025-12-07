@@ -1,0 +1,251 @@
+"""LLM Service layer for database operations."""
+from typing import Optional, List
+from sqlmodel import select, func
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.exc import IntegrityError
+from db.models.llm import LlmModelCreate, LlmModelEntity
+from common.encrypt_utils import encrypt_key
+from common.chat.response_model import PagedResult
+from loguru import logger
+
+
+# URL to group name mapping
+llm_url_group_map = {
+    "https://dashscope.aliyuncs.com/compatible-mode/v1": "通义千问",
+    "https://api.openai.com/v1": "OpenAI",
+}
+
+
+class LlmService:
+    """Service layer for LLM entity CRUD operations using dependency injection."""
+
+    def __init__(self, session: AsyncSession):
+        """
+        Initialize LlmService with a database session.
+
+        Args:
+            session: Database session (injected dependency)
+        """
+        self.session = session
+
+    async def get_llm(self, llm_id: str) -> Optional[LlmModelEntity]:
+        """
+        Get a single LLM entity by ID.
+
+        Args:
+            llm_id: LLM entity ID
+
+        Returns:
+            LlmModelEntity if found, None otherwise
+        """
+        return await self.session.get(LlmModelEntity, llm_id)
+
+    async def get_multimodal_llm(self) -> Optional[LlmModelEntity]:
+        """
+        Get the multimodal LLM entity.
+        """
+        statement = select(LlmModelEntity).where(LlmModelEntity.vision_support is True)
+        result = (await self.session.exec(statement)).first()
+        return result
+
+
+    async def get_llm_by_model_id(self, model_id: str) -> Optional[LlmModelEntity]:
+        """
+        Get a single LLM entity by model_id.
+
+        Args:
+            model_id: LLM model_id
+
+        Returns:
+            LlmModelEntity if found, None otherwise
+        """
+        statement = select(LlmModelEntity).where(
+            LlmModelEntity.model_id == model_id
+        )
+        result = await self.session.exec(statement)
+        return result.first()
+
+    async def list_llms(
+        self,
+        page: int = 1,
+        size: int = 10,
+        vision_support: Optional[bool] = None,
+    ) -> PagedResult[List[LlmModelEntity]]:
+        """
+        List LLM entities with pagination and optional filtering.
+
+        Args:
+            page: Page number (1-indexed)
+            size: Page size
+            vision_support: Optional filter for vision support
+
+        Returns:
+            PagedResult containing list of LlmModelEntity and pagination metadata
+        """
+        # Build base query
+        base_query = select(LlmModelEntity)
+
+        # Add vision_support filter if provided
+        if vision_support is not None:
+            base_query = base_query.where(
+                LlmModelEntity.vision_support == vision_support
+            )
+
+        # Get total count
+        count_query = select(func.count()).select_from(base_query)
+        total_result = await self.session.exec(count_query)
+        total = total_result.one_or_none() or 0
+
+        # Get paginated results
+        offset = (page - 1) * size
+        paginated_query = base_query.offset(offset).limit(size)
+        results = await self.session.exec(paginated_query)
+        llms = list(results.all())
+
+        # Calculate pages
+        pages = (total + size - 1) // size if total > 0 else 0
+
+        return PagedResult(
+            items=llms,
+            total=total,
+            pages=pages,
+            page=page,
+            size=size,
+        )
+
+    async def create_llm(self, llm_data: LlmModelCreate) -> LlmModelEntity:
+        """
+        Create a new LLM entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            llm_data: LLM creation data
+
+        Returns:
+            Created LlmModelEntity (not yet committed)
+
+        Raises:
+            ValueError: If model_id already exists (IntegrityError converted)
+        """
+        # Encrypt API key
+        encrypted_api_key = encrypt_key(llm_data.api_key) if llm_data.api_key else None
+
+        # Create entity
+        llm = LlmModelEntity.model_validate(
+            llm_data, update={"encrypted_api_key": encrypted_api_key}
+        )
+
+        # Set source based on base_url
+        llm.source = llm_url_group_map.get(
+            llm.base_url, "OpenAI-Compatible"
+        )
+
+        self.session.add(llm)
+
+        try:
+            # Flush to get the ID, but don't commit
+            await self.session.flush()
+            await self.session.refresh(llm)
+
+            logger.info(f"Created LLM entity: {llm.id} (model_id: {llm.model_id})")
+            return llm
+
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating LLM: {e.orig}")
+
+            if "UniqueViolationError" in str(e.orig):
+                raise ValueError(
+                    f"模型ID '{llm_data.model_id}' 已经存在。"
+                ) from e
+            else:
+                raise ValueError(f"模型创建失败: {e}") from e
+
+    async def update_llm(
+        self, llm_id: str, update_data: LlmModelCreate
+    ) -> LlmModelEntity:
+        """
+        Update an existing LLM entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            llm_id: LLM entity ID
+            update_data: Updated LLM data
+
+        Returns:
+            Updated LlmModelEntity (not yet committed)
+
+        Raises:
+            ValueError: If LLM entity not found
+        """
+        llm = await self.session.get(LlmModelEntity, llm_id)
+        if not llm:
+            raise ValueError(f"LLM '{llm_id}' 不存在。")
+
+        logger.info(f"Updating LLM {llm_id} with data: {update_data}")
+
+        # Update fields
+        if update_data.model_id is not None:
+            llm.model_id = update_data.model_id
+        if update_data.base_url is not None:
+            llm.base_url = update_data.base_url
+            # Update source when base_url changes
+            llm.source = llm_url_group_map.get(
+                llm.base_url, "OpenAI-Compatible"
+            )
+        if update_data.context_window is not None:
+            llm.context_window = update_data.context_window
+        if update_data.model is not None:
+            llm.model = update_data.model
+        if update_data.temperature is not None:
+            llm.temperature = update_data.temperature
+        if update_data.api_key is not None:
+            llm.encrypted_api_key = encrypt_key(update_data.api_key)
+        if update_data.enabled is not None:
+            llm.enabled = update_data.enabled
+        if update_data.vision_support is not None:
+            llm.vision_support = update_data.vision_support
+        if update_data.enable_thinking is not None:
+            llm.enable_thinking = update_data.enable_thinking
+
+        self.session.add(llm)
+
+        # Flush to ensure changes are staged
+        await self.session.flush()
+        await self.session.refresh(llm)
+
+        logger.info(f"Updated LLM entity: {llm.id} (model_id: {llm.model_id})")
+        return llm
+
+    async def delete_llm(self, llm_id: str) -> None:
+        """
+        Delete an LLM entity.
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            llm_id: LLM entity ID
+
+        Raises:
+            ValueError: If LLM entity not found
+        """
+        llm = await self.session.get(LlmModelEntity, llm_id)
+        if not llm:
+            raise ValueError(f"LLM '{llm_id}' 不存在。")
+
+        # Delete from database (staged, not committed)
+        await self.session.delete(llm)
+
+        # Flush to ensure deletion is staged
+        await self.session.flush()
+
+        logger.info(f"Deleted LLM entity: {llm_id} (model_id: {llm.model_id})")
+
+    async def get_all_llms(self) -> List[LlmModelEntity]:
+        """
+        Get all LLM entities without pagination.
+
+        Returns:
+            List of all LlmModelEntity
+        """
+        statement = select(LlmModelEntity)
+        results = await self.session.exec(statement)
+        return list(results.all())

@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from api.response_model import ResponseModel, error_response, to_dict
-from db.db_context import get_session
-from db.models.knowledgebase.knowledgebase import KbEntity
+from common.chat.response_model import ResponseModel, to_dict
+from api.api_exception import ApiException
+from db.db_context import get_db_session
 from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
 from sqlmodel.ext.asyncio.session import AsyncSession
-from tools.knowledgebase.knowledgebase_tool import kb_tool
+from service.injection import get_rag_service
+from service.knowledgebase.rag_service import RagService
+from typing import List
+from common.tool.search_result import SearchResult
+import traceback
 from loguru import logger
 
 
@@ -15,15 +19,12 @@ retrieval_router = APIRouter()
     "", response_model=ResponseModel[NewRetrievalResponse]
 )
 async def retrieval(
-    retrieval_request: RetrievalRequest, session: AsyncSession = Depends(get_session)
+    retrieval_request: RetrievalRequest,
+    session: AsyncSession = Depends(get_db_session),
+    rag_service: RagService = Depends(get_rag_service),
 ):
-    knowledgebase = await session.get(KbEntity, retrieval_request.knowledge_id)
-    if knowledgebase is None:
-        return error_response(
-            code=404, message=f"找不到知识库{retrieval_request.knowledge_id}"
-        )
     try:
-        node_results = await kb_tool.aquery(
+        search_results: List[SearchResult] = await rag_service.aquery(
             query=retrieval_request.query,
             user_id=retrieval_request.user_id,
             knowledge_id=retrieval_request.knowledge_id,
@@ -31,19 +32,20 @@ async def retrieval(
             metadata_condition=retrieval_request.metadata_condition,
         )
         logger.info(
-            f"Retrieved {len(node_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledge_id}."
+            f"Retrieved {len(search_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledge_id}."
         )
         records = []
-        for score_node in node_results:
+        for node in search_results:
             records.append(DocRecord(
-                content=score_node.node.get_content(),
-                score=score_node.score,
-                title=score_node.node.metadata.get("file_name", "null"),
-                metadata=score_node.node.metadata,
+                content=node.get("content", ""),
+                score=node.get("score", 0),
+                title=node.get("title", ""),
+                metadata=node.get("metadata", {}),
             ))
         return JSONResponse(status_code=200, content={"records": to_dict(records)})
+    except ValueError as e:
+        logger.error(f"Failed to retrieve: {traceback.format_exc()}")
+        raise ApiException(code=400, message=f"Failed to retrieve: {e}")
     except Exception as e:
-        logger.error(f"Failed to retrieve: {e}")
-        return error_response(
-            code=500, message=f"Failed to retrieve: {e}"
-        )
+        logger.error(f"Failed to retrieve: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"Failed to retrieve: {e}")

@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, Plus } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Trash2Icon } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Breadcrumb,
@@ -216,6 +216,45 @@ export default function KnowledgeBaseFileChunksPage(
     setIsEditOpen(true);
   };
 
+  const handleDeleteClick = async (chunk: KbFileChunk) => {
+    if (!confirm('确定要删除这个切片吗？此操作不可恢复。')) {
+      return;
+    }
+
+    try {
+      const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
+      const response = await fetch(url, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '删除切片失败');
+      }
+
+      // 从本地状态中移除
+      setKbFileChunks((prev) => prev.filter((c) => c.id !== chunk.id));
+
+      // 如果当前页没有数据了，返回上一页
+      if (kbfilechunks.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        // 刷新切片列表
+        const res = await fetch(
+          `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
+        );
+        if (res.ok) {
+          const json_data = await res.json();
+          setKbFileChunks(json_data.data.items || []);
+          setTotalPages(json_data.data.pages);
+        }
+      }
+    } catch (err: any) {
+      console.error('删除切片失败:', err);
+      alert(err.message || '删除切片失败');
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!selectedChunk) return;
     selectedChunk.text = editText;
@@ -369,10 +408,10 @@ export default function KnowledgeBaseFileChunksPage(
               <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
             </div>
           ) : (
-            <div className="gap-3 px-3 py-0 w-full">
-              <div className="grid grid-cols-4 items-center gap-4">
+            <div className="gap-1 px-3 py-0 w-full">
+              <div className="grid grid-cols-4 items-center gap-2">
                 {kbfilechunks.map((chunk) => (
-                  <Card key={chunk.id} className="h-70 px-2 pt-3 pb-1 gap-2">
+                  <Card key={chunk.id} className="h-70 px-0 pt-3 pb-1 gap-2 group relative">
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
@@ -406,7 +445,7 @@ export default function KnowledgeBaseFileChunksPage(
                       </div>
                     </CardContent>
                     <CardFooter className="shrink-0 gap-2">
-                      {chunk.chunk_metadata.images_info.map((meta, index) => (
+                      {chunk.chunk_metadata.images_info?.map((meta, index) => (
                         <PhotoProvider
                           key={index}
                           maskOpacity={0.8}
@@ -424,6 +463,15 @@ export default function KnowledgeBaseFileChunksPage(
                         </PhotoProvider>
                       ))}
                     </CardFooter>
+                    {/* 悬浮显示的删除按钮 */}
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute bottom-2 right-2 w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      onClick={() => handleDeleteClick(chunk)}
+                    >
+                      <Trash2Icon className="w-4 h-4" />
+                    </Button>
                   </Card>
                 ))}
               </div>

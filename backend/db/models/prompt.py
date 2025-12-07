@@ -1,6 +1,6 @@
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON
-from chat.prompts import (
+from common.chat.prompts import (
     SYNTHESIZE_PROMPT,
     SYSTEM_PROMPT,
     SEARCH_WEB_TOOL_PROMPT,

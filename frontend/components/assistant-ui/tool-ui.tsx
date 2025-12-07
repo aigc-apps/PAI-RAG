@@ -472,7 +472,7 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <PaperclipIcon className="size-4" /> 正在进行文件读取: {args.file_name}
+            <PaperclipIcon className="size-4" /> 正在进行文件读取: {args.file_id}
           </Button>
         </div>
       );

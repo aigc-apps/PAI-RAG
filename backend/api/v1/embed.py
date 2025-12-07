@@ -1,16 +1,21 @@
 import traceback
 from typing import List
-from api.response_model import error_response
+from api.api_exception import ApiException
 from common.knowledgebase.constants import DEFAULT_EMBEDDING_MODEL
-from config.providers.embedding_provider import embedding_provider
 from fastapi import APIRouter
 from pydantic import BaseModel
-from loguru import logger
 from openai.types.embedding import Embedding
 from openai.types.create_embedding_response import (
     CreateEmbeddingResponse,
     Usage as EmbeddingUsage,
 )
+from service.factory.model_factory import create_embedding_model
+from service.model.embedding_service import EmbeddingService
+from service.injection import get_embedding_service
+from db.db_context import get_db_session
+from fastapi import Depends
+from sqlmodel.ext.asyncio.session import AsyncSession
+from loguru import logger
 
 embedding_router = APIRouter()
 
@@ -20,13 +25,14 @@ class EmbeddingInput(BaseModel):
     model: str = DEFAULT_EMBEDDING_MODEL
 
 
-
 @embedding_router.post("")
 async def aembed(
     embedding_input: EmbeddingInput,
+    session: AsyncSession = Depends(get_db_session),
+    embedding_service: EmbeddingService = Depends(get_embedding_service),
 ) -> CreateEmbeddingResponse:
     if embedding_input.input is None:
-        return error_response(code=400, message=f"Embedding的Input输入'{embedding_input.input}'不可以为空。")
+        raise ApiException(code=400, message=f"Embedding的Input输入'{embedding_input.input}'不可以为空。")
 
     text_inputs = []
     if isinstance(embedding_input.input, str):
@@ -37,9 +43,9 @@ async def aembed(
             item is not None and isinstance(item, str)
             for item in text_inputs
         ):
-            return error_response(code=400, message="Embedding的Input列表元素必须都是非null的字符串。")
+            raise ApiException(code=400, message="Embedding的Input列表元素必须都是非null的字符串。")
     else:
-        return error_response(code=400, message="Embedding的Input输入必须是字符串或者字符串数组。")
+        raise ApiException(code=400, message="Embedding的Input输入必须是字符串或者字符串数组。")
 
 
     logger.info(f"Start embedding: {text_inputs}.")
@@ -47,7 +53,11 @@ async def aembed(
         embedding_input.model = DEFAULT_EMBEDDING_MODEL
 
     try:
-        embed_model = embedding_provider.get_embedding_model(embedding_input.model)
+        embedding_entity = await embedding_service.get_embedding_by_model_id(embedding_input.model)
+        if not embedding_entity:
+            raise ApiException(code=400, message=f"Embedding model {embedding_input.model} not found.")
+
+        embed_model = create_embedding_model(embedding_entity)
         text_embeddings = await embed_model.aget_text_embedding_batch(text_inputs)
         embedding_data_list = [
             Embedding(
@@ -69,7 +79,7 @@ async def aembed(
         )
     except ValueError as ve:
         logger.warning(f"Embedding failed due to value error: {traceback.format_exc()}")
-        return error_response(code=400, message=f"Embedding失败: {ve}")
+        raise ApiException(code=400, message=f"Embedding失败: {ve}")
     except Exception as ex:
         logger.error(f"Embedding failed: {traceback.format_exc()}")
-        return error_response(code=500, message=f"Embedding失败: {ex}")
+        raise ApiException(code=500, message=f"Embedding失败: {ex}")

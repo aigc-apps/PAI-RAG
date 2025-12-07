@@ -1,20 +1,17 @@
 import traceback
-from typing import List
-from config.providers.vectordb_provider import get_vector_db_connection_from_db
+from typing import List, Optional
 from db.models.knowledgebase.file_task import KbFileTaskEntity
-from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from tqdm import tqdm
 from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.knowledgebase import KbEntity, ChunkConfig
 from common.knowledgebase.types import (
     ChunkStatus,
     FileStatus,
-    VectorIndexRetrievalType,
 )
-import re
 
-from rag.chunk_helper import (
+from rag.offline_db_helper import (
     get_embedding_from_db,
+    get_openailike_llm_from_db,
     get_file_task_async,
     read_file_from_db,
     save_chunks_to_db_async,
@@ -22,73 +19,27 @@ from rag.chunk_helper import (
     update_file_status_async,
     update_file_content_async,
     should_cancel_file_task,
+    get_knowledgebase_from_db,
+    create_vector_store_from_db,
 )
-from tools.llm_utils import get_llm_from_db
 from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
-from rag.vector_store.vector_connection import (
-    cleanup_vector_store_async,
-    create_vector_store,
-)
+from rag.vector_store.vector_connection import cleanup_vector_store_async
 from llama_index.core.embeddings import BaseEmbedding
-from config.providers.knowledgebase_provider import fetch_knowledgebases_by_id
 from pairag.file.store.file_store_helper import file_store
 from loguru import logger
-
-MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
-MAX_TRUNCATED_CHUNK_LEN = 8000
-
-def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
-    if retrieval_type == VectorIndexRetrievalType.fulltext:
-        return VectorStoreQueryMode.TEXT_SEARCH
-    elif retrieval_type == VectorIndexRetrievalType.hybrid:
-        return VectorStoreQueryMode.HYBRID
-    else:
-        return VectorStoreQueryMode.DEFAULT
-
-
-
-def sanitize_text(text: str) -> str:
-    if not isinstance(text, str):
-        return ""
-
-    # 1. 移除 NUL 和其他控制字符 (保留 \t \n \r)
-    # 允许 0x09 (tab), 0x0A (LF), 0x0D (CR)
-    text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', ' ', text)
-
-    # 2. 移除 Unicode 替换字符（解码失败标志）
-    text = text.replace('\uFFFD', ' ')
-
-    # 3. （可选）移除零宽字符
-    text = re.sub(r'[\u200B-\u200D\uFEFF]', ' ', text)
-
-    # 4. （可选）规范化换行：\r\n 或 \r → \n
-    text = re.sub(r'\r\n?', '\n', text)
-
-    return text
+from rag.parse_utils import sanitize_text, get_node_texts_for_embedding
 
 
 class KbFileClient:
-    def get_node_texts_for_embedding(self, nodes) -> list[str]:
-        texts = []
-        for node in nodes:
-            base_text = f"filename: {node.metadata['file_name']}"
-            chapter_name = node.metadata.get('chapter_name', '').strip()
-            if chapter_name:
-                base_text += f"\n\nchapter_name: {chapter_name}"
 
-            base_text += f"\n\n{node.text}"
-
-            texts.append(base_text[:3000])
-        return texts
-
-    async def create_file_parser(self, knowledgebase: KbEntity):
+    async def create_file_parser(self, knowledgebase: KbEntity, image_caption_tool: Optional[ImageCaptionTool] = None):
         chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
 
         image_caption_tool = None
         if chunk_config.image_caption_model:
-            multimodal_llm = await get_llm_from_db(model_id=chunk_config.image_caption_model)
+            multimodal_llm = await get_openailike_llm_from_db(model_id=chunk_config.image_caption_model)
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
 
         file_parser = FileParser(
@@ -106,25 +57,14 @@ class KbFileClient:
         if not node_ids:
             return
 
-        knowledgebase: KbEntity = await fetch_knowledgebases_by_id(
+        knowledgebase: KbEntity = await get_knowledgebase_from_db(
             kb_id=kb_id
         )
         embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
-
-        vector_connection = await get_vector_db_connection_from_db()
         dimension = len(embed_model.get_text_embedding("0"))
-
-        vector_store = create_vector_store(
-            knowledgebase.id, dimension, vector_db_connection=vector_connection,
-        )
-        try:
-            await vector_store.adelete_nodes(node_ids=node_ids)
-            logger.info(
-                f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully."
-            )
-        finally:
-            # 确保无论成功还是失败都清理连接，避免连接泄漏
-            await cleanup_vector_store_async(vector_store)
+        vector_store = await create_vector_store_from_db(kb_id=kb_id, dimension=dimension)
+        await vector_store.adelete_nodes(node_ids=node_ids)
+        logger.info(f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully.")
 
 
     # process file item, status -> processing
@@ -176,7 +116,7 @@ class KbFileClient:
                 )
 
                 kb_id = file_item.kb_id
-                knowledgebase: KbEntity = await fetch_knowledgebases_by_id(
+                knowledgebase: KbEntity = await get_knowledgebase_from_db(
                     kb_id=kb_id
                 )
                 logger.info(
@@ -243,14 +183,8 @@ class KbFileClient:
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
             embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model)
 
-
-            vector_connection = await get_vector_db_connection_from_db()
             dimension = len(embed_model.get_text_embedding("0"))
-
-            vector_store = create_vector_store(
-                knowledgebase.id, dimension, vector_db_connection=vector_connection,
-            )
-
+            vector_store = await create_vector_store_from_db(kb_id=kb_id, dimension=dimension)
             try:
                 if old_chunk_ids:
                     try:
@@ -262,7 +196,7 @@ class KbFileClient:
 
                 for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
                     batch_nodes = nodes[i:i + 1000]
-                    texts_to_embed = self.get_node_texts_for_embedding(batch_nodes)
+                    texts_to_embed = get_node_texts_for_embedding(batch_nodes)
                     embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
                     for j in range(len(batch_nodes)):
                         batch_nodes[j].embedding = embeddings[j]
