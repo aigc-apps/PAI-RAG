@@ -678,10 +678,11 @@ class RagService:
         relations = await file_metadata_relation_service.get_file_metadata_relations_by_metadata_id(
             kb_id, metadata_id
         )
+        modified_file_count = 0
+
         if relations:
             file_ids = [relation.file_id for relation in relations]
             file_service = await self._get_file_service()
-            modified_file_count = 0
             for file_id in file_ids:
                 file_entity = await file_service.get_file(kb_id, file_id)
                 if file_entity and file_entity.kb_id == kb_id:
