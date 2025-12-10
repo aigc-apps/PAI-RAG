@@ -103,8 +103,6 @@ def upgrade() -> None:
         op.drop_constraint(op.f('unique_kb_file_task'), 'pai_knowledgebase_file_task', type_='unique')
         op.create_unique_constraint('unique_kb_file_task', 'pai_knowledgebase_file_task', ['kb_id', 'file_id', 'file_part', 'tenant_id'])
     
-        op.drop_constraint(op.f('unique_kb_metadata'), 'pai_knowledgebase_metadata', type_='unique')
-        op.create_unique_constraint('unique_kb_metadata', 'pai_knowledgebase_metadata', ['name', 'kb_id', 'tenant_id'])
         op.create_unique_constraint('unique_llm_model', 'pai_llm_model', ['tenant_id', 'model_id'])
 
         op.drop_constraint(op.f('unique_role_permission'), 'pai_permissions', type_='unique')
