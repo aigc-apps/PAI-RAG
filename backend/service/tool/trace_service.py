@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from loguru import logger
 
 from db.models.trace import TraceModel, TraceModelEntity
+from extensions.trace.base import init_instrument, TraceConfig
 
 
 class TraceService:
@@ -23,6 +24,7 @@ class TraceService:
 
     async def get_trace_config(
         self,
+        tenant_id: str,
     ) -> Optional[TraceModelEntity]:
         """
         Get the trace config entity (usually only one with id='default_trace_id').
@@ -30,12 +32,12 @@ class TraceService:
         Returns:
             TraceModelEntity if found, None otherwise
         """
-        statement = select(TraceModelEntity)
+        statement = select(TraceModelEntity).where(TraceModelEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         return result.first()
 
     async def create_or_update_trace_config(
-        self, config_data: TraceModel
+        self, new_trace_config: TraceModel, tenant_id: str
     ) -> TraceModelEntity:
         """
         Create or update a Trace config entity.
@@ -48,27 +50,27 @@ class TraceService:
             Created or updated TraceModelEntity (not yet committed)
         """
         # Get existing config or create new one
-        statement = select(TraceModelEntity)
+        statement = select(TraceModelEntity).where(TraceModelEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         config = result.first()
 
         if config is None:
             # Create new config
-            config = TraceModelEntity.model_validate(config_data)
+            config = TraceModelEntity.model_validate(new_trace_config, update={"tenant_id": tenant_id})
             self.session.add(config)
             logger.info("Creating new Trace config")
         else:
             # Update existing config
-            if config_data.endpoint is not None:
-                config.endpoint = config_data.endpoint
-            if config_data.enabled is not None:
-                config.enabled = config_data.enabled
-            if config_data.token is not None:
-                config.token = config_data.token
-            if config_data.service_name is not None:
-                config.service_name = config_data.service_name
-            if config_data.user_args is not None:
-                config.user_args = config_data.user_args
+            if new_trace_config.endpoint is not None:
+                config.endpoint = new_trace_config.endpoint
+            if new_trace_config.enabled is not None:
+                config.enabled = new_trace_config.enabled
+            if new_trace_config.token is not None:
+                config.token = new_trace_config.token
+            if new_trace_config.service_name is not None:
+                config.service_name = new_trace_config.service_name
+            if new_trace_config.user_args is not None:
+                config.user_args = new_trace_config.user_args
 
             self.session.add(config)
             logger.info(f"Updating Trace config: {config.id}")
@@ -79,6 +81,13 @@ class TraceService:
             await self.session.refresh(config)
 
             logger.info(f"Created/Updated Trace config: {config.id}")
+            init_instrument(TraceConfig(
+                endpoint=config.endpoint,
+                token=config.token,
+                service_name=config.service_name,
+                user_args=config.user_args,
+                enabled=config.enabled,
+            ))
             return config
 
         except IntegrityError as e:

@@ -28,7 +28,7 @@ class LlmService:
         """
         self.session = session
 
-    async def get_llm(self, llm_id: str) -> Optional[LlmModelEntity]:
+    async def get_llm(self, llm_id: str, tenant_id: str) -> Optional[LlmModelEntity]:
         """
         Get a single LLM entity by ID.
 
@@ -38,18 +38,19 @@ class LlmService:
         Returns:
             LlmModelEntity if found, None otherwise
         """
-        return await self.session.get(LlmModelEntity, llm_id)
+        result = await self.session.exec(select(LlmModelEntity).where(LlmModelEntity.id == llm_id, LlmModelEntity.tenant_id == tenant_id))
+        return result.first()
 
-    async def get_multimodal_llm(self) -> Optional[LlmModelEntity]:
+    async def get_multimodal_llm(self, tenant_id: str) -> Optional[LlmModelEntity]:
         """
         Get the multimodal LLM entity.
         """
-        statement = select(LlmModelEntity).where(LlmModelEntity.vision_support is True)
+        statement = select(LlmModelEntity).where(LlmModelEntity.vision_support, LlmModelEntity.tenant_id == tenant_id)
         result = (await self.session.exec(statement)).first()
         return result
 
 
-    async def get_llm_by_model_id(self, model_id: str) -> Optional[LlmModelEntity]:
+    async def get_llm_by_model_id(self, model_id: str, tenant_id: str) -> Optional[LlmModelEntity]:
         """
         Get a single LLM entity by model_id.
 
@@ -60,13 +61,14 @@ class LlmService:
             LlmModelEntity if found, None otherwise
         """
         statement = select(LlmModelEntity).where(
-            LlmModelEntity.model_id == model_id
+            LlmModelEntity.model_id == model_id, LlmModelEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return result.first()
 
     async def list_llms(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         vision_support: Optional[bool] = None,
@@ -83,7 +85,7 @@ class LlmService:
             PagedResult containing list of LlmModelEntity and pagination metadata
         """
         # Build base query
-        base_query = select(LlmModelEntity)
+        base_query = select(LlmModelEntity).where(LlmModelEntity.tenant_id == tenant_id)
 
         # Add vision_support filter if provided
         if vision_support is not None:
@@ -113,7 +115,7 @@ class LlmService:
             size=size,
         )
 
-    async def create_llm(self, llm_data: LlmModelCreate) -> LlmModelEntity:
+    async def create_llm(self, llm_data: LlmModelCreate, tenant_id: str) -> LlmModelEntity:
         """
         Create a new LLM entity.
         Note: Caller is responsible for committing the session.
@@ -132,7 +134,7 @@ class LlmService:
 
         # Create entity
         llm = LlmModelEntity.model_validate(
-            llm_data, update={"encrypted_api_key": encrypted_api_key}
+            llm_data, update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}
         )
 
         # Set source based on base_url
@@ -161,7 +163,7 @@ class LlmService:
                 raise ValueError(f"模型创建失败: {e}") from e
 
     async def update_llm(
-        self, llm_id: str, update_data: LlmModelCreate
+        self, llm_id: str, update_data: LlmModelCreate, tenant_id: str
     ) -> LlmModelEntity:
         """
         Update an existing LLM entity.
@@ -177,7 +179,8 @@ class LlmService:
         Raises:
             ValueError: If LLM entity not found
         """
-        llm = await self.session.get(LlmModelEntity, llm_id)
+        result = await self.session.exec(select(LlmModelEntity).where(LlmModelEntity.id == llm_id, LlmModelEntity.tenant_id == tenant_id))
+        llm = result.first()
         if not llm:
             raise ValueError(f"LLM '{llm_id}' 不存在。")
 
@@ -216,7 +219,7 @@ class LlmService:
         logger.info(f"Updated LLM entity: {llm.id} (model_id: {llm.model_id})")
         return llm
 
-    async def delete_llm(self, llm_id: str) -> None:
+    async def delete_llm(self, llm_id: str, tenant_id: str) -> None:
         """
         Delete an LLM entity.
         Note: Caller is responsible for committing the session.
@@ -227,7 +230,8 @@ class LlmService:
         Raises:
             ValueError: If LLM entity not found
         """
-        llm = await self.session.get(LlmModelEntity, llm_id)
+        result = await self.session.exec(select(LlmModelEntity).where(LlmModelEntity.id == llm_id, LlmModelEntity.tenant_id == tenant_id))
+        llm = result.first()
         if not llm:
             raise ValueError(f"LLM '{llm_id}' 不存在。")
 
@@ -239,13 +243,13 @@ class LlmService:
 
         logger.info(f"Deleted LLM entity: {llm_id} (model_id: {llm.model_id})")
 
-    async def get_all_llms(self) -> List[LlmModelEntity]:
+    async def get_all_llms(self, tenant_id: str) -> List[LlmModelEntity]:
         """
         Get all LLM entities without pagination.
 
         Returns:
             List of all LlmModelEntity
         """
-        statement = select(LlmModelEntity)
+        statement = select(LlmModelEntity).where(LlmModelEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())

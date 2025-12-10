@@ -34,7 +34,7 @@ class EvaluationService:
 
     # ========== Dataset Operations ==========
 
-    async def get_dataset(self, dataset_id: str) -> Optional[DatasetEntity]:
+    async def get_dataset(self, dataset_id: str, tenant_id: str) -> Optional[DatasetEntity]:
         """
         Get a single Dataset entity by ID.
 
@@ -44,22 +44,25 @@ class EvaluationService:
         Returns:
             DatasetEntity if found, None otherwise
         """
-        return await self.session.get(DatasetEntity, dataset_id)
+        datasets = await self.session.exec(select(DatasetEntity).where(DatasetEntity.id == dataset_id, DatasetEntity.tenant_id == tenant_id))
+        return datasets.first()
 
     async def list_datasets(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
-    ) -> PagedResult[List[Dict]]:
+    ) -> PagedResult[List[DatasetEntity]]:
         """
         List Dataset entities with pagination and statistics.
 
         Args:
             page: Page number (1-indexed)
             size: Page size
+            tenant_id: Tenant ID
 
         Returns:
-            PagedResult containing list of DatasetEntity with dataset_count and experiments_count
+            PagedResult containing list of DatasetEntity
         """
         # Subquery 1: count samples per dataset_id
         dataset_count_subq = (
@@ -106,7 +109,7 @@ class EvaluationService:
 
         # Get total count
         total_results = await self.session.exec(
-            select(func.count()).select_from(DatasetEntity)
+            select(func.count()).select_from(DatasetEntity).where(DatasetEntity.tenant_id == tenant_id)
         )
         total = total_results.one_or_none() or 0
 
@@ -133,7 +136,7 @@ class EvaluationService:
             size=size,
         )
 
-    async def create_dataset(self, dataset_data: DatasetCreate) -> DatasetEntity:
+    async def create_dataset(self, dataset_data: DatasetCreate, tenant_id: str) -> DatasetEntity:
         """
         Create a new Dataset entity.
         Note: Caller is responsible for committing the session.
@@ -147,7 +150,7 @@ class EvaluationService:
         Raises:
             ValueError: If name already exists (IntegrityError converted)
         """
-        dataset = DatasetEntity.model_validate(dataset_data)
+        dataset = DatasetEntity.model_validate(dataset_data, update={"tenant_id": tenant_id})
         self.session.add(dataset)
 
         try:
@@ -169,7 +172,7 @@ class EvaluationService:
                 raise ValueError(f"数据集创建失败: {e}") from e
 
     async def update_dataset(
-        self, dataset_id: str, update_data: DatasetCreate
+        self, dataset_id: str, update_data: DatasetCreate, tenant_id: str
     ) -> DatasetEntity:
         """
         Update an existing Dataset entity.
@@ -185,7 +188,8 @@ class EvaluationService:
         Raises:
             ValueError: If Dataset entity not found
         """
-        dataset = await self.session.get(DatasetEntity, dataset_id)
+        result = await self.session.exec(select(DatasetEntity).where(DatasetEntity.id == dataset_id, DatasetEntity.tenant_id == tenant_id))
+        dataset = result.first()
         if not dataset:
             raise ValueError(f"数据集 '{dataset_id}' 不存在。")
 
@@ -208,7 +212,7 @@ class EvaluationService:
         logger.info(f"Updated Dataset entity: {dataset.id} (name: {dataset.name})")
         return dataset
 
-    async def delete_dataset(self, dataset_id: str) -> None:
+    async def delete_dataset(self, dataset_id: str, tenant_id: str) -> None:
         """
         Delete a Dataset entity.
         Note: This will cascade delete related samples, experiments, etc.
@@ -220,7 +224,8 @@ class EvaluationService:
         Raises:
             ValueError: If Dataset entity not found
         """
-        dataset = await self.session.get(DatasetEntity, dataset_id)
+        result = await self.session.exec(select(DatasetEntity).where(DatasetEntity.id == dataset_id, DatasetEntity.tenant_id == tenant_id))
+        dataset = result.first()
         if not dataset:
             raise ValueError(f"数据集 '{dataset_id}' 不存在。")
 
@@ -236,7 +241,7 @@ class EvaluationService:
     # ========== DatasetSample Operations ==========
 
     async def get_dataset_sample(
-        self, sample_id: str
+        self, sample_id: str, tenant_id: str
     ) -> Optional[DatasetSampleEntity]:
         """
         Get a single DatasetSample entity by ID.
@@ -247,11 +252,13 @@ class EvaluationService:
         Returns:
             DatasetSampleEntity if found, None otherwise
         """
-        return await self.session.get(DatasetSampleEntity, sample_id)
+        result = await self.session.exec(select(DatasetSampleEntity).where(DatasetSampleEntity.id == sample_id, DatasetSampleEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_dataset_samples(
         self,
         dataset_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
     ) -> PagedResult[List[DatasetSampleEntity]]:
@@ -260,6 +267,7 @@ class EvaluationService:
 
         Args:
             dataset_id: Dataset ID
+            tenant_id: Tenant ID
             page: Page number (1-indexed)
             size: Page size
 
@@ -268,7 +276,8 @@ class EvaluationService:
         """
         # Build base query
         base_query = select(DatasetSampleEntity).where(
-            DatasetSampleEntity.dataset_id == dataset_id
+            DatasetSampleEntity.dataset_id == dataset_id,
+            DatasetSampleEntity.tenant_id == tenant_id
         )
 
         # Get total count
@@ -301,6 +310,7 @@ class EvaluationService:
         self,
         dataset_id: str,
         input: str,
+        tenant_id: str,
         expected_output: Optional[str] = None,
         eval_metadata: Optional[dict] = None,
     ) -> DatasetSampleEntity:
@@ -341,6 +351,7 @@ class EvaluationService:
     async def update_dataset_sample(
         self,
         sample_id: str,
+        tenant_id: str,
         input: Optional[str] = None,
         expected_output: Optional[str] = None,
         eval_metadata: Optional[dict] = None,
@@ -361,7 +372,8 @@ class EvaluationService:
         Raises:
             ValueError: If DatasetSample entity not found
         """
-        sample = await self.session.get(DatasetSampleEntity, sample_id)
+        result = await self.session.exec(select(DatasetSampleEntity).where(DatasetSampleEntity.id == sample_id, DatasetSampleEntity.tenant_id == tenant_id))
+        sample = result.first()
         if not sample:
             raise ValueError(f"数据样本 '{sample_id}' 不存在。")
 
@@ -384,7 +396,7 @@ class EvaluationService:
         logger.info(f"Updated DatasetSample entity: {sample.id}")
         return sample
 
-    async def delete_dataset_sample(self, sample_id: str) -> None:
+    async def delete_dataset_sample(self, sample_id: str, tenant_id: str) -> None:
         """
         Delete a DatasetSample entity.
         Note: Caller is responsible for committing the session.
@@ -395,7 +407,8 @@ class EvaluationService:
         Raises:
             ValueError: If DatasetSample entity not found
         """
-        sample = await self.session.get(DatasetSampleEntity, sample_id)
+        result = await self.session.exec(select(DatasetSampleEntity).where(DatasetSampleEntity.id == sample_id, DatasetSampleEntity.tenant_id == tenant_id))
+        sample = result.first()
         if not sample:
             raise ValueError(f"数据样本 '{sample_id}' 不存在。")
 
@@ -408,7 +421,7 @@ class EvaluationService:
         logger.info(f"Deleted DatasetSample entity: {sample_id}")
 
     async def get_dataset_samples(
-        self, dataset_id: str, sample_ids: List[str]
+        self, dataset_id: str, sample_ids: List[str], tenant_id: str
     ) -> List[DatasetSampleEntity]:
         """
         Get multiple DatasetSample entities by IDs.
@@ -426,6 +439,7 @@ class EvaluationService:
         statement = select(DatasetSampleEntity).where(
             DatasetSampleEntity.id.in_(sample_ids),
             DatasetSampleEntity.dataset_id == dataset_id,
+            DatasetSampleEntity.tenant_id == tenant_id
         )
         results = await self.session.exec(statement)
         return list(results.all())
@@ -434,6 +448,7 @@ class EvaluationService:
         self,
         dataset_id: str,
         samples: List[Dict],
+        tenant_id: str,
     ) -> List[DatasetSampleEntity]:
         """
         Batch create DatasetSample entities.
@@ -453,6 +468,7 @@ class EvaluationService:
                 input=sample_data["input"],
                 expected_output=sample_data.get("expected_output"),
                 eval_metadata=sample_data.get("metadata") or {},
+                tenant_id=tenant_id,
             )
             self.session.add(sample)
             dataset_samples.append(sample)
@@ -475,7 +491,7 @@ class EvaluationService:
     # ========== Experiment Operations ==========
 
     async def get_experiment(
-        self, experiment_id: str
+        self, experiment_id: str, tenant_id: str
     ) -> Optional[ExperimentEntity]:
         """
         Get a single Experiment entity by ID.
@@ -486,11 +502,13 @@ class EvaluationService:
         Returns:
             ExperimentEntity if found, None otherwise
         """
-        return await self.session.get(ExperimentEntity, experiment_id)
+        result = await self.session.exec(select(ExperimentEntity).where(ExperimentEntity.id == experiment_id, ExperimentEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_experiments(
         self,
         dataset_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
     ) -> PagedResult[List[ExperimentEntity]]:
@@ -507,7 +525,8 @@ class EvaluationService:
         """
         # Build base query
         base_query = select(ExperimentEntity).where(
-            ExperimentEntity.dataset_id == dataset_id
+            ExperimentEntity.dataset_id == dataset_id,
+            ExperimentEntity.tenant_id == tenant_id
         )
 
         # Get total count
@@ -537,7 +556,7 @@ class EvaluationService:
         )
 
     async def create_experiment(
-        self, dataset_id: str, experiment_data: ExperimentCreate
+        self, dataset_id: str, experiment_data: ExperimentCreate, tenant_id: str
     ) -> tuple[ExperimentEntity, List[str]]:
         """
         Create a new Experiment entity.
@@ -561,6 +580,7 @@ class EvaluationService:
             select(DatasetSampleEntity)
             .where(DatasetSampleEntity.id.in_(experiment_data.sample_ids))
             .where(DatasetSampleEntity.dataset_id == dataset_id)
+            .where(DatasetSampleEntity.tenant_id == tenant_id)
         )
         dataset_sample_entities = list(dataset_sample_results.all())
 
@@ -582,6 +602,7 @@ class EvaluationService:
             evaluator_config_id=experiment_data.evaluator_config_id,
             description=experiment_data.description or "Experiment created via API",
             status="pending",
+            tenant_id=tenant_id,
         )
 
         self.session.add(experiment_entity)
@@ -615,7 +636,7 @@ class EvaluationService:
             logger.error(f"IntegrityError when creating Experiment: {e.orig}")
             raise ValueError(f"实验创建失败: {e}") from e
 
-    async def delete_experiment(self, experiment_id: str) -> None:
+    async def delete_experiment(self, experiment_id: str, tenant_id: str) -> None:
         """
         Delete an Experiment entity.
         Note: This will cascade delete related experiment samples.
@@ -627,7 +648,8 @@ class EvaluationService:
         Raises:
             ValueError: If Experiment entity not found
         """
-        experiment = await self.session.get(ExperimentEntity, experiment_id)
+        result = await self.session.exec(select(ExperimentEntity).where(ExperimentEntity.id == experiment_id, ExperimentEntity.tenant_id == tenant_id))
+        experiment = result.first()
         if not experiment:
             raise ValueError(f"实验 '{experiment_id}' 不存在。")
 
@@ -643,6 +665,7 @@ class EvaluationService:
     async def get_experiment_samples(
         self,
         experiment_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
     ) -> PagedResult[List[ExperimentSampleEntity]]:
@@ -659,7 +682,8 @@ class EvaluationService:
         """
         # Build base query
         base_query = select(ExperimentSampleEntity).where(
-            ExperimentSampleEntity.experiment_id == experiment_id
+            ExperimentSampleEntity.experiment_id == experiment_id,
+            ExperimentSampleEntity.tenant_id == tenant_id
         )
 
         # Get total count
@@ -692,6 +716,7 @@ class EvaluationService:
         self,
         experiment_id: str,
         experiment_sample_id: str,
+        tenant_id: str,
         status: Optional[str] = None,
         output: Optional[str] = None,
         score: Optional[float] = None,
@@ -716,7 +741,7 @@ class EvaluationService:
             ValueError: If ExperimentSample entity not found
         """
         experiment_sample = await self.session.get(
-            ExperimentSampleEntity, experiment_sample_id
+            ExperimentSampleEntity, experiment_sample_id, ExperimentSampleEntity.tenant_id == tenant_id
         )
         if not experiment_sample:
             raise ValueError(
@@ -751,7 +776,7 @@ class EvaluationService:
 
     # ========== RunConfig Operations ==========
 
-    async def get_run_config(self, config_id: str) -> Optional[RunConfigEntity]:
+    async def get_run_config(self, config_id: str, tenant_id: str) -> Optional[RunConfigEntity]:
         """
         Get a single RunConfig entity by ID.
 
@@ -761,11 +786,13 @@ class EvaluationService:
         Returns:
             RunConfigEntity if found, None otherwise
         """
-        return await self.session.get(RunConfigEntity, config_id)
+        result = await self.session.exec(select(RunConfigEntity).where(RunConfigEntity.id == config_id, RunConfigEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_run_configs(
         self,
         dataset_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
     ) -> PagedResult[List[RunConfigEntity]]:
@@ -782,7 +809,8 @@ class EvaluationService:
         """
         # Build base query
         base_query = select(RunConfigEntity).where(
-            RunConfigEntity.dataset_id == dataset_id
+            RunConfigEntity.dataset_id == dataset_id,
+            RunConfigEntity.tenant_id == tenant_id
         )
 
         # Get total count
@@ -812,7 +840,7 @@ class EvaluationService:
         )
 
     async def create_run_config(
-        self, dataset_id: str, config_data: RunConfigCreate
+        self, dataset_id: str, config_data: RunConfigCreate, tenant_id: str
     ) -> RunConfigEntity:
         """
         Create a new RunConfig entity.
@@ -838,6 +866,7 @@ class EvaluationService:
             enable_output_guardrail=config_data.enable_output_guardrail,
             guardrail_hint=config_data.guardrail_hint,
             prompts=config_data.prompts,
+            tenant_id=tenant_id,
         )
 
         self.session.add(run_config_entity)
@@ -857,7 +886,7 @@ class EvaluationService:
             raise ValueError(f"运行配置创建失败: {e}") from e
 
     async def update_run_config(
-        self, config_id: str, update_data: RunConfigCreate
+        self, config_id: str, update_data: RunConfigCreate, tenant_id: str
     ) -> RunConfigEntity:
         """
         Update an existing RunConfig entity.
@@ -873,7 +902,8 @@ class EvaluationService:
         Raises:
             ValueError: If RunConfig entity not found
         """
-        run_config = await self.session.get(RunConfigEntity, config_id)
+        result = await self.session.exec(select(RunConfigEntity).where(RunConfigEntity.id == config_id, RunConfigEntity.tenant_id == tenant_id))
+        run_config = result.first()
         if not run_config:
             raise ValueError(f"运行配置 '{config_id}' 不存在。")
 
@@ -912,7 +942,7 @@ class EvaluationService:
         logger.info(f"Updated RunConfig entity: {run_config.id} (name: {run_config.name})")
         return run_config
 
-    async def delete_run_config(self, config_id: str) -> None:
+    async def delete_run_config(self, config_id: str, tenant_id: str) -> None:
         """
         Delete a RunConfig entity.
         Note: Caller is responsible for committing the session.
@@ -923,7 +953,8 @@ class EvaluationService:
         Raises:
             ValueError: If RunConfig entity not found
         """
-        run_config = await self.session.get(RunConfigEntity, config_id)
+        result = await self.session.exec(select(RunConfigEntity).where(RunConfigEntity.id == config_id, RunConfigEntity.tenant_id == tenant_id))
+        run_config = result.first()
         if not run_config:
             raise ValueError(f"运行配置 '{config_id}' 不存在。")
 
@@ -938,7 +969,7 @@ class EvaluationService:
     # ========== EvaluatorConfig Operations ==========
 
     async def get_evaluator_config(
-        self, config_id: str
+        self, config_id: str, tenant_id: str
     ) -> Optional[EvaluatorConfigEntity]:
         """
         Get a single EvaluatorConfig entity by ID.
@@ -949,11 +980,13 @@ class EvaluationService:
         Returns:
             EvaluatorConfigEntity if found, None otherwise
         """
-        return await self.session.get(EvaluatorConfigEntity, config_id)
+        result = await self.session.exec(select(EvaluatorConfigEntity).where(EvaluatorConfigEntity.id == config_id, EvaluatorConfigEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_evaluator_configs(
         self,
         dataset_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
     ) -> PagedResult[List[EvaluatorConfigEntity]]:
@@ -970,7 +1003,8 @@ class EvaluationService:
         """
         # Build base query
         base_query = select(EvaluatorConfigEntity).where(
-            EvaluatorConfigEntity.dataset_id == dataset_id
+            EvaluatorConfigEntity.dataset_id == dataset_id,
+            EvaluatorConfigEntity.tenant_id == tenant_id
         )
 
         # Get total count
@@ -1000,7 +1034,7 @@ class EvaluationService:
         )
 
     async def create_evaluator_config(
-        self, dataset_id: str, config_data: EvaluatorConfigCreate
+        self, dataset_id: str, config_data: EvaluatorConfigCreate, tenant_id: str
     ) -> EvaluatorConfigEntity:
         """
         Create a new EvaluatorConfig entity.
@@ -1020,6 +1054,7 @@ class EvaluationService:
             model_id=config_data.model_id,
             case_sensitive=config_data.case_sensitive,
             ignore_punctuation=config_data.ignore_punctuation,
+            tenant_id=tenant_id,
         )
 
         self.session.add(eval_config_entity)
@@ -1039,7 +1074,7 @@ class EvaluationService:
             raise ValueError(f"评估器配置创建失败: {e}") from e
 
     async def update_evaluator_config(
-        self, config_id: str, update_data: EvaluatorConfigCreate
+        self, config_id: str, update_data: EvaluatorConfigCreate, tenant_id: str
     ) -> EvaluatorConfigEntity:
         """
         Update an existing EvaluatorConfig entity.
@@ -1055,7 +1090,8 @@ class EvaluationService:
         Raises:
             ValueError: If EvaluatorConfig entity not found
         """
-        eval_config = await self.session.get(EvaluatorConfigEntity, config_id)
+        result = await self.session.exec(select(EvaluatorConfigEntity).where(EvaluatorConfigEntity.id == config_id, EvaluatorConfigEntity.tenant_id == tenant_id))
+        eval_config = result.first()
         if not eval_config:
             raise ValueError(f"评估器配置 '{config_id}' 不存在。")
 
@@ -1084,7 +1120,7 @@ class EvaluationService:
         )
         return eval_config
 
-    async def delete_evaluator_config(self, config_id: str) -> None:
+    async def delete_evaluator_config(self, config_id: str, tenant_id: str) -> None:
         """
         Delete an EvaluatorConfig entity.
         Note: Caller is responsible for committing the session.
@@ -1095,7 +1131,8 @@ class EvaluationService:
         Raises:
             ValueError: If EvaluatorConfig entity not found
         """
-        eval_config = await self.session.get(EvaluatorConfigEntity, config_id)
+        result = await self.session.exec(select(EvaluatorConfigEntity).where(EvaluatorConfigEntity.id == config_id, EvaluatorConfigEntity.tenant_id == tenant_id))
+        eval_config = result.first()
         if not eval_config:
             raise ValueError(f"评估器配置 '{config_id}' 不存在。")
 

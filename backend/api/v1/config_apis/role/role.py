@@ -16,6 +16,7 @@ from api.api_exception import ApiException
 from service.tool.role_service import RoleService
 from service.injection import get_role_service
 from loguru import logger
+from service.injection import get_tenant_id
 
 role_router = APIRouter()
 
@@ -24,11 +25,12 @@ role_router = APIRouter()
 @role_router.post("", response_model=ResponseModel[RoleEntity])
 async def create_role(
     role: RoleEntity,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
 ):
     try:
-        role = await role_service.create_role(role)
+        role = await role_service.create_role(role=role, tenant_id=tenant_id)
         return success_response(data=role, message="添加角色成功。")
     except ValueError as e:
         logger.error(f"Failed to create role: {str(e)}")
@@ -44,6 +46,7 @@ async def list_roles(
     name: str = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
 ):
@@ -58,7 +61,7 @@ async def list_roles(
             return success_response(data=role, message="查询角色成功。")
         else:
             # List all roles with pagination
-            roles = await role_service.list_roles(page, size)
+            roles = await role_service.list_roles(page=page, size=size, tenant_id=tenant_id)
             return success_response(data=roles, message="查询角色列表成功")
     except Exception as e:
         logger.error(f"Failed to list roles: {traceback.format_exc()}")
@@ -68,11 +71,12 @@ async def list_roles(
 @role_router.delete("/{role_id}")
 async def delete_role(
     role_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
 ):
     try:
-        await role_service.delete_role(role_id)
+        await role_service.delete_role(role_id=role_id, tenant_id=tenant_id)
         logger.info(f"角色 {role_id} 已删除.")
         return success_response(message=f"角色{role_id}删除成功。")
     except ValueError as e:
@@ -87,11 +91,12 @@ async def delete_role(
 @role_router.post("/user_roles", response_model=ResponseModel[UserRoleEntity])
 async def create_user_role(
     user_role: UserRoleEntity,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
 ):
     try:
-        user_role = await role_service.create_user_role(user_role)
+        user_role = await role_service.create_user_role(user_role=user_role, tenant_id=tenant_id)
         return success_response(data=user_role, message="添加用户角色成功。")
     except ValueError as e:
         logger.error(f"Failed to create user role: {str(e)}")
@@ -107,11 +112,12 @@ async def list_user_roles(
     user_id: str = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
 ):
     try:
-        user_roles = await role_service.list_user_roles(page, size, user_id)
+        user_roles = await role_service.list_user_roles(page=page, size=size, user_id=user_id, tenant_id=tenant_id)
         return success_response(data=user_roles, message="查询用户角色列表成功")
     except Exception as e:
         logger.error(f"Failed to list user roles: {traceback.format_exc()}")
@@ -121,11 +127,12 @@ async def list_user_roles(
 @role_router.delete("/user_roles/{user_role_id}")
 async def delete_user_role(
     user_role_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
 ):
     try:
-        await role_service.delete_user_role(user_role_id)
+        await role_service.delete_user_role(user_role_id=user_role_id, tenant_id=tenant_id)
         logger.info(f"用户角色 {user_role_id} 已删除.")
         return success_response(message=f"用户角色{user_role_id}删除成功。")
     except ValueError as e:
@@ -169,7 +176,7 @@ async def list_permissions(
     role_service: RoleService = Depends(get_role_service),
 ):
     try:
-        permissions = await role_service.list_permissions(page, size, name)
+        permissions = await role_service.list_permissions(page=page, size=size, name=name)
         return success_response(data=permissions, message="查询权限成功")
     except Exception as e:
         logger.error(f"Failed to list permissions: {traceback.format_exc()}")

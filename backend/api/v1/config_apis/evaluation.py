@@ -19,7 +19,7 @@ from db.models.evaluation.evaluator_config import (
 )
 from rag.evaluation_tool import eval_client
 from service.tool.evaluation_service import EvaluationService
-from service.injection import get_evaluation_service
+from service.injection import get_evaluation_service, get_tenant_id
 from api.api_exception import ApiException
 from loguru import logger
 
@@ -29,11 +29,12 @@ evaluation_router = APIRouter()
 @evaluation_router.post("", response_model=ResponseModel[DatasetEntity])
 async def create_dataset(
     dataset_create: DatasetCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     try:
-        dataset_entity = await evaluation_service.create_dataset(dataset_create)
+        dataset_entity = await evaluation_service.create_dataset(dataset_create, tenant_id=tenant_id)
         await session.commit()
         await session.refresh(dataset_entity)
         return success_response(data=dataset_entity, message="数据集创建成功。")
@@ -51,12 +52,13 @@ async def create_dataset(
 async def list_datasets(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Listing datasets with page: {page}, size: {size}.")
     try:
-        datasets = await evaluation_service.list_datasets(page, size)
+        datasets = await evaluation_service.list_datasets(tenant_id=tenant_id, page=page, size=size)
         return success_response(data=datasets, message="获取数据集列表成功。")
     except Exception as e:
         logger.error(f"Failed to list datasets: {traceback.format_exc()}")
@@ -66,12 +68,13 @@ async def list_datasets(
 @evaluation_router.get("/{dataset_id}", response_model=ResponseModel[DatasetEntity])
 async def read_evaluation(
     dataset_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Reading dataset: {dataset_id}.")
     try:
-        dataset_entity = await evaluation_service.get_dataset(dataset_id)
+        dataset_entity = await evaluation_service.get_dataset(dataset_id=dataset_id, tenant_id=tenant_id)
         if not dataset_entity:
             raise ApiException(code=404, message=f"数据集 '{dataset_id}' 不存在。")
         return success_response(data=dataset_entity, message="获取数据集成功。")
@@ -86,12 +89,13 @@ async def read_evaluation(
 async def update_dataset(
     dataset_id: str,
     new_dataset: DatasetCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Updating dataset: {dataset_id}.")
     try:
-        dataset_entity = await evaluation_service.update_dataset(dataset_id, new_dataset)
+        dataset_entity = await evaluation_service.update_dataset(dataset_id=dataset_id, new_dataset=new_dataset, tenant_id=tenant_id)
         await session.commit()
         await session.refresh(dataset_entity)
         return success_response(data=dataset_entity, message="更新数据集成功。")
@@ -108,12 +112,13 @@ async def update_dataset(
 @evaluation_router.delete("/{dataset_id}")
 async def delete_dataset(
     dataset_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Deleting dataset: {dataset_id}.")
     try:
-        await evaluation_service.delete_dataset(dataset_id)
+        await evaluation_service.delete_dataset(dataset_id=dataset_id, tenant_id=tenant_id)
         await session.commit()
         return success_response(message="数据集删除成功。")
     except ValueError as e:
@@ -130,6 +135,7 @@ async def delete_dataset(
 async def upload_dataset_samples(
     dataset_id: str,
     file: UploadFile = File(...),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
@@ -139,7 +145,7 @@ async def upload_dataset_samples(
 
     try:
         # Validate dataset exists
-        dataset = await evaluation_service.get_dataset(dataset_id)
+        dataset = await evaluation_service.get_dataset(dataset_id=dataset_id, tenant_id=tenant_id)
         if not dataset:
             raise ApiException(code=404, message=f"没有找到数据集 {dataset_id}。")
 
@@ -148,7 +154,7 @@ async def upload_dataset_samples(
 
         # Batch create dataset samples
         dataset_entities = await evaluation_service.batch_create_dataset_samples(
-            dataset_id, file_results
+            dataset_id=dataset_id, file_results=file_results, tenant_id=tenant_id
         )
 
         await session.commit()
@@ -167,11 +173,12 @@ async def list_dataset_samples(
     dataset_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     try:
-        samples = await evaluation_service.list_dataset_samples(dataset_id, page, size)
+        samples = await evaluation_service.list_dataset_samples(dataset_id=dataset_id, tenant_id=tenant_id, page=page, size=size)
         return success_response(data=samples, message="获取评估数据集列表成功")
     except Exception as e:
         logger.error(f"Failed to list dataset samples: {traceback.format_exc()}")
@@ -186,13 +193,15 @@ async def update_dataset_sample(
     dataset_id: str,
     sample_id: str,
     new_sample: DatasetSampleEntity,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Updating dataset sample: {sample_id}.")
     try:
         dataset_sample_entity = await evaluation_service.update_dataset_sample(
-            sample_id,
+            sample_id=sample_id,
+            tenant_id=tenant_id,
             input=new_sample.input,
             expected_output=new_sample.expected_output,
             eval_metadata=new_sample.eval_metadata,
@@ -216,12 +225,13 @@ async def update_dataset_sample(
 async def get_dataset_sample(
     dataset_id: str,
     sample_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Getting dataset sample: {sample_id}.")
     try:
-        dataset_sample_entity = await evaluation_service.get_dataset_sample(sample_id)
+        dataset_sample_entity = await evaluation_service.get_dataset_sample(sample_id=sample_id, tenant_id=tenant_id)
         if not dataset_sample_entity:
             raise ApiException(code=404, message=f"数据样本 '{sample_id}' 不存在。")
         return success_response(data=dataset_sample_entity, message="获取数据集样本信息成功。")
@@ -235,12 +245,13 @@ async def get_dataset_sample(
 async def delete_dataset_sample(
     dataset_id: str,
     sample_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Deleting dataset sample: {sample_id}.")
     try:
-        await evaluation_service.delete_dataset_sample(sample_id)
+        await evaluation_service.delete_dataset_sample(sample_id=sample_id, tenant_id=tenant_id)
         await session.commit()
         return success_response(message="数据样本删除成功。")
     except ValueError as e:
@@ -256,6 +267,7 @@ async def delete_dataset_sample(
 async def create_experiment(
     dataset_id: str,
     experiment_create: ExperimentCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
@@ -267,14 +279,14 @@ async def create_experiment(
         import app.worker as background_worker
 
         experiment_entity, exp_sample_ids = await evaluation_service.create_experiment(
-            dataset_id, experiment_create
+            dataset_id=dataset_id, experiment_create=experiment_create, tenant_id=tenant_id
         )
         await session.commit()
         await session.refresh(experiment_entity)
 
         logger.info(f"创建实验 {experiment_entity.id} 成功.")
         background_worker.execute_evaluation_task.delay(
-            dataset_id, experiment_entity.id, exp_sample_ids
+            dataset_id=dataset_id, experiment_id=experiment_entity.id, exp_sample_ids=exp_sample_ids
         )
 
         return success_response(data=experiment_entity, message="创建实验成功")
@@ -293,12 +305,13 @@ async def get_experiments(
     dataset_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Get experiments for {dataset_id}.")
     try:
-        experiments = await evaluation_service.list_experiments(dataset_id, page, size)
+        experiments = await evaluation_service.list_experiments(dataset_id=dataset_id, tenant_id=tenant_id, page=page, size=size)
         return success_response(data=experiments, message="获取评估实验列表成功。")
     except Exception as e:
         logger.error(f"Failed to get experiments: {traceback.format_exc()}")
@@ -309,12 +322,13 @@ async def get_experiments(
 async def get_experiment(
     dataset_id: str,
     exp_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Get experiment for dataset_id {dataset_id} and exp_id {exp_id}.")
     try:
-        experiment_entity = await evaluation_service.get_experiment(exp_id)
+        experiment_entity = await evaluation_service.get_experiment(exp_id=exp_id, tenant_id=tenant_id)
         if not experiment_entity:
             raise ApiException(code=404, message=f"实验 '{exp_id}' 不存在。")
         return success_response(data=experiment_entity, message="获取评估实验详情成功。")
@@ -330,12 +344,13 @@ async def get_experiment_samples(
     exp_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Get experiment details for dataset_id {dataset_id}, exp_id {exp_id}.")
     try:
-        experiment_samples = await evaluation_service.get_experiment_samples(exp_id, page, size)
+        experiment_samples = await evaluation_service.get_experiment_samples(exp_id=exp_id, tenant_id=tenant_id, page=page, size=size)
         return success_response(data=experiment_samples, message="获取评估实验样本列表成功。")
     except Exception as e:
         logger.error(f"Failed to get experiment samples: {traceback.format_exc()}")
@@ -346,14 +361,16 @@ async def evaluate_experiment_sample(
     dataset_id: str,
     experiment_id: str,
     experiment_sample_entity: ExperimentSampleEntity,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"evaluate_single_sample for dataset_id: {dataset_id}, exp_id: {experiment_id}, exp_run_id: {experiment_sample_entity.id}")
     try:
         await evaluation_service.evaluate_experiment_sample(
-            experiment_id,
-            experiment_sample_entity.id,
+            experiment_id=experiment_id,
+            tenant_id=tenant_id,
+            experiment_sample_id=experiment_sample_entity.id,
             status=experiment_sample_entity.status,
             output=experiment_sample_entity.actual_output,
             score=experiment_sample_entity.score,
@@ -374,12 +391,13 @@ async def evaluate_experiment_sample(
 async def delete_experiment(
     dataset_id: str,
     exp_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Delete experiment for dataset_id {dataset_id} and exp_id {exp_id}.")
     try:
-        await evaluation_service.delete_experiment(exp_id)
+        await evaluation_service.delete_experiment(exp_id=exp_id, tenant_id=tenant_id)
         await session.commit()
         return success_response(message="删除实验成功。")
     except ValueError as e:
@@ -396,12 +414,13 @@ async def delete_experiment(
 async def create_run_config(
     dataset_id: str,
     run_config: RunConfigCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info("Create run_config.")
     try:
-        run_config_entity = await evaluation_service.create_run_config(dataset_id, run_config)
+        run_config_entity = await evaluation_service.create_run_config(dataset_id=dataset_id, run_config=run_config, tenant_id=tenant_id)
         await session.refresh(run_config_entity)
 
         logger.info(f"创建实验设置 {run_config_entity.id} 成功.")
@@ -423,11 +442,12 @@ async def update_run_config(
     dataset_id: str,
     config_id: str,
     new_run_config: RunConfigCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     try:
-        run_config = await evaluation_service.update_run_config(config_id, new_run_config)
+        run_config = await evaluation_service.update_run_config(config_id=config_id, new_run_config=new_run_config, tenant_id=tenant_id)
         await session.refresh(run_config)
 
         return success_response(data=run_config, message="更新运行配置成功。")
@@ -448,12 +468,13 @@ async def list_run_configs(
     dataset_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Get run_configs for {dataset_id}.")
     try:
-        run_configs = await evaluation_service.list_run_configs(dataset_id, page, size)
+        run_configs = await evaluation_service.list_run_configs(dataset_id=dataset_id, tenant_id=tenant_id, page=page, size=size)
         return success_response(data=run_configs, message="获取实验设置列表成功")
     except Exception as e:
         logger.error(f"Failed to list run configs: {traceback.format_exc()}")
@@ -464,12 +485,13 @@ async def list_run_configs(
 async def get_config_details(
     dataset_id: str,
     config_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Get experiment for config_id {config_id}.")
     try:
-        run_config = await evaluation_service.get_run_config(config_id)
+        run_config = await evaluation_service.get_run_config(config_id=config_id, tenant_id=tenant_id)
         if not run_config:
             raise ApiException(code=404, message=f"获取运行配置失败: '{config_id}'不存在。")
         return success_response(data=run_config, message="获取实验设置详情成功")
@@ -482,12 +504,13 @@ async def get_config_details(
 async def delete_config(
     dataset_id: str,
     config_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Delete experiment for config_id {config_id}.")
     try:
-        await evaluation_service.delete_run_config(config_id)
+        await evaluation_service.delete_run_config(config_id=config_id, tenant_id=tenant_id)
         await session.commit()
         logger.info(f"run_config {config_id} has been deleted.")
         return success_response(message=f"实验设置'{config_id}'删除成功。")
@@ -506,13 +529,14 @@ async def delete_config(
 async def create_evaluator_config(
     dataset_id: str,
     eval_config: EvaluatorConfigCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info("Create eval_config_entity.")
     try:
         eval_config_entity = await evaluation_service.create_evaluator_config(
-            dataset_id, eval_config
+            dataset_id=dataset_id, eval_config=eval_config, tenant_id=tenant_id
         )
         await session.refresh(eval_config_entity)
         logger.info(f"创建评估器设置 {eval_config_entity.id} 成功.")
@@ -534,12 +558,13 @@ async def update_evaluator_config(
     dataset_id: str,
     config_id: str,
     new_eval_config: EvaluatorConfigCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     try:
         eval_config = await evaluation_service.update_evaluator_config(
-            config_id, new_eval_config
+            config_id=config_id, new_eval_config=new_eval_config, tenant_id=tenant_id
         )
         await session.refresh(eval_config)
 
@@ -561,13 +586,14 @@ async def list_eval_configs(
     dataset_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Get eval configs for {dataset_id}.")
     try:
         eval_configs = await evaluation_service.list_evaluator_configs(
-            dataset_id, page, size
+            dataset_id=dataset_id, tenant_id=tenant_id, page=page, size=size
         )
         return success_response(data=eval_configs, message="获取评估器设置列表成功")
     except Exception as e:
@@ -579,12 +605,13 @@ async def list_eval_configs(
 async def get_eval_config_details(
     dataset_id: str,
     config_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
     logger.info(f"Get evalconfigs for config_id {config_id}.")
     try:
-        eval_config = await evaluation_service.get_evaluator_config(config_id)
+        eval_config = await evaluation_service.get_evaluator_config(config_id=config_id, tenant_id=tenant_id)
         if not eval_config:
             raise ApiException(code=404, message=f"获取评估器设置失败: '{config_id}'不存在。")
         return success_response(data=eval_config, message="获取评估器设置详情成功")
@@ -597,6 +624,7 @@ async def get_eval_config_details(
 async def delete_eval_config(
     dataset_id: str,
     config_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):

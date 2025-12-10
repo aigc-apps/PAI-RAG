@@ -6,7 +6,6 @@ from docx.oxml.ns import qn
 from loguru import logger
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
-from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_utils import compress_image_if_needed
 from pairag.file.utils.markdown_tree_utils import (
     PaiTable,
@@ -175,7 +174,7 @@ class DocxReader(BaseReader):
        
 
     def convert_docx_to_markdown(
-        self, document: DocxDocument, save_name_template: str
+        self, document: DocxDocument, save_name_template: str, tenant_id: str,
     ) -> str:
         paragraphs = document.paragraphs.copy()
         tables = document.tables.copy()
@@ -235,7 +234,6 @@ class DocxReader(BaseReader):
                                     )
                                     if (
                                         embed_id
-                                        and isinstance(self.file_store, OssFileStore)
                                         and self.image_caption_tool
                                     ):
                                         image_part = document.part.related_parts.get(
@@ -258,27 +256,25 @@ class DocxReader(BaseReader):
                                             if not image_file:
                                                 continue
                                             try:
-                                                self.file_store.save(
-                                                    image_file, save_image_name
+                                                upload_result = self.file_store.write(
+                                                    file=image_file,
+                                                    file_name=image_name,
+                                                    file_path=save_image_name,
+                                                    tenant_id=tenant_id,
                                                 )
-                                                image_alt_text = (
-                                                    self.image_caption_tool.extract_url(
-                                                        self.file_store.get_url(
-                                                            save_image_name
-                                                        )
-                                                    )
-                                                )
+                                                image_alt_text = self.image_caption_tool.extract_image(image_blob)
+                                                
                                                 cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                                                image_text = to_markdown_image_text(save_image_name, cleaned_alt)
+                                                image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
                                                 markdown.append(f"{image_text}\n")
-                                                images.append(save_image_name)
+                                                images.append(upload_result.file_path)
 
                                                 logger.info(
-                                                    f"Successfully saved image {save_image_name}."
+                                                    f"Successfully saved image {upload_result.file_path}."
                                                 )
                                             except Exception as ex:
                                                 logger.exception(
-                                                    f"Failed to save image from URL: {save_image_name}. Error: {ex}"
+                                                    f"Failed to save image from URL: {upload_result.file_path}. Error: {ex}"
                                                 )
 
                     markdown.append(self._convert_paragraph(paragraph))
@@ -299,7 +295,7 @@ class DocxReader(BaseReader):
             docx_file = DocxDocument(file_item.file)
 
             markdown_content, images = self.convert_docx_to_markdown(
-                docx_file, file_item.kb_id + "/images/{}"
+                docx_file, file_item.kb_id + "/images/{}", tenant_id=file_item.tenant_id,
             )
 
             metadata = file_item.metadata()

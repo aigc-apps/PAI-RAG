@@ -1,8 +1,10 @@
 import uuid
 from sqlmodel import Field, SQLModel
-
+from common.system_constants import DEFAULT_TENANT_ID
+from typing import Optional
 
 class CodeSandboxConfig(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     type: str = Field(default='aliyun-fc')
     aliyun_id: str = Field(default=None)
     interpreter_id: str = Field(default=None)

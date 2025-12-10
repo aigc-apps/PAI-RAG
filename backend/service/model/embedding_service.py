@@ -15,7 +15,7 @@ from common.encrypt_utils import encrypt_key
 from common.chat.response_model import PagedResult
 from service.factory.model_factory import create_embedding_model
 from llama_index.core.embeddings import BaseEmbedding
-
+from common.knowledgebase.constants import DEFAULT_EMBEDDING_MODEL
 
 class EmbeddingService:
     """Service layer for Embedding entity CRUD operations using dependency injection."""
@@ -29,7 +29,7 @@ class EmbeddingService:
         """
         self.session = session
 
-    async def get_embedding(self, emb_id: str) -> Optional[EmbeddingModelEntity]:
+    async def get_embedding(self, emb_id: str, tenant_id: str) -> Optional[EmbeddingModelEntity]:
         """
         Get a single Embedding entity by ID.
 
@@ -39,10 +39,11 @@ class EmbeddingService:
         Returns:
             EmbeddingModelEntity if found, None otherwise
         """
-        return await self.session.get(EmbeddingModelEntity, emb_id)
+        result = await self.session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.id == emb_id, EmbeddingModelEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def get_embedding_by_model_id(
-        self, model_id: str
+        self, model_id: str, tenant_id: str
     ) -> Optional[EmbeddingModelEntity]:
         """
         Get a single Embedding entity by model_id.
@@ -54,33 +55,42 @@ class EmbeddingService:
             EmbeddingModelEntity if found, None otherwise
         """
         statement = select(EmbeddingModelEntity).where(
-            EmbeddingModelEntity.model_id == model_id
+            EmbeddingModelEntity.model_id == model_id, EmbeddingModelEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return result.first()
 
 
-    async def get_default_embedding(self) -> Optional[EmbeddingModelEntity]:
+    async def get_default_embedding(self, tenant_id: str) -> Optional[EmbeddingModelEntity]:
         """
         Get the default Embedding entity.
 
         Returns:
             EmbeddingModelEntity if found, None otherwise
         """
-        statement = select(EmbeddingModelEntity).where(EmbeddingModelEntity.is_default is True)
+        statement = select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == "BAAI/bge-m3", EmbeddingModelEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         default_embedding = result.first()
         if not default_embedding:
-            all_embedding_results = await self.session.exec(select(EmbeddingModelEntity))
-            all_embedding_entities = all_embedding_results.first()
-            assert all_embedding_entities, "No embedding model found."
-            default_embedding = all_embedding_entities[0]
-            logger.info(f"No default embedding model was found, and using {default_embedding.model_id} for attachment knowledgebase.")
+            logger.info(f"No default embedding model was found, and using {DEFAULT_EMBEDDING_MODEL} for attachment knowledgebase.")
+            default_embedding = await self.create_embedding(
+                embedding_data=EmbeddingModelCreate(
+                    tenant_id=tenant_id,
+                    model_name=DEFAULT_EMBEDDING_MODEL,
+                    model_id=DEFAULT_EMBEDDING_MODEL,
+                    dimension=1024,
+                    type=EmbeddingType.LOCAL,
+                    is_default=True,
+                    is_ready=True,
+                ),
+                tenant_id=tenant_id,
+            )
+            await self.session.commit()
         return default_embedding
 
 
     async def get_embedding_by_model_name(
-        self, model_name: str
+        self, model_name: str, tenant_id: str
     ) -> Optional[EmbeddingModelEntity]:
         """
         Get a single Embedding entity by model_name.
@@ -92,13 +102,14 @@ class EmbeddingService:
             EmbeddingModelEntity if found, None otherwise
         """
         statement = select(EmbeddingModelEntity).where(
-            EmbeddingModelEntity.model_name == model_name
+            EmbeddingModelEntity.model_name == model_name, EmbeddingModelEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return result.first()
 
     async def list_embeddings(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         model_name: Optional[str] = None,
@@ -115,7 +126,7 @@ class EmbeddingService:
             PagedResult containing list of EmbeddingModelEntity and pagination metadata
         """
         # Build base query
-        base_query = select(EmbeddingModelEntity)
+        base_query = select(EmbeddingModelEntity).where(EmbeddingModelEntity.tenant_id == tenant_id)
 
         # Add model_name filter if provided
         if model_name is not None:
@@ -146,7 +157,7 @@ class EmbeddingService:
         )
 
     async def create_embedding(
-        self, embedding_data: EmbeddingModelCreate
+        self, embedding_data: EmbeddingModelCreate, tenant_id: str
     ) -> EmbeddingModelEntity:
         """
         Create a new Embedding entity.
@@ -168,7 +179,7 @@ class EmbeddingService:
 
         # Create entity
         embedding = EmbeddingModelEntity.model_validate(
-            embedding_data, update={"encrypted_api_key": encrypted_api_key}
+            embedding_data, update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}
         )
 
         # Set is_ready based on type
@@ -198,7 +209,7 @@ class EmbeddingService:
                 raise ValueError(f"模型创建失败: {e}") from e
 
     async def update_embedding(
-        self, emb_id: str, update_data: EmbeddingModelCreate
+        self, emb_id: str, update_data: EmbeddingModelCreate, tenant_id: str
     ) -> EmbeddingModelEntity:
         """
         Update an existing Embedding entity.
@@ -214,7 +225,8 @@ class EmbeddingService:
         Raises:
             ValueError: If Embedding entity not found
         """
-        embedding = await self.session.get(EmbeddingModelEntity, emb_id)
+        result = await self.session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.id == emb_id, EmbeddingModelEntity.tenant_id == tenant_id))
+        embedding = result.first()
         if not embedding:
             raise ValueError(f"Embedding '{emb_id}' 不存在。")
 
@@ -274,18 +286,18 @@ class EmbeddingService:
             f"Deleted Embedding entity: {emb_id} (model_id: {embedding.model_id})"
         )
 
-    async def get_all_embeddings(self) -> List[EmbeddingModelEntity]:
+    async def get_all_embeddings(self, tenant_id: str) -> List[EmbeddingModelEntity]:
         """
         Get all Embedding entities without pagination.
 
         Returns:
             List of all EmbeddingModelEntity
         """
-        statement = select(EmbeddingModelEntity)
+        statement = select(EmbeddingModelEntity).where(EmbeddingModelEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
 
-    async def get_embedding_model(self, model_id: str) -> Optional[BaseEmbedding]:
+    async def get_embedding_model(self, model_id: str, tenant_id: str) -> Optional[BaseEmbedding]:
         """
         Get an Embedding entity by model_id.
 
@@ -295,7 +307,7 @@ class EmbeddingService:
         Returns:
             EmbeddingModelEntity if found, None otherwise
         """
-        embedding_entity = await self.get_embedding_by_model_id(model_id)
+        embedding_entity = await self.get_embedding_by_model_id(model_id, tenant_id)
         if not embedding_entity:
             raise ValueError(f"Embedding model {model_id} not found.")
 

@@ -9,6 +9,7 @@ from api.v1.mcp.kb_retriever_tool import get_retrieval_tool
 from db.db_context import with_async_db_session, AsyncSession
 from loguru import logger
 import anyio
+from common.system_constants import DEFAULT_TENANT_ID
 
 # Global task group for MCP session managers
 # This is set in the FastAPI lifespan context
@@ -42,7 +43,7 @@ class KbMcpServerMiddleware(BaseHTTPMiddleware):
 
 
     @with_async_db_session
-    async def ensure_mcp_exists_async(self, kb_id: str, session: AsyncSession) -> None:
+    async def ensure_mcp_exists_async(self, kb_id: str, tenant_id: str, session: AsyncSession) -> None:
         """
         Ensure MCP server exists for the given knowledge base ID.
 
@@ -52,7 +53,7 @@ class KbMcpServerMiddleware(BaseHTTPMiddleware):
         Args:
             kb_id: The knowledge base ID
             session: Database session
-
+            tenant_id: The tenant ID
         Raises:
             ValueError: If the knowledge base is not found
             RuntimeError: If FastAPI app or task group is not available
@@ -89,6 +90,7 @@ class KbMcpServerMiddleware(BaseHTTPMiddleware):
                     knowledgebase_id=kb_id,
                     kb_name=kb.name,
                     kb_description=kb.description or "",
+                    tenant_id=tenant_id,
                 )
 
                 # Create FastMCP server
@@ -133,6 +135,7 @@ class KbMcpServerMiddleware(BaseHTTPMiddleware):
             Response from the next handler or an error response
         """
         path = request.url.path
+        tenant_id = request.headers.get("X-TENANT-ID") or DEFAULT_TENANT_ID
 
         # Check if the path matches the knowledge base MCP server pattern
         match = self.PATH_PATTERN.match(path)
@@ -145,7 +148,7 @@ class KbMcpServerMiddleware(BaseHTTPMiddleware):
 
         try:
             # Ensure MCP server exists for this knowledge base
-            await self.ensure_mcp_exists_async(kb_id)
+            await self.ensure_mcp_exists_async(kb_id, tenant_id=tenant_id)
         except ValueError as e:
             # Knowledge base not found
             logger.error(f"Failed to create MCP server for {kb_id}: {e}")

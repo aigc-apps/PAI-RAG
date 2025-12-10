@@ -26,7 +26,7 @@ class GuardrailService:
         self.session = session
 
     async def get_guardrail_config(
-        self, config_id: str
+        self, config_id: str, tenant_id: str
     ) -> Optional[GuardrailConfigEntity]:
         """
         Get a single Guardrail config entity by ID.
@@ -37,10 +37,12 @@ class GuardrailService:
         Returns:
             GuardrailConfigEntity if found, None otherwise
         """
-        return await self.session.get(GuardrailConfigEntity, config_id)
+        result = await self.session.exec(select(GuardrailConfigEntity).where(GuardrailConfigEntity.id == config_id, GuardrailConfigEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def get_guardrail_config_or_create(
         self,
+        tenant_id: str,
     ) -> Optional[GuardrailConfigEntity]:
         """
         Get the first Guardrail config entity, or None if none exists.
@@ -48,12 +50,13 @@ class GuardrailService:
         Returns:
             GuardrailConfigEntity if found, None otherwise
         """
-        statement = select(GuardrailConfigEntity)
+        statement = select(GuardrailConfigEntity).where(GuardrailConfigEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         return result.first()
 
     async def get_all_guardrail_configs(
         self,
+        tenant_id: str,
     ) -> List[GuardrailConfigEntity]:
         """
         Get all Guardrail config entities (usually only one).
@@ -61,12 +64,12 @@ class GuardrailService:
         Returns:
             List of all GuardrailConfigEntity
         """
-        statement = select(GuardrailConfigEntity)
+        statement = select(GuardrailConfigEntity).where(GuardrailConfigEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
 
     async def create_or_update_guardrail_config(
-        self, config_data: GuardrailConfigCreate
+        self, config_data: GuardrailConfigCreate, tenant_id: str
     ) -> GuardrailConfigEntity:
         """
         Create or update a Guardrail config entity.
@@ -91,7 +94,7 @@ class GuardrailService:
         )
 
         # Get existing config or create new one
-        statement = select(GuardrailConfigEntity)
+        statement = select(GuardrailConfigEntity).where(GuardrailConfigEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         config = result.first()
 
@@ -102,6 +105,7 @@ class GuardrailService:
                 update={
                     "encrypted_access_key_id": encrypted_access_key_id,
                     "encrypted_access_key_secret": encrypted_access_key_secret,
+                    "tenant_id": tenant_id,
                 },
             )
             self.session.add(config)

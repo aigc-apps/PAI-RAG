@@ -30,13 +30,35 @@ async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
 
     await HttpSessionShared.ensure_session()
-    from db.db_context import init_db
+    from db.db_context import init_db, get_db_session
+    from service.tool.trace_service import TraceService
+    from extensions.trace.base import init_instrument, TraceConfig
+    from common.system_constants import DEFAULT_TENANT_ID
+    from service.model.embedding_service import EmbeddingService
 
     await init_db()
     logger.info("Initialized database tables.")
 
+    session_getter = get_db_session()
+    session = await anext(session_getter)
+    try:
+        embedding_service = EmbeddingService(session)
+        _ = await embedding_service.get_default_embedding(tenant_id=DEFAULT_TENANT_ID)
+        trace_service = TraceService(session)
+        trace_config = await trace_service.get_trace_config(tenant_id=DEFAULT_TENANT_ID)
+        if trace_config:
+            init_instrument(TraceConfig(
+                endpoint=trace_config.endpoint,
+                token=trace_config.token,
+                service_name=trace_config.service_name,
+                user_args=trace_config.user_args,
+                enabled=trace_config.enabled))
+            logger.info("Initialized trace config.")
+    finally:
+        await session.close()
+
     sqlite_thread = None
-    if os.getenv("DB_TYPE", "sqlite") != "postgresql":
+    if os.getenv("DB_TYPE", "sqlite") == "sqlite":
         sqlite_thread = threading.Thread(target=sync_sqlite_store_task, daemon=False)
         sqlite_thread.start()
 

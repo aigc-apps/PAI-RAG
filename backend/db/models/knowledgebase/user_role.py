@@ -3,15 +3,17 @@ import uuid
 from pydantic import model_validator
 from sqlalchemy import Column, DateTime, UniqueConstraint, Text
 from sqlmodel import Field, SQLModel
-
+from common.system_constants import DEFAULT_TENANT_ID
+from typing import Optional
 
 class PermissionEntity(SQLModel, table=True):
     __tablename__ = "pai_permissions"
-    __table_args__ = (UniqueConstraint("name", "role_id", name="unique_role_permission"),)
+    __table_args__ = (UniqueConstraint("name", "role_id", "tenant_id", name="unique_role_permission"),)
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID, max_length=64)
     name: str = Field(default=None)
-    role_id: str = Field(default=None, foreign_key="pai_roles.id", ondelete="CASCADE")
+    role_id: str = Field(default=None, foreign_key="pai_roles.id", ondelete="CASCADE", max_length=64)
     description: str | None = Field(default=None, sa_column=Column(Text))
 
     @model_validator(mode='after')
@@ -23,8 +25,9 @@ class PermissionEntity(SQLModel, table=True):
 
 class RoleEntity(SQLModel, table=True):
     __tablename__ = "pai_roles"
-    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
-    name: str = Field(default=None, unique=True)
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True, max_length=64)
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID, max_length=64)
+    name: str = Field(default=None, max_length=255)
     description: str | None = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
@@ -45,12 +48,13 @@ class RoleEntity(SQLModel, table=True):
 
 class UserRoleEntity(SQLModel, table=True):
     __tablename__ = "pai_user_roles"
-    __table_args__ = (UniqueConstraint("user_id", "role_id", name="unique_user_role"),)
+    __table_args__ = (UniqueConstraint("user_id", "role_id", "tenant_id", name="unique_user_role"),)
 
 
-    id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
-    user_id: str = Field(default=None)
-    role_id: str = Field(default=None, foreign_key="pai_roles.id", ondelete="CASCADE")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True, max_length=64)
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID, max_length=64)
+    user_id: str = Field(default=None, max_length=64)
+    role_id: str = Field(default=None, foreign_key="pai_roles.id", ondelete="CASCADE", max_length=64)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime),

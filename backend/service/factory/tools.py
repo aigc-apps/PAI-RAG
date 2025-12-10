@@ -13,6 +13,7 @@ from loguru import logger
 from typing import List
 from utils.lru_cache import LruCache
 from service.knowledgebase.file_service import FileService
+from common.llm.llm_model import PaiLlm
 
 search_cache = LruCache(max_size=10)
 chatdb_cache = LruCache(max_size=10)
@@ -64,13 +65,14 @@ def create_search_tools(websearch_config: WebSearchConfigEntity) -> List[Functio
     return [search_tool]
 
 
-def create_chatdb_tools(chatdb_config: ChatDbConfigEntity) -> List[FunctionTool]:
-    chatdb_key = json.dumps(chatdb_config.model_dump(), ensure_ascii=False, sort_keys=True)
+def create_chatdb_tools(chatdb_config: ChatDbConfigEntity, chatdb_llm: PaiLlm) -> List[FunctionTool]:
+    chatdb_key = f"{chatdb_config.tenant_id}-{chatdb_config.db_name}-{chatdb_config.username}-{chatdb_config.port}-{chatdb_config.host}--{chatdb_config.encrypted_password}"
     chatdb_tool = chatdb_cache.get(chatdb_key)
     if chatdb_tool:
         return [chatdb_tool]
 
     chatdb_client = XiyanClient(
+            llm=chatdb_llm,
             dialect=chatdb_config.dialect,
             host=chatdb_config.host,
             port=chatdb_config.port,
@@ -88,7 +90,12 @@ def create_chatdb_tools(chatdb_config: ChatDbConfigEntity) -> List[FunctionTool]
     return [chatdb_tool]
 
 
-def create_codesandbox_tools(codesandbox_config: CodeSandboxConfigEntity, code_sandbox_attachments_ids: list[str] = None, file_service: FileService = None):
+def create_codesandbox_tools(
+    codesandbox_config: CodeSandboxConfigEntity,
+    code_sandbox_attachments_ids: list[str] = None,
+    file_service: FileService = None,
+    tenant_id: str = None,
+):
     code_tool = CodeSandboxTool(
         aliyun_id=codesandbox_config.aliyun_id,
         interpreter_id=codesandbox_config.interpreter_id,
@@ -96,6 +103,7 @@ def create_codesandbox_tools(codesandbox_config: CodeSandboxConfigEntity, code_s
         enabled=codesandbox_config.enabled,
         code_sandbox_attachments_ids=code_sandbox_attachments_ids,
         file_service=file_service,
+        tenant_id=tenant_id,
     )
     async def aexecute_code(
         code: str,

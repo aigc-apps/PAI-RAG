@@ -241,13 +241,13 @@ tz = ["tzdata"]
 
 [[package]]
 name = "alibabacloud-credentials"
-version = "1.0.2"
+version = "1.0.1"
 description = "The alibabacloud credentials module of alibabaCloud Python SDK."
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "alibabacloud-credentials-1.0.2.tar.gz", hash = "sha256:d2368eb70bd02db9143b2bf531a27a6fecd2cde9601db6e5b48cd6dbe25720ce"},
+    {file = "alibabacloud-credentials-1.0.1.tar.gz", hash = "sha256:fa6c5f7cfa28fb51a59686aada8e96bba91687aa79d884534df1594bc6ad27f8"},
 ]
 
 [package.dependencies]
@@ -360,20 +360,20 @@ alibabacloud-tea-util = ">=0.3.12,<1.0.0"
 
 [[package]]
 name = "alibabacloud-green20220302"
-version = "2.22.0"
+version = "2.20.4"
 description = "Alibaba Cloud Green (20220302) SDK Library for Python"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "alibabacloud_green20220302-2.22.0-py3-none-any.whl", hash = "sha256:c58c856bd2b26f2ffe3af812980d824a149fac9645c853dd1c8069b618f36de6"},
-    {file = "alibabacloud_green20220302-2.22.0.tar.gz", hash = "sha256:e2afdf209874e0c0405434dc8996027e2c5f13c74eea166ed8da92c2d08f471a"},
+    {file = "alibabacloud_green20220302-2.20.4-py3-none-any.whl", hash = "sha256:118701e0eddf9f9275a15afa5d5be57d192f0df4698e04866d93fc22a1a3d81d"},
+    {file = "alibabacloud_green20220302-2.20.4.tar.gz", hash = "sha256:82039963af22bc45e7223a6d48dc12ca0ad74e228d3b2b3c672cc62ef3141659"},
 ]
 
 [package.dependencies]
-alibabacloud-endpoint-util = ">=0.0.4,<1.0.0"
+alibabacloud-endpoint-util = ">=0.0.3,<1.0.0"
 alibabacloud-openapi-util = ">=0.2.2,<1.0.0"
-alibabacloud-tea-openapi = ">=0.3.15,<1.0.0"
+alibabacloud-tea-openapi = ">=0.3.12,<1.0.0"
 alibabacloud-tea-util = ">=0.3.13,<1.0.0"
 
 [[package]]
@@ -520,17 +520,17 @@ alibabacloud-tea = ">=0.0.1"
 
 [[package]]
 name = "alibabacloud-tea-openapi"
-version = "0.3.16"
+version = "0.3.14"
 description = "Alibaba Cloud openapi SDK Library for Python"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "alibabacloud_tea_openapi-0.3.16.tar.gz", hash = "sha256:6bffed8278597592e67860156f424bde4173a6599d7b6039fb640a3612bae292"},
+    {file = "alibabacloud_tea_openapi-0.3.14.tar.gz", hash = "sha256:1e0a67ab3450cf09e26ccc0fb5b0622a6b58fdde25dc3ccb99b45e167c5db717"},
 ]
 
 [package.dependencies]
-alibabacloud_credentials = ">=1.0.2,<2.0.0"
+alibabacloud_credentials = ">=0.3.6"
 alibabacloud_gateway_spi = ">=0.0.2,<1.0.0"
 alibabacloud_openapi_util = ">=0.2.2,<1.0.0"
 alibabacloud_tea_util = ">=0.3.13,<1.0.0"
@@ -697,14 +697,14 @@ trio = ["trio (>=0.26.1)"]
 
 [[package]]
 name = "apscheduler"
-version = "3.11.0"
+version = "3.11.1"
 description = "In-process task scheduler with Cron-like capabilities"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "APScheduler-3.11.0-py3-none-any.whl", hash = "sha256:fc134ca32e50f5eadcc4938e3a4545ab19131435e851abb40b34d63d5141c6da"},
-    {file = "apscheduler-3.11.0.tar.gz", hash = "sha256:4c622d250b0955a65d5d0eb91c33e6d43fd879834bf541e0a18661ae60460133"},
+    {file = "apscheduler-3.11.1-py3-none-any.whl", hash = "sha256:6162cb5683cb09923654fa9bdd3130c4be4bfda6ad8990971c9597ecd52965d2"},
+    {file = "apscheduler-3.11.1.tar.gz", hash = "sha256:0db77af6400c84d1747fe98a04b8b58f0080c77d11d338c4f507a9752880f221"},
 ]
 
 [package.dependencies]
@@ -1189,18 +1189,6 @@ groups = ["main"]
 files = [
     {file = "cfgv-3.4.0-py2.py3-none-any.whl", hash = "sha256:b7265b1f29fd3316bfcd2b330d63d024f2bfd8bcb8b0272f8e19a504856c48f9"},
     {file = "cfgv-3.4.0.tar.gz", hash = "sha256:e52591d4c5f5dead8e0f673fb16db7949d2cfb3f7da4582893288f0ded8fe560"},
-]
-
-[[package]]
-name = "chardet"
-version = "5.2.0"
-description = "Universal encoding detector for Python 3"
-optional = false
-python-versions = ">=3.7"
-groups = ["main"]
-files = [
-    {file = "chardet-5.2.0-py3-none-any.whl", hash = "sha256:e1cf59446890a00105fe7b7912492ea04b6e6f06d4b742b2c788469e34c82970"},
-    {file = "chardet-5.2.0.tar.gz", hash = "sha256:1b3b6ff479a8c414bc3fa2c0852995695c4a026dcd6d0633b2dd092ca39c1cf7"},
 ]
 
 [[package]]
@@ -1904,18 +1892,6 @@ files = [
 ]
 
 [[package]]
-name = "docx2txt"
-version = "0.9"
-description = "A pure python-based utility to extract text and images from docx files."
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "docx2txt-0.9-py3-none-any.whl", hash = "sha256:e3718c0653fd6f2fcf4b51b02a61452ad1c38a4c163bcf0a6fd9486cd38f529a"},
-    {file = "docx2txt-0.9.tar.gz", hash = "sha256:18013f6229b14909028b19aa7bf4f8f3d6e4632d7b089ab29f7f0a4d1f660e28"},
-]
-
-[[package]]
 name = "durationpy"
 version = "0.10"
 description = "Module for converting between datetime.timedelta and Go's Duration strings."
@@ -1973,18 +1949,6 @@ requests = ["requests (>=2.4.0,!=2.32.2,<3.0.0)"]
 vectorstore-mmr = ["numpy (>=1)", "simsimd (>=3)"]
 
 [[package]]
-name = "et-xmlfile"
-version = "2.0.0"
-description = "An implementation of lxml.xmlfile for the standard library"
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa"},
-    {file = "et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54"},
-]
-
-[[package]]
 name = "fastapi"
 version = "0.115.2"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
@@ -2004,23 +1968,6 @@ typing-extensions = ">=4.8.0"
 [package.extras]
 all = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.5)", "httpx (>=0.23.0)", "itsdangerous (>=1.1.0)", "jinja2 (>=2.11.2)", "orjson (>=3.2.1)", "pydantic-extra-types (>=2.0.0)", "pydantic-settings (>=2.0.0)", "python-multipart (>=0.0.7)", "pyyaml (>=5.3.1)", "ujson (>=4.0.1,!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0)", "uvicorn[standard] (>=0.12.0)"]
 standard = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.5)", "httpx (>=0.23.0)", "jinja2 (>=2.11.2)", "python-multipart (>=0.0.7)", "uvicorn[standard] (>=0.12.0)"]
-
-[[package]]
-name = "fastpdf4llm"
-version = "0.1.4"
-description = "A fast PDF to Markdown converter optimized for LLM processing"
-optional = false
-python-versions = "<4.0,>=3.9"
-groups = ["main"]
-files = [
-    {file = "fastpdf4llm-0.1.4-py3-none-any.whl", hash = "sha256:d5d29972282b4861dddce05be49d963b31900f6253cae2ed5a22a0d11e1f81b1"},
-    {file = "fastpdf4llm-0.1.4.tar.gz", hash = "sha256:9beb30fcc5e7478fd180f703d92b26c40cb978cb7fdd72826fafcefc38f0ba8c"},
-]
-
-[package.dependencies]
-loguru = ">=0.7.0,<0.8.0"
-pdfplumber = ">=0.11.3"
-pydantic = ">=2.0.0,<3.0.0"
 
 [[package]]
 name = "filelock"
@@ -3838,22 +3785,6 @@ lingua = ["lingua"]
 testing = ["pytest"]
 
 [[package]]
-name = "markdown"
-version = "3.10"
-description = "Python implementation of John Gruber's Markdown."
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "markdown-3.10-py3-none-any.whl", hash = "sha256:b5b99d6951e2e4948d939255596523444c0e677c669700b1d17aa4a8a464cb7c"},
-    {file = "markdown-3.10.tar.gz", hash = "sha256:37062d4f2aa4b2b6b32aefb80faa300f82cc790cb949a35b8caede34f2b68c0e"},
-]
-
-[package.extras]
-docs = ["mdx_gh_links (>=0.2)", "mkdocs (>=1.6)", "mkdocs-gen-files", "mkdocs-literate-nav", "mkdocs-nature (>=0.6)", "mkdocs-section-index", "mkdocstrings[python]"]
-testing = ["coverage", "pyyaml"]
-
-[[package]]
 name = "markdown-it-py"
 version = "3.0.0"
 description = "Python port of markdown-it. Markdown parsing, done right!"
@@ -3877,22 +3808,6 @@ plugins = ["mdit-py-plugins"]
 profiling = ["gprof2dot"]
 rtd = ["jupyter_sphinx", "mdit-py-plugins", "myst-parser", "pyyaml", "sphinx", "sphinx-copybutton", "sphinx-design", "sphinx_book_theme"]
 testing = ["coverage", "pytest", "pytest-cov", "pytest-regressions"]
-
-[[package]]
-name = "markdownify"
-version = "1.2.2"
-description = "Convert HTML to markdown."
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "markdownify-1.2.2-py3-none-any.whl", hash = "sha256:3f02d3cc52714084d6e589f70397b6fc9f2f3a8531481bf35e8cc39f975e186a"},
-    {file = "markdownify-1.2.2.tar.gz", hash = "sha256:b274f1b5943180b031b699b199cbaeb1e2ac938b75851849a31fd0c3d6603d09"},
-]
-
-[package.dependencies]
-beautifulsoup4 = ">=4.9,<5"
-six = ">=1.15,<2"
 
 [[package]]
 name = "markupsafe"
@@ -4049,18 +3964,6 @@ files = [
 
 [package.dependencies]
 tqdm = "*"
-
-[[package]]
-name = "mistletoe"
-version = "1.5.0"
-description = "A fast, extensible Markdown parser in pure Python."
-optional = false
-python-versions = "~=3.5"
-groups = ["main"]
-files = [
-    {file = "mistletoe-1.5.0-py3-none-any.whl", hash = "sha256:d4e77b991b998c5efe3c4eab4e1b472263b5349688acd50d79bd9a6c317a9df1"},
-    {file = "mistletoe-1.5.0.tar.gz", hash = "sha256:68b73be68bf8075ec882e035176d5c379d0d7f3401392c6f39c2cc9cd3264d44"},
-]
 
 [[package]]
 name = "mmh3"
@@ -4901,21 +4804,6 @@ files = [
 ]
 
 [[package]]
-name = "openpyxl"
-version = "3.1.5"
-description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2"},
-    {file = "openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050"},
-]
-
-[package.dependencies]
-et-xmlfile = "*"
-
-[[package]]
 name = "opentelemetry-api"
 version = "1.36.0"
 description = "OpenTelemetry Python API"
@@ -5170,45 +5058,6 @@ files = [
 ]
 
 [[package]]
-name = "pairag-file"
-version = "2.1.3"
-description = "PAI-RAG file processing library."
-optional = false
-python-versions = ">=3.11,<3.13"
-groups = ["main"]
-files = [
-    {file = "pairag_file-2.1.3-py3-none-any.whl", hash = "sha256:54b13109dbc68fe0bdb6760c1bedb07153f19905e8c398c026f6ffd7f27c3c02"},
-]
-
-[package.dependencies]
-anyio = ">=4.6.2.post1,<5.0.0"
-bs4 = ">=0.0.2,<0.0.3"
-chardet = ">=5.2.0,<6.0.0"
-docx2txt = ">=0.9,<0.10"
-fastpdf4llm = ">=0.1.4,<0.2.0"
-llama-index-core = ">=0.12.12,<0.13.0"
-llama-index-llms-openai = ">=0.3.44,<0.4.0"
-loguru = ">=0.7.3,<0.8.0"
-markdown = ">=3.8.2,<4.0.0"
-markdownify = ">=1.2.0,<2.0.0"
-mistletoe = ">=1.4.0,<2.0.0"
-modelscope = ">=1.16.0,<2.0.0"
-numpy = ">=1.26.4,<2.0.0"
-openpyxl = ">=3.1.5,<4.0.0"
-oss2 = ">=2.18.5,<3.0.0"
-pydantic = ">=2.7.0,<3.0.0"
-python-docx = ">=1.2.0,<2.0.0"
-python-pptx = ">=1.0.2,<2.0.0"
-rapidfuzz = ">=3.14.3,<4.0.0"
-torch = ">=2.6.0,<3.0.0"
-transformers = "4.51.3"
-xlrd = ">=2.0.2,<3.0.0"
-
-[package.source]
-type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.3-py3-none-any.whl"
-
-[[package]]
 name = "pandas"
 version = "2.3.1"
 description = "Powerful data structures for data analysis, time series, and statistics"
@@ -5293,44 +5142,6 @@ spss = ["pyreadstat (>=1.2.0)"]
 sql-other = ["SQLAlchemy (>=2.0.0)", "adbc-driver-postgresql (>=0.8.0)", "adbc-driver-sqlite (>=0.8.0)"]
 test = ["hypothesis (>=6.46.1)", "pytest (>=7.3.2)", "pytest-xdist (>=2.2.0)"]
 xml = ["lxml (>=4.9.2)"]
-
-[[package]]
-name = "pdfminer-six"
-version = "20251107"
-description = "PDF parser and analyzer"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "pdfminer_six-20251107-py3-none-any.whl", hash = "sha256:c09df33e4cbe6b26b2a79248a4ffcccafaa5c5d39c9fff0e6e81567f165b5401"},
-    {file = "pdfminer_six-20251107.tar.gz", hash = "sha256:5fb0c553799c591777f22c0c72b77fc2522d7d10c70654e25f4c5f1fd996e008"},
-]
-
-[package.dependencies]
-charset-normalizer = ">=2.0.0"
-cryptography = ">=36.0.0"
-
-[package.extras]
-dev = ["atheris ; python_version < \"3.12\"", "black", "mypy (==0.931)", "nox", "pytest"]
-docs = ["sphinx", "sphinx-argparse"]
-image = ["Pillow"]
-
-[[package]]
-name = "pdfplumber"
-version = "0.11.8"
-description = "Plumb a PDF for detailed information about each char, rectangle, and line."
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "pdfplumber-0.11.8-py3-none-any.whl", hash = "sha256:7dda117b8ed21bca9c8e7d7808fee2439f93c8bd6ea45989bfb1aead6dc3cad3"},
-    {file = "pdfplumber-0.11.8.tar.gz", hash = "sha256:db29b04bc8bb62f39dd444533bcf2e0ba33584bd24f5a54644f3ba30f4f22d31"},
-]
-
-[package.dependencies]
-"pdfminer.six" = "20251107"
-Pillow = ">=9.1"
-pypdfium2 = ">=4.18.0"
 
 [[package]]
 name = "peft"
@@ -6445,29 +6256,6 @@ full = ["Pillow (>=8.0.0)", "cryptography"]
 image = ["Pillow (>=8.0.0)"]
 
 [[package]]
-name = "pypdfium2"
-version = "5.1.0"
-description = "Python bindings to PDFium"
-optional = false
-python-versions = ">=3.6"
-groups = ["main"]
-files = [
-    {file = "pypdfium2-5.1.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:f3dde94d320d582d3c20255b600f1e7e03261bfdea139b7064b54126fc3db4e2"},
-    {file = "pypdfium2-5.1.0-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:dee09b7a3ab1860a17decc97c179a5aaba5a74b2780d53c91daa18d742945892"},
-    {file = "pypdfium2-5.1.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1757d6470cbf5b8d1c825350df2ccd79fd0bfcf5753ff566fd02153a486014b1"},
-    {file = "pypdfium2-5.1.0-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:ad18e95497423f88b33f2976cb78c27f0bd6ef4b4bf340c901f5f28a234c4f06"},
-    {file = "pypdfium2-5.1.0-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:2faee2f4fbd5bd33dd77c07d15ccaa6687562d883a54c4beb8329ebaee615b7d"},
-    {file = "pypdfium2-5.1.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d688372df169a9dad606c1e5ad34b6e0e6b820f1e0d540b4780711600a7bf8dd"},
-    {file = "pypdfium2-5.1.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:cfecd2b20f1c05027aaa2af6bfbcc2835b4c8f6455155b0dc2800ec6a2051965"},
-    {file = "pypdfium2-5.1.0-py3-none-musllinux_1_1_i686.whl", hash = "sha256:5698de8e6d662f1b2cdff5cb62e6f0ee79ffaaa13e282251854cbc64cf712449"},
-    {file = "pypdfium2-5.1.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:2cbd73093fbb1710ea1164cdf27583363e1b663b8cc22d555c84af0ee1af50c7"},
-    {file = "pypdfium2-5.1.0-py3-none-win32.whl", hash = "sha256:11d319cd2e5f71cdc3d68e8a79142b559a0edbcc16fe31d4036fcfc45f0e9ed8"},
-    {file = "pypdfium2-5.1.0-py3-none-win_amd64.whl", hash = "sha256:4725f347a8c9ff011a7035d8267ee25912ab1b946034ba0b57f3cca89de8847a"},
-    {file = "pypdfium2-5.1.0-py3-none-win_arm64.whl", hash = "sha256:47c5593f7eb6ae0f1e5a940d712d733ede580f09ca91de6c3f89611848695c0f"},
-    {file = "pypdfium2-5.1.0.tar.gz", hash = "sha256:46335ca30a1584b804a6824da84d2e846b4b954bdfc342d035b7bf15ed9a14e5"},
-]
-
-[[package]]
 name = "pypika"
 version = "0.48.9"
 description = "A SQL query builder API for Python"
@@ -6582,22 +6370,6 @@ files = [
 six = ">=1.5"
 
 [[package]]
-name = "python-docx"
-version = "1.2.0"
-description = "Create, read, and update Microsoft Word .docx files."
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "python_docx-1.2.0-py3-none-any.whl", hash = "sha256:3fd478f3250fbbbfd3b94fe1e985955737c145627498896a8a6bf81f4baf66c7"},
-    {file = "python_docx-1.2.0.tar.gz", hash = "sha256:7bc9d7b7d8a69c9c02ca09216118c86552704edc23bac179283f2e38f86220ce"},
-]
-
-[package.dependencies]
-lxml = ">=3.1.0"
-typing_extensions = ">=4.9.0"
-
-[[package]]
 name = "python-dotenv"
 version = "1.1.1"
 description = "Read key-value pairs from a .env file and set them as environment variables"
@@ -6623,24 +6395,6 @@ files = [
     {file = "python_multipart-0.0.20-py3-none-any.whl", hash = "sha256:8a62d3a8335e06589fe01f2a3e178cdcc632f3fbe0d492ad9ee0ec35aab1f104"},
     {file = "python_multipart-0.0.20.tar.gz", hash = "sha256:8dd0cab45b8e23064ae09147625994d090fa46f5b0d1e13af944c331a7fa9d13"},
 ]
-
-[[package]]
-name = "python-pptx"
-version = "1.0.2"
-description = "Create, read, and update PowerPoint 2007+ (.pptx) files."
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "python_pptx-1.0.2-py3-none-any.whl", hash = "sha256:160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba"},
-    {file = "python_pptx-1.0.2.tar.gz", hash = "sha256:479a8af0eaf0f0d76b6f00b0887732874ad2e3188230315290cd1f9dd9cc7095"},
-]
-
-[package.dependencies]
-lxml = ">=3.1.0"
-Pillow = ">=3.3.2"
-typing-extensions = ">=4.9.0"
-XlsxWriter = ">=0.5.7"
 
 [[package]]
 name = "pytz"
@@ -8850,35 +8604,6 @@ pymysql = "*"
 sqlalchemy = "*"
 
 [[package]]
-name = "xlrd"
-version = "2.0.2"
-description = "Library for developers to extract data from Microsoft Excel (tm) .xls spreadsheet files"
-optional = false
-python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.7"
-groups = ["main"]
-files = [
-    {file = "xlrd-2.0.2-py2.py3-none-any.whl", hash = "sha256:ea762c3d29f4cca48d82df517b6d89fbce4db3107f9d78713e48cd321d5c9aa9"},
-    {file = "xlrd-2.0.2.tar.gz", hash = "sha256:08b5e25de58f21ce71dc7db3b3b8106c1fa776f3024c54e45b45b374e89234c9"},
-]
-
-[package.extras]
-build = ["twine", "wheel"]
-docs = ["sphinx"]
-test = ["pytest", "pytest-cov"]
-
-[[package]]
-name = "xlsxwriter"
-version = "3.2.9"
-description = "A Python module for creating Excel XLSX files."
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "xlsxwriter-3.2.9-py3-none-any.whl", hash = "sha256:9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3"},
-    {file = "xlsxwriter-3.2.9.tar.gz", hash = "sha256:254b1c37a368c444eac6e2f867405cc9e461b0ed97a3233b2ac1e574efb4140c"},
-]
-
-[[package]]
 name = "xxhash"
 version = "3.5.0"
 description = "Python binding for xxHash"
@@ -9191,4 +8916,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.13"
-content-hash = "38b73f017b95325571060892ccb615c86bbc50232d8bd6fc0efa8d9b701056cd"
+content-hash = "916ee072e2112aa52bc78625d78fd5305913c8ab07971d3b06d6007e928903e7"

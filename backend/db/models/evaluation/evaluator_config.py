@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, DateTime
+from common.system_constants import DEFAULT_TENANT_ID
+from typing import Optional
 
 class EvaluatorConfigCreate(SQLModel):
     name: str = Field(default="")
@@ -14,6 +16,8 @@ class EvaluatorConfigEntity(EvaluatorConfigCreate, table=True):
     __tablename__ = "pai_evaluator_config"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
+
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
         description="Reference to the evaluation task",

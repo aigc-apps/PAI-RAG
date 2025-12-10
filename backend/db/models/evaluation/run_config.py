@@ -3,6 +3,8 @@ import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime
 from typing import List, Optional
+from common.system_constants import DEFAULT_TENANT_ID
+
 
 class RunConfigCreate(SQLModel):
     name: Optional[str] = Field(
@@ -25,6 +27,7 @@ class RunConfigEntity(RunConfigCreate, table=True):
     __tablename__ = "pai_run_config"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
         description="Reference to the evaluation task",

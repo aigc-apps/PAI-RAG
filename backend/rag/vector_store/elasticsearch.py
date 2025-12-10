@@ -3,7 +3,7 @@
 import asyncio
 from logging import getLogger
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
-
+from elasticsearch import NotFoundError
 from llama_index.core.bridge.pydantic import PrivateAttr
 from llama_index.core.schema import BaseNode, MetadataMode
 from llama_index.core.vector_stores.types import (
@@ -176,6 +176,7 @@ class ElasticsearchStore(BasePydanticVectorStore):
         distance_strategy: Optional[DISTANCE_STRATEGIES] = "COSINE",
         retrieval_strategy: Optional[AsyncRetrievalStrategy] = None,
         metadata_mappings: Optional[Dict[str, Any]] = None,
+        dimension: int = 1024,
         **kwargs,
     ) -> None:
         if not es_client:
@@ -222,6 +223,7 @@ class ElasticsearchStore(BasePydanticVectorStore):
             user_agent=get_user_agent(),
             client=es_client,
             index=index_name,
+            num_dimensions=dimension,
             retrieval_strategy=retrieval_strategy,
             text_field=text_field,
             vector_field=vector_field,
@@ -526,26 +528,31 @@ class ElasticsearchStore(BasePydanticVectorStore):
                 del query_body["retriever"]
             return query_body
 
-        if query.mode == VectorStoreQueryMode.DEFAULT:
-            hits = await self._store.search(
-                query=None,
-                query_vector=query.query_embedding,
-                k=query.similarity_top_k,
-                num_candidates=query.similarity_top_k * 10,
-                filter=filter,
-                custom_query=dense_only_query,
-            )
-        elif query.mode == VectorStoreQueryMode.TEXT_SEARCH:
-            hits = await self._store.search(
-                query=query.query_str,
-                query_vector=None,
-                k=query.similarity_top_k,
-                num_candidates=query.similarity_top_k * 10,
-                filter=filter,
-                custom_query=text_only_query,
-            )
-        else:
-            raise ValueError(f"Unsupported query mode: {query.mode}")
+        try:
+            if query.mode == VectorStoreQueryMode.DEFAULT:
+                hits = await self._store.search(
+                    query=None,
+                    query_vector=query.query_embedding,
+                    k=query.similarity_top_k,
+                    num_candidates=query.similarity_top_k * 10,
+                    filter=filter,
+                    custom_query=dense_only_query,
+                )
+            elif query.mode == VectorStoreQueryMode.TEXT_SEARCH:
+                hits = await self._store.search(
+                    query=query.query_str,
+                    query_vector=None,
+                    k=query.similarity_top_k,
+                    num_candidates=query.similarity_top_k * 10,
+                    filter=filter,
+                    custom_query=text_only_query,
+                )
+            else:
+                raise ValueError(f"Unsupported query mode: {query.mode}")
+        except NotFoundError as e:
+            logger.error(f"Elasticsearch index not found: {e}, empty hits.")
+            await self._store._create_index_if_not_exists()
+            hits = []
 
         top_k_nodes = []
         top_k_ids = []

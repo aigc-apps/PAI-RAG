@@ -30,6 +30,30 @@ from service.thread.thread_service import ThreadService
 from service.thread.message_service import MessageService
 from service.agent.agent_service import AgentService
 
+from fastapi import Header, HTTPException
+from typing import Optional
+from common.system_constants import ENABLE_TENANT_ID, DEFAULT_TENANT_ID
+
+# 依赖项函数：从请求头中获取 Tenant ID
+async def get_tenant_id(
+    # 使用 FastAPI Header 依赖项来获取 HTTP 请求头 'X-Tenant-ID' 的值
+    x_tenant_id: Optional[str] = Header(None, alias="X-TENANT-ID")
+) -> str:
+    """
+    从请求头中提取 X-TENANT-ID
+    """
+    if x_tenant_id is None:
+        if ENABLE_TENANT_ID:
+            raise HTTPException(
+                status_code=400,
+                detail="Tenant ID is missing in the X-TENANT-ID header."
+            )
+        else:
+            # 未激活tenant id，则返回默认tenant id
+            return DEFAULT_TENANT_ID
+
+    return x_tenant_id
+
 
 async def get_llm_service(
     session: AsyncSession = Depends(get_db_session),

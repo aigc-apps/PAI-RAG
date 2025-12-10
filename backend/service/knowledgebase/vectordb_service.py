@@ -3,6 +3,7 @@
 from typing import Optional
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
 from loguru import logger
 
 from db.models.vectordb import VectorDbConfig
@@ -25,6 +26,7 @@ class VectordbService:
 
     async def get_vectordb_config(
         self,
+        tenant_id: str,
     ) -> Optional[VectorDbConfig]:
         """
         Get the vector database config entity (usually only one with id=DEFAULT_VECTOR_ID).
@@ -32,7 +34,8 @@ class VectordbService:
         Returns:
             VectorDbConfig if found, None otherwise
         """
-        vector_config = await self.session.get(VectorDbConfig, DEFAULT_VECTOR_ID)
+        result = await self.session.exec(select(VectorDbConfig).where(VectorDbConfig.id == DEFAULT_VECTOR_ID, VectorDbConfig.tenant_id == tenant_id))
+        vector_config = result.first()
         if vector_config is None:
             # Create from environment if not exists
             connection = create_vector_db_connection_from_env()
@@ -44,7 +47,7 @@ class VectordbService:
         return vector_config
 
     async def create_or_update_vectordb_config(
-        self, config_data: VectorDbConfig
+        self, config_data: VectorDbConfig, tenant_id: str
     ) -> VectorDbConfig:
         """
         Create or update a VectorDB config entity.
@@ -65,9 +68,8 @@ class VectordbService:
             )
 
         config_data.config["type"] = config_data.type
-        existing_vector_config = await self.session.get(
-            VectorDbConfig, DEFAULT_VECTOR_ID
-        )
+        result = await self.session.exec(select(VectorDbConfig).where(VectorDbConfig.id == DEFAULT_VECTOR_ID, VectorDbConfig.tenant_id == tenant_id))
+        existing_vector_config = result.first()
 
         if existing_vector_config is None:
             logger.info(f"Creating new vectordb config for type {config_data.type}")
@@ -88,6 +90,7 @@ class VectordbService:
                 id=DEFAULT_VECTOR_ID,
                 type=config_data.type,
                 config=config_data.config,
+                tenant_id=tenant_id,
             )
         else:
             existing_vector_config.type = config_data.type
@@ -123,7 +126,7 @@ class VectordbService:
             raise ValueError(f"配置创建/更新失败: {e}") from e
 
     async def prepare_test_config(
-        self, test_config: VectorDbConfig
+        self, test_config: VectorDbConfig, tenant_id: str
     ) -> VectorDbConfig:
         """
         Prepare a test config by filling in encrypted fields from existing config or environment.
@@ -141,9 +144,9 @@ class VectordbService:
 
         # Fill in missing encrypted fields from existing config or environment
         if not test_config.config.get("password"):
-            existing_vector_config = await self.session.get(
-                VectorDbConfig, DEFAULT_VECTOR_ID
-            )
+            result = await self.session.exec(select(VectorDbConfig).where(VectorDbConfig.id == DEFAULT_VECTOR_ID, VectorDbConfig.tenant_id == tenant_id))
+            existing_vector_config = result.first()
+
             if existing_vector_config is not None:
                 test_config.config["encrypted_password"] = (
                     existing_vector_config.config.get("encrypted_password")
@@ -155,9 +158,9 @@ class VectordbService:
                 )
 
         if not test_config.config.get("sk"):
-            existing_vector_config = await self.session.get(
-                VectorDbConfig, DEFAULT_VECTOR_ID
-            )
+            result = await self.session.exec(select(VectorDbConfig).where(VectorDbConfig.id == DEFAULT_VECTOR_ID, VectorDbConfig.tenant_id == tenant_id))
+            existing_vector_config = result.first()
+
             if existing_vector_config is not None:
                 test_config.config["encrypted_sk"] = (
                     existing_vector_config.config.get("encrypted_sk")

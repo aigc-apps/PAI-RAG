@@ -19,24 +19,25 @@ from sqlalchemy.exc import IntegrityError
 from pairag.file.store.file_store_helper import file_store
 from common.chat.response_model import ResponseModel, success_response
 from api.api_exception import ApiException
-from service.injection import get_rag_service, get_file_service, get_chunk_service
+from service.injection import get_rag_service, get_file_service, get_chunk_service, get_tenant_id
 from service.knowledgebase.rag_service import RagService
 from service.knowledgebase.file_service import FileService
 from service.knowledgebase.chunk_service import ChunkService
 from loguru import logger
-from utils.upload_file_utils import upload_form_files, upload_file_path_list
+from utils.upload_file_utils import upload_form_files_async, upload_file_names_async, StartParseTaskRequest
 
 knowledgebase_router = APIRouter()
 
 
 @knowledgebase_router.post("", response_model=ResponseModel[KbEntity])
 async def create_knowledgebase(
-    kb: KnowledgebaseCreate,
+    kb_data: KnowledgebaseCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        knowledgebase = await rag_service.add_knowledgebase(kb)
+        knowledgebase = await rag_service.create_knowledgebase(kb_data=kb_data, tenant_id=tenant_id)
 
         return success_response(data=knowledgebase, message="知识库创建成功。")
     except ValueError as e:
@@ -58,11 +59,12 @@ async def list_knowledgebases(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     query: Optional[str] = None,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        paged_result = await rag_service.list_knowledgebases(page, size, query)
+        paged_result = await rag_service.list_knowledgebases(tenant_id=tenant_id, page=page, size=size, query=query)
         return success_response(data=paged_result, message="获取知识库列表成功")
     except ValueError as e:
         logger.error(f"获取知识库列表失败。\nValueError:{e}")
@@ -75,11 +77,12 @@ async def list_knowledgebases(
 @knowledgebase_router.get("/{kb_id}", response_model=ResponseModel[KbEntity])
 async def read_knowledgebase(
     kb_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        knowledgebase = await rag_service.get_knowledgebase(kb_id)
+        knowledgebase = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
         return success_response(data=knowledgebase, message="查询知识库成功。")
     except ValueError as e:
         logger.error(f"查询知识库失败。\nValueError:{e}")
@@ -93,11 +96,12 @@ async def read_knowledgebase(
 async def update_knowledgebase(
     kb_id: str,
     new_kb: KnowledgebaseCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        knowledgebase = await rag_service.update_knowledgebase(kb_id, new_kb)
+        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, new_kb=new_kb, tenant_id=tenant_id)
 
         return success_response(data=knowledgebase, message="知识库更新成功。")
     except ValueError as e:
@@ -111,11 +115,12 @@ async def update_knowledgebase(
 @knowledgebase_router.delete("/{kb_id}")
 async def delete_knowledgebase(
     kb_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        await rag_service.delete_knowledgebase(kb_id)
+        await rag_service.delete_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
 
         return success_response(data=None, message="知识库删除成功。")
     except ValueError as e:
@@ -133,17 +138,18 @@ async def list_files(
     status: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
         if file_name:
-            file_entity = await rag_service.get_file_by_name(kb_id=kb_id, file_name=file_name)
+            file_entity = await rag_service.get_file_by_name(kb_id=kb_id, file_name=file_name, tenant_id=tenant_id)
             if not file_entity:
                 raise ApiException.not_found(file_name, "文件")
             return success_response(data=file_entity, message="查询文件成功")
         else:
-            page_result = await rag_service.list_files(kb_id, page, size, query, status)
+            page_result = await rag_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status)
             return success_response(data=page_result, message="查询文件列表成功")
     except ValueError as e:
         logger.error(f"查询文件失败。\nValueError:{e}")
@@ -153,60 +159,108 @@ async def list_files(
         raise ApiException(code=400, message=f"查询文件失败: {traceback.format_exc()}.")
 
 
+
+# 启动解析任务
+@knowledgebase_router.post("/{kb_id}/files/parse", response_model=ResponseModel[List[KbFileEntity]])
+async def start_parse_task(
+    kb_id: str,
+    parse_request: StartParseTaskRequest,
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    rag_service: RagService = Depends(get_rag_service),
+    file_service: FileService = Depends(get_file_service),
+):
+    logger.info(f"Start parsing task for knowledgebase {kb_id} with tenant {tenant_id}, parse_request: {parse_request}")
+    try:
+        kb_entity = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
+        if not kb_entity:
+            raise ValueError(f"知识库 {kb_id} 不存在。")
+
+        file_items = await upload_file_names_async(kb_id=kb_id, parse_tasks=parse_request.files, tenant_id=tenant_id)
+
+        file_version = int(time.time())
+        file_names = [file_task.file_name for file_task in parse_request.files]
+        existing_file_entities = await rag_service.get_files_by_names(
+            kb_id=kb_id, file_names=file_names, tenant_id=tenant_id
+        )
+        existing_file_dict = { entity.file_name: entity for entity in existing_file_entities }
+
+        import app.worker as background_worker
+        file_entities = []
+        for file_item in file_items:
+            if file_item.file_name in existing_file_dict:
+                file_entity = existing_file_dict[file_item.file_name]
+                file_entity.file_md5 = file_item.file_md5
+                file_entity.file_size = file_item.file_size
+                file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            else:
+                file_entity = to_file_entity(file_item=file_item)
+
+            file_entity.file_version = file_version
+            background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
+            session.add(file_entity)
+            file_entities.append(file_entity)
+
+        logger.info(f"Uploaded {len(file_entities)} files successfully.")
+        return success_response(data=file_entities, message="启动解析任务成功")
+    except ValueError as e:
+        logger.error(f"启动解析任务失败。\nValueError:{e}")
+        raise ApiException(code=400, message=str(e))
+    except Exception as e:
+        logger.error(f"启动解析任务失败。\nException:{traceback.format_exc()}")
+        raise ApiException(code=400, message=f"启动解析任务失败: {e}")
+
+
+
 @knowledgebase_router.post("/{kb_id}/files")
 async def upload_files(
     kb_id: str,
+    auto_parse: bool = Query(default=True),
     files: Optional[List[UploadFile]] = File(...),
-    file_path_list: Optional[List[str]] = Form(None),
-    file_id_list: Optional[List[str]] = Form(None),
     file_sources: Optional[List[str]] = Form(None),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
     file_service: FileService = Depends(get_file_service),
 ):
     try:
         file_version = int(time.time())
-        if not files and not file_id_list and not file_path_list:
+        if not files:
             raise ApiException(code=400, message="没有上传任何文件。")
-        _ = await rag_service.get_knowledgebase(kb_id=kb_id)
-        if file_id_list:
-            file_entities = await file_service.get_files_by_ids(file_ids=file_id_list)
-            if not file_entities:
-                raise ApiException.not_found(file_id_list, "文件ID列表")
-        else:
-            if files:
-                file_items = upload_form_files(kb_id=kb_id, files=files)
-            elif file_path_list:
-                file_items = upload_file_path_list(kb_id=kb_id, file_path_list=file_path_list)
+        file_items = await upload_form_files_async(kb_id=kb_id, files=files, tenant_id=tenant_id)
 
-            file_paths = [file_item.file_path for file_item in file_items]
-            file_entities = await file_service.get_files_by_path(kb_id=kb_id, file_paths=file_paths)
+        file_names = [file_item.file_name for file_item in file_items]
+        existing_file_entities = await file_service.get_files_by_names(kb_id=kb_id, file_names=file_names, tenant_id=tenant_id)
 
-            file_entity_dict = {file_entity.file_path: file_entity for file_entity in file_entities}
-            for file_item in file_items:
-                if file_item.file_path not in file_entity_dict:
-                    file_entity = to_file_entity(file_item)
-                else:
-                    file_entity.file_md5 = file_item.file_md5
-                    file_entity.file_size = file_item.file_size
-                    file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        existing_file_entity_dict = {file_entity.file_name: file_entity for file_entity in existing_file_entities}
+        new_file_entities = []
+        for file_item in file_items:
+            if file_item.file_name not in existing_file_entity_dict:
+                file_entity = to_file_entity(file_item=file_item)
+            else:
+                file_entity = existing_file_entity_dict[file_item.file_name]
+                file_entity.file_md5 = file_item.file_md5
+                file_entity.file_size = file_item.file_size
+                file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-                file_entity.file_version = file_version
-                file_entities.append(file_entity)
+            file_entity.file_version = file_version
+            new_file_entities.append(file_entity)
 
+        if file_sources:
+            assert len(file_sources) == len(new_file_entities), "文件来源列表长度与文件列表长度不一致"
+
+        for i,file_entity in enumerate(new_file_entities):
             if file_sources:
-                assert len(file_sources) == len(file_entities), "文件来源列表长度与文件列表长度不一致"
+                file_entity.file_source = file_sources[i]
 
-            import app.worker as background_worker
-            for i,file_entity in enumerate(file_entities):
-                if file_sources:
-                    file_entity.file_source = file_sources[i]
-                background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False)
+            if auto_parse:
+                import app.worker as background_worker
+                background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
                 logger.info(f"Queued {file_entity.id} job successfully.")
-                session.add(file_entity)
+            session.add(file_entity)
 
-            logger.info(f"Uploaded {len(file_entities)} files successfully.")
-            return success_response(data=file_entities, message="上传文件成功")
+        logger.info(f"Uploaded {len(new_file_entities)} files successfully.")
+        return success_response(data=new_file_entities, message="上传文件成功")
     except ValueError as e:
         logger.error(f"上传文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
@@ -214,22 +268,22 @@ async def upload_files(
         logger.error(f"上传文件失败。\nException:{traceback.format_exc()}")
         raise ApiException(code=400, message=f"上传文件失败: {traceback.format_exc()}.")
 
-
 @knowledgebase_router.get(
     "/{kb_id}/files/{file_id}", response_model=ResponseModel[KbFileEntity]
 )
 async def get_kb_file(
     kb_id: str,
     file_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        file_entity = await rag_service.get_file(kb_id=kb_id, file_id=file_id)
+        file_entity = await rag_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
             raise ApiException.not_found(file_id, "文件")
 
-        file_url = file_store.get_url(file_entity.file_path)
+        file_url = await file_store.get_url_async(file_path=file_entity.file_path, tenant_id=tenant_id)
         file_entity.file_metadata["file_url"] = file_url
         return success_response(data=file_entity, message="查询文件成功")
     except ValueError as e:
@@ -244,15 +298,16 @@ async def get_kb_file(
 async def reprocess_file(
     kb_id: str,
     file_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     file_service: FileService = Depends(get_file_service),
 ):
     try:
-        file_entities = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=[file_id])
+        file_entities = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=[file_id], tenant_id=tenant_id)
         if not file_entities:
             raise ApiException.not_found(file_id, "文件")
 
-        reprocessed_count = await _batch_reprocess_files(kb_id, file_entities, session)
+        reprocessed_count = await _batch_reprocess_files(kb_id=kb_id, file_entities=file_entities, session=session, tenant_id=tenant_id)
         return success_response(data=reprocessed_count, message=f"成功将 {reprocessed_count} 个文件加入重新处理队列。")
     except ValueError as e:
         logger.error(f"重新处理文件失败。\nValueError:{e}")
@@ -266,11 +321,12 @@ async def reprocess_file(
 async def delete_file(
     kb_id: str,
     file_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        await rag_service.delete_file(kb_id=kb_id, file_id=file_id)
+        await rag_service.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         return success_response(data=None, message="删除文件成功。")
     except ValueError as e:
         logger.error(f"删除文件失败。\nValueError:{e}")
@@ -290,6 +346,7 @@ class BatchOperationRequest(BaseModel):
 async def batch_operations(
     kb_id: str,
     request: BatchOperationRequest,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
     file_service: FileService = Depends(get_file_service),
@@ -310,7 +367,7 @@ async def batch_operations(
         )
 
     # 验证所有文件是否存在
-    file_entities = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=request.file_id_list)
+    file_entities = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=request.file_id_list, tenant_id=tenant_id)
     found_file_ids = {entity.id for entity in file_entities}
     not_found_ids = [file_id for file_id in request.file_id_list if file_id not in found_file_ids]
 
@@ -322,7 +379,7 @@ async def batch_operations(
 
     if request.operation == "delete":
         try:
-            await rag_service.batch_delete_files(kb_id=kb_id, file_ids=request.file_id_list)
+            await rag_service.batch_delete_files(kb_id=kb_id, file_ids=request.file_id_list, tenant_id=tenant_id)
             return success_response(data=None, message="删除文件成功。")
         except ValueError as e:
             logger.error(f"删除文件失败。\nValueError:{e}")
@@ -332,7 +389,7 @@ async def batch_operations(
             raise ApiException(code=400, message=f"删除文件失败: {traceback.format_exc()}.")
     elif request.operation == "reprocess":
         try:
-            reprocessed_count = await _batch_reprocess_files(kb_id, file_entities, session)
+            reprocessed_count = await _batch_reprocess_files(kb_id=kb_id, file_entities=file_entities, session=session, tenant_id=tenant_id)
             return success_response(data=reprocessed_count, message=f"成功将 {reprocessed_count} 个文件加入重新处理队列。")
         except ValueError as e:
             logger.error(f"重新处理文件失败。\nValueError:{e}")
@@ -346,6 +403,7 @@ async def _batch_reprocess_files(
     kb_id: str,
     file_entities: List[KbFileEntity],
     session: AsyncSession,
+    tenant_id: str,
 ) -> ResponseModel[dict]:
     """
     批量重新处理文件的内部实现
@@ -366,7 +424,8 @@ async def _batch_reprocess_files(
         background_worker.enqueue_file_tasks.delay(
             file_entity.id,
             file_entity.file_version,
-            is_attachment=False
+            is_attachment=False,
+            tenant_id=tenant_id,
         )
         logger.info(f"Queued file {file_entity.id} for reprocessing.")
 
@@ -387,6 +446,7 @@ async def set_file_source(
     kb_id: str,
     file_id: str,
     body: FileSourceParam,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
 ):
     file_entity = await session.get(KbFileEntity, file_id)
@@ -410,11 +470,12 @@ async def list_chunks(
     file_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        chunk_entities = await rag_service.list_chunks(kb_id=kb_id, file_id=file_id, page=page, size=size)
+        chunk_entities = await rag_service.list_chunks(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id, page=page, size=size)
 
         return success_response(data=chunk_entities, message="获取切片列表成功")
     except Exception as ex:
@@ -428,11 +489,12 @@ async def update_chunk(
     file_id: str,
     chunk_id: str,
     update_kb_chunk: KbChunkModel,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        kb_chunk = await rag_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, chunk=update_kb_chunk)
+        kb_chunk = await rag_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, chunk=update_kb_chunk, tenant_id=tenant_id)
         return success_response(data=kb_chunk, message="更新知识库切片成功。")
     except Exception as ex:
         logger.error(f"Failed to update knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {traceback.format_exc()}")
@@ -448,11 +510,12 @@ async def delete_chunk(
     kb_id: str,
     file_id: str,
     chunk_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        await rag_service.delete_chunk(chunk_id=chunk_id, kb_id=kb_id, file_id=file_id)
+        await rag_service.delete_chunk(chunk_id=chunk_id, kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         return success_response(data=None, message="删除切片成功。")
     except Exception as ex:
         logger.error(f"Failed to delete chunk from knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {traceback.format_exc()}")
@@ -463,6 +526,7 @@ async def add_chunk(
     kb_id: str,
     file_id: str,
     request: AddChunkRequest,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     chunk_service: ChunkService = Depends(get_chunk_service),
     rag_service: RagService = Depends(get_rag_service),
@@ -476,7 +540,7 @@ async def add_chunk(
     - chunk_metadata: Combines file_metadata + token_count
     """
     try:
-        new_chunk = await rag_service.add_chunk(kb_id=kb_id, file_id=file_id, text=request.text, chunk_metadata=request.chunk_metadata)
+        new_chunk = await rag_service.add_chunk(kb_id=kb_id, file_id=file_id, text=request.text, chunk_metadata=request.chunk_metadata, tenant_id=tenant_id)
 
         return success_response(data=new_chunk, message="添加切片成功。")
     except Exception as ex:

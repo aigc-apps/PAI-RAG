@@ -1,5 +1,6 @@
 ### Embedding configuration API ###
 import time
+import traceback
 import asyncio
 from fastapi import APIRouter, File, UploadFile, Form, Depends
 from db.models.knowledgebase.knowledgebase import (
@@ -13,13 +14,13 @@ from common.knowledgebase.types import FileStatus
 from datetime import datetime, timezone
 from api.api_exception import ApiException
 from service.knowledgebase.rag_service import RagService
-from service.injection import get_rag_service, get_embedding_service, get_knowledgebase_service, get_file_service, get_file_task_service
+from service.injection import get_rag_service, get_embedding_service, get_knowledgebase_service, get_file_service, get_file_task_service, get_tenant_id
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.knowledgebase.file_service import FileService
 from service.knowledgebase.file_task_service import FileTaskService
 from service.model.embedding_service import EmbeddingService
 from common.knowledgebase.constants import ATTACHMENT_KNOWLEDGEBASE_NAME
-from utils.upload_file_utils import upload_form_files
+from utils.upload_file_utils import upload_form_files_async
 from loguru import logger
 
 attachments_router = APIRouter()
@@ -38,10 +39,11 @@ async def create_attachment_file(
     file_service: FileService = Depends(get_file_service),
     file_task_service: FileTaskService = Depends(get_file_task_service),
     rag_service: RagService = Depends(get_rag_service),
+    tenant_id: str = Depends(get_tenant_id),
 ):
     try:
-        knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(ATTACHMENT_KNOWLEDGEBASE_NAME)
-        default_embedding_config = await embedding_service.get_default_embedding()
+        knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(ATTACHMENT_KNOWLEDGEBASE_NAME, tenant_id=tenant_id)
+        default_embedding_config = await embedding_service.get_default_embedding(tenant_id=tenant_id)
         file_version = int(time.time())
 
         if not knowledgebase:
@@ -50,35 +52,35 @@ async def create_attachment_file(
                 description="附件知识库",
                 embedding_model=default_embedding_config.model_id,
             )
-            knowledgebase = await knowledgebase_service.create_knowledgebase(kb_create)
+            knowledgebase = await knowledgebase_service.create_knowledgebase(kb_create=kb_create, tenant_id=tenant_id)
             await session.commit() # commit for background worker to use the knowledgebase id
 
         import app.worker as background_worker
 
-        file_items = upload_form_files(kb_id=knowledgebase.id, files=[file])
+        file_items = await upload_form_files_async(kb_id=knowledgebase.id, files=[file], tenant_id=tenant_id)
 
         file_item = file_items[0]
-        file_entity = await file_service.get_file(kb_id=knowledgebase.id, file_id=file_id)
+        file_entity = await file_service.get_file(kb_id=knowledgebase.id, file_id=file_id, tenant_id=tenant_id)
 
         if not file_entity:
-            file_entity = to_file_entity(file_item)
+            file_entity = to_file_entity(file_item=file_item)
             file_entity.id = file_id
-            await file_service.create_file(file_entity)
+            await file_service.create_file(file_data=file_entity, tenant_id=tenant_id)
         else:
             file_entity.file_md5 = file_item.file_md5
             file_entity.file_size = file_item.file_size
             file_entity.file_version = file_version
             file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity)
+            await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity, tenant_id=tenant_id)
 
         session.add(file_entity)
         await session.commit()
 
-        background_worker.enqueue_attachments_file_tasks.delay(file_entity.id, file_entity.file_version, file_entity.file_extension, is_attachment=True)
+        background_worker.enqueue_attachments_file_tasks.delay(file_entity.id, file_entity.file_version, file_entity.file_extension, is_attachment=True, tenant_id=tenant_id)
         logger.info(f"Enqueued file {file_entity.id} for background processing...")
     except Exception as e:
-        logger.error(f"Failed to save file {file_item.file_name} to database: {e}")
-        raise ApiException(code=400, message=f"文件{file_item.file_name}上传失败: {e}")
+        logger.error(f"Failed to save file {file_id} to database: {traceback.format_exc()}")
+        raise ApiException(code=400, message=f"文件{file_id}上传失败: {e}")
 
     attempt = 0
     while attempt < MAX_CHECK_ATTEMPTS:
@@ -97,10 +99,10 @@ async def create_attachment_file(
     file_entity.status = FileStatus.cancelled
     file_entity.failed_reason = f"文件{file_item.file_name}上传超时。"
     try:
-        await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity)
+        await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity, tenant_id=tenant_id)
         await session.commit()
-    except Exception as e:
-        logger.error(f"Failed to save file {file_item.file_name} to database: {e}")
+    except Exception:
+        logger.error(f"Failed to save file {file_item.file_name} to database: {traceback.format_exc()}")
         await session.rollback()
 
-    raise ApiException(code=400, message=f"文件{file_item.file_name}上传超时。")
+    raise ApiException(code=400, message=f"文件{file_id}上传超时。")

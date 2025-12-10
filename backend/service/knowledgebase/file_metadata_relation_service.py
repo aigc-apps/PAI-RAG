@@ -21,7 +21,7 @@ class FileMetadataRelationService:
         self.session = session
 
     async def get_file_metadata_relations(
-        self, kb_id: str, file_id: Optional[str] = None, metadata_id: Optional[str] = None
+        self, kb_id: str, tenant_id: str, file_id: Optional[str] = None, metadata_id: Optional[str] = None,
     ) -> List[FileMetadataEntity]:
         """
         Get FileMetadataEntity relations.
@@ -35,7 +35,8 @@ class FileMetadataRelationService:
             List of FileMetadataEntity
         """
         statement = select(FileMetadataEntity).where(
-            FileMetadataEntity.kb_id == kb_id
+            FileMetadataEntity.kb_id == kb_id,
+            FileMetadataEntity.tenant_id == tenant_id
         )
         if file_id:
             statement = statement.where(FileMetadataEntity.file_id == file_id)
@@ -47,7 +48,7 @@ class FileMetadataRelationService:
 
 
     async def get_file_metadata_relations_by_metadata_id(
-        self, kb_id: str, metadata_id: str
+        self, kb_id: str, metadata_id: str, tenant_id: str
     ) -> List[FileMetadataEntity]:
         """
         Get all FileMetadataEntity relations for a metadata.
@@ -60,11 +61,11 @@ class FileMetadataRelationService:
             List of FileMetadataEntity
         """
         return await self.get_file_metadata_relations(
-            kb_id=kb_id, metadata_id=metadata_id
+            kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id
         )
 
     async def get_file_metadata_relations_by_file_id(
-        self, kb_id: str, file_id: str
+        self, kb_id: str, file_id: str, tenant_id: str
     ) -> List[FileMetadataEntity]:
         """
         Get all FileMetadataEntity relations for a file.
@@ -76,10 +77,10 @@ class FileMetadataRelationService:
         Returns:
             List of FileMetadataEntity
         """
-        return await self.get_file_metadata_relations(kb_id=kb_id, file_id=file_id)
+        return await self.get_file_metadata_relations(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
 
     async def create_file_metadata_relation(
-        self, kb_id: str, file_id: str, metadata_id: str
+        self, kb_id: str, file_id: str, metadata_id: str, tenant_id: str
     ) -> FileMetadataEntity:
         """
         Create a new FileMetadataEntity relation.
@@ -93,7 +94,7 @@ class FileMetadataRelationService:
             Created FileMetadataEntity (not yet committed)
         """
         file_metadata_relation = FileMetadataEntity(
-            kb_id=kb_id, file_id=file_id, metadata_id=metadata_id
+            kb_id=kb_id, file_id=file_id, metadata_id=metadata_id, tenant_id=tenant_id
         )
         self.session.add(file_metadata_relation)
 
@@ -107,7 +108,7 @@ class FileMetadataRelationService:
         return file_metadata_relation
 
     async def delete_file_metadata_relation(
-        self, kb_id: str, file_id: str, metadata_id: str
+        self, kb_id: str, file_id: str, metadata_id: str, tenant_id: str
     ) -> None:
         """
         Delete a FileMetadataEntity relation.
@@ -123,6 +124,7 @@ class FileMetadataRelationService:
         statement = (
             select(FileMetadataEntity)
             .where(FileMetadataEntity.kb_id == kb_id)
+            .where(FileMetadataEntity.tenant_id == tenant_id)
             .where(FileMetadataEntity.file_id == file_id)
             .where(FileMetadataEntity.metadata_id == metadata_id)
         )
@@ -142,7 +144,7 @@ class FileMetadataRelationService:
         )
 
     async def delete_file_metadata_relations_by_file_id(
-        self, kb_id: str, file_id: str
+        self, kb_id: str, file_id: str, tenant_id: str
     ) -> None:
         """
         Delete all FileMetadataEntity relations for a file.
@@ -157,7 +159,8 @@ class FileMetadataRelationService:
         # Directly delete all file metadata relations for this file
         stmt = delete(FileMetadataEntity).where(
             FileMetadataEntity.file_id == file_id,
-            FileMetadataEntity.kb_id == kb_id
+            FileMetadataEntity.kb_id == kb_id,
+            FileMetadataEntity.tenant_id == tenant_id
         )
         result = await self.session.execute(stmt)
         deleted_count = result.rowcount
@@ -170,7 +173,7 @@ class FileMetadataRelationService:
         )
 
     async def delete_file_metadata_relations_by_metadata_id(
-        self, kb_id: str, metadata_id: str
+        self, kb_id: str, metadata_id: str, tenant_id: str
     ) -> None:
         """
         Delete all FileMetadataEntity relations for a metadata.
@@ -185,7 +188,8 @@ class FileMetadataRelationService:
         # Directly delete all file metadata relations for this metadata
         stmt = delete(FileMetadataEntity).where(
             FileMetadataEntity.metadata_id == metadata_id,
-            FileMetadataEntity.kb_id == kb_id
+            FileMetadataEntity.kb_id == kb_id,
+            FileMetadataEntity.tenant_id == tenant_id
         )
         result = await self.session.execute(stmt)
         deleted_count = result.rowcount
@@ -197,7 +201,7 @@ class FileMetadataRelationService:
             f"Deleted {deleted_count} FileMetadataEntity relations for metadata {metadata_id}"
         )
 
-    async def delete_file_metadata_relations_by_kb_id(self, kb_id: str) -> None:
+    async def delete_file_metadata_relations_by_kb_id(self, kb_id: str, tenant_id: str) -> None:
         """
         Delete all FileMetadataEntity relations for a knowledgebase.
 
@@ -208,7 +212,7 @@ class FileMetadataRelationService:
             return
 
         # Directly delete all file metadata relations for this knowledgebase
-        stmt = delete(FileMetadataEntity).where(FileMetadataEntity.kb_id == kb_id)
+        stmt = delete(FileMetadataEntity).where(FileMetadataEntity.kb_id == kb_id, FileMetadataEntity.tenant_id == tenant_id)
         result = await self.session.execute(stmt)
         deleted_count = result.rowcount
 

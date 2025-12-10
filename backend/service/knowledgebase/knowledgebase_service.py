@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
 
@@ -33,7 +33,7 @@ class KnowledgebaseService:
         """
         self.session = session
 
-    async def get_knowledgebase(self, kb_id: str) -> Optional[KbEntity]:
+    async def get_knowledgebase(self, kb_id: str, tenant_id: str) -> Optional[KbEntity]:
         """
         Get a single Knowledgebase entity by ID.
 
@@ -43,9 +43,10 @@ class KnowledgebaseService:
         Returns:
             KbEntity if found, None otherwise
         """
-        return await self.session.get(KbEntity, kb_id)
+        result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
+        return result.first()
 
-    async def get_knowledgebase_by_name(self, name: str) -> Optional[KbEntity]:
+    async def get_knowledgebase_by_name(self, name: str, tenant_id: str) -> Optional[KbEntity]:
         """
         Get a single Knowledgebase entity by name.
 
@@ -55,12 +56,13 @@ class KnowledgebaseService:
         Returns:
             KbEntity if found, None otherwise
         """
-        statement = select(KbEntity).where(KbEntity.name == name)
+        statement = select(KbEntity).where(KbEntity.name == name, KbEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         return result.first()
 
     async def list_knowledgebases(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         query: Optional[str] = None,
@@ -80,9 +82,9 @@ class KnowledgebaseService:
         """
         # Build base query condition
         if exclude_default_attachments:
-            base_condition = KbEntity.name != "default_attachments"
+            base_condition = and_(KbEntity.name != "default_attachments", KbEntity.tenant_id == tenant_id)
         else:
-            base_condition = True
+            base_condition = KbEntity.tenant_id == tenant_id
 
         # Add search condition if provided
         if query:
@@ -154,7 +156,7 @@ class KnowledgebaseService:
         )
 
     async def create_knowledgebase(
-        self, kb_data: KnowledgebaseCreate
+        self, kb_data: KnowledgebaseCreate, tenant_id: str
     ) -> KbEntity:
         """
         Create a new Knowledgebase entity.
@@ -177,7 +179,7 @@ class KnowledgebaseService:
             (kb_data.retrieval_config or RetrievalConfig()).model_dump()
         )
 
-        knowledgebase = KbEntity.model_validate(kb_data)
+        knowledgebase = KbEntity.model_validate(kb_data, update={"tenant_id": tenant_id})
         self.session.add(knowledgebase)
 
         try:
@@ -201,7 +203,7 @@ class KnowledgebaseService:
                 raise ValueError(f"知识库创建失败: {e}") from e
 
     async def update_knowledgebase(
-        self, kb_id: str, update_data: KnowledgebaseCreate
+        self, kb_id: str, update_data: KnowledgebaseCreate, tenant_id: str
     ) -> KbEntity:
         """
         Update an existing Knowledgebase entity.
@@ -217,7 +219,8 @@ class KnowledgebaseService:
         Raises:
             ValueError: If Knowledgebase entity not found
         """
-        knowledgebase = await self.session.get(KbEntity, kb_id)
+        result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
+        knowledgebase = result.first()
         if not knowledgebase:
             raise ValueError(f"知识库 '{kb_id}' 不存在。")
 
@@ -248,7 +251,7 @@ class KnowledgebaseService:
         )
         return knowledgebase
 
-    async def delete_knowledgebase(self, kb_id: str) -> None:
+    async def delete_knowledgebase(self, kb_id: str, tenant_id: str) -> None:
         """
         Delete a Knowledgebase entity.
         Note: This only deletes the knowledgebase entity itself.
@@ -261,7 +264,8 @@ class KnowledgebaseService:
         Raises:
             ValueError: If Knowledgebase entity not found
         """
-        knowledgebase = await self.session.get(KbEntity, kb_id)
+        result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
+        knowledgebase = result.first()
         if not knowledgebase:
             raise ValueError(f"知识库 '{kb_id}' 不存在。")
 
@@ -273,13 +277,13 @@ class KnowledgebaseService:
 
         logger.info(f"Deleted Knowledgebase entity: {kb_id} (name: {knowledgebase.name})")
 
-    async def get_all_knowledgebases(self) -> List[KbEntity]:
+    async def get_all_knowledgebases(self, tenant_id: str) -> List[KbEntity]:
         """
         Get all Knowledgebase entities without pagination.
 
         Returns:
             List of all KbEntity
         """
-        statement = select(KbEntity)
+        statement = select(KbEntity).where(KbEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())

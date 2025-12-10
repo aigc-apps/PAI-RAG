@@ -55,12 +55,8 @@ class SimplePdfReader(BaseReader):
     def read(self, file_item: FileItem) -> List[Document]:
         content_list = to_content_list(file_item.file, progress_callback=progress_callback, extract_images=self.extract_images)
         md_content = "\n\n".join([content.text.rstrip("\n") for content in content_list])
-        save_md_file_name = os.path.join(
-            file_item.kb_id, "markdown", file_item.file_name + ".md"
-        )
-        self.file_store.save(BytesIO(md_content.encode("utf-8")), save_md_file_name)
 
-        if self.extract_images and self.image_caption_tool and isinstance(self.file_store, OssFileStore):
+        if self.extract_images and self.image_caption_tool:
             # convert image content to text field
             logger.info(f"[MinerU] replacing image by pattern...")
             save_name_template = file_item.kb_id + "/images/{}"
@@ -73,17 +69,17 @@ class SimplePdfReader(BaseReader):
                         save_image_name = save_name_template.format(image_name)
 
                         try:
-                            self.file_store.save(image_file, save_image_name)
-                            image_alt_text = self.image_caption_tool.extract_url(
-                                self.file_store.get_url(save_image_name)
-                            )
+                            upload_result = self.file_store.write(file=image_file, file_name=image_name, file_path=save_image_name, tenant_id=file_item.tenant_id)
+                            image_file.seek(0)
+                            image_data = image_file.read()
+                            image_alt_text = self.image_caption_tool.extract_image(image_data)
                             cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                            content.text = markdown_image_text_to_chunk(save_image_name, cleaned_alt)
+                            content.text = markdown_image_text_to_chunk(upload_result.file_path, cleaned_alt)
 
                             md_content = md_content.replace(origin_image_text, content.text)
 
                             logger.info(
-                                f"Successfully saved image {save_image_name} from URL: {image_path}"
+                                f"Successfully saved image {upload_result.file_path} from URL: {image_path}"
                             )
                         except Exception as ex:
                             logger.exception(

@@ -57,6 +57,7 @@ class CodeSandboxTool:
         self,
         aliyun_id: str,
         interpreter_id: str,
+        tenant_id: str,
         timeout_default: int = 50,
         enabled: bool = False,
         code_sandbox_attachments_ids: list = None,
@@ -72,6 +73,7 @@ class CodeSandboxTool:
         self._sandbox_context_id = None
         self._code_sandbox_attachments_ids = code_sandbox_attachments_ids or []
         self.file_service = file_service
+        self.tenant_id = tenant_id
 
     async def _ensure_sandbox_initialized(self):
         """确保 sandbox 已初始化，如果未初始化则进行初始化"""
@@ -311,11 +313,13 @@ class CodeSandboxTool:
                         continue
 
                 destination_file_path = f"default_chat_docs/docs/{file_name}"
-                file_store.save(
+                await file_store.write_async(
                     file=image_file,
+                    file_name=file_name,
                     file_path=destination_file_path,
+                    tenant_id=self.tenant_id
                 )
-                url = file_store.get_url(destination_file_path)
+                url = await file_store.get_url_async(file_path=destination_file_path, tenant_id=self.tenant_id)
                 replacement = f"{prefix}{url}{suffix}"
                 replacements.append((match.start(), match.end(), replacement))
 
@@ -436,10 +440,10 @@ class CodeSandboxTool:
             logger.error("Session ID not set. Cannot upload files to sandbox.")
             return None
         for file_id in file_ids:
-            file_entity = await self.file_service.get_file_by_id(file_id=file_id)
+            file_entity = await self.file_service.get_file_by_id(file_id=file_id, tenant_id=self.tenant_id)
             if not file_entity:
                 logger.error(f"File entity not found for file ID: {file_id}")
                 continue
-            file_content_bytes = file_store.load(file_entity.file_path)
-            await self.aupload_data_file_to_sandbox(file_content_bytes, file_entity.file_name, session_id)
+            file_content_bytes = await file_store.read_async(file_path=file_entity.file_path, tenant_id=self.tenant_id)
+            await self.aupload_data_file_to_sandbox(file_content=file_content_bytes, file_name=file_entity.file_name, session_id=session_id)
         logger.info(f"{len(file_ids)} files uploaded to sandbox successfully.")

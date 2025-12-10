@@ -92,7 +92,7 @@ def create_vector_store(
             index_name=table_name,
             es_user=vector_db_connection.user,
             es_password=decrypt_key(vector_db_connection.encrypted_password),
-            dim=dimension,
+            dimension=dimension,
             retrieval_strategy=AsyncDenseVectorStrategy(
                 hybrid=True,
                 rrf=False,

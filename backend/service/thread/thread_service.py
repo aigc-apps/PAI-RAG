@@ -21,7 +21,7 @@ class ThreadService:
         """
         self.session = session
 
-    async def get_thread(self, thread_id: str) -> Optional[ThreadEntity]:
+    async def get_thread(self, thread_id: str, tenant_id: str) -> Optional[ThreadEntity]:
         """
         Get a single Thread entity by ID.
 
@@ -31,10 +31,12 @@ class ThreadService:
         Returns:
             ThreadEntity if found, None otherwise
         """
-        return await self.session.get(ThreadEntity, thread_id)
+        result = await self.session.exec(select(ThreadEntity).where(ThreadEntity.id == thread_id, ThreadEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_threads(
         self,
+        tenant_id: str,
         offset: int = 0,
         limit: int = 10,
     ) -> List[ThreadEntity]:
@@ -49,7 +51,7 @@ class ThreadService:
             List of ThreadEntity
         """
         statement = (
-            select(ThreadEntity)
+            select(ThreadEntity).where(ThreadEntity.tenant_id == tenant_id)
             .order_by(ThreadEntity.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -57,7 +59,7 @@ class ThreadService:
         results = await self.session.exec(statement)
         return list(results.all())
 
-    async def create_thread(self, thread_data: ThreadCreate) -> ThreadEntity:
+    async def create_thread(self, thread_data: ThreadCreate, tenant_id: str) -> ThreadEntity:
         """
         Create a new Thread entity.
         Note: Caller is responsible for committing the session.
@@ -71,7 +73,7 @@ class ThreadService:
         Raises:
             ValueError: If thread creation fails (IntegrityError converted)
         """
-        thread = ThreadEntity.model_validate(thread_data)
+        thread = ThreadEntity.model_validate(thread_data, update={"tenant_id": tenant_id})
         self.session.add(thread)
 
         try:
@@ -93,7 +95,7 @@ class ThreadService:
                 raise ValueError(f"Failed to add conversation: {str(e)}") from e
 
     async def update_thread_title(
-        self, thread_id: str, title: str
+        self, thread_id: str, title: str, tenant_id: str
     ) -> ThreadEntity:
         """
         Update thread title.
@@ -109,7 +111,8 @@ class ThreadService:
         Raises:
             ValueError: If Thread entity not found
         """
-        thread = await self.session.get(ThreadEntity, thread_id)
+        result = await self.session.exec(select(ThreadEntity).where(ThreadEntity.id == thread_id, ThreadEntity.tenant_id == tenant_id))
+        thread = result.first()
         if not thread:
             raise ValueError(f"Conversation {thread_id} not found.")
 
@@ -123,7 +126,7 @@ class ThreadService:
         logger.info(f"Updated Thread title: {thread.id} -> {title}")
         return thread
 
-    async def delete_thread(self, thread_id: str) -> None:
+    async def delete_thread(self, thread_id: str, tenant_id: str) -> None:
         """
         Delete a Thread entity.
         Note: Caller is responsible for committing the session.
@@ -134,7 +137,8 @@ class ThreadService:
         Raises:
             ValueError: If Thread entity not found
         """
-        thread = await self.session.get(ThreadEntity, thread_id)
+        result = await self.session.exec(select(ThreadEntity).where(ThreadEntity.id == thread_id, ThreadEntity.tenant_id == tenant_id))
+        thread = result.first()
         if not thread:
             raise ValueError(f"Conversation {thread_id} not found.")
 

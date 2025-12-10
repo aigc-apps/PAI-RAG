@@ -25,7 +25,7 @@ class CodesandboxService:
         self.session = session
 
     async def get_codesandbox_config(
-        self, config_id: str
+        self, config_id: str, tenant_id: str
     ) -> Optional[CodeSandboxConfigEntity]:
         """
         Get a single CodeSandbox config entity by ID.
@@ -36,10 +36,14 @@ class CodesandboxService:
         Returns:
             CodeSandboxConfigEntity if found, None otherwise
         """
-        return await self.session.get(CodeSandboxConfigEntity, config_id)
+        codesandbox_configs = await self.session.exec(
+            select(CodeSandboxConfigEntity).where(
+                CodeSandboxConfigEntity.id == config_id, CodeSandboxConfigEntity.tenant_id == tenant_id))
+        return codesandbox_configs.first()
 
     async def get_codesandbox_config_or_create(
         self,
+        tenant_id: str,
     ) -> Optional[CodeSandboxConfigEntity]:
         """
         Get the first CodeSandbox config entity, or None if none exists.
@@ -47,12 +51,13 @@ class CodesandboxService:
         Returns:
             CodeSandboxConfigEntity if found, None otherwise
         """
-        statement = select(CodeSandboxConfigEntity)
-        result = await self.session.exec(statement)
-        return result.first()
+        statement = select(CodeSandboxConfigEntity).where(CodeSandboxConfigEntity.tenant_id == tenant_id)
+        codesandbox_configs = await self.session.exec(statement)
+        return codesandbox_configs.first()
 
     async def get_all_codesandbox_configs(
         self,
+        tenant_id: str,
     ) -> List[CodeSandboxConfigEntity]:
         """
         Get all CodeSandbox config entities (usually only one).
@@ -60,12 +65,12 @@ class CodesandboxService:
         Returns:
             List of all CodeSandboxConfigEntity
         """
-        statement = select(CodeSandboxConfigEntity)
-        results = await self.session.exec(statement)
-        return list(results.all())
+        statement = select(CodeSandboxConfigEntity).where(CodeSandboxConfigEntity.tenant_id == tenant_id)
+        codesandbox_configs = await self.session.exec(statement)
+        return list(codesandbox_configs.all())
 
     async def create_or_update_codesandbox_config(
-        self, config_data: CodeSandboxConfigCreate
+        self, config_data: CodeSandboxConfigCreate, tenant_id: str
     ) -> CodeSandboxConfigEntity:
         """
         Create or update a CodeSandbox config entity.
@@ -84,13 +89,13 @@ class CodesandboxService:
             raise ValueError("不支持的code sandbox类型，仅支持aliyun-fc")
 
         # Get existing config or create new one
-        statement = select(CodeSandboxConfigEntity)
-        result = await self.session.exec(statement)
-        config = result.first()
+        statement = select(CodeSandboxConfigEntity).where(CodeSandboxConfigEntity.tenant_id == tenant_id)
+        codesandbox_configs = await self.session.exec(statement)
+        config = codesandbox_configs.first()
 
         if config is None:
             # Create new config
-            config = CodeSandboxConfigEntity.model_validate(config_data)
+            config = CodeSandboxConfigEntity.model_validate(config_data, update={"tenant_id": tenant_id})
             self.session.add(config)
             logger.info(f"Creating new CodeSandbox config for type {config_data.type}")
         else:

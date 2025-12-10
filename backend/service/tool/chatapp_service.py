@@ -23,7 +23,7 @@ class ChatappService:
         """
         self.session = session
 
-    async def get_chatapp(self, id: str) -> Optional[ChatBotEntity]:
+    async def get_chatapp(self, id: str, tenant_id: str) -> Optional[ChatBotEntity]:
         """
         Get a single ChatApp entity by ID.
 
@@ -33,9 +33,10 @@ class ChatappService:
         Returns:
             ChatBotEntity if found, None otherwise
         """
-        return await self.session.get(ChatBotEntity, id)
+        chatapps = await self.session.exec(select(ChatBotEntity).where(ChatBotEntity.id == id, ChatBotEntity.tenant_id == tenant_id))
+        return chatapps.first()
 
-    async def get_chatapp_by_app_id(self, app_id: str) -> Optional[ChatBotEntity]:
+    async def get_chatapp_by_app_id(self, app_id: str, tenant_id: str) -> Optional[ChatBotEntity]:
         """
         Get a single ChatApp entity by app_id.
 
@@ -45,12 +46,13 @@ class ChatappService:
         Returns:
             ChatBotEntity if found, None otherwise
         """
-        statement = select(ChatBotEntity).where(ChatBotEntity.app_id == app_id)
-        result = await self.session.exec(statement)
-        return result.first()
+        statement = select(ChatBotEntity).where(ChatBotEntity.app_id == app_id, ChatBotEntity.tenant_id == tenant_id)
+        chatapps = await self.session.exec(statement)
+        return chatapps.first()
 
     async def list_chatapps(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         app_id: Optional[str] = None,
@@ -67,7 +69,7 @@ class ChatappService:
             PagedResult containing list of ChatBotEntity and pagination metadata
         """
         # Build base query
-        base_query = select(ChatBotEntity)
+        base_query = select(ChatBotEntity).where(ChatBotEntity.tenant_id == tenant_id)
 
         # Add app_id filter if provided
         if app_id is not None:
@@ -95,7 +97,7 @@ class ChatappService:
             size=size,
         )
 
-    async def create_chatapp(self, app_data: ChatBotCreate) -> ChatBotEntity:
+    async def create_chatapp(self, app_data: ChatBotCreate, tenant_id: str) -> ChatBotEntity:
         """
         Create a new ChatApp entity.
         Note: Caller is responsible for committing the session.
@@ -109,7 +111,7 @@ class ChatappService:
         Raises:
             ValueError: If app_id already exists (IntegrityError converted)
         """
-        chatbot = ChatBotEntity.model_validate(app_data)
+        chatbot = ChatBotEntity.model_validate(app_data, update={"tenant_id": tenant_id})
         self.session.add(chatbot)
 
         try:
@@ -133,7 +135,7 @@ class ChatappService:
                 raise ValueError(f"应用创建失败: {e}") from e
 
     async def update_chatapp(
-        self, id: str, update_data: ChatBotCreate
+        self, id: str, update_data: ChatBotCreate, tenant_id: str
     ) -> ChatBotEntity:
         """
         Update an existing ChatApp entity.
@@ -149,7 +151,7 @@ class ChatappService:
         Raises:
             ValueError: If ChatApp entity not found
         """
-        chatbot = await self.session.get(ChatBotEntity, id)
+        chatbot = await self.get_chatapp(id=id, tenant_id=tenant_id)
         if not chatbot:
             raise ValueError(f"应用 '{id}' 不存在。")
 
@@ -193,7 +195,7 @@ class ChatappService:
         logger.info(f"Updated ChatApp entity: {chatbot.id} (app_id: {chatbot.app_id})")
         return chatbot
 
-    async def delete_chatapp(self, id: str) -> None:
+    async def delete_chatapp(self, id: str, tenant_id: str) -> None:
         """
         Delete a ChatApp entity.
         Note: Caller is responsible for committing the session.
@@ -204,7 +206,7 @@ class ChatappService:
         Raises:
             ValueError: If ChatApp entity not found
         """
-        chatbot = await self.session.get(ChatBotEntity, id)
+        chatbot = await self.get_chatapp(id=id, tenant_id=tenant_id)
         if not chatbot:
             raise ValueError(f"应用 '{id}' 不存在。")
 
@@ -216,13 +218,13 @@ class ChatappService:
 
         logger.info(f"Deleted ChatApp entity: {id} (app_id: {chatbot.app_id})")
 
-    async def get_all_chatapps(self) -> List[ChatBotEntity]:
+    async def get_all_chatapps(self, tenant_id: str) -> List[ChatBotEntity]:
         """
         Get all ChatApp entities without pagination.
 
         Returns:
             List of all ChatBotEntity
         """
-        statement = select(ChatBotEntity)
-        results = await self.session.exec(statement)
-        return list(results.all())
+        statement = select(ChatBotEntity).where(ChatBotEntity.tenant_id == tenant_id)
+        chatapps = await self.session.exec(statement)
+        return list(chatapps.all())

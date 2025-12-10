@@ -5,12 +5,12 @@ from service.knowledgebase.file_service import FileService
 
 
 
-async def aget_file_reader(file_service: FileService = None):
+async def aget_file_reader(file_service: FileService = None, tenant_id: str = None):
     if not file_service:
         raise ValueError("file_service is required")
 
     async def aread_file_content(file_id: str, **kwargs):
-        file_entity = await file_service.get_file_by_id(file_id=file_id)
+        file_entity = await file_service.get_file_by_id(file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
             raise ValueError(f"File entity not found for attachment {file_id}")
 

@@ -11,7 +11,7 @@ from db.models.code_sandbox import (
 from common.chat.response_model import success_response, ResponseModel
 from db.db_context import get_db_session
 from service.tool.codesandbox_service import CodesandboxService
-from service.injection import get_codesandbox_service
+from service.injection import get_codesandbox_service, get_tenant_id
 from api.api_exception import ApiException
 from loguru import logger
 
@@ -22,6 +22,7 @@ code_sandbox_router = APIRouter()
 @code_sandbox_router.post("", response_model=ResponseModel[CodeSandboxConfigRead])
 async def add_code_sandbox_config(
     new_code_sandbox_config: CodeSandboxConfigCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     codesandbox_service: CodesandboxService = Depends(get_codesandbox_service),
 ):
@@ -31,7 +32,7 @@ async def add_code_sandbox_config(
 
     try:
         code_sandbox_config = await codesandbox_service.create_or_update_codesandbox_config(
-            new_code_sandbox_config
+            new_code_sandbox_config, tenant_id=tenant_id
         )
         await session.refresh(code_sandbox_config)
         return success_response(data=code_sandbox_config, message="添加代码沙盒配置成功。")
@@ -45,11 +46,12 @@ async def add_code_sandbox_config(
 
 @code_sandbox_router.get("", response_model=ResponseModel[List[CodeSandboxConfigRead]])
 async def list_code_sandbox_config(
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     codesandbox_service: CodesandboxService = Depends(get_codesandbox_service),
 ):
     try:
-        configs = await codesandbox_service.get_all_codesandbox_configs()
+        configs = await codesandbox_service.get_all_codesandbox_configs(tenant_id=tenant_id)
         if configs:
             code_sandbox_config_read = CodeSandboxConfigRead(
                 type=configs[0].type,

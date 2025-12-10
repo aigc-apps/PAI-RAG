@@ -36,9 +36,10 @@ async def create_vector_store_from_db(
     session: AsyncSession,
     kb_id: str,
     dimension: int,
+    tenant_id: str,
 ) -> BasePydanticVectorStore:
     vectordb_service: VectordbService = await get_vectordb_service(session=session)
-    vectordb_config = await vectordb_service.get_vectordb_config()
+    vectordb_config = await vectordb_service.get_vectordb_config(tenant_id=tenant_id)
     if not vectordb_config:
         raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
     vector_store = create_vector_store(
@@ -52,17 +53,22 @@ async def create_vector_store_from_db(
 async def get_knowledgebase_from_db(
     session: AsyncSession,
     kb_id: str,
+    tenant_id: str,
 ) -> KbEntity:
-    knowledgebase = await session.get(KbEntity, kb_id)
+    select_statement = select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id)
+    knowledgebase = (await session.exec(select_statement)).first()
+    if not knowledgebase:
+        logger.error(f"[FileHelper] Knowledgebase {kb_id} not found, skip getting knowledgebase.")
+        raise ValueError(f"Knowledgebase {kb_id} not found.")
     return knowledgebase
 
 
 @with_async_db_session
 async def get_embedding_from_db(
-    session: AsyncSession, model_id: str
+    session: AsyncSession, model_id: str, tenant_id: str,
 ) -> BaseEmbedding:
     embedding_entity = (await session.exec(
-        select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == model_id)
+        select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == model_id, EmbeddingModelEntity.tenant_id == tenant_id)
     )).first()
 
     if not embedding_entity:
@@ -79,9 +85,14 @@ async def get_embedding_from_db(
 async def set_embedding_model_ready(
     session: AsyncSession,
     id: str,
+    tenant_id: str,
 ):
     try:
-        embedding_model = await session.get(EmbeddingModelEntity, id)
+        select_statement = select(EmbeddingModelEntity).where(EmbeddingModelEntity.id == id, EmbeddingModelEntity.tenant_id == tenant_id)
+        embedding_model = (await session.exec(select_statement)).first()
+        if not embedding_model:
+            logger.error(f"[FileHelper] Embedding model {id} not found, skip setting embedding model ready.")
+            raise ValueError(f"Embedding model {id} not found.")
         if embedding_model is None:
             raise ValueError(
                 f"Embedding model {id} not found."
@@ -101,9 +112,10 @@ async def set_embedding_model_ready(
 async def get_openailike_llm_from_db(
     session: AsyncSession,
     model_id: str,
+    tenant_id: str,
 ) -> OpenAILike:
     llm_entity = (await session.exec(
-        select(LlmModelEntity).where(LlmModelEntity.model_id == model_id)
+        select(LlmModelEntity).where(LlmModelEntity.model_id == model_id, LlmModelEntity.tenant_id == tenant_id)
     )).first()
     if not llm_entity:
         raise ValueError(f"LLM model {model_id} not found.")
@@ -115,10 +127,12 @@ async def should_cancel_file_task(
     session: AsyncSession,
     kb_id: str,
     file_id: str,
+    tenant_id: str,
     file_part: int = 0,
     file_version: int = 0,
 ) -> bool:
-    file_entity = await session.get(KbFileEntity, file_id)
+    select_statement = select(KbFileEntity).where(KbFileEntity.id == file_id, KbFileEntity.tenant_id == tenant_id)
+    file_entity = (await session.exec(select_statement)).first()
     if not file_entity:
         logger.warning(f"File entity {file_id} not found, cancel the task.")
         return True
@@ -139,6 +153,7 @@ async def should_cancel_file_task(
             KbFileTaskEntity.kb_id == kb_id,
             KbFileTaskEntity.file_id == file_id,
             KbFileTaskEntity.file_part == file_part,
+            KbFileTaskEntity.tenant_id == tenant_id,
         )
     )).first()
 
@@ -161,8 +176,13 @@ async def should_cancel_file_task(
 async def read_file_from_db(
     session: AsyncSession,
     file_id: str,
+    tenant_id: str,
 ) -> KbFileEntity:
-    file_entity = await session.get(KbFileEntity, file_id)
+    select_statement = select(KbFileEntity).where(KbFileEntity.id == file_id, KbFileEntity.tenant_id == tenant_id)
+    file_entity = (await session.exec(select_statement)).first()
+    if not file_entity:
+        logger.error(f"[FileHelper] File {file_id} not found, skip reading file.")
+        raise ValueError(f"File {file_id} not found.")
     return file_entity
 
 
@@ -185,20 +205,26 @@ async def save_file_to_db(
 async def update_file_content_async(
     session: AsyncSession,
     file_id: str,
+    tenant_id: str,
     is_attachment: bool = False,
     documents: List[Document] = None,
 ):
-    file = await session.get(KbFileEntity, file_id)
+    select_statement = select(KbFileEntity).where(KbFileEntity.id == file_id, KbFileEntity.tenant_id == tenant_id)
+    file = (await session.exec(select_statement)).first()
+    if not file:
+        logger.error(f"[FileHelper] File {file_id} not found, skip updating file content.")
+        raise ValueError(f"File {file_id} not found.")
+
     if is_attachment:
         if file.file_extension in [".xlsx"]:
-            file_data = file_store.load(file.file_path)
+            file_data = await file_store.read_async(file_path=file.file_path, tenant_id=tenant_id)
             df = pd.read_excel(file_data)
             file.file_content = df.head(10).to_csv(index=False)
             if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE or len(df) > 10:
                 file.file_content = file.file_content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
             file.file_content_length = len(file.file_content)
         elif file.file_extension in [".csv"]:
-            file_data = file_store.load(file.file_path)
+            file_data = await file_store.read_async(file_path=file.file_path, tenant_id=tenant_id)
             df = pd.read_csv(file_data)
             file.file_content = df.head(10).to_csv(index=False)
             if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE or len(df) > 10:
@@ -227,19 +253,22 @@ async def update_file_content_async(
 async def update_file_status_async(
     session: AsyncSession,
     file_id: str,
+    tenant_id: str,
     status: FileStatus,
     task_id: str = None,
     failed_reason: str = None,
     is_attachment: bool = False,
 ):
-    file = await session.get(KbFileEntity, file_id)
+    select_statement = select(KbFileEntity).where(KbFileEntity.id == file_id, KbFileEntity.tenant_id == tenant_id)
+    file = (await session.exec(select_statement)).first()
     if not file:
         logger.error(f"[FileHelper] File {file_id} not found, skip updating file status.")
         raise ValueError(f"File {file_id} not found.")
 
     # try update task status first, if there are still other tasks not in the same status, skip updating file status.
     if task_id:
-        task = await session.get(KbFileTaskEntity, task_id)
+        select_statement = select(KbFileTaskEntity).where(KbFileTaskEntity.id == task_id, KbFileTaskEntity.tenant_id == tenant_id)
+        task = (await session.exec(select_statement)).first()
         if task:
             task.status = status
             task.failed_reason = failed_reason
@@ -254,6 +283,7 @@ async def update_file_status_async(
                     KbFileTaskEntity.kb_id == file.kb_id,
                     KbFileTaskEntity.status != status,
                     KbFileTaskEntity.id != task_id,
+                    KbFileTaskEntity.tenant_id == tenant_id,
                 )
 
             # 执行并获取标量结果
@@ -283,21 +313,22 @@ async def save_chunks_to_db_async(
     file_id: str,
     file_part: int,
     chunk_nodes: List[TextNode],
+    tenant_id: str,
 ):
     try:
         logger.info(f"[KnowledgebaseProvider] Start saving {len(chunk_nodes)} chunks.")
         chunk_records: List[KbChunkEntity] = [
-            create_chunk_from_text_node(kb_id=kb_id, file_id=file_id, file_part=file_part,node=chunk, index=i) for (i, chunk) in enumerate(chunk_nodes)
+            create_chunk_from_text_node(kb_id=kb_id, file_id=file_id, file_part=file_part,node=chunk, index=i, tenant_id=tenant_id) for (i, chunk) in enumerate(chunk_nodes)
         ]
         select_statement = select(KbChunkEntity).where(
-            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, or_(KbChunkEntity.file_part.is_(None), KbChunkEntity.file_part == file_part)
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, or_(KbChunkEntity.file_part.is_(None), KbChunkEntity.file_part == file_part), KbChunkEntity.tenant_id == tenant_id
         )
         existing_chunks = (await session.exec(select_statement)).all()
         existing_chunk_ids = [chunk.id for chunk in existing_chunks]
 
         # 构造 DELETE 语句
         del_statement = delete(KbChunkEntity).where(
-            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, or_(KbChunkEntity.file_part.is_(None), KbChunkEntity.file_part == file_part)
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, or_(KbChunkEntity.file_part.is_(None), KbChunkEntity.file_part == file_part), KbChunkEntity.tenant_id == tenant_id
         )
 
         # 执行删除操作
@@ -322,12 +353,13 @@ async def update_chunk_status_async(
     session: AsyncSession,
     chunk_ids: List[str],
     status: ChunkStatus,
+    tenant_id: str,
 ) -> None:
     try:
         logger.info(f"[FileHelper] updating chunk {chunk_ids} status to {status}.")
         await session.exec(
             update(KbChunkEntity)
-            .where(KbChunkEntity.id.in_(chunk_ids))
+            .where(KbChunkEntity.id.in_(chunk_ids), KbChunkEntity.tenant_id == tenant_id)
             .values(status=status.value)
         )
         await session.commit()
@@ -344,10 +376,11 @@ async def get_kb_chunk_ids(
     session: AsyncSession,
     kb_id: str,
     file_id: str,
+    tenant_id: str,
 ) -> List[str]:
     chunk_ids = (await session.exec(
         select(KbChunkEntity.id).where(
-            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, KbChunkEntity.tenant_id == tenant_id
         )
     )).all()
 
@@ -361,6 +394,7 @@ async def clear_useless_file_resources_async(
     session: AsyncSession,
     kb_id: str,
     file_id: str,
+    tenant_id: str,
     part_count: int = 0,
 ):
     try:
@@ -368,6 +402,7 @@ async def clear_useless_file_resources_async(
             KbFileTaskEntity.kb_id == kb_id,
             KbFileTaskEntity.file_id == file_id,
             KbFileTaskEntity.file_part > part_count,
+            KbFileTaskEntity.tenant_id == tenant_id,
         )
         clear_task_result = await session.exec(clear_task_statement)
 
@@ -375,12 +410,14 @@ async def clear_useless_file_resources_async(
             KbChunkEntity.kb_id == kb_id,
             KbChunkEntity.file_id == file_id,
             KbChunkEntity.file_part > part_count,
+            KbChunkEntity.tenant_id == tenant_id,
         )
         chunk_ids_to_delete = (await session.exec(filter_chunk_id_clause)).all()
         clear_chunk_statement = delete(KbChunkEntity).where(
             KbChunkEntity.kb_id == kb_id,
             KbChunkEntity.file_id == file_id,
             KbChunkEntity.file_part > part_count,
+            KbChunkEntity.tenant_id == tenant_id,
         )
         clear_chunk_result = await session.exec(clear_chunk_statement)
         logger.info(f"Deleted {clear_task_result.rowcount} file tasks and {clear_chunk_result.rowcount} chunks for file {file_id}.")
@@ -397,11 +434,13 @@ async def delete_file_tasks_by_file_id_async(
     session: AsyncSession,
     kb_id: str,
     file_id: str,
+    tenant_id: str,
 ):
     try:
         del_statement = delete(KbFileTaskEntity).where(
             KbFileTaskEntity.kb_id == kb_id,
             KbFileTaskEntity.file_id == file_id,
+            KbFileTaskEntity.tenant_id == tenant_id,
         )
         result = await session.exec(del_statement)
         await session.commit()
@@ -415,13 +454,16 @@ async def delete_file_tasks_by_file_id_async(
 async def save_file_task_async(
     session: AsyncSession,
     task_entity: KbFileTaskEntity,
+    tenant_id: str,
 ):
+    logger.info(f"Saving file task entity {task_entity} for tenant {tenant_id}.")
     try:
         target_task_entity = (await session.exec(
             select(KbFileTaskEntity).where(
                 KbFileTaskEntity.kb_id == task_entity.kb_id,
                 KbFileTaskEntity.file_id == task_entity.file_id,
                 KbFileTaskEntity.file_part == task_entity.file_part,
+                KbFileTaskEntity.tenant_id == tenant_id,
             )
         )).first()
 
@@ -448,6 +490,11 @@ async def save_file_task_async(
 async def get_file_task_async(
     session: AsyncSession,
     task_id: str,
+    tenant_id: str,
 ) -> KbFileTaskEntity:
-    target_task_entity = await session.get(KbFileTaskEntity, task_id)
+    select_statement = select(KbFileTaskEntity).where(KbFileTaskEntity.id == task_id, KbFileTaskEntity.tenant_id == tenant_id)
+    target_task_entity = (await session.exec(select_statement)).first()
+    if not target_task_entity:
+        logger.error(f"[FileHelper] File task {task_id} not found, skip getting file task.")
+        raise ValueError(f"File task {task_id} not found.")
     return target_task_entity

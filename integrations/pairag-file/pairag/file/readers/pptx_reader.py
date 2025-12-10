@@ -5,7 +5,6 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from loguru import logger
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
-from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_utils import compress_image_if_needed
 from pairag.file.utils.markdown_tree_utils import PaiTable, convert_table_to_markdown
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
@@ -23,13 +22,13 @@ class PptxReader(BaseReader):
         logger.info("PptxReader inited.")
 
 
-    def _extract_image_from_shape(self,shape, save_name_template: str):
+    def _extract_image_from_shape(self,shape, save_name_template: str, tenant_id: str):
         """从 shape 提取图片（支持 PICTURE、PLACEHOLDER.PICTURE、CHART 等）"""
         markdown = []
         images = []
         if not (hasattr(shape, 'image') and shape.image):
             return markdown, images
-        if isinstance(self.file_store, OssFileStore) and self.image_caption_tool:
+        if self.image_caption_tool:
             image_blob = shape.image.blob
             image_name = hashlib.md5(image_blob).hexdigest() + ".jpeg"
             save_image_name = save_name_template.format(image_name)
@@ -37,20 +36,19 @@ class PptxReader(BaseReader):
             image_file = compress_image_if_needed(image_file)
             if image_file:
                 try:
-                    self.file_store.save(BytesIO(image_blob), save_image_name)
-                    image_alt_text = self.image_caption_tool.extract_url(
-                        self.file_store.get_url(save_image_name)
-                    )
+                    upload_result = self.file_store.write(file=image_file, file_name=image_name, file_path=save_image_name, tenant_id=tenant_id)
+                    image_file.seek(0)
+                    image_alt_text = self.image_caption_tool.extract_image(image_file.read())
                     cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                    image_text = to_markdown_image_text(save_image_name, cleaned_alt)
+                    image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
                     markdown.append(f"{image_text}\n\n")
-                    images.append(save_image_name)
-                    logger.info(f"Successfully saved image {save_image_name}.")
+                    images.append(upload_result.file_path)
+                    logger.info(f"Successfully saved image {upload_result.file_path}.")
                 except Exception as ex:
-                    logger.exception(f"Failed to save image: {save_image_name}. Error: {ex}")
+                    logger.exception(f"Failed to save image: {upload_result.file_path}. Error: {ex}")
         return markdown, images
 
-    def _extract_shape(self, slide_number, shape, save_name_template: str):
+    def _extract_shape(self, slide_number, shape, save_name_template: str, tenant_id: str):
         markdown = []
         images = []
         if shape.name.startswith("Title"):
@@ -58,7 +56,7 @@ class PptxReader(BaseReader):
             markdown.append(f"# {shape.text}\n\n")
         elif shape.shape_type in (MSO_SHAPE_TYPE.PICTURE, MSO_SHAPE_TYPE.CHART):
             # 图片
-            new_markdown, new_images = self._extract_image_from_shape(shape, save_name_template)
+            new_markdown, new_images = self._extract_image_from_shape(shape, save_name_template, tenant_id)
             markdown.extend(new_markdown)
             images.extend(new_images)
         elif shape.shape_type == MSO_SHAPE_TYPE.TEXT_BOX:
@@ -73,7 +71,7 @@ class PptxReader(BaseReader):
             texts = []
             for p in sorted(shape.shapes, key=lambda x: (x.top // 10, x.left)):
                 md, new_images = self._extract_shape(
-                    slide_number, p, save_name_template
+                    slide_number, p, save_name_template, tenant_id
                 )
                 if md:
                     texts.append(md)
@@ -92,7 +90,7 @@ class PptxReader(BaseReader):
                     markdown.append(f"{text}\n\n")
             elif placeholder_type in (PP_PLACEHOLDER.PICTURE, PP_PLACEHOLDER.CHART):
                 # 图片
-                new_markdown, new_images = self._extract_image_from_shape(shape, save_name_template)
+                new_markdown, new_images = self._extract_image_from_shape(shape, save_name_template, tenant_id)
                 markdown.extend(new_markdown)
                 images.extend(new_images)
             elif placeholder_type == PP_PLACEHOLDER.TABLE:
@@ -160,7 +158,7 @@ class PptxReader(BaseReader):
         return convert_table_to_markdown(pai_table, len(table.columns))
 
     def convert_pptx_to_markdown(
-        self, presentation: Presentation, save_name_template: str
+        self, presentation: Presentation, save_name_template: str, tenant_id: str
     ):
         markdown = []
         images = []
@@ -169,7 +167,7 @@ class PptxReader(BaseReader):
             image_flag = False
             for shape in slide.shapes:
                 shape_markdown, shape_images = self._extract_shape(
-                    slide_number, shape, save_name_template
+                    slide_number, shape, save_name_template, tenant_id
                 )
                 markdown.append(shape_markdown)
                 images.extend(shape_images)
@@ -187,7 +185,7 @@ class PptxReader(BaseReader):
             presentation = Presentation(file_item.file)
 
             markdown_content, images = self.convert_pptx_to_markdown(
-                presentation, file_item.kb_id + "/images/{}"
+                presentation, file_item.kb_id + "/images/{}", tenant_id=file_item.tenant_id
             )
 
             metadata = file_item.metadata()

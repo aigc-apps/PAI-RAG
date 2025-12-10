@@ -28,7 +28,7 @@ class RoleService:
 
     # ========== Role Operations ==========
 
-    async def get_role(self, role_id: str) -> Optional[RoleEntity]:
+    async def get_role(self, role_id: str, tenant_id: str) -> Optional[RoleEntity]:
         """
         Get a single Role entity by ID.
 
@@ -38,9 +38,10 @@ class RoleService:
         Returns:
             RoleEntity if found, None otherwise
         """
-        return await self.session.get(RoleEntity, role_id)
+        result = await self.session.exec(select(RoleEntity).where(RoleEntity.id == role_id, RoleEntity.tenant_id == tenant_id))
+        return result.first()
 
-    async def get_role_by_name(self, name: str) -> Optional[RoleEntity]:
+    async def get_role_by_name(self, name: str, tenant_id: str) -> Optional[RoleEntity]:
         """
         Get a single Role entity by name.
 
@@ -50,12 +51,13 @@ class RoleService:
         Returns:
             RoleEntity if found, None otherwise
         """
-        statement = select(RoleEntity).where(RoleEntity.name == name)
+        statement = select(RoleEntity).where(RoleEntity.name == name, RoleEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         return result.first()
 
     async def list_roles(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         name: Optional[str] = None,
@@ -72,7 +74,7 @@ class RoleService:
             PagedResult containing list of RoleEntity and pagination metadata
         """
         # Build base query
-        base_query = select(RoleEntity)
+        base_query = select(RoleEntity).where(RoleEntity.tenant_id == tenant_id)
 
         # Add name filter if provided
         if name is not None:
@@ -100,7 +102,7 @@ class RoleService:
             size=size,
         )
 
-    async def create_role(self, role: RoleEntity) -> RoleEntity:
+    async def create_role(self, role: RoleEntity, tenant_id: str) -> RoleEntity:
         """
         Create a new Role entity.
         Note: Caller is responsible for committing the session.
@@ -114,6 +116,7 @@ class RoleService:
         Raises:
             ValueError: If name already exists (IntegrityError converted)
         """
+        role.tenant_id = tenant_id
         self.session.add(role)
 
         try:
@@ -132,7 +135,7 @@ class RoleService:
             else:
                 raise ValueError(f"角色创建失败: {e}") from e
 
-    async def delete_role(self, role_id: str) -> None:
+    async def delete_role(self, role_id: str, tenant_id: str) -> None:
         """
         Delete a Role entity.
         Note: Caller is responsible for committing the session.
@@ -143,7 +146,8 @@ class RoleService:
         Raises:
             ValueError: If Role entity not found
         """
-        role = await self.session.get(RoleEntity, role_id)
+        result = await self.session.exec(select(RoleEntity).where(RoleEntity.id == role_id, RoleEntity.tenant_id == tenant_id))
+        role = result.first()
         if not role:
             raise ValueError(f"角色 '{role_id}' 不存在。")
 
@@ -157,7 +161,7 @@ class RoleService:
 
     # ========== UserRole Operations ==========
 
-    async def get_user_role(self, user_role_id: str) -> Optional[UserRoleEntity]:
+    async def get_user_role(self, user_role_id: str, tenant_id: str) -> Optional[UserRoleEntity]:
         """
         Get a single UserRole entity by ID.
 
@@ -167,10 +171,12 @@ class RoleService:
         Returns:
             UserRoleEntity if found, None otherwise
         """
-        return await self.session.get(UserRoleEntity, user_role_id)
+        result = await self.session.exec(select(UserRoleEntity).where(UserRoleEntity.id == user_role_id, UserRoleEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_user_roles(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         user_id: Optional[str] = None,
@@ -187,7 +193,7 @@ class RoleService:
             PagedResult containing list of UserRoleEntity and pagination metadata
         """
         # Build base query
-        base_query = select(UserRoleEntity)
+        base_query = select(UserRoleEntity).where(UserRoleEntity.tenant_id == tenant_id)
 
         # Add user_id filter if provided
         if user_id is not None:
@@ -215,7 +221,7 @@ class RoleService:
             size=size,
         )
 
-    async def create_user_role(self, user_role: UserRoleEntity) -> UserRoleEntity:
+    async def create_user_role(self, user_role: UserRoleEntity, tenant_id: str) -> UserRoleEntity:
         """
         Create a new UserRole entity.
         Note: Caller is responsible for committing the session.
@@ -229,6 +235,7 @@ class RoleService:
         Raises:
             ValueError: If user_id-role_id combination already exists (IntegrityError converted)
         """
+        user_role.tenant_id = tenant_id
         self.session.add(user_role)
 
         try:
@@ -251,7 +258,7 @@ class RoleService:
             else:
                 raise ValueError(f"用户角色创建失败: {e}") from e
 
-    async def delete_user_role(self, user_role_id: str) -> None:
+    async def delete_user_role(self, user_role_id: str, tenant_id: str) -> None:
         """
         Delete a UserRole entity.
         Note: Caller is responsible for committing the session.
@@ -262,7 +269,8 @@ class RoleService:
         Raises:
             ValueError: If UserRole entity not found
         """
-        user_role = await self.session.get(UserRoleEntity, user_role_id)
+        result = await self.session.exec(select(UserRoleEntity).where(UserRoleEntity.id == user_role_id, UserRoleEntity.tenant_id == tenant_id))
+        user_role = result.first()
         if not user_role:
             raise ValueError(f"用户角色 '{user_role_id}' 不存在。")
 
@@ -279,7 +287,7 @@ class RoleService:
     # ========== Permission Operations ==========
 
     async def get_permission(
-        self, permission_id: str
+        self, permission_id: str, tenant_id: str
     ) -> Optional[PermissionEntity]:
         """
         Get a single Permission entity by ID.
@@ -290,10 +298,12 @@ class RoleService:
         Returns:
             PermissionEntity if found, None otherwise
         """
-        return await self.session.get(PermissionEntity, permission_id)
+        result = await self.session.exec(select(PermissionEntity).where(PermissionEntity.id == permission_id, PermissionEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_permissions(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         name: Optional[str] = None,
@@ -310,7 +320,7 @@ class RoleService:
             PagedResult containing list of PermissionEntity and pagination metadata
         """
         # Build base query
-        base_query = select(PermissionEntity)
+        base_query = select(PermissionEntity).where(PermissionEntity.tenant_id == tenant_id)
 
         # Add name filter if provided
         if name is not None:
@@ -339,7 +349,7 @@ class RoleService:
         )
 
     async def create_permission(
-        self, permission: PermissionEntity
+        self, permission: PermissionEntity, tenant_id: str
     ) -> PermissionEntity:
         """
         Create a new Permission entity.
@@ -354,6 +364,7 @@ class RoleService:
         Raises:
             ValueError: If name-role_id combination already exists (IntegrityError converted)
         """
+        permission.tenant_id = tenant_id
         self.session.add(permission)
 
         try:
@@ -376,7 +387,7 @@ class RoleService:
             else:
                 raise ValueError(f"权限创建失败: {e}") from e
 
-    async def delete_permission(self, permission_id: str) -> None:
+    async def delete_permission(self, permission_id: str, tenant_id: str) -> None:
         """
         Delete a Permission entity.
         Note: Caller is responsible for committing the session.
@@ -387,7 +398,8 @@ class RoleService:
         Raises:
             ValueError: If Permission entity not found
         """
-        permission = await self.session.get(PermissionEntity, permission_id)
+        result = await self.session.exec(select(PermissionEntity).where(PermissionEntity.id == permission_id, PermissionEntity.tenant_id == tenant_id))
+        permission = result.first()
         if not permission:
             raise ValueError(f"权限 '{permission_id}' 不存在。")
 
@@ -402,7 +414,7 @@ class RoleService:
         )
 
     async def set_file_permissions(
-        self, file_id: str, role_ids: List[str]
+        self, file_id: str, role_ids: List[str], tenant_id: str
     ) -> List[PermissionEntity]:
         """
         Set permissions for a file by updating role associations.
@@ -421,7 +433,7 @@ class RoleService:
         """
         # Get existing permissions for this file
         existing_permissions_result = await self.session.exec(
-            select(PermissionEntity).where(PermissionEntity.name == file_id)
+            select(PermissionEntity).where(PermissionEntity.name == file_id, PermissionEntity.tenant_id == tenant_id)
         )
         existing_permissions = list(existing_permissions_result.all())
 
@@ -436,6 +448,7 @@ class RoleService:
                     name=file_id,
                     description=f"Read permission for file {file_id}",
                     role_id=role_id,
+                    tenant_id=tenant_id,
                 )
                 self.session.add(permission)
                 new_permissions.append(permission)

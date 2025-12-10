@@ -10,7 +10,7 @@ from db.models.websearch import (
 from common.chat.response_model import ResponseModel, success_response
 from api.api_exception import ApiException
 from db.db_context import get_db_session
-from service.injection import get_websearch_service
+from service.injection import get_websearch_service, get_tenant_id
 from service.tool.websearch_service import WebsearchService
 from loguru import logger
 
@@ -21,6 +21,7 @@ websearch_router = APIRouter()
 @websearch_router.post("", response_model=ResponseModel[WebSearchConfigRead])
 async def add_search_config(
     new_search_config: WebSearchConfigCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     websearch_service: WebsearchService = Depends(get_websearch_service),
 ):
@@ -42,7 +43,8 @@ async def add_search_config(
     try:
         # Use service layer for business logic
         search_config = await websearch_service.create_or_update_websearch_config(
-            new_search_config
+            new_search_config=new_search_config,
+            tenant_id=tenant_id
         )
 
         # Convert to read model
@@ -70,6 +72,7 @@ async def add_search_config(
 
 @websearch_router.get("", response_model=ResponseModel[List[WebSearchConfigRead]])
 async def list_search_config(
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     websearch_service: WebsearchService = Depends(get_websearch_service),
 ):
@@ -87,7 +90,7 @@ async def list_search_config(
     """
     try:
         # Use service layer to get all configs
-        configs = await websearch_service.get_all_websearch_configs()
+        configs = await websearch_service.get_all_websearch_configs(tenant_id=tenant_id)
 
         if not configs:
             # Return default empty config if none exists

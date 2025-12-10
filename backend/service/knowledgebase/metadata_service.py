@@ -29,7 +29,7 @@ class MetadataService:
         self.session = session
 
     async def get_metadata(
-        self, kb_id: str, metadata_id: str
+        self, kb_id: str, metadata_id: str, tenant_id: str
     ) -> Optional[KbMetadataEntity]:
         """
         Get a single Metadata entity by ID.
@@ -45,12 +45,13 @@ class MetadataService:
             select(KbMetadataEntity)
             .where(KbMetadataEntity.id == metadata_id)
             .where(KbMetadataEntity.kb_id == kb_id)
+            .where(KbMetadataEntity.tenant_id == tenant_id)
         )
         result = await self.session.exec(statement)
         return result.first()
 
     async def get_metadata_by_name(
-        self, kb_id: str, name: str
+        self, kb_id: str, name: str, tenant_id: str
     ) -> Optional[KbMetadataEntity]:
         """
         Get a single Metadata entity by name.
@@ -66,6 +67,7 @@ class MetadataService:
             select(KbMetadataEntity)
             .where(KbMetadataEntity.kb_id == kb_id)
             .where(KbMetadataEntity.name == name)
+            .where(KbMetadataEntity.tenant_id == tenant_id)
         )
         result = await self.session.exec(statement)
         return result.first()
@@ -73,6 +75,7 @@ class MetadataService:
     async def list_metadata(
         self,
         kb_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 20,
     ) -> PagedResult[List[Dict]]:
@@ -89,7 +92,8 @@ class MetadataService:
         """
         # Get total count
         count_query = select(func.count(KbMetadataEntity.id)).where(
-            KbMetadataEntity.kb_id == kb_id
+            KbMetadataEntity.kb_id == kb_id,
+            KbMetadataEntity.tenant_id == tenant_id,
         )
         total_result = await self.session.exec(count_query)
         total = total_result.one_or_none() or 0
@@ -101,6 +105,7 @@ class MetadataService:
                 func.count(FileMetadataEntity.id).label("count"),
             )
             .where(FileMetadataEntity.kb_id == kb_id)
+            .where(FileMetadataEntity.tenant_id == tenant_id)
             .group_by(FileMetadataEntity.metadata_id)
             .subquery()
         )
@@ -117,6 +122,7 @@ class MetadataService:
                 KbMetadataEntity.id == file_count_subquery.c.metadata_id,
             )
             .where(KbMetadataEntity.kb_id == kb_id)
+            .where(KbMetadataEntity.tenant_id == tenant_id)
             .offset(offset)
             .limit(size)
         )
@@ -146,6 +152,7 @@ class MetadataService:
         self,
         kb_id: str,
         metadata_create: KbMetadataEntityCreate,
+        tenant_id: str,
     ) -> KbMetadataEntity:
         """
         Create a new Metadata entity.
@@ -166,7 +173,7 @@ class MetadataService:
             raise ValueError(f"元数据名称 '{metadata_create.name}' 是系统保留名称，不能创建。")
 
         metadata_entity = KbMetadataEntity.model_validate(
-            metadata_create, update={"kb_id": kb_id}
+            metadata_create, update={"kb_id": kb_id, "tenant_id": tenant_id}
         )
 
         self.session.add(metadata_entity)
@@ -196,6 +203,7 @@ class MetadataService:
         kb_id: str,
         metadata_id: str,
         update_data: KbMetadataEntityCreate,
+        tenant_id: str,
     ) -> KbMetadataEntity:
         """
         Update an existing Metadata entity.
@@ -214,7 +222,7 @@ class MetadataService:
         Raises:
             ValueError: If Metadata entity not found
         """
-        metadata_entity = await self.get_metadata(kb_id, metadata_id)
+        metadata_entity = await self.get_metadata(kb_id, metadata_id, tenant_id)
         if not metadata_entity:
             raise ValueError(f"元数据 '{metadata_id}' 不存在。")
 
@@ -234,7 +242,7 @@ class MetadataService:
         )
         return metadata_entity
 
-    async def delete_metadata(self, kb_id: str, metadata_id: str) -> None:
+    async def delete_metadata(self, kb_id: str, metadata_id: str, tenant_id: str) -> None:
         """
         Delete a Metadata entity.
         Note: This only deletes the metadata entity itself.
@@ -249,7 +257,7 @@ class MetadataService:
         Raises:
             ValueError: If Metadata entity not found
         """
-        metadata_entity = await self.get_metadata(kb_id, metadata_id)
+        metadata_entity = await self.get_metadata(kb_id, metadata_id, tenant_id)
         if not metadata_entity:
             raise ValueError(f"元数据 '{metadata_id}' 不存在。")
 
@@ -262,7 +270,7 @@ class MetadataService:
         logger.info(f"Deleted Metadata entity: {metadata_id} (name: {metadata_entity.name})")
 
 
-    async def get_all_metadata(self, kb_id: str) -> List[KbMetadataEntity]:
+    async def get_all_metadata(self, kb_id: str, tenant_id: str) -> List[KbMetadataEntity]:
         """
         Get all Metadata entities for a knowledgebase without pagination.
 
@@ -272,13 +280,13 @@ class MetadataService:
         Returns:
             List of all KbMetadataEntity for the knowledgebase
         """
-        statement = select(KbMetadataEntity).where(KbMetadataEntity.kb_id == kb_id)
+        statement = select(KbMetadataEntity).where(KbMetadataEntity.kb_id == kb_id, KbMetadataEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
 
 
     async def batch_delete_metadata(
-        self, kb_id: str, metadata_ids: List[str]
+        self, kb_id: str, metadata_ids: List[str], tenant_id: str
     ) -> None:
         """
         Delete multiple Metadata entities in batch.
@@ -301,12 +309,13 @@ class MetadataService:
         # Directly delete all metadata for this knowledgebase
         stmt = delete(KbMetadataEntity).where(KbMetadataEntity.id.in_(metadata_ids))
         stmt = stmt.where(KbMetadataEntity.kb_id == kb_id)
+        stmt = stmt.where(KbMetadataEntity.tenant_id == tenant_id)
         await self.session.execute(stmt)
 
         # Flush to ensure deletions are staged
         await self.session.flush()
 
-    async def delete_metadata_by_kb_id(self, kb_id: str) -> None:
+    async def delete_metadata_by_kb_id(self, kb_id: str, tenant_id: str) -> None:
         """
         Delete all Metadata entities for a knowledgebase.
         Note: This directly deletes all metadata without querying first.
@@ -316,7 +325,7 @@ class MetadataService:
             kb_id: Knowledgebase ID
         """
         # Directly delete all metadata for this knowledgebase
-        stmt = delete(KbMetadataEntity).where(KbMetadataEntity.kb_id == kb_id)
+        stmt = delete(KbMetadataEntity).where(KbMetadataEntity.kb_id == kb_id, KbMetadataEntity.tenant_id == tenant_id)
         result = await self.session.execute(stmt)
         deleted_count = result.rowcount
 

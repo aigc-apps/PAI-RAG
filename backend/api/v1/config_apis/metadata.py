@@ -13,7 +13,7 @@ from api.v1.config_apis.knowledgebase import knowledgebase_router
 from loguru import logger
 from service.knowledgebase.rag_service import RagService
 from service.knowledgebase.metadata_service import MetadataService
-from service.injection import get_rag_service, get_metadata_service
+from service.injection import get_rag_service, get_metadata_service, get_tenant_id
 
 
 
@@ -21,12 +21,13 @@ from service.injection import get_rag_service, get_metadata_service
 async def add_kb_metadata(
     kb_id: str,
     metadata_create: KbMetadataEntityCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
     metadata_service: MetadataService = Depends(get_metadata_service),
 ):
     try:
-        metadata_entity = await metadata_service.create_metadata(kb_id=kb_id, metadata_create=metadata_create)
+        metadata_entity = await metadata_service.create_metadata(kb_id=kb_id, metadata_create=metadata_create, tenant_id=tenant_id)
         return success_response(data=metadata_entity, message="元数据创建成功。")
 
     except IntegrityError as e:
@@ -42,11 +43,12 @@ async def list_metadata(
     kb_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, le=1000),
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        metadata_list = await rag_service.list_metadata(kb_id=kb_id, page=page, size=size)
+        metadata_list = await rag_service.list_metadata(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size)
         return success_response(data=metadata_list, message="查询元数据成功。")
     except Exception as e:
         logger.exception(f"查询元数据失败。\nException:{traceback.format_exc()}")
@@ -58,6 +60,7 @@ async def update_metadata(
     kb_id: str,
     metadata_id: str,
     new_metadata_entity: KbMetadataEntity,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
@@ -65,7 +68,8 @@ async def update_metadata(
         metadata_entity = await rag_service.update_metadata(
             kb_id=kb_id,
             metadata_id=metadata_id,
-            update_data=new_metadata_entity)
+            update_data=new_metadata_entity,
+            tenant_id=tenant_id)
         return success_response(data=metadata_entity, message="更新元数据成功。")
     except Exception as e:
         logger.exception(f"更新元数据失败。\nException:{traceback.format_exc()}")
@@ -76,11 +80,12 @@ async def update_metadata(
 async def delete_metadata(
     kb_id: str,
     metadata_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        metadata_entity = await rag_service.delete_metadata(kb_id=kb_id, metadata_id=metadata_id)
+        metadata_entity = await rag_service.delete_metadata(kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id)
         return success_response(data=metadata_entity, message="删除元数据成功。")
     except Exception as e:
         logger.exception(f"删除元数据失败。\nException:{traceback.format_exc()}")
@@ -92,11 +97,12 @@ async def set_file_metadata(
     kb_id: str,
     file_id: str,
     entry_data: MetadataEntryData,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        file_entity = await rag_service.set_file_metadata(kb_id=kb_id, file_id=file_id, entry_data=entry_data)
+        file_entity = await rag_service.set_file_metadata(kb_id=kb_id, file_id=file_id, entry_data=entry_data, tenant_id=tenant_id)
         return success_response(data=file_entity, message="更新文件元数据成功。")
     except Exception as e:
         logger.exception(f"更新文件元数据失败。\nException:{traceback.format_exc()}")

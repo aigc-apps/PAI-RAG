@@ -24,7 +24,7 @@ class FileTaskService:
         """
         self.session = session
 
-    async def get_file_task(self, task_id: str) -> Optional[KbFileTaskEntity]:
+    async def get_file_task(self, task_id: str, tenant_id: str) -> Optional[KbFileTaskEntity]:
         """
         Get a single FileTask entity by ID.
 
@@ -34,10 +34,11 @@ class FileTaskService:
         Returns:
             KbFileTaskEntity if found, None otherwise
         """
-        return await self.session.get(KbFileTaskEntity, task_id)
+        result = await self.session.exec(select(KbFileTaskEntity).where(KbFileTaskEntity.id == task_id, KbFileTaskEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def get_file_task_by_file_and_part(
-        self, kb_id: str, file_id: str, file_part: int
+        self, kb_id: str, file_id: str, file_part: int, tenant_id: str
     ) -> Optional[KbFileTaskEntity]:
         """
         Get a single FileTask entity by file_id, kb_id, and file_part.
@@ -55,6 +56,7 @@ class FileTaskService:
             .where(KbFileTaskEntity.kb_id == kb_id)
             .where(KbFileTaskEntity.file_id == file_id)
             .where(KbFileTaskEntity.file_part == file_part)
+            .where(KbFileTaskEntity.tenant_id == tenant_id)
         )
         result = await self.session.exec(statement)
         return result.first()
@@ -62,6 +64,7 @@ class FileTaskService:
     async def list_file_tasks(
         self,
         kb_id: str,
+        tenant_id: str,
         file_id: Optional[str] = None,
         page: int = 1,
         size: int = 10,
@@ -82,7 +85,8 @@ class FileTaskService:
         """
         # Build base query
         base_query = select(KbFileTaskEntity).where(
-            KbFileTaskEntity.kb_id == kb_id
+            KbFileTaskEntity.kb_id == kb_id,
+            KbFileTaskEntity.tenant_id == tenant_id
         )
 
         # Add file_id filter if provided
@@ -120,7 +124,7 @@ class FileTaskService:
         )
 
     async def create_file_task(
-        self, task_data: KbFileTaskEntity
+        self, task_data: KbFileTaskEntity, tenant_id: str
     ) -> KbFileTaskEntity:
         """
         Create a new FileTask entity.
@@ -135,6 +139,7 @@ class FileTaskService:
         Raises:
             ValueError: If task already exists (IntegrityError converted)
         """
+        task_data.tenant_id = tenant_id
         self.session.add(task_data)
 
         try:
@@ -162,6 +167,7 @@ class FileTaskService:
         task_id: str,
         kb_id: str,
         file_id: str,
+        tenant_id: str,
         **update_fields,
     ) -> KbFileTaskEntity:
         """
@@ -180,7 +186,8 @@ class FileTaskService:
         Raises:
             ValueError: If FileTask entity not found or doesn't belong to kb_id/file_id
         """
-        task_entity = await self.session.get(KbFileTaskEntity, task_id)
+        result = await self.session.exec(select(KbFileTaskEntity).where(KbFileTaskEntity.id == task_id, KbFileTaskEntity.tenant_id == tenant_id))
+        task_entity = result.first()
         if not task_entity:
             raise ValueError(f"文件任务 '{task_id}' 不存在。")
 
@@ -210,7 +217,7 @@ class FileTaskService:
         return task_entity
 
     async def delete_file_task(
-        self, task_id: str, kb_id: str, file_id: str
+        self, task_id: str, kb_id: str, file_id: str, tenant_id: str
     ) -> None:
         """
         Delete a FileTask entity.
@@ -224,7 +231,8 @@ class FileTaskService:
         Raises:
             ValueError: If FileTask entity not found or doesn't belong to kb_id/file_id
         """
-        task_entity = await self.session.get(KbFileTaskEntity, task_id)
+        result = await self.session.exec(select(KbFileTaskEntity).where(KbFileTaskEntity.id == task_id, KbFileTaskEntity.tenant_id == tenant_id))
+        task_entity = result.first()
         if not task_entity:
             raise ValueError(f"文件任务 '{task_id}' 不存在。")
 
@@ -245,7 +253,7 @@ class FileTaskService:
         )
 
     async def get_file_tasks_by_file(
-        self, kb_id: str, file_id: str
+        self, kb_id: str, file_id: str, tenant_id: str
     ) -> List[KbFileTaskEntity]:
         """
         Get all FileTask entities for a file without pagination.
@@ -261,12 +269,13 @@ class FileTaskService:
             select(KbFileTaskEntity)
             .where(KbFileTaskEntity.kb_id == kb_id)
             .where(KbFileTaskEntity.file_id == file_id)
+            .where(KbFileTaskEntity.tenant_id == tenant_id)
             .order_by(KbFileTaskEntity.file_part)
         )
         results = await self.session.exec(statement)
         return list(results.all())
 
-    async def get_file_tasks_by_kb(self, kb_id: str) -> List[KbFileTaskEntity]:
+    async def get_file_tasks_by_kb(self, kb_id: str, tenant_id: str) -> List[KbFileTaskEntity]:
         """
         Get all FileTask entities for a knowledgebase without pagination.
 
@@ -277,13 +286,14 @@ class FileTaskService:
             List of all KbFileTaskEntity for the knowledgebase
         """
         statement = select(KbFileTaskEntity).where(
-            KbFileTaskEntity.kb_id == kb_id
+            KbFileTaskEntity.kb_id == kb_id,
+            KbFileTaskEntity.tenant_id == tenant_id
         )
         results = await self.session.exec(statement)
         return list(results.all())
 
     async def delete_file_tasks_from_file(
-        self, kb_id: str, file_id: str
+        self, kb_id: str, file_id: str, tenant_id: str
     ) -> None:
         """
         Delete all FileTask entities for a file.
@@ -299,6 +309,7 @@ class FileTaskService:
             delete(KbFileTaskEntity)
             .where(KbFileTaskEntity.kb_id == kb_id)
             .where(KbFileTaskEntity.file_id == file_id)
+            .where(KbFileTaskEntity.tenant_id == tenant_id)
         )
         result = await self.session.execute(stmt)
         deleted_count = result.rowcount
@@ -310,7 +321,7 @@ class FileTaskService:
             f"Deleted {deleted_count} FileTask entities for file {file_id} in knowledgebase {kb_id}"
         )
 
-    async def delete_file_tasks_from_kb(self, kb_id: str) -> None:
+    async def delete_file_tasks_from_kb(self, kb_id: str, tenant_id: str) -> None:
         """
         Delete all FileTask entities for a knowledgebase.
         Note: This directly deletes all tasks without querying first.
@@ -320,7 +331,7 @@ class FileTaskService:
             kb_id: Knowledgebase ID
         """
         # Directly delete all tasks for this knowledgebase
-        stmt = delete(KbFileTaskEntity).where(KbFileTaskEntity.kb_id == kb_id)
+        stmt = delete(KbFileTaskEntity).where(KbFileTaskEntity.kb_id == kb_id, KbFileTaskEntity.tenant_id == tenant_id)
         result = await self.session.execute(stmt)
         deleted_count = result.rowcount
 

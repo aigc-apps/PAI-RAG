@@ -23,7 +23,7 @@ class ChatdbService:
         self.session = session
 
     async def get_chatdb_config(
-        self, config_id: str
+        self, config_id: str, tenant_id: str
     ) -> Optional[ChatDbConfigEntity]:
         """
         Get a single ChatDB config entity by ID.
@@ -34,10 +34,12 @@ class ChatdbService:
         Returns:
             ChatDbConfigEntity if found, None otherwise
         """
-        return await self.session.get(ChatDbConfigEntity, config_id)
+        chatdb_configs = await self.session.exec(select(ChatDbConfigEntity).where(ChatDbConfigEntity.id == config_id, ChatDbConfigEntity.tenant_id == tenant_id))
+        return chatdb_configs.first()
 
     async def get_chatdb_config_or_create(
         self,
+        tenant_id: str,
     ) -> Optional[ChatDbConfigEntity]:
         """
         Get the first ChatDB config entity, or None if none exists.
@@ -45,23 +47,23 @@ class ChatdbService:
         Returns:
             ChatDbConfigEntity if found, None otherwise
         """
-        statement = select(ChatDbConfigEntity)
-        result = await self.session.exec(statement)
-        return result.first()
+        statement = select(ChatDbConfigEntity).where(ChatDbConfigEntity.tenant_id == tenant_id)
+        chatdb_configs = await self.session.exec(statement)
+        return chatdb_configs.first()
 
-    async def get_all_chatdb_configs(self) -> List[ChatDbConfigEntity]:
+    async def get_all_chatdb_configs(self, tenant_id: str) -> List[ChatDbConfigEntity]:
         """
         Get all ChatDB config entities (usually only one).
 
         Returns:
             List of all ChatDbConfigEntity
         """
-        statement = select(ChatDbConfigEntity)
-        results = await self.session.exec(statement)
-        return list(results.all())
+        statement = select(ChatDbConfigEntity).where(ChatDbConfigEntity.tenant_id == tenant_id)
+        chatdb_configs = await self.session.exec(statement)
+        return list(chatdb_configs.all())
 
     async def create_or_update_chatdb_config(
-        self, config_data: ChatDbCreate
+        self, config_data: ChatDbCreate, tenant_id: str
     ) -> ChatDbConfigEntity:
         """
         Create or update a ChatDB config entity.
@@ -87,15 +89,15 @@ class ChatdbService:
         )
 
         # Get existing config or create new one
-        statement = select(ChatDbConfigEntity)
-        result = await self.session.exec(statement)
-        config = result.first()
+        statement = select(ChatDbConfigEntity).where(ChatDbConfigEntity.tenant_id == tenant_id)
+        chatdb_configs = await self.session.exec(statement)
+        config = chatdb_configs.first()
 
         if config is None:
             # Create new config
             config = ChatDbConfigEntity.model_validate(
                 config_data,
-                update={"encrypted_password": encrypted_password},
+                update={"encrypted_password": encrypted_password, "tenant_id": tenant_id},
             )
             self.session.add(config)
             logger.info(f"Creating new ChatDB config for dialect {config_data.dialect}")

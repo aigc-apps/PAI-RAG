@@ -26,7 +26,7 @@ class WebsearchService:
         self.session = session
 
     async def get_websearch_config(
-        self, config_id: str
+        self, config_id: str, tenant_id: str
     ) -> Optional[WebSearchConfigEntity]:
         """
         Get a single WebSearch config entity by ID.
@@ -37,10 +37,12 @@ class WebsearchService:
         Returns:
             WebSearchConfigEntity if found, None otherwise
         """
-        return await self.session.get(WebSearchConfigEntity, config_id)
+        result = await self.session.exec(select(WebSearchConfigEntity).where(WebSearchConfigEntity.id == config_id, WebSearchConfigEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def get_websearch_config_or_create(
         self,
+        tenant_id: str,
     ) -> WebSearchConfigEntity:
         """
         Get the first WebSearch config entity, or create a new one if none exists.
@@ -49,7 +51,7 @@ class WebsearchService:
         Returns:
             WebSearchConfigEntity (existing or newly created, not yet committed)
         """
-        statement = select(WebSearchConfigEntity)
+        statement = select(WebSearchConfigEntity).where(WebSearchConfigEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         config = result.first()
 
@@ -59,6 +61,7 @@ class WebsearchService:
                 type="aliyun",
                 search_count=10,
                 endpoint=None,
+                tenant_id=tenant_id,
             )
             self.session.add(config)
             await self.session.flush()
@@ -67,19 +70,19 @@ class WebsearchService:
 
         return config
 
-    async def get_all_websearch_configs(self) -> List[WebSearchConfigEntity]:
+    async def get_all_websearch_configs(self, tenant_id: str) -> List[WebSearchConfigEntity]:
         """
         Get all WebSearch config entities (usually only one).
 
         Returns:
             List of all WebSearchConfigEntity
         """
-        statement = select(WebSearchConfigEntity)
+        statement = select(WebSearchConfigEntity).where(WebSearchConfigEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
 
     async def create_or_update_websearch_config(
-        self, config_data: WebSearchConfigCreate
+        self, config_data: WebSearchConfigCreate, tenant_id: str
     ) -> WebSearchConfigEntity:
         """
         Create or update a WebSearch config entity.
@@ -115,7 +118,7 @@ class WebsearchService:
         )
 
         # Get existing config or create new one
-        statement = select(WebSearchConfigEntity)
+        statement = select(WebSearchConfigEntity).where(WebSearchConfigEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         config = result.first()
 
@@ -127,6 +130,7 @@ class WebsearchService:
                     "encrypted_access_key_id": encrypted_access_key_id,
                     "encrypted_access_key_secret": encrypted_access_key_secret,
                     "encrypted_tavily_api_key": encrypted_tavily_api_key,
+                    "tenant_id": tenant_id,
                 },
             )
             self.session.add(config)
@@ -161,7 +165,7 @@ class WebsearchService:
             logger.error(f"IntegrityError when creating/updating WebSearch config: {e.orig}")
             raise ValueError(f"配置创建/更新失败: {e}") from e
 
-    async def delete_websearch_config(self, config_id: str) -> None:
+    async def delete_websearch_config(self, config_id: str, tenant_id: str) -> None:
         """
         Delete a WebSearch config entity.
         Note: Caller is responsible for committing the session.
@@ -172,7 +176,8 @@ class WebsearchService:
         Raises:
             ValueError: If WebSearch config entity not found
         """
-        config = await self.session.get(WebSearchConfigEntity, config_id)
+        result = await self.session.exec(select(WebSearchConfigEntity).where(WebSearchConfigEntity.id == config_id, WebSearchConfigEntity.tenant_id == tenant_id))
+        config = result.first()
         if not config:
             raise ValueError(f"WebSearch配置 '{config_id}' 不存在。")
 

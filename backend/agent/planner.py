@@ -17,8 +17,6 @@ from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
 from common.llm.llm_model import PaiLlm, ReasoningChunk, ChatResponseGenerator
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
-from service.model.llm_service import LlmService
-from service.knowledgebase.file_service import FileService
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
@@ -44,8 +42,6 @@ class Planner(BaseAgent):
         name: str,
         prompt_set: PlanAgentPromptSet,
         max_steps: int = MAX_RECURSION_STEPS,
-        file_service: FileService = None,
-        llm_service: LlmService = None,
     ):
         super().__init__(prompt_set.plan_prompt, llm, tools, name)
 
@@ -55,8 +51,6 @@ class Planner(BaseAgent):
         self.tool_metadata = [
             tool.metadata.to_openai_tool(skip_length_check=True) for tool in self.tools
         ]
-        self.file_service = file_service
-        self.llm_service = llm_service
 
 
     # internal tool for planning agent

@@ -115,17 +115,18 @@ class RagService:
 
     async def list_knowledgebases(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         query: Optional[str] = None,
         exclude_default_attachments: bool = True,
     ) -> PagedResult[List[KbEntity]]:
         kb_service = await self._get_kb_service()
-        return await kb_service.list_knowledgebases(page, size, query, exclude_default_attachments)
+        return await kb_service.list_knowledgebases(tenant_id=tenant_id, page=page, size=size, query=query, exclude_default_attachments=exclude_default_attachments)
 
 
     async def _validate_knowledgebase_models(
-        self, knowledgebase: KnowledgebaseCreate
+        self, kb_data: KnowledgebaseCreate, tenant_id: str
     ) -> None:
         """
         Validate that all referenced models (embedding, reranker, image_caption) exist and are valid.
@@ -137,28 +138,28 @@ class RagService:
             ValueError: If any model is invalid or doesn't exist
         """
         # Validate embedding_model
-        logger.info(f"Validating knowledgebase models: {knowledgebase}")
-        if not knowledgebase.embedding_model:
+        logger.info(f"Validating knowledgebase models: {kb_data}")
+        if not kb_data.embedding_model:
             raise ValueError("需要提供嵌入模型才能创建知识库。")
 
         embedding_service = await self._get_embedding_service()
         embedding_model = await embedding_service.get_embedding_by_model_id(
-            knowledgebase.embedding_model
+            kb_data.embedding_model, tenant_id=tenant_id,
         )
         if not embedding_model:
             raise ValueError(
-                f"嵌入模型 '{knowledgebase.embedding_model}' 不存在。"
+                f"嵌入模型 '{kb_data.embedding_model}' 不存在。"
             )
 
         # Validate rerank_model if rerank is enabled
-        if knowledgebase.retrieval_config:
-            retrieval_config = knowledgebase.retrieval_config
+        if kb_data.retrieval_config:
+            retrieval_config = kb_data.retrieval_config
             if retrieval_config.enable_rerank:
                 if not retrieval_config.rerank_model:
                     raise ValueError("启用重排序时，必须指定重排序模型。")
                 reranker_service = await self._get_reranker_service()
                 reranker_model = await reranker_service.get_reranker_by_model_id(
-                    retrieval_config.rerank_model
+                    retrieval_config.rerank_model, tenant_id=tenant_id
                 )
                 if not reranker_model:
                     raise ValueError(
@@ -166,22 +167,22 @@ class RagService:
                     )
 
         # Validate image_caption_model if specified
-        if knowledgebase.chunk_config and knowledgebase.chunk_config.image_caption_model:
+        if kb_data.chunk_config and kb_data.chunk_config.image_caption_model:
             llm_service = await self._get_llm_service()
             llm_model = await llm_service.get_llm_by_model_id(
-                knowledgebase.chunk_config.image_caption_model
+                kb_data.chunk_config.image_caption_model, tenant_id=tenant_id
             )
             if not llm_model:
                 raise ValueError(
-                    f"图片描述模型 '{knowledgebase.chunk_config.image_caption_model}' 不存在。"
+                    f"图片描述模型 '{kb_data.chunk_config.image_caption_model}' 不存在。"
                 )
             if not llm_model.vision_support:
                 raise ValueError(
-                    f"图片描述模型 '{knowledgebase.chunk_config.image_caption_model}' 不支持视觉功能。"
+                    f"图片描述模型 '{kb_data.chunk_config.image_caption_model}' 不支持视觉功能。"
                 )
 
-    async def add_knowledgebase(
-        self, knowledgebase: KnowledgebaseCreate
+    async def create_knowledgebase(
+        self, kb_data: KnowledgebaseCreate, tenant_id: str
     ) -> KbEntity:
         """
         Add a knowledgebase.
@@ -197,15 +198,15 @@ class RagService:
             ValueError: If any referenced model is invalid or doesn't exist
         """
         # Validate all referenced models
-        await self._validate_knowledgebase_models(knowledgebase)
+        await self._validate_knowledgebase_models(kb_data, tenant_id=tenant_id)
 
         # Create knowledgebase
         kb_service = await self._get_kb_service()
-        return await kb_service.create_knowledgebase(knowledgebase)
+        return await kb_service.create_knowledgebase(kb_data=kb_data, tenant_id=tenant_id)
 
 
     async def update_knowledgebase(
-        self, kb_id: str, knowledgebase: KnowledgebaseCreate
+        self, kb_id: str, knowledgebase: KnowledgebaseCreate, tenant_id: str
     ) -> KbEntity:
         """
         Update a knowledgebase.
@@ -224,12 +225,12 @@ class RagService:
         # Get existing knowledgebase to merge with update data
         kb_service = await self._get_kb_service()
         # Validate all referenced models (including existing ones if not being updated)
-        await self._validate_knowledgebase_models(knowledgebase)
+        await self._validate_knowledgebase_models(knowledgebase, tenant_id=tenant_id)
 
         # Update knowledgebase
-        return await kb_service.update_knowledgebase(kb_id, knowledgebase)
+        return await kb_service.update_knowledgebase(kb_id=kb_id, update_data=knowledgebase, tenant_id=tenant_id)
 
-    async def get_knowledgebase_by_name(self, name: str) -> Optional[KbEntity]:
+    async def get_knowledgebase_by_name(self, name: str, tenant_id: str) -> Optional[KbEntity]:
         """
         Get a knowledgebase by name.
         This orchestrates the retrieval across knowledgebase services.
@@ -238,9 +239,9 @@ class RagService:
             name: Knowledgebase name
         """
         kb_service = await self._get_kb_service()
-        return await kb_service.get_knowledgebase_by_name(name)
+        return await kb_service.get_knowledgebase_by_name(name=name, tenant_id=tenant_id)
 
-    async def get_knowledgebase(self, kb_id: str) -> Optional[KbEntity]:
+    async def get_knowledgebase(self, kb_id: str, tenant_id: str) -> Optional[KbEntity]:
         """
         Get a knowledgebase.
         This orchestrates the retrieval across knowledgebase, file, chunk, metadata, and file metadata relation services.
@@ -252,9 +253,9 @@ class RagService:
             KbEntity if found, None otherwise
         """
         kb_service = await self._get_kb_service()
-        return await kb_service.get_knowledgebase(kb_id)
+        return await kb_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
 
-    async def delete_knowledgebase(self, kb_id: str) -> None:
+    async def delete_knowledgebase(self, kb_id: str, tenant_id: str) -> None:
         """
         Delete a knowledgebase and all related entities (files, chunks, metadata).
         This orchestrates the deletion across multiple services.
@@ -266,29 +267,29 @@ class RagService:
             ValueError: If knowledgebase not found
         """
         kb_service = await self._get_kb_service()
-        knowledgebase = await kb_service.get_knowledgebase(kb_id)
+        knowledgebase = await kb_service.get_knowledgebase(kb_id, tenant_id=tenant_id)
         if not knowledgebase:
             raise ValueError(f"知识库 '{kb_id}' 不存在。")
 
         # Delete related files directly (no need to query first)
         file_service = await self._get_file_service()
-        await file_service.delete_files_from_kb(kb_id)
+        await file_service.delete_files_from_kb(kb_id=kb_id, tenant_id=tenant_id)
 
         # Delete related chunks directly (no need to query first)
         chunk_service = await self._get_chunk_service()
-        chunk_ids = await chunk_service.delete_chunks_from_kb(kb_id)
-        await self.adelete(kb_id=kb_id, node_ids=chunk_ids)
+        chunk_ids = await chunk_service.delete_chunks_from_kb(kb_id=kb_id, tenant_id=tenant_id)
+        await self.adelete(kb_id=kb_id, node_ids=chunk_ids, tenant_id=tenant_id)
 
         # Delete related metadata in batch
         metadata_service = await self._get_metadata_service()
-        await metadata_service.delete_metadata_by_kb_id(kb_id)
+        await metadata_service.delete_metadata_by_kb_id(kb_id=kb_id, tenant_id=tenant_id)
 
         # Delete related file metadata relations
         file_metadata_relation_service = await self._get_file_metadata_relation_service()
-        await file_metadata_relation_service.delete_file_metadata_relations_by_kb_id(kb_id)
+        await file_metadata_relation_service.delete_file_metadata_relations_by_kb_id(kb_id=kb_id, tenant_id=tenant_id)
 
         # Delete knowledgebase itself
-        await kb_service.delete_knowledgebase(kb_id)
+        await kb_service.delete_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
 
         logger.info(f"Deleted knowledgebase {kb_id} and all related entities")
 
@@ -300,6 +301,7 @@ class RagService:
     async def list_files(
         self,
         kb_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         query: Optional[str] = None,
@@ -319,10 +321,10 @@ class RagService:
             PagedResult containing list of KbFileEntity and pagination metadata
         """
         file_service = await self._get_file_service()
-        return await file_service.list_files(kb_id, page, size, query, status)
+        return await file_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status)
 
 
-    async def get_files_by_path(self, kb_id: str, file_paths: List[str]) -> List[KbFileEntity]:
+    async def get_files_by_names(self, kb_id: str, file_names: List[str], tenant_id: str) -> List[KbFileEntity]:
         """
         Get a file by path from a knowledgebase.
         This orchestrates the retrieval across file services.
@@ -332,10 +334,10 @@ class RagService:
             file_path: File path
         """
         file_service = await self._get_file_service()
-        return await file_service.get_files_by_path(kb_id, file_paths)
+        return await file_service.get_files_by_names(kb_id=kb_id, file_names=file_names, tenant_id=tenant_id)
 
 
-    async def get_file_by_name(self, kb_id: str, file_name: str) -> Optional[KbFileEntity]:
+    async def get_file_by_name(self, kb_id: str, file_name: str, tenant_id: str) -> Optional[KbFileEntity]:
         """
         Get a file by name from a knowledgebase.
         This orchestrates the retrieval across file services.
@@ -345,10 +347,10 @@ class RagService:
             file_name: File name
         """
         file_service = await self._get_file_service()
-        return await file_service.get_file_by_name(kb_id, file_name)
+        return await file_service.get_file_by_name(kb_id=kb_id, file_name=file_name, tenant_id=tenant_id)
 
 
-    async def get_file(self, kb_id: str, file_id: str) -> KbFileEntity:
+    async def get_file(self, kb_id: str, file_id: str, tenant_id: str) -> KbFileEntity:
         """
         Get a file from a knowledgebase.
         This orchestrates the retrieval across file and chunk services.
@@ -358,10 +360,10 @@ class RagService:
             file_id: File ID
         """
         file_service = await self._get_file_service()
-        return await file_service.get_file(kb_id, file_id)
+        return await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
 
 
-    async def add_file(self, kb_id: str, file: KbFileEntity) -> KbFileEntity:
+    async def add_file(self, kb_id: str, file: KbFileEntity, tenant_id: str) -> KbFileEntity:
         """
         Add a file to a knowledgebase.
         This orchestrates the addition across file and chunk services.
@@ -371,10 +373,10 @@ class RagService:
             file: File data
         """
         file_service = await self._get_file_service()
-        return await file_service.add_file(kb_id, file)
+        return await file_service.add_file(kb_id=kb_id, file=file, tenant_id=tenant_id)
 
 
-    async def delete_file(self, kb_id: str, file_id: str) -> None:
+    async def delete_file(self, kb_id: str, file_id: str, tenant_id: str) -> None:
         """
         Delete a file and all related chunks.
         This orchestrates the deletion across file and chunk services.
@@ -387,7 +389,7 @@ class RagService:
             ValueError: If file not found
         """
         file_service = await self._get_file_service()
-        file_entity = await file_service.get_file(kb_id, file_id)
+        file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
             raise ValueError(f"文件 '{file_id}' 不存在。")
 
@@ -396,8 +398,8 @@ class RagService:
 
         # Delete related chunks in batch
         chunk_service = await self._get_chunk_service()
-        chunk_ids = await chunk_service.delete_chunks_from_file(file_id, kb_id)
-        await self.adelete(kb_id=kb_id, node_ids=chunk_ids)
+        chunk_ids = await chunk_service.delete_chunks_from_file(file_id, kb_id, tenant_id=tenant_id)
+        await self.adelete(kb_id=kb_id, node_ids=chunk_ids, tenant_id=tenant_id)
 
         # Delete file itself
         await file_service.delete_file(file_id, kb_id)
@@ -406,7 +408,7 @@ class RagService:
 
 
     ## Batch
-    async def batch_delete_files(self, kb_id: str, file_ids: List[str]) -> None:
+    async def batch_delete_files(self, kb_id: str, file_ids: List[str], tenant_id: str) -> None:
         """
         Batch delete files and related chunks.
         This orchestrates the deletion across file and chunk services.
@@ -417,19 +419,21 @@ class RagService:
         """
         file_service = await self._get_file_service()
         for file_id in file_ids:
-            await self.delete_file(kb_id, file_id)
-        return await file_service.batch_delete_files(kb_id, file_ids)
+            await self.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+        return await file_service.batch_delete_files(kb_id=kb_id, file_ids=file_ids, tenant_id=tenant_id)
 
 
     async def get_file_id_source_map(
         self,
         kb_id: str,
         file_ids: List[str],
+        tenant_id: str,
     ):
         file_source_results = (await self.session.exec(
             select( KbFileEntity.id, KbFileEntity.file_source ).where(
                 KbFileEntity.kb_id == kb_id,
                 KbFileEntity.id.in_(file_ids),
+                KbFileEntity.tenant_id == tenant_id,
             )
         )).all()
         logger.info(f"Get file_source_results: {file_source_results}")
@@ -440,7 +444,7 @@ class RagService:
 
     # Chunk operations: get, add, update, delete, list
 
-    async def list_chunks(self, kb_id: str, file_id: str, page: int = 1, size: int = 10) -> PagedResult[List[KbChunkEntity]]:
+    async def list_chunks(self, kb_id: str, file_id: str, tenant_id: str, page: int = 1, size: int = 10) -> PagedResult[List[KbChunkEntity]]:
         """
         List chunks in a file.
         This orchestrates the retrieval across chunk services.
@@ -450,10 +454,10 @@ class RagService:
             file_id: File ID
         """
         chunk_service = await self._get_chunk_service()
-        return await chunk_service.list_chunks(kb_id, file_id, page, size)
+        return await chunk_service.list_chunks(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id, page=page, size=size)
 
 
-    async def get_chunk(self, kb_id: str, file_id: str, chunk_id: str) -> KbChunkEntity:
+    async def get_chunk(self, kb_id: str, file_id: str, chunk_id: str, tenant_id: str) -> KbChunkEntity:
         """
         Get a chunk from a file.
         This orchestrates the retrieval across chunk services.
@@ -464,10 +468,10 @@ class RagService:
             chunk_id: Chunk ID
         """
         chunk_service = await self._get_chunk_service()
-        return await chunk_service.get_chunk(kb_id, file_id, chunk_id)
+        return await chunk_service.get_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, tenant_id=tenant_id)
 
 
-    async def add_chunk(self, kb_id: str, file_id: str, text: str, chunk_metadata: dict = None) -> KbChunkEntity:
+    async def add_chunk(self, kb_id: str, file_id: str, text: str, tenant_id: str, chunk_metadata: dict = None) -> KbChunkEntity:
         """
         Add a chunk to a file.
         This orchestrates the addition across chunk services.
@@ -478,21 +482,21 @@ class RagService:
             text: Chunk text
             chunk_metadata: Chunk metadata
         """
-        file_entity = await self.get_file(kb_id, file_id)
+        file_entity = await self.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
             raise ValueError(f"文件 '{file_id}' 不存在。")
 
         chunk_metadata = chunk_metadata or file_entity.file_metadata
 
         chunk_service = await self._get_chunk_service()
-        chunk = await chunk_service.create_chunk(kb_id, file_id, text, chunk_metadata)
+        chunk = await chunk_service.create_chunk(kb_id=kb_id, file_id=file_id, text=text, tenant_id=tenant_id, chunk_metadata=chunk_metadata)
 
         kb_node = create_text_node_from_chunk(chunk)
-        await self.ainsert(kb_id=kb_id, nodes=[kb_node])
+        await self.ainsert(kb_id=kb_id, nodes=[kb_node], tenant_id=tenant_id)
         return chunk
 
 
-    async def update_chunk(self, kb_id: str, file_id: str, chunk_id: str, chunk: KbChunkEntity) -> KbChunkEntity:
+    async def update_chunk(self, kb_id: str, file_id: str, chunk_id: str, chunk: KbChunkEntity, tenant_id: str) -> KbChunkEntity:
         """
         Update a chunk in a file.
         This orchestrates the update across chunk services.
@@ -504,16 +508,16 @@ class RagService:
             chunk: Chunk data
         """
         chunk_service = await self._get_chunk_service()
-        kb_chunk = await chunk_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, new_chunk=chunk)
+        kb_chunk = await chunk_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, tenant_id=tenant_id, new_chunk=chunk)
         kb_node = create_text_node_from_chunk(kb_chunk)
 
-        await self.adelete(kb_id=kb_id, node_ids=[kb_chunk.id])
+        await self.adelete(kb_id=kb_id, node_ids=[kb_chunk.id], tenant_id=tenant_id)
         if kb_chunk.active:
-            await self.ainsert(kb_id=kb_id, nodes=[kb_node])
+            await self.ainsert(kb_id=kb_id, nodes=[kb_node], tenant_id=tenant_id)
         return kb_chunk
 
 
-    async def delete_chunk(self, kb_id: str, file_id: str, chunk_id: str) -> None:
+    async def delete_chunk(self, kb_id: str, file_id: str, chunk_id: str, tenant_id: str) -> None:
         """
         Delete a chunk from a file.
         This orchestrates the deletion across chunk services.
@@ -523,15 +527,15 @@ class RagService:
             file_id: File ID
             chunk_id: Chunk ID
         """
-        await self.adelete(kb_id=kb_id, node_ids=[chunk_id])
+        await self.adelete(kb_id=kb_id, node_ids=[chunk_id], tenant_id=tenant_id)
 
         chunk_service = await self._get_chunk_service()
-        await chunk_service.delete_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id)
+        await chunk_service.delete_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, tenant_id=tenant_id)
 
     # ------------------------------------------------------------------------------------------------
     # Metadata operations: list, get, add, update, delete
     # ------------------------------------------------------------------------------------------------
-    async def list_metadata(self, kb_id: str, page: int = 1, size: int = 10) -> PagedResult[List[KbMetadataEntity]]:
+    async def list_metadata(self, kb_id: str, tenant_id: str, page: int = 1, size: int = 10) -> PagedResult[List[KbMetadataEntity]]:
         """
         List metadata in a knowledgebase.
         This orchestrates the retrieval across metadata services.
@@ -540,9 +544,9 @@ class RagService:
             kb_id: Knowledgebase ID
         """
         metadata_service = await self._get_metadata_service()
-        return await metadata_service.list_metadata(kb_id, page, size)
+        return await metadata_service.list_metadata(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size)
 
-    async def get_metadata(self, kb_id: str, metadata_id: str) -> Optional[KbMetadataEntity]:
+    async def get_metadata(self, kb_id: str, metadata_id: str, tenant_id: str) -> Optional[KbMetadataEntity]:
         """
         Get a metadata from a knowledgebase.
         This orchestrates the retrieval across metadata services.
@@ -552,13 +556,14 @@ class RagService:
             metadata_id: Metadata ID
         """
         metadata_service = await self._get_metadata_service()
-        return await metadata_service.get_metadata(kb_id, metadata_id)
+        return await metadata_service.get_metadata(kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id)
 
     async def update_metadata(
         self,
         kb_id: str,
         metadata_id: str,
         update_data: KbMetadataEntityCreate,
+        tenant_id: str,
     ) -> KbMetadataEntity:
         """
         Update metadata configuration and update all related file metadata.
@@ -578,7 +583,7 @@ class RagService:
         metadata_service = await self._get_metadata_service()
 
         # Get current metadata to compare changes
-        metadata_entity = await metadata_service.get_metadata(kb_id, metadata_id)
+        metadata_entity = await metadata_service.get_metadata(kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id)
         if not metadata_entity:
             raise ValueError(f"元数据 '{metadata_id}' 不存在。")
 
@@ -589,13 +594,13 @@ class RagService:
 
         # Update metadata entity itself
         updated_metadata = await metadata_service.update_metadata(
-            kb_id, metadata_id, update_data
+            kb_id=kb_id, metadata_id=metadata_id, update_data=update_data, tenant_id=tenant_id
         )
 
         # Find all files using this metadata
         file_metadata_relation_service = await self._get_file_metadata_relation_service()
         file_metadata_list = await file_metadata_relation_service.get_file_metadata_relations_by_metadata_id(
-            kb_id, metadata_id
+            kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id
         )
         file_ids = [relation.file_id for relation in file_metadata_list]
         if file_ids:
@@ -655,7 +660,7 @@ class RagService:
         return updated_metadata
 
 
-    async def delete_metadata(self, kb_id: str, metadata_id: str) -> None:
+    async def delete_metadata(self, kb_id: str, metadata_id: str, tenant_id: str) -> None:
         """
         Delete metadata configuration and remove from all related files.
         This orchestrates the deletion across metadata, file metadata relation, and file services.
@@ -668,7 +673,7 @@ class RagService:
             ValueError: If metadata not found
         """
         metadata_service = await self._get_metadata_service()
-        metadata_entity = await metadata_service.get_metadata(kb_id, metadata_id)
+        metadata_entity = await metadata_service.get_metadata(kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id)
         if not metadata_entity:
             raise ValueError(f"元数据 '{metadata_id}' 不存在。")
 
@@ -676,7 +681,7 @@ class RagService:
         file_metadata_relation_service = await self._get_file_metadata_relation_service()
 
         relations = await file_metadata_relation_service.get_file_metadata_relations_by_metadata_id(
-            kb_id, metadata_id
+            kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id
         )
         modified_file_count = 0
 
@@ -684,7 +689,7 @@ class RagService:
             file_ids = [relation.file_id for relation in relations]
             file_service = await self._get_file_service()
             for file_id in file_ids:
-                file_entity = await file_service.get_file(kb_id, file_id)
+                file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
                 if file_entity and file_entity.kb_id == kb_id:
                     file_entity.file_metadata.pop(metadata_entity.name, None)
                     flag_modified(file_entity, "file_metadata")
@@ -692,11 +697,11 @@ class RagService:
                     modified_file_count += 1
 
         await file_metadata_relation_service.delete_file_metadata_relations_by_metadata_id(
-            kb_id, metadata_id
+            kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id
         )
 
         # Delete metadata entity
-        await metadata_service.delete_metadata(kb_id, metadata_id)
+        await metadata_service.delete_metadata(kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id)
 
         # Flush to ensure all changes are staged
         await self.session.flush()
@@ -705,7 +710,7 @@ class RagService:
 
 
     async def set_file_metadata(
-        self, kb_id: str, file_id: str, entry_data: MetadataEntryData
+        self, kb_id: str, file_id: str, entry_data: MetadataEntryData, tenant_id: str
     ) -> KbFileEntity:
         """
         Set metadata for a file.
@@ -727,7 +732,7 @@ class RagService:
         file_metadata_relation_service = await self._get_file_metadata_relation_service()
 
         # Validate file exists
-        file_entity = await file_service.get_file(kb_id, file_id)
+        file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
             raise ValueError(f"文件 '{file_id}' 不存在。")
 
@@ -736,7 +741,7 @@ class RagService:
 
         # Delete all existing FileMetadataEntity relations for this file
         await file_metadata_relation_service.delete_file_metadata_relations_by_file_id(
-            kb_id, file_id
+            kb_id=kb_id, file_id=file_id, tenant_id=tenant_id
         )
 
         # Update file_metadata JSON field
@@ -750,7 +755,7 @@ class RagService:
 
             # Get metadata entity to validate value type
             metadata_entity = await metadata_service.get_metadata_by_name(
-                kb_id, metadata_name
+                kb_id=kb_id, name=metadata_name, tenant_id=tenant_id
             )
 
             if metadata_entity:
@@ -763,7 +768,7 @@ class RagService:
 
                     # Create FileMetadataEntity relation
                     await file_metadata_relation_service.create_file_metadata_relation(
-                        kb_id, file_id, metadata_entity.id
+                        kb_id=kb_id, file_id=file_id, metadata_id=metadata_entity.id, tenant_id=tenant_id
                     )
                 else:
                     logger.warning(
@@ -795,16 +800,17 @@ class RagService:
         knowledge_id: str = None,
         knowledge_name: str = None,
         user_id: str = None,
+        tenant_id: str = None,
         retrieval_setting: Optional[RetrievalSetting] = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
         document_ids: Optional[List[str]] = None,
     ) -> List[SearchResult]:
         knowledgebase_service = await self._get_kb_service()
         if knowledge_id:
-            kb = await knowledgebase_service.get_knowledgebase(knowledge_id)
+            kb = await knowledgebase_service.get_knowledgebase(kb_id=knowledge_id, tenant_id=tenant_id)
         else:
             if knowledge_name:
-                kb = await knowledgebase_service.get_knowledgebase_by_name(knowledge_name)
+                kb = await knowledgebase_service.get_knowledgebase_by_name(name=knowledge_name, tenant_id=tenant_id)
             else:
                 raise ValueError("Knowledgebase ID or name is required.")
 
@@ -812,7 +818,7 @@ class RagService:
             raise ValueError(f"Knowledgebase {knowledge_id} not found.")
 
         embedding_service = await self._get_embedding_service()
-        embed_model = await embedding_service.get_embedding_model(kb.embedding_model)
+        embed_model = await embedding_service.get_embedding_model(kb.embedding_model, tenant_id=tenant_id)
         if not embed_model:
             raise ValueError(f"Embedding model not found for knowledgebase {knowledge_id}.")
 
@@ -847,7 +853,7 @@ class RagService:
 
 
         vector_db_service = await self._get_vector_db_service()
-        vector_config = await vector_db_service.get_vectordb_config()
+        vector_config = await vector_db_service.get_vectordb_config(tenant_id=tenant_id)
         if not vector_config:
             raise ValueError(f"VectorDB config not found for knowledgebase {knowledge_id}.")
 
@@ -906,7 +912,7 @@ class RagService:
                 pattern = MARKDOWN_IMAGE_PATTERN
                 matches = re.findall(pattern, origin_text, re.DOTALL)
                 for _, (src, desc)  in enumerate(matches):
-                    image_url = file_store.get_url(src)
+                    image_url = await file_store.get_url_async(file_path=src, tenant_id=tenant_id)
                     origin_text = origin_text.replace(src, image_url)
                     images.append({"url": image_url, "desc": desc})
                 node.text = origin_text
@@ -914,7 +920,7 @@ class RagService:
                 # TODO: Add file source
                 file_url = node.metadata.get("file_source")
                 if not file_url:
-                    file_url = file_store.get_url(node.metadata.get("file_path", ""))
+                    file_url = await file_store.get_url_async(file_path=node.metadata.get("file_path", ""), tenant_id=tenant_id)
                 records.append(
                     SearchResult(
                         score=reranked_result.similarities[i],
@@ -933,6 +939,7 @@ class RagService:
         self,
         kb_id: str,
         nodes: List[BaseNode],
+        tenant_id: str,
     ) -> List[str]:
         logger.info(f"Starting to insert {len(nodes)} into vector store. Knowledgebase: {kb_id}")
 
@@ -940,12 +947,12 @@ class RagService:
             return []
 
         kb_service = await self._get_kb_service()
-        kb = await kb_service.get_knowledgebase(kb_id)
+        kb = await kb_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
         if not kb:
             raise ValueError(f"Knowledgebase {kb_id} not found.")
 
         embed_service = await self._get_embedding_service()
-        embed_model = await embed_service.get_embedding_model(kb.embedding_model)
+        embed_model = await embed_service.get_embedding_model(model_id=kb.embedding_model, tenant_id=tenant_id)
         if not embed_model:
             raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
 
@@ -955,7 +962,7 @@ class RagService:
             nodes[i].embedding = embeddings[i]
 
         vector_db_service = await self._get_vector_db_service()
-        vector_config = await vector_db_service.get_vectordb_config()
+        vector_config = await vector_db_service.get_vectordb_config(tenant_id=tenant_id)
         if not vector_config:
             raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
 
@@ -980,26 +987,27 @@ class RagService:
         self,
         kb_id: str,
         node_ids: List[str],
+        tenant_id: str,
     ):
         if not node_ids:
             return []
 
         kb_service = await self._get_kb_service()
-        kb = await kb_service.get_knowledgebase(kb_id)
+        kb = await kb_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
         if not kb:
             raise ValueError(f"Knowledgebase {kb_id} not found.")
 
         embed_dimension = self._embed_dimension_cache.get(kb.embedding_model)
         if not embed_dimension:
             embed_serivce = await self._get_embedding_service()
-            embed_model = await embed_serivce.get_embedding_model(kb.embedding_model)
+            embed_model = await embed_serivce.get_embedding_model(model_id=kb.embedding_model, tenant_id=tenant_id)
             if not embed_model:
                 raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
             embed_dimension = len(await embed_model.aget_text_embedding("0"))
 
         logger.info(f"Starting to delete {len(node_ids)} nodes from vector store. Node ids: {node_ids[:5]}...")
         vector_db_service = await self._get_vector_db_service()
-        vector_config = await vector_db_service.get_vectordb_config()
+        vector_config = await vector_db_service.get_vectordb_config(tenant_id=tenant_id)
         if not vector_config:
             raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
         vector_store = create_vector_store(
@@ -1018,23 +1026,24 @@ class RagService:
         self,
         kb_id: str,
         file_id: str,
+        tenant_id: str,
     ):
         kb_service = await self._get_kb_service()
-        kb = await kb_service.get_knowledgebase(kb_id)
+        kb = await kb_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
         if not kb:
             raise ValueError(f"Knowledgebase {kb_id} not found.")
 
         embed_dimension = self._embed_dimension_cache.get(kb.embedding_model)
         if not embed_dimension:
             embed_service = await self._get_embedding_service()
-            embed_model = await embed_service.get_embedding_model(kb.embedding_model)
+            embed_model = await embed_service.get_embedding_model(model_id=kb.embedding_model, tenant_id=tenant_id)
             if not embed_model:
                 raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
             embed_dimension = len(await embed_model.aget_text_embedding("0"))
 
         logger.info(f"Starting to delete file {file_id} from vector store...")
         vector_db_service = await self._get_vector_db_service()
-        vector_config = await vector_db_service.get_vectordb_config()
+        vector_config = await vector_db_service.get_vectordb_config(tenant_id=tenant_id)
         if not vector_config:
             raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
         vector_store = create_vector_store(

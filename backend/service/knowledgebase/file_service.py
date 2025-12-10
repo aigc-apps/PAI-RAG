@@ -23,13 +23,14 @@ class FileService:
         """
         self.session = session
 
-    async def get_file_by_id(self, file_id: str) -> Optional[KbFileEntity]:
+    async def get_file_by_id(self, file_id: str, tenant_id: str) -> Optional[KbFileEntity]:
         """
         Get a single File entity by ID.
         """
-        return await self.session.get(KbFileEntity, file_id)
+        result = await self.session.exec(select(KbFileEntity).where(KbFileEntity.id == file_id, KbFileEntity.tenant_id == tenant_id))
+        return result.first()
 
-    async def get_file(self, kb_id: str, file_id: str) -> Optional[KbFileEntity]:
+    async def get_file(self, kb_id: str, file_id: str, tenant_id: str) -> Optional[KbFileEntity]:
         """
         Get a single File entity by ID.
 
@@ -41,35 +42,35 @@ class FileService:
             KbFileEntity if found, None otherwise
         """
         statement = select(KbFileEntity).where(
-            KbFileEntity.kb_id == kb_id, KbFileEntity.id == file_id
+            KbFileEntity.kb_id == kb_id, KbFileEntity.id == file_id, KbFileEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return result.first()
 
-    async def get_files_by_path(
-        self, kb_id: str, file_paths: List[str]
+    async def get_files_by_names(
+        self, kb_id: str, file_names: List[str], tenant_id: str
     ) -> List[KbFileEntity]:
         """
         Get multiple File entities by path within a knowledgebase.
 
         Args:
             kb_id: Knowledgebase ID
-            file_paths: List of file paths
+            file_names: List of file names
 
         Returns:
             List of KbFileEntity if found, None otherwise
         """
-        if not file_paths:
+        if not file_names:
             return []
 
         statement = select(KbFileEntity).where(
-            KbFileEntity.kb_id == kb_id, KbFileEntity.file_path.in_(file_paths)
+            KbFileEntity.kb_id == kb_id, KbFileEntity.file_name.in_(file_names), KbFileEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return list(result.all())
 
     async def get_file_by_name(
-        self, kb_id: str, file_name: str
+        self, kb_id: str, file_name: str, tenant_id: str
     ) -> Optional[KbFileEntity]:
         """
         Get a single File entity by name within a knowledgebase.
@@ -82,7 +83,7 @@ class FileService:
             KbFileEntity if found, None otherwise
         """
         statement = select(KbFileEntity).where(
-            KbFileEntity.kb_id == kb_id, KbFileEntity.file_name == file_name
+            KbFileEntity.kb_id == kb_id, KbFileEntity.file_name == file_name, KbFileEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return result.first()
@@ -90,6 +91,7 @@ class FileService:
     async def list_files(
         self,
         kb_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         query: Optional[str] = None,
@@ -109,7 +111,7 @@ class FileService:
             PagedResult containing list of KbFileEntity and pagination metadata
         """
         # Build base query
-        base_query = select(KbFileEntity).where(KbFileEntity.kb_id == kb_id)
+        base_query = select(KbFileEntity).where(KbFileEntity.kb_id == kb_id, KbFileEntity.tenant_id == tenant_id)
 
         # Add query filter if provided
         if query:
@@ -147,7 +149,7 @@ class FileService:
             size=size,
         )
 
-    async def create_file(self, file_data: KbFileEntity) -> KbFileEntity:
+    async def create_file(self, file_data: KbFileEntity, tenant_id: str) -> KbFileEntity:
         """
         Create a new File entity.
         Note: Caller is responsible for committing the session.
@@ -161,6 +163,7 @@ class FileService:
         Raises:
             ValueError: If file already exists (IntegrityError converted)
         """
+        file_data.tenant_id = tenant_id
         self.session.add(file_data)
 
         try:
@@ -184,7 +187,7 @@ class FileService:
                 raise ValueError(f"文件创建失败: {e}") from e
 
     async def update_file(
-        self, file_id: str, kb_id: str, new_entity: KbFileEntity,
+        self, file_id: str, kb_id: str, new_entity: KbFileEntity, tenant_id: str
     ) -> KbFileEntity:
         """
         Update an existing File entity.
@@ -201,7 +204,12 @@ class FileService:
         Raises:
             ValueError: If File entity not found or doesn't belong to kb_id
         """
-        file_entity = await self.session.get(KbFileEntity, file_id)
+        result = await self.session.exec(select(KbFileEntity).where(
+            KbFileEntity.id == file_id,
+            KbFileEntity.kb_id == kb_id,
+            KbFileEntity.tenant_id == tenant_id
+        ))
+        file_entity = result.first()
         if not file_entity:
             raise ValueError(f"文件 '{file_id}' 不存在。")
 
@@ -229,7 +237,7 @@ class FileService:
         return file_entity
 
 
-    async def delete_file(self, file_id: str, kb_id: str) -> None:
+    async def delete_file(self, file_id: str, kb_id: str, tenant_id: str) -> None:
         """
         Delete a File entity.
         Note: This will cascade delete related chunks.
@@ -242,7 +250,12 @@ class FileService:
         Raises:
             ValueError: If File entity not found or doesn't belong to kb_id
         """
-        file_entity = await self.session.get(KbFileEntity, file_id)
+        result = await self.session.exec(select(KbFileEntity).where(
+            KbFileEntity.id == file_id,
+            KbFileEntity.kb_id == kb_id,
+            KbFileEntity.tenant_id == tenant_id
+        ))
+        file_entity = result.first()
         if not file_entity:
             raise ValueError(f"文件 '{file_id}' 不存在。")
 
@@ -260,7 +273,7 @@ class FileService:
             f"Deleted File entity: {file_id} (file_name: {file_entity.file_name})"
         )
 
-    async def get_files_by_kb(self, kb_id: str) -> List[KbFileEntity]:
+    async def get_files_by_kb(self, kb_id: str, tenant_id: str) -> List[KbFileEntity]:
         """
         Get all File entities for a knowledgebase without pagination.
 
@@ -270,12 +283,12 @@ class FileService:
         Returns:
             List of all KbFileEntity for the knowledgebase
         """
-        statement = select(KbFileEntity).where(KbFileEntity.kb_id == kb_id)
+        statement = select(KbFileEntity).where(KbFileEntity.kb_id == kb_id, KbFileEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
 
     ## Batch
-    async def batch_delete_files(self, kb_id: str, file_ids: List[str]) -> None:
+    async def batch_delete_files(self, kb_id: str, file_ids: List[str], tenant_id: str) -> None:
         """
         Delete multiple File entities in batch.
         Note: This will cascade delete related chunks.
@@ -296,6 +309,7 @@ class FileService:
             select(KbFileEntity)
             .where(KbFileEntity.id.in_(file_ids))
             .where(KbFileEntity.kb_id == kb_id)
+            .where(KbFileEntity.tenant_id == tenant_id)
         )
         file_list = list(files.all())
 
@@ -317,7 +331,7 @@ class FileService:
             f"Batch deleted {len(file_list)} File entities from knowledgebase {kb_id}"
         )
 
-    async def delete_files_from_kb(self, kb_id: str) -> None:
+    async def delete_files_from_kb(self, kb_id: str, tenant_id: str) -> None:
         """
         Delete all File entities for a knowledgebase.
         Note: This directly deletes all files without querying first.
@@ -328,16 +342,16 @@ class FileService:
             kb_id: Knowledgebase ID
         """
         # Directly delete all files for this knowledgebase
-        stmt = delete(KbFileEntity).where(KbFileEntity.kb_id == kb_id)
+        stmt = delete(KbFileEntity).where(KbFileEntity.kb_id == kb_id, KbFileEntity.tenant_id == tenant_id)
         result = await self.session.execute(stmt)
         deleted_count = result.rowcount
 
         logger.info(f"Deleted {deleted_count} File entities from knowledgebase {kb_id}")
 
-    async def get_files_by_ids(self, kb_id: str, file_ids: List[str]) -> List[KbFileEntity]:
+    async def get_files_by_ids(self, kb_id: str, file_ids: List[str], tenant_id: str) -> List[KbFileEntity]:
         """
         Get multiple File entities by IDs.
         """
-        statement = select(KbFileEntity).where(KbFileEntity.kb_id == kb_id, KbFileEntity.id.in_(file_ids))
+        statement = select(KbFileEntity).where(KbFileEntity.kb_id == kb_id, KbFileEntity.id.in_(file_ids), KbFileEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())

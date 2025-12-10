@@ -12,6 +12,7 @@ from openai.types.create_embedding_response import (
 from service.factory.model_factory import create_embedding_model
 from service.model.embedding_service import EmbeddingService
 from service.injection import get_embedding_service
+from service.injection import get_tenant_id
 from db.db_context import get_db_session
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -28,6 +29,7 @@ class EmbeddingInput(BaseModel):
 @embedding_router.post("")
 async def aembed(
     embedding_input: EmbeddingInput,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     embedding_service: EmbeddingService = Depends(get_embedding_service),
 ) -> CreateEmbeddingResponse:
@@ -53,7 +55,7 @@ async def aembed(
         embedding_input.model = DEFAULT_EMBEDDING_MODEL
 
     try:
-        embedding_entity = await embedding_service.get_embedding_by_model_id(embedding_input.model)
+        embedding_entity = await embedding_service.get_embedding_by_model_id(embedding_input.model, tenant_id=tenant_id)
         if not embedding_entity:
             raise ApiException(code=400, message=f"Embedding model {embedding_input.model} not found.")
 

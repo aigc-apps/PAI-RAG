@@ -40,6 +40,7 @@ class RetrievalToolResponse(BaseModel):
 async def asearch_knowledgebase(
     query: str,
     knowledgebase_id: str,
+    tenant_id: str,
     image_list: List[str] = [],
     user_id: Optional[str] = None,
     retrieval_setting: Optional[RetrievalSetting] = None,
@@ -61,6 +62,7 @@ async def asearch_knowledgebase(
             knowledge_id=knowledgebase_id,
             retrieval_setting=retrieval_setting,
             metadata_condition=metadata_condition,
+            tenant_id=tenant_id,
         )
 
         logger.info(
@@ -118,6 +120,7 @@ def get_retrieval_tool(
     knowledgebase_id: str,
     kb_name: str,
     kb_description: str,
+    tenant_id: str,
 ) -> Tool:
     func_name = f"search-knowledgebase-{knowledgebase_id}"
     func_description = f"从知识库中搜索和用户查询相关的内容。\n知识库名称: {kb_name}\n知识库描述: {kb_description}\n"
@@ -138,6 +141,7 @@ def get_retrieval_tool(
         return await asearch_knowledgebase(
             query=query,
             knowledgebase_id=knowledgebase_id,
+            tenant_id=tenant_id,
             image_list=image_list,
             user_id=user_id,
             retrieval_setting=retrieval_setting,

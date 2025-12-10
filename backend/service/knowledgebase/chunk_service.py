@@ -9,6 +9,10 @@ from loguru import logger
 from db.models.knowledgebase.chunk import KbChunkEntity, KbChunkModel
 from common.chat.response_model import PagedResult
 from memory.utils import estimate_tokens_in_text
+from pairag.file.store.file_store_helper import file_store
+import re
+
+MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
 
 
 class ChunkService:
@@ -23,7 +27,7 @@ class ChunkService:
         """
         self.session = session
 
-    async def get_chunk(self, chunk_id: str) -> Optional[KbChunkEntity]:
+    async def get_chunk(self, chunk_id: str, tenant_id: str) -> Optional[KbChunkEntity]:
         """
         Get a single Chunk entity by ID.
 
@@ -33,12 +37,14 @@ class ChunkService:
         Returns:
             KbChunkEntity if found, None otherwise
         """
-        return await self.session.get(KbChunkEntity, chunk_id)
+        result = await self.session.exec(select(KbChunkEntity).where(KbChunkEntity.id == chunk_id, KbChunkEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def list_chunks(
         self,
         kb_id: str,
         file_id: str,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
     ) -> PagedResult[List[KbChunkEntity]]:
@@ -56,7 +62,7 @@ class ChunkService:
         """
         # Build base query
         base_query = select(KbChunkEntity).where(
-            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, KbChunkEntity.tenant_id == tenant_id
         )
 
         # Get total count
@@ -71,7 +77,11 @@ class ChunkService:
         )
         results = await self.session.exec(paginated_query)
         chunks = list(results.all())
-
+        for chunk_entity in chunks:
+            origin_text = chunk_entity.text
+            pattern = MARKDOWN_IMAGE_PATTERN
+            matches = re.findall(pattern, origin_text, re.DOTALL)
+            chunk_entity.chunk_metadata["images_info"] = [{"url": await file_store.get_url_async(file_path=src, tenant_id=tenant_id), "desc": desc} for src, desc in matches]
         # Calculate pages
         pages = (total + size - 1) // size if total > 0 else 0
 
@@ -88,6 +98,7 @@ class ChunkService:
         kb_id: str,
         file_id: str,
         text: str,
+        tenant_id: str,
         chunk_metadata: Optional[dict] = None,
         file_metadata: Optional[dict] = None,
         active: bool = True,
@@ -113,7 +124,7 @@ class ChunkService:
         # Get max index for the file
         max_index_result = await self.session.exec(
             select(func.max(KbChunkEntity.index)).where(
-                KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+                KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, KbChunkEntity.tenant_id == tenant_id
             )
         )
         max_index = max_index_result.one_or_none() or -1
@@ -141,6 +152,7 @@ class ChunkService:
             active=active,
             file_part=0,
             file_version=0,
+            tenant_id=tenant_id,
         )
 
         self.session.add(new_chunk)
@@ -164,6 +176,7 @@ class ChunkService:
         chunk_id: str,
         kb_id: str,
         file_id: str,
+        tenant_id: str,
         new_chunk: KbChunkModel,
     ) -> KbChunkEntity:
         """
@@ -181,7 +194,8 @@ class ChunkService:
         Raises:
             ValueError: If Chunk entity not found or doesn't belong to kb_id/file_id
         """
-        chunk = await self.session.get(KbChunkEntity, chunk_id)
+        result = await self.session.exec(select(KbChunkEntity).where(KbChunkEntity.id == chunk_id, KbChunkEntity.tenant_id == tenant_id))
+        chunk = result.first()
         if not chunk:
             raise ValueError(f"切片 '{chunk_id}' 不存在。")
 
@@ -213,7 +227,7 @@ class ChunkService:
         logger.info(f"Updated Chunk entity: {chunk.id} (index: {chunk.index})")
         return chunk
 
-    async def delete_chunk(self, kb_id: str, file_id: str, chunk_id: str) -> None:
+    async def delete_chunk(self, kb_id: str, file_id: str, chunk_id: str, tenant_id: str) -> None:
         """
         Delete a Chunk entity.
         Note: Caller is responsible for committing the session.
@@ -226,7 +240,8 @@ class ChunkService:
         Raises:
             ValueError: If Chunk entity not found or doesn't belong to kb_id/file_id
         """
-        chunk = await self.session.get(KbChunkEntity, chunk_id)
+        result = await self.session.exec(select(KbChunkEntity).where(KbChunkEntity.id == chunk_id, KbChunkEntity.tenant_id == tenant_id))
+        chunk = result.first()
         if not chunk:
             raise ValueError(f"切片 '{chunk_id}' 不存在。")
 
@@ -244,7 +259,7 @@ class ChunkService:
         logger.info(f"Deleted Chunk entity: {chunk_id} (index: {chunk.index})")
 
     async def get_chunks_by_file(
-        self, kb_id: str, file_id: str
+        self, kb_id: str, file_id: str, tenant_id: str
     ) -> List[KbChunkEntity]:
         """
         Get all Chunk entities for a file without pagination.
@@ -259,14 +274,14 @@ class ChunkService:
         statement = (
             select(KbChunkEntity)
             .where(
-                KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id
+                KbChunkEntity.kb_id == kb_id, KbChunkEntity.file_id == file_id, KbChunkEntity.tenant_id == tenant_id
             )
             .order_by(KbChunkEntity.index)
         )
         results = await self.session.exec(statement)
         return list(results.all())
 
-    async def get_chunks_by_kb(self, kb_id: str) -> List[KbChunkEntity]:
+    async def get_chunks_by_kb(self, kb_id: str, tenant_id: str) -> List[KbChunkEntity]:
         """
         Get all Chunk entities for a knowledgebase without pagination.
 
@@ -276,12 +291,12 @@ class ChunkService:
         Returns:
             List of all KbChunkEntity for the knowledgebase
         """
-        statement = select(KbChunkEntity).where(KbChunkEntity.kb_id == kb_id)
+        statement = select(KbChunkEntity).where(KbChunkEntity.kb_id == kb_id, KbChunkEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
 
 
-    async def delete_chunks_from_kb(self, kb_id: str) -> List[str]:
+    async def delete_chunks_from_kb(self, kb_id: str, tenant_id: str) -> List[str]:
         """
         Delete all Chunk entities for a knowledgebase.
         Note: This directly deletes all chunks without querying first.
@@ -294,7 +309,7 @@ class ChunkService:
             return []
 
         select_statement = select(KbChunkEntity).where(
-            KbChunkEntity.kb_id == kb_id
+            KbChunkEntity.kb_id == kb_id, KbChunkEntity.tenant_id == tenant_id
         )
         chunks = await self.session.exec(select_statement)
         chunk_ids = [chunk.id for chunk in chunks]
@@ -316,7 +331,7 @@ class ChunkService:
 
         return chunk_ids
 
-    async def delete_chunks_from_file(self, file_id: str, kb_id: str) -> List[str]:
+    async def delete_chunks_from_file(self, file_id: str, kb_id: str, tenant_id: str) -> List[str]:
         """
         Delete all Chunk entities for a file.
         """
@@ -325,7 +340,8 @@ class ChunkService:
 
         select_statement = select(KbChunkEntity).where(
             KbChunkEntity.file_id == file_id,
-            KbChunkEntity.kb_id == kb_id
+            KbChunkEntity.kb_id == kb_id,
+            KbChunkEntity.tenant_id == tenant_id
         )
         chunks = await self.session.exec(select_statement)
         chunk_ids = [chunk.id for chunk in chunks]

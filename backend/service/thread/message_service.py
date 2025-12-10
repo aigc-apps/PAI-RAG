@@ -21,7 +21,7 @@ class MessageService:
         """
         self.session = session
 
-    async def get_message(self, message_id: str) -> Optional[MessageEntity]:
+    async def get_message(self, message_id: str, tenant_id: str) -> Optional[MessageEntity]:
         """
         Get a single Message entity by ID.
 
@@ -31,10 +31,11 @@ class MessageService:
         Returns:
             MessageEntity if found, None otherwise
         """
-        return await self.session.get(MessageEntity, message_id)
+        result = await self.session.exec(select(MessageEntity).where(MessageEntity.id == message_id, MessageEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def get_message_by_local_id(
-        self, thread_id: str, local_id: str
+        self, thread_id: str, local_id: str, tenant_id: str
     ) -> Optional[MessageEntity]:
         """
         Get a Message entity by thread_id and local_id.
@@ -48,6 +49,7 @@ class MessageService:
         """
         statement = select(MessageEntity).where(
             MessageEntity.thread_id == thread_id,
+            MessageEntity.tenant_id == tenant_id,
             MessageEntity.local_id == local_id,
         )
         result = await self.session.exec(statement)
@@ -56,6 +58,8 @@ class MessageService:
     async def list_messages(
         self,
         thread_id: str,
+        tenant_id: str,
+        offset: int = 0,
         limit: int = 30,
     ) -> List[MessageEntity]:
         """
@@ -70,15 +74,16 @@ class MessageService:
         """
         statement = (
             select(MessageEntity)
-            .where(MessageEntity.thread_id == thread_id)
+            .where(MessageEntity.thread_id == thread_id, MessageEntity.tenant_id == tenant_id)
             .order_by(MessageEntity.created_at)
+            .offset(offset)
             .limit(limit)
         )
         results = await self.session.exec(statement)
         return list(results.all())
 
     async def get_message_ids_by_thread(
-        self, thread_id: str
+        self, thread_id: str, tenant_id: str
     ) -> List[str]:
         """
         Get all message IDs for a thread.
@@ -90,13 +95,13 @@ class MessageService:
             List of message IDs
         """
         statement = select(MessageEntity.id).where(
-            MessageEntity.thread_id == thread_id
+            MessageEntity.thread_id == thread_id, MessageEntity.tenant_id == tenant_id
         )
         results = await self.session.exec(statement)
         return list(results.all())
 
     async def create_message(
-        self, message_data: MessageCreate
+        self, message_data: MessageCreate, tenant_id: str
     ) -> MessageEntity:
         """
         Create a new Message entity.
@@ -115,7 +120,7 @@ class MessageService:
         # Check if message with local_id already exists
         if message_data.local_id:
             existing_message = await self.get_message_by_local_id(
-                thread_id, message_data.local_id
+                thread_id=thread_id, local_id=message_data.local_id, tenant_id=tenant_id
             )
             if existing_message:
                 # Update existing message
@@ -125,10 +130,10 @@ class MessageService:
                 message_entity = existing_message
             else:
                 # Create new message
-                message_entity = MessageEntity.model_validate(message_data)
+                message_entity = MessageEntity.model_validate(message_data, update={"tenant_id": tenant_id})
         else:
             # Create new message
-            message_entity = MessageEntity.model_validate(message_data)
+            message_entity = MessageEntity.model_validate(message_data, update={"tenant_id": tenant_id})
 
         self.session.add(message_entity)
 
@@ -151,7 +156,7 @@ class MessageService:
         return message_entity
 
     async def delete_related_attachments(
-        self, thread_id: str
+        self, thread_id: str, tenant_id: str
     ) -> None:
         """
         Delete all attachment files related to messages in a thread.
@@ -163,7 +168,7 @@ class MessageService:
         logger.info(f"[MessageService] Start deleting related attachments for thread {thread_id}.")
 
         # Get all message IDs for this thread
-        message_ids = await self.get_message_ids_by_thread(thread_id)
+        message_ids = await self.get_message_ids_by_thread(thread_id, tenant_id)
 
         if not message_ids:
             logger.info(f"[MessageService] No messages found for thread {thread_id}.")
@@ -171,7 +176,7 @@ class MessageService:
 
         # Find all attachment files with these message IDs
         statement = select(KbFileEntity).where(
-            KbFileEntity.message_id.in_(message_ids)
+            KbFileEntity.message_id.in_(message_ids), KbFileEntity.tenant_id == tenant_id
         )
         results = await self.session.exec(statement)
         attachment_file_entities = list(results.all())

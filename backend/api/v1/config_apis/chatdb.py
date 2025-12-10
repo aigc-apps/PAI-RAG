@@ -13,7 +13,7 @@ from service.injection import get_chatdb_service
 from api.api_exception import ApiException
 from urllib.parse import quote_plus
 from loguru import logger
-
+from service.injection import get_tenant_id
 
 chatdb_router = APIRouter()
 
@@ -21,6 +21,7 @@ chatdb_router = APIRouter()
 @chatdb_router.post("", response_model=ResponseModel[ChatDbConfigEntity])
 async def add_chatdb_config(
     new_db_config: ChatDbCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     chatdb_service: ChatdbService = Depends(get_chatdb_service),
 ):
@@ -29,7 +30,7 @@ async def add_chatdb_config(
         raise ApiException(code=400, message=f"不支持的数据库类型{new_db_config.dialect}，仅支持mysql和postgresql")
 
     try:
-        chatdb_config = await chatdb_service.create_or_update_chatdb_config(new_db_config)
+        chatdb_config = await chatdb_service.create_or_update_chatdb_config(new_db_config, tenant_id=tenant_id)
         await session.refresh(chatdb_config)
         return success_response(data=chatdb_config, message="添加ChatDB配置成功!")
     except ValueError as e:
@@ -41,11 +42,12 @@ async def add_chatdb_config(
 
 @chatdb_router.get("", response_model=ResponseModel[List[ChatDbConfigEntity]])
 async def list_chatdb_config(
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     chatdb_service: ChatdbService = Depends(get_chatdb_service),
 ):
     try:
-        configs = await chatdb_service.get_all_chatdb_configs()
+        configs = await chatdb_service.get_all_chatdb_configs(tenant_id=tenant_id)
         return success_response(data=configs, message="获取ChatDB配置成功!")
     except Exception as e:
         logger.error(f"获取ChatDB配置失败: {traceback.format_exc()}。")
@@ -55,6 +57,7 @@ async def list_chatdb_config(
 @chatdb_router.post("/connectiontest")
 async def connection_test(
     db_config: ChatDbCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     chatdb_service: ChatdbService = Depends(get_chatdb_service),
 ):
@@ -62,7 +65,7 @@ async def connection_test(
     from sqlalchemy.exc import SQLAlchemyError
 
     if not db_config.password:
-        existing_config = await chatdb_service.get_chatdb_config_or_create()
+        existing_config = await chatdb_service.get_chatdb_config_or_create(tenant_id=tenant_id)
         if existing_config:
             db_config.password = decrypt_key(existing_config.encrypted_password)
     db_config.dialect = db_config.dialect.lower()

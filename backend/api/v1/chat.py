@@ -10,7 +10,7 @@ from service.tool.codesandbox_service import CodesandboxService
 from service.tool.chatapp_service import ChatappService
 from service.tool.guardrail_service import GuardrailService
 from db.db_context import get_db_session
-from service.injection import get_agent_service, get_chatapp_service, get_guardrail_service, get_llm_service, get_codesandbox_service
+from service.injection import get_agent_service, get_chatapp_service, get_guardrail_service, get_llm_service, get_codesandbox_service, get_tenant_id
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 from service.factory.extension_factory import create_guardrail_checker
@@ -67,6 +67,7 @@ async def generate_reponse(
 @chat_agent_router.post("")
 async def chat(
     chat_request: ChatAgentRequest,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     code_sandbox_service: CodesandboxService = Depends(get_codesandbox_service),
     guardrail_service: GuardrailService = Depends(get_guardrail_service),
@@ -76,10 +77,10 @@ async def chat(
 ):
     logger.info(f"Chat agent body: {chat_request}.")
     try:
-        agent = await agent_service.create_agent(chat_request)
+        agent = await agent_service.create_agent(chat_request, tenant_id=tenant_id)
         # 创建审核器
         checker = None
-        guardrail_config = await guardrail_service.get_guardrail_config_or_create()
+        guardrail_config = await guardrail_service.get_guardrail_config_or_create(tenant_id=tenant_id)
         if guardrail_config:
             checker = create_guardrail_checker(guardrail_config)
 

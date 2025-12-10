@@ -205,6 +205,9 @@ export default function KnowledgeBaseDetailPage(
 
   let isRefreshing = false;
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0); // 上传进度 0-100
+  const [uploadStep, setUploadStep] = useState<'idle' | 'uploading' | 'uploaded' | 'parsing'>('idle'); // 上传步骤
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{id: string; file_name: string; file_path: string}>>([]);  // 已上传待解析的文件
   const [deleting, setDeleting] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -948,8 +951,6 @@ export default function KnowledgeBaseDetailPage(
       alert('文件列表为空！');
       return;
     }
-    setUploadDialogOpen(false); // 关闭Dialog
-    setUploading(true);
 
     // 文件校验 (Demo功能，后续调整优化)
     const validFiles = Array.from(files).filter((file) => {
@@ -961,7 +962,6 @@ export default function KnowledgeBaseDetailPage(
 
     if (validFiles.length === 0) {
       alert("请选择有效的文件（如 PDF 或 Word，且小于 1GB）");
-      setUploading(false);
       return;
     }
 
@@ -971,34 +971,128 @@ export default function KnowledgeBaseDetailPage(
       formData.append('files', file);
     });
 
+    setUploading(true);
+    setUploadStep('uploading');
+    setUploadProgress(0);
+
     try {
       // 生产环境上传大文件直连
-      const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1"; // 你的后端地址
-      console.log("上传后端地址前缀: ", API_PREFIX)
-      const res = await fetch(
-        `${API_PREFIX}/config/knowledgebases/${kbId}/files`,
-        {
-          method: 'POST',
-          body: formData,
-        },
-      );
-      const upload_result = await res.json();
+      const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1";
+      console.log("上传后端地址前缀: ", API_PREFIX);
+
+      // 使用 XMLHttpRequest 来获取上传进度
+      const upload_result = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            setUploadProgress(progress);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const result = JSON.parse(xhr.responseText);
+              resolve(result);
+            } catch (e) {
+              reject(new Error('解析响应失败'));
+            }
+          } else {
+            try {
+              const result = JSON.parse(xhr.responseText);
+              reject(new Error(result.message || '上传失败'));
+            } catch (e) {
+              reject(new Error('上传失败'));
+            }
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('网络错误'));
+        };
+
+        // 添加 auto_parse=false 参数，只上传不解析
+        xhr.open('POST', `${API_PREFIX}/config/knowledgebases/${kbId}/files?auto_parse=false`);
+        xhr.send(formData);
+      });
+
       if (upload_result.code !== 200) {
         throw new Error(upload_result.message);
       }
+
       console.log('上传成功:', upload_result);
-      toast.success("上传成功。")
+      
+      // 保存上传的文件信息，用于后续解析
+      const uploadedFileList = upload_result.data.map((file: any) => ({
+        id: file.id,
+        file_name: file.file_name,
+        file_path: file.file_path,
+      }));
+      setUploadedFiles(uploadedFileList);
+      setUploadStep('uploaded');
+      setUploadProgress(100);
+      toast.success("文件上传成功，请点击开始解析按钮启动解析任务。");
+      
+      // 清空文件选择框
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      fetchKbFiles();
     } catch (error: any) {
       console.error('上传失败:', error.message);
       toast.error("上传失败: " + error.message);
-    } finally {
+      setUploadStep('idle');
+      setUploadProgress(0);
       setUploading(false);
-      // 清空文件选择框
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''; // 清空 input 的值
+    }
+  };
+
+  const handleStartParse = async () => {
+    if (uploadedFiles.length === 0) {
+      toast.error("没有待解析的文件");
+      return;
+    }
+
+    setUploadStep('parsing');
+
+    try {
+      const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1";
+      const res = await fetch(
+        `${API_PREFIX}/config/knowledgebases/${kbId}/files/parse`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: uploadedFiles.map(f => ({
+              file_name: f.file_name,
+              file_path: f.file_path,
+            })),
+          }),
+        },
+      );
+
+      const result = await res.json();
+      if (result.code !== 200) {
+        throw new Error(result.message);
       }
+
+      console.log('解析任务提交成功:', result);
+      toast.success("解析任务已提交，请稍候刷新查看进度。");
+      
+      // 重置状态
+      setUploadedFiles([]);
+      setUploadStep('idle');
+      setUploadProgress(0);
+      setUploading(false);
+      setUploadDialogOpen(false);
       setPage(1);
       fetchKbFiles();
+    } catch (error: any) {
+      console.error('提交解析任务失败:', error.message);
+      toast.error("提交解析任务失败: " + error.message);
+      setUploadStep('uploaded'); // 回到上传完成状态，可以重试
     }
   };
 
@@ -1451,7 +1545,20 @@ export default function KnowledgeBaseDetailPage(
                   )}
                 </div>
                 <div className="flex gap-2 items-center">
-                <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
+                    // 只有在非上传/解析状态时才允许关闭
+                    if (!open && (uploadStep === 'uploading' || uploadStep === 'parsing')) {
+                      return;
+                    }
+                    setUploadDialogOpen(open);
+                    if (!open) {
+                      // 关闭时重置状态
+                      setUploadStep('idle');
+                      setUploadProgress(0);
+                      setUploadedFiles([]);
+                      setUploading(false);
+                    }
+                  }}>
                     <DialogTrigger asChild>
                       <Button
                         variant="default"
@@ -1465,21 +1572,80 @@ export default function KnowledgeBaseDetailPage(
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
                         <DialogTitle>上传文件</DialogTitle>
+                        <DialogDescription>
+                          {uploadStep === 'idle' && '选择文件进行上传'}
+                          {uploadStep === 'uploading' && '正在上传文件...'}
+                          {uploadStep === 'uploaded' && '上传完成，点击开始解析按钮启动解析任务'}
+                          {uploadStep === 'parsing' && '正在提交解析任务...'}
+                        </DialogDescription>
                       </DialogHeader>
-                      <div 
-                        className="flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors"
-                        onClick={() => {
-                          document.getElementById('file-upload')?.click();
-                        }}
-                      >
-                        <Upload className="h-12 w-12 text-muted-foreground mb-4" />
-                        <p className="text-sm text-muted-foreground text-center">
-                          支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          点击选择文件
-                        </p>
-                      </div>
+                      
+                      {/* 步骤1: 选择文件 */}
+                      {uploadStep === 'idle' && (
+                        <div 
+                          className="flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors"
+                          onClick={() => {
+                            document.getElementById('file-upload')?.click();
+                          }}
+                        >
+                          <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                          <p className="text-sm text-muted-foreground text-center">
+                            支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            点击选择文件
+                          </p>
+                        </div>
+                      )}
+
+                      {/* 步骤2: 上传中 - 显示进度条 */}
+                      {uploadStep === 'uploading' && (
+                        <div className="flex flex-col items-center justify-center py-8 px-4">
+                          <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
+                          <p className="text-sm text-muted-foreground mb-4">正在上传文件...</p>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div 
+                              className="bg-primary h-3 rounded-full transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-2">{uploadProgress}%</p>
+                        </div>
+                      )}
+
+                      {/* 步骤3: 上传完成 - 显示文件列表和开始解析按钮 */}
+                      {uploadStep === 'uploaded' && (
+                        <div className="flex flex-col py-4 px-2">
+                          <div className="flex items-center gap-2 mb-4">
+                            <CheckCircle className="h-6 w-6 text-green-500" />
+                            <span className="text-sm font-medium">文件上传成功</span>
+                          </div>
+                          <div className="border rounded-lg p-3 mb-4 max-h-40 overflow-y-auto">
+                            <p className="text-xs text-muted-foreground mb-2">已上传的文件：</p>
+                            {uploadedFiles.map((file, index) => (
+                              <div key={file.id} className="text-sm py-1 border-b last:border-b-0">
+                                {index + 1}. {file.file_name}
+                              </div>
+                            ))}
+                          </div>
+                          <Button 
+                            onClick={handleStartParse}
+                            className="w-full"
+                          >
+                            <CirclePlayIcon className="h-4 w-4 mr-2" />
+                            开始解析 ({uploadedFiles.length} 个文件)
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* 步骤4: 解析中 */}
+                      {uploadStep === 'parsing' && (
+                        <div className="flex flex-col items-center justify-center py-8 px-4">
+                          <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
+                          <p className="text-sm text-muted-foreground">正在提交解析任务...</p>
+                        </div>
+                      )}
+
                       <input
                         id="file-upload"
                         type="file"

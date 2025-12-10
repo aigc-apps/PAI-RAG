@@ -20,6 +20,7 @@ from service.injection import (
     get_thread_service,
     get_message_service,
     get_llm_service,
+    get_tenant_id,
 )
 
 thread_router = APIRouter()
@@ -28,11 +29,12 @@ thread_router = APIRouter()
 @thread_router.post("", response_model=ResponseModel[ThreadRead])
 async def create_thread(
     thread: ThreadCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     thread_service: ThreadService = Depends(get_thread_service),
 ):
     try:
-        thread_entity = await thread_service.create_thread(thread)
+        thread_entity = await thread_service.create_thread(thread, tenant_id=tenant_id)
         await session.commit()
         await session.refresh(thread_entity)
         return success_response(
@@ -55,11 +57,14 @@ async def get_threads(
     session: AsyncSession = Depends(get_db_session),
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
+    tenant_id: str = Depends(get_tenant_id),
     thread_service: ThreadService = Depends(get_thread_service),
 ):
     try:
         thread_entities = await thread_service.list_threads(
-            offset=offset, limit=limit
+            tenant_id=tenant_id,
+            offset=offset,
+            limit=limit,
         )
         thread_models = [
             ThreadRead.model_validate(thread) for thread in thread_entities
@@ -76,6 +81,7 @@ async def get_threads(
 @thread_router.delete("/{thread_id}")
 async def delete_thread(
     thread_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     thread_service: ThreadService = Depends(get_thread_service),
     message_service: MessageService = Depends(get_message_service),
@@ -83,14 +89,14 @@ async def delete_thread(
     try:
         # Delete related attachments first
         try:
-            await message_service.delete_related_attachments(thread_id)
+            await message_service.delete_related_attachments(thread_id, tenant_id=tenant_id)
         except Exception as e:
             logger.error(
                 f"[ThreadProvider] Failed to delete related attachments in messages: {e}"
             )
 
         # Delete the thread
-        await thread_service.delete_thread(thread_id)
+        await thread_service.delete_thread(thread_id, tenant_id=tenant_id)
         await session.commit()
 
         return success_response(
@@ -111,6 +117,7 @@ async def delete_thread(
 async def update_thread_title(
     thread_id: str,
     messages: List[MessageCreate],
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     thread_service: ThreadService = Depends(get_thread_service),
     llm_service: LlmService = Depends(get_llm_service),
@@ -119,7 +126,7 @@ async def update_thread_title(
         f"Updating conversation {thread_id} title based on messages {messages}."
     )
     try:
-        thread = await thread_service.get_thread(thread_id)
+        thread = await thread_service.get_thread(thread_id, tenant_id=tenant_id)
         if not thread:
             raise ApiException(
                 code=404, message=f"Conversation {thread_id} not found."
@@ -128,7 +135,7 @@ async def update_thread_title(
         title = "未命名会话"
         try:
             # Get first LLM model from database
-            llm_entities = await llm_service.get_all_llms()
+            llm_entities = await llm_service.get_all_llms(tenant_id=tenant_id)
             if not llm_entities:
                 raise ValueError("No LLM models found in database.")
 
@@ -174,7 +181,7 @@ async def update_thread_title(
             )
 
         # Update thread title
-        await thread_service.update_thread_title(thread_id, title)
+        await thread_service.update_thread_title(thread_id, title, tenant_id=tenant_id)
         await session.commit()
 
         logger.info(f"Conversation {thread_id} updated title to {title}.")
@@ -199,6 +206,7 @@ async def update_thread_title(
 @thread_router.post("/{thread_id}/messages", response_model=ResponseModel[MessageRead])
 async def create_thread_message(
     message: MessageCreate,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     thread_service: ThreadService = Depends(get_thread_service),
     message_service: MessageService = Depends(get_message_service),
@@ -206,15 +214,14 @@ async def create_thread_message(
     thread_id = message.thread_id
     try:
         # Verify thread exists
-        thread = await thread_service.get_thread(thread_id)
+        thread = await thread_service.get_thread(thread_id, tenant_id=tenant_id)
         if not thread:
             raise ApiException(
                 code=404, message=f"Conversation {thread_id} not found."
             )
 
         # Create or update message
-        message_entity = await message_service.create_message(message)
-        await session.commit()
+        message_entity = await message_service.create_message(message, tenant_id=tenant_id)
         await session.refresh(message_entity)
 
         return success_response(
@@ -233,12 +240,15 @@ async def create_thread_message(
 @thread_router.get("/{thread_id}/messages", response_model=ResponseModel[List[MessageRead]])
 async def get_thread_messages(
     thread_id: str,
+    tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     message_service: MessageService = Depends(get_message_service),
 ):
     try:
         message_entities = await message_service.list_messages(
-            thread_id=thread_id, limit=30
+            thread_id=thread_id,
+            tenant_id=tenant_id,
+            limit=30,
         )
         message_models = [
             MessageRead.model_validate(message) for message in message_entities

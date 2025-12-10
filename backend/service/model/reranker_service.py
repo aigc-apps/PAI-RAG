@@ -26,7 +26,7 @@ class RerankerService:
         """
         self.session = session
 
-    async def get_reranker(self, reranker_id: str) -> Optional[RerankerModelEntity]:
+    async def get_reranker(self, reranker_id: str, tenant_id: str) -> Optional[RerankerModelEntity]:
         """
         Get a single Reranker entity by ID.
 
@@ -36,10 +36,11 @@ class RerankerService:
         Returns:
             RerankerModelEntity if found, None otherwise
         """
-        return await self.session.get(RerankerModelEntity, reranker_id)
+        result = await self.session.exec(select(RerankerModelEntity).where(RerankerModelEntity.id == reranker_id, RerankerModelEntity.tenant_id == tenant_id))
+        return result.first()
 
     async def get_reranker_by_model_id(
-        self, model_id: str
+        self, model_id: str, tenant_id: str
     ) -> Optional[RerankerModelEntity]:
         """
         Get a single Reranker entity by model_id.
@@ -51,13 +52,13 @@ class RerankerService:
             RerankerModelEntity if found, None otherwise
         """
         statement = select(RerankerModelEntity).where(
-            RerankerModelEntity.model_id == model_id
+            RerankerModelEntity.model_id == model_id, RerankerModelEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return result.first()
 
     async def get_reranker_by_model_name(
-        self, model_name: str
+        self, model_name: str, tenant_id: str
     ) -> Optional[RerankerModelEntity]:
         """
         Get a single Reranker entity by model_name.
@@ -69,13 +70,14 @@ class RerankerService:
             RerankerModelEntity if found, None otherwise
         """
         statement = select(RerankerModelEntity).where(
-            RerankerModelEntity.model_name == model_name
+            RerankerModelEntity.model_name == model_name, RerankerModelEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
         return result.first()
 
     async def list_rerankers(
         self,
+        tenant_id: str,
         page: int = 1,
         size: int = 10,
         model_name: Optional[str] = None,
@@ -92,7 +94,7 @@ class RerankerService:
             PagedResult containing list of RerankerModelEntity and pagination metadata
         """
         # Build base query
-        base_query = select(RerankerModelEntity)
+        base_query = select(RerankerModelEntity).where(RerankerModelEntity.tenant_id == tenant_id)
 
         # Add model_name filter if provided
         if model_name is not None:
@@ -123,7 +125,7 @@ class RerankerService:
         )
 
     async def create_reranker(
-        self, reranker_data: RerankerModelCreate
+        self, reranker_data: RerankerModelCreate, tenant_id: str
     ) -> RerankerModelEntity:
         """
         Create a new Reranker entity.
@@ -145,7 +147,7 @@ class RerankerService:
 
         # Create entity
         reranker = RerankerModelEntity.model_validate(
-            reranker_data, update={"encrypted_api_key": encrypted_api_key}
+            reranker_data, update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}
         )
 
         self.session.add(reranker)
@@ -171,7 +173,7 @@ class RerankerService:
                 raise ValueError(f"模型创建失败: {e}") from e
 
     async def update_reranker(
-        self, reranker_id: str, update_data: RerankerModelCreate
+        self, reranker_id: str, update_data: RerankerModelCreate, tenant_id: str
     ) -> RerankerModelEntity:
         """
         Update an existing Reranker entity.
@@ -187,7 +189,8 @@ class RerankerService:
         Raises:
             ValueError: If Reranker entity not found
         """
-        reranker = await self.session.get(RerankerModelEntity, reranker_id)
+        result = await self.session.exec(select(RerankerModelEntity).where(RerankerModelEntity.id == reranker_id, RerankerModelEntity.tenant_id == tenant_id))
+        reranker = result.first()
         if not reranker:
             raise ValueError(f"Reranker '{reranker_id}' 不存在。")
 
@@ -216,7 +219,7 @@ class RerankerService:
         )
         return reranker
 
-    async def delete_reranker(self, reranker_id: str) -> None:
+    async def delete_reranker(self, reranker_id: str, tenant_id: str) -> None:
         """
         Delete a Reranker entity.
         Note: Caller is responsible for committing the session.
@@ -227,7 +230,8 @@ class RerankerService:
         Raises:
             ValueError: If Reranker entity not found
         """
-        reranker = await self.session.get(RerankerModelEntity, reranker_id)
+        result = await self.session.exec(select(RerankerModelEntity).where(RerankerModelEntity.id == reranker_id, RerankerModelEntity.tenant_id == tenant_id))
+        reranker = result.first()
         if not reranker:
             raise ValueError(f"Reranker '{reranker_id}' 不存在。")
 
@@ -241,13 +245,13 @@ class RerankerService:
             f"Deleted Reranker entity: {reranker_id} (model_id: {reranker.model_id})"
         )
 
-    async def get_all_rerankers(self) -> List[RerankerModelEntity]:
+    async def get_all_rerankers(self, tenant_id: str) -> List[RerankerModelEntity]:
         """
         Get all Reranker entities without pagination.
 
         Returns:
             List of all RerankerModelEntity
         """
-        statement = select(RerankerModelEntity)
+        statement = select(RerankerModelEntity).where(RerankerModelEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
