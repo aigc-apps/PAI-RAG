@@ -882,7 +882,7 @@ class RagService:
         if retrieval_setting.enable_rerank and retrieval_setting.rerank_model and (text_nodes_count + dense_nodes_count > 1):
             reranker_service = await self._get_reranker_service()
             reranker_config = await reranker_service.get_reranker_by_model_id(
-                retrieval_setting.rerank_model
+                retrieval_setting.rerank_model, tenant_id=tenant_id
             )
             if not reranker_config:
                 raise ValueError(f"Reranker model not found for knowledgebase {knowledge_id}.")
