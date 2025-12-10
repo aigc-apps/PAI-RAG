@@ -13,11 +13,13 @@ packages = [
   {include = "rag", from = "backend"},
   {include = "app", from = "backend"},
   {include = "api", from = "backend"},
-  {include = "config", from = "backend"},
   {include = "common", from = "backend"},
   {include = "extensions", from = "backend"},
   {include = "memory", from = "backend"},
-  {include = "chat", from = "backend"}
+  {include = "service", from = "backend"},
+  {include = "tools", from = "backend"},
+  {include = "evaluation", from = "backend"},
+  {include = "utils", from = "backend"}
 ]
 
 [tool.poetry.dependencies]
