@@ -11,7 +11,9 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { useEffect, useState } from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import Link from 'next/link';
 
 interface ModelConfigurationParams {
   id: string;
@@ -40,6 +42,7 @@ export default function ModelSelector({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modelGroups, setModelGroups] = useState<ModelGroup[]>([]);
+  const { tenantFetch } = useTenantFetch();
 
   // 获取模型数据
   useEffect(() => {
@@ -48,8 +51,8 @@ export default function ModelSelector({
       setError(null);
       try {
         const [llmRes, appRes] = await Promise.all([
-          fetch(`/api/config/llms/groups`),
-          fetch(`/api/config/apps`),
+          tenantFetch(`/api/config/llms/groups`),
+          tenantFetch(`/api/config/apps`),
         ]);
         if (!llmRes.ok) throw new Error('模型数据加载失败');
         const data = await llmRes.json();
@@ -71,24 +74,38 @@ export default function ModelSelector({
         const modelGroups = [chatbotGroup, ...data.data.groups];
         setModelGroups(modelGroups);
 
-        if (!selectedModel.model_id) {
-          // 如果没有选中的模型，默认选择第一个模型
+        // 查找当前选中的模型是否存在
+        let foundModel: ModelConfigurationParams | null = null;
+        let foundGroup: ModelGroup | null = null;
+        if (selectedModel.model_id) {
           for (const group of modelGroups) {
-            if (group.models.length > 0) {
-              const firstModel = group.models[0];
-              setCurrentModel(firstModel?.model_id);
-              if (firstModel) {
-                onModelChange(firstModel.id, group.id, firstModel.model_id);
-              }
+            const model = group.models.find((m: ModelConfigurationParams) => m.model_id === selectedModel.model_id);
+            if (model) {
+              foundModel = model;
+              foundGroup = group;
+              break;
             }
           }
         }
-        else {
-          // 如果有选中的模型，根据选中的模型ID查找对应的模型
-          const modelConfig = modelGroups.flatMap((group) => group.models).find((model) => model.model_id === selectedModel.model_id);
-          if (modelConfig) {
-            setCurrentModel(modelConfig.model_id);
-            onModelChange(modelConfig.id, modelConfig.group_id, modelConfig.model_id);
+
+        if (foundModel && foundGroup) {
+          // 找到了保存的模型，使用它
+          setCurrentModel(foundModel.model_id);
+          onModelChange(foundModel.id, foundGroup.id, foundModel.model_id);
+        } else {
+          // 没有选中的模型或保存的模型不存在，选择第一个可用的模型
+          let found = false;
+          for (const group of modelGroups) {
+            if (group.models.length > 0) {
+              const firstModel = group.models[0];
+              setCurrentModel(firstModel.model_id);
+              onModelChange(firstModel.id, group.id, firstModel.model_id);
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            setError('没有可用的模型');
           }
         }
       } catch (err) {
@@ -120,8 +137,16 @@ export default function ModelSelector({
                 加载中...
               </div>
             ) : error ? (
-              <div className="p-4 text-center text-sm text-red-500">
-                {error}
+              <div className="p-4 text-center text-sm">
+                <p className="text-red-500 mb-2">{error}</p>
+                <Link 
+                  href="/config/model" 
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                  onClick={() => setOpen(false)}
+                >
+                  <Plus className="h-3 w-3" />
+                  去添加模型
+                </Link>
               </div>
             ) : (
               modelGroups.map((group) => (

@@ -40,6 +40,7 @@ class RetrievalConfig(SQLModel):
 
 
 class KnowledgebaseCreate(SQLModel):
+    id: Optional[str] = Field(default=None)
     tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     name: str = Field(default=None)
     description: str = Field(default=None, sa_column=Column(Text))

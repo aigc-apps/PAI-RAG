@@ -107,6 +107,7 @@ async def connection_test(
             kb_id="connectiontest",
             dimension=1024,
             vector_config=test_config,
+            table_name="connectiontest",
         )
         embedding = list(np.random.rand(1024)) # convert to list for JSON serializable (HologresVectorStore requirement)
         node = TextNode(

@@ -57,7 +57,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 interface EmbeddingModel {
   id: string;
   model_id: string;
@@ -127,7 +127,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
   const [vectorDbType, setVectorDbType] = useState<string>('local');
-  
+  const { tenantFetch } = useTenantFetch();
   // 不支持全文检索和混合检索的向量数据库类型列表
   const VECTOR_DB_TYPES_WITHOUT_FULLTEXT = ['local', 'opensearch', 'hologres'];
   
@@ -138,10 +138,10 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const fetchModelConfigs = async () => {
       try {
         const [embRes, rerankerRes, vectordbRes, visionRes] = await Promise.all([
-          fetch(`/api/config/embeddings`),
-          fetch(`/api/config/rerankers`),
-          fetch(`/api/config/vectordb`),
-          fetch(`/api/config/llms?vision_support=true&size=1000`),
+          tenantFetch(`/api/config/embeddings`),
+          tenantFetch(`/api/config/rerankers`),
+          tenantFetch(`/api/config/vectordb`),
+          tenantFetch(`/api/config/llms?vision_support=true&size=1000`),
         ]);
 
         const embData = (await embRes.json())?.data.items || [];
@@ -194,7 +194,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const updateMethod = isCreate ? 'POST' : 'PUT';
     kb.retrieval_config.enable_rerank = kb.retrieval_config.rerank_model && kb.retrieval_config.rerank_model.length > 0  ? true : false;
     try {
-      const res = await fetch(submit_url, {
+      const res = await tenantFetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kb), // 包装为数组

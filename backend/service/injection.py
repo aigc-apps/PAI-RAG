@@ -26,6 +26,7 @@ from service.knowledgebase.file_metadata_relation_service import (
 )
 from service.knowledgebase.file_task_service import FileTaskService
 from service.knowledgebase.rag_service import RagService
+from service.knowledgebase.vector_table_mapping_service import VectorTableMappingService
 from service.thread.thread_service import ThreadService
 from service.thread.message_service import MessageService
 from service.agent.agent_service import AgentService
@@ -302,6 +303,32 @@ async def get_file_metadata_relation_service(
     return FileMetadataRelationService(session)
 
 
+async def get_vector_table_mapping_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> VectorTableMappingService:
+    """
+    FastAPI dependency injection function for VectorTableMappingService.
+
+    Args:
+        session: Database session (injected via Depends)
+
+    Returns:
+        VectorTableMappingService instance with the injected session
+
+    Example:
+        ```python
+        @router.get("/{kb_id}/vector-table-name")
+        async def get_vector_table_name(
+            kb_id: str,
+            tenant_id: str,
+            mapping_service: VectorTableMappingService = Depends(get_vector_table_mapping_service),
+        ):
+            return await mapping_service.get_vector_table_name(tenant_id, kb_id)
+        ```
+    """
+    return VectorTableMappingService(session)
+
+
 async def get_rag_service(
     session: AsyncSession = Depends(get_db_session),
 ) -> RagService:
@@ -356,6 +383,9 @@ async def get_rag_service(
     async def vector_db_service_getter():
         return await get_vectordb_service(session)
 
+    async def vector_table_mapping_service_getter():
+        return await get_vector_table_mapping_service(session)
+
     return RagService(
         session=session,
         kb_service_getter=kb_service_getter,
@@ -367,6 +397,7 @@ async def get_rag_service(
         reranker_service_getter=reranker_service_getter,
         llm_service_getter=llm_service_getter,
         vector_db_service_getter=vector_db_service_getter,
+        vector_table_mapping_service_getter=vector_table_mapping_service_getter,
     )
 
 

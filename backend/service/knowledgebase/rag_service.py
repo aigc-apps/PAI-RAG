@@ -61,6 +61,7 @@ class RagService:
         reranker_service_getter: Callable[[], Awaitable],
         llm_service_getter: Callable[[], Awaitable],
         vector_db_service_getter: Callable[[], Awaitable],
+        vector_table_mapping_service_getter: Callable[[], Awaitable],
     ):
         """
         Initialize RagService with a database session and service getters.
@@ -75,7 +76,8 @@ class RagService:
             embedding_service_getter: Async callable that returns EmbeddingService instance (required)
             reranker_service_getter: Async callable that returns RerankerService instance (required)
             llm_service_getter: Async callable that returns LlmService instance (required)
-
+            vector_db_service_getter: Async callable that returns VectordbService instance (required)
+            vector_table_mapping_service_getter: Async callable that returns VectorTableMappingService instance (required)
         Raises:
             ValueError: If any getter is None
         """
@@ -95,6 +97,10 @@ class RagService:
             raise ValueError("reranker_service_getter is required")
         if llm_service_getter is None:
             raise ValueError("llm_service_getter is required")
+        if vector_db_service_getter is None:
+            raise ValueError("vector_db_service_getter is required")
+        if vector_table_mapping_service_getter is None:
+            raise ValueError("vector_table_mapping_service_getter is required")
 
         self.session = session
         self._get_kb_service = kb_service_getter
@@ -106,7 +112,7 @@ class RagService:
         self._get_reranker_service = reranker_service_getter
         self._get_llm_service = llm_service_getter
         self._get_vector_db_service = vector_db_service_getter
-
+        self._get_vector_table_mapping_service = vector_table_mapping_service_getter
         self._embed_dimension_cache = LruCache(max_size=100)
 
     # ------------------------------------------------------------------------------------------------
@@ -402,7 +408,7 @@ class RagService:
         await self.adelete(kb_id=kb_id, node_ids=chunk_ids, tenant_id=tenant_id)
 
         # Delete file itself
-        await file_service.delete_file(file_id, kb_id)
+        await file_service.delete_file(tenant_id=tenant_id, file_id=file_id, kb_id=kb_id)
 
         logger.info(f"Deleted file {file_id} and all related chunks")
 
@@ -857,10 +863,15 @@ class RagService:
         if not vector_config:
             raise ValueError(f"VectorDB config not found for knowledgebase {knowledge_id}.")
 
+        table_mapping_service = await self._get_vector_table_mapping_service()
+        table_name = await table_mapping_service.get_vector_table_name(tenant_id=tenant_id, kb_id=kb.id)
+        if not table_name:
+            raise ValueError(f"Vector table name not found for knowledgebase {knowledge_id}.")
         vector_store = create_vector_store(
             kb_id=kb.id,
             dimension=len(query_embedding),
             vector_config=vector_config,
+            table_name=table_name,
         )
 
         logger.info("Executing vector store query...")
@@ -968,10 +979,16 @@ class RagService:
 
         embed_dimension = len(embeddings[0])
         self._embed_dimension_cache.put(kb.embedding_model, embed_dimension)
+
+        table_mapping_service = await self._get_vector_table_mapping_service()
+        table_name = await table_mapping_service.get_vector_table_name(tenant_id=tenant_id, kb_id=kb.id)
+        if not table_name:
+            raise ValueError(f"Vector table name not found for knowledgebase {kb_id}.")
         vector_store = create_vector_store(
             kb_id=kb_id,
             dimension=embed_dimension,
             vector_config=vector_config,
+            table_name=table_name,
         )
 
         try:
@@ -1010,10 +1027,16 @@ class RagService:
         vector_config = await vector_db_service.get_vectordb_config(tenant_id=tenant_id)
         if not vector_config:
             raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
+
+        table_mapping_service = await self._get_vector_table_mapping_service()
+        table_name = await table_mapping_service.get_vector_table_name(tenant_id=tenant_id, kb_id=kb.id)
+        if not table_name:
+            raise ValueError(f"Vector table name not found for knowledgebase {kb_id}.")
         vector_store = create_vector_store(
             kb_id=kb_id,
             dimension=embed_dimension,
             vector_config=vector_config,
+            table_name=table_name,
         )
         try:
             await vector_store.adelete_nodes(node_ids=node_ids)
@@ -1046,10 +1069,16 @@ class RagService:
         vector_config = await vector_db_service.get_vectordb_config(tenant_id=tenant_id)
         if not vector_config:
             raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
+
+        table_mapping_service = await self._get_vector_table_mapping_service()
+        table_name = await table_mapping_service.get_vector_table_name(tenant_id=tenant_id, kb_id=kb.id)
+        if not table_name:
+            raise ValueError(f"Vector table name not found for knowledgebase {kb_id}.")
         vector_store = create_vector_store(
             kb_id=kb_id,
             dimension=embed_dimension,
             vector_config=vector_config,
+            table_name=table_name,
         )
         try:
             await vector_store.adelete(ref_doc_id=file_id)

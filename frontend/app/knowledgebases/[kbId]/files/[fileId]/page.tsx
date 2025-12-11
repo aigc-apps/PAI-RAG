@@ -34,6 +34,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
 import { htmlRender } from "@/app/knowledgebases/[kbId]/viewer/htmlRender";
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 interface KnowledgeBase {
   id: string;
@@ -125,13 +126,13 @@ export default function KnowledgeBaseFileChunksPage(
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newChunkText, setNewChunkText] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-
+  const { tenantFetch } = useTenantFetch();
   const router = useRouter();
 
   useEffect(() => {
     const fetchKbConfigs = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}`,
         );
         if (!res.ok) throw new Error('获取知识库列表失败');
@@ -148,7 +149,7 @@ export default function KnowledgeBaseFileChunksPage(
     };
     const fetchKbFile = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}/files/${fileId}`,
         );
         if (!res.ok) throw new Error('获取知识库文件失败');
@@ -166,7 +167,7 @@ export default function KnowledgeBaseFileChunksPage(
 
     const fetchKbFileChunks = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取知识库文件切片列表失败');
@@ -198,7 +199,7 @@ export default function KnowledgeBaseFileChunksPage(
     chunk.active = !chunk.active;
     const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
 
-    const res = await fetch(url, {
+    const res = await tenantFetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chunk), // 包装为数组
@@ -223,7 +224,7 @@ export default function KnowledgeBaseFileChunksPage(
 
     try {
       const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
-      const response = await fetch(url, {
+      const response = await tenantFetch(url, {
         method: 'DELETE',
       });
 
@@ -240,7 +241,7 @@ export default function KnowledgeBaseFileChunksPage(
         setPage(page - 1);
       } else {
         // 刷新切片列表
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
         if (res.ok) {
@@ -261,7 +262,7 @@ export default function KnowledgeBaseFileChunksPage(
     const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${selectedChunk.id}`;
 
     try {
-      const response = await fetch(url, {
+      const response = await tenantFetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(selectedChunk),
@@ -291,7 +292,7 @@ export default function KnowledgeBaseFileChunksPage(
     setIsAdding(true);
     try {
       const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks`;
-      const response = await fetch(url, {
+      const response = await tenantFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -310,7 +311,7 @@ export default function KnowledgeBaseFileChunksPage(
       setIsAddOpen(false);
 
       // 刷新切片列表
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
       );
       if (res.ok) {

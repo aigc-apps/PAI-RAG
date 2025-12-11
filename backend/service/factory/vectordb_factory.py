@@ -34,9 +34,9 @@ from rag.vector_store.vector_connection import cleanup_vector_store
 vectordb_cache = LruCache(max_size=200, on_delete_func=cleanup_vector_store)
 
 
-def get_vectordb_cache_key(kb_id: str, dimension: int, vector_config: VectorDbConfig):
+def get_vectordb_cache_key(kb_id: str, dimension: int, vector_config: VectorDbConfig, table_name: str):
     vector_str = json.dumps(vector_config.config, sort_keys=True, ensure_ascii=False)
-    key_str = f"{kb_id}--{dimension}--{vector_str}"
+    key_str = f"{table_name}--{kb_id}--{dimension}--{vector_str}"
     return key_str
 
 
@@ -44,23 +44,23 @@ def create_vector_store(
     kb_id: str,
     dimension: int,
     vector_config: VectorDbConfig,
+    table_name: str,
 ) -> BasePydanticVectorStore:
-    cache_key = get_vectordb_cache_key(kb_id, dimension, vector_config)
+    cache_key = get_vectordb_cache_key(kb_id, dimension, vector_config, table_name)
 
     vector_store = vectordb_cache.get(cache_key)
     if vector_store is not None:
-        logger.info(f"Using cached vector store for {kb_id} with dimension {dimension}.")
+        logger.info(f"Using cached vector store for {kb_id} with table name {table_name} with dimension {dimension}.")
         return vector_store
 
-    logger.info(f"Creating new vector store for {kb_id} with dimension {dimension}.")
+    logger.info(f"Creating new vector store for {kb_id} with table name {table_name} with dimension {dimension}.")
 
-    table_name = kb_id
     vector_db_connection = create_vector_db_connection(vector_config.config)
 
     if isinstance(vector_db_connection, MilvusConnection):
         # milvus collection name should starts with non-numeric character
-        if len(kb_id) <= 32:
-            table_name = "kb"+ kb_id
+        if table_name[0].isdigit():
+            table_name = "kb"+ table_name
 
         milvus_url = (
             f"http://{vector_db_connection.host.strip('/')}:{vector_db_connection.port}/{vector_db_connection.database}"
@@ -68,7 +68,7 @@ def create_vector_store(
         token = f"{vector_db_connection.user}:{decrypt_key(vector_db_connection.encrypted_password)}"
         sparse_embedding_function = BM25BuiltInFunction()
 
-        logger.info(f"Creating Milvus vector store for {kb_id} with url: {milvus_url}.")
+        logger.info(f"Creating Milvus vector store for {kb_id} with table name {table_name} with url: {milvus_url}.")
         vector_store = MilvusVectorStore(
             uri=milvus_url,
             token=token,
@@ -84,7 +84,7 @@ def create_vector_store(
         )
     elif isinstance(vector_db_connection, ElasticsearchConnection):
         logger.info(
-            f"Creating ElasticsearchStore for {kb_id} with url {vector_db_connection.endpoint}."
+            f"Creating ElasticsearchStore for {kb_id} with table name {table_name} with url {vector_db_connection.endpoint}."
         )
 
         vector_store = ElasticsearchStore(
@@ -100,7 +100,7 @@ def create_vector_store(
         )
     elif isinstance(vector_db_connection, PostgresqlConnection):
         logger.info(
-            f"Creating PostgresqlStore for {kb_id} with url {vector_db_connection.host} {vector_db_connection.database}."
+            f"Creating PostgresqlStore for {kb_id} with table name {table_name} with url {vector_db_connection.host} {vector_db_connection.database}."
         )
         password = decrypt_key(vector_db_connection.encrypted_password)
         conn_str = (
@@ -120,7 +120,7 @@ def create_vector_store(
         )
     elif isinstance(vector_db_connection, HologresConnection):
         logger.info(
-            f"Creating HologresVectorStore for {kb_id} with url {vector_db_connection.host}:{vector_db_connection.port}/{vector_db_connection.database}."
+            f"Creating HologresVectorStore for {kb_id} with table name {table_name} with url {vector_db_connection.host}:{vector_db_connection.port}/{vector_db_connection.database}."
         )
         password = quote_plus(decrypt_key(vector_db_connection.encrypted_password))
         vector_store = HologresVectorStore.from_param(
@@ -135,7 +135,7 @@ def create_vector_store(
 
     elif isinstance(vector_db_connection, OpensearchConnection):
         logger.info(
-            f"Creating OpensearchVectorStore for {kb_id} with endpoint {vector_db_connection.endpoint}, instance_id {vector_db_connection.instance_id}, username: {vector_db_connection.username}"
+            f"Creating OpensearchVectorStore for {kb_id} with table name {table_name} with endpoint {vector_db_connection.endpoint}, instance_id {vector_db_connection.instance_id}, username: {vector_db_connection.username}"
         )
 
         password = quote_plus(decrypt_key(vector_db_connection.encrypted_password))
@@ -229,9 +229,9 @@ def create_vector_store(
         vector_store.create_search_index_if_not_exist()
 
     elif isinstance(vector_db_connection, LocalConnection):
-        logger.info(f"Creating LocalVectorStore for {kb_id} with port {DEFAULT_CHROMA_PORT}.")
+        logger.info(f"Creating LocalVectorStore for {kb_id} with table name {table_name} with port {DEFAULT_CHROMA_PORT}.")
         vector_store = LocalChromaVectorStore(
-            collection_name=kb_id,
+            collection_name=table_name,
             host="localhost",
             port=DEFAULT_CHROMA_PORT,
         )

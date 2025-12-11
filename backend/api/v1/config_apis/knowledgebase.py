@@ -83,7 +83,11 @@ async def read_knowledgebase(
 ):
     try:
         knowledgebase = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
+        if not knowledgebase:
+            raise ApiException.not_found(kb_id, "知识库")
         return success_response(data=knowledgebase, message="查询知识库成功。")
+    except ApiException:
+        raise
     except ValueError as e:
         logger.error(f"查询知识库失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))

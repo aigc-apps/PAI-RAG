@@ -77,16 +77,17 @@ export default function RunConfigsPage(
     const [isEditSetting, setIsEditSetting] = useState(false);
     const [editConfig, setEditConfig] = useState<RunConfig>(default_eval_run_config);
 
+    const { tenantFetch } = useTenantFetch();
     useEffect(() => {
         const fetchConfigs = async () => {
             setIsLoading(true);
             try {
                 const [evalRes, datasetRes, llmRes, mcpRes, kbRes] = await Promise.all([
-                    fetch(`/api/config/evaluation/${datasetId}`),
-                    fetch(`/api/config/evaluation/${datasetId}/runconfigs?page=${page}&size=${pageSize}`),
-                    fetch(`/api/config/llms`),
-                    fetch(`/api/config/mcps`),
-                    fetch(`/api/config/knowledgebases`),
+                    tenantFetch(`/api/config/evaluation/${datasetId}`),
+                    tenantFetch(`/api/config/evaluation/${datasetId}/runconfigs?page=${page}&size=${pageSize}`),
+                    tenantFetch(`/api/config/llms`),
+                    tenantFetch(`/api/config/mcps`),
+                    tenantFetch(`/api/config/knowledgebases`),
                 ]);
 
                 const eval_data = await evalRes.json();
@@ -134,7 +135,7 @@ export default function RunConfigsPage(
         console.log("createNewRunConfig", data)
         try {
             if (!isEditSetting) {
-                const res = await fetch(
+                const res = await tenantFetch(
                     `/api/config/evaluation/${datasetId}/runconfigs`,
                     {
                         method: "POST",
@@ -150,7 +151,7 @@ export default function RunConfigsPage(
                 console.log('创建成功:', result);
                 setRunConfigs((prev) => [...prev, result.data]); // 追加新配置
             } else {
-                const res = await fetch(
+                const res = await tenantFetch(
                     `/api/config/evaluation/${datasetId}/runconfigs/${data.id}`,
                     {
                         method: "PUT",
@@ -267,7 +268,7 @@ export default function RunConfigsPage(
 
     const onDelete = async (config_id: string) => {
         try {
-            const res = await fetch(`/api/config/evaluation/${datasetId}/runconfigs/${config_id}`, {
+            const res = await tenantFetch(`/api/config/evaluation/${datasetId}/runconfigs/${config_id}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',

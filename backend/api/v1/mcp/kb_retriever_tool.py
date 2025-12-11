@@ -102,7 +102,6 @@ async def asearch_knowledgebase(
             ),
             request_id=request_id
         )
-
     except Exception:
         logger.exception(f"Retrieval tool failed: {traceback.format_exc()}")
         return RetrievalToolResponse(

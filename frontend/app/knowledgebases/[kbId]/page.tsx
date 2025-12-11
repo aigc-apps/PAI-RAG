@@ -122,7 +122,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Slider } from '@/components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { SearchCode, TextSearch, ScanSearch, ChevronDownIcon as ChevronDown, ChevronUpIcon as ChevronUp, Save } from 'lucide-react';
-
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 interface KnowledgeBaseFile {
   id: string;
   file_name: string;
@@ -195,6 +195,7 @@ export default function KnowledgeBaseDetailPage(
   const [searchError, setSearchError] = useState<string | null>(null); // 搜索错误信息
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({}); // 展开的卡片索引
   const [logicalOperator, setLogicalOperator] = useState<string>('and');
+  const [loadingMsg, setLoadingMsg] = useState('获取知识库配置中...');
   const [metadataConditions, setMetadataConditions] = useState<
     MetadataCondition[]
   >([]);
@@ -254,7 +255,8 @@ export default function KnowledgeBaseDetailPage(
   const [rerankerModels, setRerankerModels] = useState<Array<{id: string; model_id: string; model_name: string}>>([]);
   const [retrievalSettingOpen, setRetrievalSettingOpen] = useState(true);
   const [vectorDbType, setVectorDbType] = useState<string>('local');
-  
+  const { tenantFetch, tenantId } = useTenantFetch();
+
   // 不支持全文检索和混合检索的向量数据库类型列表
   const VECTOR_DB_TYPES_WITHOUT_FULLTEXT = ['local', 'opensearch', 'hologres'];
   
@@ -303,7 +305,7 @@ export default function KnowledgeBaseDetailPage(
     console.log('handleSearchSubmit');
 
     try {
-      const search_result = await fetch(`/api/retrieval`, {
+      const search_result = await tenantFetch(`/api/retrieval`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -383,7 +385,7 @@ export default function KnowledgeBaseDetailPage(
     const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}&query=${fileQueryRef.current || ''}&status=${filter === 'all' ? '': filter}`;
 
     try {
-      const files_res = await fetch(url, { signal: controller.signal, });
+      const files_res = await tenantFetch(url, { signal: controller.signal, });
       if (!files_res.ok) throw new Error('获取知识库文件列表失败');
 
       const file_json_data = await files_res.json();
@@ -421,7 +423,7 @@ export default function KnowledgeBaseDetailPage(
 
   const fetchMetadataConfigs = useCallback(async () => {
     try {
-      const metaRes = await fetch(`/api/config/knowledgebases/${kbId}/metadata`);
+      const metaRes = await tenantFetch(`/api/config/knowledgebases/${kbId}/metadata`);
       if (!metaRes.ok) throw new Error('获取知识库元数据失败');
       const metadata_json = await metaRes.json();
       const metadata_data = metadata_json.data.items as MetadataConfig[];
@@ -441,14 +443,19 @@ export default function KnowledgeBaseDetailPage(
 
   const fetchKbConfigs = useCallback(async () => {
     try {
+      setLoadingMsg('获取知识库配置中...');
       const [kbRes, metaRes, rerankerRes, vectordbRes] = await Promise.all([
-        fetch(`/api/config/knowledgebases/${kbId}`),
-        fetch(`/api/config/knowledgebases/${kbId}/metadata`),
-        fetch(`/api/config/rerankers`),
-        fetch(`/api/config/vectordb`),
+        tenantFetch(`/api/config/knowledgebases/${kbId}`),
+        tenantFetch(`/api/config/knowledgebases/${kbId}/metadata`),
+        tenantFetch(`/api/config/rerankers`),
+        tenantFetch(`/api/config/vectordb`),
       ]);
 
-      if (!kbRes.ok) throw new Error('获取知识库配置失败');
+      if (!kbRes.ok) {
+        const errorData = await kbRes.json();
+        setLoadingMsg(errorData.message || `获取知识库配置失败`);
+        throw new Error(errorData.message || `获取知识库配置失败`);
+      }
       const json_data = await kbRes.json();
       const kb_data = json_data.data;
 
@@ -514,7 +521,7 @@ export default function KnowledgeBaseDetailPage(
   }, [fetchKbConfigs]);
 
   if (!knowledgebase) {
-    return <div className="p-6">加载中...</div>;
+    return <div className="p-6">{loadingMsg}</div>;
   }
 
   const handleSaveSuccess = async (kb: KbConfig) => {
@@ -537,7 +544,7 @@ export default function KnowledgeBaseDetailPage(
       };
 
       // 调用更新知识库接口，只更新retrieval_config
-      const res = await fetch(`/api/config/knowledgebases/${kbId}`, {
+      const res = await tenantFetch(`/api/config/knowledgebases/${kbId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -577,7 +584,7 @@ export default function KnowledgeBaseDetailPage(
 
   const handleReprocessFile = async (file_id: string) => {
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${file_id}`,
         {
           method: 'PUT',
@@ -596,7 +603,7 @@ export default function KnowledgeBaseDetailPage(
   const handleDeleteFile = async (file_id: string) => {
     setDeleting(true);
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${file_id}`,
         {
           method: 'DELETE',
@@ -622,7 +629,7 @@ export default function KnowledgeBaseDetailPage(
     setShowBatchDeleteDialog(false);
     setDeleting(true);
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/batch`,
         {
           method: 'POST',
@@ -660,7 +667,7 @@ export default function KnowledgeBaseDetailPage(
     setShowBatchReprocessDialog(false);
     setReprocessing(true);
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/batch`,
         {
           method: 'POST',
@@ -714,7 +721,7 @@ export default function KnowledgeBaseDetailPage(
     setPreviewLoading(true);
     setPreviewError('');
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${fileId}`,
       );
       if (!res.ok) throw new Error('获取知识库文件失败');
@@ -746,7 +753,7 @@ export default function KnowledgeBaseDetailPage(
     if (!currentFileId) return;
     
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${currentFileId}/source`,
         {
           method: 'POST',
@@ -804,7 +811,7 @@ export default function KnowledgeBaseDetailPage(
     setIsEditingMetadata(false);
     setCurrentMetadataFileId(file_id);
     try {
-      const file_res = await fetch(
+      const file_res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${file_id}`,
       );
       if (!file_res.ok) throw new Error(`获取 ${file_id} 失败`);
@@ -883,7 +890,7 @@ export default function KnowledgeBaseDetailPage(
   const checkFileRole = async (file_id: string) => {
     try {
       setEditRoleFileId(file_id);
-      const roleRes = await fetch(`/api/config/roles?size=100`);
+      const roleRes = await tenantFetch(`/api/config/roles?size=100`);
       if (!roleRes.ok) {
         alert('查询角色失败');
         return;
@@ -892,7 +899,7 @@ export default function KnowledgeBaseDetailPage(
       setRoles(all_roles);
 
       const permission_name = file_id;
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/roles/permissions?name=${permission_name}&size=100`,
       );
       if (!res.ok) {
@@ -920,7 +927,7 @@ export default function KnowledgeBaseDetailPage(
 
   const saveFilePermission = async () => {
     try {
-      const roleRes = await fetch(
+      const roleRes = await tenantFetch(
         `/api/config/roles/permissions/files/${editRoleFileId}`,
         {
           method: 'POST',
@@ -1015,6 +1022,7 @@ export default function KnowledgeBaseDetailPage(
 
         // 添加 auto_parse=false 参数，只上传不解析
         xhr.open('POST', `${API_PREFIX}/config/knowledgebases/${kbId}/files?auto_parse=false`);
+        xhr.setRequestHeader('X-TENANT-ID', tenantId);
         xhr.send(formData);
       });
 
@@ -1059,7 +1067,7 @@ export default function KnowledgeBaseDetailPage(
 
     try {
       const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1";
-      const res = await fetch(
+      const res = await tenantFetch(
         `${API_PREFIX}/config/knowledgebases/${kbId}/files/parse`,
         {
           method: 'POST',
@@ -1209,7 +1217,7 @@ export default function KnowledgeBaseDetailPage(
       const bodyData = {
         entries: metadata_entries,
       };
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${currentMetadataFileId}/metadata`,
         {
           method: 'POST',
@@ -1255,7 +1263,7 @@ export default function KnowledgeBaseDetailPage(
 
     const metadata_url = `/api/config/knowledgebases/${kbId}/metadata`;
     try {
-      const res = await fetch(metadata_url, {
+      const res = await tenantFetch(metadata_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1283,7 +1291,7 @@ export default function KnowledgeBaseDetailPage(
   const handleRemoveMetadataEntry = async (id: string) => {
     const metadata_url = `/api/config/knowledgebases/${kbId}/metadata/${id}`;
     try {
-      const res = await fetch(metadata_url, {
+      const res = await tenantFetch(metadata_url, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error(`删除metadata失败: ${await res.text()}`);
@@ -1320,7 +1328,7 @@ export default function KnowledgeBaseDetailPage(
 
     const metadata_url = `/api/config/knowledgebases/${kbId}/metadata/${editingMetadataConfig.id}`;
     try {
-      const res = await fetch(metadata_url, {
+      const res = await tenantFetch(metadata_url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

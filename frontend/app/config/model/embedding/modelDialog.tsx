@@ -25,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 // 定义组件 props
 interface EmbeddingModelDialogProps {
@@ -59,6 +60,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
   const [emb, setEmb] = useState<EmbConfig>(embConfig);
   const [error, setError] = useState<string | null>(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
+  const { tenantFetch } = useTenantFetch();
 
   useEffect(() => {
     setEmb(embConfig);
@@ -99,7 +101,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     if (emb.api_key === '******') emb.api_key = '';
     console.log('updateMethod', isAdd, updateMethod, submit_url, emb);
     try {
-      const res = await fetch(submit_url, {
+      const res = await tenantFetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(emb),

@@ -43,7 +43,7 @@ async def add_search_config(
     try:
         # Use service layer for business logic
         search_config = await websearch_service.create_or_update_websearch_config(
-            new_search_config=new_search_config,
+            config_data=new_search_config,
             tenant_id=tenant_id
         )
 

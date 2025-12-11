@@ -39,6 +39,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { set } from 'date-fns';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export interface Role {
   id: string;
@@ -63,11 +64,12 @@ export default function RolePage() {
   const modelSizePerPage = 8;
 
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const { tenantFetch } = useTenantFetch();
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/roles?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取角色列表失败');
@@ -86,7 +88,7 @@ export default function RolePage() {
 
   const handleDelete = async (role_id: string) => {
     try {
-      const res = await fetch(`/api/config/roles/${role_id}`, {
+      const res = await tenantFetch(`/api/config/roles/${role_id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('获取角色列表失败');
@@ -104,7 +106,7 @@ export default function RolePage() {
 
   const handleAddRole = async () => {
     try {
-      const res = await fetch(`/api/config/roles`, {
+      const res = await tenantFetch(`/api/config/roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editRole), // 包装为数组

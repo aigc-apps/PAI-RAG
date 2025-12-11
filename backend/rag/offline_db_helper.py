@@ -25,7 +25,7 @@ import pandas as pd
 from llama_index.core.embeddings import BaseEmbedding
 from db.models.knowledgebase.knowledgebase import KbEntity
 from service.knowledgebase.vectordb_service import VectordbService
-from service.injection import get_vectordb_service
+from service.injection import get_vectordb_service, get_vector_table_mapping_service
 
 DEFAULT_ATTACHMENT_MAX_SIZE = 1000
 MAX_CACHE_SIZE = 3
@@ -42,8 +42,12 @@ async def create_vector_store_from_db(
     vectordb_config = await vectordb_service.get_vectordb_config(tenant_id=tenant_id)
     if not vectordb_config:
         raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
+    table_mapping_service = await get_vector_table_mapping_service(session=session)
+    table_name = await table_mapping_service.get_vector_table_name(tenant_id=tenant_id, kb_id=kb_id)
+    if not table_name:
+        raise ValueError(f"Vector table name not found for knowledgebase {kb_id}.")
     vector_store = create_vector_store(
-        kb_id, dimension, vector_config=vectordb_config,
+        kb_id, dimension, vector_config=vectordb_config, table_name=table_name,
     )
     return vector_store
 

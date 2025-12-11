@@ -55,19 +55,6 @@ class WebsearchService:
         result = await self.session.exec(statement)
         config = result.first()
 
-        if config is None:
-            # Create a new default config
-            config = WebSearchConfigEntity(
-                type="aliyun",
-                search_count=10,
-                endpoint=None,
-                tenant_id=tenant_id,
-            )
-            self.session.add(config)
-            await self.session.flush()
-            await self.session.refresh(config)
-            logger.info(f"Created new WebSearch config: {config.id}")
-
         return config
 
     async def get_all_websearch_configs(self, tenant_id: str) -> List[WebSearchConfigEntity]:

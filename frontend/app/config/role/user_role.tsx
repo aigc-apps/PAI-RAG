@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export interface UserRole {
   id: string;
@@ -57,10 +58,11 @@ export default function UserRolePage() {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
 
+  const { tenantFetch } = useTenantFetch();
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/roles/user_roles?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取角色列表失败');
@@ -79,7 +81,7 @@ export default function UserRolePage() {
 
     const fetchRoles = async () => {
       try {
-        const res = await fetch(`/api/config/roles?page=${page}&size=1000`);
+        const res = await tenantFetch(`/api/config/roles?page=${page}&size=1000`);
         if (!res.ok) throw new Error('获取角色列表失败');
         const json_data = await res.json();
         const data = json_data.data.items;
@@ -96,7 +98,7 @@ export default function UserRolePage() {
 
   const handleDelete = async (role_id: string) => {
     try {
-      const res = await fetch(`/api/config/roles/user_roles/${role_id}`, {
+      const res = await tenantFetch(`/api/config/roles/user_roles/${role_id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('获取角色列表失败');
@@ -114,7 +116,7 @@ export default function UserRolePage() {
 
   const handleAddRole = async () => {
     try {
-      const res = await fetch(`/api/config/roles/user_roles`, {
+      const res = await tenantFetch(`/api/config/roles/user_roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editRole), // 包装为数组

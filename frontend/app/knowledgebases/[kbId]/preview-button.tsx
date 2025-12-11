@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react';
 import { MarkdownViewer } from '@/app/knowledgebases/[kbId]/viewer/markdown-viewer';
 import { JsonlViewer } from '@/app/knowledgebases/[kbId]/viewer/jsonl-viewer';
 import { HtmlViewer } from '@/app/knowledgebases/[kbId]/viewer/html-viewer';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 interface KnowledgeBaseFile {
   id: string;
@@ -36,11 +37,12 @@ export function PreviewButton({
   const [kbfile, setKbFile] = useState<KnowledgeBaseFile>(); // 文件详情
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { tenantFetch } = useTenantFetch();
 
   const loadContent = async () => {
     setLoading(true);
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${fileId}`,
       );
       if (!res.ok) throw new Error('获取知识库文件失败');

@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { AlertCircleIcon } from 'lucide-react';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 // 定义组件 props
 interface RerankerModelDialogProps {
@@ -49,7 +50,8 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
   const [reranker, setReranker] = useState<RerankerConfig>(rerankerConfig);
   const [error, setError] = useState<string | null>(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
-
+  const { tenantFetch } = useTenantFetch();
+  
   useEffect(() => {
     setReranker(rerankerConfig);
   }, [isAdd, rerankerConfig]);
@@ -88,7 +90,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
     
     console.log('updateMethod', isAdd, updateMethod, submit_url, submitData);
     try {
-      const res = await fetch(submit_url, {
+      const res = await tenantFetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submitData),
