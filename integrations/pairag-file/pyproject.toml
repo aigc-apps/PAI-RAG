@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "pairag-file"
-version = "2.1.20"
+version = "2.1.21"
 description = "PAI-RAG file processing library."
 authors = []
 readme = "README.md"
@@ -14,8 +14,8 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.13"
-llama-index-core = "^0.12.12"
-llama-index-llms-openai = "^0.3.44"
+llama-index-core = "^0.14.8"
+llama-index-llms-openai = "^0.6.10"
 pydantic = "^2.7.0"
 oss2 = "^2.18.5"
 torch = "^2.6.0"
@@ -36,6 +36,7 @@ docx2txt = "^0.9"
 markdownify = "^1.2.0"
 rapidfuzz = "^3.14.3"
 fastpdf4llm = "^0.1.4"
+tabulate = "^0.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"

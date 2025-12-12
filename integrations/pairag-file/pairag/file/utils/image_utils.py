@@ -60,21 +60,6 @@ def compress_image_if_needed(image_file: BinaryIO) -> BinaryIO:
             return None
         if image.mode != "RGB":
             image = image.convert("RGB")
-        if image.width <= 15 or image.height <= 15:
-            logger.warning(f"Skipping small image {image}")
-            return None
-
-        current_pixels = image.width * image.height
-
-        # 检查像素总数是否超过限制
-        if current_pixels > IMAGE_MAX_PIXELS:
-            # 计算缩放比例以适应最大像素数
-            scale = math.sqrt(IMAGE_MAX_PIXELS / current_pixels)
-            new_width = int(image.width * scale)
-            new_height = int(image.height * scale)
-
-            # 调整图片大小
-            image = image.resize((new_width, new_height), Image.LANCZOS)
 
         image_stream = BytesIO()
         image.save(image_stream, format="jpeg")

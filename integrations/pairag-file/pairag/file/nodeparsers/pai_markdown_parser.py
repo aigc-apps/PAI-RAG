@@ -251,6 +251,8 @@ class MarkdownNodeParser(NodeParser):
         self,
         chunk_size: int = 800,
         chunk_overlap: int = 50,
+        paragraph_separator: str = "\n\n",
+        base_parser: Any = None,
         id_func: Callable[[int, BaseNode], str] = None,
     ):
         super().__init__(
@@ -258,9 +260,10 @@ class MarkdownNodeParser(NodeParser):
         )
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.base_parser = SentenceSplitter(
+        self.base_parser = base_parser or SentenceSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
+            paragraph_separator=paragraph_separator,
             id_func=id_func,
         )
 

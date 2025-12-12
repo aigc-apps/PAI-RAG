@@ -21,6 +21,7 @@ import {
   AlertCircleIcon,
   CirclePlus,
   Trash2Icon,
+  HelpCircle,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -58,6 +59,13 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+
 interface EmbeddingModel {
   id: string;
   model_id: string;
@@ -267,14 +275,15 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
   return (
     <div className="h-200 overflow-y-auto">
-      <div>
-        <div className="flex space-y-2 gap-3 px-4 items-center">
+      <div className="space-y-4 px-4">
+        {/* 基本信息 */}
+        <div className="flex gap-3 items-center">
           <Label htmlFor="name" className="w-[100px] text-xs">
             知识库名称 <span className="text-destructive">*</span>
           </Label>
           <Input
             id="name"
-            className="w-60 h-6 text-[0.2rem] font-normal"
+            className="w-80 h-8 text-xs font-normal"
             value={kb.name}
             onChange={(e) =>
               setKb((prev) => ({ ...prev, name: e.target.value }))
@@ -282,18 +291,15 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             placeholder="请输入知识库名称"
             required
           />
-          <p className="text-xs text-muted-foreground">
-            例如：&quot;XX产品用户手册&quot;、&quot;IT操作说明&quot;
-          </p>
         </div>
 
-        <div className="flex gap-3 px-4 items-center pt-3">
-          <Label htmlFor="description" className="w-[100px] text-xs">
+        <div className="flex gap-3 items-start pt-3">
+          <Label htmlFor="description" className="w-[100px] text-xs pt-2">
             知识库描述
           </Label>
           <Textarea
             id="description"
-            className="w-120 text-xs"
+            className="w-[600px] text-xs"
             value={kb.description}
             onChange={(e) =>
               setKb((prev) => ({
@@ -306,243 +312,394 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           />
         </div>
 
-        <div className="flex gap-3 px-4 items-center pt-3">
-          <Label htmlFor="chunkSize" className="w-[100px] text-xs">
-            切片大小
-            <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            type="number"
-            className="w-60 h-6 text-xs"
-            id="chunkSize"
-            value={kb.chunk_config.chunk_size}
-            onChange={(e) =>
-              setKb((prev) => ({
-                ...prev,
-                chunk_config: {
-                  ...prev.chunk_config,
-                  chunk_size: e.target.value,
-                },
-              }))
-            }
-            min="100"
-            max="2000"
-            required
-          />
-          <p className="text-xs text-muted-foreground">推荐值: 1000</p>
-
-          <Label htmlFor="chunkOverlap" className="w-[100px] ml-20 text-xs">
-            切片重叠
-            <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            type="number"
-            className="w-60 h-6 text-xs"
-            id="chunkOverlap"
-            value={kb.chunk_config.chunk_overlap}
-            onChange={(e) =>
-              setKb((prev) => ({
-                ...prev,
-                chunk_config: {
-                  ...prev.chunk_config,
-                  chunk_overlap: e.target.value,
-                },
-              }))
-            }
-            min="0"
-            max="200"
-          />
-          <p className="text-xs text-muted-foreground">推荐值: 50</p>
-        </div>
-
-        <div className="flex gap-3 px-4 items-center pt-3">
-          <Label htmlFor="imageCaptionModel" className="w-[100px] text-xs">
-            图片理解模型
-          </Label>
-          <Select
-            value={kb.chunk_config.image_caption_model || 'DISABLED'}
-            onValueChange={(value) => {
-              const selectedModel = visionModels.find(m => m.model_id === value);
-              setKb((prev) => ({
-                ...prev,
-                chunk_config: {
-                  ...prev.chunk_config,
-                  image_caption_model: value !== "DISABLED" ? value : undefined,
-                  image_caption_provider_name: selectedModel?.provider_name || prev.chunk_config.image_caption_provider_name,
-                },
-              }));
-            }}
-          >
-            <SelectTrigger className="w-60 h-6 text-xs">
-              <SelectValue placeholder="请选择图片理解模型（可选）" />
-            </SelectTrigger>
-            <SelectContent className="text-xs">
-              <SelectGroup>
-                <SelectItem value="DISABLED" className="text-xs h-5">
-                  不使用图片理解模型
-                </SelectItem>
-                {visionModels.map((model) => (
-                  <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
-                    {model.model_id} ({model.model})
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">用于理解图片内容</p>
-        </div>
-
-        <div className="flex gap-3 px-4 items-center pt-3">
-          <Label htmlFor="embeddingModel" className="w-[100px] text-xs">
-            向量模型 <span className="text-destructive">*</span>
-          </Label>
-          <Select
-            value={kb.embedding_model}
-            onValueChange={(value) => {
-              const selectedModel = embeddingmodels.find(m => m.model_id === value);
-              setKb((prev) => ({ 
-                ...prev, 
-                embedding_model: value,
-                embedding_provider_name: selectedModel?.provider_name || prev.embedding_provider_name,
-              }));
-            }}
-          >
-            <SelectTrigger className="w-40 h-6 text-xs">
-              <SelectValue placeholder="请选择向量类型" />
-            </SelectTrigger>
-            <SelectContent className="text-xs">
-              <SelectGroup>
-                {embeddingmodels.map((model) => (
-                  <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
-                    {model.model_id}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Label htmlFor="topk" className="w-[50px] ml-20 text-xs">
-            Top-K:
-          </Label>
-          <Slider
-            className="w-60"
-            defaultValue={[5]}
-            max={100}
-            min={0}
-            step={1}
-            value={[kb.retrieval_config.top_k]}
-            onValueChange={(value: number[]) => {
-              setKb((prev) => ({
-                ...prev,
-                retrieval_config: {
-                  ...prev.retrieval_config,
-                  top_k: value[0],
-                },
-              }));
-            }}
-          />
-          <span className="font-medium text-xs"> {kb.retrieval_config.top_k} </span>
-
-          <Label htmlFor="topk" className="w-[80px] ml-20 text-xs">
-            相似度阈值:
-          </Label>
-          <Slider
-            className="w-60"
-            defaultValue={[0]}
-            max={1}
-            step={0.01}
-            value={[kb.retrieval_config.similarity_threshold]}
-            onValueChange={(value: number[]) => {
-              setKb((prev) => ({
-                ...prev,
-                retrieval_config: {
-                  ...prev.retrieval_config,
-                  similarity_threshold: value[0],
-                },
-              }));
-            }}
-          />
-          <span className="font-medium text-xs">
-            {' '}
-            {kb.retrieval_config.similarity_threshold?.toFixed(2) ?? '0.00'}{' '}
-          </span>
-        </div>
-
-        <div className="flex gap-3 px-4 items-center pt-3">
-          <Label className="w-[100px] text-xs">检索策略</Label>
-          <ToggleGroup
-            type="single"
-            value={kb.retrieval_config.retrieval_mode}
-            onValueChange={(value) => {
-              // 同时更新 indexType 和 formData.retrieval_config.index_type
-              setIndexType(value);
-              setKb((prev) => ({
-                ...prev,
-                retrieval_config: {
-                  ...prev.retrieval_config,
-                  retrieval_mode: value,
-                },
-              }));
-            }}
-            variant="outline"
-            className="flex gap-x-1 overflow-visible"
-          >
-            <ToggleGroupItem
-              value="vector"
-              aria-label="向量检索"
-              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
-            >
-              <ScanSearch className="w-2 h-2 mr-0.5" />
-              向量检索
-            </ToggleGroupItem>
-            {isFulltextSupported && (
-              <ToggleGroupItem
-                value="fulltext"
-                aria-label="全文检索"
-                className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-              >
-                <TextSearch />
-                全文检索
-              </ToggleGroupItem>
-            )}
-            {isFulltextSupported && (
-              <ToggleGroupItem
-                value="hybrid"
-                aria-label="混合检索"
-                className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
-              >
-                <SearchCode />
-                混合检索
-              </ToggleGroupItem>
-            )}
-          </ToggleGroup>
-
-          {indexType === 'hybrid' && (
-            <div className="ml-10 flex items-center">
-              <Label htmlFor="embeddingWeight" className="w-[100px] text-xs">
-                向量检索权重
+        {/* 分段设置卡片 */}
+        <div className="flex gap-3 items-start pt-3">
+          <div className="flex items-center gap-1 w-[100px] pt-2">
+            <Label className="text-xs">
+              分段设置
+            </Label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-xs">
+                    分段设置参数对以下文件类型无效：.csv, .xlsx, .xls, .jsonl
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <Card className="flex-1">
+            <CardContent className="space-y-4 pt-6">
+            <div className="flex gap-3 items-center">
+              <Label htmlFor="parserType" className="w-[100px] text-xs">
+                切片类型
+                <span className="text-destructive">*</span>
               </Label>
-              <Slider
-                id="embeddingWeight"
-                className="w-60"
-                min={0}
-                max={1}
-                step={0.1}
-                value={[kb.retrieval_config.vector_weight || 0.7]}
-                onValueChange={(value) =>
+              <Select
+                value={kb.chunk_config.parser_type || 'structure'}
+                onValueChange={(value) => {
+                  setKb((prev) => ({
+                    ...prev,
+                    chunk_config: {
+                      ...prev.chunk_config,
+                      parser_type: value,
+                    },
+                  }));
+                }}
+              >
+                <SelectTrigger className="w-60 h-6 text-xs">
+                  <SelectValue placeholder="请选择切片类型" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectGroup>
+                    <SelectItem value="structure" className="text-xs h-5">
+                      结构化(structure)
+                    </SelectItem>
+                    <SelectItem value="token" className="text-xs h-5">
+                      按token
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">选择文档切片方式</p>
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <Label htmlFor="chunkSize" className="w-[100px] text-xs">
+                切片大小
+                <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="number"
+                className="w-60 h-6 text-xs"
+                id="chunkSize"
+                value={kb.chunk_config.chunk_size}
+                onChange={(e) =>
+                  setKb((prev) => ({
+                    ...prev,
+                    chunk_config: {
+                      ...prev.chunk_config,
+                      chunk_size: e.target.value,
+                    },
+                  }))
+                }
+                min="100"
+                max="2000"
+                required
+              />
+              <p className="text-xs text-muted-foreground">推荐值: 1000</p>
+
+              <Label htmlFor="chunkOverlap" className="w-[100px] ml-20 text-xs">
+                切片重叠
+                <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="number"
+                className="w-60 h-6 text-xs"
+                id="chunkOverlap"
+                value={kb.chunk_config.chunk_overlap}
+                onChange={(e) =>
+                  setKb((prev) => ({
+                    ...prev,
+                    chunk_config: {
+                      ...prev.chunk_config,
+                      chunk_overlap: e.target.value,
+                    },
+                  }))
+                }
+                min="0"
+                max="200"
+              />
+              <p className="text-xs text-muted-foreground">推荐值: 50</p>
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <Label htmlFor="imageCaptionModel" className="w-[100px] text-xs">
+                图片理解模型
+              </Label>
+              <Select
+                value={kb.chunk_config.image_caption_model || 'DISABLED'}
+                onValueChange={(value) => {
+                  const selectedModel = visionModels.find(m => m.model_id === value);
+                  setKb((prev) => ({
+                    ...prev,
+                    chunk_config: {
+                      ...prev.chunk_config,
+                      image_caption_model: value !== "DISABLED" ? value : undefined,
+                      image_caption_provider_name: selectedModel?.provider_name || prev.chunk_config.image_caption_provider_name,
+                    },
+                  }));
+                }}
+              >
+                <SelectTrigger className="w-60 h-6 text-xs">
+                  <SelectValue placeholder="请选择图片理解模型（可选）" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectGroup>
+                    <SelectItem value="DISABLED" className="text-xs h-5">
+                      不使用图片理解模型
+                    </SelectItem>
+                    {visionModels.map((model) => (
+                      <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                        {model.model_id} ({model.model})
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">用于理解图片内容</p>
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <Label htmlFor="embeddingModel" className="w-[100px] text-xs">
+                向量模型 <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={kb.embedding_model}
+                onValueChange={(value) => {
+                  const selectedModel = embeddingmodels.find(m => m.model_id === value);
+                  setKb((prev) => ({ 
+                    ...prev, 
+                    embedding_model: value,
+                    embedding_provider_name: selectedModel?.provider_name || prev.embedding_provider_name,
+                  }));
+                }}
+              >
+                <SelectTrigger className="w-60 h-6 text-xs">
+                  <SelectValue placeholder="请选择向量模型" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectGroup>
+                    {embeddingmodels.map((model) => (
+                      <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                        {model.model_id}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 检索设置卡片 */}
+        <div className="flex gap-3 items-start pt-3">
+          <Label className="w-[100px] text-xs pt-2">
+            检索设置
+          </Label>
+          <Card className="flex-1">
+            <CardContent className="space-y-4 pt-6">
+            <div className="flex gap-3 items-center">
+              <Label className="w-[100px] text-xs">检索策略</Label>
+              <ToggleGroup
+                type="single"
+                value={kb.retrieval_config.retrieval_mode}
+                onValueChange={(value) => {
+                  setIndexType(value);
                   setKb((prev) => ({
                     ...prev,
                     retrieval_config: {
                       ...prev.retrieval_config,
-                      vector_weight: value[0],
+                      retrieval_mode: value,
                     },
-                  }))
-                }
-              />
-              <span className="w-12 text-right text-xs font-medium">
-                {kb.retrieval_config.vector_weight?.toFixed(1) ?? '0.7'}
-              </span>
+                  }));
+                }}
+                variant="outline"
+                className="flex gap-x-1 overflow-visible"
+              >
+                <ToggleGroupItem
+                  value="vector"
+                  aria-label="向量检索"
+                  className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                >
+                  <ScanSearch className="w-2 h-2 mr-0.5" />
+                  向量检索
+                </ToggleGroupItem>
+                {isFulltextSupported && (
+                  <ToggleGroupItem
+                    value="fulltext"
+                    aria-label="全文检索"
+                    className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                  >
+                    <TextSearch />
+                    全文检索
+                  </ToggleGroupItem>
+                )}
+                {isFulltextSupported && (
+                  <ToggleGroupItem
+                    value="hybrid"
+                    aria-label="混合检索"
+                    className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                  >
+                    <SearchCode />
+                    混合检索
+                  </ToggleGroupItem>
+                )}
+              </ToggleGroup>
+
+              {indexType === 'hybrid' && (
+                <div className="ml-10 flex items-center">
+                  <Label htmlFor="embeddingWeight" className="w-[100px] text-xs">
+                    向量检索权重
+                  </Label>
+                  <Slider
+                    id="embeddingWeight"
+                    className="w-60"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={[kb.retrieval_config.vector_weight || 0.7]}
+                    onValueChange={(value) =>
+                      setKb((prev) => ({
+                        ...prev,
+                        retrieval_config: {
+                          ...prev.retrieval_config,
+                          vector_weight: value[0],
+                        },
+                      }))
+                    }
+                  />
+                  <span className="w-12 text-right text-xs font-medium ml-2">
+                    {kb.retrieval_config.vector_weight?.toFixed(1) ?? '0.7'}
+                  </span>
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="flex gap-3 items-center">
+              <Label htmlFor="topk" className="w-[100px] text-xs">
+                Top-K
+              </Label>
+              <Slider
+                className="w-60"
+                defaultValue={[5]}
+                max={100}
+                min={0}
+                step={1}
+                value={[kb.retrieval_config.top_k]}
+                onValueChange={(value: number[]) => {
+                  setKb((prev) => ({
+                    ...prev,
+                    retrieval_config: {
+                      ...prev.retrieval_config,
+                      top_k: value[0],
+                    },
+                  }));
+                }}
+              />
+              <span className="font-medium text-xs ml-2"> {kb.retrieval_config.top_k} </span>
+              <p className="text-xs text-muted-foreground ml-4">检索返回的最相似结果数量</p>
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <Label htmlFor="similarityThreshold" className="w-[100px] text-xs">
+                相似度阈值
+              </Label>
+              <Slider
+                className="w-60"
+                defaultValue={[0]}
+                max={1}
+                step={0.01}
+                value={[kb.retrieval_config.similarity_threshold]}
+                onValueChange={(value: number[]) => {
+                  setKb((prev) => ({
+                    ...prev,
+                    retrieval_config: {
+                      ...prev.retrieval_config,
+                      similarity_threshold: value[0],
+                    },
+                  }));
+                }}
+              />
+              <span className="font-medium text-xs ml-2">
+                {kb.retrieval_config.similarity_threshold?.toFixed(2) ?? '0.00'}
+              </span>
+              <p className="text-xs text-muted-foreground ml-4">仅返回相似度大于等于该值的结果</p>
+            </div>
+
+            <div className="flex gap-3 items-center">
+              <Label className="w-[100px] text-xs">开启重排序</Label>
+              <Checkbox
+                id="enable_reranker"
+                checked={kb.retrieval_config.enable_rerank ?? false}
+                onCheckedChange={(checked) => {
+                  setKb((prev) => ({
+                    ...prev,
+                    retrieval_config: {
+                      ...prev.retrieval_config,
+                      enable_rerank: Boolean(checked),
+                    },
+                  }));
+                }}
+                className="h-3.5 w-3.5"
+              />
+              {kb.retrieval_config.enable_rerank && (
+                <>
+                  <div className="flex ml-20 items-center">
+                    <Label htmlFor="rerank_model" className="w-[100px] text-xs">
+                      重排序模型
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      defaultValue={kb.retrieval_config.rerank_model}
+                      onValueChange={(value) => {
+                        setKb((prev) => ({
+                          ...prev,
+                          retrieval_config: {
+                            ...prev.retrieval_config,
+                            rerank_model: value,
+                          },
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="h-6 text-xs w-60">
+                        <SelectValue placeholder="请选择重排序模型" />
+                      </SelectTrigger>
+                      <SelectContent className="text-xs">
+                        <SelectGroup>
+                          {rerankermodels.map((model) => (
+                            <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                              {model.model_id}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex ml-20 items-center">
+                    <Label htmlFor="rerank_top_k" className="w-[100px] text-xs">
+                      Rerank-Top-K
+                    </Label>
+                    <Slider
+                      className="w-60"
+                      defaultValue={[5]}
+                      max={10}
+                      min={0}
+                      step={1}
+                      value={[kb.retrieval_config.rerank_top_k ?? 5]}
+                      onValueChange={(value: number[]) => {
+                        setKb((prev) => ({
+                          ...prev,
+                          retrieval_config: {
+                            ...prev.retrieval_config,
+                            rerank_top_k: value[0],
+                          },
+                        }));
+                      }}
+                    />
+                    <span className="font-medium ml-2 text-xs">
+                      {kb.retrieval_config.rerank_top_k ?? 5}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="flex gap-3 px-4 items-center pt-3">
@@ -666,6 +823,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               </Button>
             </div>
           )}
+
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch
 from collections import deque
-from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from memory.base_memory import BaseMemory
 from common.chat.constants import DEFAULT_MAX_INPUT_TOKENS
 from openai.types.chat.chat_completion_chunk import (
