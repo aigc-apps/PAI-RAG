@@ -4,7 +4,7 @@ from llama_index.core.bridge.pydantic import Field, BaseModel
 from typing import Any, Callable, List, Sequence, Dict
 
 from llama_index.core.node_parser.interface import NodeParser, NodeRelationship
-from pairag.file.nodeparsers.sentence_parser import SentenceSplitter
+from pairag.file.nodeparsers.sentence_parser import MySentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
 from llama_index.core.schema import (
     BaseNode,
@@ -103,7 +103,7 @@ class PositionalMarkdownNodeParser(NodeParser):
         )
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.base_parser = SentenceSplitter(
+        self.base_parser = MySentenceSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             tokenizer=get_tokenizer(),

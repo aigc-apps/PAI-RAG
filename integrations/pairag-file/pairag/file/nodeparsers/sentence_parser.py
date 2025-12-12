@@ -1,10 +1,10 @@
 
 """Custom SentenceSplitter that uses estimate_tokens_in_text for token counting."""
-from llama_index.core.node_parser import SentenceSplitter as BaseSentenceSplitter
+from llama_index.core.node_parser import SentenceSplitter 
 from pairag.file.utils.tokenization import estimate_tokens_in_text
 
 
-class SentenceSplitter(BaseSentenceSplitter):
+class MySentenceSplitter(SentenceSplitter):
     """Custom SentenceSplitter that uses estimate_tokens_in_text for token counting.
     
     This class extends llama_index's SentenceSplitter to use a custom token estimation

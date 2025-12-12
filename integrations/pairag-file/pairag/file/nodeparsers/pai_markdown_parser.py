@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterator, List, Optional, Sequence
 from loguru import logger
 
 from llama_index.core.node_parser.interface import NodeParser
-from pairag.file.nodeparsers.sentence_parser import SentenceSplitter
+from pairag.file.nodeparsers.sentence_parser import MySentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
 from llama_index.core.schema import (
     BaseNode,
@@ -278,7 +278,7 @@ class MarkdownNodeParser(NodeParser):
         )
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.base_parser = base_parser or SentenceSplitter(
+        self.base_parser = base_parser or MySentenceSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             paragraph_separator=paragraph_separator,

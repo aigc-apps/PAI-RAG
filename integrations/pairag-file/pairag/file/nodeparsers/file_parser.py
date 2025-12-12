@@ -3,7 +3,7 @@ from loguru import logger
 from typing import List
 from llama_index.core.schema import Document, BaseNode, TextNode
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
-from pairag.file.nodeparsers.sentence_parser import SentenceSplitter
+from pairag.file.nodeparsers.sentence_parser import MySentenceSplitter
 from pairag.file.models.file_item import FileItem
 from pairag.file.readers.base import BaseReader
 from pairag.file.readers.csv2md_reader import Csv2MdReader
@@ -249,7 +249,7 @@ class FileParser:
                 chunks = parser.get_nodes_from_documents([doc_node])
             else:
                 logger.info(f"Start splitting document: {doc_node.metadata['file_name']} with id {doc_node.id_}")
-                parser = SentenceSplitter(
+                parser = MySentenceSplitter(
                     id_func=node_id_func,
                     chunk_size=chunk_config.chunk_size,
                     chunk_overlap=chunk_config.chunk_overlap,
