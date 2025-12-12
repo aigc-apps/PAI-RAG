@@ -163,6 +163,8 @@ class LlmService:
         if llm_data.provider_name not in model_provider_map:
             raise ValueError(f"LLM创建失败: 'provider_name {llm_data.provider_name} not supported'.")
 
+        llm_data.source = llm_data.provider_name
+
         # Create entity
         llm = LlmModelEntity.model_validate(
             llm_data, update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}

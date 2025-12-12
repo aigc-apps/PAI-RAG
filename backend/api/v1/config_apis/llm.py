@@ -144,6 +144,9 @@ async def get_llms(
     try:
         llm_entities = await llm_service.list_llms(tenant_id=tenant_id, page=page, size=size, vision_support=vision_support, provider_name=provider_name)
         return success_response(data=llm_entities, message="获取LLM模型列表成功")
+    except ApiException as e:
+        logger.warning(f"Failed to get llms: {e}")
+        raise e
     except Exception as e:
         logger.error(f"Failed to get llms: {traceback.format_exc()}")
         raise ApiException(code=500, message=f"获取LLM模型列表失败: '{e}'.")
@@ -159,10 +162,16 @@ async def read_llm(
     logger.info(f"Getting LLM: {llm_id}.")
     try:
         llm_entity = await llm_service.get_llm(llm_id=llm_id, tenant_id=tenant_id)
+        if not llm_entity:
+            raise ApiException.not_found(llm_id, "LLM")
+
         llm_entity.provider_name = llm_entity.provider_name or llm_url_to_model_provider_id_map.get(llm_entity.base_url, "openai_like")
         if not llm_entity:
             raise ApiException.not_found(llm_id, "LLM")
         return success_response(data=llm_entity, message="获取LLM模型成功")
+    except ApiException as e:
+        logger.warning(f"Failed to get llm: {e}")
+        raise e
     except Exception as e:
         logger.error(f"Failed to get llm: {traceback.format_exc()}")
         raise ApiException(code=500, message=f"获取LLM模型失败: '{e}'.")

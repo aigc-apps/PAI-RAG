@@ -18,7 +18,7 @@ class LlmModel(SQLModel):
     vision_support: bool = Field(default=False)
     enable_thinking: bool = Field(default=False, description="Whether the LLM supports thinking mode.")
     provider_name: Optional[str] = Field(default=None)
-
+    source: str = Field(default=None)
 
 class LlmModelCreate(LlmModel):
     api_key: str = Field(default=None)
@@ -26,7 +26,6 @@ class LlmModelCreate(LlmModel):
 
 class LlmModelRead(LlmModel):
     id: str = Field(default=None)
-    source: str = Field(default=None)
 
 
 # table entity
