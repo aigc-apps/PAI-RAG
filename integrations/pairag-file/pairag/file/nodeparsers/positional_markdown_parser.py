@@ -4,7 +4,7 @@ from llama_index.core.bridge.pydantic import Field, BaseModel
 from typing import Any, Callable, List, Sequence, Dict
 
 from llama_index.core.node_parser.interface import NodeParser, NodeRelationship
-from llama_index.core.node_parser import SentenceSplitter
+from pairag.file.nodeparsers.sentence_parser import MySentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
 from llama_index.core.schema import (
     BaseNode,
@@ -13,6 +13,7 @@ from llama_index.core.schema import (
 )
 from fastpdf4llm import ContentBlock
 from pairag.file.utils.tokenization import estimate_tokens_in_text
+from pairag.file.utils.tokenization import get_tokenizer
 from loguru import logger
 import json
 
@@ -102,9 +103,10 @@ class PositionalMarkdownNodeParser(NodeParser):
         )
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.base_parser = SentenceSplitter(
+        self.base_parser = MySentenceSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
+            tokenizer=get_tokenizer(),
             id_func=id_func,
         )
 

@@ -104,14 +104,23 @@ class DocxReader(BaseReader):
             if parsed_paragraph:
                 cell_content.append(parsed_paragraph)
         unique_content = list(dict.fromkeys(cell_content))
-        return " ".join(unique_content)
+        return " ".join(unique_content) if unique_content else ""
 
     def _parse_cell_paragraph(self, paragraph, doc_name):
-        paragraph_content = []
+        # 使用paragraph.text直接获取所有文本内容，这比遍历runs更可靠
+        # paragraph.text会自动处理所有runs，包括格式化文本
+        paragraph_text = paragraph.text.strip() if paragraph.text else ""
+        
+        run_texts = []
         for run in paragraph.runs:
-            if not run.element.xpath(".//a:blip"):
-                paragraph_content.append(run.text)
-        return "".join(paragraph_content).strip()
+            run_text = run.text if run.text is not None else ""
+            run_texts.append(run_text)
+        
+        # 如果paragraph.text为空但runs有文本，使用runs的文本（处理特殊情况）
+        if not paragraph_text and any(run_texts):
+            paragraph_text = "".join(run_texts).strip()
+        
+        return paragraph_text
     
 
     def _is_ordered_list(self, paragraph) -> bool:
