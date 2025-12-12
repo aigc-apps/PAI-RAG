@@ -8,6 +8,7 @@ from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
 from chat.agent.base import BaseAgent
 from chat.agent.state import AgentState
 from llama_index.core.tools.function_tool import FunctionTool, ToolOutput
+from llama_index.core.llms.utils import parse_partial_json
 from chat.llm.llm_model import PaiLlm
 from chat.llm.models import TextChunk, ChatResponseGenerator, ToolResultChunk
 from extensions.trace.base import use_current_span
@@ -161,11 +162,37 @@ class Actor(BaseAgent):
                         logger.warning(f"[{self.name}] Unknown tool: {function_name}, skipping.")
                         continue
 
-                    try:
-                        function_args = json.loads(tool.function.arguments) if tool.function.arguments else {}
-                    except json.JSONDecodeError:
-                        logger.warning(f"[{self.name}] Invalid JSON args: {tool.function.arguments}")
-                        function_args = {}
+                    # 解析工具参数，尝试多种方法处理格式不正确的 JSON
+                    function_args = {}
+                    if tool.function.arguments:
+                        try:
+                            # 首先尝试标准 JSON 解析
+                            function_args = json.loads(tool.function.arguments)
+                        except json.JSONDecodeError:
+                            try:
+                                # 如果标准解析失败，尝试使用 parse_partial_json 处理部分 JSON
+                                function_args = parse_partial_json(tool.function.arguments) or {}
+                            except Exception:
+                                # 如果都失败，尝试简单的字符串修复
+                                try:
+                                    # 尝试修复常见的 JSON 格式问题
+                                    fixed_json = tool.function.arguments.strip()
+                                    # 移除末尾的额外字符（如单引号、逗号等）
+                                    while fixed_json and not fixed_json.endswith('}'):
+                                        # 如果末尾有单引号、双引号或其他字符，尝试移除
+                                        if fixed_json[-1] in ("'", '"', ",", " ", "\n", "\r", "\t"):
+                                            fixed_json = fixed_json[:-1].rstrip()
+                                        else:
+                                            # 尝试找到最后一个完整的 }
+                                            last_brace = fixed_json.rfind('}')
+                                            if last_brace > 0:
+                                                fixed_json = fixed_json[:last_brace + 1]
+                                            else:
+                                                break
+                                    function_args = json.loads(fixed_json)
+                                except Exception:
+                                    logger.warning(f"[{self.name}] Invalid JSON args: {tool.function.arguments[:200]}")
+                                    function_args = {}
 
                     yield TextChunk(tool_calls=[tool])
 

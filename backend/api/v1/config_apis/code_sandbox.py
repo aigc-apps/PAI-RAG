@@ -33,6 +33,7 @@ async def add_code_sandbox_config(
 
     aliyun_id = new_code_sandbox_config.aliyun_id
     interpreter_id = new_code_sandbox_config.interpreter_id
+    interpreter_name = new_code_sandbox_config.interpreter_name
     type = new_code_sandbox_config.type
     enabled = new_code_sandbox_config.enabled
 
@@ -49,6 +50,7 @@ async def add_code_sandbox_config(
         logger.info("Updating code sandbox config")
         code_sandbox_config.aliyun_id = aliyun_id or code_sandbox_config.aliyun_id
         code_sandbox_config.interpreter_id = interpreter_id or code_sandbox_config.interpreter_id
+        code_sandbox_config.interpreter_name = interpreter_name or code_sandbox_config.interpreter_name
         code_sandbox_config.type = type or code_sandbox_config.type
         code_sandbox_config.enabled = enabled
 
@@ -91,6 +93,7 @@ async def list_code_sandbox_config(
             type=code_sandbox_config_result.type,
             aliyun_id=code_sandbox_config_result.aliyun_id,
             interpreter_id=code_sandbox_config_result.interpreter_id,
+            interpreter_name=code_sandbox_config_result.interpreter_name,
             enabled=code_sandbox_config_result.enabled,
             id=code_sandbox_config_result.id,
         )

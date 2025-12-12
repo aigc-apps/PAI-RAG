@@ -14,6 +14,7 @@ export default function CodeSandboxConfig() {
   const [configType, setConfigType] = useState('aliyun-fc'); // 目前仅支持 aliyun-fc
   const [aliyunId, setAliyunId] = useState('');
   const [interpreterId, setInterpreterId] = useState('');
+  const [interpreterName, setInterpreterName] = useState('');
   const [timeoutDefault, setTimeoutDefault] = useState(50);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -36,6 +37,7 @@ export default function CodeSandboxConfig() {
           setConfigType(config.type || 'aliyun-fc');
           setAliyunId(config.aliyun_id || '');
           setInterpreterId(config.interpreter_id || '');
+          setInterpreterName(config.interpreter_name || '');
           setTimeoutDefault(config.timeout_default || 50);
         }
       } catch (err: any) {
@@ -59,6 +61,7 @@ export default function CodeSandboxConfig() {
       // 仅当用户输入了值才提交（避免覆盖已有值为空）
       if (aliyunId) payload.aliyun_id = aliyunId;
       if (interpreterId) payload.interpreter_id = interpreterId;
+      if (interpreterName) payload.interpreter_name = interpreterName;
       if (isEnabled) payload.enabled = isEnabled;
       if (timeoutDefault) payload.timeout_default = timeoutDefault;
 
@@ -143,6 +146,19 @@ export default function CodeSandboxConfig() {
               </div>
             </div>
 
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="interpreter_name" className="text-right">
+                解释器名称
+              </Label>
+              <div className="col-span-3">
+                <Input
+                  id="interpreter_name"
+                  value={interpreterName}
+                  onChange={(e) => setInterpreterName(e.target.value)}
+                  placeholder={'输入解释器名称（templateName）'}
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="timeout_default" className="text-right">

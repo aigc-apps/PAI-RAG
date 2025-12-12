@@ -8,6 +8,7 @@ from sse_starlette import EventSourceResponse
 from common.chat.models import DEFAULT_GUARDRAIL_ADVICE, ChatAgentRequest
 from config.providers.llm_provider import llm_provider
 from config.providers.chatbot_provider import chatbot_provider
+from config.providers.code_sandbox_provider import codesandbox_provider
 from openai.types.chat import ChatCompletionMessageParam
 import traceback
 from loguru import logger
@@ -112,13 +113,31 @@ async def chat(chat_request: ChatAgentRequest):
                 )
 
         async_response_gen = await agent.run_async(state=state)
-        return await generate_reponse(
+        response = await generate_reponse(
             async_response_gen,
             model=chat_request.model,
             stream=chat_request.stream,
             enable_output_check=new_chat_request.enable_output_guardrail,
             guardrail_hint=new_chat_request.guardrail_hint,
         )
+
+        # 对于流式响应，需要在流完成后清理 sandbox
+        if chat_request.stream and isinstance(response, EventSourceResponse):
+            # 包装生成器以在流完成后清理
+            original_gen = response.body_iterator
+            async def wrapped_gen():
+                try:
+                    async for item in original_gen:
+                        yield item
+                finally:
+                    # 流完成后清理 sandbox
+                    await codesandbox_provider.aclear_current_code_sandbox_tool_instance()
+            response.body_iterator = wrapped_gen()
+            # 对于流式响应，不在 finally 中删除，因为会在流完成后删除
+            return response
+
+        # 对于非流式响应，在 finally 块中删除
+        return response
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
         return await generate_reponse(
@@ -133,3 +152,6 @@ async def chat(chat_request: ChatAgentRequest):
             model=chat_request.model,
             stream=chat_request.stream,
         )
+    finally:
+        if not chat_request.stream:
+            await codesandbox_provider.aclear_current_code_sandbox_tool_instance()

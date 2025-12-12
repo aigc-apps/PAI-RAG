@@ -78,7 +78,9 @@ async def build_agent(chat_request: ChatAgentRequest) -> Planner:
         if codesandbox_provider.tool_config and codesandbox_provider.tool_config.enabled:
             code_sandbox_attachments_ids = [att["id"] for att in code_sandbox_attachments]
             code_interpreter_tool = codesandbox_provider.get_code_sandbox_tool(code_sandbox_attachments_ids=code_sandbox_attachments_ids)
+            packages_install_tool = codesandbox_provider.get_install_package_tool(code_sandbox_attachments_ids=code_sandbox_attachments_ids)
             mcp_tools.append(code_interpreter_tool)
+            mcp_tools.append(packages_install_tool)
 
         prompt_set = PlanAgentPromptSet()
         if chat_request.prompts:
