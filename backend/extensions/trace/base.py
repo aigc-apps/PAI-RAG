@@ -18,7 +18,7 @@ from opentelemetry.sdk.trace.export import (
 from opentelemetry.trace import Span
 from opentelemetry.context import attach, detach
 from openinference.instrumentation.openai import OpenAIInstrumentor
-from openinference.semconv.trace import SpanAttributes
+from openinference.semconv.trace import SpanAttributes, MessageAttributes, MessageContentAttributes
 
 from extensions.trace.reloadable_exporter import ReloadableOTLPSpanExporter
 from extensions.trace import context as trace_context
@@ -148,6 +148,25 @@ def gen_ai_semantic_conversion():
             else:
                 new_value = value.replace("llm.", "gen_ai.", 1)
             setattr(SpanAttributes, attr_name, new_value)
+
+    # Message & MessageContent attributes key
+    for attr_name in dir(MessageAttributes):
+        if attr_name.startswith("__"):
+            continue
+
+        value = getattr(MessageAttributes, attr_name)
+        if isinstance(value, str) and value == "message.contents":
+            new_value = "message.content"
+            setattr(MessageAttributes, attr_name, new_value)
+
+    for attr_name in dir(MessageContentAttributes):
+        if attr_name.startswith("__"):
+            continue
+
+        value = getattr(MessageContentAttributes, attr_name)
+        if isinstance(value, str) and value.startswith("message_content."):
+            new_value = value.replace("message_content.", "")
+            setattr(MessageContentAttributes, attr_name, new_value)
 
 
 gen_ai_semantic_conversion()
