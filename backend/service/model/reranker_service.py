@@ -306,10 +306,11 @@ class RerankerService:
         """
         logger.info(f"Getting Reranker model {model_id} by provider {provider_name} and tenant {tenant_id}.")
         statement = select(RerankerModelEntity).where(
-            RerankerModelEntity.provider_name == provider_name,
             RerankerModelEntity.model_id == model_id,
             RerankerModelEntity.tenant_id == tenant_id
         )
+        if provider_name:
+            statement = statement.where(RerankerModelEntity.provider_name == provider_name)
         reranker_entity = await self.session.exec(statement)
         reranker = reranker_entity.first()
         return reranker

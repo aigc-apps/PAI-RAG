@@ -60,6 +60,17 @@ class KnowledgebaseService:
         result = await self.session.exec(statement)
         return result.first()
 
+    async def get_knowledgebases_by_ids(self, tenant_id: str, kb_ids: List[str]) -> List[KbEntity]:
+        """
+        Get Knowledgebase entities by IDs.
+        """
+        if not kb_ids:
+            return []
+
+        statement = select(KbEntity).where(KbEntity.id.in_(kb_ids), KbEntity.tenant_id == tenant_id)
+        result = await self.session.exec(statement)
+        return list(result.all())
+
     async def list_knowledgebases(
         self,
         tenant_id: str,
@@ -85,7 +96,6 @@ class KnowledgebaseService:
             base_condition = and_(KbEntity.name != "default_attachments", KbEntity.tenant_id == tenant_id)
         else:
             base_condition = KbEntity.tenant_id == tenant_id
-
         # Add search condition if provided
         if query:
             query_lower = query.lower()

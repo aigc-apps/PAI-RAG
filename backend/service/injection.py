@@ -363,35 +363,35 @@ async def get_rag_service(
         ```
     """
     # Create lazy getters for related services using nested async functions
-    async def kb_service_getter():
-        return await get_knowledgebase_service(session)
+    async def kb_service_getter(db_session: AsyncSession = session):
+        return await get_knowledgebase_service(db_session)
 
-    async def file_service_getter():
-        return await get_file_service(session)
+    async def file_service_getter(db_session: AsyncSession = session):
+        return await get_file_service(db_session)
 
-    async def chunk_service_getter():
-        return await get_chunk_service(session)
+    async def chunk_service_getter(db_session: AsyncSession = session):
+        return await get_chunk_service(db_session)
 
-    async def metadata_service_getter():
-        return await get_metadata_service(session)
+    async def metadata_service_getter(db_session: AsyncSession = session):
+        return await get_metadata_service(db_session)
 
-    async def file_metadata_relation_service_getter():
-        return await get_file_metadata_relation_service(session)
+    async def file_metadata_relation_service_getter(db_session: AsyncSession = session):
+        return await get_file_metadata_relation_service(db_session)
 
-    async def embedding_service_getter():
-        return await get_embedding_service(session)
+    async def embedding_service_getter(db_session: AsyncSession = session):
+        return await get_embedding_service(db_session)
 
-    async def reranker_service_getter():
-        return await get_reranker_service(session)
+    async def reranker_service_getter(db_session: AsyncSession = session):
+        return await get_reranker_service(db_session)
 
-    async def llm_service_getter():
-        return await get_llm_service(session)
+    async def llm_service_getter(db_session: AsyncSession = session):
+        return await get_llm_service(db_session)
 
-    async def vector_db_service_getter():
-        return await get_vectordb_service(session)
+    async def vector_db_service_getter(db_session: AsyncSession = session):
+        return await get_vectordb_service(db_session)
 
-    async def vector_table_mapping_service_getter():
-        return await get_vector_table_mapping_service(session)
+    async def vector_table_mapping_service_getter(db_session: AsyncSession = session):
+        return await get_vector_table_mapping_service(db_session)
 
     return RagService(
         session=session,
