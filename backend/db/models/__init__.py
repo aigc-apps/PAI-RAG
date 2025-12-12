@@ -22,3 +22,4 @@ from db.models.evaluation.experiment import ExperimentEntity, ExperimentSampleEn
 from db.models.evaluation.run_config import RunConfigEntity
 from db.models.vectordb import VectorDbConfig
 from db.models.chatdb.chatdb import ChatDbConfigEntity
+from db.models.knowledgebase.vector_table_mapping import VectorTableMappingEntity

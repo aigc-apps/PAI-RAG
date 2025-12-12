@@ -80,7 +80,7 @@ export function AppSidebar() {
           <span className="text-lg font-medium">PAI-RAG</span>
         </div>
         {/* 工作空间选择器 */}
-        <div className="mt-3">
+        <div className="mt-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="w-full justify-between text-xs h-8">

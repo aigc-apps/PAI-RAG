@@ -12,18 +12,15 @@ from service.model.llm_service import LlmService
 from service.injection import get_llm_service, get_tenant_id
 from api.api_exception import ApiException
 from loguru import logger
+from common.llm.models import llm_url_to_model_provider_id_map, model_provider_map
 
 ### LLM Configuration API ###
 llm_router = APIRouter()
 
-llm_url_group_map = {
-    "https://dashscope.aliyuncs.com/compatible-mode/v1": "通义千问",
-    "https://api.openai.com/v1": "OpenAI",
-}
 
 
 def try_get_initial_model_from_env():
-    endpoint = os.environ.get("PAIRAG_RAG__LLM__endpoint")
+    endpoint = os.environ.get("PAIRAG_RAG__LLM__endpoint", "").rstrip("/")
     if not endpoint:
         return None
 
@@ -42,6 +39,8 @@ def try_get_initial_model_from_env():
                 "base_url": endpoint,
                 "encrypted_api_key": encrypt_key(token),
                 "model": models.data[0].id,
+                "provider_name": "openai_like",
+                "model_name": models.data[0].id,
                 "model_id": models.data[0].id,
                 "source": "OpenAI-Compatible",
             })
@@ -93,18 +92,21 @@ async def get_llm_groups(
 
         grouped_results = {}
         for llm in llm_entities:
-            if not llm.model:
+            if not llm.model and not llm.model_name:
                 continue
 
-            group_name = llm_url_group_map.get(llm.base_url, "OpenAI-Compatible")
-            if group_name not in grouped_results:
-                grouped_results[group_name] = {
+            model_provider_id = llm.provider_name or llm_url_to_model_provider_id_map.get(llm.base_url, "openai_like")
+            if model_provider_id not in model_provider_map:
+                continue
+            provider_label = model_provider_map[model_provider_id].label
+
+            if provider_label not in grouped_results:
+                grouped_results[provider_label] = {
                     "id": len(grouped_results),
-                    "label": group_name,
+                    "label": provider_label,
                     "models": [],
                 }
-
-            grouped_results[group_name]["models"].append(llm)
+            grouped_results[provider_label]["models"].append(llm)
 
         return success_response(data={"groups": list(grouped_results.values())}, message="获取LLM模型组成功")
     except Exception as e:
@@ -112,10 +114,27 @@ async def get_llm_groups(
         raise ApiException(code=500, message=f"获取LLM模型组失败: '{e}'.")
 
 
+@llm_router.get("/providers")
+async def get_llm_providers(
+    vision_support: Optional[bool] = Query(default=None, description="过滤支持vision的多模态大模型"),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    llm_service: LlmService = Depends(get_llm_service),
+):
+    """Get distinct provider names for LLMs."""
+    try:
+        providers = await llm_service.get_provider_names(tenant_id=tenant_id, vision_support=vision_support)
+        return success_response(data=providers, message="获取LLM服务商列表成功")
+    except Exception as e:
+        logger.error(f"Failed to get LLM providers: {traceback.format_exc()}")
+        raise ApiException(code=400, message=f"获取LLM服务商列表失败: {str(e)}")
+
+
 @llm_router.get("")
 async def get_llms(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    provider_name: str = Query(default=None, description="过滤LLM模型提供商，None表示不过滤"),
     vision_support: Optional[bool] = Query(default=None, description="过滤支持vision的多模态大模型，None表示不过滤"),
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
@@ -123,7 +142,7 @@ async def get_llms(
 ):
     logger.info(f"Getting LLMs with page: {page}, size: {size}, vision_support: {vision_support}.")
     try:
-        llm_entities = await llm_service.list_llms(tenant_id=tenant_id, page=page, size=size, vision_support=vision_support)
+        llm_entities = await llm_service.list_llms(tenant_id=tenant_id, page=page, size=size, vision_support=vision_support, provider_name=provider_name)
         return success_response(data=llm_entities, message="获取LLM模型列表成功")
     except Exception as e:
         logger.error(f"Failed to get llms: {traceback.format_exc()}")
@@ -140,6 +159,7 @@ async def read_llm(
     logger.info(f"Getting LLM: {llm_id}.")
     try:
         llm_entity = await llm_service.get_llm(llm_id=llm_id, tenant_id=tenant_id)
+        llm_entity.provider_name = llm_entity.provider_name or llm_url_to_model_provider_id_map.get(llm_entity.base_url, "openai_like")
         if not llm_entity:
             raise ApiException.not_found(llm_id, "LLM")
         return success_response(data=llm_entity, message="获取LLM模型成功")
@@ -158,6 +178,8 @@ async def update_llm(
 ):
     logger.info(f"Updating LLM: {llm_id} with data: {update_llm}.")
     try:
+        if update_llm.provider_name is None:
+            update_llm.provider_name = llm_url_to_model_provider_id_map.get(update_llm.base_url, "openai_like")
         llm_entity = await llm_service.update_llm(llm_id=llm_id, update_data=update_llm, tenant_id=tenant_id)
         return success_response(data=llm_entity, message="LLM更新成功。")
     except Exception as e:

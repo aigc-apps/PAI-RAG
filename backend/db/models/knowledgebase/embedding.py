@@ -23,6 +23,7 @@ class EmbeddingModel(SQLModel):
     model_id: str = Field(default=None, max_length=64)
     is_ready: Optional[bool] = Field(default=False) # 是否已经加载完成，用于本地模型下载
     is_default: Optional[bool] = Field(default=False)
+    provider_name: Optional[str] = Field(default=None)
 
 
 class EmbeddingModelCreate(SQLModel):
@@ -36,7 +37,7 @@ class EmbeddingModelCreate(SQLModel):
     model_id: str = Field(default=None, max_length=64)
     is_ready: Optional[bool] = False
     is_default: Optional[bool] = False
-
+    provider_name: Optional[str] = Field(default=None)
 
     @model_validator(mode='after')
     def set_is_ready(self) -> 'EmbeddingModelCreate':
@@ -55,7 +56,7 @@ class EmbeddingModelRead(EmbeddingModel):
 
 class EmbeddingModelEntity(EmbeddingModel, table=True):
     __tablename__ = "pai_embedding_model"
-    __table_args__ = (UniqueConstraint("tenant_id", "model_id", name="unique_embedding_model"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "provider_name", "model_id", name="unique_embedding_model"),)
 
     id: str = Field(default_factory=lambda x: uuid.uuid4().hex, primary_key=True)
     encrypted_api_key: str | None = Field(default=None)

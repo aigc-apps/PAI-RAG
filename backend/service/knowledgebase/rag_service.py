@@ -21,10 +21,9 @@ from db.models.knowledgebase.metadata import (
 )
 from db.models.knowledgebase.chunk import KbChunkEntity, create_text_node_from_chunk
 from service.knowledgebase.utils.metadata_utils import validate_metadata_value
-from service.factory.model_factory import create_reranker_model
+from service.factory.model_factory import create_reranker_model, create_embedding_model
 from rag.metadata_filter import EmptyFilesException, query_file_ids_with_metadata_filter
 from service.factory.vectordb_factory import create_vector_store
-
 from rag.vector_store.vector_connection import is_docid_filter_supported
 from rag.rerank.fusion_reranker import arerank_fusion
 from llama_index.core.schema import BaseNode
@@ -149,8 +148,10 @@ class RagService:
             raise ValueError("需要提供嵌入模型才能创建知识库。")
 
         embedding_service = await self._get_embedding_service()
-        embedding_model = await embedding_service.get_embedding_by_model_id(
-            kb_data.embedding_model, tenant_id=tenant_id,
+        embedding_model = await embedding_service.get_embedding_model_by_provider_model_id(
+            provider_name=kb_data.embedding_provider_name,
+            model_id=kb_data.embedding_model,
+            tenant_id=tenant_id,
         )
         if not embedding_model:
             raise ValueError(
@@ -164,8 +165,10 @@ class RagService:
                 if not retrieval_config.rerank_model:
                     raise ValueError("启用重排序时，必须指定重排序模型。")
                 reranker_service = await self._get_reranker_service()
-                reranker_model = await reranker_service.get_reranker_by_model_id(
-                    retrieval_config.rerank_model, tenant_id=tenant_id
+                reranker_model = await reranker_service.get_reranker_model_by_provider_model_id(
+                    provider_name=retrieval_config.rerank_provider_name,
+                    model_id=retrieval_config.rerank_model,
+                    tenant_id=tenant_id,
                 )
                 if not reranker_model:
                     raise ValueError(
@@ -175,8 +178,10 @@ class RagService:
         # Validate image_caption_model if specified
         if kb_data.chunk_config and kb_data.chunk_config.image_caption_model:
             llm_service = await self._get_llm_service()
-            llm_model = await llm_service.get_llm_by_model_id(
-                kb_data.chunk_config.image_caption_model, tenant_id=tenant_id
+            llm_model = await llm_service.get_llm_model_by_provider_model_id(
+                provider_name=kb_data.chunk_config.image_caption_provider_name,
+                model_id=kb_data.chunk_config.image_caption_model,
+                tenant_id=tenant_id,
             )
             if not llm_model:
                 raise ValueError(
@@ -212,7 +217,7 @@ class RagService:
 
 
     async def update_knowledgebase(
-        self, kb_id: str, knowledgebase: KnowledgebaseCreate, tenant_id: str
+        self, kb_id: str, update_data: KnowledgebaseCreate, tenant_id: str
     ) -> KbEntity:
         """
         Update a knowledgebase.
@@ -231,10 +236,10 @@ class RagService:
         # Get existing knowledgebase to merge with update data
         kb_service = await self._get_kb_service()
         # Validate all referenced models (including existing ones if not being updated)
-        await self._validate_knowledgebase_models(knowledgebase, tenant_id=tenant_id)
+        await self._validate_knowledgebase_models(update_data, tenant_id=tenant_id)
 
         # Update knowledgebase
-        return await kb_service.update_knowledgebase(kb_id=kb_id, update_data=knowledgebase, tenant_id=tenant_id)
+        return await kb_service.update_knowledgebase(kb_id=kb_id, update_data=update_data, tenant_id=tenant_id)
 
     async def get_knowledgebase_by_name(self, name: str, tenant_id: str) -> Optional[KbEntity]:
         """
@@ -824,9 +829,15 @@ class RagService:
             raise ValueError(f"Knowledgebase {knowledge_id} not found.")
 
         embedding_service = await self._get_embedding_service()
-        embed_model = await embedding_service.get_embedding_model(kb.embedding_model, tenant_id=tenant_id)
-        if not embed_model:
+        embed_model_entity = await embedding_service.get_embedding_model_by_provider_model_id(
+            provider_name=kb.embedding_provider_name,
+            model_id=kb.embedding_model,
+            tenant_id=tenant_id,
+        )
+        if not embed_model_entity:
             raise ValueError(f"Embedding model not found for knowledgebase {knowledge_id}.")
+
+        embed_model = create_embedding_model(embed_model_entity)
 
         base_retrieval_setting = RetrievalConfig.model_validate(kb.retrieval_config)
         if not retrieval_setting:
@@ -840,6 +851,8 @@ class RagService:
                 retrieval_setting.enable_rerank = base_retrieval_setting.enable_rerank
             if retrieval_setting.rerank_model is None:
                 retrieval_setting.rerank_model = base_retrieval_setting.rerank_model
+            if retrieval_setting.rerank_provider_name is None:
+                retrieval_setting.rerank_provider_name = base_retrieval_setting.rerank_provider_name
             if retrieval_setting.rerank_top_k is None:
                 retrieval_setting.rerank_top_k = base_retrieval_setting.rerank_top_k
             if retrieval_setting.similarity_threshold is None:
@@ -890,15 +903,19 @@ class RagService:
         dense_nodes_count = len(dense_result.nodes) if dense_result else 0
         logger.info(f"Executing rerank phrase...text nodes: {text_nodes_count}, dense nodes: {dense_nodes_count}")
         reranker = None
+
+
         if retrieval_setting.enable_rerank and retrieval_setting.rerank_model and (text_nodes_count + dense_nodes_count > 1):
             reranker_service = await self._get_reranker_service()
-            reranker_config = await reranker_service.get_reranker_by_model_id(
-                retrieval_setting.rerank_model, tenant_id=tenant_id
+            reranker_config = await reranker_service.get_reranker_model_by_provider_model_id(
+                provider_name=retrieval_setting.rerank_provider_name,
+                model_id=retrieval_setting.rerank_model,
+                tenant_id=tenant_id,
             )
             if not reranker_config:
-                raise ValueError(f"Reranker model not found for knowledgebase {knowledge_id}.")
+                raise ValueError(f"Reranker model not found for knowledgebase {knowledge_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
             reranker = create_reranker_model(reranker_config)
-            logger.info(f"Created reranker model {reranker_config.model_name} for knowledgebase {knowledge_id}.")
+            logger.info(f"Created reranker model {reranker_config.model_name} for knowledgebase {knowledge_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
 
         try:
             reranked_result = await arerank_fusion(
@@ -908,6 +925,7 @@ class RagService:
                 rerank_model=reranker,
                 vector_weight=retrieval_setting.vector_weight,
                 top_k=retrieval_setting.top_k,
+                rerank_top_k=retrieval_setting.rerank_top_k,
             )
         except Exception as e:
             logger.error(f"Failed to rerank: {e}")
@@ -963,10 +981,15 @@ class RagService:
             raise ValueError(f"Knowledgebase {kb_id} not found.")
 
         embed_service = await self._get_embedding_service()
-        embed_model = await embed_service.get_embedding_model(model_id=kb.embedding_model, tenant_id=tenant_id)
-        if not embed_model:
+        embed_model_entity = await embed_service.get_embedding_model_by_provider_model_id(
+            provider_name=kb.embedding_provider_name,
+            model_id=kb.embedding_model,
+            tenant_id=tenant_id,
+        )
+        if not embed_model_entity:
             raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
 
+        embed_model = create_embedding_model(embed_model_entity)
         texts_to_embed = get_node_texts_for_embedding(nodes)
         embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
         for i in range(len(nodes)):
@@ -1016,10 +1039,16 @@ class RagService:
 
         embed_dimension = self._embed_dimension_cache.get(kb.embedding_model)
         if not embed_dimension:
-            embed_serivce = await self._get_embedding_service()
-            embed_model = await embed_serivce.get_embedding_model(model_id=kb.embedding_model, tenant_id=tenant_id)
-            if not embed_model:
+            embed_service = await self._get_embedding_service()
+            embed_model_entity = await embed_service.get_embedding_model_by_provider_model_id(
+                provider_name=kb.embedding_provider_name,
+                model_id=kb.embedding_model,
+                tenant_id=tenant_id,
+            )
+            if not embed_model_entity:
                 raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
+
+            embed_model = create_embedding_model(embed_model_entity)
             embed_dimension = len(await embed_model.aget_text_embedding("0"))
 
         logger.info(f"Starting to delete {len(node_ids)} nodes from vector store. Node ids: {node_ids[:5]}...")
@@ -1059,9 +1088,15 @@ class RagService:
         embed_dimension = self._embed_dimension_cache.get(kb.embedding_model)
         if not embed_dimension:
             embed_service = await self._get_embedding_service()
-            embed_model = await embed_service.get_embedding_model(model_id=kb.embedding_model, tenant_id=tenant_id)
-            if not embed_model:
+            embed_model_entity = await embed_service.get_embedding_model_by_provider_model_id(
+                provider_name=kb.embedding_provider_name,
+                model_id=kb.embedding_model,
+                tenant_id=tenant_id,
+            )
+            if not embed_model_entity:
                 raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
+
+            embed_model = create_embedding_model(embed_model_entity)
             embed_dimension = len(await embed_model.aget_text_embedding("0"))
 
         logger.info(f"Starting to delete file {file_id} from vector store...")

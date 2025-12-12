@@ -50,10 +50,12 @@ class BailianFileStore(BaseFileStore):
     
     def read(self, file_path: str, tenant_id: str) -> Optional[BinaryIO]:
         try:
+            logger.info(f"Reading file {file_path} from BailianFileStore.")
             response = requests.get(f"{self.endpoint}/infra/v1/files/download", params={"object_name": file_path}, headers={"X-TENANT-ID": tenant_id})
             if response.status_code != 200:
                 logger.error(f"Failed to read file {file_path}. status: {response.status_code}, response: {response.text}")
                 raise Exception(f"Failed to read file {file_path}. status: {response.status_code}, response: {response.text}")
+            logger.info(f"Read file {file_path} from BailianFileStore successfully.")
             return BytesIO(response.content)
         except Exception as e:
             logger.error(f"Failed to read file {file_path}. error: {e}")
@@ -98,11 +100,14 @@ class BailianFileStore(BaseFileStore):
 
     async def read_async(self, file_path: str, tenant_id: str) -> Optional[BinaryIO]:
         try:
+            logger.info(f"Reading file {file_path} from BailianFileStore asynchronously.")
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.endpoint}/infra/v1/files/download", params={"object_name": file_path}, headers={"X-TENANT-ID": tenant_id}) as response:
                     if response.status == 200:
+                        logger.info(f"Read file {file_path} from BailianFileStore asynchronously successfully.")
                         return BytesIO(await response.read())
                     else:
+                        logger.error(f"Failed to read file {file_path}. status: {response.status}, response: {await response.text()}")
                         raise Exception(f"Failed to read file {file_path}. status: {response.status}, response: {await response.text()}")
         except Exception as e:
             logger.error(f"Failed to read file {file_path}. error: {traceback.format_exc()}")

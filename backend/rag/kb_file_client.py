@@ -39,7 +39,11 @@ class KbFileClient:
 
         image_caption_tool = None
         if chunk_config.image_caption_model:
-            multimodal_llm = await get_openailike_llm_from_db(model_id=chunk_config.image_caption_model, tenant_id=knowledgebase.tenant_id)
+            multimodal_llm = await get_openailike_llm_from_db(
+                model_id=chunk_config.image_caption_model,
+                tenant_id=knowledgebase.tenant_id,
+                provider_name=chunk_config.image_caption_provider_name,
+            )
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
 
         file_parser = FileParser(

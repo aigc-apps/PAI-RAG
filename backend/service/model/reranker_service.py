@@ -78,6 +78,7 @@ class RerankerService:
     async def list_rerankers(
         self,
         tenant_id: str,
+        provider_name: Optional[str] = None,
         page: int = 1,
         size: int = 10,
         model_name: Optional[str] = None,
@@ -95,6 +96,11 @@ class RerankerService:
         """
         # Build base query
         base_query = select(RerankerModelEntity).where(RerankerModelEntity.tenant_id == tenant_id)
+
+        if provider_name is not None:
+            base_query = base_query.where(
+                RerankerModelEntity.provider_name == provider_name
+            )
 
         # Add model_name filter if provided
         if model_name is not None:
@@ -124,6 +130,26 @@ class RerankerService:
             size=size,
         )
 
+    async def get_provider_names(self, tenant_id: str) -> List[str]:
+        """
+        Get distinct provider names for rerankers.
+
+        Args:
+            tenant_id: Tenant ID
+
+        Returns:
+            List of distinct provider names
+        """
+        statement = select(RerankerModelEntity.provider_name).where(
+            RerankerModelEntity.tenant_id == tenant_id
+        ).distinct()
+        result = await self.session.exec(statement)
+        providers = [p for p in result.all() if p]
+        # Add default if not present
+        if not providers or "openai_like" not in providers:
+            providers.append("openai_like")
+        return sorted(set(providers))
+
     async def create_reranker(
         self, reranker_data: RerankerModelCreate, tenant_id: str
     ) -> RerankerModelEntity:
@@ -149,6 +175,9 @@ class RerankerService:
         reranker = RerankerModelEntity.model_validate(
             reranker_data, update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}
         )
+
+        if reranker.provider_name is None:
+            reranker.provider_name = reranker.type
 
         self.session.add(reranker)
 
@@ -207,7 +236,11 @@ class RerankerService:
             reranker.type = update_data.type
         if update_data.api_key is not None:
             reranker.encrypted_api_key = encrypt_key(update_data.api_key)
+        if update_data.provider_name is not None:
+            reranker.provider_name = update_data.provider_name
 
+        if reranker.provider_name is None:
+            reranker.provider_name = reranker.type
         self.session.add(reranker)
 
         # Flush to ensure changes are staged
@@ -254,4 +287,29 @@ class RerankerService:
         """
         statement = select(RerankerModelEntity).where(RerankerModelEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
+        for reranker in results:
+            if reranker.provider_name is None:
+                reranker.provider_name = reranker.type
         return list(results.all())
+
+    async def get_reranker_model_by_provider_model_id(self, provider_name: str, model_id: str, tenant_id: str) -> Optional[RerankerModelEntity]:
+        """
+        Get a Reranker entity by provider and model id.
+
+        Args:
+            provider_name: Reranker provider name
+            model_id: Reranker model_id
+            tenant_id: Tenant id
+
+        Returns:
+            RerankerModelEntity if found, None otherwise
+        """
+        logger.info(f"Getting Reranker model {model_id} by provider {provider_name} and tenant {tenant_id}.")
+        statement = select(RerankerModelEntity).where(
+            RerankerModelEntity.provider_name == provider_name,
+            RerankerModelEntity.model_id == model_id,
+            RerankerModelEntity.tenant_id == tenant_id
+        )
+        reranker_entity = await self.session.exec(statement)
+        reranker = reranker_entity.first()
+        return reranker

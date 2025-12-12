@@ -41,9 +41,25 @@ async def create_embedding(
         raise ApiException(code=400, message=f"创建embedding模型失败: '{e}'.")
 
 
+@embedding_router.get("/providers")
+async def get_embedding_providers(
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    embedding_service: EmbeddingService = Depends(get_embedding_service),
+):
+    """Get distinct provider names for embeddings."""
+    try:
+        providers = await embedding_service.get_provider_names(tenant_id=tenant_id)
+        return success_response(data=providers, message="获取embedding服务商列表成功")
+    except Exception as e:
+        logger.error(f"Failed to get embedding providers: {traceback.format_exc()}")
+        raise ApiException(code=400, message=f"获取embedding服务商列表失败: {str(e)}")
+
+
 @embedding_router.get("")
 async def get_embeddings(
     model_name: str = None,
+    provider_name: str = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     tenant_id: str = Depends(get_tenant_id),
@@ -52,7 +68,7 @@ async def get_embeddings(
 ):
     try:
         if not model_name:
-            embedding_models = await embedding_service.list_embeddings(tenant_id=tenant_id, page=page, size=size)
+            embedding_models = await embedding_service.list_embeddings(tenant_id=tenant_id, page=page, size=size, provider_name=provider_name)
             return success_response(
                 data=embedding_models,
                 message="查询embedding模型列表成功"
@@ -72,13 +88,13 @@ async def get_embeddings(
 @embedding_router.put("/{emb_id}", response_model=ResponseModel[EmbeddingModelRead])
 async def update_embedding(
     emb_id: str,
-    new_embedding: EmbeddingModelCreate,
+    update_data: EmbeddingModelCreate,
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     embedding_service: EmbeddingService = Depends(get_embedding_service),
 ):
     try:
-        embedding_model = await embedding_service.update_embedding(emb_id=emb_id, new_embedding=new_embedding, tenant_id=tenant_id)
+        embedding_model = await embedding_service.update_embedding(emb_id=emb_id, update_data=update_data, tenant_id=tenant_id)
         await session.refresh(embedding_model)
         logger.info(f"Embedding {emb_id} updated to {embedding_model}.")
         return success_response(data=embedding_model, message="Embedding模型更新成功。")

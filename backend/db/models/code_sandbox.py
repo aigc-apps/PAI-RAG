@@ -10,10 +10,7 @@ class CodeSandboxConfig(SQLModel):
     interpreter_id: str = Field(default=None)
     enabled: bool = Field(default=False)
     timeout_default: int = Field(default=50)
-
      # aliyun-fc
-
-
 
 class CodeSandboxConfigCreate(CodeSandboxConfig):
     aliyun_id: str = Field(default=None)

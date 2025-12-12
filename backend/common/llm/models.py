@@ -14,6 +14,23 @@ THINK_START_TAG = "<think>"
 THINK_END_TAG = "</think>"
 
 
+class ModelProvider(BaseModel):
+    id: str
+    name: str
+    label: str
+
+
+model_provider_map = {
+    "openai_like": ModelProvider(id="openai_like", name="OpenAILike", label="OpenAI兼容"),
+    "dashscope": ModelProvider(id="dashscope", name="Dashscope", label="通义千问"),
+}
+
+
+llm_url_to_model_provider_id_map = {
+    "https://dashscope.aliyuncs.com/compatible-mode/v1": "dashscope",
+}
+
+
 class ChunkStage(str, Enum):
     PLANNING = "planning"
     ACTING = "acting"

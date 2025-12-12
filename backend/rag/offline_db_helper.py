@@ -14,7 +14,6 @@ from llama_index.core.schema import TextNode
 from common.knowledgebase.types import FileStatus, ChunkStatus
 from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.llm import LlmModelEntity
 from llama_index.core.schema import Document
 from pairag.file.store.file_store_helper import file_store
 from common.llm.openai.openai_like import OpenAILike
@@ -25,7 +24,7 @@ import pandas as pd
 from llama_index.core.embeddings import BaseEmbedding
 from db.models.knowledgebase.knowledgebase import KbEntity
 from service.knowledgebase.vectordb_service import VectordbService
-from service.injection import get_vectordb_service, get_vector_table_mapping_service
+from service.injection import get_vectordb_service, get_vector_table_mapping_service, get_llm_service
 
 DEFAULT_ATTACHMENT_MAX_SIZE = 1000
 MAX_CACHE_SIZE = 3
@@ -117,10 +116,15 @@ async def get_openailike_llm_from_db(
     session: AsyncSession,
     model_id: str,
     tenant_id: str,
+    provider_name: str,
 ) -> OpenAILike:
-    llm_entity = (await session.exec(
-        select(LlmModelEntity).where(LlmModelEntity.model_id == model_id, LlmModelEntity.tenant_id == tenant_id)
-    )).first()
+    llm_service = await get_llm_service(session=session)
+
+    llm_entity = await llm_service.get_llm_model_by_provider_model_id(
+        provider_name=provider_name,
+        model_id=model_id,
+        tenant_id=tenant_id,
+    )
     if not llm_entity:
         raise ValueError(f"LLM model {model_id} not found.")
     return create_openailike_llm(config=llm_entity)

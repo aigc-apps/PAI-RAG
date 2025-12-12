@@ -2,7 +2,7 @@
 
 from fastapi import Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
-
+import os
 from db.db_context import get_db_session
 from service.model.llm_service import LlmService
 from service.model.embedding_service import EmbeddingService
@@ -30,6 +30,7 @@ from service.knowledgebase.vector_table_mapping_service import VectorTableMappin
 from service.thread.thread_service import ThreadService
 from service.thread.message_service import MessageService
 from service.agent.agent_service import AgentService
+from service.model.bailian_model_service import BailianModelService
 
 from fastapi import Header, HTTPException
 from typing import Optional
@@ -77,6 +78,8 @@ async def get_llm_service(
             return await llm_service.list_llms()
         ```
     """
+    if os.environ.get("USE_BAILIAN_MODEL_SERVICE", "false").lower() == "true":
+        return BailianModelService()
     return LlmService(session)
 
 
@@ -101,6 +104,8 @@ async def get_embedding_service(
             return await embedding_service.list_embeddings()
         ```
     """
+    if os.environ.get("USE_BAILIAN_MODEL_SERVICE", "false").lower() == "true":
+        return BailianModelService()
     return EmbeddingService(session)
 
 
@@ -125,6 +130,8 @@ async def get_reranker_service(
             return await reranker_service.list_rerankers()
         ```
     """
+    if os.environ.get("USE_BAILIAN_MODEL_SERVICE", "false").lower() == "true":
+        return BailianModelService()
     return RerankerService(session)
 
 

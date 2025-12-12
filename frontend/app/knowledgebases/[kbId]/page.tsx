@@ -245,6 +245,7 @@ export default function KnowledgeBaseDetailPage(
   // 检索设置状态
   const [retrievalSetting, setRetrievalSetting] = useState<{
     retrieval_mode?: string;
+    rerank_provider_name?: string;
     vector_weight?: number;
     enable_rerank?: boolean;
     rerank_model?: string;
@@ -490,6 +491,7 @@ export default function KnowledgeBaseDetailPage(
           top_k: kb_data.retrieval_config.top_k ?? 5,
           similarity_threshold: kb_data.retrieval_config.similarity_threshold ?? 0.2,
           rerank_top_k: kb_data.retrieval_config.rerank_top_k ?? 5,
+          rerank_provider_name: kb_data.retrieval_config.rerank_provider_name || '',
         });
       }
 
@@ -2797,6 +2799,7 @@ export default function KnowledgeBaseDetailPage(
                                   setRetrievalSetting((prev) => ({
                                     ...prev,
                                     rerank_model: value,
+                                    rerank_provider_name: retrievalSetting.rerank_provider_name || '',
                                   }));
                                 }}
                               >

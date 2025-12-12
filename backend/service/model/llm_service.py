@@ -6,14 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from db.models.llm import LlmModelCreate, LlmModelEntity
 from common.encrypt_utils import encrypt_key
 from common.chat.response_model import PagedResult
+from common.llm.models import model_provider_map, llm_url_to_model_provider_id_map
 from loguru import logger
 
-
-# URL to group name mapping
-llm_url_group_map = {
-    "https://dashscope.aliyuncs.com/compatible-mode/v1": "通义千问",
-    "https://api.openai.com/v1": "OpenAI",
-}
 
 
 class LlmService:
@@ -69,6 +64,7 @@ class LlmService:
     async def list_llms(
         self,
         tenant_id: str,
+        provider_name: Optional[str] = None,
         page: int = 1,
         size: int = 10,
         vision_support: Optional[bool] = None,
@@ -86,6 +82,11 @@ class LlmService:
         """
         # Build base query
         base_query = select(LlmModelEntity).where(LlmModelEntity.tenant_id == tenant_id)
+
+        if provider_name is not None:
+            base_query = base_query.where(
+                LlmModelEntity.provider_name == provider_name
+            )
 
         # Add vision_support filter if provided
         if vision_support is not None:
@@ -115,6 +116,30 @@ class LlmService:
             size=size,
         )
 
+    async def get_provider_names(self, tenant_id: str, vision_support: Optional[bool] = None) -> List[str]:
+        """
+        Get distinct provider names for LLMs.
+
+        Args:
+            tenant_id: Tenant ID
+            vision_support: Optional filter for vision support
+
+        Returns:
+            List of distinct provider names
+        """
+        base_query = select(LlmModelEntity.provider_name).where(
+            LlmModelEntity.tenant_id == tenant_id
+        )
+        if vision_support is not None:
+            base_query = base_query.where(LlmModelEntity.vision_support == vision_support)
+        statement = base_query.distinct()
+        result = await self.session.exec(statement)
+        providers = [p for p in result.all() if p]
+        # Add default if not present
+        if not providers or "openai_like" not in providers:
+            providers.append("openai_like")
+        return sorted(set(providers))
+
     async def create_llm(self, llm_data: LlmModelCreate, tenant_id: str) -> LlmModelEntity:
         """
         Create a new LLM entity.
@@ -131,15 +156,16 @@ class LlmService:
         """
         # Encrypt API key
         encrypted_api_key = encrypt_key(llm_data.api_key) if llm_data.api_key else None
+        if llm_data.model_name is None:
+            llm_data.model_name = llm_data.model # model will be deprecated, keep consistency with embedding rerank
+        if llm_data.provider_name is None:
+            llm_data.provider_name = llm_url_to_model_provider_id_map.get(llm_data.base_url, "openai_like")
+        if llm_data.provider_name not in model_provider_map:
+            raise ValueError(f"LLM创建失败: 'provider_name {llm_data.provider_name} not supported'.")
 
         # Create entity
         llm = LlmModelEntity.model_validate(
             llm_data, update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}
-        )
-
-        # Set source based on base_url
-        llm.source = llm_url_group_map.get(
-            llm.base_url, "OpenAI-Compatible"
         )
 
         self.session.add(llm)
@@ -191,14 +217,13 @@ class LlmService:
             llm.model_id = update_data.model_id
         if update_data.base_url is not None:
             llm.base_url = update_data.base_url
-            # Update source when base_url changes
-            llm.source = llm_url_group_map.get(
-                llm.base_url, "OpenAI-Compatible"
-            )
         if update_data.context_window is not None:
             llm.context_window = update_data.context_window
         if update_data.model is not None:
             llm.model = update_data.model
+            llm.model_name = update_data.model # model will be deprecated, keep consistency with embedding rerank
+        if update_data.model_name is not None:
+            llm.model_name = update_data.model_name
         if update_data.temperature is not None:
             llm.temperature = update_data.temperature
         if update_data.api_key is not None:
@@ -253,3 +278,23 @@ class LlmService:
         statement = select(LlmModelEntity).where(LlmModelEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
+
+    async def get_llm_model_by_provider_model_id(self, provider_name: str, model_id: str, tenant_id: str) -> Optional[LlmModelEntity]:
+        """
+        Get a LLM entity by provider and model id.
+
+        Args:
+            provider_name: LLM provider name
+            model_id: LLM model_id
+            tenant_id: Tenant id
+
+        Returns:
+            LlmModelEntity if found, None otherwise
+        """
+        statement = select(LlmModelEntity).where(
+            LlmModelEntity.provider_name == provider_name,
+            LlmModelEntity.model_id == model_id,
+            LlmModelEntity.tenant_id == tenant_id
+        )
+        result = await self.session.exec(statement)
+        return result.first()

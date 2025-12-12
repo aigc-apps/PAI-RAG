@@ -49,9 +49,9 @@ async def create_knowledgebase(
             raise ApiException(code=400, message="创建知识库失败: 知识库名称已存在。")
         else:
             raise ApiException(code=400, message=f"创建知识库失败: {e}.")
-    except Exception:
+    except Exception as e:
         logger.exception(f"创建知识库失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"创建知识库失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"创建知识库失败: {e}.")
 
 
 @knowledgebase_router.get("")
@@ -69,9 +69,9 @@ async def list_knowledgebases(
     except ValueError as e:
         logger.error(f"获取知识库列表失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"获取知识库列表失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"获取知识库列表失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"获取知识库列表失败: {e}.")
 
 
 @knowledgebase_router.get("/{kb_id}", response_model=ResponseModel[KbEntity])
@@ -91,29 +91,29 @@ async def read_knowledgebase(
     except ValueError as e:
         logger.error(f"查询知识库失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"查询知识库失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询知识库失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"查询知识库失败: {e}.")
 
 
 @knowledgebase_router.put("/{kb_id}", response_model=ResponseModel[KbEntity])
 async def update_knowledgebase(
     kb_id: str,
-    new_kb: KnowledgebaseCreate,
+    update_data: KnowledgebaseCreate,
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, new_kb=new_kb, tenant_id=tenant_id)
+        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, update_data=update_data, tenant_id=tenant_id)
 
         return success_response(data=knowledgebase, message="知识库更新成功。")
     except ValueError as e:
         logger.error(f"更新知识库失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"更新知识库失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"更新知识库失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"更新知识库失败: {e}.")
 
 
 @knowledgebase_router.delete("/{kb_id}")
@@ -130,9 +130,9 @@ async def delete_knowledgebase(
     except ValueError as e:
         logger.error(f"删除知识库失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"删除知识库失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"删除知识库失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"删除知识库失败: {e}.")
 
 @knowledgebase_router.get("/{kb_id}/files")
 async def list_files(
@@ -158,9 +158,9 @@ async def list_files(
     except ValueError as e:
         logger.error(f"查询文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"查询文件失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询文件失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"查询文件失败: {e}.")
 
 
 
@@ -212,7 +212,7 @@ async def start_parse_task(
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"启动解析任务失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"启动解析任务失败: {e}")
+        raise ApiException(code=400, message=f"启动解析任务失败: {e}.")
 
 
 
@@ -268,9 +268,9 @@ async def upload_files(
     except ValueError as e:
         logger.error(f"上传文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"上传文件失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"上传文件失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"上传文件失败: {e}.")
 
 @knowledgebase_router.get(
     "/{kb_id}/files/{file_id}", response_model=ResponseModel[KbFileEntity]
@@ -293,9 +293,9 @@ async def get_kb_file(
     except ValueError as e:
         logger.error(f"查询文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"查询文件失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询文件失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"查询文件失败: {e}.")
 
 
 @knowledgebase_router.put("/{kb_id}/files/{file_id}")
@@ -316,9 +316,9 @@ async def reprocess_file(
     except ValueError as e:
         logger.error(f"重新处理文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"重新处理文件失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"重新处理文件失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"重新处理文件失败: {e}.")
 
 
 @knowledgebase_router.delete("/{kb_id}/files/{file_id}")
@@ -335,9 +335,9 @@ async def delete_file(
     except ValueError as e:
         logger.error(f"删除文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except Exception:
+    except Exception as e:
         logger.error(f"删除文件失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"删除文件失败: {traceback.format_exc()}.")
+        raise ApiException(code=400, message=f"删除文件失败: {e}.")
 
 
 
@@ -388,9 +388,9 @@ async def batch_operations(
         except ValueError as e:
             logger.error(f"删除文件失败。\nValueError:{e}")
             raise ApiException(code=400, message=str(e))
-        except Exception:
+        except Exception as e:
             logger.error(f"删除文件失败。\nException:{traceback.format_exc()}")
-            raise ApiException(code=400, message=f"删除文件失败: {traceback.format_exc()}.")
+            raise ApiException(code=400, message=f"删除文件失败: {e}.")
     elif request.operation == "reprocess":
         try:
             reprocessed_count = await _batch_reprocess_files(kb_id=kb_id, file_entities=file_entities, session=session, tenant_id=tenant_id)
@@ -398,9 +398,9 @@ async def batch_operations(
         except ValueError as e:
             logger.error(f"重新处理文件失败。\nValueError:{e}")
             raise ApiException(code=400, message=str(e))
-        except Exception:
+        except Exception as e:
             logger.error(f"重新处理文件失败。\nException:{traceback.format_exc()}")
-            raise ApiException(code=400, message=f"重新处理文件失败: {traceback.format_exc()}.")
+            raise ApiException(code=400, message=f"重新处理文件失败: {e}.")
 
 
 async def _batch_reprocess_files(
@@ -482,9 +482,9 @@ async def list_chunks(
         chunk_entities = await rag_service.list_chunks(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id, page=page, size=size)
 
         return success_response(data=chunk_entities, message="获取切片列表成功")
-    except Exception as ex:
-        logger.error(f"Failed to list chunks for knowledgebase {kb_id} / file {file_id}: {ex}")
-        raise ApiException(code=500, message=f"获取切片列表失败：{str(ex)}")
+    except Exception as e:
+        logger.error(f"Failed to list chunks for knowledgebase {kb_id} / file {file_id}: {e}")
+        raise ApiException(code=500, message=f"获取切片列表失败：{e}")
 
 
 @knowledgebase_router.put("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])

@@ -80,6 +80,7 @@ class EmbeddingService:
                     model_id=DEFAULT_EMBEDDING_MODEL,
                     dimension=1024,
                     type=EmbeddingType.LOCAL,
+                    provider_name="openai_like",
                     is_default=True,
                     is_ready=True,
                 ),
@@ -105,11 +106,15 @@ class EmbeddingService:
             EmbeddingModelEntity.model_name == model_name, EmbeddingModelEntity.tenant_id == tenant_id
         )
         result = await self.session.exec(statement)
-        return result.first()
+        embedding = result.first()
+        if embedding and not embedding.provider_name:
+            embedding.provider_name = "openai_like"
+        return embedding
 
     async def list_embeddings(
         self,
         tenant_id: str,
+        provider_name: Optional[str] = None,
         page: int = 1,
         size: int = 10,
         model_name: Optional[str] = None,
@@ -128,6 +133,10 @@ class EmbeddingService:
         # Build base query
         base_query = select(EmbeddingModelEntity).where(EmbeddingModelEntity.tenant_id == tenant_id)
 
+        if provider_name is not None:
+            base_query = base_query.where(
+                EmbeddingModelEntity.provider_name == provider_name
+            )
         # Add model_name filter if provided
         if model_name is not None:
             base_query = base_query.where(
@@ -144,7 +153,9 @@ class EmbeddingService:
         paginated_query = base_query.offset(offset).limit(size)
         results = await self.session.exec(paginated_query)
         embeddings = list(results.all())
-
+        for embedding in embeddings:
+            if not embedding.provider_name:
+                embedding.provider_name = "openai_like"
         # Calculate pages
         pages = (total + size - 1) // size if total > 0 else 0
 
@@ -155,6 +166,26 @@ class EmbeddingService:
             page=page,
             size=size,
         )
+
+    async def get_provider_names(self, tenant_id: str) -> List[str]:
+        """
+        Get distinct provider names for embeddings.
+
+        Args:
+            tenant_id: Tenant ID
+
+        Returns:
+            List of distinct provider names
+        """
+        statement = select(EmbeddingModelEntity.provider_name).where(
+            EmbeddingModelEntity.tenant_id == tenant_id
+        ).distinct()
+        result = await self.session.exec(statement)
+        providers = [p for p in result.all() if p]
+        # Add default if not present
+        if not providers or "openai_like" not in providers:
+            providers.append("openai_like")
+        return sorted(set(providers))
 
     async def create_embedding(
         self, embedding_data: EmbeddingModelCreate, tenant_id: str
@@ -176,7 +207,8 @@ class EmbeddingService:
         encrypted_api_key = (
             encrypt_key(embedding_data.api_key) if embedding_data.api_key else None
         )
-
+        if embedding_data.provider_name is None:
+            embedding_data.provider_name = "openai_like"
         # Create entity
         embedding = EmbeddingModelEntity.model_validate(
             embedding_data, update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}
@@ -249,6 +281,10 @@ class EmbeddingService:
             embedding.is_default = update_data.is_default
         if update_data.api_key is not None:
             embedding.encrypted_api_key = encrypt_key(update_data.api_key)
+        if update_data.provider_name is not None:
+            embedding.provider_name = update_data.provider_name
+        if embedding.provider_name is None:
+            embedding.provider_name = "openai_like"
 
         self.session.add(embedding)
 
@@ -261,7 +297,7 @@ class EmbeddingService:
         )
         return embedding
 
-    async def delete_embedding(self, emb_id: str) -> None:
+    async def delete_embedding(self, emb_id: str, tenant_id: str) -> None:
         """
         Delete an Embedding entity.
         Note: Caller is responsible for committing the session.
@@ -272,9 +308,13 @@ class EmbeddingService:
         Raises:
             ValueError: If Embedding entity not found
         """
-        embedding = await self.session.get(EmbeddingModelEntity, emb_id)
+        result = await self.session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.id == emb_id, EmbeddingModelEntity.tenant_id == tenant_id))
+        embedding = result.first()
+
         if not embedding:
-            raise ValueError(f"Embedding '{emb_id}' 不存在。")
+            raise ValueError(f"Embedding '{emb_id}' by tenant {tenant_id} not found.")
+
+        assert embedding.tenant_id == tenant_id, f"Embedding '{emb_id}' by tenant {tenant_id} not found."
 
         # Delete from database (staged, not committed)
         await self.session.delete(embedding)
@@ -295,7 +335,11 @@ class EmbeddingService:
         """
         statement = select(EmbeddingModelEntity).where(EmbeddingModelEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
-        return list(results.all())
+        embeddings = list(results.all())
+        for embedding in embeddings:
+            if not embedding.provider_name:
+                embedding.provider_name = "openai_like"
+        return embeddings
 
     async def get_embedding_model(self, model_id: str, tenant_id: str) -> Optional[BaseEmbedding]:
         """
@@ -311,4 +355,27 @@ class EmbeddingService:
         if not embedding_entity:
             raise ValueError(f"Embedding model {model_id} not found.")
 
+        if not embedding_entity.provider_name:
+            embedding_entity.provider_name = "openai_like"
         return create_embedding_model(embedding_entity)
+
+    async def get_embedding_model_by_provider_model_id(self, provider_name: str, model_id: str, tenant_id: str) -> Optional[EmbeddingModelEntity]:
+        """
+        Get an Embedding entity by provider and model id.
+
+        Args:
+            provider_name: Embedding model provider name
+            model_id: Embedding model id
+            tenant_id: Tenant id
+
+        Returns:
+            EmbeddingModelEntity if found, None otherwise
+        """
+        statement = select(EmbeddingModelEntity).where(
+            EmbeddingModelEntity.provider_name == provider_name,
+            EmbeddingModelEntity.model_id == model_id,
+            EmbeddingModelEntity.tenant_id == tenant_id
+        )
+        embedding_entity = await self.session.exec(statement)
+        embedding = embedding_entity.first()
+        return embedding
