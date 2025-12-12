@@ -826,7 +826,8 @@ class RagService:
                 raise ValueError("Knowledgebase ID or name is required.")
 
         if not kb:
-            raise ValueError(f"Knowledgebase {knowledge_id} not found.")
+            kb_identifier = knowledge_id if knowledge_id else knowledge_name
+            raise ValueError(f"Knowledgebase {kb_identifier} not found.")
 
         embedding_service = await self._get_embedding_service()
         embed_model_entity = await embedding_service.get_embedding_model_by_provider_model_id(

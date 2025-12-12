@@ -13,6 +13,7 @@ async def aget_file_retrieve_results(
     doc_ids: List[str],
     query_str: str,
     rag_service: RagService,
+    tenant_id: str = None,
 ):
     """Get retrieve file tool"""
     if not doc_ids:
@@ -21,6 +22,7 @@ async def aget_file_retrieve_results(
     search_results: List[SearchResult] = await rag_service.aquery(
         query=query_str,
         knowledge_name=ATTACHMENT_KNOWLEDGEBASE_NAME,
+        tenant_id=tenant_id,
         retrieval_setting=RetrievalSetting(top_k=5, score_threshold=0.1),
         document_ids=doc_ids,
     )
@@ -35,8 +37,8 @@ async def aget_file_retrieve_results(
     return json.dumps(data, ensure_ascii=False)
 
 
-async def aget_file_searcher(rag_service: RagService):
-    get_file_retrieve_results_func = partial(aget_file_retrieve_results, rag_service=rag_service)
+async def aget_file_searcher(rag_service: RagService, tenant_id: str = None):
+    get_file_retrieve_results_func = partial(aget_file_retrieve_results, rag_service=rag_service, tenant_id=tenant_id)
     async def file_retrieve_handler(
         query_str: Annotated[
             str,

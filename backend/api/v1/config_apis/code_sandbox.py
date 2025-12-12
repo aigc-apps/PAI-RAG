@@ -26,7 +26,7 @@ async def add_code_sandbox_config(
     session: AsyncSession = Depends(get_db_session),
     codesandbox_service: CodesandboxService = Depends(get_codesandbox_service),
 ):
-    if new_code_sandbox_config.type.lowwer() not in ["aliyun-fc"]:
+    if new_code_sandbox_config.type.lower() not in ["aliyun-fc"]:
         logger.error(f"不支持的code sandbox类型{new_code_sandbox_config.type}，仅支持aliyun-fc")
         raise ApiException(code=400, message=f"不支持的code sandbox类型{new_code_sandbox_config.type}，仅支持aliyun-fc")
 

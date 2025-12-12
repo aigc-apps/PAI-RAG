@@ -213,7 +213,7 @@ class AgentService:
         self,
         messages: List[dict],
         tenant_id: str,
-    ):
+    ) -> tuple[List[FunctionTool], Callable | None]:
         file_service = await self._get_file_service()
         llm_service = await self._get_llm_service()
         rag_service = await self._get_rag_service()
@@ -249,7 +249,7 @@ class AgentService:
         # 文件搜索工具
         if len(file_ids_to_read) > 0:
             logger.info(f"Loading file searcher tool with file ids to read: {file_ids_to_read}")
-            file_searcher_tool = await aget_file_searcher(rag_service=rag_service)
+            file_searcher_tool = await aget_file_searcher(rag_service=rag_service, tenant_id=tenant_id)
             attachment_tools.append(file_searcher_tool)
 
 

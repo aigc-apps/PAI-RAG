@@ -551,7 +551,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
         }
       },
     }),
-    [remoteId],
+    [remoteId, tenantFetch],
   );
   const adapters = useMemo(() => ({ history }), [history]);
   return (
@@ -590,10 +590,12 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
 
 
 export function MyChatRuntimeProvider({ children }: { children: ReactNode }) {
+  const { tenantFetch } = useTenantFetch();
+  
   const runtime = usePaiChatThreadRuntime({
     api: `/api/chat/completions`,
     adapters: {
-      attachments: new UploadAttachmentAdapter(),
+      attachments: useMemo(() => new UploadAttachmentAdapter(tenantFetch), [tenantFetch]),
     },
   });
   

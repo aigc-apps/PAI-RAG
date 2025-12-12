@@ -44,14 +44,48 @@ def upgrade() -> None:
     op.execute(sa.text("UPDATE pai_reranker_model SET provider_name = 'openai_like' WHERE provider_name IS NULL"))
 
     # pai_knowledgebase - 根据 embedding_model 的 provider_name 更新
-    op.execute(sa.text("""
-        UPDATE pai_knowledgebase kb
-        SET embedding_provider_name = em.provider_name
-        FROM pai_embedding_model em
-        WHERE kb.embedding_model = em.model_id
-        AND kb.tenant_id = em.tenant_id
-        AND kb.embedding_provider_name IS NULL
-    """))
+    # SQLite 和 MySQL 不支持 UPDATE ... FROM 语法，需要根据数据库类型使用不同语法
+    conn = op.get_bind()
+    dialect_name = conn.dialect.name
+    
+    if dialect_name == 'sqlite':
+        # SQLite 使用子查询语法
+        op.execute(sa.text("""
+            UPDATE pai_knowledgebase
+            SET embedding_provider_name = (
+                SELECT em.provider_name
+                FROM pai_embedding_model em
+                WHERE em.model_id = pai_knowledgebase.embedding_model
+                AND em.tenant_id = pai_knowledgebase.tenant_id
+            )
+            WHERE embedding_provider_name IS NULL
+            AND EXISTS (
+                SELECT 1
+                FROM pai_embedding_model em
+                WHERE em.model_id = pai_knowledgebase.embedding_model
+                AND em.tenant_id = pai_knowledgebase.tenant_id
+            )
+        """))
+    elif dialect_name == 'mysql':
+        # MySQL 使用 JOIN 语法
+        op.execute(sa.text("""
+            UPDATE pai_knowledgebase kb
+            INNER JOIN pai_embedding_model em
+                ON kb.embedding_model = em.model_id
+                AND kb.tenant_id = em.tenant_id
+            SET kb.embedding_provider_name = em.provider_name
+            WHERE kb.embedding_provider_name IS NULL
+        """))
+    else:
+        # PostgreSQL 使用 UPDATE ... FROM 语法
+        op.execute(sa.text("""
+            UPDATE pai_knowledgebase kb
+            SET embedding_provider_name = em.provider_name
+            FROM pai_embedding_model em
+            WHERE kb.embedding_model = em.model_id
+            AND kb.tenant_id = em.tenant_id
+            AND kb.embedding_provider_name IS NULL
+        """))
     # 如果没有匹配到，默认设置为 openai_like
     op.execute(sa.text("UPDATE pai_knowledgebase SET embedding_provider_name = 'openai_like' WHERE embedding_provider_name IS NULL"))
     # ### end Alembic commands ###
