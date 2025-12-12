@@ -13,6 +13,7 @@ from mistletoe.block_token import (
 from mistletoe.span_token import RawText, Emphasis, Strong, InlineCode, Link, Image, LineBreak
 from mistletoe import Document
 from pairag.file.utils.image_utils import markdown_image_text_to_chunk
+from pairag.file.utils.tokenization import estimate_tokens_in_text
 
 START_HTML_TAG = "<html><body><table>"
 END_HTML_TAG = "</table></body></html>"
@@ -123,7 +124,7 @@ class TreeNode:
         self.level = level  # 层级
         self.category = category  # 所属类别
         self.content = content  # 节点内容
-        self.content_token_count = len(content)  # 本节点内容和本节点所有子节点token数
+        self.content_token_count = estimate_tokens_in_text(content)  # 本节点内容和本节点所有子节点token数
         self.children: TList["TreeNode"] = []  # 子节点列表
         self.page_idx = None # 页码
         self.bbox = None # 位置坐标
@@ -137,11 +138,10 @@ class TreeNode:
         将结果存储在 content_token_count 中。
         """
         if not self.children:
-            return len(self.content)
+            return estimate_tokens_in_text(self.content)
         total = 0
         for child in self.children:
-            if child.category != "image":
-                total += child.compute_total_tokens()
+            total += child.compute_total_tokens()
         self.content_token_count += total
         return self.content_token_count
 
@@ -153,6 +153,33 @@ class TreeNode:
             "content_token_count": self.content_token_count,
             "children": [child.to_dict() for child in self.children],
         }
+    
+    def print_tree(self, indent: int = 0, max_content_length: int = 100, show_content: bool = True):
+        """
+        打印树结构
+        
+        Args:
+            indent: 缩进级别
+            max_content_length: 内容最大显示长度
+            show_content: 是否显示内容
+        """
+        prefix = "  " * indent
+        content_preview = self.content[:max_content_length] + "..." if len(self.content) > max_content_length else self.content
+        content_preview = content_preview.replace('\n', '\\n')
+        
+        if show_content:
+            print(f"{prefix}[{self.category}] (level={self.level}, tokens={self.content_token_count})")
+            print(f"{prefix}  Content: {content_preview}")
+        else:
+            print(f"{prefix}[{self.category}] (level={self.level}, tokens={self.content_token_count}, children={len(self.children)})")
+        
+        for child in self.children:
+            child.print_tree(indent + 1, max_content_length, show_content)
+    
+    def __str__(self):
+        """字符串表示"""
+        content_preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
+        return f"TreeNode(category={self.category}, level={self.level}, tokens={self.content_token_count}, children={len(self.children)})"
 
 
 # 自定义AST遍历器，用于构建树结构

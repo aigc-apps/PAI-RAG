@@ -2,10 +2,11 @@
 import uuid
 from llama_index.core.bridge.pydantic import Field, BaseModel
 from urllib.parse import urlparse
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Dict
+from typing import Any, Callable, Iterator, List, Optional, Sequence
+from loguru import logger
 
 from llama_index.core.node_parser.interface import NodeParser
-from llama_index.core.node_parser import SentenceSplitter
+from pairag.file.nodeparsers.sentence_parser import MySentenceSplitter
 from llama_index.core.utils import get_tqdm_iterable
 from llama_index.core.schema import (
     BaseNode,
@@ -18,8 +19,7 @@ from pairag.file.utils.markdown_tree_utils import (
     TreeNode,
     HARD_LINE_BREAK
 )
-from rapidfuzz import fuzz
-import json
+from pairag.file.utils.tokenization import get_tokenizer
 
 
 
@@ -44,6 +44,7 @@ class StructuredNodeParser(BaseModel):
         default=None,
         description="base parser",
     )
+
 
     @classmethod
     def class_name(cls) -> str:
@@ -145,10 +146,18 @@ class StructuredNodeParser(BaseModel):
         tree_tokens = 0
         for tree_node in tree_nodes:
             if tree_node.category in ["image", "image_caption"]:
-                if tree_nodes_group:
+                # 检查添加图片后是否会超过 chunk_size
+                if (
+                    tree_nodes_group
+                    and tree_tokens + tree_node.content_token_count <= self.chunk_size
+                ):
+                    # 可以添加到当前 group
                     tree_nodes_group[-1].append(tree_node)
+                    tree_tokens += tree_node.content_token_count
                 else:
+                    # 创建新 group
                     tree_nodes_group.append([tree_node])
+                    tree_tokens = tree_node.content_token_count
             elif tree_node.content_token_count > self.chunk_size:
                 if tree_nodes_group and len(tree_nodes_group[-1]) == 0:
                     tree_nodes_group[-1].append(tree_node)
@@ -178,11 +187,16 @@ class StructuredNodeParser(BaseModel):
         # 单个节点token数大于chunk_size，则需要将节点进行拆分。拆分元素里不会含有image。
         if not tree_node.children:
             if tree_node.category == "image":
-                # 图片描述，不进行切割
+                # 图片节点：如果超过 chunk_size，记录警告但仍创建（图片不能拆分）
+                if tree_node.content_token_count > self.chunk_size:
+                    logger.warning(
+                        f"Image node token count ({tree_node.content_token_count}) exceeds chunk_size ({self.chunk_size}). "
+                        f"Image cannot be split, creating chunk anyway."
+                    )
                 node = self._create_text_node(tree_node.content, doc_node, ref_doc)
                 nodes_list.append(node)
-            elif tree_node.category != "paragraph":
-                # 不进行切割
+            elif tree_node.category not in ["paragraph", "table", "html_table"]:
+                # 不进行切割的节点
                 if nearest_title_stack:
                     chunk_text = (
                         f"{self._format_section_header(nearest_title_stack)}\n\n{tree_node.content}"
@@ -193,7 +207,10 @@ class StructuredNodeParser(BaseModel):
                 node = self._create_text_node(chunk_text, doc_node, ref_doc, title_stack)
                 nodes_list.append(node)
             else:
-                for chunk_text in self._cut(tree_node.content):
+                # 段落和表格节点：进行切割
+                cut_method = self._cut
+                
+                for chunk_text in cut_method(tree_node.content):
                     if nearest_title_stack:
                         chunk_text = (
                             f"{self._format_section_header(nearest_title_stack)}\n\n{chunk_text}"
@@ -236,6 +253,7 @@ class StructuredNodeParser(BaseModel):
                         f"{self._format_section_header(nearest_title_stack)}\n\n{chunk_text}"
                     )
                     nearest_title_stack.pop()
+                
                 node = self._create_text_node(chunk_text, doc_node, ref_doc, title_stack)
                 nodes_list.append(node)
 
@@ -260,10 +278,11 @@ class MarkdownNodeParser(NodeParser):
         )
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.base_parser = base_parser or SentenceSplitter(
+        self.base_parser = base_parser or MySentenceSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             paragraph_separator=paragraph_separator,
+            tokenizer=get_tokenizer(),
             id_func=id_func,
         )
 
