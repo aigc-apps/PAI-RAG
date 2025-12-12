@@ -1,9 +1,11 @@
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON
 from typing import Optional
+from common.system_constants import DEFAULT_TENANT_ID
 
 
 class TraceModel(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     endpoint: str = Field(default="http://tracing-analysis-dc-hz.aliyuncs.com:8090")
     token: str = Field(default=None)
     service_name: str = Field(default=None)

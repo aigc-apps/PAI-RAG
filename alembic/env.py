@@ -30,7 +30,6 @@ from db.models import (
     KbMetadataEntity,
     FileMetadataEntity,
     PromptModelEntity,
-    ChangeEvent,
     ChatBotEntity,
     GuardrailConfigEntity,
     KbFileTaskEntity,

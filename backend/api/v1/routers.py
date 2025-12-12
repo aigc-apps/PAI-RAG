@@ -19,6 +19,8 @@ def add_config_router(app: FastAPI):
     from api.v1.config_apis.code_sandbox import code_sandbox_router
     from api.v1.config_apis.chatdb import chatdb_router
 
+    from api.v1.fileview import fileview_router
+
     app.include_router(llm_router, prefix="/v1/config/llms")
     app.include_router(mcp_router, prefix="/v1/config/mcps")
     app.include_router(websearch_router, prefix="/v1/config/websearch")
@@ -35,6 +37,7 @@ def add_config_router(app: FastAPI):
 
     app.include_router(code_sandbox_router, prefix="/v1/config/code_sandbox")
     app.include_router(chatdb_router, prefix="/v1/config/chatdb")
+    app.include_router(fileview_router, prefix="/v1/fileview")
 
 
 def add_chat_router(app: FastAPI):

@@ -2,12 +2,13 @@ import uuid
 from sqlmodel import Field, SQLModel
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, Text
+from common.system_constants import DEFAULT_TENANT_ID
+from typing import Optional
 
 
 class ThreadCreate(SQLModel):
     user_id: str = Field(default="PAI-RAG Assistant")
     title: str = Field(default=None, sa_column=Column(Text))
-
 
 class ThreadRead(ThreadCreate):
     id: str = Field(default=None, primary_key=True)
@@ -20,6 +21,7 @@ class ThreadEntity(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4().hex), primary_key=True)
     user_id: str = Field(default="PAI-RAG Assistant", nullable=False)
     title: str = Field(default=None, sa_column=Column(Text))
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

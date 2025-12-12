@@ -58,6 +58,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import {
   Tooltip,
   TooltipContent,
@@ -70,12 +71,21 @@ interface EmbeddingModel {
   model_id: string;
   model_name: string;
   type: string;
+  provider_name?: string;
 }
 
 interface RerankerModel {
   id: string;
   model_id: string;
   model_name: string;
+  provider_name?: string;
+}
+
+interface VisionModel {
+  id: string;
+  model_id: string;
+  model: string;
+  provider_name?: string;
 }
 
 // 元数据配置
@@ -97,14 +107,17 @@ export interface KbConfig {
     chunk_size: string; // 切片大小
     chunk_overlap: string; // 切片重叠大小
     image_caption_model?: string; // 图片理解模型ID
+    image_caption_provider_name?: string; // 图片理解模型服务商
   };
   embedding_model: string; //向量模型名称
+  embedding_provider_name?: string; // 向量模型服务商
   retrieval_config: {
     retrieval_mode: string; // 索引类型：vector, fulltext, hybrid
     top_k: number; // Top-K 值
     similarity_threshold: number; // 相似度分数阈值
     enable_rerank: boolean;
     rerank_model?: string; // rerank模型名称
+    rerank_provider_name?: string; // rerank模型服务商
     rerank_top_k?: number; // Rerank-Top-K 值
     vector_weight?: number; // 向量检索权重（仅 hybrid 时使用）
   };
@@ -128,13 +141,13 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   const [indexType, setIndexType] = useState('vector');
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [rerankermodels, setRerankerModels] = useState<RerankerModel[]>([]);
-  const [visionModels, setVisionModels] = useState<Array<{ id: string; model_id: string; model: string }>>([]);
+  const [visionModels, setVisionModels] = useState<VisionModel[]>([]);
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(''); // 错误信息
 
   const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
   const [vectorDbType, setVectorDbType] = useState<string>('local');
-  
+  const { tenantFetch } = useTenantFetch();
   // 不支持全文检索和混合检索的向量数据库类型列表
   const VECTOR_DB_TYPES_WITHOUT_FULLTEXT = ['local', 'opensearch', 'hologres'];
   
@@ -145,10 +158,10 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const fetchModelConfigs = async () => {
       try {
         const [embRes, rerankerRes, vectordbRes, visionRes] = await Promise.all([
-          fetch(`/api/config/embeddings`),
-          fetch(`/api/config/rerankers`),
-          fetch(`/api/config/vectordb`),
-          fetch(`/api/config/llms?vision_support=true&size=1000`),
+          tenantFetch(`/api/config/embeddings?size=1000`),
+          tenantFetch(`/api/config/rerankers?size=1000`),
+          tenantFetch(`/api/config/vectordb`),
+          tenantFetch(`/api/config/llms?vision_support=true&size=1000`),
         ]);
 
         const embData = (await embRes.json())?.data.items || [];
@@ -182,7 +195,48 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
         const visionData = (await visionRes.json())?.data.items || [];
         console.log('visionData', visionData);
-        setVisionModels(visionData.map((m: any) => ({ id: m.id, model_id: m.model_id, model: m.model })));
+        const mappedVisionModels = visionData.map((m: any) => ({ id: m.id, model_id: m.model_id, model: m.model, provider_name: m.provider_name }));
+        setVisionModels(mappedVisionModels);
+
+        // 初始化 provider_name：如果为空，从模型列表中填充
+        setKb((prev) => {
+          const updates: Partial<KbConfig> = {};
+          
+          // embedding_provider_name
+          if (!prev.embedding_provider_name && prev.embedding_model) {
+            const embModel = embData.find((m: EmbeddingModel) => m.model_id === prev.embedding_model);
+            if (embModel?.provider_name) {
+              updates.embedding_provider_name = embModel.provider_name;
+            }
+          }
+          
+          // chunk_config.image_caption_provider_name
+          if (prev.chunk_config?.image_caption_model && !prev.chunk_config?.image_caption_provider_name) {
+            const visionModel = mappedVisionModels.find((m: VisionModel) => m.model_id === prev.chunk_config.image_caption_model);
+            if (visionModel?.provider_name) {
+              updates.chunk_config = {
+                ...prev.chunk_config,
+                image_caption_provider_name: visionModel.provider_name,
+              };
+            }
+          }
+          
+          // retrieval_config.rerank_provider_name
+          if (prev.retrieval_config?.rerank_model && !prev.retrieval_config?.rerank_provider_name) {
+            const rerankerModel = rerankerData.find((m: RerankerModel) => m.model_id === prev.retrieval_config.rerank_model);
+            if (rerankerModel?.provider_name) {
+              updates.retrieval_config = {
+                ...prev.retrieval_config,
+                rerank_provider_name: rerankerModel.provider_name,
+              };
+            }
+          }
+          
+          if (Object.keys(updates).length > 0) {
+            return { ...prev, ...updates };
+          }
+          return prev;
+        });
       } catch (err: any) {
         setModelError(err || '加载失败');
       } finally {
@@ -201,7 +255,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
     const updateMethod = isCreate ? 'POST' : 'PUT';
     kb.retrieval_config.enable_rerank = kb.retrieval_config.rerank_model && kb.retrieval_config.rerank_model.length > 0  ? true : false;
     try {
-      const res = await fetch(submit_url, {
+      const res = await tenantFetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kb), // 包装为数组
@@ -369,11 +423,13 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               <Select
                 value={kb.chunk_config.image_caption_model || 'DISABLED'}
                 onValueChange={(value) => {
+                  const selectedModel = visionModels.find(m => m.model_id === value);
                   setKb((prev) => ({
                     ...prev,
                     chunk_config: {
                       ...prev.chunk_config,
-                      image_caption_model: value !== "DISABLED" ? value: undefined,
+                      image_caption_model: value !== "DISABLED" ? value : undefined,
+                      image_caption_provider_name: selectedModel?.provider_name || prev.chunk_config.image_caption_provider_name,
                     },
                   }));
                 }}
@@ -396,34 +452,38 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               </Select>
               <p className="text-xs text-muted-foreground">用于理解图片内容</p>
             </div>
+
+            <div className="flex gap-3 items-center">
+              <Label htmlFor="embeddingModel" className="w-[100px] text-xs">
+                向量模型 <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={kb.embedding_model}
+                onValueChange={(value) => {
+                  const selectedModel = embeddingmodels.find(m => m.model_id === value);
+                  setKb((prev) => ({ 
+                    ...prev, 
+                    embedding_model: value,
+                    embedding_provider_name: selectedModel?.provider_name || prev.embedding_provider_name,
+                  }));
+                }}
+              >
+                <SelectTrigger className="w-60 h-6 text-xs">
+                  <SelectValue placeholder="请选择向量模型" />
+                </SelectTrigger>
+                <SelectContent className="text-xs">
+                  <SelectGroup>
+                    {embeddingmodels.map((model) => (
+                      <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                        {model.model_id}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* 向量模型 */}
-        <div className="flex gap-3 items-center pt-3">
-          <Label htmlFor="embeddingModel" className="w-[100px] text-xs">
-            向量模型 <span className="text-destructive">*</span>
-          </Label>
-          <Select
-            value={kb.embedding_model}
-            onValueChange={(value) => {
-              setKb((prev) => ({ ...prev, embedding_model: value }));
-            }}
-          >
-            <SelectTrigger className="w-60 h-6 text-xs">
-              <SelectValue placeholder="请选择向量模型" />
-            </SelectTrigger>
-            <SelectContent className="text-xs">
-              <SelectGroup>
-                {embeddingmodels.map((model) => (
-                  <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
-                    {model.model_id}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
         </div>
 
         {/* 检索设置卡片 */}
@@ -642,6 +702,85 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           </Card>
         </div>
 
+        <div className="flex gap-3 px-4 items-center pt-3">
+          <Label className="w-[100px] text-xs">开启重排序</Label>
+          <Checkbox
+            id="enable_reranker"
+            checked={kb.retrieval_config.enable_rerank ?? false}
+            onCheckedChange={(checked) => {
+              setKb((prev) => ({
+                ...prev,
+                retrieval_config: {
+                  ...prev.retrieval_config,
+                  enable_rerank: Boolean(checked),
+                },
+              }));
+            }}
+            className="h-3.5 w-3.5"
+          />
+          {kb.retrieval_config.enable_rerank && (
+            <>
+              <div className="flex ml-20 items-center">
+                <Label htmlFor="rerank_model" className="w-[100px] text-xs">
+                  重排序模型
+                  <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={kb.retrieval_config.rerank_model}
+                  onValueChange={(value) => {
+                    const selectedModel = rerankermodels.find(m => m.model_id === value);
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        rerank_model: value,
+                        rerank_provider_name: selectedModel?.provider_name || 'openai_like',
+                      },
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="h-6 text-xs">
+                    <SelectValue placeholder="请选择重排序模型" />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectGroup>
+                      {rerankermodels.map((model) => (
+                        <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                          {model.model_id}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex ml-20 items-center">
+                <Label htmlFor="rerank_top_k" className="w-[100px] text-xs">
+                  Rerank-Top-K
+                </Label>
+                <Slider
+                  className="w-60"
+                  defaultValue={[5]}
+                  max={10}
+                  min={0}
+                  step={1}
+                  value={[kb.retrieval_config.rerank_top_k ?? 5]}
+                  onValueChange={(value: number[]) => {
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        rerank_top_k: value[0],
+                      },
+                    }));
+                  }}
+                />
+                <span className="font-medium ml-2 text-xs">
+                  {kb.retrieval_config.rerank_top_k ?? 5}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
         <div className="block w-full">
           {saveErrorMsg !== '' && (
             <Alert variant="destructive" className="text-xs py-2">
@@ -684,6 +823,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               </Button>
             </div>
           )}
+
         </div>
       </div>
     </div>

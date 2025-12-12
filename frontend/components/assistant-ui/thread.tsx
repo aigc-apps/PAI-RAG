@@ -36,6 +36,7 @@ import {
 import { UserMessageAttachments } from '@/components/assistant-ui/my_attachment';
 import { KbModal, KbSelection } from '@/app/knowledgebases/kbmodal';
 import { useChatOptions } from '@/app/providers/chat';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export const Thread: FC<{
   onToggleChange?: (options: string[]) => void;
@@ -54,18 +55,17 @@ export const Thread: FC<{
   const [kbError, setKbError] = useState<string | null>(null);
   const {kb_ids, mcp_ids, enable_search, enable_agent, enable_chatdb, 
     updateEnableSearch, updateEnablePlanning, updateKbIds, updateMcpIds, updateEnableChatdb} = useChatOptions();
-
+  const { tenantFetch } = useTenantFetch();
   // 获取MCP配置
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
         setMcpLoading(true);
         setKbLoading(true);
-        
         const [mcpRes, kbRes] = await Promise.all(
           [
-            fetch(`/api/config/mcps`),
-            fetch(`/api/config/knowledgebases`),
+            tenantFetch(`/api/config/mcps`),
+            tenantFetch(`/api/config/knowledgebases`),
           ]
         )
         if (!mcpRes.ok) setMcpError('MCP加载失败');

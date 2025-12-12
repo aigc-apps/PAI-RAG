@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export default function TracingConfig() {
   const [endpoint, setEndpoint] = useState('');
@@ -17,13 +18,14 @@ export default function TracingConfig() {
 
   const [error, setError] = useState(''); // 错误提示
 
+  const { tenantFetch } = useTenantFetch();
   // 初始化加载配置
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         setIsLoading(true);
 
-        const res = await fetch(`/api/config/trace`, {
+        const res = await tenantFetch(`/api/config/trace`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -54,7 +56,7 @@ export default function TracingConfig() {
       setIsSaving(true);
       setError('');
 
-      const res = await fetch(`/api/config/trace`, {
+      const res = await tenantFetch(`/api/config/trace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatBeijingTime } from '@/app/knowledgebases/utils/utils';
 import { Badge } from '@/components/ui/badge';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 // 评估数据类型定义
 interface Dataset {
@@ -50,13 +51,13 @@ const EvaluationPage = () => {
   const [datasetName, setEvalTaskName] = useState("");
   const [datasetDesc, setEvalTaskDesc] = useState("");
   const router = useRouter();
-
+  const { tenantFetch } = useTenantFetch();
 
   useEffect(() => {
     const fetchConfigs = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/evaluation?page=${page}&size=${pageSize}`,
         );
         if (!res.ok) throw new Error('获取评估任务列表失败');
@@ -88,7 +89,7 @@ const EvaluationPage = () => {
     };
 
     try {
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/evaluation`,
         {
           method: 'POST',
@@ -113,7 +114,7 @@ const EvaluationPage = () => {
 
   const deleteEval = async (eval_id: string) => {
     try {
-      const res = await fetch(`/api/config/evaluation/${eval_id}`, {
+      const res = await tenantFetch(`/api/config/evaluation/${eval_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

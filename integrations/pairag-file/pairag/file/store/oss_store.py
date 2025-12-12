@@ -4,9 +4,11 @@ import oss2
 from alibabacloud_credentials import providers
 from oss2.credentials import EnvironmentVariableCredentialsProvider, CredentialsProvider
 from typing import BinaryIO, Optional
-from pairag.file.store.base import BaseFileStore
+from pairag.file.store.base import BaseFileStore, FileUploadResult
 from loguru import logger
 from oss2.models import BucketCors, CorsRule
+import traceback
+import asyncio
 
 DEFAULT_OSS_PREFIX = "pairag_knowledgebases"
 
@@ -42,23 +44,69 @@ class OssFileStore(BaseFileStore):
             logger.warning(f"Failed to set CORS for bucket {bucket}. error: {ex}")
             pass
 
+    def get_url(self, file_path: str, tenant_id: str) -> Optional[str]:
+        try:
+            oss_file_key = os.path.join(self.prefix_path, file_path)
+            oss_url = self.bucket.sign_url("GET", oss_file_key, 3600)
+            logger.info(f"Get url {oss_url} for file {file_path}.")
+            return oss_url
+        except Exception as e:
+            logger.error(f"Failed to get url for file {file_path}. error: {traceback.format_exc()}")
+            raise
+    
+    def write(self, file: BinaryIO, file_name: str, file_path: str, tenant_id: str) -> FileUploadResult:
+        try:
+            oss_file_key = os.path.join(self.prefix_path, file_path)
+            self.bucket.put_object(key=oss_file_key, data=file.read())
+            logger.info(f"Saved oss file {file_name} to {oss_file_key}.")
+            return FileUploadResult(
+                file_name=file_name,
+                file_path=file_path,
+            )
+        except Exception as e:
+            logger.error(f"Failed to write file {file_path}. error: {traceback.format_exc()}")
+            raise
 
-    def get_url(self, file_path: str):
+    def read(self, file_path: str, tenant_id: str) -> Optional[BinaryIO]:
         oss_file_key = os.path.join(self.prefix_path, file_path)
-        oss_url = self.bucket.sign_url("GET", oss_file_key, 3600)
-        logger.info(f"Get url {oss_url} for file {file_path}.")
-        return oss_url
+        try:
+            object_result = self.bucket.get_object(key=oss_file_key)
+            return BytesIO(object_result.read())
+        except Exception as e:
+            logger.error(f"Failed to read file {file_path}. error: {traceback.format_exc()}")
+            raise
 
-    def save(self, file: BinaryIO, file_path: str) -> None:
-        oss_file_key = os.path.join(self.prefix_path, file_path)
-        self.bucket.put_object(key=oss_file_key, data=file.read())
-        logger.info(f"Saved oss file {file_path} to {oss_file_key}.")
+    async def get_url_async(self, file_path: str, tenant_id: str) -> Optional[str]:
+        try:
+            oss_file_key = os.path.join(self.prefix_path, file_path)
+            oss_url = self.bucket.sign_url("GET", oss_file_key, 3600)
+            logger.info(f"Get url {oss_url} for file {file_path}.")
+            return oss_url
+        except Exception as e:
+            logger.error(f"Failed to get url for file {file_path}. error: {traceback.format_exc()}")
+            raise
 
-    def load(self, file_path: str) -> Optional[BinaryIO]:
+    async def write_async(self, file: BinaryIO, file_name: str, file_path: str, tenant_id: str) -> FileUploadResult:
         oss_file_key = os.path.join(self.prefix_path, file_path)
-        object_result = self.bucket.get_object(oss_file_key)
-        return BytesIO(object_result.read())
+        try:
+            write_task = asyncio.to_thread(self.bucket.put_object, key=oss_file_key, data=file.read())
+            await write_task
+            logger.info(f"Saved oss file {file_path} to {oss_file_key}.")
 
-    def exists(self, file_path: str) -> bool:
+            return FileUploadResult(
+                file_name=file_name,
+                file_path=file_path,
+            )
+        except Exception as e:
+            logger.error(f"Failed to write file {file_path}. error: {traceback.format_exc()}")
+            raise
+
+    async def read_async(self, file_path: str, tenant_id: str) -> Optional[BinaryIO]:
         oss_file_key = os.path.join(self.prefix_path, file_path)
-        return self.bucket.object_exists(oss_file_key)
+        try:
+            read_task = asyncio.to_thread(self.bucket.get_object, key=oss_file_key)
+            object_result = await read_task
+            return BytesIO(object_result.read())
+        except Exception as e:
+            logger.error(f"Failed to read file {file_path}. error: {traceback.format_exc()}")
+            raise

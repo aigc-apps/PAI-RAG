@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { useRouter } from 'next/navigation';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 
 interface ChatDbConfig {
@@ -37,6 +38,7 @@ export default function ChatdbConfig() {
   const [isLoading, setIsLoading] = useState(false); // 加载状态
   const [isSaving, setIsSaving] = useState(false); // 加载状态
   const [error, setError] = useState(''); // 错误提示
+  const { tenantFetch } = useTenantFetch();
 
   const router = useRouter();
   // 初始化加载配置
@@ -47,8 +49,8 @@ export default function ChatdbConfig() {
         setError('');
 
         const [llmRes, dbRes] = await Promise.all([
-          fetch(`/api/config/llms`),
-          fetch(`/api/config/chatdb`)]);
+          tenantFetch(`/api/config/llms`),
+          tenantFetch(`/api/config/chatdb`)]);
 
 
         const llmResponse = await llmRes.json();
@@ -117,7 +119,7 @@ export default function ChatdbConfig() {
       setIsConnecting(true);
 
       const password = dbConfig.password === '******' ? '' : dbConfig.password;
-      const res = await fetch(`/api/config/chatdb/connectiontest`, {
+      const res = await tenantFetch(`/api/config/chatdb/connectiontest`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
 
@@ -150,7 +152,7 @@ export default function ChatdbConfig() {
 
       const password = dbConfig.password === '******' ? '' : dbConfig.password;
 
-      const res = await fetch(`/api/config/chatdb`, {
+      const res = await tenantFetch(`/api/config/chatdb`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
 

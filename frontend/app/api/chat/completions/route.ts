@@ -5,6 +5,7 @@ export async function POST(request: NextRequest) {
   const text = await request.text();
 
   const headers = new Headers(request.headers);
+  // X-TENANT-ID 已由客户端通过 useTenantFetch 设置，会自动包含在 request.headers 中转发到后端
   // 删除 Next.js 自动添加的 header，避免冲突
   headers.delete('host');
   headers.delete('connection');

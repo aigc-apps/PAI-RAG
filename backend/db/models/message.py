@@ -3,6 +3,7 @@ from sqlmodel import Field, SQLModel
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, JSON
 from typing import List, Optional
+from common.system_constants import DEFAULT_TENANT_ID
 
 
 class MessageCreate(SQLModel):
@@ -29,7 +30,7 @@ class MessageEntity(SQLModel, table=True):
         default=None, foreign_key="pai_thread.id", ondelete="CASCADE", nullable=False
     )
     local_id: Optional[str] = Field(default=None) # 记录当前message的local_id信息，避免重新生成时的重复
-
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
 
     role: str = Field(default=None)  # e.g., "user", "assistant", "system"
     content: List[dict] = Field(default=[], sa_column=Column("content", JSON))

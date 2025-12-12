@@ -63,6 +63,7 @@ class RetrievalSetting(BaseModel):
     vector_weight: Optional[float] = None
     enable_rerank: Optional[bool] = None
     rerank_model: Optional[str] = None
+    rerank_provider_name: Optional[str] = "openai_like"
     top_k: Optional[int] = None
     similarity_threshold: Optional[float] = None
     rerank_top_k: Optional[int] = None

@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 import uuid
 from sqlmodel import Column, DateTime, Field, SQLModel
+from common.system_constants import DEFAULT_TENANT_ID
+from typing import Optional
 
 
 class GuardrailConfig(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     region_name: str = Field(default=None)
     region_id: str = Field(default="cn-hangzhou")
     endpoint: str = Field(default=None)
