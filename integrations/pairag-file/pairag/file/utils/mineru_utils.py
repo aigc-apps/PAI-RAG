@@ -11,8 +11,8 @@ import re
 from loguru import logger
 from typing import Optional, Tuple
 from markdownify import markdownify
-from pairag.file.store.oss_store import OssFileStore
 from fastpdf4llm import ContentBlock
+from pairag.file.store.base import BaseFileStore
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import get_image_from_url, markdown_image_text_to_chunk
 
@@ -113,10 +113,11 @@ def get_title_level(block):
 def make_content_block(
     raw_block: dict,
     page_idx: int,
-    image_store: OssFileStore = None,
+    image_store: BaseFileStore = None,
     image_local_dir: str = None,
     save_image_template: str = None,
     image_caption_tool: ImageCaptionTool = None,
+    tenant_id: str = None,
     ) -> ContentBlock:
     if not raw_block.get("lines") and not raw_block.get("blocks"):
         return None
@@ -154,15 +155,14 @@ def make_content_block(
                                     save_image_name = save_image_template.format(image_name)
 
                                     try:
-                                        image_store.save(image_file, save_image_name)
-                                        image_alt_text = image_caption_tool.extract_url(
-                                            image_store.get_url(save_image_name)
-                                        )
+                                        upload_result = image_store.write(file=image_file, file_name=image_name, file_path=save_image_name, tenant_id=tenant_id)
+                                        image_file.seek(0)
+                                        image_alt_text = image_caption_tool.extract_image(image_file.read())
                                         cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
 
-                                        image_body = markdown_image_text_to_chunk(save_image_name, cleaned_alt)
+                                        image_body = markdown_image_text_to_chunk(upload_result.file_path, cleaned_alt)
                                         logger.info(
-                                            f"Successfully saved image {save_image_name} from URL: {image_path}"
+                                            f"Successfully saved image {upload_result.file_path} from URL: {image_path}"
                                         )
                                     except Exception as ex:
                                         logger.exception(

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 const REGION_NAMES = [
   "上海（公网）",
@@ -63,6 +64,7 @@ export default function GuardrailConfig() {
   const [isSaving, setIsSaving] = useState(false); // 加载状态
   const [error, setError] = useState(''); // 错误提示
 
+  const { tenantFetch } = useTenantFetch();
   // 初始化加载配置
   useEffect(() => {
     const fetchConfig = async () => {
@@ -70,7 +72,7 @@ export default function GuardrailConfig() {
         setIsLoading(true);
         setError('');
 
-        const res = await fetch(`/api/config/guardrail`, {
+        const res = await tenantFetch(`/api/config/guardrail`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -103,7 +105,7 @@ export default function GuardrailConfig() {
       const update_ak = aliyunAK === '******' ? '' : aliyunAK;
       const update_sk = aliyunSK === '******' ? '' : aliyunSK;
 
-      const res = await fetch(`/api/config/guardrail`, {
+      const res = await tenantFetch(`/api/config/guardrail`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
 

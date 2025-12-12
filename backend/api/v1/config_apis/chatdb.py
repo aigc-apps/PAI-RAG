@@ -3,19 +3,17 @@
 import traceback
 from typing import List
 from db.models.chatdb.chatdb import ChatDbConfigEntity, ChatDbCreate
-from fastapi import APIRouter, Depends, Query
-from sqlmodel import select
+from fastapi import APIRouter, Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.models.change_event import ChangeEventSource, ChangeEventType
-from api.response_model import ResponseModel, error_response, success_response
-from db.db_context import get_session
-from common.encrypt_utils import decrypt_key, encrypt_key
-from sqlalchemy.exc import IntegrityError
-from config.providers.config_change_manager import config_change_manager
-from config.providers.chatdb_provider import chatdb_provider
+from common.chat.response_model import ResponseModel, success_response
+from db.db_context import get_db_session
+from common.encrypt_utils import decrypt_key
+from service.tool.chatdb_service import ChatdbService
+from service.injection import get_chatdb_service
+from api.api_exception import ApiException
 from urllib.parse import quote_plus
 from loguru import logger
-
+from service.injection import get_tenant_id
 
 chatdb_router = APIRouter()
 
@@ -23,89 +21,51 @@ chatdb_router = APIRouter()
 @chatdb_router.post("", response_model=ResponseModel[ChatDbConfigEntity])
 async def add_chatdb_config(
     new_db_config: ChatDbCreate,
-    session: AsyncSession = Depends(get_session),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    chatdb_service: ChatdbService = Depends(get_chatdb_service),
 ):
-    new_db_config.dialect = new_db_config.dialect.lower()
+    if new_db_config.dialect.lower() not in ["mysql", "postgresql"]:
+        logger.error(f"不支持的数据库类型{new_db_config.dialect}，仅支持mysql和postgresql")
+        raise ApiException(code=400, message=f"不支持的数据库类型{new_db_config.dialect}，仅支持mysql和postgresql")
 
-    if new_db_config.dialect not in ["mysql", "postgresql"]:
-        return error_response(code=400, message="不支持的数据库类型，仅支持mysql和postgresql")
-
-    encrypted_password = encrypt_key(new_db_config.password)
-
-    statement = select(ChatDbConfigEntity)
-    chatdb_config = (await session.exec(statement)).first()
-    if chatdb_config is None:
-        logger.info(f"Adding new chatdb config for dialect {new_db_config.dialect}")
-
-        chatdb_config = ChatDbConfigEntity.model_validate(
-            new_db_config,
-            update={
-                "encrypted_password": encrypted_password,
-            },
-        )
-    else:
-        chatdb_config.dialect = new_db_config.dialect
-        chatdb_config.db_name = new_db_config.db_name
-        chatdb_config.username = new_db_config.username
-        chatdb_config.encrypted_password = encrypted_password or chatdb_config.encrypted_password
-        chatdb_config.model_id = new_db_config.model_id
-        chatdb_config.host = new_db_config.host
-        chatdb_config.port = new_db_config.port
-
-    session.add(chatdb_config)
     try:
-        await session.commit()
+        chatdb_config = await chatdb_service.create_or_update_chatdb_config(new_db_config, tenant_id=tenant_id)
         await session.refresh(chatdb_config)
-        chatdb_provider.update(chatdb_config)
-        await config_change_manager.notify_change_async(
-            event_source=ChangeEventSource.CHATDB,
-            source_id=chatdb_config.id,
-            event_type=ChangeEventType.UPDATE,
-        )
         return success_response(data=chatdb_config, message="添加ChatDB配置成功!")
-
-    except IntegrityError as e:
-        logger.error(f"IntegrityError occurred when add chatdb config: {traceback.format_exc()}")
-        await session.rollback()
-        return error_response(code=400, message=f"Failed to add chatdb config: {str(e)}")
+    except ValueError as e:
+        logger.error(f"Failed to add chatdb config: {str(e)}")
+        raise ApiException(code=400, message=f"添加ChatDB配置失败: {e}")
     except Exception as e:
         logger.error(f"Failed to add chatdb config: {traceback.format_exc()}")
-        await session.rollback()
-        return error_response(code=400, message=f"Failed to add chatdb config: {str(e)}")
+        raise ApiException(code=400, message=f"添加ChatDB配置失败: {e}")
 
 @chatdb_router.get("", response_model=ResponseModel[List[ChatDbConfigEntity]])
 async def list_chatdb_config(
-    session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    chatdb_service: ChatdbService = Depends(get_chatdb_service),
 ):
     try:
-        chatdb_config = (await session.exec(
-            select(ChatDbConfigEntity).offset(offset).limit(limit)
-        )).first()
-        if chatdb_config:
-            result = [chatdb_config]
-        else:
-            result = []
-
-        return success_response(data=result, message="获取ChatDB配置成功!")
+        configs = await chatdb_service.get_all_chatdb_configs(tenant_id=tenant_id)
+        return success_response(data=configs, message="获取ChatDB配置成功!")
     except Exception as e:
         logger.error(f"获取ChatDB配置失败: {traceback.format_exc()}。")
-        return error_response(code=400, message=f"获取ChatDB配置失败: {e}。")
+        raise ApiException(code=400, message=f"获取ChatDB配置失败: {e}。")
 
 
 @chatdb_router.post("/connectiontest")
 async def connection_test(
     db_config: ChatDbCreate,
-    session: AsyncSession = Depends(get_session),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    chatdb_service: ChatdbService = Depends(get_chatdb_service),
 ):
     from sqlalchemy import create_engine, text
     from sqlalchemy.exc import SQLAlchemyError
 
     if not db_config.password:
-        existing_config = (await session.exec(
-                select(ChatDbConfigEntity)
-            )).first()
+        existing_config = await chatdb_service.get_chatdb_config_or_create(tenant_id=tenant_id)
         if existing_config:
             db_config.password = decrypt_key(existing_config.encrypted_password)
     db_config.dialect = db_config.dialect.lower()
@@ -115,7 +75,7 @@ async def connection_test(
     elif db_config.dialect == "postgresql":
         db_url = f"postgresql+psycopg2://{db_config.username}:{quote_plus(db_config.password)}@{db_config.host}:{db_config.port}/{db_config.db_name}"
     else:
-        return error_response(code=400, message=f"不支持的数据库类型{db_config.dialect}, 仅支持mysql和postgresql")
+        raise ApiException(code=400, message=f"不支持的数据库类型{db_config.dialect}, 仅支持mysql和postgresql")
 
     try:
         # 添加连接参数（设置超时）
@@ -137,7 +97,11 @@ async def connection_test(
         return success_response(message="连接成功")
     except SQLAlchemyError as e:
         logger.error(f"数据库连接失败: {traceback.format_exc()}")
-        return error_response(code=400, message=f"数据库连接失败: {e}")
+        raise ApiException(code=400, message=f"数据库连接失败: {e}")
     except Exception as e:
         logger.error(f"未知错误: {traceback.format_exc()}")
-        return error_response(code=500, message=f"数据库连接失败: {e}")
+        raise ApiException(code=500, message=f"数据库连接失败: {e}")
+    finally:
+        if engine:
+            engine.dispose()
+            logger.info("数据库连接已关闭")

@@ -1,13 +1,16 @@
+import traceback
 import uuid
-from functools import partial
 from typing import List, Optional
 from loguru import logger
 from common.chat.models import RetrievalSetting
-from db.models.knowledgebase.metadata_filter import MetadataFilteringCondition
-from tools.knowledgebase.knowledgebase_tool import kb_tool
+from common.chat.models import MetadataFilteringCondition
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp.tools import Tool
 from mcp.server.fastmcp.utilities.func_metadata import func_metadata
+from db.db_context import with_async_db_session
+from service.injection import get_rag_service
+from sqlmodel.ext.asyncio.session import AsyncSession
+from service.knowledgebase.rag_service import RagService
 
 
 class NodeMetadata(BaseModel):
@@ -37,10 +40,12 @@ class RetrievalToolResponse(BaseModel):
 async def asearch_knowledgebase(
     query: str,
     knowledgebase_id: str,
+    tenant_id: str,
     image_list: List[str] = [],
     user_id: Optional[str] = None,
     retrieval_setting: Optional[RetrievalSetting] = None,
     metadata_condition: Optional[MetadataFilteringCondition] = None,
+    rag_service: RagService = None,
 ) -> RetrievalToolResponse:
     request_id = str(uuid.uuid4())
 
@@ -51,12 +56,13 @@ async def asearch_knowledgebase(
 
     try:
         # Perform retrieval using the same strategy as retrieval.py
-        node_results = await kb_tool.aquery(
+        node_results = await rag_service.aquery(
             query=query,
             user_id=user_id,
             knowledge_id=knowledgebase_id,
             retrieval_setting=retrieval_setting,
             metadata_condition=metadata_condition,
+            tenant_id=tenant_id,
         )
 
         logger.info(
@@ -66,40 +72,24 @@ async def asearch_knowledgebase(
         # Transform results to the required format
         nodes = []
         for score_node in node_results:
-            node_metadata = score_node.node.metadata.copy()
-
-            # Extract image_url from metadata
-            # Check for images_info first (from knowledgebase_tool processing)
-            image_url = []
-            if "images_info" in node_metadata and isinstance(node_metadata["images_info"], list):
-                # Extract URLs from images_info list
-                image_url = [img.get("url", "") for img in node_metadata["images_info"] if isinstance(img, dict) and "url" in img]
-            elif "image_url" in node_metadata:
-                # Fallback to direct image_url field
-                image_url_value = node_metadata.get("image_url", [])
-                if isinstance(image_url_value, list):
-                    image_url = image_url_value
-                elif image_url_value:
-                    image_url = [image_url_value]
-
             # Extract title - prefer title, then file_name
-            title = node_metadata.get("title") or node_metadata.get("file_name", "")
+            title = score_node.get("title", "")
             # Extract doc_name - prefer doc_name, then file_name
-            doc_name = node_metadata.get("doc_name") or node_metadata.get("file_name", "")
+            doc_name = score_node.get("title")
             # Extract file_path
-            file_path = node_metadata.get("file_url", node_metadata.get("file_path", ""))
+            file_path = score_node.get("url", "")
 
             # Build the node in the required format
             # Include all metadata fields but structure the required ones at the top level
             node = NodeResult(
-                score=score_node.score,
+                score=score_node.get("score", 0),
                 metadata=NodeMetadata(
                     file_path=file_path,
-                    image_url=image_url,
+                    image_url=[img.get("url", "") for img in score_node.get("images", []) if img.get("url", "")],
                     title=title,
                     doc_name=doc_name,
                 ),
-                text=score_node.node.text,
+                text=score_node.get("content", ""),
             )
             nodes.append(node)
 
@@ -112,9 +102,8 @@ async def asearch_knowledgebase(
             ),
             request_id=request_id
         )
-
-    except Exception as e:
-        logger.exception(f"Retrieval tool failed: {e}")
+    except Exception:
+        logger.exception(f"Retrieval tool failed: {traceback.format_exc()}")
         return RetrievalToolResponse(
             status="ERROR",
             status_code=500,
@@ -130,22 +119,44 @@ def get_retrieval_tool(
     knowledgebase_id: str,
     kb_name: str,
     kb_description: str,
+    tenant_id: str,
 ) -> Tool:
     func_name = f"search-knowledgebase-{knowledgebase_id}"
     func_description = f"从知识库中搜索和用户查询相关的内容。\n知识库名称: {kb_name}\n知识库描述: {kb_description}\n"
 
+    @with_async_db_session
+    async def asearch_knowledgebase_wrapper(
+        query: str,
+        image_list: List[str] = [],
+        user_id: Optional[str] = None,
+        retrieval_setting: Optional[RetrievalSetting] = None,
+        metadata_condition: Optional[MetadataFilteringCondition] = None,
+        session: AsyncSession = None,
+    ) -> RetrievalToolResponse:
+        """
+        Search knowledgebase function.
+        """
+        rag_service = await get_rag_service(session=session)
+        return await asearch_knowledgebase(
+            query=query,
+            knowledgebase_id=knowledgebase_id,
+            tenant_id=tenant_id,
+            image_list=image_list,
+            user_id=user_id,
+            retrieval_setting=retrieval_setting,
+            metadata_condition=metadata_condition,
+            rag_service=rag_service,
+        )
+
     func_arg_metadata = func_metadata(
-        asearch_knowledgebase,
-        skip_names=["user_id", "metadata_condition", "knowledgebase_id", "retrieval_setting"],
+        asearch_knowledgebase_wrapper,
+    skip_names=["user_id", "metadata_condition", "knowledgebase_id", "retrieval_setting", "session"],
         structured_output=True,
     )
     parameters = func_arg_metadata.arg_model.model_json_schema(by_alias=True)
 
-    fn = partial(asearch_knowledgebase, knowledgebase_id=knowledgebase_id)
-
-
     return Tool(
-        fn=fn,
+        fn=asearch_knowledgebase_wrapper,
         name=func_name,
         description=func_description,
         fn_metadata=func_arg_metadata,

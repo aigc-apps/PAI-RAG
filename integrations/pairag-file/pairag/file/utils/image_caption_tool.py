@@ -9,6 +9,7 @@ from llama_index.core.base.llms.types import (
 )
 from llama_index.core.multi_modal_llms import MultiModalLLM
 from loguru import logger
+import base64
 
 
 context_prompt_str = """
@@ -67,5 +68,39 @@ class ImageCaptionTool:
         ]
         result = self._get_result(messages)
         logger.info(f"[图像解析] 图片链接: {image_url} \n图片描述: {result}")
+
+        return result
+
+
+    def extract_image(self, image_data: bytes, context_str=None) -> str:
+        """
+        Run the image captioning model on the given image URL.
+        image_data: 图片数据
+        context_str: 上下文描述。
+        """
+        logger.info(f"[图像解析] 正在解析图片")
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+
+        prompt = caption_prompt_str
+        if context_str:
+            prompt += context_prompt_str.format(context_str=context_str)
+
+        messages = [
+            ChatMessage(
+                role=MessageRole.SYSTEM,
+                content=[
+                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成简洁完整的描述和标签。"),
+                ],
+            ),
+            ChatMessage(
+                role=MessageRole.USER,
+                content=[
+                    TextBlock(text=prompt),
+                    ImageBlock(image=image_base64),
+                ],
+            ),
+        ]
+        result = self._get_result(messages)
+        logger.info(f"[图像解析] 解析图片结果: {result}")
 
         return result

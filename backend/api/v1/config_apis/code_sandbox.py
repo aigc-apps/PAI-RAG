@@ -2,20 +2,17 @@
 
 from typing import List
 import traceback
-from fastapi import APIRouter, Depends, Query
-from sqlmodel import select
+from fastapi import APIRouter, Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.models.change_event import ChangeEventSource, ChangeEventType
 from db.models.code_sandbox import (
     CodeSandboxConfigRead,
     CodeSandboxConfigCreate,
-    CodeSandboxConfigEntity,
 )
-from api.response_model import success_response, error_response, ResponseModel
-from db.db_context import get_session
-from sqlalchemy.exc import IntegrityError
-from config.providers.config_change_manager import config_change_manager
-from config.providers.code_sandbox_provider import codesandbox_provider
+from common.chat.response_model import success_response, ResponseModel
+from db.db_context import get_db_session
+from service.tool.codesandbox_service import CodesandboxService
+from service.injection import get_codesandbox_service, get_tenant_id
+from api.api_exception import ApiException
 from loguru import logger
 
 
@@ -25,76 +22,47 @@ code_sandbox_router = APIRouter()
 @code_sandbox_router.post("", response_model=ResponseModel[CodeSandboxConfigRead])
 async def add_code_sandbox_config(
     new_code_sandbox_config: CodeSandboxConfigCreate,
-    session: AsyncSession = Depends(get_session),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    codesandbox_service: CodesandboxService = Depends(get_codesandbox_service),
 ):
-    if new_code_sandbox_config.type not in ["aliyun-fc"]:
-        return error_response(code=400, message="不支持的code sandbox类型，仅支持aliyun-fc")
+    if new_code_sandbox_config.type.lowwer() not in ["aliyun-fc"]:
+        logger.error(f"不支持的code sandbox类型{new_code_sandbox_config.type}，仅支持aliyun-fc")
+        raise ApiException(code=400, message=f"不支持的code sandbox类型{new_code_sandbox_config.type}，仅支持aliyun-fc")
 
-
-    aliyun_id = new_code_sandbox_config.aliyun_id
-    interpreter_id = new_code_sandbox_config.interpreter_id
-    type = new_code_sandbox_config.type
-    enabled = new_code_sandbox_config.enabled
-
-
-    statement = select(CodeSandboxConfigEntity)
-    code_sandbox_config = (await session.exec(statement)).first()
-    if code_sandbox_config is None:
-        logger.info(f"Adding new code sandbox config for type {new_code_sandbox_config.type}")
-
-        code_sandbox_config = CodeSandboxConfigEntity.model_validate(
-            new_code_sandbox_config
-        )
-    else:
-        logger.info("Updating code sandbox config")
-        code_sandbox_config.aliyun_id = aliyun_id or code_sandbox_config.aliyun_id
-        code_sandbox_config.interpreter_id = interpreter_id or code_sandbox_config.interpreter_id
-        code_sandbox_config.type = type or code_sandbox_config.type
-        code_sandbox_config.enabled = enabled
-
-
-    session.add(code_sandbox_config)
     try:
-        await session.commit()
-        await session.refresh(code_sandbox_config)
-        codesandbox_provider.update(code_sandbox_config)
-        await config_change_manager.notify_change_async(
-            event_source=ChangeEventSource.CODESANDBOX,
-            source_id=code_sandbox_config.id,
-            event_type=ChangeEventType.UPDATE,
+        code_sandbox_config = await codesandbox_service.create_or_update_codesandbox_config(
+            new_code_sandbox_config, tenant_id=tenant_id
         )
-
+        await session.refresh(code_sandbox_config)
         return success_response(data=code_sandbox_config, message="添加代码沙盒配置成功。")
-    except IntegrityError as e:
-        logger.error(f"IntegrityError occurred when add code sandbox config: {traceback.format_exc()}")
-        await session.rollback()
-        return error_response(code=400, message=f"Failed to add code sandbox config: {str(e)}")
+    except ValueError as e:
+        logger.error(f"Failed to add code sandbox config: {str(e)}")
+        raise ApiException(code=400, message=f"添加代码沙盒配置失败: {e}")
     except Exception as e:
         logger.error(f"Failed to add code sandbox config: {traceback.format_exc()}")
-        await session.rollback()
-        return error_response(code=400, message=f"Failed to add code sandbox config: {str(e)}")
+        raise ApiException(code=400, message=f"Failed to add code sandbox config: {str(e)}")
 
 
 @code_sandbox_router.get("", response_model=ResponseModel[List[CodeSandboxConfigRead]])
 async def list_code_sandbox_config(
-    session: AsyncSession = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=10, lte=1000),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    codesandbox_service: CodesandboxService = Depends(get_codesandbox_service),
 ):
-    code_sandbox_config_result = (await session.exec(
-        select(CodeSandboxConfigEntity).offset(offset).limit(limit)
-    )).first()
-    code_sandbox_config = None
-
-    if code_sandbox_config_result:
-        code_sandbox_config = CodeSandboxConfigRead(
-            type=code_sandbox_config_result.type,
-            aliyun_id=code_sandbox_config_result.aliyun_id,
-            interpreter_id=code_sandbox_config_result.interpreter_id,
-            enabled=code_sandbox_config_result.enabled,
-            id=code_sandbox_config_result.id,
-        )
-    else:
-        logger.warning("No code sandbox config found.")
-
-    return success_response(data=[code_sandbox_config], message="查询代码沙盒配置成功。")
+    try:
+        configs = await codesandbox_service.get_all_codesandbox_configs(tenant_id=tenant_id)
+        if configs:
+            code_sandbox_config_read = CodeSandboxConfigRead(
+                type=configs[0].type,
+                aliyun_id=configs[0].aliyun_id,
+                interpreter_id=configs[0].interpreter_id,
+                enabled=configs[0].enabled,
+                id=configs[0].id,
+            )
+            return success_response(data=[code_sandbox_config_read], message="查询代码沙盒配置成功。")
+        else:
+            return success_response(data=[], message="查询代码沙盒配置成功。")
+    except Exception as e:
+        logger.error(f"Failed to list code sandbox config: {traceback.format_exc()}")
+        raise ApiException(code=400, message=f"查询代码沙盒配置失败: {str(e)}")

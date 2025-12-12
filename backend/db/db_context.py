@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 from functools import wraps
+from typing import AsyncGenerator
 
 from urllib.parse import quote_plus
 import os
@@ -102,9 +103,26 @@ async def init_db():
         await conn.run_sync(SQLModel.metadata.create_all)
 
 
-async def get_session():
-    async with AsyncSessionLocal() as session:
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    FastAPI Dependency: 为每个请求提供一个 AsyncSession，并负责事务管理和关闭。
+    """
+    session = AsyncSessionLocal() # 1. 事务开始：创建新的 Session
+    try:
+        # 2. 暂停执行：将 Session 实例注入到 API 路由中
         yield session
+
+        # 3. 成功路径：API 路由执行完毕且没有抛出异常，执行 commit
+        await session.commit()
+
+    except Exception:
+        # 4. 失败路径：API 路由抛出异常，执行 rollback
+        await session.rollback()
+        raise # 重新抛出异常，让 FastAPI 返回错误响应
+
+    finally:
+        # 5. 资源清理：无论成功还是失败，最终都会执行 close
+        await session.close()
 
 
 def with_async_db_session(func):

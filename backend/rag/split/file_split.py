@@ -24,6 +24,7 @@ def split_file_tasks(file_entity: KbFileEntity) -> Iterator[KbFileTaskEntity]:
             file_path=file_entity.file_path,
             file_version=file_entity.file_version,
             status=FileStatus.pending,
+            tenant_id=file_entity.tenant_id,
         )
         return
 

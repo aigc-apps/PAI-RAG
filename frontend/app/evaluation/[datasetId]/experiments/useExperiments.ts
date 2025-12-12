@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { ExperimentItem } from '@/app/evaluation/[datasetId]/types';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 
 interface UseExperimentsProps {
@@ -18,7 +19,7 @@ export function useExperiments({ datasetId, page, pageSize }: UseExperimentsProp
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const isRefreshing = useRef(false);
-
+  const { tenantFetch } = useTenantFetch();
   const fetchExperiments = useCallback(async () => {
     if (isRefreshing.current) {
       console.log("实验列表正在刷新中...");
@@ -30,7 +31,7 @@ export function useExperiments({ datasetId, page, pageSize }: UseExperimentsProp
 
     try {
       const url = `/api/config/evaluation/${datasetId}/experiments?page=${page}&size=${pageSize}`;
-      const response = await fetch(url);
+      const response = await tenantFetch(url);
 
       if (!response.ok) throw new Error('获取实验列表失败');
 
@@ -71,7 +72,7 @@ export function useExperiments({ datasetId, page, pageSize }: UseExperimentsProp
   // 删除实验
   const deleteExperiment = async (id: string) => {
     try {
-      const response = await fetch(`/api/config/evaluation/${datasetId}/experiments/${id}`, {
+      const response = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });

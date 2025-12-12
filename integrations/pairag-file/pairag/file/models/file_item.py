@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, BinaryIO, Dict, List
+from typing import Any, BinaryIO, Dict, List, Optional
 import os
 import io
 import uuid
@@ -17,6 +17,7 @@ class FileItem:
         file_name: str,
         file_md5: str,
         file_size: int,
+        tenant_id: Optional[str] = None,
     ):
         self.id = id
         self.file_path = file_path
@@ -26,6 +27,7 @@ class FileItem:
         self.file_md5 = file_md5
         self.file_size = file_size
         self.file = file
+        self.tenant_id = tenant_id
 
     @classmethod
     def from_file(
@@ -34,6 +36,7 @@ class FileItem:
         file: BinaryIO,
         kb_id: str,
         file_name: str = None,
+        tenant_id: Optional[str] = None,
     ):
         if not file_name:
             file_name = os.path.basename(file_path)
@@ -54,6 +57,7 @@ class FileItem:
             file_size=file_size,
             kb_id=kb_id,
             file=file,
+            tenant_id=tenant_id,
         )
 
     @classmethod
@@ -61,6 +65,7 @@ class FileItem:
         cls,
         file_path,
         kb_id: str,
+        tenant_id: Optional[str] = None,
     ):
         with open(file_path, "rb") as f:
             file_content = f.read() 
@@ -71,6 +76,7 @@ class FileItem:
             file_path=file_path,
             file=file,
             kb_id=kb_id,
+            tenant_id=tenant_id,
         )
 
     def metadata(self) -> Dict[str, Any]:

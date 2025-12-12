@@ -22,6 +22,7 @@ import { TablestoreConfig, TablestoreForm } from "./forms/tablestore";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 type DBType = "local" | "postgresql" | "milvus" | "elasticsearch" | "hologres" | "opensearch" | "tablestore";
 
@@ -33,12 +34,12 @@ export default function VectorDBConsole() {
 
   const [loading, setLoading] = useState(false);
   const [connectionTesting, setConnectionTesting] = useState(false);
-  
+  const { tenantFetch } = useTenantFetch();
   useEffect(() => {
     const fetchConfig = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/config/vectordb`, {
+        const res = await tenantFetch(`/api/config/vectordb`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -75,7 +76,7 @@ export default function VectorDBConsole() {
         if (dbType === 'milvus' && !config.database) {
           config.database = 'default';
         }
-        const res = await fetch(`/api/config/vectordb`, {
+        const res = await tenantFetch(`/api/config/vectordb`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -113,7 +114,7 @@ export default function VectorDBConsole() {
         if (dbType === 'milvus' && !config.database) {
           config.database = 'default';
         }
-        const res = await fetch(`/api/config/vectordb/connection_test`, {
+        const res = await tenantFetch(`/api/config/vectordb/connection_test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

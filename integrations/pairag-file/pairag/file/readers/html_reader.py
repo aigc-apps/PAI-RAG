@@ -4,7 +4,6 @@ from markdownify import markdownify
 from loguru import logger
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
-from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_utils import get_image_from_url
 from pairag.file.utils.markdown_tree_utils import PaiTable, convert_table_to_markdown
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
@@ -129,22 +128,22 @@ class HtmlReader(BaseReader):
         table, total_cols = self._convert_table_to_pai_table(table)
         return convert_table_to_markdown(table, total_cols)
 
-    def _replace_image_paths(self, content: str, save_name_template: str):
+    def _replace_image_paths(self, content: str, save_name_template: str, tenant_id: str):
         image_matches = MARKDOWN_IMAGE_PATTERN.finditer(content)
         saved_images = []
         for match in image_matches:
             full_match = match.group(0)  # 整个匹配
             image_url = match.group(1)  # 捕获的URL
-            if self.image_caption_tool and isinstance(self.file_store, OssFileStore):
+            if self.image_caption_tool:
                 image_file, image_name = get_image_from_url(image_url)
                 if image_name:
                     save_image_name = save_name_template.format(image_name)
 
                     try:
-                        self.file_store.save(image_file, save_image_name)
-                        image_alt_text = self.image_caption_tool.extract_url(
-                            self.file_store.get_url(save_image_name)
-                        )
+                        self.file_store.write(file=image_file, file_name=image_name, file_path=save_image_name, tenant_id=tenant_id)
+                        image_file.seek(0)
+                        image_data = image_file.read()
+                        image_alt_text = self.image_caption_tool.extract_image(image_data)
                         cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
                         
                         image_text = to_markdown_image_text(save_image_name, cleaned_alt)
@@ -185,7 +184,7 @@ class HtmlReader(BaseReader):
 
             images = []
             markdown_content, images = self._replace_image_paths(
-                markdown_content, file_item.kb_id + "/images/{}"
+                markdown_content, file_item.kb_id + "/images/{}", tenant_id=file_item.tenant_id,
             )
             logger.info(
                 f"Successfully read {file_item.file_name} with images {images}."

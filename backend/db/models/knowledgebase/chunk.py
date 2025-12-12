@@ -6,9 +6,11 @@ from sqlalchemy import Column, JSON, DateTime, Text
 from llama_index.core.schema import TextNode
 from common.knowledgebase.types import ChunkStatus
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
+from common.system_constants import DEFAULT_TENANT_ID
 
 
 class KbChunkModel(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     text: str = Field(default=None, sa_column=Column(Text))
     chunk_metadata: dict = Field(default={}, sa_column=Column("chunk_metadata", JSON))
 
@@ -40,7 +42,7 @@ class KbChunkEntity(KbChunkModel, table=True):
     )
 
 
-def create_chunk_from_text_node(kb_id: str, file_id: str, file_part: int, node: TextNode, index: int):
+def create_chunk_from_text_node(kb_id: str, file_id: str, file_part: int, node: TextNode, index: int, tenant_id: str):
     return KbChunkEntity(
         id=node.id_,
         knowledgebase_id=kb_id,
@@ -50,6 +52,7 @@ def create_chunk_from_text_node(kb_id: str, file_id: str, file_part: int, node: 
         file_part=file_part,
         chunk_metadata=node.metadata,
         index=index,
+        tenant_id=tenant_id,
     )
 
 def create_text_node_from_chunk(chunk: KbChunkEntity):

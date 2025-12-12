@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 import uuid
 from sqlmodel import Column, DateTime, Field, SQLModel
-
+from common.system_constants import DEFAULT_TENANT_ID
+from typing import Optional
 
 class ChatDbConfig(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     dialect: str # postgresql/mysql
     db_name: str = None
     username: str = None

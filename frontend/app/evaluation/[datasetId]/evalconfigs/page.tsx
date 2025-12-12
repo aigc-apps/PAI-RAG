@@ -31,6 +31,7 @@ import {
 import { Settings, Pencil, Trash2, Settings2, BarChart2, Loader2 } from "lucide-react";
 import { EvalConfigFormDialog } from "@/app/evaluation/components/evalconfig-form-dialog";
 import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 const default_evaluator_config = {
     id: "",
@@ -62,15 +63,15 @@ export default function EvaluatorConfigsPage(
     const [isCreateLoading, setIsCreateLoading] = useState(false);
     const [isEditSetting, setIsEditSetting] = useState(false);
     const [editConfig, setEditConfig] = useState<EvaluatorConfig>(default_evaluator_config);
-
+    const { tenantFetch } = useTenantFetch();
     useEffect(() => {
         const fetchConfigs = async () => {
             setIsLoading(true);
             try {
                 const [evalRes, datasetRes, llmRes] = await Promise.all([
-                    fetch(`/api/config/evaluation/${datasetId}`),
-                    fetch(`/api/config/evaluation/${datasetId}/evalconfigs?page=${page}&size=${pageSize}`),
-                    fetch(`/api/config/llms`),
+                    tenantFetch(`/api/config/evaluation/${datasetId}`),
+                    tenantFetch(`/api/config/evaluation/${datasetId}/evalconfigs?page=${page}&size=${pageSize}`),
+                    tenantFetch(`/api/config/llms`),
                 ]);
 
                 const eval_data = await evalRes.json();
@@ -109,7 +110,7 @@ export default function EvaluatorConfigsPage(
         console.log("createNewEvaluatorConfig", data)
         try {
             if (!isEditSetting) {
-                const res = await fetch(
+                const res = await tenantFetch(
                     `/api/config/evaluation/${datasetId}/evalconfigs`,
                     {
                         method: "POST",
@@ -125,7 +126,7 @@ export default function EvaluatorConfigsPage(
                 console.log('创建成功:', result);
                 setEvaluatorConfigs((prev) => [...prev, result.data]); // 追加新配置
             } else {
-                const res = await fetch(
+                const res = await tenantFetch(
                     `/api/config/evaluation/${datasetId}/evalconfigs/${data.id}`,
                     {
                         method: "PUT",
@@ -154,7 +155,7 @@ export default function EvaluatorConfigsPage(
 
     const onDelete = async (config_id: string) => {
         try {
-            const res = await fetch(`/api/config/evaluation/${datasetId}/evalconfigs/${config_id}`, {
+            const res = await tenantFetch(`/api/config/evaluation/${datasetId}/evalconfigs/${config_id}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',

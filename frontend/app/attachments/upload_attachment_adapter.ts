@@ -4,6 +4,7 @@ import {
   CompleteAttachment,
 } from '@assistant-ui/react';
 import { toast } from 'sonner';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export class UploadAttachmentAdapter implements AttachmentAdapter {
   public accept = '*/*';
@@ -16,6 +17,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     // Validate file size
     const { v4: uuidv4 } = require('uuid');
     const fid = uuidv4();
+    const { tenantFetch } = useTenantFetch();
     yield {
       id: fid,
       type: file.type.startsWith('image/') ? 'image' : 'document',
@@ -53,7 +55,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       formData.append('file_id', fid);
       formData.append('file', file); // 将文件加入 FormData
 
-      const response = await fetch(`/api/config/attachments`, {
+      const response = await tenantFetch(`/api/config/attachments`, {
         method: 'POST',
         body: formData, // 自动设置 content-type 为 multipart/form-data
       });

@@ -1,5 +1,5 @@
 import json
-from chat.llm.llm_model import PaiLlm
+from common.llm.llm_model import PaiLlm
 from loguru import logger
 from xiyan_mcp_server.utils.db_config import DBConfig
 from xiyan_mcp_server.utils.db_source import HITLSQLDatabase

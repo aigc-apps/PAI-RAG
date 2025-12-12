@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmbeddingModelDialog, EmbConfig } from '@/app/config/model/embedding/modelDialog';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 const newembconfig: EmbConfig = {
   id: '',
@@ -46,11 +47,12 @@ export default function EmbConfigPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const { tenantFetch } = useTenantFetch();
 
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/embeddings?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取Embedding模型列表失败');
@@ -91,7 +93,7 @@ export default function EmbConfigPage() {
     try {
       console.log('removeModel: id: ', id, 'model_type: ', model_type);
 
-      const res = await fetch(`/api/config/${model_type}/${id}`, {
+      const res = await tenantFetch(`/api/config/${model_type}/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

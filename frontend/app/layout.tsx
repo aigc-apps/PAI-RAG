@@ -10,6 +10,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { AppSidebar } from '@/components/app-sidebar';
 import { MyChatRuntimeProvider } from './runtime/usePaiChatThreadRuntime';
 import { ChatProvider } from './providers/chat';
+import { TenantProvider } from './providers/tenant';
 import { Toaster } from '@/components/ui/sonner';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
@@ -41,22 +42,24 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ChatProvider>
-          <MyChatRuntimeProvider>
-            <SidebarProvider>
-              <AppSidebar />
-              <SidebarInset>
-                  <div className="h-screen w-full overflow-hidden">
-                    <SidebarTrigger className="w-10 pt-5"/>
-                    <div className="w-full pt-0">
-                        {children}
-                        <Toaster duration={3000} position='top-right'/>
+        <TenantProvider>
+          <ChatProvider>
+            <MyChatRuntimeProvider>
+              <SidebarProvider>
+                <AppSidebar />
+                <SidebarInset>
+                    <div className="h-screen w-full overflow-hidden">
+                      <SidebarTrigger className="w-10 pt-5"/>
+                      <div className="w-full pt-0">
+                          {children}
+                          <Toaster duration={3000} position='top-right'/>
+                      </div>
                     </div>
-                  </div>
-              </SidebarInset>
-            </SidebarProvider>
-          </MyChatRuntimeProvider>
-        </ChatProvider>
+                </SidebarInset>
+              </SidebarProvider>
+            </MyChatRuntimeProvider>
+          </ChatProvider>
+        </TenantProvider>
       </body>
     </html>
   );

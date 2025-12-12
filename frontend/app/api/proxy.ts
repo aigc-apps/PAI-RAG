@@ -16,7 +16,6 @@ export async function proxyRequest(request: NextRequest) {
 
   const method = request.method;
   let headers = new Headers(request.headers);
-
   // 删除 Next.js 自动添加的 header，避免冲突
   headers.delete('host');
   headers.delete('connection');

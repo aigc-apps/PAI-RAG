@@ -19,22 +19,23 @@ def _create_file_task(
     file_bytes = "\n".join(current_rows).encode('utf-8')
     binary_buffer = BytesIO(file_bytes)
     file_part_path = f"{base_path}_Part{current_part:04d}.jsonl"
-    file_store.save(file=binary_buffer, file_path=file_part_path)
-    logger.info(f"Created jsonl part file: {file_part_path} with {len(current_rows)} rows.")
+    upload_result = file_store.write(file=binary_buffer, file_name=file_entity.file_name, file_path=file_part_path, tenant_id=file_entity.tenant_id)
+    logger.info(f"Created jsonl part file: {upload_result.file_path} with {len(current_rows)} rows.")
     return KbFileTaskEntity(
         id=uuid.uuid4().hex,
         file_id=file_entity.id,
         kb_id=file_entity.kb_id,
         file_part=current_part,
-        file_path=file_part_path,
+        file_path=upload_result.file_path,
         file_version=file_entity.file_version,
+        tenant_id=file_entity.tenant_id,
     )
 
 
 def split_jsonl(file_entity: KbFileEntity) -> Iterator[KbFileTaskEntity]:
     logger.info(f"Start splitting jsonl file: {file_entity.file_path}")
 
-    file = file_store.load(file_entity.file_path)
+    file = file_store.read(file_path=file_entity.file_path, tenant_id=file_entity.tenant_id)
     base_path, _ = os.path.splitext(file_entity.file_path)
 
     text_instream = TextIOWrapper(file, encoding="utf-8")
@@ -67,6 +68,7 @@ def split_jsonl(file_entity: KbFileEntity) -> Iterator[KbFileTaskEntity]:
             file_part=0,
             file_path=file_entity.file_path,
             file_version=file_entity.file_version,
+            tenant_id=file_entity.tenant_id,
         )
     elif current_rows:
         yield _create_file_task(

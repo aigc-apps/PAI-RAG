@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { toast } from 'sonner';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 interface UseDatasetActionsProps {
   datasetId: string;
@@ -17,11 +18,11 @@ interface ExperimentData {
 
 export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
   const router = useRouter();
-
+  const { tenantFetch } = useTenantFetch();
   // 运行样本（单条或批量）
   const runSamples = async (data: ExperimentData) => {
     try {
-      const res = await fetch(`/api/config/evaluation/${datasetId}/experiments`, {
+      const res = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -43,7 +44,7 @@ export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
   // 删除样本
   const deleteSample = async (sampleId: string) => {
     try {
-      const res = await fetch(`/api/config/evaluation/${datasetId}/samples/${sampleId}`, {
+      const res = await tenantFetch(`/api/config/evaluation/${datasetId}/samples/${sampleId}`, {
         method: 'DELETE',
       });
 
@@ -63,7 +64,7 @@ export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
     formData.append('file', file);
 
     try {
-      const res = await fetch(`/api/config/evaluation/${datasetId}/upload`, {
+      const res = await tenantFetch(`/api/config/evaluation/${datasetId}/upload`, {
         method: 'POST',
         body: formData,
       });
