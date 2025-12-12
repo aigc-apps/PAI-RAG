@@ -1,12 +1,12 @@
 """RAG Service layer for orchestrating business logic across knowledgebase entities."""
 
-from typing import Callable, Awaitable, Optional, List
+from typing import Callable, Awaitable, Optional, List, Tuple
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
-
+import asyncio
+import copy
 from common.chat.response_model import PagedResult
-
 from common.chat.models import RetrievalSetting, MetadataFilteringCondition
 
 from db.models.knowledgebase.knowledgebase import (
@@ -20,6 +20,7 @@ from db.models.knowledgebase.metadata import (
     KbMetadataEntityCreate,
 )
 from db.models.knowledgebase.chunk import KbChunkEntity, create_text_node_from_chunk
+from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from service.knowledgebase.utils.metadata_utils import validate_metadata_value
 from service.factory.model_factory import create_reranker_model, create_embedding_model
 from rag.metadata_filter import EmptyFilesException, query_file_ids_with_metadata_filter
@@ -35,6 +36,7 @@ import re
 from common.tool.search_result import SearchResult
 from tools.utils.vectordb_retrieval import aquery_vector_store
 from utils.lru_cache import LruCache
+from db.db_context import create_db_session
 from loguru import logger
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
@@ -51,16 +53,16 @@ class RagService:
     def __init__(
         self,
         session: AsyncSession,
-        kb_service_getter: Callable[[], Awaitable],
-        file_service_getter: Callable[[], Awaitable],
-        chunk_service_getter: Callable[[], Awaitable],
-        metadata_service_getter: Callable[[], Awaitable],
-        file_metadata_relation_service_getter: Callable[[], Awaitable],
-        embedding_service_getter: Callable[[], Awaitable],
-        reranker_service_getter: Callable[[], Awaitable],
-        llm_service_getter: Callable[[], Awaitable],
-        vector_db_service_getter: Callable[[], Awaitable],
-        vector_table_mapping_service_getter: Callable[[], Awaitable],
+        kb_service_getter: Callable[[AsyncSession], Awaitable],
+        file_service_getter: Callable[[AsyncSession], Awaitable],
+        chunk_service_getter: Callable[[AsyncSession], Awaitable],
+        metadata_service_getter: Callable[[AsyncSession], Awaitable],
+        file_metadata_relation_service_getter: Callable[[AsyncSession], Awaitable],
+        embedding_service_getter: Callable[[AsyncSession], Awaitable],
+        reranker_service_getter: Callable[[AsyncSession], Awaitable],
+        llm_service_getter: Callable[[AsyncSession], Awaitable],
+        vector_db_service_getter: Callable[[AsyncSession], Awaitable],
+        vector_table_mapping_service_getter: Callable[[AsyncSession], Awaitable],
     ):
         """
         Initialize RagService with a database session and service getters.
@@ -127,7 +129,12 @@ class RagService:
         exclude_default_attachments: bool = True,
     ) -> PagedResult[List[KbEntity]]:
         kb_service = await self._get_kb_service()
-        return await kb_service.list_knowledgebases(tenant_id=tenant_id, page=page, size=size, query=query, exclude_default_attachments=exclude_default_attachments)
+        return await kb_service.list_knowledgebases(
+            tenant_id=tenant_id,
+            page=page,
+            size=size,
+            query=query,
+            exclude_default_attachments=exclude_default_attachments)
 
 
     async def _validate_knowledgebase_models(
@@ -804,40 +811,46 @@ class RagService:
         return file_entity
 
 
-    ## VectorDB Retrieval Service
-    async def aquery(
+    # 当需要发起SessionScope并发时，每个查询都需要独立的session实例
+    async def _aquery_vector_store(
         self,
-        query: str,
-        knowledge_id: str = None,
-        knowledge_name: str = None,
+        session: AsyncSession,
+        kb_id: str = None,
+        kb_name: str = None,
+        query: str = None,
         user_id: str = None,
-        tenant_id: str = None,
         retrieval_setting: Optional[RetrievalSetting] = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
         document_ids: Optional[List[str]] = None,
-    ) -> List[SearchResult]:
-        knowledgebase_service = await self._get_kb_service()
-        if knowledge_id:
-            kb = await knowledgebase_service.get_knowledgebase(kb_id=knowledge_id, tenant_id=tenant_id)
+        tenant_id: str = None,
+    ) -> Tuple[Optional[VectorStoreQueryResult], Optional[VectorStoreQueryResult]]:
+        knowledgebase_service = await self._get_kb_service(session)
+        if kb_id:
+            kb = await knowledgebase_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
+            if not kb:
+                raise ValueError(f"Knowledgebase id {kb_id} not found.")
         else:
-            if knowledge_name:
-                kb = await knowledgebase_service.get_knowledgebase_by_name(name=knowledge_name, tenant_id=tenant_id)
+            if kb_name:
+                kb = await knowledgebase_service.get_knowledgebase_by_name(name=kb_name, tenant_id=tenant_id)
+                if not kb:
+                    raise ValueError(f"Knowledgebase name {kb_name} not found.")
+
+                kb_id = kb.id
             else:
                 raise ValueError("Knowledgebase ID or name is required.")
 
-        if not kb:
-            raise ValueError(f"Knowledgebase {knowledge_id} not found.")
-
-        embedding_service = await self._get_embedding_service()
+        embedding_service = await self._get_embedding_service(session)
         embed_model_entity = await embedding_service.get_embedding_model_by_provider_model_id(
             provider_name=kb.embedding_provider_name,
             model_id=kb.embedding_model,
             tenant_id=tenant_id,
         )
         if not embed_model_entity:
-            raise ValueError(f"Embedding model not found for knowledgebase {knowledge_id}.")
+            raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
 
         embed_model = create_embedding_model(embed_model_entity)
+        query_embedding = await embed_model.aget_query_embedding(query)
+        query_mode = retrieval_type_to_search_mode(retrieval_setting.retrieval_mode)
 
         base_retrieval_setting = RetrievalConfig.model_validate(kb.retrieval_config)
         if not retrieval_setting:
@@ -862,24 +875,21 @@ class RagService:
 
         if not document_ids:
             try:
-                document_ids = await query_file_ids_with_metadata_filter(session=self.session, kb_id=knowledge_id, user_id=user_id, metadata_filter=metadata_condition)
+                document_ids = await query_file_ids_with_metadata_filter(session=session, kb_id=kb_id, user_id=user_id, metadata_filter=metadata_condition)
             except EmptyFilesException as e:
                 logger.error(f"No files found with the given metadata filter. error: {e}")
-                return []
-
-        query_embedding = await embed_model.aget_query_embedding(query)
-        query_mode = retrieval_type_to_search_mode(retrieval_setting.retrieval_mode)
+                return VectorStoreQueryResult(nodes=[], similarities=[], ids=[]), VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
 
 
-        vector_db_service = await self._get_vector_db_service()
+        vector_db_service = await self._get_vector_db_service(session)
         vector_config = await vector_db_service.get_vectordb_config(tenant_id=tenant_id)
         if not vector_config:
-            raise ValueError(f"VectorDB config not found for knowledgebase {knowledge_id}.")
+            raise ValueError(f"VectorDB config not found for knowledgebase {kb_id}.")
 
-        table_mapping_service = await self._get_vector_table_mapping_service()
+        table_mapping_service = await self._get_vector_table_mapping_service(session)
         table_name = await table_mapping_service.get_vector_table_name(tenant_id=tenant_id, kb_id=kb.id)
         if not table_name:
-            raise ValueError(f"Vector table name not found for knowledgebase {knowledge_id}.")
+            raise ValueError(f"Vector table name not found for knowledgebase {kb_id}.")
         vector_store = create_vector_store(
             kb_id=kb.id,
             dimension=len(query_embedding),
@@ -887,8 +897,7 @@ class RagService:
             table_name=table_name,
         )
 
-        logger.info("Executing vector store query...")
-
+        logger.info(f"Executing vector store query for query '{query}' against knowledgebase {kb_id}.")
         text_result, dense_result = await aquery_vector_store(
             vector_store=vector_store,
             query=query,
@@ -898,6 +907,114 @@ class RagService:
             top_k=retrieval_setting.top_k,
             use_docid_filter=is_docid_filter_supported(vector_store),
         )
+        logger.info(f"Retrieved {len(text_result.nodes) if text_result else 0} text nodes and {len(dense_result.nodes) if dense_result else 0} dense nodes for query '{query}' against knowledgebase {kb_id}.")
+        return text_result, dense_result
+
+    async def aquery_task(
+        self,
+        session: AsyncSession = None,
+        kb_id: str = None,
+        kb_name: str = None,
+        query: str = None,
+        user_id: str = None,
+        retrieval_setting: Optional[RetrievalSetting] = None,
+        metadata_condition: Optional[MetadataFilteringCondition] = None,
+        document_ids: Optional[List[str]] = None,
+        tenant_id: str = None,
+    ):
+        if session is None:
+            async with create_db_session() as new_session:
+                return await self._aquery_vector_store(
+                    session=new_session,
+                    kb_id=kb_id,
+                    kb_name=kb_name,
+                    query=query,
+                    user_id=user_id,
+                    retrieval_setting=retrieval_setting,
+                    metadata_condition=metadata_condition,
+                    document_ids=document_ids,
+                    tenant_id=tenant_id,
+                )
+        else:
+            return await self._aquery_vector_store(
+                session=session,
+                kb_id=kb_id,
+                kb_name=kb_name,
+                query=query,
+                user_id=user_id,
+                retrieval_setting=retrieval_setting,
+                metadata_condition=metadata_condition,
+                document_ids=document_ids,
+                tenant_id=tenant_id,
+            )
+
+    ## VectorDB Retrieval Service
+    async def aquery(
+        self,
+        query: str,
+        kb_id: str = None,
+        kb_name: str = None,
+        kb_id_list: List[str] = None,
+        user_id: str = None,
+        tenant_id: str = None,
+        retrieval_setting: Optional[RetrievalSetting] = None,
+        metadata_condition: Optional[MetadataFilteringCondition] = None,
+        document_ids: Optional[List[str]] = None,
+    ) -> List[SearchResult]:
+        if not query:
+            logger.info("No query provided, returning empty results.")
+            return []
+
+        if kb_id:
+            text_result, dense_result = await self.aquery_task(
+                session=self.session,
+                query=query,
+                kb_id=kb_id,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                retrieval_setting=retrieval_setting,
+                metadata_condition=metadata_condition,
+                document_ids=document_ids,
+            )
+        elif kb_name:
+            text_result, dense_result = await self.aquery_task(
+                session=self.session,
+                query=query,
+                kb_name=kb_name,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                retrieval_setting=retrieval_setting,
+                metadata_condition=metadata_condition,
+                document_ids=document_ids,
+            )
+        elif kb_id_list:
+            vector_query_tasks = []
+            for task_id in kb_id_list:
+                task_setting=copy.copy(retrieval_setting)
+                vector_query_tasks.append(self.aquery_task(
+                    kb_id=task_id,
+                    user_id=user_id,
+                    query=query,
+                    tenant_id=tenant_id,
+                    retrieval_setting=task_setting,
+                    metadata_condition=metadata_condition,
+                    document_ids=document_ids,
+                ))
+            results = await asyncio.gather(*vector_query_tasks)
+            text_result = VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
+            dense_result = VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
+            for sub_text_result, sub_dense_result in results:
+                if sub_text_result and sub_text_result.nodes:
+                    text_result.nodes.extend(sub_text_result.nodes)
+                    text_result.similarities.extend(sub_text_result.similarities)
+                    text_result.ids.extend(sub_text_result.ids)
+
+                if sub_dense_result and sub_dense_result.nodes:
+                    dense_result.nodes.extend(sub_dense_result.nodes)
+                    dense_result.similarities.extend(sub_dense_result.similarities)
+                    dense_result.ids.extend(sub_dense_result.ids)
+        else:
+            raise ValueError("No valid knowledgebase ID or name provided.")
 
         text_nodes_count = len(text_result.nodes) if text_result else 0
         dense_nodes_count = len(dense_result.nodes) if dense_result else 0
@@ -913,9 +1030,9 @@ class RagService:
                 tenant_id=tenant_id,
             )
             if not reranker_config:
-                raise ValueError(f"Reranker model not found for knowledgebase {knowledge_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
+                raise ValueError(f"Reranker model not found for knowledgebase {kb_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
             reranker = create_reranker_model(reranker_config)
-            logger.info(f"Created reranker model {reranker_config.model_name} for knowledgebase {knowledge_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
+            logger.info(f"Created reranker model {reranker_config.model_name} for knowledgebase {kb_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
 
         try:
             reranked_result = await arerank_fusion(

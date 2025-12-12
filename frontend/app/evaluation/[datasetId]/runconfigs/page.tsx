@@ -32,6 +32,7 @@ import { Settings, Pencil, Trash2, Settings2, BarChart2, Loader2 } from "lucide-
 import { RunConfigFormDialog } from "@/app/evaluation/components/runconfig-form-dialog";
 import { RunConfig } from '@/app/evaluation/[datasetId]/types';
 import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 const default_eval_run_config = {
     id: "",

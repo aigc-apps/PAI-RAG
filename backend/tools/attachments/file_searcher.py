@@ -20,7 +20,7 @@ async def aget_file_retrieve_results(
 
     search_results: List[SearchResult] = await rag_service.aquery(
         query=query_str,
-        knowledge_name=ATTACHMENT_KNOWLEDGEBASE_NAME,
+        kb_name=ATTACHMENT_KNOWLEDGEBASE_NAME,
         retrieval_setting=RetrievalSetting(top_k=5, score_threshold=0.1),
         document_ids=doc_ids,
     )

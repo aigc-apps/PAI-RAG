@@ -28,7 +28,8 @@ async def retrieval(
         search_results: List[SearchResult] = await rag_service.aquery(
             query=retrieval_request.query,
             user_id=retrieval_request.user_id,
-            knowledge_id=retrieval_request.knowledge_id,
+            kb_id=retrieval_request.knowledge_id,
+            kb_id_list=retrieval_request.knowledge_id_list,
             retrieval_setting=retrieval_request.retrieval_setting,
             metadata_condition=retrieval_request.metadata_condition,
             tenant_id=tenant_id,
