@@ -1,6 +1,6 @@
 'use client';
-import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck, Code } from 'lucide-react';
-import React from 'react';
+import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck, Code, Users, Plus, Check, X } from 'lucide-react';
+import React, { useState } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,8 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import {
   LassoSelectIcon,
@@ -34,9 +36,37 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { useTenant } from '@/app/providers/tenant';
 
 export function AppSidebar() {
+  const { tenantId, tenantName, tenants, setTenant, addTenant, removeTenant } = useTenant();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newTenantId, setNewTenantId] = useState('');
+  const [newTenantName, setNewTenantName] = useState('');
+
+  const handleCreateTenant = () => {
+    if (newTenantId.trim() && newTenantName.trim()) {
+      addTenant(newTenantId.trim(), newTenantName.trim());
+      setNewTenantId('');
+      setNewTenantName('');
+      setIsCreateDialogOpen(false);
+      // 创建并切换到新工作空间后跳转到首页
+      setTimeout(() => window.location.href = '/', 100);
+    }
+  };
+
   return (
     <Sidebar side="left">
       <SidebarHeader>
@@ -49,6 +79,89 @@ export function AppSidebar() {
           </Avatar>
           <span className="text-lg font-medium">PAI-RAG</span>
         </div>
+        {/* 工作空间选择器 */}
+        <div className="mt-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full justify-between text-xs h-8">
+                <div className="flex items-center gap-2 truncate">
+                  <Users className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{tenantName}</span>
+                </div>
+                <ChevronDown className="h-3 w-3 flex-shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">选择工作空间</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {tenants.map((tenant) => (
+                <DropdownMenuItem
+                  key={tenant.id}
+                  onClick={() => {
+                    if (tenant.id !== tenantId) {
+                      setTenant(tenant.id, tenant.name);
+                      // 切换工作空间后跳转到首页
+                      setTimeout(() => window.location.href = '/', 100);
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    {tenant.id === tenantId && <Check className="h-3 w-3 text-primary" />}
+                    {tenant.id !== tenantId && <div className="w-3" />}
+                    <span className="text-xs">{tenant.name}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{tenant.id}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => setIsCreateDialogOpen(true)}
+              >
+                <Plus className="h-3 w-3 mr-2" />
+                <span className="text-xs">新建工作空间</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* 创建工作空间对话框 */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>新建工作空间</DialogTitle>
+              <DialogDescription>创建一个新的工作空间来隔离数据</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="tenant-id">工作空间 ID</Label>
+                <Input
+                  id="tenant-id"
+                  placeholder="请输入工作空间 ID（英文字母、数字、下划线）"
+                  value={newTenantId}
+                  onChange={(e) => setNewTenantId(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tenant-name">工作空间名称</Label>
+                <Input
+                  id="tenant-name"
+                  placeholder="请输入工作空间名称"
+                  value={newTenantName}
+                  onChange={(e) => setNewTenantName(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                取消
+              </Button>
+              <Button onClick={handleCreateTenant} disabled={!newTenantId.trim() || !newTenantName.trim()}>
+                创建
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>

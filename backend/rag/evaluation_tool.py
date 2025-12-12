@@ -12,7 +12,7 @@ from typing import List
 from datetime import datetime, timezone
 from common.chat.models import ChatAgentRequest
 from evaluation.run import run_agent, run_evaluator
-from chat.openai.openai_like import OpenAILike
+from common.llm.openai.openai_like import OpenAILike
 from sqlmodel import select, update, func, case
 from common.encrypt_utils import decrypt_key
 from fastapi import UploadFile

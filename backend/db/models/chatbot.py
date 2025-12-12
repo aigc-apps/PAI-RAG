@@ -5,6 +5,7 @@ from pydantic import field_validator
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, JSON, Text
 from typing import List, Optional
+from common.system_constants import DEFAULT_TENANT_ID
 
 
 class ChatBotCreate(SQLModel):
@@ -45,7 +46,7 @@ class ChatBotEntity(ChatBotCreate, table=True):
     mcp_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     kb_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     prompts: Optional[dict] = Field(default_factory=dict, sa_column=Column(JSON))
-
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
 
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

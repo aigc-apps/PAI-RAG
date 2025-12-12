@@ -3,7 +3,7 @@ import json
 import os
 import time
 from typing import cast, Awaitable
-from chat.llm.models import ChatResponseGenerator, ReasoningChunk, TextChunk
+from common.llm.models import ChatResponseGenerator, ReasoningChunk, TextChunk
 from opentelemetry.context import attach, detach
 from opentelemetry.trace import set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode

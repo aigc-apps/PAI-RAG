@@ -275,19 +275,18 @@ tz = ["tzdata"]
 
 [[package]]
 name = "alibabacloud-credentials"
-version = "1.0.3"
+version = "1.0.1"
 description = "The alibabacloud credentials module of alibabaCloud Python SDK."
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "alibabacloud-credentials-1.0.3.tar.gz", hash = "sha256:9d8707e96afc6f348e23f5677ed15a21c2dfce7cfe6669776548ee4c80e1dfaf"},
-    {file = "alibabacloud_credentials-1.0.3-py3-none-any.whl", hash = "sha256:30c8302f204b663c655d97e1c283ee9f9f84a6257d7901b931477d6cf34445a8"},
+    {file = "alibabacloud-credentials-1.0.1.tar.gz", hash = "sha256:fa6c5f7cfa28fb51a59686aada8e96bba91687aa79d884534df1594bc6ad27f8"},
 ]
 
 [package.dependencies]
 aiofiles = ">=22.1.0,<25.0.0"
-alibabacloud-credentials-api = ">=1.0.0,<2.0.0"
+alibabacloud_credentials_api = ">=1.0.0,<2.0.0"
 alibabacloud-tea = ">=0.4.0"
 APScheduler = ">=3.10.0,<4.0.0"
 
@@ -395,20 +394,20 @@ alibabacloud-tea-util = ">=0.3.12,<1.0.0"
 
 [[package]]
 name = "alibabacloud-green20220302"
-version = "2.23.0"
+version = "2.20.4"
 description = "Alibaba Cloud Green (20220302) SDK Library for Python"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "alibabacloud_green20220302-2.23.0-py3-none-any.whl", hash = "sha256:d90e98765f9142656c1c1cc0aa6e9eb13942d27291fa3f2880f7347c641c8cbe"},
-    {file = "alibabacloud_green20220302-2.23.0.tar.gz", hash = "sha256:bf704fabf14103be8f69d35218c075ce02f9c23328d84f72578239b5b8bfb4ec"},
+    {file = "alibabacloud_green20220302-2.20.4-py3-none-any.whl", hash = "sha256:118701e0eddf9f9275a15afa5d5be57d192f0df4698e04866d93fc22a1a3d81d"},
+    {file = "alibabacloud_green20220302-2.20.4.tar.gz", hash = "sha256:82039963af22bc45e7223a6d48dc12ca0ad74e228d3b2b3c672cc62ef3141659"},
 ]
 
 [package.dependencies]
-alibabacloud-endpoint-util = ">=0.0.4,<1.0.0"
+alibabacloud-endpoint-util = ">=0.0.3,<1.0.0"
 alibabacloud-openapi-util = ">=0.2.2,<1.0.0"
-alibabacloud-tea-openapi = ">=0.3.16,<1.0.0"
+alibabacloud-tea-openapi = ">=0.3.12,<1.0.0"
 alibabacloud-tea-util = ">=0.3.13,<1.0.0"
 
 [[package]]
@@ -555,17 +554,17 @@ alibabacloud-tea = ">=0.0.1"
 
 [[package]]
 name = "alibabacloud-tea-openapi"
-version = "0.3.16"
+version = "0.3.14"
 description = "Alibaba Cloud openapi SDK Library for Python"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "alibabacloud_tea_openapi-0.3.16.tar.gz", hash = "sha256:6bffed8278597592e67860156f424bde4173a6599d7b6039fb640a3612bae292"},
+    {file = "alibabacloud_tea_openapi-0.3.14.tar.gz", hash = "sha256:1e0a67ab3450cf09e26ccc0fb5b0622a6b58fdde25dc3ccb99b45e167c5db717"},
 ]
 
 [package.dependencies]
-alibabacloud_credentials = ">=1.0.2,<2.0.0"
+alibabacloud_credentials = ">=0.3.6"
 alibabacloud_gateway_spi = ">=0.0.2,<1.0.0"
 alibabacloud_openapi_util = ">=0.2.2,<1.0.0"
 alibabacloud_tea_util = ">=0.3.13,<1.0.0"
@@ -4292,14 +4291,14 @@ files = [
 
 [[package]]
 name = "mistletoe"
-version = "1.5.0"
+version = "1.5.1"
 description = "A fast, extensible Markdown parser in pure Python."
 optional = false
 python-versions = "~=3.5"
 groups = ["main"]
 files = [
-    {file = "mistletoe-1.5.0-py3-none-any.whl", hash = "sha256:d4e77b991b998c5efe3c4eab4e1b472263b5349688acd50d79bd9a6c317a9df1"},
-    {file = "mistletoe-1.5.0.tar.gz", hash = "sha256:68b73be68bf8075ec882e035176d5c379d0d7f3401392c6f39c2cc9cd3264d44"},
+    {file = "mistletoe-1.5.1-py3-none-any.whl", hash = "sha256:d3e97664798261503f685f6a6281b092628367cf3128fc68a015a993b0c4feb3"},
+    {file = "mistletoe-1.5.1.tar.gz", hash = "sha256:c5571ce6ca9cfdc7ce9151c3ae79acb418e067812000907616427197648030a3"},
 ]
 
 [[package]]
@@ -5469,13 +5468,13 @@ files = [
 
 [[package]]
 name = "pairag-file"
-version = "2.1.19"
+version = "2.1.22"
 description = "PAI-RAG file processing library."
 optional = false
 python-versions = ">=3.11,<3.13"
 groups = ["main"]
 files = [
-    {file = "pairag_file-2.1.19-py3-none-any.whl", hash = "sha256:3e45ee665a1f8cf49418e4c097474ed943de7725e0bfc76b7cdc71d62c2cba79"},
+    {file = "pairag_file-2.1.22-py3-none-any.whl", hash = "sha256:28b63e83e688918bedb80bda8664453af7fd383f3f86dc28f94daaa5b75546b5"},
 ]
 
 [package.dependencies]
@@ -5508,7 +5507,7 @@ xlrd = ">=2.0.2,<3.0.0"
 
 [package.source]
 type = "url"
-url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.19-py3-none-any.whl"
+url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.22-py3-none-any.whl"
 
 [[package]]
 name = "pandas"
@@ -9592,4 +9591,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.13"
-content-hash = "76fa09c9ea5f5d0d765367fd325e161db4200dab36ecbdcf842cb5509d5a5324"
+content-hash = "4cd3eb82bf718e4e0c276467525b55058397e1f6fa81ca7e5dede26809eb9ac3"

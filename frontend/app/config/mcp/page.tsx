@@ -30,6 +30,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { v4 as uuidv4 } from 'uuid';
 import { McpConfig } from './mcp';
 import { toast } from 'sonner';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export default function McpConfigPage() {
   const [isOpen, setIsOpen] = useState(false);
@@ -58,12 +59,12 @@ export default function McpConfigPage() {
     enabled: boolean;
   }>>([]);
   const [mcploading, setMcpLoading] = useState(true);
-
+  const { tenantFetch } = useTenantFetch();
   // 提取 fetchConfigs 为可复用函数
   const fetchConfigs = useCallback(async () => {
     try {
       setMcpLoading(true);
-      const res = await fetch(`/api/config/mcps`);
+      const res = await tenantFetch(`/api/config/mcps`);
       if (!res.ok) throw new Error('获取MCP配置失败');
       const data = await res.json();
       setMcpConfigs(data.data.items || []);
@@ -116,7 +117,7 @@ export default function McpConfigPage() {
 
   const handleToggleEnabled = async (id: string, enabled: boolean) => {
     try {
-      const res = await fetch(`/api/config/mcps/${id}`, {
+      const res = await tenantFetch(`/api/config/mcps/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !enabled }),
@@ -151,7 +152,7 @@ export default function McpConfigPage() {
       enabled: addFormData.enabled,
     };
     
-    const res = await fetch(`/api/config/mcps`, {
+    const res = await tenantFetch(`/api/config/mcps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(mcp_data),
@@ -207,7 +208,7 @@ const updatedMCP = async () => {
       updateData.need_token = false;
     }
 
-    const res = await fetch(`/api/config/mcps/${editingConfig.id}`, {
+    const res = await tenantFetch(`/api/config/mcps/${editingConfig.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData),
@@ -232,7 +233,7 @@ const updatedMCP = async () => {
 };
   const removeMCP = async (id: string) => {
     try {
-      const res = await fetch(`/api/config/mcps/${id}`, {
+      const res = await tenantFetch(`/api/config/mcps/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

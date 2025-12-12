@@ -3,6 +3,7 @@ from pairag.file.store.base import BaseFileStore
 from pairag.file.store.local_store import LocalFileStore
 from pairag.file.store.oss_store import DEFAULT_OSS_PREFIX, OssFileStore
 from pairag.file.utils.constants import DEFAULT_KNOWLEDGEBASE_PATH
+from pairag.file.store.bailian_file_store import BailianFileStore
 from loguru import logger
 
 
@@ -24,7 +25,8 @@ def create_file_store_from_env() -> BaseFileStore:
 
         logger.info("Created OSS file store.")
         return OssFileStore(bucket=bucket, endpoint=endpoint, prefix_path=prefix_path)
-
+    elif file_store_type == "bailian":
+        return BailianFileStore()
     else:
         if file_store_type != "local":
             logger.warning(

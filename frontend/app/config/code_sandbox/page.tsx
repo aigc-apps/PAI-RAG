@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch'; // 确保你有 Switch 组件
-
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 export default function CodeSandboxConfig() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [configType, setConfigType] = useState('aliyun-fc'); // 目前仅支持 aliyun-fc
@@ -16,12 +16,12 @@ export default function CodeSandboxConfig() {
   const [interpreterId, setInterpreterId] = useState('');
   const [timeoutDefault, setTimeoutDefault] = useState(50);
   const [isSaving, setIsSaving] = useState(false);
-
+  const { tenantFetch } = useTenantFetch();
   // 初始化加载配置
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const res = await fetch(`/api/config/code_sandbox`, {
+        const res = await tenantFetch(`/api/config/code_sandbox`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -63,7 +63,7 @@ export default function CodeSandboxConfig() {
       if (timeoutDefault) payload.timeout_default = timeoutDefault;
 
 
-      const res = await fetch(`/api/config/code_sandbox`, {
+      const res = await tenantFetch(`/api/config/code_sandbox`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

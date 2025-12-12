@@ -2,18 +2,22 @@ import uuid
 from sqlmodel import Field, SQLModel
 from typing import Optional
 from enum import Enum
-
+from common.system_constants import DEFAULT_TENANT_ID
+from sqlalchemy import UniqueConstraint
 
 # 支持openai_like和dashscope两种模式
 class RerankerType(str, Enum):
     OPENAI_LIKE = "openai_like"
     DASHSCOPE = "dashscope"
 
+
 class RerankerModel(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID, max_length=64)
     model_name: str = Field(default=None)
     base_url: str = Field(default=None)
-    model_id: str = Field(default=None, unique=True)
+    model_id: str = Field(default=None)
     type: Optional[str] = Field(default=RerankerType.OPENAI_LIKE)
+    provider_name: Optional[str] = Field(default=None)
 
 
 class RerankerModelCreate(RerankerModel):
@@ -26,6 +30,7 @@ class RerankerModelRead(RerankerModel):
 
 class RerankerModelEntity(RerankerModel, table=True):
     __tablename__ = "pai_reranker_model"
+    __table_args__ = (UniqueConstraint("tenant_id", "provider_name", "model_id", name="unique_reranker_model"),)
 
-    id: str = Field(default_factory=lambda x: uuid.uuid4().hex, primary_key=True)
+    id: str = Field(default_factory=lambda x: uuid.uuid4().hex, primary_key=True, max_length=64)
     encrypted_api_key: str | None = Field(default=None)

@@ -1,6 +1,6 @@
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON
-from chat.prompts import (
+from common.chat.prompts import (
     SYNTHESIZE_PROMPT,
     SYSTEM_PROMPT,
     SEARCH_WEB_TOOL_PROMPT,
@@ -8,6 +8,9 @@ from chat.prompts import (
     KNOWLEDGEBASE_TOOL_PROMPT,
     ATTACHMENTS_TOOL_PROMPT
 )
+from common.system_constants import DEFAULT_TENANT_ID
+from typing import Optional
+
 
 DEFAULT_PROMPTS = {
     "system_prompt": SYSTEM_PROMPT,
@@ -20,6 +23,7 @@ DEFAULT_PROMPTS = {
 
 
 class PromptModel(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     prompts: dict = Field(default=DEFAULT_PROMPTS, sa_column=Column("prompts", JSON))
 
 

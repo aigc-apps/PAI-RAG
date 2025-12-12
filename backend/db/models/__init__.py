@@ -13,7 +13,6 @@ from db.models.knowledgebase.reranker import RerankerModelEntity
 from db.models.knowledgebase.user_role import RoleEntity, UserRoleEntity, PermissionEntity
 from db.models.knowledgebase.metadata import KbMetadataEntity, FileMetadataEntity
 from db.models.prompt import PromptModelEntity
-from db.models.change_event import ChangeEvent
 from db.models.chatbot import ChatBotEntity
 from db.models.guardrail import GuardrailConfigEntity
 from db.models.code_sandbox import CodeSandboxConfigEntity
@@ -23,3 +22,4 @@ from db.models.evaluation.experiment import ExperimentEntity, ExperimentSampleEn
 from db.models.evaluation.run_config import RunConfigEntity
 from db.models.vectordb import VectorDbConfig
 from db.models.chatdb.chatdb import ChatDbConfigEntity
+from db.models.knowledgebase.vector_table_mapping import VectorTableMappingEntity

@@ -92,6 +92,7 @@ import {
 import { ExperimentSampleDetails } from '@/app/evaluation/[datasetId]/types';
 import { SampleDetailDialog } from '@/app/evaluation/components/sample-detail-dialog';
 import { SampleItem } from '@/app/evaluation/[datasetId]/types';
+import { useTenantFetch } from "@/hooks/use-tenant-fetch";
 
 const STATUS_OPTIONS = [
   { value: "running", label: "运行中" },
@@ -130,10 +131,10 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   // 查看样本对话框
   const [isSampleDialogOpen, setIsSampleDialogOpen] = useState(false);
   const [selectedSample, setSelectedSample] = useState<SampleItem | null>(null);
-
+  const { tenantFetch } = useTenantFetch();
   const handleViewSample = async (sample_id: string) => {
     try {
-        const response = await fetch(`/api/config/evaluation/${datasetId}/samples/${sample_id}`, {
+        const response = await tenantFetch(`/api/config/evaluation/${datasetId}/samples/${sample_id}`, {
             method: "GET",
             headers: { "Content-Type": "application/json" },
         });
@@ -184,14 +185,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   const fetchAllItems = async () => {
     try {
       const tmpPageSize = 1000;
-      const firstPageRes = await fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=1&size=${tmpPageSize}`);
+      const firstPageRes = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=1&size=${tmpPageSize}`);
       if (!firstPageRes.ok) throw new Error('获取评估实验列表失败');
       const json_data = await firstPageRes.json();
       const tmpAllItems: ExperimentSampleDetails[] = [];
 
       for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
         console.log("加载所有数据，第", curPage, "页");
-        const response = await fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${curPage}&size=${tmpPageSize}`);
+        const response = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${curPage}&size=${tmpPageSize}`);
         const data = await response.json();
         tmpAllItems.push(...data.data.items);
       }
@@ -208,9 +209,9 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   const fetchExperimentDetails = useCallback(async () => {
     try {
       const [evalRes, expDataRes, detailsRes] = await Promise.all([
-        fetch(`/api/config/evaluation/${datasetId}`),
-        fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}`),
-        fetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${pageRef.current}&size=${pageSize}`),
+        tenantFetch(`/api/config/evaluation/${datasetId}`),
+        tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}`),
+        tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${pageRef.current}&size=${pageSize}`),
       ]);
 
       // 获取评估配置
@@ -225,7 +226,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
 
       // 获取运行配置
       if (exp_data.data?.run_config_id) {
-        const runConfigRes = await fetch(`/api/config/evaluation/${datasetId}/runconfigs/${exp_data.data.run_config_id}`);
+        const runConfigRes = await tenantFetch(`/api/config/evaluation/${datasetId}/runconfigs/${exp_data.data.run_config_id}`);
         if (runConfigRes.ok) {
           const runConfigData = await runConfigRes.json();
           setRunConfig(runConfigData.data);
@@ -233,7 +234,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
       }
 
       if (exp_data.data?.evaluator_config_id) {
-        const evaluatorConfigRes = await fetch(`/api/config/evaluation/${datasetId}/evalconfigs/${exp_data.data.evaluator_config_id}`);
+        const evaluatorConfigRes = await tenantFetch(`/api/config/evaluation/${datasetId}/evalconfigs/${exp_data.data.evaluator_config_id}`);
         if (evaluatorConfigRes.ok) {
           const evaluatorConfigData = await evaluatorConfigRes.json();
           setEvaluatorConfig(evaluatorConfigData.data);
@@ -258,7 +259,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   // ========================
   const updateEvaluation = async (id: string) => {
     try {
-      const response = await fetch(
+      const response = await tenantFetch(
         `/api/config/evaluation/${datasetId}/experiments/${expId}/samples`,
         {
           method: "PUT",

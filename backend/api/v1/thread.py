@@ -1,23 +1,26 @@
 import re
 import json
-from chat.llm.llm_model import PaiLlm
 from fastapi import APIRouter, Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.db_context import get_session
+from db.db_context import get_db_session
 from loguru import logger
-from db.models.thread import ThreadEntity, ThreadCreate, ThreadRead
-from db.models.message import MessageEntity, MessageCreate, MessageRead
-from sqlalchemy.exc import IntegrityError
+from db.models.thread import ThreadCreate, ThreadRead
+from db.models.message import MessageCreate, MessageRead
 from typing import List
-from sqlmodel import select
-from db.models.knowledgebase.file import KbFileEntity
-from config.providers.llm_provider import llm_provider
-from db.models.llm import LlmModelEntity
-from api.response_model import success_response, error_response, ResponseModel
-from chat.prompts import DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
+from common.chat.response_model import success_response, ResponseModel
+from api.api_exception import ApiException
+from common.chat.prompts import DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
 from utils.message_utils import get_content_from_messages
-from llama_index.core.base.llms.types import (
-    MessageRole,
+from llama_index.core.base.llms.types import MessageRole
+from service.factory.model_factory import create_llm
+from service.thread.thread_service import ThreadService
+from service.thread.message_service import MessageService
+from service.model.llm_service import LlmService
+from service.injection import (
+    get_thread_service,
+    get_message_service,
+    get_llm_service,
+    get_tenant_id,
 )
 
 thread_router = APIRouter()
@@ -25,194 +28,236 @@ thread_router = APIRouter()
 
 @thread_router.post("", response_model=ResponseModel[ThreadRead])
 async def create_thread(
-    thread: ThreadCreate, session: AsyncSession = Depends(get_session)
+    thread: ThreadCreate,
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    thread_service: ThreadService = Depends(get_thread_service),
 ):
     try:
-        thread = ThreadEntity.model_validate(thread)
-        session.add(thread)
+        thread_entity = await thread_service.create_thread(thread, tenant_id=tenant_id)
         await session.commit()
-        await session.refresh(thread)
-        return success_response(data=thread, message="Conversation created successfully.")
-
-    except IntegrityError as e:
-        logger.exception(f"Failed to add conversation: {e}")
+        await session.refresh(thread_entity)
+        return success_response(
+            data=thread_entity, message="Conversation created successfully."
+        )
+    except ValueError as e:
+        logger.error(f"Failed to create thread: {str(e)}")
         await session.rollback()
-
-        if "UniqueViolationError" in str(e.orig):
-            return error_response(
-                code=400, message=f"Conversation {thread} already exists."
-            )
-        else:
-            return error_response(
-                code=400, message=f"Failed to add conversation: {str(e)}"
-            )
+        raise ApiException(code=400, message=str(e))
     except Exception as e:
+        logger.error(f"Failed to create thread: {str(e)}")
         await session.rollback()
-        return error_response(
+        raise ApiException(
             code=400, message=f"Failed to add conversation: {str(e)}"
         )
 
 
 @thread_router.get("", response_model=ResponseModel[List[ThreadRead]])
 async def get_threads(
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_db_session),
     offset: int = 0,
     limit: int = Query(default=10, lte=1000),
+    tenant_id: str = Depends(get_tenant_id),
+    thread_service: ThreadService = Depends(get_thread_service),
 ):
-    sql_results = await session.exec(select(ThreadEntity).order_by(ThreadEntity.created_at.desc()).offset(offset).limit(limit))
-    thread_entities = sql_results.all()
-    thread_models = [
-        ThreadRead.model_validate(
-            thread,
+    try:
+        thread_entities = await thread_service.list_threads(
+            tenant_id=tenant_id,
+            offset=offset,
+            limit=limit,
         )
-        for thread in thread_entities
-    ]
-    return success_response(data=thread_models, message="Get conversations successfully.")
-
-async def delete_related_attachments_in_messages(session: AsyncSession, thread_id: str):
-    logger.info("[thread] Start deleting related attachments in messages.")
-    sql_results = await session.exec(
-        select(MessageEntity)
-        .where(MessageEntity.thread_id == thread_id)
-    )
-    message_entities = sql_results.all()
-    message_models = [
-        MessageRead.model_validate(
-            message,
+        thread_models = [
+            ThreadRead.model_validate(thread) for thread in thread_entities
+        ]
+        return success_response(
+            data=thread_models, message="Get conversations successfully."
         )
-        for message in message_entities
-    ]
-    message_ids = [message.id for message in message_models]
-    file_sql_results = await session.exec(
-        select(KbFileEntity)
-        .where(KbFileEntity.message_id.in_(message_ids))
-    )
-    attachment_file_entities = file_sql_results.all()
-    for attachment_file_entity in attachment_file_entities:
-        await session.delete(attachment_file_entity)
-        await session.commit()
-    logger.info("[thread] Deleted related attachments in messages successfully.")
+    except Exception as e:
+        logger.error(f"Failed to get threads: {str(e)}")
+        raise ApiException(
+            code=400, message=f"Failed to get conversations: {str(e)}"
+        )
 
 @thread_router.delete("/{thread_id}")
 async def delete_thread(
     thread_id: str,
-    session: AsyncSession = Depends(get_session),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    thread_service: ThreadService = Depends(get_thread_service),
+    message_service: MessageService = Depends(get_message_service),
 ):
     try:
-        await delete_related_attachments_in_messages(session, thread_id)
-    except Exception as e:
-        logger.error(f"[ThreadProvider] Failed to delete related attachments in messages: {e}")
-    thread = await session.get(ThreadEntity, thread_id)
-    if not thread:
-        return error_response(code=404, message=f"Conversation {thread_id} not found.")
-    await session.delete(thread)
-    await session.commit()
+        # Delete related attachments first
+        try:
+            await message_service.delete_related_attachments(thread_id, tenant_id=tenant_id)
+        except Exception as e:
+            logger.error(
+                f"[ThreadProvider] Failed to delete related attachments in messages: {e}"
+            )
 
-    return success_response(code=200, message=f"Conversation {thread_id} deleted.")
+        # Delete the thread
+        await thread_service.delete_thread(thread_id, tenant_id=tenant_id)
+        await session.commit()
+
+        return success_response(
+            code=200, message=f"Conversation {thread_id} deleted."
+        )
+    except ValueError as e:
+        logger.error(f"Failed to delete thread: {str(e)}")
+        await session.rollback()
+        raise ApiException(code=404, message=str(e))
+    except Exception as e:
+        logger.error(f"Failed to delete thread: {str(e)}")
+        await session.rollback()
+        raise ApiException(
+            code=400, message=f"Failed to delete conversation: {str(e)}"
+        )
 
 @thread_router.post("/{thread_id}/title")
 async def update_thread_title(
     thread_id: str,
     messages: List[MessageCreate],
-    session: AsyncSession = Depends(get_session),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    thread_service: ThreadService = Depends(get_thread_service),
+    llm_service: LlmService = Depends(get_llm_service),
 ):
-    logger.info(f"Updating conversation {thread_id} title based on messages {messages}.")
-    thread = await session.get(ThreadEntity, thread_id)
-    if not thread:
-        return error_response(code=404, message=f"Conversation {thread_id} not found.")
-    try:
-        llm_sql_results = await session.exec(select(LlmModelEntity))
-        llm_entities = llm_sql_results.all()
-        llm: PaiLlm = llm_provider.get_llm_model(model_id=llm_entities[0].model_id)
-        generate_title_prompt = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE.format(
-            chat_history="\n".join([f"{msg.role}: {get_content_from_messages(msg.content)}" for msg in messages])
-        )
-        chat_response_gen = await llm.astream(
-            messages=[{
-                "role": MessageRole.USER,
-                "content": generate_title_prompt,
-            }]
-        )
-        response_text = ""
-        async for chunk in chat_response_gen:
-            response_text += chunk.delta
-
-        extracted_content = re.sub(r"<think>.*?</think>", "", response_text, flags=re.DOTALL)
-        logger.info(f"Generated title: {extracted_content}")
-        title = json.loads(extracted_content).get("title", "未命名会话")
-        thread.title = title
-    except Exception as e:
-        logger.error(f"Failed to update conversation {thread_id} title: {e}")
-        title = f"{get_content_from_messages(messages[0].content)[:10]}..." if messages else "未命名会话"
-        thread.title = title
-
-    session.add(thread)
-    await session.commit()
-
-    logger.info(f"Conversation {thread_id} updated title to {title}.")
-    return success_response(
-        data={"title": title},
-        message=f"Conversation {thread_id} title updated successfully."
+    logger.info(
+        f"Updating conversation {thread_id} title based on messages {messages}."
     )
+    try:
+        thread = await thread_service.get_thread(thread_id, tenant_id=tenant_id)
+        if not thread:
+            raise ApiException(
+                code=404, message=f"Conversation {thread_id} not found."
+            )
 
-@thread_router.post("/{thread_id}/messages", response_model=MessageEntity)
+        title = "未命名会话"
+        try:
+            # Get first LLM model from database
+            llm_entities = await llm_service.get_all_llms(tenant_id=tenant_id)
+            if not llm_entities:
+                raise ValueError("No LLM models found in database.")
+
+            llm_model = llm_entities[0]
+            llm = create_llm(llm_model)
+
+            # Generate title using LLM
+            generate_title_prompt = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE.format(
+                chat_history="\n".join(
+                    [
+                        f"{msg.role}: {get_content_from_messages(msg.content)}"
+                        for msg in messages
+                    ]
+                )
+            )
+            chat_response_gen = await llm.astream(
+                messages=[
+                    {
+                        "role": MessageRole.USER,
+                        "content": generate_title_prompt,
+                    }
+                ]
+            )
+            response_text = ""
+            async for chunk in chat_response_gen:
+                response_text += chunk.delta
+
+            extracted_content = re.sub(
+                r"<think>.*?</think>",
+                "",
+                response_text,
+                flags=re.DOTALL,
+            )
+            logger.info(f"Generated title: {extracted_content}")
+            title = json.loads(extracted_content).get("title", "未命名会话")
+        except Exception as e:
+            logger.error(f"Failed to update conversation {thread_id} title: {e}")
+            # Fallback to simple title
+            title = (
+                f"{get_content_from_messages(messages[0].content)[:10]}..."
+                if messages
+                else "未命名会话"
+            )
+
+        # Update thread title
+        await thread_service.update_thread_title(thread_id, title, tenant_id=tenant_id)
+        await session.commit()
+
+        logger.info(f"Conversation {thread_id} updated title to {title}.")
+        return success_response(
+            data={"title": title},
+            message=f"Conversation {thread_id} title updated successfully.",
+        )
+    except ApiException:
+        raise
+    except ValueError as e:
+        logger.error(f"Failed to update thread title: {str(e)}")
+        await session.rollback()
+        raise ApiException(code=400, message=str(e))
+    except Exception as e:
+        logger.error(f"Failed to update thread title: {str(e)}")
+        await session.rollback()
+        raise ApiException(
+            code=400,
+            message=f"Failed to update conversation title: {str(e)}",
+        )
+
+@thread_router.post("/{thread_id}/messages", response_model=ResponseModel[MessageRead])
 async def create_thread_message(
     message: MessageCreate,
-    session: AsyncSession = Depends(get_session),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    thread_service: ThreadService = Depends(get_thread_service),
+    message_service: MessageService = Depends(get_message_service),
 ):
     thread_id = message.thread_id
-    thread = await session.get(ThreadEntity, thread_id)
-    if not thread:
-        return error_response(code=404, message=f"Conversation {thread_id} not found.")
+    try:
+        # Verify thread exists
+        thread = await thread_service.get_thread(thread_id, tenant_id=tenant_id)
+        if not thread:
+            raise ApiException(
+                code=404, message=f"Conversation {thread_id} not found."
+            )
 
-    message_entity = MessageEntity.model_validate(message)
-    if message.local_id:
-        message_entity = (await session.exec(
-            select(MessageEntity).where(MessageEntity.thread_id == thread_id, MessageEntity.local_id == message.local_id)
-        )).first()
-        if message_entity is None:
-            message_entity = MessageEntity.model_validate(message)
-        else:
-            message_entity.attachments = message.attachments
-            message_entity.content = message.content
-            message_entity.role = message.role
-    else:
-        message_entity = MessageEntity.model_validate(message)
+        # Create or update message
+        message_entity = await message_service.create_message(message, tenant_id=tenant_id)
+        await session.refresh(message_entity)
 
-    session.add(message_entity)
-    for attachment in message.attachments:
-        attachment_file_entity = await session.get(KbFileEntity, attachment.get("id"))
-        attachment_file_entity.message_id = message_entity.id
-        session.add(attachment_file_entity)
-
-    await session.commit()
-    await session.flush()
-
-    return success_response(
-        data=message_entity,
-        message="Message created successfully."
-    )
+        return success_response(
+            data=message_entity, message="Message created successfully."
+        )
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create message: {str(e)}")
+        await session.rollback()
+        raise ApiException(
+            code=400, message=f"Failed to create message: {str(e)}"
+        )
 
 
 @thread_router.get("/{thread_id}/messages", response_model=ResponseModel[List[MessageRead]])
 async def get_thread_messages(
     thread_id: str,
-    session: AsyncSession = Depends(get_session),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    message_service: MessageService = Depends(get_message_service),
 ):
-    sql_results = await session.exec(
-        select(MessageEntity)
-        .where(MessageEntity.thread_id == thread_id)
-        .order_by(MessageEntity.created_at)
-        .limit(30)
-    )
-    message_entities = sql_results.all()
-    message_models = [
-        MessageRead.model_validate(
-            message,
+    try:
+        message_entities = await message_service.list_messages(
+            thread_id=thread_id,
+            tenant_id=tenant_id,
+            limit=30,
         )
-        for message in message_entities
-    ]
-    return success_response(
-        data=message_models,
-        message="Messages retrieved successfully."
-    )
+        message_models = [
+            MessageRead.model_validate(message) for message in message_entities
+        ]
+        return success_response(
+            data=message_models, message="Messages retrieved successfully."
+        )
+    except Exception as e:
+        logger.error(f"Failed to get messages: {str(e)}")
+        raise ApiException(
+            code=400, message=f"Failed to retrieve messages: {str(e)}"
+        )

@@ -45,6 +45,7 @@ import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '.
 // Add import for ResettableTextarea
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
 import { toast } from 'sonner';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 
 interface PromptConfig {
@@ -117,6 +118,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const [actPrompt, setActPrompt] = useState('');
   const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
   const [summarizePrompt, setSummarizePrompt] = useState('');
+  const { tenantFetch } = useTenantFetch();
 
   const router = useRouter();
   // const [isLoading, setIsLoading] = useState(false);
@@ -126,10 +128,10 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
       try {
         if (!isCreate) {
           const [llmRes, mcpRes, kbRes, botRes] = await Promise.all([
-            fetch(`/api/config/llms`),
-            fetch(`/api/config/mcps`),
-            fetch(`/api/config/knowledgebases`),
-            fetch(`/api/config/apps?app_id=${chatbotId}`)]);
+            tenantFetch(`/api/config/llms`),
+            tenantFetch(`/api/config/mcps`),
+            tenantFetch(`/api/config/knowledgebases`),
+            tenantFetch(`/api/config/apps?app_id=${chatbotId}`)]);
           const llmData = (await llmRes.json())?.data.items || [];
           console.log('llmData', llmData);
           setLlms([...llmData]);
@@ -179,9 +181,9 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         }
         else {
           const [llmRes, mcpRes, kbRes] = await Promise.all([
-            fetch(`/api/config/llms`),
-            fetch(`/api/config/mcps`),
-            fetch(`/api/config/knowledgebases`)]);
+            tenantFetch(`/api/config/llms`),
+            tenantFetch(`/api/config/mcps`),
+            tenantFetch(`/api/config/knowledgebases`)]);
 
           const llmData = (await llmRes.json())?.data.items || [];
           console.log('llmData', llmData);
@@ -217,7 +219,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
       : `/api/config/apps/${botConfig.id}`;
     const updateMethod = isCreate ? 'POST' : 'PUT';
     try {
-      const res = await fetch(submit_url, {
+      const res = await tenantFetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(botConfig), // 包装为数组

@@ -17,7 +17,6 @@ from pairag.file.readers.base import BaseReader
 from pairag.file.utils.font_utils import infer_mineru_api_title_level
 from pairag.file.utils.image_utils import to_markdown_image_text
 from pairag.file.utils.mineru_utils import make_content_block
-from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.store.base import BaseFileStore
 from pairag.file.models.file_item import FileItem
@@ -48,9 +47,10 @@ def extract_api_result(
     zip_path: str,
     extract_to: str,
     root_dir: str,
-    image_store: OssFileStore = None,
+    image_store: BaseFileStore = None,
     save_image_template: str = None,
     image_caption_tool: ImageCaptionTool = None,
+    tenant_id: str = None,
     ) -> Tuple[str, List[ContentBlock]]:
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall(extract_to)
@@ -77,7 +77,7 @@ def extract_api_result(
                 page_idx = page.get("page_idx", 0) + 1
                 page_blocks = page.get("preproc_blocks", [])
                 for block in page_blocks:
-                    content_block = make_content_block(block, page_idx, image_store, image_local_dir, save_image_template, image_caption_tool)
+                    content_block = make_content_block(block, page_idx, image_store, image_local_dir, save_image_template, image_caption_tool, tenant_id)
                     if content_block:
                         content_list.append(content_block)
             logger.info(f"Extracted content list from {middle_json_path}, length: {len(content_list)}")
@@ -107,7 +107,7 @@ class MineruPdfReader(BaseReader):
         self.image_caption_tool = image_caption_tool
 
         self.image_store = None
-        if self.image_caption_tool and isinstance(self.file_store, OssFileStore):
+        if self.image_caption_tool:
             self.image_store = self.file_store
         logger.info(f"MineruPdfReader: init with endpoint {self.endpoint}, token {self.token}, model version {self.model_version}")
 
@@ -117,24 +117,25 @@ class MineruPdfReader(BaseReader):
         md_content, content_list = run_sync(
             self.parse_file_async(
                 file=file_item.file,
+                tenant_id=file_item.tenant_id,
                 pdf_file_name=sanitize_filename(file_item.file_name),
                 save_image_template=save_image_template,
                 method="auto",
                 backend="pipeline",
-                lang="ch"
+                lang="ch",
             )
         )
         metadata = file_item.metadata()
         metadata["content_list"] = content_list
 
-        save_md_file_name = os.path.join(file_item.kb_id, "markdown", file_item.file_name + ".md")
-        self.file_store.save(io.BytesIO(md_content.encode("utf-8")), save_md_file_name)
+        # save_md_file_name = os.path.join(file_item.kb_id, "markdown", file_item.file_name + ".md")
 
         return [Document(id_=file_item.id, text=md_content, metadata=metadata)]
 
     async def parse_file_async(
         self,
         file,
+        tenant_id: str,
         pdf_file_name: str,
         save_image_template: str,
         method: str = "auto",
@@ -206,7 +207,7 @@ class MineruPdfReader(BaseReader):
 
             try:
                 logger.info(f"[MinerU] Unzip to {output_path}...")
-                md_content, content_list = extract_api_result(output_zip_path, output_path, file_base_name, self.image_store, save_image_template, self.image_caption_tool)
+                md_content, content_list = extract_api_result(output_zip_path, output_path, file_base_name, self.image_store, save_image_template, self.image_caption_tool, tenant_id)
             except Exception as e:
                 logger.error(f"[MinerU] error extracting content list from {output_zip_path}: {e}")
                 raise

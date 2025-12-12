@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { LLMModelDialog } from '@/app/config/model/llm/modelDialog';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export interface LlmConfig {
   id: string;
@@ -54,11 +55,11 @@ export default function LlmConfigPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-
+  const { tenantFetch } = useTenantFetch();
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/llms?page=${page}&size=${modelSizePerPage}`,
         );
         if (!res.ok) throw new Error('获取LLM模型列表失败');
@@ -99,7 +100,7 @@ export default function LlmConfigPage() {
     llm.enabled = !llm.enabled;
     const url = `/api/config/llms/${llm.id}`;
 
-    const res = await fetch(url, {
+    const res = await tenantFetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(llm), // 包装为数组
@@ -118,7 +119,7 @@ export default function LlmConfigPage() {
     setErrorMsg('');
     try {
       console.log('removeModel: id: ', id, 'model_type: ', model_type);
-      const res = await fetch(`/api/config/${model_type}/${id}`, {
+      const res = await tenantFetch(`/api/config/${model_type}/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

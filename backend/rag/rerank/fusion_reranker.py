@@ -65,6 +65,9 @@ def weight_rerank(
             scores.append(dense_result.similarities[i] * vector_weight)
             nodes.append(node)
 
+    if not ids:
+        # 如果dense_result有结果，则返回dense_result
+        return dense_result
 
     ids, nodes, scores = zip(*sorted(zip(ids, nodes, scores), key=lambda x: x[2], reverse=True))
     ids, nodes, scores = map(list, (ids, nodes, scores))

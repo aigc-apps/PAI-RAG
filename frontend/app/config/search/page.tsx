@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Slider } from "@/components/ui/slider"
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 const ENDPOINT_LIST = [
   "iqs.cn-zhangjiakou.aliyuncs.com",
@@ -33,12 +34,13 @@ export default function SearchConfig() {
   const [searchCount, setSearchCount] = useState(10); // 每次搜索返回的结果数
   const [tavilyApiKey, setTavilyApiKey] = useState(''); // Tavily API Key
   const [searchEngineType, setSearchEngineType] = useState('aliyun'); // 搜索引擎类型
+  const { tenantFetch } = useTenantFetch();
 
   // 初始化加载配置
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const res = await fetch(`/api/config/websearch`, {
+        const res = await tenantFetch(`/api/config/websearch`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -70,7 +72,7 @@ export default function SearchConfig() {
       const update_sk = aliyunSK === MASK_API_KEY ? '' : aliyunSK;
       const update_tavily_api_key = tavilyApiKey === MASK_API_KEY ? '' : tavilyApiKey;
 
-      const res = await fetch(`/api/config/websearch`, {
+      const res = await tenantFetch(`/api/config/websearch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
 

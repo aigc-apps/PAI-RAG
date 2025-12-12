@@ -1,6 +1,5 @@
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
-from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_utils import compress_image_if_needed
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import to_markdown_image_text
@@ -20,7 +19,7 @@ class ImageReader(BaseReader):
         """
         Read a CSV file and return a list of Documents.
         """
-        if not isinstance(self.file_store, OssFileStore) or not self.image_caption_tool:
+        if not self.image_caption_tool:
             logger.warning(
                 "Will not parse image files when image store is not configured."
             )
@@ -33,12 +32,12 @@ class ImageReader(BaseReader):
             if not image_file:
                 return []
 
-            self.file_store.save(image_file, save_image_name)
-            image_alt_text = self.image_caption_tool.extract_url(
-                self.file_store.get_url(save_image_name)
-            )
+            upload_result = self.file_store.write(file=image_file, file_name=file_item.file_name, file_path=save_image_name, tenant_id=file_item.tenant_id)
+            image_file.seek(0)
+            image_data = image_file.read()
+            image_alt_text = self.image_caption_tool.extract_image(image_data)
             cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-            image_text = to_markdown_image_text(save_image_name, cleaned_alt)
+            image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
 
             metadata = file_item.metadata()
 

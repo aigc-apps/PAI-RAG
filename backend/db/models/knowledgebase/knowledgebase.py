@@ -3,7 +3,7 @@ import re
 import uuid
 from pydantic import field_validator
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, JSON, DateTime, Text
+from sqlalchemy import Column, JSON, DateTime, Text, UniqueConstraint
 from common.knowledgebase.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
@@ -16,6 +16,8 @@ from common.knowledgebase.constants import (
 )
 from common.knowledgebase.types import VectorIndexRetrievalType
 from typing import Optional
+from common.system_constants import DEFAULT_TENANT_ID
+
 
 class ChunkConfig(SQLModel):
     chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE)
@@ -23,6 +25,7 @@ class ChunkConfig(SQLModel):
     parser_type: str = Field(default=DEFAULT_PARSER_TYPE)
     separator: str = Field(default=DEFAULT_SENTENCE_SEPARATOR)
     image_caption_model: Optional[str] = Field(default=None)
+    image_caption_provider_name: str = Field(default="openai_like")
 
 
 class RetrievalConfig(SQLModel):
@@ -34,13 +37,16 @@ class RetrievalConfig(SQLModel):
     vector_weight: float = Field(default=0.5)
     enable_rerank: bool = Field(default=False)
     rerank_model: str = Field(default="")
+    rerank_provider_name: str = Field(default="openai_like")
     rerank_top_k: Optional[int] = Field(default=DEFAULT_RERANK_SIMILARITY_TOP_K)
 
 
 class KnowledgebaseCreate(SQLModel):
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     name: str = Field(default=None)
     description: str = Field(default=None, sa_column=Column(Text))
     embedding_model: str = Field(default=None)
+    embedding_provider_name: str = Field(default="openai_like")
     chunk_config: ChunkConfig | None = Field(default=None)
     retrieval_config: RetrievalConfig | None = Field(default=None)
 
@@ -48,9 +54,11 @@ class KnowledgebaseCreate(SQLModel):
 # table entity
 class KbEntity(SQLModel, table=True):
     __tablename__ = "pai_knowledgebase"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="unique_kb_name"),)
 
-    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
-    name: str = Field(default=None, unique=True)
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True, max_length=64)
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID, max_length=64)
+    name: str = Field(default=None)
     description: str = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
@@ -62,7 +70,8 @@ class KbEntity(SQLModel, table=True):
         sa_column=Column(DateTime),
     )
 
-    embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL)
+    embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, max_length=255)
+    embedding_provider_name: str = Field(default="openai_like")
 
     chunk_config: dict = Field(
         default=lambda: ChunkConfig(), sa_column=Column("chunk_config", JSON)

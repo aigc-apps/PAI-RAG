@@ -1,7 +1,7 @@
 import time
 from typing import Any, Dict
 from fastapi import APIRouter
-from api.response_model import ResponseModel, success_response
+from common.chat.response_model import ResponseModel, success_response
 from pydantic import BaseModel
 
 

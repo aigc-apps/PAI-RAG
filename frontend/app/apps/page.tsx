@@ -27,7 +27,7 @@ import {
 
 import { Chatbot } from './chatbot_config';
 import { useRouter } from 'next/navigation';
-
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 const ChatbotPage = () => {
   const [chatbots, setChatbots] = useState(Array<Chatbot>); // 知识库列表
@@ -35,11 +35,12 @@ const ChatbotPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 6;
   const router = useRouter();
-
+  const { tenantFetch } = useTenantFetch();
+  
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
-        const res = await fetch(
+        const res = await tenantFetch(
           `/api/config/apps?page=${page}&size=${pageSize}`,
         );
         if (!res.ok) throw new Error('获取应用列表失败');
@@ -61,7 +62,7 @@ const ChatbotPage = () => {
   };
   const deleteChatbot = async (bot_id: string) => {
     try {
-      const res = await fetch(`/api/config/apps/${bot_id}`, {
+      const res = await tenantFetch(`/api/config/apps/${bot_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

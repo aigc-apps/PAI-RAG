@@ -18,6 +18,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import utc from 'dayjs/plugin/utc';
 import 'dayjs/locale/zh-cn';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 dayjs.extend(relativeTime);
 dayjs.extend(utc);
@@ -82,13 +83,14 @@ export default function KnowledgeBasePage() {
   const [searchQuery, setSearchQuery] = useState(''); // 搜索关键词
   const kbSizePerPage = 6;
   const router = useRouter();
+  const { tenantFetch } = useTenantFetch();
 
   // 获取知识库列表
   const fetchConfigs = useCallback(async (currentPage: number, query: string = '') => {
     try {
       setKnowledgeBasesLoading(true);
       const queryParam = query ? `&query=${encodeURIComponent(query)}` : '';
-      const res = await fetch(
+      const res = await tenantFetch(
         `/api/config/knowledgebases?page=${currentPage}&size=${kbSizePerPage}${queryParam}`,
       );
       if (!res.ok) throw new Error('获取知识库列表失败');
@@ -126,7 +128,7 @@ export default function KnowledgeBasePage() {
   };
   const deleteKnowledgebase = async (kb_id: string) => {
     try {
-      const res = await fetch(`/api/config/knowledgebases/${kb_id}`, {
+      const res = await tenantFetch(`/api/config/knowledgebases/${kb_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

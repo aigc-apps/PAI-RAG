@@ -26,6 +26,7 @@ import { useChatOptions } from '../providers/chat';
 import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
 import { v4 as uuidv4 } from 'uuid';
 import { AssistantStream, PlainTextDecoder } from "assistant-stream";
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 interface Props {
   children?: ReactNode;
@@ -81,6 +82,11 @@ export type EdgeModelAdapterOptions = {
   headers?: HeadersValue | (() => Promise<HeadersValue>);
 
   body?: object;
+
+  /**
+   * Tenant-aware fetch function for API calls
+   */
+  tenantFetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 };
 
 // This adapter connects LocalRuntime to your AI backend
@@ -125,8 +131,8 @@ export class MyModelAdapter implements ChatModelAdapter {
       (m) => (m.attachments ?? []).length > 0,
     );
 
-
-    const result = await fetch(this.options.api, {
+    const fetchFn = this.options.tenantFetch ?? fetch;
+    const result = await fetchFn(this.options.api, {
       method: 'POST',
       headers,
       credentials: this.options.credentials ?? 'same-origin',
@@ -337,111 +343,113 @@ export class MyModelAdapter implements ChatModelAdapter {
   }
 }
 
-// Implement your custom adapter with proper message persistence
-const myDatabaseAdapter: unstable_RemoteThreadListAdapter = {
-  async list() {
-    try {
-      const res = await fetch(`/api/threads`);
-      if (!res.ok) throw new Error('获取配置失败');
-      const response = await res.json();
-      return {
-        threads: response.data.map((t: any) => ({
-          status: t.archived ? 'archived' : 'regular',
-          remoteId: t.id,
-          title: t.title,
-        })),
-      };
-    } catch (error) {
-      console.error('Error fetching threads:', error);
-      return { threads: [] };
-    }
-  },
-  async initialize(threadId: string) {
-    isInitializing = true;
-
-    try {
-      const url = `/api/threads`;
-      const now = new Date();
-      const formattedTime = `${now.getFullYear()}-${String(
-        now.getMonth() + 1,
-      ).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(
-        now.getHours(),
-      ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: 'PAI-RAG Assistant',
-          title: `会话 - ${formattedTime}`, // 动态插入时间
-          archived: false,
-        }),
-      });
-
-      if (!response.ok) {
-        isInitializing = false;
-        throw new Error(`Failed to create thread: ${response.statusText}`);
+// 创建 adapter 的工厂函数，接收 tenantFetch 作为参数
+function createDatabaseAdapter(tenantFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>): unstable_RemoteThreadListAdapter {
+  return {
+    async list() {
+      try {
+        const res = await tenantFetch(`/api/threads`);
+        if (!res.ok) throw new Error('获取配置失败');
+        const response = await res.json();
+        return {
+          threads: response.data.map((t: any) => ({
+            status: t.archived ? 'archived' : 'regular',
+            remoteId: t.id,
+            title: t.title,
+          })),
+        };
+      } catch (error) {
+        console.error('Error fetching threads:', error);
+        return { threads: [] };
       }
+    },
+    async initialize(threadId: string) {
+      isInitializing = true;
 
-      const result = await response.json();
-      initializedThreadId = result.data.id;
+      try {
+        const url = `/api/threads`;
+        const now = new Date();
+        const formattedTime = `${now.getFullYear()}-${String(
+          now.getMonth() + 1,
+        ).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(
+          now.getHours(),
+        ).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-      return {
-        remoteId: result.data.id,
-        externalId: result.data.id,
-      };
-    } catch (error) {
-      console.error('Error creating thread:', error);
-      throw error;
-    }
-    finally {
-      isInitializing = false;
-    }
-  },
-  async rename(remoteId, newTitle) {
-    // await db.threads.update(remoteId, { title: newTitle });
-    // const thread = mockThreads.find((t) => t.id === remoteId);
-    // if (thread) thread.title = newTitle;
-  },
-  async archive(remoteId) {},
-  async unarchive(remoteId) {},
-  async delete(remoteId) {
-    try {
-      const res = await fetch(`/api/threads/${remoteId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!res.ok) {
+        const response = await tenantFetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: 'PAI-RAG Assistant',
+            title: `会话 - ${formattedTime}`, // 动态插入时间
+            archived: false,
+          }),
+        });
+
+        if (!response.ok) {
+          isInitializing = false;
+          throw new Error(`Failed to create thread: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        initializedThreadId = result.data.id;
+
+        return {
+          remoteId: result.data.id,
+          externalId: result.data.id,
+        };
+      } catch (error) {
+        console.error('Error creating thread:', error);
+        throw error;
+      }
+      finally {
+        isInitializing = false;
+      }
+    },
+    async rename(remoteId, newTitle) {
+      // await db.threads.update(remoteId, { title: newTitle });
+      // const thread = mockThreads.find((t) => t.id === remoteId);
+      // if (thread) thread.title = newTitle;
+    },
+    async archive(remoteId) {},
+    async unarchive(remoteId) {},
+    async delete(remoteId) {
+      try {
+        const res = await tenantFetch(`/api/threads/${remoteId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!res.ok) {
+          throw new Error('删除失败，请检查网络或配置');
+        }
+      } catch (err: any) {
+        // 显示错误提示
         throw new Error('删除失败，请检查网络或配置');
       }
-    } catch (err: any) {
-      // 显示错误提示
-      throw new Error('删除失败，请检查网络或配置');
-    }
-  },
-  async generateTitle(remoteId, messages) {
-    try {
-      const res = await fetch(`/api/threads/${remoteId}/title`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messages), 
-      });
-      if (!res.ok) {
+    },
+    async generateTitle(remoteId, messages) {
+      try {
+        const res = await tenantFetch(`/api/threads/${remoteId}/title`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(messages), 
+        });
+        if (!res.ok) {
+          throw new Error('生成标题失败，请检查网络或配置');
+        }
+        const data = await res.json();
+        return AssistantStream.fromByteStream(toByteStream(data.data.title) as ReadableStream<Uint8Array<ArrayBuffer>>, new PlainTextDecoder());
+
+      } catch (err: any) {
+        // 显示错误提示
         throw new Error('生成标题失败，请检查网络或配置');
       }
-      const data = await res.json();
-      return AssistantStream.fromByteStream(toByteStream(data.data.title) as ReadableStream<Uint8Array<ArrayBuffer>>, new PlainTextDecoder());
-
-    } catch (err: any) {
-      // 显示错误提示
-      throw new Error('生成标题失败，请检查网络或配置');
-    }
-  },
-};
+    },
+  };
+}
 
 
 export const StableProvider: React.ComponentType<{ children?: React.ReactNode }> = ({
@@ -450,6 +458,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
   // This runs in the context of each thread
   const threadListItem = useThreadListItem();
   const remoteId = threadListItem.remoteId;
+  const { tenantFetch } = useTenantFetch();
 
   // Create thread-specific history adapter
   const history = useMemo<ThreadHistoryAdapter>(
@@ -458,7 +467,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
         if (!remoteId) return { headId: null, messages: [] };
         // 模拟从后端获取数据
         try {
-          const res = await fetch(`/api/threads/${remoteId}/messages`);
+          const res = await tenantFetch(`/api/threads/${remoteId}/messages`);
 
           if (!res.ok) throw new Error('获取配置失败');
           const result = await res.json();
@@ -521,7 +530,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           else {
             msgParentIdMap.set(pid, msgId);
           }
-          const response = await fetch(url, {
+          const response = await tenantFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -558,16 +567,20 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
 
   // load chat options
   const { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id } = useChatOptions();
+  const { tenantFetch } = useTenantFetch();
+
+  // 创建带有 tenantFetch 的 adapter
+  const databaseAdapter = useMemo(() => createDatabaseAdapter(tenantFetch), [tenantFetch]);
 
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
       return useLocalThreadRuntime(
-        new MyModelAdapter({...otherOptions, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id }}),
+        new MyModelAdapter({...otherOptions, tenantFetch, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id }}),
         localRuntimeOptions,
       );
     },
     adapter: {
-      ...myDatabaseAdapter,
+      ...databaseAdapter,
       // The Provider component adds thread-specific adapters
       unstable_Provider: StableProvider,
     },

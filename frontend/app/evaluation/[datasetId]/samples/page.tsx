@@ -56,6 +56,7 @@ import { toast } from 'sonner';
 import { SampleDetailDialog } from '@/app/evaluation/components/sample-detail-dialog';
 import { useDatasetActions } from '@/app/evaluation/[datasetId]/samples/useDatasetActions';
 import { SampleItem } from '@/app/evaluation/[datasetId]/types';
+import { useTenantFetch } from "@/hooks/use-tenant-fetch";
 
 export default function EvalDatasetsDetailsPage({
     params,
@@ -96,7 +97,7 @@ export default function EvalDatasetsDetailsPage({
     // 上传状态
     const [uploading, setUploading] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-
+    const { tenantFetch } = useTenantFetch();
     const { runSamples, deleteSample, uploadFile } = useDatasetActions({ datasetId });
 
     // === 数据加载 ===
@@ -105,9 +106,9 @@ export default function EvalDatasetsDetailsPage({
             setIsLoading(true);
             try {
                 const [datasetRes, runConfigsRes, evalConfigsRes] = await Promise.all([
-                    fetch(`/api/config/evaluation/${datasetId}/samples?page=${page}&size=${pageSize}`),
-                    fetch(`/api/config/evaluation/${datasetId}/runconfigs`),
-                    fetch(`/api/config/evaluation/${datasetId}/evalconfigs`),
+                    tenantFetch(`/api/config/evaluation/${datasetId}/samples?page=${page}&size=${pageSize}`),
+                    tenantFetch(`/api/config/evaluation/${datasetId}/runconfigs`),
+                    tenantFetch(`/api/config/evaluation/${datasetId}/evalconfigs`),
                 ]);
 
                 // 加载分页数据
@@ -131,14 +132,14 @@ export default function EvalDatasetsDetailsPage({
 
                 // 加载所有数据（用于全选）
                 const tmpPageSize = 1000;
-                const firstPageRes = await fetch(`/api/config/evaluation/${datasetId}/samples?page=1&size=${tmpPageSize}`);
+                const firstPageRes = await tenantFetch(`/api/config/evaluation/${datasetId}/samples?page=1&size=${tmpPageSize}`);
                 if (!firstPageRes.ok) throw new Error('获取数据样本列表失败');
                 const json_data = await firstPageRes.json();
                 const tmpAllItems: SampleItem[] = [];
 
                 for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
                     console.log("加载所有数据，第", curPage, "页");
-                    const response = await fetch(`/api/config/evaluation/${datasetId}/samples?page=${curPage}&size=${tmpPageSize}`);
+                    const response = await tenantFetch(`/api/config/evaluation/${datasetId}/samples?page=${curPage}&size=${tmpPageSize}`);
                     const data = await response.json();
                     tmpAllItems.push(...data.data.items);
                 }
@@ -255,7 +256,7 @@ export default function EvalDatasetsDetailsPage({
 
     const handleSaveEdit = async (updatedSample: SampleItem) => {
         try {
-            const response = await fetch(`/api/config/evaluation/${datasetId}/samples/${updatedSample.id}`, {
+            const response = await tenantFetch(`/api/config/evaluation/${datasetId}/samples/${updatedSample.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(updatedSample),

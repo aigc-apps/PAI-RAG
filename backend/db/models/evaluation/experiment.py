@@ -3,6 +3,8 @@ import uuid
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime, Text
 from typing import Optional, List
+from common.system_constants import DEFAULT_TENANT_ID
+
 
 class ExperimentCreate(SQLModel):
     name: Optional[str] = None
@@ -19,10 +21,12 @@ class ExperimentCreate(SQLModel):
         ondelete="CASCADE",
     )
 
+
 class ExperimentEntity(SQLModel, table=True):
     __tablename__ = "pai_experiment"
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
         description="Reference to the evaluation task",
