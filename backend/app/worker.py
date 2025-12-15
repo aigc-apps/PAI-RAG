@@ -23,9 +23,9 @@ from rag.evaluation_tool import eval_client
 import asyncio
 from loguru import logger
 from typing import List
+from db.redis_conn import REDIS_URL
 
-
-DEFAULT_BROKER = "redis://localhost:6379/0"
+DEFAULT_BROKER = REDIS_URL
 
 
 app = Celery(

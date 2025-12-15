@@ -16,6 +16,7 @@ from db.models.knowledgebase.knowledgebase import (
 )
 from db.models.knowledgebase.file import KbFileEntity
 from common.chat.response_model import PagedResult
+from service.cache.redis_cache import redis_cache, kb_key, kb_name_key
 
 
 class KnowledgebaseService:
@@ -43,8 +44,18 @@ class KnowledgebaseService:
         Returns:
             KbEntity if found, None otherwise
         """
+        cache_key = kb_key(tenant_id, kb_id)
+        kb_data = await redis_cache.get(cache_key)
+        if kb_data:
+            logger.info(f"Get knowledgebase entity from cache: {kb_id}")
+            kb_entity = KbEntity.model_validate(kb_data)
+            return kb_entity
+
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
-        return result.first()
+        kb_entity = result.first()
+        if kb_entity:
+            await redis_cache.set(cache_key, kb_entity.model_dump(mode="json"))
+        return kb_entity
 
     async def get_knowledgebase_by_name(self, name: str, tenant_id: str) -> Optional[KbEntity]:
         """
@@ -56,9 +67,19 @@ class KnowledgebaseService:
         Returns:
             KbEntity if found, None otherwise
         """
+        cache_key = kb_name_key(tenant_id, name)
+        kb_data = await redis_cache.get(cache_key)
+        if kb_data:
+            logger.info(f"Get knowledgebase entity from cache: {name}")
+            kb_entity = KbEntity.model_validate(kb_data)
+            return kb_entity
+
         statement = select(KbEntity).where(KbEntity.name == name, KbEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
-        return result.first()
+        kb_entity = result.first()
+        if kb_entity:
+            await redis_cache.set(cache_key, kb_entity.model_dump(mode="json"))
+        return kb_entity
 
     async def get_knowledgebases_by_ids(self, tenant_id: str, kb_ids: List[str]) -> List[KbEntity]:
         """
@@ -147,7 +168,7 @@ class KnowledgebaseService:
         items = []
         for kb_entity, file_count in kb_entities_with_counts:
             kb_dict = (
-                kb_entity.model_dump()
+                kb_entity.model_dump(mode="json")
                 if hasattr(kb_entity, "model_dump")
                 else kb_entity.__dict__
             )
@@ -229,10 +250,17 @@ class KnowledgebaseService:
         Raises:
             ValueError: If Knowledgebase entity not found
         """
+        cache_key = kb_key(tenant_id, kb_id)
+        await redis_cache.delete(cache_key)
+
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
         if not knowledgebase:
             raise ValueError(f"知识库 '{kb_id}' 不存在。")
+
+        cache_name_key = kb_name_key(tenant_id, knowledgebase.name)
+        await redis_cache.delete(cache_name_key)
+
 
         logger.info(f"Updating Knowledgebase {kb_id} with data: {update_data}")
 
@@ -243,6 +271,8 @@ class KnowledgebaseService:
             knowledgebase.description = update_data.description
         if update_data.embedding_model is not None:
             knowledgebase.embedding_model = update_data.embedding_model
+        if update_data.embedding_provider_name is not None:
+            knowledgebase.embedding_provider_name = update_data.embedding_provider_name
         if update_data.chunk_config is not None:
             knowledgebase.chunk_config = update_data.chunk_config.model_dump()
         if update_data.retrieval_config is not None:
@@ -255,6 +285,8 @@ class KnowledgebaseService:
         # Flush to ensure changes are staged
         await self.session.flush()
         await self.session.refresh(knowledgebase)
+
+        await redis_cache.set(cache_key, knowledgebase.model_dump(mode="json"))
 
         logger.info(
             f"Updated Knowledgebase entity: {knowledgebase.id} (name: {knowledgebase.name})"
@@ -274,6 +306,8 @@ class KnowledgebaseService:
         Raises:
             ValueError: If Knowledgebase entity not found
         """
+        cache_key = kb_key(tenant_id, kb_id)
+        await redis_cache.delete(cache_key)
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
         if not knowledgebase:

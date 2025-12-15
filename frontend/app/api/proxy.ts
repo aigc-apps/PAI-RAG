@@ -46,7 +46,12 @@ export async function proxyRequest(request: NextRequest) {
           }
         }
         body = externalFormData;
+        // 保留 X-TENANT-ID header
+        const tenantId = request.headers.get('X-TENANT-ID');
         headers = new Headers();
+        if (tenantId) {
+          headers.set('X-TENANT-ID', tenantId);
+        }
     } else {
       // JSON 或其他：读取为 text，再传给 fetch
       const text = await request.text();

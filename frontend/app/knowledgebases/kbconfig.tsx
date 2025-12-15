@@ -647,11 +647,13 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     <Select
                       defaultValue={kb.retrieval_config.rerank_model}
                       onValueChange={(value) => {
+                        const selectedModel = rerankermodels.find(m => m.model_id === value);
                         setKb((prev) => ({
                           ...prev,
                           retrieval_config: {
                             ...prev.retrieval_config,
                             rerank_model: value,
+                            rerank_provider_name: selectedModel?.provider_name || 'openai_like',
                           },
                         }));
                       }}
@@ -702,85 +704,6 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           </Card>
         </div>
 
-        <div className="flex gap-3 px-4 items-center pt-3">
-          <Label className="w-[100px] text-xs">开启重排序</Label>
-          <Checkbox
-            id="enable_reranker"
-            checked={kb.retrieval_config.enable_rerank ?? false}
-            onCheckedChange={(checked) => {
-              setKb((prev) => ({
-                ...prev,
-                retrieval_config: {
-                  ...prev.retrieval_config,
-                  enable_rerank: Boolean(checked),
-                },
-              }));
-            }}
-            className="h-3.5 w-3.5"
-          />
-          {kb.retrieval_config.enable_rerank && (
-            <>
-              <div className="flex ml-20 items-center">
-                <Label htmlFor="rerank_model" className="w-[100px] text-xs">
-                  重排序模型
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={kb.retrieval_config.rerank_model}
-                  onValueChange={(value) => {
-                    const selectedModel = rerankermodels.find(m => m.model_id === value);
-                    setKb((prev) => ({
-                      ...prev,
-                      retrieval_config: {
-                        ...prev.retrieval_config,
-                        rerank_model: value,
-                        rerank_provider_name: selectedModel?.provider_name || 'openai_like',
-                      },
-                    }));
-                  }}
-                >
-                  <SelectTrigger className="h-6 text-xs">
-                    <SelectValue placeholder="请选择重排序模型" />
-                  </SelectTrigger>
-                  <SelectContent className="text-xs">
-                    <SelectGroup>
-                      {rerankermodels.map((model) => (
-                        <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
-                          {model.model_id}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex ml-20 items-center">
-                <Label htmlFor="rerank_top_k" className="w-[100px] text-xs">
-                  Rerank-Top-K
-                </Label>
-                <Slider
-                  className="w-60"
-                  defaultValue={[5]}
-                  max={10}
-                  min={0}
-                  step={1}
-                  value={[kb.retrieval_config.rerank_top_k ?? 5]}
-                  onValueChange={(value: number[]) => {
-                    setKb((prev) => ({
-                      ...prev,
-                      retrieval_config: {
-                        ...prev.retrieval_config,
-                        rerank_top_k: value[0],
-                      },
-                    }));
-                  }}
-                />
-                <span className="font-medium ml-2 text-xs">
-                  {kb.retrieval_config.rerank_top_k ?? 5}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
         <div className="block w-full">
           {saveErrorMsg !== '' && (
             <Alert variant="destructive" className="text-xs py-2">
