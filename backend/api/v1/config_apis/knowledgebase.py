@@ -270,6 +270,7 @@ async def upload_files(
                 import app.worker as background_worker
                 background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
                 logger.info(f"Queued {file_entity.id} job successfully.")
+
             session.add(file_entity)
 
         logger.info(f"Uploaded {len(new_file_entities)} files successfully.")
