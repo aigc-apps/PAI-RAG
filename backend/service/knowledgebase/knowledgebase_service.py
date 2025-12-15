@@ -271,6 +271,8 @@ class KnowledgebaseService:
             knowledgebase.description = update_data.description
         if update_data.embedding_model is not None:
             knowledgebase.embedding_model = update_data.embedding_model
+        if update_data.embedding_provider_name is not None:
+            knowledgebase.embedding_provider_name = update_data.embedding_provider_name
         if update_data.chunk_config is not None:
             knowledgebase.chunk_config = update_data.chunk_config.model_dump()
         if update_data.retrieval_config is not None:
