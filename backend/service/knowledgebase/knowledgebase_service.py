@@ -306,6 +306,8 @@ class KnowledgebaseService:
         Raises:
             ValueError: If Knowledgebase entity not found
         """
+        cache_key = kb_key(tenant_id, kb_id)
+        await redis_cache.delete(cache_key)
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
         if not knowledgebase:
