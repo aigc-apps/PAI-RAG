@@ -14,7 +14,7 @@ async def upload_form_files_async(
 ) -> List[FileItem]:
     file_items = []
     for single_file in files:
-        logger.info(f"Uploading file {single_file.filename}...")
+        logger.info(f"Uploading file {single_file.filename} to tenant_id {tenant_id}...")
         file_name = single_file.filename
         file_data = single_file.file
         if single_file.filename.endswith(".xls"):
@@ -37,7 +37,7 @@ async def upload_form_files_async(
         )
         file_items.append(file_item)
 
-        logger.info(f"Uploaded file {file_name} to {destination_file_path} successfully.")
+        logger.info(f"Uploaded file {file_name} to {destination_file_path} to tenant_id {tenant_id} successfully.")
 
     return file_items
 
@@ -60,9 +60,9 @@ async def upload_file_names_async(
     for file_task in parse_tasks:
         file_path = file_task.file_path
         file_name = file_task.file_name
-        logger.info(f"Retrieving file {file_name} from file_store...")
+        logger.info(f"Retrieving file {file_name} from file_store to tenant_id {tenant_id}...")
         file = await file_store.read_async(file_path=file_path, tenant_id=tenant_id)
         file_item = FileItem.from_file(file_path=file_path, file=file, kb_id=kb_id, file_name=file_name, tenant_id=tenant_id)
         file_items.append(file_item)
-        logger.info(f"Retrieved file {file_name} from file_store successfully.")
+        logger.info(f"Retrieved file {file_name} from file_store to tenant_id {tenant_id} successfully.")
     return file_items

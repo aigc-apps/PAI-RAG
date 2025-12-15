@@ -39,7 +39,7 @@ from common.system_constants import ENABLE_TENANT_ID, DEFAULT_TENANT_ID
 # 依赖项函数：从请求头中获取 Tenant ID
 async def get_tenant_id(
     # 使用 FastAPI Header 依赖项来获取 HTTP 请求头 'X-Tenant-ID' 的值
-    x_tenant_id: Optional[str] = Header(None, alias="X-TENANT-ID")
+    x_tenant_id: Optional[str] = Header(None, alias="X-TENANT-ID"),
 ) -> str:
     """
     从请求头中提取 X-TENANT-ID
