@@ -19,11 +19,13 @@ from sqlalchemy.exc import IntegrityError
 from pairag.file.store.file_store_helper import file_store
 from common.chat.response_model import ResponseModel, success_response
 from api.api_exception import ApiException
-from service.injection import get_rag_service, get_file_service, get_chunk_service, get_tenant_id
+from service.injection import get_rag_service, get_file_service, get_chunk_service, get_tenant_id, get_knowledgebase_service
 from service.knowledgebase.rag_service import RagService
 from service.knowledgebase.file_service import FileService
 from service.knowledgebase.chunk_service import ChunkService
+from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from loguru import logger
+from utils.list_api_utils import parse_comma_separated_list
 from utils.upload_file_utils import upload_form_files_async, upload_file_names_async, StartParseTaskRequest
 
 knowledgebase_router = APIRouter()
@@ -59,13 +61,20 @@ async def list_knowledgebases(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     query: Optional[str] = None,
+    ids: Optional[str]=Query(default=None, description="IDs separated by comma, e.g. abc,123"),
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
     try:
-        paged_result = await rag_service.list_knowledgebases(tenant_id=tenant_id, page=page, size=size, query=query)
-        return success_response(data=paged_result, message="获取知识库列表成功")
+        if not ids:
+            paged_result = await rag_service.list_knowledgebases(tenant_id=tenant_id, page=page, size=size, query=query)
+            return success_response(data=paged_result, message="获取知识库列表成功")
+        else:
+            kb_ids = parse_comma_separated_list(ids)
+            total_result = await knowledgebase_service.get_knowledgebases_by_ids(tenant_id=tenant_id, kb_ids=kb_ids)
+            return success_response(data=total_result, message="获取知识库列表成功")
     except ValueError as e:
         logger.error(f"获取知识库列表失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
@@ -261,6 +270,7 @@ async def upload_files(
                 import app.worker as background_worker
                 background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
                 logger.info(f"Queued {file_entity.id} job successfully.")
+
             session.add(file_entity)
 
         logger.info(f"Uploaded {len(new_file_entities)} files successfully.")

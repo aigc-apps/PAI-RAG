@@ -59,7 +59,7 @@ async def asearch_knowledgebase(
         node_results = await rag_service.aquery(
             query=query,
             user_id=user_id,
-            knowledge_id=knowledgebase_id,
+            kb_id=knowledgebase_id,
             retrieval_setting=retrieval_setting,
             metadata_condition=metadata_condition,
             tenant_id=tenant_id,

@@ -294,9 +294,10 @@ class LlmService:
             LlmModelEntity if found, None otherwise
         """
         statement = select(LlmModelEntity).where(
-            LlmModelEntity.provider_name == provider_name,
             LlmModelEntity.model_id == model_id,
             LlmModelEntity.tenant_id == tenant_id
         )
+        if provider_name:
+            statement = statement.where(LlmModelEntity.provider_name == provider_name)
         result = await self.session.exec(statement)
         return result.first()

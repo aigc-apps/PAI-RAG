@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import re
 import uuid
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime, Text, UniqueConstraint
 from common.knowledgebase.constants import (
@@ -89,3 +89,8 @@ class KbEntity(SQLModel, table=True):
         if not re.fullmatch(r"[\w-]+", v):
             raise ValueError("知识库名称只能包含字母、数字和下划线。")
         return v
+
+    # Pydantic V2 配置
+    model_config = ConfigDict(json_encoders={
+        datetime: lambda v: v.isoformat()
+    })

@@ -9,7 +9,7 @@ from loguru import logger
 async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str | None =None, rag_service: RagService | None = None, tenant_id: str = None) -> str:
     """Get aliyun search tool"""
     logger.info(f"Searching knowledgebase with kb {kb_id} and user {user_id}.")
-    records = await rag_service.aquery(query=query, knowledge_id=kb_id, user_id=user_id, tenant_id=tenant_id)
+    records = await rag_service.aquery(query=query, kb_id=kb_id, user_id=user_id, tenant_id=tenant_id)
     return json.dumps({"result": records}, ensure_ascii=False)
 
 

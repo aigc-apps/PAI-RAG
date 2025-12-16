@@ -8,6 +8,7 @@ from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
+from contextlib import asynccontextmanager
 from functools import wraps
 from typing import AsyncGenerator
 
@@ -122,6 +123,32 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
     finally:
         # 5. 资源清理：无论成功还是失败，最终都会执行 close
+        await session.close()
+
+
+@asynccontextmanager
+async def create_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    一个可重用的异步上下文管理器。
+    它手动创建 Session，并在 with 块退出时自动处理 commit/rollback/close。
+    """
+    # 事务开始：使用 Session Factory 创建新的 Session
+    session = AsyncSessionLocal()
+
+    try:
+        # 暂停执行：将 Session 注入到 'async with' 块中
+        yield session
+
+        # 成功路径：如果 with 块中没有异常，执行 commit
+        await session.commit()
+
+    except Exception:
+        # 失败路径：如果 with 块中抛出异常，执行 rollback
+        await session.rollback()
+        raise # 重新抛出异常
+
+    finally:
+        # 资源清理：无论成功还是失败，最终都会执行 close
         await session.close()
 
 

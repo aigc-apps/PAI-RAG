@@ -372,10 +372,11 @@ class EmbeddingService:
             EmbeddingModelEntity if found, None otherwise
         """
         statement = select(EmbeddingModelEntity).where(
-            EmbeddingModelEntity.provider_name == provider_name,
             EmbeddingModelEntity.model_id == model_id,
             EmbeddingModelEntity.tenant_id == tenant_id
         )
+        if provider_name:
+            statement = statement.where(EmbeddingModelEntity.provider_name == provider_name)
         embedding_entity = await self.session.exec(statement)
         embedding = embedding_entity.first()
         return embedding
