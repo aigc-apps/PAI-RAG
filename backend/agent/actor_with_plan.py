@@ -1,4 +1,3 @@
-import json
 import traceback
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from loguru import logger
@@ -10,6 +9,7 @@ from common.llm.llm_model import PaiLlm
 from common.llm.models import TextChunk, ChatResponseGenerator, ToolResultChunk
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
+from utils.json_utils import parse_tool_arguments
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -58,107 +58,116 @@ class ActorWithPlan(BaseAgent):
     @pai_agent_wrapper
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:
         logger.info("Running actor_with_plan agent.")
-        act_with_plan_prompt = self.build_prompt(state)
-        messages = [{"role": "user", "content": act_with_plan_prompt}]
+        try:
+            act_with_plan_prompt = self.build_prompt(state)
+            messages = [{"role": "user", "content": act_with_plan_prompt}]
 
-        @use_current_span(trace.get_current_span())
-        async def gen():
-            action_step = 1
-            while action_step <= self.max_steps:
-                logger.info(f"Acting at step {action_step} with messages: {messages}")
-                action_step += 1
+            @use_current_span(trace.get_current_span())
+            async def gen():
+                action_step = 1
+                while action_step <= self.max_steps:
+                    logger.info(f"Acting at step {action_step} with messages: {messages}")
+                    action_step += 1
 
-                tool_calls = []
+                    tool_calls = []
 
-                step_content = ""
-                async for chunk in await self.invoke_llm_async(
-                    messages=messages,
-                    tools=self.tool_metadata,
-                ):
-                    if chunk.tool_calls:
-                        tool_calls = chunk.tool_calls
-                    if chunk.delta:
-                        step_content += chunk.delta
-                        yield TextChunk(
-                            delta=chunk.delta
-                        )
-
-                if step_content:
-                    messages.append({
-                        "role": "assistant",
-                        "content": step_content,
-                    })
                     step_content = ""
-
-                if tool_calls:
-                    for tool in tool_calls:
-                        if tool.type == "function":
-                            function_name = tool.function.name
-                            if not function_name or function_name not in self.tool_fn_map:
-                                logger.warning(f"Unknown tool_call: {tool}, skip it.")
-                                continue
-
-
-                            if function_name == "respond-tool":
-                                logger.info("Actor finished with respond-tool.")
-                                yield TextChunk(tool_calls=[tool])
-                                return
-
-
-                            if tool.function.arguments:
-                                function_args = json.loads(tool.function.arguments)
-                            else:
-                                function_args = {}
-
+                    async for chunk in await self.invoke_llm_async(
+                        messages=messages,
+                        tools=self.tool_metadata,
+                    ):
+                        if chunk.tool_calls:
+                            tool_calls = chunk.tool_calls
+                        if chunk.delta:
+                            step_content += chunk.delta
                             yield TextChunk(
-                                tool_calls=[tool],
+                                delta=chunk.delta
                             )
-                            async_fn = self.tool_fn_map[function_name]
-                            logger.info(f"Calling tool {function_name} with args {function_args}.")
-                            try:
-                                tool_result = await call_tool_with_retry(async_fn, function_args)
-                                tool_content = tool_result.content
-                                tool_error = None
-                                message_content = tool_content
-                            except RetryError as retry_err:
-                                logger.error(f"Call tool failed: {traceback.format_exc()}")
-                                inner_exception = retry_err.last_attempt.exception()
-                                tool_content = None
-                                tool_error = f"工具调用失败: {inner_exception}"
-                                message_content = tool_error
-                            except Exception as ex:
-                                logger.error(f"Call tool failed: {traceback.format_exc()}")
-                                tool_content = None
-                                tool_error = f"工具调用失败: {ex}"
-                                message_content = tool_error
 
-                            #logger.info(f"Get tool result {tool_result}.")
-                            messages.append(
-                                {
-                                    "role": "assistant",
-                                    "content": None,
-                                    "tool_calls": [
-                                        tool
-                                    ]
-                                }
-                            )
-                            messages.append(
-                                {
-                                    "role": "tool",
-                                    "content": message_content,
-                                    "tool_call_id": tool.id
-                                }
-                            )
-                            yield ToolResultChunk(
-                                tool=tool,
-                                result=tool_content,
-                                error=tool_error
-                            )
-                else:
-                    break
+                    if step_content:
+                        messages.append({
+                            "role": "assistant",
+                            "content": step_content,
+                        })
+                        step_content = ""
 
-            if action_step > self.max_steps:
-                yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+                    if tool_calls:
+                        for tool in tool_calls:
+                            if tool.type == "function":
+                                function_name = tool.function.name
+                                if not function_name or function_name not in self.tool_fn_map:
+                                    logger.warning(f"Unknown tool_call: {tool}, skip it.")
+                                    continue
 
 
-        return gen()
+                                if function_name == "respond-tool":
+                                    logger.info("Actor finished with respond-tool.")
+                                    yield TextChunk(tool_calls=[tool])
+                                    return
+
+
+                                function_args = parse_tool_arguments(
+                                    tool.function.arguments or "",
+                                    agent_name=self.name
+                                )
+
+                                yield TextChunk(
+                                    tool_calls=[tool],
+                                )
+                                async_fn = self.tool_fn_map[function_name]
+                                logger.info(f"Calling tool {function_name} with args {function_args}.")
+                                try:
+                                    tool_result = await call_tool_with_retry(async_fn, function_args)
+                                    tool_content = tool_result.content
+                                    tool_error = None
+                                    message_content = tool_content
+                                except RetryError as retry_err:
+                                    logger.error(f"Call tool failed: {traceback.format_exc()}")
+                                    inner_exception = retry_err.last_attempt.exception()
+                                    tool_content = None
+                                    tool_error = f"工具调用失败: {inner_exception}"
+                                    message_content = tool_error
+                                except Exception as ex:
+                                    logger.error(f"Call tool failed: {traceback.format_exc()}")
+                                    tool_content = None
+                                    tool_error = f"工具调用失败: {ex}"
+                                    message_content = tool_error
+
+                                #logger.info(f"Get tool result {tool_result}.")
+                                messages.append(
+                                    {
+                                        "role": "assistant",
+                                        "content": None,
+                                        "tool_calls": [
+                                            tool
+                                        ]
+                                    }
+                                )
+                                messages.append(
+                                    {
+                                        "role": "tool",
+                                        "content": message_content,
+                                        "tool_call_id": tool.id
+                                    }
+                                )
+                                yield ToolResultChunk(
+                                    tool=tool,
+                                    result=tool_content,
+                                    error=tool_error
+                                )
+                    else:
+                        break
+
+                if action_step > self.max_steps:
+                    yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+
+            return self._wrap_generator_with_cleanup(gen())
+        except Exception:
+            # 如果执行出错，也要清理
+            if not self._cleanup_called and self._cleanup_func:
+                self._cleanup_called = True
+                try:
+                    await self._cleanup_func()
+                except Exception as cleanup_error:
+                    logger.exception(f"Failed to cleanup in {self.name} after error: {cleanup_error}")
+            raise

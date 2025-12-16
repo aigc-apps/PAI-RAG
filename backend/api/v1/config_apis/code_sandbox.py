@@ -60,7 +60,9 @@ async def list_code_sandbox_config(
                 type=configs[0].type,
                 aliyun_id=configs[0].aliyun_id,
                 interpreter_id=configs[0].interpreter_id,
+                interpreter_name=configs[0].interpreter_name,
                 enabled=configs[0].enabled,
+                timeout_default=configs[0].timeout_default,
                 id=configs[0].id,
             )
             return success_response(data=[code_sandbox_config_read], message="查询代码沙盒配置成功。")

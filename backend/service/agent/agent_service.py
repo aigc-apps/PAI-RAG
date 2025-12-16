@@ -13,54 +13,8 @@ from llama_index.core.tools.function_tool import FunctionTool
 from sqlmodel.ext.asyncio.session import AsyncSession
 from agent.base import BaseAgent
 from agent.planner import PlanAgentPromptSet, Planner
-from agent.state import AgentState
-from common.llm.models import ChatResponseGenerator
 from loguru import logger
 from typing import List, Callable, Awaitable, Dict
-
-
-class AgentWithCleanup(BaseAgent):
-    """包装器类，在 agent 执行完成后自动清理资源"""
-    def __init__(self, agent: BaseAgent, cleanup_func: Callable):
-        super().__init__(
-            prompt=agent.prompt,
-            llm=agent.llm,
-            tools=agent.tools,
-            name=agent.name,
-        )
-        self._agent = agent
-        self._cleanup_func = cleanup_func
-        self._cleanup_called = False
-
-    async def run_async(self, state: AgentState) -> ChatResponseGenerator:
-        try:
-            # 调用原始 agent 的 run_async
-            response_gen = await self._agent.run_async(state)
-
-            # 包装生成器，在完成后清理
-            async def wrapped_gen():
-                try:
-                    async for item in response_gen:
-                        yield item
-                finally:
-                    # 确保清理函数只调用一次
-                    if not self._cleanup_called:
-                        self._cleanup_called = True
-                        try:
-                            await self._cleanup_func()
-                        except Exception as e:
-                            logger.exception(f"Failed to cleanup code sandbox: {e}")
-
-            return wrapped_gen()
-        except Exception:
-            # 如果执行出错，也要清理
-            if not self._cleanup_called:
-                self._cleanup_called = True
-                try:
-                    await self._cleanup_func()
-                except Exception as cleanup_error:
-                    logger.exception(f"Failed to cleanup code sandbox after error: {cleanup_error}")
-            raise
 
 
 def append_text(user_message: Dict, text: str):
@@ -140,11 +94,8 @@ class AgentService:
                 prompt_set=prompt_set,
                 tools=tools,
                 name="Planner",
+                cleanup_func=cleanup_tools_func,
             )
-
-            # 如果有清理函数，包装 agent 以在执行完成后自动清理
-            if cleanup_tools_func:
-                runner = AgentWithCleanup(runner, cleanup_tools_func)
 
             return runner
         except Exception as ex:

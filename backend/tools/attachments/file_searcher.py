@@ -24,6 +24,7 @@ async def aget_file_retrieve_results(
         kb_name=ATTACHMENT_KNOWLEDGEBASE_NAME,
         retrieval_setting=RetrievalSetting(top_k=5, score_threshold=0.1),
         document_ids=doc_ids,
+        tenant_id=tenant_id,
     )
     records = []
     for node in search_results:
