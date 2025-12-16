@@ -371,6 +371,7 @@ class EmbeddingService:
         Returns:
             EmbeddingModelEntity if found, None otherwise
         """
+        logger.info(f"Getting embedding model by provider {provider_name} and model id {model_id} for tenant {tenant_id}.")
         statement = select(EmbeddingModelEntity).where(
             EmbeddingModelEntity.model_id == model_id,
             EmbeddingModelEntity.tenant_id == tenant_id

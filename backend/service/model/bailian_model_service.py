@@ -24,6 +24,7 @@ class BailianModelService:
     def __init__(self):
         self.endpoint = os.environ.get("BAILIAN_CONSOLE_ENDPOINT", "").rstrip("/")
         assert self.endpoint, "BAILIAN_CONSOLE_ENDPOINT is not set."
+        logger.info(f"Bailian model service initialized with endpoint: {self.endpoint}")
 
     async def _get_bailian_model_by_provider_model_id(self, provider_name: str, model_id: str, tenant_id: str) -> dict:
         """
