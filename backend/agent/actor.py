@@ -57,118 +57,24 @@ class Actor(BaseAgent):
         try:
             @use_current_span(trace.get_current_span())
             async def gen():
-                react_step = 1
-                messages = state.messages.copy()
-                observations = ""
-                if state.current_tool_call:
-                    selected_tool = state.current_tool_call
-                    tool_name = selected_tool.function.name
+                try:
+                    react_step = 1
+                    messages = state.messages.copy()
+                    observations = ""
+                    if state.current_tool_call:
+                        selected_tool = state.current_tool_call
+                        tool_name = selected_tool.function.name
 
-                    function_args = parse_tool_arguments(
-                        selected_tool.function.arguments or "",
-                        agent_name=self.name
-                    )
-
-                    yield TextChunk(
-                        tool_calls=[selected_tool],
-                    )
-                    async_fn = self.tool_fn_map[tool_name]
-                    logger.info(f"Calling tool {tool_name} with args {function_args}.")
-                    try:
-                        tool_result = await call_tool_with_retry(async_fn, function_args)
-                        tool_content = tool_result.content
-                        tool_error = None
-                        message_content = tool_content
-                    except RetryError as retry_err:
-                        logger.error(f"Call tool failed: {traceback.format_exc()}")
-                        inner_exception = retry_err.last_attempt.exception()
-                        tool_content = None
-                        tool_error = f"工具调用失败: {inner_exception}"
-                        message_content = tool_error
-                    except Exception as ex:
-                        logger.error(f"Call tool failed: {traceback.format_exc()}")
-                        tool_content = None
-                        tool_error = f"工具调用失败: {ex}"
-                        message_content = tool_error
-
-                    #logger.info(f"Get tool result {tool_result}.")
-                    messages.append(
-                        {
-                            "role": "assistant",
-                            "content": None,
-                            "tool_calls": [
-                                selected_tool
-                            ]
-                        }
-                    )
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "content": message_content,
-                            "tool_call_id": selected_tool.id
-                        }
-                    )
-                    yield ToolResultChunk(
-                        tool=selected_tool,
-                        result=tool_content,
-                        error=tool_error
-                    )
-
-                    state.current_tool_call = None
-                    observations += message_content + "\n\n"
-                act_prompt = self.build_prompt(state)
-                messages = [{"role": "system", "content": act_prompt}] + messages
-
-                while react_step <= self.max_steps:
-                    logger.info(f"[{self.name}] ReAct step {react_step} / {self.max_steps}")
-                    react_step += 1
-
-                    tool_calls = []
-                    step_content = ""
-
-
-                    async for chunk in await self.invoke_llm_async(
-                        messages=messages,
-                        tools=self.tool_metadata,
-                    ):
-                        if chunk.tool_calls:
-                            tool_calls = chunk.tool_calls
-                        if chunk.delta:
-                            step_content += chunk.delta
-                            yield TextChunk(delta=chunk.delta)
-
-                    if step_content:
-                        messages.append({
-                            "role": "assistant",
-                            "content": step_content,
-                        })
-                        step_content = ""
-
-                    if not tool_calls:
-                        logger.info(f"[{self.name}] No more tool calls. Exiting ReAct loop.")
-                        break
-
-                    # 处理工具调用
-                    for tool in tool_calls:
-                        if tool.type != "function":
-                            continue
-
-                        function_name = tool.function.name
-                        if not function_name or function_name not in self.tool_fn_map:
-                            logger.warning(f"[{self.name}] Unknown tool: {function_name}, skipping.")
-                            continue
-
-                        # 解析工具参数，尝试多种方法处理格式不正确的 JSON
                         function_args = parse_tool_arguments(
-                            tool.function.arguments or "",
+                            selected_tool.function.arguments or "",
                             agent_name=self.name
                         )
 
-                        yield TextChunk(tool_calls=[tool])
-
-                        # 调用工具
-                        async_fn = self.tool_fn_map[function_name]
-                        logger.info(f"[{self.name}] Calling {function_name} with args: {function_args}")
+                        yield TextChunk(
+                            tool_calls=[selected_tool],
+                        )
+                        async_fn = self.tool_fn_map[tool_name]
+                        logger.info(f"Calling tool {tool_name} with args {function_args}.")
                         try:
                             tool_result = await call_tool_with_retry(async_fn, function_args)
                             tool_content = tool_result.content
@@ -192,7 +98,7 @@ class Actor(BaseAgent):
                                 "role": "assistant",
                                 "content": None,
                                 "tool_calls": [
-                                    tool
+                                    selected_tool
                                 ]
                             }
                         )
@@ -200,34 +106,137 @@ class Actor(BaseAgent):
                             {
                                 "role": "tool",
                                 "content": message_content,
-                                "tool_call_id": tool.id
+                                "tool_call_id": selected_tool.id
                             }
                         )
                         yield ToolResultChunk(
-                            tool=tool,
+                            tool=selected_tool,
                             result=tool_content,
                             error=tool_error
                         )
+
+                        state.current_tool_call = None
                         observations += message_content + "\n\n"
+                    act_prompt = self.build_prompt(state)
+                    messages = [{"role": "system", "content": act_prompt}] + messages
 
-                # 超出步数保护
-                if react_step > self.max_steps:
-                    logger.warning(f"Reached max recursion steps: {self.max_steps}")
-                    current_datetime = state.context_variables.get("current_datetime", "")
-                    prompt = SUMMARY_PROMPT.format(
-                        tool_results=observations,
-                        chat_history=state.chat_history,
-                        current_datetime=current_datetime,
-                        user_query=state.user_query,
-                    )
-                    response_gen = await self.invoke_llm_async(messages=[
-                    {"role": MessageRole.USER, "content": prompt},
-                ])
-                    async for chunk in response_gen:
-                        yield chunk
-                    return
+                    while react_step <= self.max_steps:
+                        logger.info(f"[{self.name}] ReAct step {react_step} / {self.max_steps}")
+                        react_step += 1
 
-            return self._wrap_generator_with_cleanup(gen())
+                        tool_calls = []
+                        step_content = ""
+
+
+                        async for chunk in await self.invoke_llm_async(
+                            messages=messages,
+                            tools=self.tool_metadata,
+                        ):
+                            if chunk.tool_calls:
+                                tool_calls = chunk.tool_calls
+                            if chunk.delta:
+                                step_content += chunk.delta
+                                yield TextChunk(delta=chunk.delta)
+
+                        if step_content:
+                            messages.append({
+                                "role": "assistant",
+                                "content": step_content,
+                            })
+                            step_content = ""
+
+                        if not tool_calls:
+                            logger.info(f"[{self.name}] No more tool calls. Exiting ReAct loop.")
+                            break
+
+                        # 处理工具调用
+                        for tool in tool_calls:
+                            if tool.type != "function":
+                                continue
+
+                            function_name = tool.function.name
+                            if not function_name or function_name not in self.tool_fn_map:
+                                logger.warning(f"[{self.name}] Unknown tool: {function_name}, skipping.")
+                                continue
+
+                            # 解析工具参数，尝试多种方法处理格式不正确的 JSON
+                            function_args = parse_tool_arguments(
+                                tool.function.arguments or "",
+                                agent_name=self.name
+                            )
+
+                            yield TextChunk(tool_calls=[tool])
+
+                            # 调用工具
+                            async_fn = self.tool_fn_map[function_name]
+                            logger.info(f"[{self.name}] Calling {function_name} with args: {function_args}")
+                            try:
+                                tool_result = await call_tool_with_retry(async_fn, function_args)
+                                tool_content = tool_result.content
+                                tool_error = None
+                                message_content = tool_content
+                            except RetryError as retry_err:
+                                logger.error(f"Call tool failed: {traceback.format_exc()}")
+                                inner_exception = retry_err.last_attempt.exception()
+                                tool_content = None
+                                tool_error = f"工具调用失败: {inner_exception}"
+                                message_content = tool_error
+                            except Exception as ex:
+                                logger.error(f"Call tool failed: {traceback.format_exc()}")
+                                tool_content = None
+                                tool_error = f"工具调用失败: {ex}"
+                                message_content = tool_error
+
+                            #logger.info(f"Get tool result {tool_result}.")
+                            messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": None,
+                                    "tool_calls": [
+                                        tool
+                                    ]
+                                }
+                            )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "content": message_content,
+                                    "tool_call_id": tool.id
+                                }
+                            )
+                            yield ToolResultChunk(
+                                tool=tool,
+                                result=tool_content,
+                                error=tool_error
+                            )
+                            observations += message_content + "\n\n"
+
+                    # 超出步数保护
+                    if react_step > self.max_steps:
+                        logger.warning(f"Reached max recursion steps: {self.max_steps}")
+                        current_datetime = state.context_variables.get("current_datetime", "")
+                        prompt = SUMMARY_PROMPT.format(
+                            tool_results=observations,
+                            chat_history=state.chat_history,
+                            current_datetime=current_datetime,
+                            user_query=state.user_query,
+                        )
+                        response_gen = await self.invoke_llm_async(messages=[
+                        {"role": MessageRole.USER, "content": prompt},
+                    ])
+                        async for chunk in response_gen:
+                            yield chunk
+                        return
+                finally:
+                    # 确保清理函数只调用一次
+                    if not self._cleanup_called and self._cleanup_func:
+                        self._cleanup_called = True
+                        try:
+                            await self._cleanup_func()
+                        except Exception as e:
+                            logger.exception(f"Failed to cleanup in {self.name}: {e}")
+
+            return gen()
         except Exception:
             # 如果执行出错，也要清理
             if not self._cleanup_called and self._cleanup_func:

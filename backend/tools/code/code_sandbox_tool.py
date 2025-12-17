@@ -176,61 +176,52 @@ class CodeSandboxTool:
         try:
             async with session.get(url, headers=headers) as response:
                 text = await response.text()
-                # 即使HTTP状态码不是200，也尝试解析响应体中的健康检查信息
-                try:
-                    result = json.loads(text)
-                    # 如果响应体包含健康检查信息（有status字段）
-                    if isinstance(result, dict) and "status" in result:
-                        return result
-                except json.JSONDecodeError:
-                    # 如果无法解析JSON，记录错误
-                    logger.error(f"Failed to parse health check response as JSON: {text}")
-                    # 如果HTTP状态码也不是200，抛出异常
-                    if not response.ok:
-                        logger.error(f"Failed to check sandbox health: {response.status} {text}")
-                        response.raise_for_status()
-                    # 如果HTTP是200但无法解析JSON，抛出异常
-                    raise CodeSandboxAPIException(f"Invalid JSON response from health check: {text}")
-
-                if not response.ok:
-                    logger.error(f"Failed to check sandbox health: {response.status} {text}")
-                    response.raise_for_status()
-
-                # 正常情况下返回结果（HTTP 200且已解析JSON）
-                return result
+                result = json.loads(text)
+                if isinstance(result, dict) and "status" in result:
+                    return result
+                else:
+                    raise ValueError(f"Invalid health check response: missing 'status' field in {result}")
         except Exception as e:
             logger.exception("Error in _fetch_sandbox_health_status")
             raise CodeSandboxAPIException(f"Failed to check sandbox health: {e}")
 
     async def acheck_sandbox_health(self, sandbox_id: str, max_wait_seconds: int = 60):
+        """
+        检查 sandbox 健康状态，必须等待状态为 ok 才返回
 
-        async def _wait_for_ready():
-            """内部函数：循环检查直到状态为 ok"""
-            while True:
-                try:
-                    result = await self._fetch_sandbox_health_status(sandbox_id)
-                    status = result.get("status")
+        Args:
+            sandbox_id: sandbox ID
+            max_wait_seconds: 最大等待时间（秒）
 
-                    if status == "ok":
-                        logger.info(f"Sandbox health check passed: {result}")
-                        return result
-                    else:
-                        # 状态不是 "ok"，等待后重试
-                        logger.info(f"Sandbox not ready (status: {status}), waiting 5s before retry...")
-                        await asyncio.sleep(5)
-                        continue
+        Returns:
+            健康检查结果字典，status 字段为 "ok"
 
-                except CodeSandboxAPIException as e:
-                    # 如果是 API 异常，等待后重试
-                    logger.warning(f"Health check error, retrying in 5s: {e}")
-                    await asyncio.sleep(5)
-                    continue
-
+        Raises:
+            CodeSandboxAPIException: 当超时或健康检查失败时
+        """
         try:
             async with asyncio.timeout(max_wait_seconds):
-                return await _wait_for_ready()
-        except TimeoutError as e:
-            logger.error(f"Sandbox health check timeout after {max_wait_seconds}s. Failed to get final status: {e}")
+                while True:
+                    try:
+                        result = await self._fetch_sandbox_health_status(sandbox_id)
+                        status = result.get("status")
+
+                        if status == "ok":
+                            logger.info(f"Sandbox health check passed: {result}")
+                            return status
+                        else:
+                            # 状态不是 "ok"，等待后重试
+                            logger.info(f"Sandbox not ready (status: {status}), waiting 5s before retry...")
+                            await asyncio.sleep(5)
+                            continue
+
+                    except CodeSandboxAPIException as e:
+                        # 如果是 API 异常，等待后重试
+                        logger.warning(f"Health check error, retrying in 5s: {e}")
+                        await asyncio.sleep(5)
+                        continue
+        except TimeoutError:
+            logger.error(f"Sandbox health check timeout after {max_wait_seconds}s")
             raise CodeSandboxAPIException(f"Sandbox health check timeout after {max_wait_seconds}s")
 
     async def adelete_sandbox_instance(self, sandbox_id: str=None):
