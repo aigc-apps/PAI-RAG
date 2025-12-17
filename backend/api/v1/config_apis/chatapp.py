@@ -28,7 +28,7 @@ async def create_chatbot(
     chatapp_service: ChatappService = Depends(get_chatapp_service),
 ):
     try:
-        chatbot = await chatapp_service.create_chatapp(chatbot_create=chatbot_create, tenant_id=tenant_id)
+        chatbot = await chatapp_service.create_chatapp(app_data=chatbot_create, tenant_id=tenant_id)
         return success_response(data=chatbot, message="创建应用成功。")
     except ValueError as e:
         logger.error(f"Failed to create chatapp: {str(e)}")
@@ -73,7 +73,7 @@ async def update_chatbot(
     chatapp_service: ChatappService = Depends(get_chatapp_service),
 ):
     try:
-        chatbot = await chatapp_service.update_chatapp(id=id, new_chatbot=new_chatbot, tenant_id=tenant_id)
+        chatbot = await chatapp_service.update_chatapp(id=id, update_data=new_chatbot, tenant_id=tenant_id)
         return success_response(data=chatbot, message="更新应用成功。")
     except ValueError as e:
         logger.error(f"Failed to update chatapp: {str(e)}")

@@ -110,7 +110,7 @@ async def query_file_ids_with_metadata_filter(
 
     file_ids = [entity.id for entity in file_entities]
     if not file_ids:
-        logger.error(f"No files found with the given metadata filter. filters: {filters}, sub_clauses: {sub_clauses}")
+        logger.warning(f"No files found with the given metadata filter. filters: {filters}, sub_clauses: {sub_clauses}")
         raise EmptyFilesException("No files found with the given metadata filter.")
 
     return file_ids

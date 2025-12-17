@@ -6,19 +6,13 @@ import os
 import asyncio
 from fastapi import FastAPI
 import threading
-from db.sqlite_store import sync_sqlite_store_task, stop_event, sync_sqlite_store
 
 # setup models
 from utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 
-from api.api_exception import ApiException, api_exception_handler
-import api.v1.mcp_server_middleware as mcp_middleware
-from rag.vector_store.local_chroma_service import LocalChromaService
-from app.log_middleware import CustomLoggingMiddleware
 from contextlib import asynccontextmanager
 from utils.format_logging import format_logging
-from utils.http_session import HttpSessionShared
 import anyio
 from loguru import logger
 
@@ -27,6 +21,8 @@ format_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from utils.http_session import HttpSessionShared
+
     logger.info("Application starting up...")
 
     await HttpSessionShared.ensure_session()
@@ -35,6 +31,8 @@ async def lifespan(app: FastAPI):
     from extensions.trace.base import init_instrument, TraceConfig
     from common.system_constants import DEFAULT_TENANT_ID
     from service.model.embedding_service import EmbeddingService
+    from rag.vector_store.local_chroma_service import LocalChromaService
+    from db.sqlite_store import sync_sqlite_store_task, stop_event, sync_sqlite_store
 
     await init_db()
     logger.info("Initialized database tables.")
@@ -79,8 +77,15 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutting down...")
 
 
-def configure(app: FastAPI):
+def create_app():
     from api.v1.routers import add_chat_router, add_config_router
+    from api.api_exception import ApiException, api_exception_handler
+    from fastapi.exceptions import RequestValidationError
+    import api.v1.mcp_server_middleware as mcp_middleware
+    from app.log_middleware import CustomLoggingMiddleware
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app = FastAPI(lifespan=lifespan)
     add_config_router(app)
     add_chat_router(app)
 
@@ -88,7 +93,6 @@ def configure(app: FastAPI):
     # Pass the FastAPI app instance so middleware can mount sub-applications
     app.add_middleware(mcp_middleware.KbMcpServerMiddleware, fastapi_app=app)
 
-    from fastapi.middleware.cors import CORSMiddleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -99,6 +103,6 @@ def configure(app: FastAPI):
     app.add_middleware(CustomLoggingMiddleware)
     app.add_exception_handler(ApiException, api_exception_handler)
 
+    return app
 
-app = FastAPI(lifespan=lifespan)
-configure(app)
+app = create_app()
