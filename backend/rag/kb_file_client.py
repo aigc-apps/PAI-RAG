@@ -30,6 +30,7 @@ from llama_index.core.embeddings import BaseEmbedding
 from pairag.file.store.file_store_helper import file_store
 from loguru import logger
 from rag.parse_utils import sanitize_text, get_node_texts_for_embedding
+from common.knowledgebase.constants import DEFAULT_SENTENCE_SEPARATOR
 
 
 class KbFileClient:
@@ -45,6 +46,9 @@ class KbFileClient:
                 provider_name=chunk_config.image_caption_provider_name,
             )
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+
+        if not chunk_config.separator:
+            chunk_config.separator = DEFAULT_SENTENCE_SEPARATOR
 
         file_parser = FileParser(
             file_store=file_store,
@@ -66,7 +70,7 @@ class KbFileClient:
             kb_id=kb_id,
             tenant_id=tenant_id,
         )
-        embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model, tenant_id=tenant_id)
+        embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model, tenant_id=tenant_id, provider_name=knowledgebase.embedding_provider_name)
         dimension = len(embed_model.get_text_embedding("0"))
         vector_store = await create_vector_store_from_db(kb_id=kb_id, dimension=dimension, tenant_id=tenant_id)
         await vector_store.adelete_nodes(node_ids=node_ids)
@@ -194,7 +198,7 @@ class KbFileClient:
                 tenant_id=tenant_id,
             )
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
-            embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model, tenant_id=tenant_id)
+            embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model, tenant_id=tenant_id, provider_name=knowledgebase.embedding_provider_name)
 
             dimension = len(embed_model.get_text_embedding("0"))
             vector_store = await create_vector_store_from_db(kb_id=kb_id, dimension=dimension, tenant_id=tenant_id)
