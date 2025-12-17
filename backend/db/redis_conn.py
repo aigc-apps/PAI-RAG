@@ -4,10 +4,21 @@ from typing import Optional
 from loguru import logger
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+if not REDIS_HOST:
+    REDIS_HOST = "localhost"
 REDIS_PORT = os.getenv("REDIS_PORT", 6379)
+if not REDIS_PORT:
+    REDIS_PORT = 6379
+else:
+    REDIS_PORT = int(REDIS_PORT)
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_USER=os.getenv("REDIS_USER", "")
-REDIS_DB = os.getenv("REDIS_DB", 0)
+REDIS_DB = os.getenv("REDIS_DB")
+
+if not REDIS_DB:
+    REDIS_DB = 0
+else:
+    REDIS_DB = int(REDIS_DB)
 
 
 def compose_redis_url_safe(

@@ -7,7 +7,10 @@ import asyncio
 async def cleanup_vector_store_async(vector_store: BasePydanticVectorStore):
     try:
         if hasattr(vector_store, "close"):
-            await vector_store.close()
+            if asyncio.iscoroutinefunction(vector_store.close):
+                await vector_store.close()
+            else:
+                vector_store.close()
     except Exception as e:
         logger.warning(f"Error closing vector store: {e}")
 

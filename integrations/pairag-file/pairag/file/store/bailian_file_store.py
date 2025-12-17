@@ -14,20 +14,26 @@ class BailianFileStore(BaseFileStore):
         super().__init__()
         self.endpoint = os.environ.get("BAILIAN_CONSOLE_ENDPOINT", "").rstrip("/")
         assert self.endpoint, "BAILIAN_CONSOLE_ENDPOINT is not set."
+        logger.info(f"BailianFileStore initialized with endpoint: {self.endpoint}")
 
     def get_url(self, file_path: str, tenant_id: str) -> Optional[str]:
         try:
+            logger.info(f"Getting url for file {file_path} from BailianFileStore.")
             response = requests.get(f"{self.endpoint}/infra/v1/files/download-url", params={"object_name": file_path}, headers={"X-TENANT-ID": tenant_id})
             if response.status_code != 200:
                 logger.error(f"Failed to get_url for file {file_path}. status: {response.status_code}, response: {response.text}")
                 raise Exception(f"Failed to get_url for file {file_path}. status: {response.status_code}, response: {response.text}")
-            return response.json()["data"]["url"]
+            
+            url = response.json()["data"]["url"]
+            logger.info(f"Got url for file {file_path} from BailianFileStore successfully.")
+            return url
         except Exception as e:
             logger.error(f"Failed to get url for file {file_path}. error: {e}")
             raise
     
     def write(self, file: BinaryIO, file_name: str, file_path: str, tenant_id: str) -> FileUploadResult:
         try:
+            logger.info(f"Writing file {file_name} to BailianFileStore.")
             files = {"file": (file_name, file.read())}
 
             response = requests.post(
@@ -63,6 +69,7 @@ class BailianFileStore(BaseFileStore):
 
     async def get_url_async(self, file_path: str, tenant_id: str) -> Optional[str]:
         try:
+            logger.info(f"Getting url for file {file_path} from BailianFileStore asynchronously.")
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.endpoint}/infra/v1/files/download-url", params={"object_name": file_path}, headers={"X-TENANT-ID": tenant_id}) as response:
                     if response.status == 200:
@@ -76,6 +83,7 @@ class BailianFileStore(BaseFileStore):
 
     async def write_async(self, file: BinaryIO, file_name: str, file_path: str, tenant_id: str) -> str:
         try:
+            logger.info(f"Writing file {file_name} to BailianFileStore asynchronously.")
             form_data = aiohttp.FormData()
             form_data.add_field("file", file.read(), filename=file_name)
             form_data.add_field("file_type", DEFAULT_FILE_TYPE)

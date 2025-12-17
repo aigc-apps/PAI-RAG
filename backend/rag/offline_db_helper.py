@@ -24,7 +24,7 @@ import pandas as pd
 from llama_index.core.embeddings import BaseEmbedding
 from db.models.knowledgebase.knowledgebase import KbEntity
 from service.knowledgebase.vectordb_service import VectordbService
-from service.injection import get_vectordb_service, get_vector_table_mapping_service, get_llm_service
+from service.injection import get_vectordb_service, get_vector_table_mapping_service, get_llm_service, get_embedding_service
 
 DEFAULT_ATTACHMENT_MAX_SIZE = 1000
 MAX_CACHE_SIZE = 3
@@ -68,20 +68,15 @@ async def get_knowledgebase_from_db(
 
 @with_async_db_session
 async def get_embedding_from_db(
-    session: AsyncSession, model_id: str, tenant_id: str,
+    session: AsyncSession, model_id: str, provider_name: str, tenant_id: str,
 ) -> BaseEmbedding:
-    embedding_entity = (await session.exec(
-        select(EmbeddingModelEntity).where(EmbeddingModelEntity.model_id == model_id, EmbeddingModelEntity.tenant_id == tenant_id)
-    )).first()
+    embedding_service = await get_embedding_service(session=session)
 
+    embedding_entity = await embedding_service.get_embedding_model_by_provider_model_id(provider_name=provider_name, model_id=model_id, tenant_id=tenant_id)
     if not embedding_entity:
         raise ValueError(f"Embedding model {model_id} not found.")
 
-    if not embedding_entity.is_ready:
-        raise ValueError(f"Embedding model {model_id} is not downloaded, please check the download status.")
-
-    embed_model = create_embedding_model(config=embedding_entity)
-    return embed_model
+    return create_embedding_model(config=embedding_entity)
 
 
 @with_async_db_session
