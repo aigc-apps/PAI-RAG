@@ -10,7 +10,7 @@ from tools.code.code_sandbox_tool import CodeSandboxTool
 from tools.code.code_sandbox_exceptions import CodeSandboxNotConfiguredException, CodeSandboxException
 import json
 from loguru import logger
-from typing import List
+from typing import List, Callable
 from utils.lru_cache import LruCache
 from service.knowledgebase.file_service import FileService
 from common.llm.llm_model import PaiLlm
@@ -95,16 +95,29 @@ def create_codesandbox_tools(
     code_sandbox_attachments_ids: list[str] = None,
     file_service: FileService = None,
     tenant_id: str = None,
-):
+) -> tuple[List[FunctionTool], Callable]:
+    """
+    创建 CodeSandbox 工具列表
+    每次调用都会创建新的 CodeSandboxTool 实例，确保每次 chat 会话使用独立的实例
+    返回执行代码工具和安装包工具，它们共享同一个 code_tool 实例
+    同时返回清理函数用于清理 sandbox 实例
+
+    Returns:
+        tuple: (工具列表, 清理函数)
+    """
     code_tool = CodeSandboxTool(
         aliyun_id=codesandbox_config.aliyun_id,
         interpreter_id=codesandbox_config.interpreter_id,
-        timeout_default=codesandbox_config.timeout_default,
+        interpreter_name=codesandbox_config.interpreter_name,
+        timeout_default=codesandbox_config.timeout_default or 50,
         enabled=codesandbox_config.enabled,
         code_sandbox_attachments_ids=code_sandbox_attachments_ids,
         file_service=file_service,
         tenant_id=tenant_id,
+        api_key=decrypt_key(codesandbox_config.encrypted_api_key) if codesandbox_config.encrypted_api_key else None,
     )
+
+    # 执行代码的工具
     async def aexecute_code(
         code: str,
     ) -> str:
@@ -120,28 +133,80 @@ def create_codesandbox_tools(
             logger.error(f"CodeSandbox execution failed: {e}")
             raise
 
-    tool = FunctionTool.from_defaults(
-    async_fn=aexecute_code,
-    name="PythonInterpreter",
-    description="""Execute Python code with file system access and return the execution output. Use this tool **only** for complex math, spreadsheet analysis, or data visualization.
+    execute_tool = FunctionTool.from_defaults(
+        async_fn=aexecute_code,
+        name="PythonInterpreter",
+        description="""Execute Python code with file system access and return the execution output. Use this tool **only** for complex math, spreadsheet analysis, or data visualization.
 
-            # Parameters
-                **IMPORTANT: You MUST pass parameters as a valid JSON object in the format: `{"code": "your_python_code_here"}`**
+                # Parameters
+                    **IMPORTANT: You MUST pass parameters as a valid JSON object in the format: `{"code": "your_python_code_here"}`**
 
-                - **`code`** (required, string): The Python code to execute. Pass this as a JSON object with the key "code".
-                    - ✅ ALL OUTPUT MUST BE EXPLICITLY PRINTED USING print()
-                        - This includes numbers, strings, lists, dictionaries, DataFrames, model metrics, file paths, or any result you want to see.
-                        - For DataFrames, always inspect with print(df.head()), print(df.shape), print(df.columns), or print(df.info()) — do not rely on automatic display.
-                        - For scalar results, always wrap in print(...), e.g., print(correlation), not just correlation.
-                    - For visualizations (Matplotlib, Seaborn, etc.):
-                        - **Do not use `plt.show()`** — it has no effect.
-                        - **Save the plot** with a **descriptive filename**, e.g.: `sales_by_channel_aug2024.png`, `user_growth_q3.png` (Avoid generic names like `plot.png`.)
-                        - **Display the image** by printing a Markdown embed: `print("![Sales by Channel](sales_by_channel_aug2024.png)")`.
-                    - Code may be provided as a raw string, in triple backticks (```python ... ```), or in `<code>...</code>` tags. When passing to this tool, wrap it in JSON: `{"code": "your_code_here"}`.
+                    - **`code`** (required, string): The Python code to execute. Pass this as a JSON object with the key "code".
+                        - ✅ ALL OUTPUT MUST BE EXPLICITLY PRINTED USING print()
+                            - This includes numbers, strings, lists, dictionaries, DataFrames, model metrics, file paths, or any result you want to see.
+                            - For DataFrames, always inspect with print(df.head()), print(df.shape), print(df.columns), or print(df.info()) — do not rely on automatic display.
+                            - For scalar results, always wrap in print(...), e.g., print(correlation), not just correlation.
+                        - For visualizations (Matplotlib, Seaborn, etc.):
+                            - **Do not use `plt.show()`** — it has no effect.
+                            - **Save the plot** with a **descriptive filename**, e.g.: `sales_by_channel_aug2024.png`, `user_growth_q3.png` (Avoid generic names like `plot.png`.)
+                            - **Display the image** by printing a Markdown embed: `print("![Sales by Channel](sales_by_channel_aug2024.png)")`.
+                        - Code may be provided as a raw string, in triple backticks (```python ... ```), or in `<code>...</code>` tags. When passing to this tool, wrap it in JSON: `{"code": "your_code_here"}`.
 
 
-            # Returns
-                - A string containing all printed output from execution, including Markdown image references if plots are generated.
-        """,
+                # Returns
+                    - A string containing all printed output from execution, including Markdown image references if plots are generated.
+            """,
     )
-    return tool
+
+    # 安装包的工具
+    async def ainstall_package(
+        package_name: str,
+    ) -> str:
+        if code_tool is None:
+            logger.error("CodeSandbox not configured")
+            raise CodeSandboxNotConfiguredException("Not configured")
+        try:
+            result = await code_tool.ainstall_package(package_name)
+        except CodeSandboxException as e:
+            logger.error(f"Package installation failed: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Package installation failed: {e}")
+            raise
+        return result.get("status", "unknown")
+
+    install_tool = FunctionTool.from_defaults(
+        async_fn=ainstall_package,
+        name="InstallPythonPackage",
+        description="""Install a Python package in the CodeSandbox environment using sudo pip install.
+
+                # Parameters
+                    **IMPORTANT: You MUST pass parameters as a valid JSON object in the format: `{"package_name": "package_name"}`**
+
+                    - **`package_name`** (required, string): The name of the Python package to install.
+                        - Can be a simple package name (e.g., "numpy")
+                        - Can include version specification (e.g., "numpy==1.21.0", "pandas>=1.5.0")
+                        - Can install multiple packages separated by spaces (e.g., "numpy pandas matplotlib")
+                        - Pass this as a JSON object with the key "package_name".
+
+                # Returns
+                    - A string containing the installation status, exit code, execution time, stdout, and stderr output.
+                    - If installation succeeds (exit code 0), the package is ready to use.
+                    - If installation fails, check the stderr output for error details.
+
+                # Usage Examples
+                    - Install a single package: `{"package_name": "numpy"}`
+                    - Install with version: `{"package_name": "pandas==1.5.0"}`
+                    - Install multiple packages: `{"package_name": "numpy scipy matplotlib"}`
+            """,
+    )
+
+    # 清理函数
+    async def cleanup_code_sandbox():
+        """清理 CodeSandboxTool 实例"""
+        try:
+            await code_tool.adelete_sandbox_instance()
+        except Exception as e:
+            logger.exception(f"Failed to delete sandbox instance: {e}")
+
+    return [execute_tool, install_tool], cleanup_code_sandbox

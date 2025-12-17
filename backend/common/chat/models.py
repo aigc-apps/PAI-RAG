@@ -90,7 +90,7 @@ class RetrievalRequest(BaseModel):
 class ChatAgentRequest(BaseModel):
     model: str  # 模型名称
     messages: Union[List[Any], List[ChatCompletionMessageParam]]  # 上下文聊天
-    stream: Optional[bool] = False  # 默认流式输出
+    stream: Optional[bool] = True  # 默认流式输出
 
     mcp_ids: Optional[List[str]] = []
     kb_ids: Optional[List[str]] = []
