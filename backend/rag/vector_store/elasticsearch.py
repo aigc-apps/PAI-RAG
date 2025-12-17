@@ -240,8 +240,8 @@ class ElasticsearchStore(BasePydanticVectorStore):
         """Get async elasticsearch client."""
         return self._store.client
 
-    def close(self) -> None:
-        return asyncio.get_event_loop().run_until_complete(self._store.close())
+    async def close(self) -> None:
+        await self._store.close()
 
     def add(
         self,
