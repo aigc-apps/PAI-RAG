@@ -291,16 +291,20 @@ export class MyModelAdapter implements ChatModelAdapter {
           }
           if (chunk?.observation) {
             // 处理工具调用结果
-            const keys = Object.keys(currentToolCallMap);
-            const lastKey = keys[keys.length - 1];
-            if (currentToolCallMap[lastKey]) {
-              currentToolCallMap[lastKey].state = 'complete';
-              currentToolCallMap[lastKey].result = chunk?.observation?.result || chunk?.observation?.error;
-              currentToolCallMap[lastKey].isError = chunk?.observation?.error != null && chunk?.observation?.error.trim() !== '';
+            // 使用 observation.tool.id 来正确匹配工具调用，而不是假设是最后一个
+            const toolCallId = chunk?.observation?.tool?.id;
+            if (toolCallId && currentToolCallMap[toolCallId]) {
+              currentToolCallMap[toolCallId].state = 'complete';
+              currentToolCallMap[toolCallId].result = chunk?.observation?.result || chunk?.observation?.error;
+              currentToolCallMap[toolCallId].isError = chunk?.observation?.error != null && chunk?.observation?.error.trim() !== '';
+              AddOrMergeToolCall(eventQueue, currentToolCallMap[toolCallId]);
             } else {
-              console.warn(`Tool call with ID ${lastKey} not found.`);
+              console.warn(`Tool call with ID ${toolCallId} not found in observation.`, {
+                toolCallId,
+                availableIds: Object.keys(currentToolCallMap),
+                observation: chunk?.observation
+              });
             }
-            AddOrMergeToolCall(eventQueue, currentToolCallMap[lastKey]);
             content = ""; // 重置content
           }
 

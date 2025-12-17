@@ -18,6 +18,7 @@ class CodeSandboxConfigCreate(CodeSandboxConfig):
     interpreter_id: str = Field(default=None)
     interpreter_name: str = Field(default=None)
     enabled: bool = Field(default=False)
+    api_key: Optional[str] = Field(default=None)
 
 
 class CodeSandboxConfigRead(CodeSandboxConfigCreate):
@@ -33,3 +34,4 @@ class CodeSandboxConfigEntity(CodeSandboxConfig, table=True):
     interpreter_name: str | None = Field(default=None)
     enabled: bool | None = Field(default=False)
     timeout_default: int | None = Field(default=50)
+    encrypted_api_key: str | None = Field(default=None)

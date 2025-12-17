@@ -39,22 +39,14 @@ def parse_tool_arguments(json_str: str, agent_name: str = "") -> Dict:
 
     # 如果都失败，尝试简单的字符串修复
     try:
-        # 尝试修复常见的 JSON 格式问题
-        fixed_json = json_str.strip()
-        # 移除末尾的额外字符（如单引号、逗号等）
-        while fixed_json and not fixed_json.endswith('}'):
-            # 如果末尾有单引号、双引号或其他字符，尝试移除
-            if fixed_json[-1] in ("'", '"', ",", " ", "\n", "\r", "\t"):
-                fixed_json = fixed_json[:-1].rstrip()
-            else:
-                # 尝试找到最后一个完整的 }
-                last_brace = fixed_json.rfind('}')
-                if last_brace > 0:
-                    fixed_json = fixed_json[:last_brace + 1]
-                else:
-                    break
+        first_brace = json_str.find('{')
+        last_brace = json_str.rfind('}')
 
-        return json.loads(fixed_json)
+        if first_brace >= 0 and last_brace > first_brace:
+            fixed_json = json_str[first_brace:last_brace + 1]
+            return json.loads(fixed_json)
+        else:
+            raise ValueError("No valid JSON braces found")
     except Exception:
         if agent_name:
             logger.warning(f"[{agent_name}] Invalid JSON args: {json_str[:200]}")

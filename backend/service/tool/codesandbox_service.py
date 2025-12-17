@@ -10,6 +10,7 @@ from db.models.code_sandbox import (
     CodeSandboxConfigCreate,
     CodeSandboxConfigEntity,
 )
+from common.encrypt_utils import encrypt_key
 
 
 class CodesandboxService:
@@ -93,9 +94,19 @@ class CodesandboxService:
         codesandbox_configs = await self.session.exec(statement)
         config = codesandbox_configs.first()
 
+        provided_fields = config_data.model_dump(exclude_unset=True)
+
+        encrypted_api_key = None
+        if "api_key" in provided_fields:
+            encrypted_api_key = (
+                encrypt_key(config_data.api_key) if config_data.api_key else None
+            )
+
         if config is None:
-            # Create new config
-            config = CodeSandboxConfigEntity.model_validate(config_data, update={"tenant_id": tenant_id})
+            config = CodeSandboxConfigEntity.model_validate(
+                config_data,
+                update={"encrypted_api_key": encrypted_api_key, "tenant_id": tenant_id}
+            )
             self.session.add(config)
             logger.info(f"Creating new CodeSandbox config for type {config_data.type}")
         else:
@@ -104,12 +115,16 @@ class CodesandboxService:
                 config.aliyun_id = config_data.aliyun_id
             if config_data.interpreter_id is not None:
                 config.interpreter_id = config_data.interpreter_id
+            if config_data.interpreter_name is not None:
+                config.interpreter_name = config_data.interpreter_name
             if config_data.type is not None:
                 config.type = config_data.type
             if config_data.enabled is not None:
                 config.enabled = config_data.enabled
             if config_data.timeout_default is not None:
                 config.timeout_default = config_data.timeout_default
+            if "api_key" in provided_fields:
+                config.encrypted_api_key = encrypted_api_key
 
             self.session.add(config)
             logger.info(f"Updating CodeSandbox config: {config.id}")

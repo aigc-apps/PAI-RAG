@@ -61,12 +61,14 @@ class CodeSandboxTool:
         enabled: bool = False,
         code_sandbox_attachments_ids: list = None,
         file_service: FileService = None,
+        api_key: str = None,
     ):
         self.enabled = enabled
         self.aliyun_id = aliyun_id
         self.interpreter_id = interpreter_id
         self.interpreter_name = interpreter_name
         self.timeout_default = timeout_default
+        self.api_key = api_key
         # 使用 aliyun_id 构建 base_url，与用户提供的示例一致
         self.base_url = f"https://{self.aliyun_id}.agentrun-data.cn-hangzhou.aliyuncs.com"
         self._sandbox_initialized = False
@@ -75,6 +77,15 @@ class CodeSandboxTool:
         self._code_sandbox_attachments_ids = code_sandbox_attachments_ids or []
         self.file_service = file_service
         self.tenant_id = tenant_id
+
+    def _get_headers(self) -> dict:
+        """生成包含 X-API-Key 的请求头"""
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+        return headers
 
     async def _ensure_sandbox_initialized(self):
         """确保 sandbox 已初始化，如果未初始化则进行初始化"""
@@ -93,8 +104,8 @@ class CodeSandboxTool:
         sandbox_id = await self.acreate_sandbox_instance()
 
         # 1.5. 检查sandbox实例健康状态，如果是新创建的实例，等待其完全启动
-        # wait_for_ready=True 表示会等待 sandbox 完全就绪（Jupyter 服务启动）
-        await self.acheck_sandbox_health(sandbox_id, wait_for_ready=True, max_wait_seconds=60)
+        # 必须等待 sandbox 完全就绪（Jupyter 服务启动，状态为 ok）
+        await self.acheck_sandbox_health(sandbox_id, max_wait_seconds=60)
 
         # 2. 创建context
         context_id = await self.acreate_context(sandbox_id)
@@ -116,9 +127,7 @@ class CodeSandboxTool:
 
     async def acreate_sandbox_instance(self):
         """创建 sandbox 实例"""
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
         payload = {
             "templateName": self.interpreter_name,
         }
@@ -147,95 +156,89 @@ class CodeSandboxTool:
         else:
             raise CodeSandboxAPIException("Failed to create sandbox instance: invalid response format")
 
-    async def acheck_sandbox_health(self, sandbox_id: str, wait_for_ready: bool = False, max_wait_seconds: int = 60):
+    async def _fetch_sandbox_health_status(self, sandbox_id: str) -> dict:
         """
-        检查 sandbox 实例的健康状态
+        获取 sandbox 健康状态（单次请求）
 
         Args:
             sandbox_id: sandbox ID
-            wait_for_ready: 如果为 True，当健康检查失败时会等待并重试，直到 sandbox 就绪
-            max_wait_seconds: 最大等待时间（秒）
+
+        Returns:
+            健康检查结果字典，包含 status 字段
+
+        Raises:
+            CodeSandboxAPIException: 当请求失败或响应格式无效时
         """
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
         url = f"{self.base_url}/sandboxes/{sandbox_id}/health"
         session = await self._get_session()
 
-        start_time = asyncio.get_event_loop().time()
-        max_wait_time = start_time + max_wait_seconds
-
-        while True:
-            try:
-                async with session.get(
-                    url,
-                    headers=headers
-                ) as response:
-                    text = await response.text()
-                    # 即使HTTP状态码不是200，也尝试解析响应体中的健康检查信息
-                    try:
-                        result = json.loads(text)
-                        # 如果响应体包含健康检查信息（有status字段）
-                        if isinstance(result, dict) and "status" in result:
-                            status = result.get("status")
-                            if status == "ok":
-                                logger.info(f"Sandbox health check passed: {result}")
-                                return result
-                            else:
-                                # 如果状态不是 "ok"，检查是否需要等待
-                                if wait_for_ready:
-                                    current_time = asyncio.get_event_loop().time()
-                                    if current_time < max_wait_time:
-                                        wait_time = min(5, max_wait_time - current_time)  # 每次等待最多5秒
-                                        logger.info(f"Sandbox not ready (status: {status}), waiting {wait_time:.1f}s before retry...")
-                                        await asyncio.sleep(wait_time)
-                                        continue  # 重试
-                                    else:
-                                        # 超时了，抛出异常
-                                        logger.error(f"Sandbox health check timeout after {max_wait_seconds}s. Status: {status}")
-                                        raise CodeSandboxAPIException(f"Sandbox health check failed: status '{status}' after waiting {max_wait_seconds}s")
-                                else:
-                                    # 不等待，直接记录警告并返回
-                                    logger.warning(f"Sandbox health check returned status '{status}' (HTTP {response.status}): {result}")
-                                    return result
-                        # 如果解析成功但没有status字段，继续检查HTTP状态码
-                    except json.JSONDecodeError:
-                        # 如果无法解析JSON，记录错误
-                        logger.error(f"Failed to parse health check response as JSON: {text}")
-                        # 如果HTTP状态码也不是200，抛出异常
-                        if not response.ok:
-                            logger.error(f"Failed to check sandbox health: {response.status} {text}")
-                            response.raise_for_status()
-                        # 如果HTTP是200但无法解析JSON，抛出异常
-                        raise CodeSandboxAPIException(f"Invalid JSON response from health check: {text}")
-
-                    # 如果解析成功但没有status字段，且HTTP状态码不是200，抛出异常
+        try:
+            async with session.get(url, headers=headers) as response:
+                text = await response.text()
+                # 即使HTTP状态码不是200，也尝试解析响应体中的健康检查信息
+                try:
+                    result = json.loads(text)
+                    # 如果响应体包含健康检查信息（有status字段）
+                    if isinstance(result, dict) and "status" in result:
+                        return result
+                except json.JSONDecodeError:
+                    # 如果无法解析JSON，记录错误
+                    logger.error(f"Failed to parse health check response as JSON: {text}")
+                    # 如果HTTP状态码也不是200，抛出异常
                     if not response.ok:
                         logger.error(f"Failed to check sandbox health: {response.status} {text}")
                         response.raise_for_status()
+                    # 如果HTTP是200但无法解析JSON，抛出异常
+                    raise CodeSandboxAPIException(f"Invalid JSON response from health check: {text}")
 
-                    # 正常情况下返回结果（HTTP 200且已解析JSON）
-                    logger.info(f"Sandbox health check result: {result}")
-                    return result
-            except Exception as e:
-                if wait_for_ready:
-                    current_time = asyncio.get_event_loop().time()
-                    if current_time < max_wait_time:
-                        wait_time = min(5, max_wait_time - current_time)
-                        logger.warning(f"Health check error, retrying in {wait_time:.1f}s: {e}")
-                        await asyncio.sleep(wait_time)
+                if not response.ok:
+                    logger.error(f"Failed to check sandbox health: {response.status} {text}")
+                    response.raise_for_status()
+
+                # 正常情况下返回结果（HTTP 200且已解析JSON）
+                return result
+        except Exception as e:
+            logger.exception("Error in _fetch_sandbox_health_status")
+            raise CodeSandboxAPIException(f"Failed to check sandbox health: {e}")
+
+    async def acheck_sandbox_health(self, sandbox_id: str, max_wait_seconds: int = 60):
+
+        async def _wait_for_ready():
+            """内部函数：循环检查直到状态为 ok"""
+            while True:
+                try:
+                    result = await self._fetch_sandbox_health_status(sandbox_id)
+                    status = result.get("status")
+
+                    if status == "ok":
+                        logger.info(f"Sandbox health check passed: {result}")
+                        return result
+                    else:
+                        # 状态不是 "ok"，等待后重试
+                        logger.info(f"Sandbox not ready (status: {status}), waiting 5s before retry...")
+                        await asyncio.sleep(5)
                         continue
-                logger.exception("Error in acheck_sandbox_health")
-                raise CodeSandboxAPIException(f"Failed to check sandbox health: {e}")
+
+                except CodeSandboxAPIException as e:
+                    # 如果是 API 异常，等待后重试
+                    logger.warning(f"Health check error, retrying in 5s: {e}")
+                    await asyncio.sleep(5)
+                    continue
+
+        try:
+            async with asyncio.timeout(max_wait_seconds):
+                return await _wait_for_ready()
+        except TimeoutError as e:
+            logger.error(f"Sandbox health check timeout after {max_wait_seconds}s. Failed to get final status: {e}")
+            raise CodeSandboxAPIException(f"Sandbox health check timeout after {max_wait_seconds}s")
 
     async def adelete_sandbox_instance(self, sandbox_id: str=None):
         sandbox_id = sandbox_id or self._sandbox_id
         if not sandbox_id:
             logger.info("sandbox_id not set. Cannot delete sandbox instance.")
             return None
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
         url = f"{self.base_url}/sandboxes/{sandbox_id}"
         session = await self._get_session()
         try:
@@ -257,9 +260,7 @@ class CodeSandboxTool:
             raise CodeSandboxAPIException(f"Failed to delete sandbox instance: {e}")
 
     async def acreate_context(self, sandbox_id: str, cwd=None):
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
         payload = {
             "language": "python",
         }
@@ -314,11 +315,16 @@ class CodeSandboxTool:
         path = os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, file_name)
         form_data.add_field('path', path)
 
+        headers = self._get_headers()
+        # 对于 multipart/form-data，移除 Content-Type，让 aiohttp 自动设置
+        if "Content-Type" in headers:
+            headers.pop("Content-Type")
         session = await self._get_session()
         try:
             async with session.post(
                 f"{self.base_url}/sandboxes/{sandbox_id}/filesystem/upload",
-                data=form_data
+                data=form_data,
+                headers=headers
             ) as response:
                 if not response.ok:
                     text = await response.text()
@@ -337,9 +343,7 @@ class CodeSandboxTool:
             logger.error("sandbox_id not set. Cannot download file.")
             return None
 
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
         payload = {
             "path": file_path,
         }
@@ -364,9 +368,7 @@ class CodeSandboxTool:
             logger.error("sandbox_id not set. Cannot list dir files.")
             return json.dumps({"paths": ""}, ensure_ascii=False)
 
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
         payload = {
             "path": file_dir_path,
         }
@@ -500,9 +502,7 @@ class CodeSandboxTool:
             logger.error("sandbox or context not initialized")
             raise CodeSandboxNotInitializedException("sandbox or context not initialized")
 
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
 
         payload = {"code": code, "timeout": timeout or self.timeout_default}
         url = f"{self.base_url}/sandboxes/{sandbox_id}/contexts/{context_id}/execute"
@@ -607,9 +607,7 @@ class CodeSandboxTool:
             logger.error("sandbox not initialized")
             raise CodeSandboxNotInitializedException("sandbox not initialized")
 
-        headers = {
-            "Content-Type": "application/json",
-        }
+        headers = self._get_headers()
 
         payload = {
             "command": command,

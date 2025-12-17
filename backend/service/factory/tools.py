@@ -114,6 +114,7 @@ def create_codesandbox_tools(
         code_sandbox_attachments_ids=code_sandbox_attachments_ids,
         file_service=file_service,
         tenant_id=tenant_id,
+        api_key=decrypt_key(codesandbox_config.encrypted_api_key) if codesandbox_config.encrypted_api_key else None,
     )
 
     # 执行代码的工具
