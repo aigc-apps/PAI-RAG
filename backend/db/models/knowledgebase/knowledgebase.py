@@ -13,6 +13,7 @@ from common.knowledgebase.constants import (
     DEFAULT_SIMILARITY_THRESHOLD,
     DEFAULT_SIMILARITY_TOP_K,
     DEFAULT_RERANK_SIMILARITY_TOP_K,
+    DEFAULT_VECTOR_WEIGHT,
 )
 from common.knowledgebase.types import VectorIndexRetrievalType
 from typing import Optional
@@ -34,7 +35,7 @@ class RetrievalConfig(SQLModel):
     )
     top_k: int = Field(default=DEFAULT_SIMILARITY_TOP_K)
     similarity_threshold: float = Field(default=DEFAULT_SIMILARITY_THRESHOLD)
-    vector_weight: float = Field(default=0.5)
+    vector_weight: float = Field(default=DEFAULT_VECTOR_WEIGHT)
     enable_rerank: bool = Field(default=False)
     rerank_model: str = Field(default="")
     rerank_provider_name: str = Field(default="openai_like")

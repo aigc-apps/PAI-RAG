@@ -293,6 +293,7 @@ class LlmService:
         Returns:
             LlmModelEntity if found, None otherwise
         """
+        logger.info(f"Getting LLM model {model_id} by provider {provider_name} and tenant {tenant_id}.")
         statement = select(LlmModelEntity).where(
             LlmModelEntity.model_id == model_id,
             LlmModelEntity.tenant_id == tenant_id

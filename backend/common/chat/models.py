@@ -59,14 +59,14 @@ class NewRetrievalResponse(BaseModel):
 
 
 class RetrievalSetting(BaseModel):
-    retrieval_mode: Optional[VectorIndexRetrievalType] = VectorIndexRetrievalType.hybrid
-    vector_weight: Optional[float] = 0.7
-    enable_rerank: Optional[bool] = False
+    retrieval_mode: Optional[VectorIndexRetrievalType] = None
+    vector_weight: Optional[float] = None
+    enable_rerank: Optional[bool] = None
     rerank_model: Optional[str] = None
-    rerank_provider_name: Optional[str] = "openai_like"
-    top_k: Optional[int] = 10
-    similarity_threshold: Optional[float] = 0
-    rerank_top_k: Optional[int] = 5
+    rerank_provider_name: Optional[str] = None
+    top_k: Optional[int] = None
+    similarity_threshold: Optional[float] = None
+    rerank_top_k: Optional[int] = None
 
 
 class RetrievalRequest(BaseModel):
