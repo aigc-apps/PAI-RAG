@@ -70,6 +70,7 @@ class Planner(BaseAgent):
                 tools_to_plan.append(await self.get_plan_tool_meta())
 
             @use_current_span(trace.get_current_span())
+            @self.with_cleanup
             async def gen():
                 selected_tool = None
                 plan_delta = ""
@@ -200,7 +201,7 @@ class Planner(BaseAgent):
 
                         yield chunk
 
-            return self._wrap_generator_with_cleanup(gen())
+            return gen()
         except Exception:
             # 如果执行出错，也要清理
             if not self._cleanup_called and self._cleanup_func:

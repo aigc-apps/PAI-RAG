@@ -63,6 +63,7 @@ class ActorWithPlan(BaseAgent):
             messages = [{"role": "user", "content": act_with_plan_prompt}]
 
             @use_current_span(trace.get_current_span())
+            @self.with_cleanup
             async def gen():
                 try:
                     action_step = 1

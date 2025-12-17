@@ -31,12 +31,15 @@ class BaseAgent:
             tool_choice="auto",
         )
 
-    def _wrap_generator_with_cleanup(self, response_gen: ChatResponseGenerator) -> ChatResponseGenerator:
-        """包装生成器，在完成后自动调用 cleanup 函数"""
-        if not self._cleanup_func:
-            return response_gen
+    def with_cleanup(self, gen_func):
+        """装饰器：在异步生成器函数完成后自动调用 cleanup 函数"""
+        async def wrapped_gen(*args, **kwargs):
+            response_gen = gen_func(*args, **kwargs)
+            if not self._cleanup_func:
+                async for item in response_gen:
+                    yield item
+                return
 
-        async def wrapped_gen():
             try:
                 async for item in response_gen:
                     yield item
@@ -49,7 +52,7 @@ class BaseAgent:
                     except Exception as e:
                         logger.exception(f"Failed to cleanup in {self.name}: {e}")
 
-        return wrapped_gen()
+        return wrapped_gen
 
     @pai_agent_wrapper
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:

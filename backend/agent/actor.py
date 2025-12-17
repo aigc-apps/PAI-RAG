@@ -56,6 +56,7 @@ class Actor(BaseAgent):
         logger.info("Running actor agent.")
         try:
             @use_current_span(trace.get_current_span())
+            @self.with_cleanup
             async def gen():
                 try:
                     react_step = 1

@@ -178,7 +178,7 @@ class CodeSandboxTool:
                 text = await response.text()
                 result = json.loads(text)
                 if isinstance(result, dict) and "status" in result:
-                    return result
+                    return result.get("status")
                 else:
                     raise ValueError(f"Invalid health check response: missing 'status' field in {result}")
         except Exception as e:
@@ -202,22 +202,16 @@ class CodeSandboxTool:
         try:
             async with asyncio.timeout(max_wait_seconds):
                 while True:
-                    try:
-                        result = await self._fetch_sandbox_health_status(sandbox_id)
-                        status = result.get("status")
+                    status = await self._fetch_sandbox_health_status(sandbox_id)
 
-                        if status == "ok":
-                            logger.info(f"Sandbox health check passed: {result}")
-                            return status
-                        else:
-                            # 状态不是 "ok"，等待后重试
-                            logger.info(f"Sandbox not ready (status: {status}), waiting 5s before retry...")
-                            await asyncio.sleep(5)
-                            continue
-
-                    except CodeSandboxAPIException as e:
-                        logger.error(f"Health check error: {e}")
-                        raise CodeSandboxAPIException(f"Failed to check sandbox health: {e}")
+                    if status == "ok":
+                        logger.info(f"Sandbox health check passed: {status}")
+                        return status
+                    else:
+                        # 状态不是 "ok"，等待后重试
+                        logger.info(f"Sandbox not ready (status: {status}), waiting 5s before retry...")
+                        await asyncio.sleep(5)
+                        continue
 
         except TimeoutError:
             logger.error(f"Sandbox health check timeout after {max_wait_seconds}s")

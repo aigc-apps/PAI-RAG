@@ -32,6 +32,7 @@ class Summarizer(BaseAgent):
             )
 
             @use_current_span(trace.get_current_span())
+            @self.with_cleanup
             async def gen():
                 response_gen = await self.invoke_llm_async(messages=[
                     {"role": MessageRole.USER, "content": prompt},
@@ -39,7 +40,7 @@ class Summarizer(BaseAgent):
                 async for chunk in response_gen:
                     yield chunk
 
-            return self._wrap_generator_with_cleanup(gen())
+            return gen()
         except Exception:
             # 如果执行出错，也要清理
             if not self._cleanup_called and self._cleanup_func:
