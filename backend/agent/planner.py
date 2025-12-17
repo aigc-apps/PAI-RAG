@@ -42,8 +42,9 @@ class Planner(BaseAgent):
         name: str,
         prompt_set: PlanAgentPromptSet,
         max_steps: int = MAX_RECURSION_STEPS,
+        cleanup_func=None,
     ):
-        super().__init__(prompt_set.plan_prompt, llm, tools, name)
+        super().__init__(prompt_set.plan_prompt, llm, tools, name, cleanup_func=cleanup_func)
 
         self.prompt_set = prompt_set
         self.max_steps = max_steps
@@ -62,122 +63,33 @@ class Planner(BaseAgent):
     async def run_async(self, state: AgentState) -> ChatResponseGenerator:
         logger.info("Start agentic run.")
 
-        plan_prompt = self.prompt.format(context_variables=state.format_context_str())
-        tools_to_plan = self.tool_metadata
-        if tools_to_plan and state.enable_agent:
-            tools_to_plan.append(await self.get_plan_tool_meta())
+        try:
+            plan_prompt = self.prompt.format(context_variables=state.format_context_str())
+            tools_to_plan = self.tool_metadata
+            if tools_to_plan and state.enable_agent:
+                tools_to_plan.append(await self.get_plan_tool_meta())
 
-        @use_current_span(trace.get_current_span())
-        async def gen():
-            selected_tool = None
-            plan_delta = ""
-            messages = [{"role": "system", "content": plan_prompt}] + state.messages
+            @use_current_span(trace.get_current_span())
+            @self.with_cleanup
+            async def gen():
+                selected_tool = None
+                plan_delta = ""
+                messages = [{"role": "system", "content": plan_prompt}] + state.messages
 
-            async for chunk in await self.invoke_llm_async(
-                messages=messages,
-                tools=tools_to_plan,
-            ):
-                if isinstance(chunk, ErrorChunk):
-                    logger.error(f"Call llm failed: {chunk.error_message}")
-                    yield chunk
-                    return
-
-                if chunk.tool_calls:
-                    selected_tool = chunk.tool_calls[0]
-
-                plan_delta += chunk.delta or ""
-                if chunk.delta and selected_tool:
-                    yield ReasoningChunk(
-                        reasoning_delta=chunk.delta,
-                        tool_calls=chunk.tool_calls,
-                        stage=ChunkStage.ACTING,
-                    )
-                else:
-                    chunk.stage = ChunkStage.ACTING
-                    yield chunk
-                # yield chunk
-
-            # TODO: Fallback for empty plan
-            if selected_tool is None:
-                if not plan_delta:
-                    logger.warning("Planner execute error, no direct response and no tool.")
-                    yield ErrorChunk(delta="抱歉，出现错误，请重试。")
-                return
-
-
-            tool_name = selected_tool.function.name
-            if tool_name != "planning-tool":
-                logger.info(f"Single tool execution detected, tool: {tool_name}.")
-
-                if not tool_name or tool_name not in self.tool_fn_map:
-                    logger.warning(f"Unknown tool_call: {tool_name}, ignore it.")
-                else:
-                    state.current_tool_call = selected_tool
-
-                    actor = Actor(
-                        prompt=self.prompt_set.act_prompt,
-                        llm=self.llm,
-                        tools=self.tools,
-                        name="actor",
-                        max_steps=self.max_steps
-                    )
-
-                    response_gen = await actor.run_async(state)
-                    async for chunk in response_gen:
-                        if isinstance(chunk, ToolResultChunk):
-                            if chunk.result:
-                                state.observations += chunk.result + "\n\n"
-                            if chunk.error:
-                                state.observations += chunk.error + "\n\n"
-
-                        chunk.stage = ChunkStage.ACTING
+                async for chunk in await self.invoke_llm_async(
+                    messages=messages,
+                    tools=tools_to_plan,
+                ):
+                    if isinstance(chunk, ErrorChunk):
+                        logger.error(f"Call llm failed: {chunk.error_message}")
                         yield chunk
+                        return
 
-            else:
-                logger.info(f"Planning tool execution detected, plan: {selected_tool.function.arguments}.")
+                    if chunk.tool_calls:
+                        selected_tool = chunk.tool_calls[0]
 
-                yield ToolResultChunk(
-                    tool=selected_tool,
-                    result=selected_tool.function.arguments,
-                )
-
-                try:
-                    state.plan = parse_llm_json(selected_tool.function.arguments)
-                except Exception as ex:
-                    logger.error(f"Parse plan json error: {ex}, plan content: {selected_tool.function.arguments}")
-                    raise ex
-
-                if len(state.plan["steps"]) == 0:
-                    logger.error("Empty plan steps.")
-                    raise Exception("Empty plan steps.")
-
-
-                actor_with_plan = ActorWithPlan(
-                    prompt=self.prompt_set.act_with_plan_prompt,
-                    llm=self.llm,
-                    tools=self.tools + [await aget_respond_tool()],
-                    name="actor_with_plan",
-                    max_steps=10,
-                )
-                summarizer = Summarizer(
-                    self.prompt_set.summary_prompt,
-                    llm=self.llm,
-                    name="summarizer",
-                )
-
-                response_gen = await actor_with_plan.run_async(state)
-
-                async for chunk in response_gen:
-                    if chunk.tool_calls and chunk.tool_calls[0].function.name == "respond-tool":
-                        logger.info("Actor finished with respond-tool.")
-                        break
-                    elif isinstance(chunk, ToolResultChunk):
-                        if chunk.result:
-                            state.observations += chunk.result + "\n\n"
-                        if chunk.error:
-                            state.observations += chunk.error + "\n\n"
-
-                    if chunk.delta:
+                    plan_delta += chunk.delta or ""
+                    if chunk.delta and selected_tool:
                         yield ReasoningChunk(
                             reasoning_delta=chunk.delta,
                             tool_calls=chunk.tool_calls,
@@ -186,16 +98,116 @@ class Planner(BaseAgent):
                     else:
                         chunk.stage = ChunkStage.ACTING
                         yield chunk
+                    # yield chunk
+
+                # TODO: Fallback for empty plan
+                if selected_tool is None:
+                    if not plan_delta:
+                        logger.warning("Planner execute error, no direct response and no tool.")
+                        yield ErrorChunk(delta="抱歉，出现错误，请重试。")
+                    return
 
 
-                answer_gen = await summarizer.run_async(state)
-                is_first_chunk = True
-                async for chunk in answer_gen:
-                    chunk.stage = ChunkStage.RESPONSE
-                    if is_first_chunk:
-                        chunk.delta = "\n" + chunk.delta # Summary 换行
-                        is_first_chunk = False
+                tool_name = selected_tool.function.name
+                if tool_name != "planning-tool":
+                    logger.info(f"Single tool execution detected, tool: {tool_name}.")
 
-                    yield chunk
+                    if not tool_name or tool_name not in self.tool_fn_map:
+                        logger.warning(f"Unknown tool_call: {tool_name}, ignore it.")
+                    else:
+                        state.current_tool_call = selected_tool
 
-        return gen()
+                        actor = Actor(
+                            prompt=self.prompt_set.act_prompt,
+                            llm=self.llm,
+                            tools=self.tools,
+                            name="actor",
+                            max_steps=self.max_steps
+                        )
+
+                        response_gen = await actor.run_async(state)
+                        async for chunk in response_gen:
+                            if isinstance(chunk, ToolResultChunk):
+                                if chunk.result:
+                                    state.observations += chunk.result + "\n\n"
+                                if chunk.error:
+                                    state.observations += chunk.error + "\n\n"
+
+                            chunk.stage = ChunkStage.ACTING
+                            yield chunk
+
+                else:
+                    logger.info(f"Planning tool execution detected, plan: {selected_tool.function.arguments}.")
+
+                    yield ToolResultChunk(
+                        tool=selected_tool,
+                        result=selected_tool.function.arguments,
+                    )
+
+                    try:
+                        state.plan = parse_llm_json(selected_tool.function.arguments)
+                    except Exception as ex:
+                        logger.error(f"Parse plan json error: {ex}, plan content: {selected_tool.function.arguments}")
+                        raise ex
+
+                    if len(state.plan["steps"]) == 0:
+                        logger.error("Empty plan steps.")
+                        raise Exception("Empty plan steps.")
+
+
+                    actor_with_plan = ActorWithPlan(
+                        prompt=self.prompt_set.act_with_plan_prompt,
+                        llm=self.llm,
+                        tools=self.tools + [await aget_respond_tool()],
+                        name="actor_with_plan",
+                        max_steps=10,
+                    )
+                    summarizer = Summarizer(
+                        self.prompt_set.summary_prompt,
+                        llm=self.llm,
+                        name="summarizer",
+                    )
+
+                    response_gen = await actor_with_plan.run_async(state)
+
+                    async for chunk in response_gen:
+                        if chunk.tool_calls and chunk.tool_calls[0].function.name == "respond-tool":
+                            logger.info("Actor finished with respond-tool.")
+                            break
+                        elif isinstance(chunk, ToolResultChunk):
+                            if chunk.result:
+                                state.observations += chunk.result + "\n\n"
+                            if chunk.error:
+                                state.observations += chunk.error + "\n\n"
+
+                        if chunk.delta:
+                            yield ReasoningChunk(
+                                reasoning_delta=chunk.delta,
+                                tool_calls=chunk.tool_calls,
+                                stage=ChunkStage.ACTING,
+                            )
+                        else:
+                            chunk.stage = ChunkStage.ACTING
+                            yield chunk
+
+
+                    answer_gen = await summarizer.run_async(state)
+                    is_first_chunk = True
+                    async for chunk in answer_gen:
+                        chunk.stage = ChunkStage.RESPONSE
+                        if is_first_chunk:
+                            chunk.delta = "\n" + chunk.delta # Summary 换行
+                            is_first_chunk = False
+
+                        yield chunk
+
+            return gen()
+        except Exception:
+            # 如果执行出错，也要清理
+            if not self._cleanup_called and self._cleanup_func:
+                self._cleanup_called = True
+                try:
+                    await self._cleanup_func()
+                except Exception as cleanup_error:
+                    logger.exception(f"Failed to cleanup in {self.name} after error: {cleanup_error}")
+            raise

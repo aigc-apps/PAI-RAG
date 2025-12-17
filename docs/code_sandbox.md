@@ -20,6 +20,7 @@ Code 沙箱是一个安全的 Python 代码执行环境，允许 AI 助手在隔
 3. **获得沙箱凭证**：
     - `aliyun_id`：阿里云账号 ID
     - `interpreter_id`：代码解释器 ID
+    - `interpreter_name`：代码解释器 名称
 
 ---
 
@@ -31,6 +32,7 @@ Code 沙箱是一个安全的 Python 代码执行环境，允许 AI 助手在隔
     - **沙箱类型**：当前仅支持 `aliyun-fc`（阿里云FC沙箱）
     - **阿里云ID** (`aliyun_id`)：您的阿里云账号 ID
     - **解释器ID** (`interpreter_id`)：代码解释器的 ID
+    - **解释器名称** (`interpreter_name`)：代码解释器的 名称
     - **默认超时时间** (`timeout_default`)：代码执行的默认超时时间（秒），默认值为 50 秒
 3. 点击 **保存** 完成配置
 
@@ -49,6 +51,7 @@ curl -X POST 'http://{API_ENDPOINT}/v1/config/code_sandbox' \
     "type": "aliyun-fc",
     "aliyun_id": "your-aliyun-id",
     "interpreter_id": "your-interpreter-id",
+    "interpreter_name": "your-interpreter-name",
     "enabled": true
   }'
 ```

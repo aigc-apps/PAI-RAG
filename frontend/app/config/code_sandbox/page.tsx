@@ -9,11 +9,16 @@ import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch'; // 确保你有 Switch 组件
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+const MASK_API_KEY = '******'
+
 export default function CodeSandboxConfig() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [configType, setConfigType] = useState('aliyun-fc'); // 目前仅支持 aliyun-fc
   const [aliyunId, setAliyunId] = useState('');
   const [interpreterId, setInterpreterId] = useState('');
+  const [interpreterName, setInterpreterName] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [hasApiKey, setHasApiKey] = useState(false); // 标记是否存在 API key
   const [timeoutDefault, setTimeoutDefault] = useState(50);
   const [isSaving, setIsSaving] = useState(false);
   const { tenantFetch } = useTenantFetch();
@@ -29,13 +34,17 @@ export default function CodeSandboxConfig() {
         if (!res.ok) throw new Error('加载配置失败');
 
         const response = await res.json();
-        const config = response?.data?.[0];
+        const config = response?.data;
 
         if (config) {
           setIsEnabled(config.enabled || false);
           setConfigType(config.type || 'aliyun-fc');
           setAliyunId(config.aliyun_id || '');
           setInterpreterId(config.interpreter_id || '');
+          setInterpreterName(config.interpreter_name || '');
+          const hasKey = !!config.api_key;
+          setHasApiKey(hasKey);
+          setApiKey(hasKey ? MASK_API_KEY : '');
           setTimeoutDefault(config.timeout_default || 50);
         }
       } catch (err: any) {
@@ -59,6 +68,11 @@ export default function CodeSandboxConfig() {
       // 仅当用户输入了值才提交（避免覆盖已有值为空）
       if (aliyunId) payload.aliyun_id = aliyunId;
       if (interpreterId) payload.interpreter_id = interpreterId;
+      if (interpreterName) payload.interpreter_name = interpreterName;
+      // 如果用户输入的是占位符，则不更新 API key（保持原值）；否则更新
+      if (apiKey !== MASK_API_KEY) {
+        payload.api_key = apiKey || null;
+      }
       if (isEnabled) payload.enabled = isEnabled;
       if (timeoutDefault) payload.timeout_default = timeoutDefault;
 
@@ -72,6 +86,21 @@ export default function CodeSandboxConfig() {
       if (!res.ok) throw new Error('保存失败，请检查网络或配置');
 
       toast.success('代码沙箱配置已成功保存。');
+      
+      // 重新加载配置以更新状态
+      const refreshRes = await tenantFetch(`/api/config/code_sandbox`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (refreshRes.ok) {
+        const refreshResponse = await refreshRes.json();
+        const refreshConfig = refreshResponse?.data;
+        if (refreshConfig) {
+          const hasKey = !!refreshConfig.api_key;
+          setHasApiKey(hasKey);
+          setApiKey(hasKey ? MASK_API_KEY : '');
+        }
+      }
     } catch (err: any) {
       toast.warning(err.message);
     } finally {
@@ -143,6 +172,34 @@ export default function CodeSandboxConfig() {
               </div>
             </div>
 
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="interpreter_name" className="text-right">
+                解释器名称
+              </Label>
+              <div className="col-span-3">
+                <Input
+                  id="interpreter_name"
+                  value={interpreterName}
+                  onChange={(e) => setInterpreterName(e.target.value)}
+                  placeholder={'输入解释器名称（templateName）'}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="api_key" className="text-right">
+                API Key
+              </Label>
+              <div className="col-span-3">
+                <Input
+                  id="api_key"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={'输入API Key'}
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="timeout_default" className="text-right">

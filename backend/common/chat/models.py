@@ -1,6 +1,6 @@
 from typing import Dict, Literal, Union, List, Any, Optional, Sequence
 from openai.types.chat import ChatCompletionMessageParam
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from common.knowledgebase.types import VectorIndexRetrievalType
 
 
@@ -66,7 +66,14 @@ class RetrievalSetting(BaseModel):
     rerank_provider_name: Optional[str] = None
     top_k: Optional[int] = None
     similarity_threshold: Optional[float] = None
+    score_threshold: Optional[float] = None # For dify compatibility, similarity_threshold is preferred
     rerank_top_k: Optional[int] = None
+
+    @model_validator(mode="after")
+    def validate_score_threshold(self):
+        if self.similarity_threshold is None:
+            self.similarity_threshold = self.score_threshold
+        return self
 
 
 class RetrievalRequest(BaseModel):
@@ -83,7 +90,7 @@ class RetrievalRequest(BaseModel):
 class ChatAgentRequest(BaseModel):
     model: str  # 模型名称
     messages: Union[List[Any], List[ChatCompletionMessageParam]]  # 上下文聊天
-    stream: Optional[bool] = False  # 默认流式输出
+    stream: Optional[bool] = True  # 默认流式输出
 
     mcp_ids: Optional[List[str]] = []
     kb_ids: Optional[List[str]] = []
