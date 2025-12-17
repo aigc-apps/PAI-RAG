@@ -216,10 +216,9 @@ class CodeSandboxTool:
                             continue
 
                     except CodeSandboxAPIException as e:
-                        # 如果是 API 异常，等待后重试
-                        logger.warning(f"Health check error, retrying in 5s: {e}")
-                        await asyncio.sleep(5)
-                        continue
+                        logger.error(f"Health check error: {e}")
+                        raise CodeSandboxAPIException(f"Failed to check sandbox health: {e}")
+
         except TimeoutError:
             logger.error(f"Sandbox health check timeout after {max_wait_seconds}s")
             raise CodeSandboxAPIException(f"Sandbox health check timeout after {max_wait_seconds}s")
