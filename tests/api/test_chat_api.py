@@ -2,31 +2,23 @@
 Reference: https://help.aliyun.com/zh/pai/use-cases/rag-api-interface-for-v0-4-x
 """
 import os
-from typing import Generator
+from typing import Generator, Any
 from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
+from conftest import client, test_knowledgebase, test_llm_model, test_embedding_model, test_reranker_model
 import json
-
-os.environ["SQLITE_URL"] = "sqlite+aiosqlite:///./localdata/pytest.db"
-os.environ["DB_TYPE"] = "sqlite"
-
-
-@pytest.fixture()
-def client() -> Generator[None, None, Client]:
-    from app.main import app
-    with TestClient(app) as client:
-        yield client
+from loguru import logger
 
 
 class TestChatAPI:
     """Test cases for Chat API (OpenAI-compatible)."""
 
     @pytest.mark.skip(reason="Requires LLM model configuration")
-    def test_chat_completions_basic(self, client: Client):
+    def test_chat_completions_basic(self, client: Client, test_llm_model: Any):
         """Test POST /v1/chat/completions - Basic chat request."""
         chat_payload = {
-            "model": "my_assistant",  # Should be a configured chat app
+            "model": "qwen-plus",  # Should be a configured chat app
             "messages": [
                 {
                     "role": "user",
@@ -43,11 +35,10 @@ class TestChatAPI:
         assert len(resp_json["choices"]) > 0
         assert "message" in resp_json["choices"][0]
 
-    @pytest.mark.skip(reason="Requires LLM model configuration")
-    def test_chat_completions_stream(self, client: Client):
+    def test_chat_completions_stream(self, client: Client, test_llm_model: Any):
         """Test POST /v1/chat/completions - Streaming chat request."""
         chat_payload = {
-            "model": "my_assistant",
+            "model": "qwen-plus",
             "messages": [
                 {
                     "role": "user",
@@ -66,12 +57,13 @@ class TestChatAPI:
                     if data != "[DONE]":
                         chunks.append(json.loads(data))
             assert len(chunks) > 0
+            logger.debug(f"####: {chunks}")
+            assert "not found" not in chunks[0]["choices"][0]["delta"]["content"]
 
-    @pytest.mark.skip(reason="Requires LLM model configuration")
-    def test_chat_completions_with_history(self, client: Client):
+    def test_chat_completions_with_history(self, client: Client, test_llm_model: Any):
         """Test chat with conversation history."""
         chat_payload = {
-            "model": "my_assistant",
+            "model": "qwen-plus",
             "messages": [
                 {
                     "role": "user",
@@ -93,6 +85,8 @@ class TestChatAPI:
         assert response.status_code == 200
         resp_json = response.json()
         assert "choices" in resp_json
+        assert "not found" not in resp_json["choices"][0]["message"]["content"]
+        logger.debug(f"####: {resp_json}")
 
     def test_chat_completions_invalid_model(self, client: Client):
         """Test chat with non-existent model should fail."""
@@ -103,18 +97,19 @@ class TestChatAPI:
                     "role": "user",
                     "content": "测试"
                 }
-            ]
+            ],
+            "stream": False
         }
         
         response = client.post("/v1/chat/completions", json=chat_payload)
         # Should return error for non-existent model
-        result_json = response.json()
-        assert "Model `non_existent_model` not found." in result_json["choices"][0]["message"]["content"]
+        response_json = response.json()
+        assert "Model `non_existent_model` not found." in response_json["choices"][0]["message"]["content"]
 
     def test_chat_completions_missing_messages(self, client: Client):
         """Test chat without messages should fail validation."""
         chat_payload = {
-            "model": "my_assistant"
+            "model": "qwen-max"
             # Missing messages field
         }
         
@@ -125,13 +120,14 @@ class TestChatAPI:
         """Test chat with empty messages array."""
         chat_payload = {
             "model": "my_assistant",
-            "messages": []
+            "messages": [],
+            "stream": False
         }
         
         response = client.post("/v1/chat/completions", json=chat_payload)
-        result_json = response.json()
+        response_json = response.json()
         # Should fail or return error
-        assert "Model `my_assistant` not found." in result_json["choices"][0]["message"]["content"]
+        assert "Model `my_assistant` not found." in response_json["choices"][0]["message"]["content"]
 
 
 class TestChatAppsAPI:
@@ -174,14 +170,13 @@ class TestChatAppsAPI:
         create_response = client.post("/v1/config/apps", json=create_payload)
         
         if create_response.status_code == 200:
-            app_id = create_response.json()["data"]["id"]
-            
+            _id = create_response.json()["data"]["id"]
             # Get the app
-            get_response = client.get(f"/v1/config/apps/{app_id}")
+            get_response = client.get(f"/v1/config/apps?app_id=test_chat_app_get")
             assert get_response.status_code == 200
             
             # Cleanup
-            client.delete(f"/v1/config/apps/{app_id}")
+            client.delete(f"/v1/config/apps/{_id}")
 
     def test_delete_chat_app(self, client: Client):
         """Test DELETE /v1/config/apps/{app_id} - Delete chat application."""

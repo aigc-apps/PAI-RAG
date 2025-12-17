@@ -7,32 +7,7 @@ from typing import Generator
 from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
-
-os.environ["SQLITE_URL"] = "sqlite+aiosqlite:///./localdata/pytest.db"
-os.environ["DB_TYPE"] = "sqlite"
-
-
-@pytest.fixture()
-def client() -> Generator[None, None, Client]:
-    from app.main import app
-    with TestClient(app) as client:
-        yield client
-
-
-@pytest.fixture()
-def test_knowledgebase(client: Client):
-    """Create a test knowledge base for file tests."""
-    create_payload = {
-        "name": "test_kb_files",
-        "description": "用于文件测试的知识库",
-        "embedding_model": "BAAI/bge-m3"
-    }
-    response = client.post("/v1/config/knowledgebases", json=create_payload)
-    kb_data = response.json()["data"]
-    yield kb_data
-    # Cleanup
-    client.delete(f"/v1/config/knowledgebases/{kb_data['id']}")
-
+from conftest import client, test_knowledgebase
 
 class TestFileAPI:
     """Test cases for File Management operations."""

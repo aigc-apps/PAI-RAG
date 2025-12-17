@@ -7,16 +7,8 @@ from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
 from loguru import logger
-
-os.environ["SQLITE_URL"] = "sqlite+aiosqlite:///./localdata/pytest.db"
-os.environ["DB_TYPE"] = "sqlite"
-
-
-@pytest.fixture()
-def client() -> Generator[None, None, Client]:
-    from app.main import app
-    with TestClient(app) as client:
-        yield client
+from conftest import test_embedding_model, client
+from typing import Any
 
 
 class TestKnowledgeBaseAPI:
@@ -32,7 +24,7 @@ class TestKnowledgeBaseAPI:
         assert "items" in resp_json["data"]
         assert "total" in resp_json["data"]
 
-    def test_create_knowledgebase(self, client: Client):
+    def test_create_knowledgebase(self, client: Client, test_embedding_model: Any):
         """Test POST /v1/config/knowledgebases - Create a new knowledge base."""
         create_payload = {
             "name": "test_kb_api",
@@ -43,7 +35,8 @@ class TestKnowledgeBaseAPI:
                 "chunk_size": 1000,
                 "chunk_overlap": 50
             },
-            "embedding_model": "BAAI/bge-m3",
+            "embedding_model": "text-embedding-v3",
+            "embedding_provider_name": "openai_like",
             "retrieval_config": {
                 "retrieval_mode": "hybrid",
                 "top_k": 5,
@@ -63,7 +56,7 @@ class TestKnowledgeBaseAPI:
         kb_id = kb_data["id"]
         assert kb_data["name"] == "test_kb_api"
         assert kb_data["description"] == "这是一个API测试知识库"
-        assert kb_data["embedding_model"] == "BAAI/bge-m3"
+        assert kb_data["embedding_model"] == "text-embedding-v3"
         
         # Cleanup: Delete the created knowledge base
         delete_response = client.delete(f"/v1/config/knowledgebases/{kb_id}")
@@ -76,7 +69,8 @@ class TestKnowledgeBaseAPI:
         create_payload = {
             "name": "test_kb_get",
             "description": "测试获取知识库详情",
-            "embedding_model": "BAAI/bge-m3"
+            "embedding_model": "text-embedding-v3",
+            "embedding_provider_name": "openai_like",
         }
         create_response = client.post("/v1/config/knowledgebases", json=create_payload)
         assert create_response.status_code == 200, f"Create failed: {create_response.json()}"
@@ -103,7 +97,8 @@ class TestKnowledgeBaseAPI:
         create_payload = {
             "name": "test_kb_update",
             "description": "原始描述",
-            "embedding_model": "BAAI/bge-m3"
+            "embedding_model": "text-embedding-v3",
+            "embedding_provider_name": "openai_like",
         }
         create_response = client.post("/v1/config/knowledgebases", json=create_payload)
         assert create_response.status_code == 200, f"Create failed: {create_response.json()}"
@@ -116,7 +111,8 @@ class TestKnowledgeBaseAPI:
             update_payload = {
                 "name": "test_kb_update",
                 "description": "更新后的描述",
-                "embedding_model": "BAAI/bge-m3",
+                "embedding_model": "text-embedding-v3",
+                "embedding_provider_name": "openai_like",
                 "retrieval_config": {
                     "retrieval_mode": "vector",
                     "top_k": 10,
@@ -138,7 +134,8 @@ class TestKnowledgeBaseAPI:
         create_payload = {
             "name": "test_kb_delete",
             "description": "测试删除知识库",
-            "embedding_model": "BAAI/bge-m3"
+            "embedding_model": "text-embedding-v3",
+            "embedding_provider_name": "openai_like",
         }
         create_response = client.post("/v1/config/knowledgebases", json=create_payload)
         assert create_response.status_code == 200, f"Create failed: {create_response.json()}"
@@ -161,7 +158,8 @@ class TestKnowledgeBaseAPI:
         create_payload = {
             "name": "test_kb_duplicate",
             "description": "测试重复名称知识库",
-            "embedding_model": "BAAI/bge-m3"
+            "embedding_model": "text-embedding-v3",
+            "embedding_provider_name": "openai_like",
         }
         
         # Create first knowledge base

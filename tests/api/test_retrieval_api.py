@@ -6,42 +6,13 @@ from typing import Generator
 from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
-
-os.environ["SQLITE_URL"] = "sqlite+aiosqlite:///./localdata/pytest.db"
-os.environ["DB_TYPE"] = "sqlite"
-
-
-@pytest.fixture()
-def client() -> Generator[None, None, Client]:
-    from app.main import app
-    with TestClient(app) as client:
-        yield client
-
-
-@pytest.fixture()
-def test_knowledgebase(client: Client):
-    """Create a test knowledge base for retrieval tests."""
-    create_payload = {
-        "name": "test_kb_retrieval",
-        "description": "用于检索测试的知识库",
-        "embedding_model": "BAAI/bge-m3",
-        "retrieval_config": {
-            "retrieval_mode": "vector",
-            "top_k": 5,
-            "similarity_threshold": 0.2
-        }
-    }
-    response = client.post("/v1/config/knowledgebases", json=create_payload)
-    kb_data = response.json()["data"]
-    yield kb_data
-    # Cleanup
-    client.delete(f"/v1/config/knowledgebases/{kb_data['id']}")
-
+from conftest import client, test_knowledgebase
+from typing import Any
 
 class TestRetrievalAPI:
     """Test cases for Retrieval API."""
 
-    def test_retrieval_basic(self, client: Client, test_knowledgebase):
+    def test_retrieval_basic(self, client: Client, test_knowledgebase: Any):
         """Test POST /v1/retrieval - Basic retrieval request."""
         kb_id = test_knowledgebase["id"]
         
@@ -55,7 +26,7 @@ class TestRetrievalAPI:
         resp_json = response.json()
         assert "records" in resp_json
 
-    def test_retrieval_with_retrieval_setting(self, client: Client, test_knowledgebase):
+    def test_retrieval_with_retrieval_setting(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with custom retrieval settings that override KB defaults."""
         kb_id = test_knowledgebase["id"]
         
@@ -73,7 +44,7 @@ class TestRetrievalAPI:
         resp_json = response.json()
         assert "records" in resp_json
 
-    def test_retrieval_with_metadata_condition(self, client: Client, test_knowledgebase):
+    def test_retrieval_with_metadata_condition(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with metadata filtering conditions."""
         kb_id = test_knowledgebase["id"]
         
@@ -97,7 +68,7 @@ class TestRetrievalAPI:
         resp_json = response.json()
         assert "records" in resp_json
 
-    def test_retrieval_with_user_id(self, client: Client, test_knowledgebase):
+    def test_retrieval_with_user_id(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with user_id for personalization/tracking."""
         kb_id = test_knowledgebase["id"]
         
@@ -112,7 +83,7 @@ class TestRetrievalAPI:
         resp_json = response.json()
         assert "records" in resp_json
 
-    def test_retrieval_invalid_knowledge_id(self, client: Client):
+    def test_retrieval_invalid_knowledge_id(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with non-existent knowledge_id should fail."""
         retrieval_payload = {
             "query": "测试查询",
@@ -123,7 +94,7 @@ class TestRetrievalAPI:
         # Should return error for non-existent KB
         assert response.status_code in [400, 404, 500]
 
-    def test_retrieval_empty_query(self, client: Client, test_knowledgebase):
+    def test_retrieval_empty_query(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with empty query."""
         kb_id = test_knowledgebase["id"]
         
@@ -134,9 +105,9 @@ class TestRetrievalAPI:
         
         response = client.post("/v1/retrieval", json=retrieval_payload)
         # Empty query might still work or return validation error
-        assert response.status_code in [200, 400, 422]
+        assert response.status_code == 200
 
-    def test_retrieval_metadata_operators(self, client: Client, test_knowledgebase):
+    def test_retrieval_metadata_operators(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with various metadata comparison operators."""
         kb_id = test_knowledgebase["id"]
         
@@ -159,7 +130,7 @@ class TestRetrievalAPI:
         response = client.post("/v1/retrieval", json=retrieval_payload)
         assert response.status_code == 200
 
-    def test_retrieval_multiple_conditions(self, client: Client, test_knowledgebase):
+    def test_retrieval_multiple_conditions(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with multiple metadata conditions."""
         kb_id = test_knowledgebase["id"]
         
