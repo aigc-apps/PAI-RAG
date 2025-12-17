@@ -16,7 +16,7 @@ from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.vector_stores.postgres import PGVectorStore
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from loguru import logger
-
+import copy
 from rag.vector_store.local_chroma_service import DEFAULT_CHROMA_PORT
 from rag.vector_store.local import LocalChromaVectorStore
 from rag.vector_store.elasticsearch import ElasticsearchStore
@@ -35,7 +35,15 @@ vectordb_cache = LruCache(max_size=200, on_delete_func=cleanup_vector_store)
 
 
 def get_vectordb_cache_key(kb_id: str, dimension: int, vector_config: VectorDbConfig, table_name: str):
-    vector_str = json.dumps(vector_config.config, sort_keys=True, ensure_ascii=False)
+    vec_config_dict = copy.copy(vector_config.config)
+    if "encrypted_password" in vec_config_dict:
+        vec_config_dict["password"] = decrypt_key(vec_config_dict["encrypted_password"])
+        vec_config_dict.pop("encrypted_password")
+    if "encrypted_sk" in vec_config_dict:
+        vec_config_dict["sk"] = decrypt_key(vec_config_dict["encrypted_sk"])
+        vec_config_dict.pop("encrypted_sk")
+
+    vector_str = json.dumps(vec_config_dict, sort_keys=True, ensure_ascii=False)
     key_str = f"{table_name}--{kb_id}--{dimension}--{vector_str}"
     return key_str
 
@@ -47,7 +55,6 @@ def create_vector_store(
     table_name: str,
 ) -> BasePydanticVectorStore:
     cache_key = get_vectordb_cache_key(kb_id, dimension, vector_config, table_name)
-
     vector_store = vectordb_cache.get(cache_key)
     if vector_store is not None:
         logger.info(f"Using cached vector store for {kb_id} with table name {table_name} with dimension {dimension}.")
