@@ -1064,6 +1064,7 @@ class RagService:
         records = []
         file_ids = []
 
+        seen_file_urls = {}
         similarity_threshold = retrieval_setting.similarity_threshold or DEFAULT_SIMILARITY_THRESHOLD
         for i, node in enumerate(reranked_result.nodes):
             if reranked_result.similarities[i] >= similarity_threshold:
@@ -1080,8 +1081,14 @@ class RagService:
 
                 # TODO: Add file source
                 file_url = node.metadata.get("file_source")
-                if not file_url:
-                    file_url = await file_store.get_url_async(file_path=node.metadata.get("file_path", ""), tenant_id=tenant_id)
+                file_path = node.metadata.get("file_path")
+                if not file_url and file_path:
+                    if file_path in seen_file_urls:
+                        file_url = seen_file_urls[file_path]
+                    else:
+                        file_url = await file_store.get_url_async(file_path=file_path, tenant_id=tenant_id)
+                        seen_file_urls[file_path] = file_url
+
                 records.append(
                     SearchResult(
                         score=reranked_result.similarities[i],

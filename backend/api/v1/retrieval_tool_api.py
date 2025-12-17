@@ -9,6 +9,7 @@ from api.v1.mcp.kb_retriever_tool import asearch_knowledgebase
 from common.chat.models import MetadataFilteringCondition
 from service.knowledgebase.rag_service import RagService
 from service.injection import get_rag_service, get_tenant_id
+from loguru import logger
 
 retrieval_tool_router = APIRouter()
 
@@ -34,6 +35,7 @@ async def mcp_retrieval(
     Input: {"query": "xxx", "images": ["1.jpg", "2.jpg"]}
     Output: {"status": "SUCCESS", "status_code": 200, "data": {"total": 2, "nodes": [...]}, "request_id": "..."}
     """
+    logger.info(f"Retrieval tool request: {request}, knowledgebase_id: {knowledgebase_id}, tenant_id: {tenant_id}")
 
     result = await asearch_knowledgebase(
         query=request.query,

@@ -7,12 +7,13 @@ import asyncio
 from fastapi import FastAPI
 import threading
 from db.sqlite_store import sync_sqlite_store_task, stop_event, sync_sqlite_store
-
+from fastapi.exceptions import RequestValidationError
 # setup models
 from utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
 
 from api.api_exception import ApiException, api_exception_handler
+from api.request_validate_exception import validation_exception_handler
 import api.v1.mcp_server_middleware as mcp_middleware
 from rag.vector_store.local_chroma_service import LocalChromaService
 from app.log_middleware import CustomLoggingMiddleware
@@ -98,7 +99,7 @@ def configure(app: FastAPI):
     )
     app.add_middleware(CustomLoggingMiddleware)
     app.add_exception_handler(ApiException, api_exception_handler)
-
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 app = FastAPI(lifespan=lifespan)
 configure(app)
