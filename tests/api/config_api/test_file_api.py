@@ -7,7 +7,7 @@ from typing import Generator
 from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
-from conftest import client, test_knowledgebase
+from conftest import client, test_knowledgebase_for_file as test_knowledgebase
 
 class TestFileAPI:
     """Test cases for File Management operations."""

@@ -2,9 +2,8 @@
 
 Reference: https://help.aliyun.com/zh/pai/use-cases/rag-api-interface-for-v0-4-x
 """
-import dotenv
-dotenv.load_dotenv()
 import os
+import asyncio
 from typing import Generator
 from fastapi.testclient import TestClient
 import pytest
@@ -19,6 +18,13 @@ if os.path.exists("./localdata/pytest.db"):
 # Set up test database before importing app
 os.environ["SQLITE_URL"] = "sqlite+aiosqlite:///./localdata/pytest.db"
 os.environ["DB_TYPE"] = "sqlite"
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create a single event loop for the entire test session."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 
 @pytest.fixture(scope="session")
@@ -68,9 +74,12 @@ def test_embedding_model(client: Client):
     }
     response = client.post("/v1/config/embeddings", json=create_payload)
     emb_data = response.json()["data"]
+    logger.debug(f"test_embedding_model: {emb_data}")
     yield emb_data
     # Cleanup
-    client.delete(f"/v1/config/embeddings/{emb_data['id']}")
+    embed_id = emb_data.get("id") if emb_data else None
+    if embed_id:
+        client.delete(f"/v1/config/embeddings/{embed_id}")
 
 
 @pytest.fixture(scope="session")
@@ -95,8 +104,38 @@ def test_reranker_model(client: Client):
 def test_knowledgebase(client: Client, test_embedding_model: Any, test_reranker_model: Any):
     """Create a test knowledge base and cleanup after test."""
     create_payload = {
-        "name": "test_kb_fixture",
-        "description": "Fixture knowledge base for testing",
+        "name": "test_kb_for_retrieval",
+        "description": "Fixture knowledge base for testing retrieval",
+        "embedding_model": test_embedding_model["model_id"],
+        "embedding_provider_name": test_embedding_model["provider_name"],
+        "chunk_config": {
+            "parser_type": "structure",
+            "chunk_size": 1000,
+            "chunk_overlap": 50
+        },
+        "retrieval_config": {
+            "retrieval_mode": "vector",
+            "top_k": 5,
+            "similarity_threshold": 0.2,
+            "enable_rerank": True,
+            "rerank_model": test_reranker_model["model_id"],
+            "rerank_provider_name": test_reranker_model["provider_name"],
+            "rerank_top_k": 5,
+        }
+    }
+    response = client.post("/v1/config/knowledgebases", json=create_payload)
+    kb_data = response.json()["data"]
+    yield kb_data
+    # Cleanup
+    client.delete(f"/v1/config/knowledgebases/{kb_data['id']}")
+
+
+@pytest.fixture(scope="session")
+def test_knowledgebase_for_file(client: Client, test_embedding_model: Any, test_reranker_model: Any):
+    """Create a test knowledge base and cleanup after test."""
+    create_payload = {
+        "name": "test_kb_for_file",
+        "description": "Fixture knowledge base for testing file",
         "embedding_model": test_embedding_model["model_id"],
         "embedding_provider_name": test_embedding_model["provider_name"],
         "chunk_config": {
