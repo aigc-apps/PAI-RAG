@@ -52,7 +52,7 @@ async def create_attachment_file(
                 description="附件知识库",
                 embedding_model=default_embedding_config.model_id,
             )
-            knowledgebase = await knowledgebase_service.create_knowledgebase(kb_create=kb_create, tenant_id=tenant_id)
+            knowledgebase = await knowledgebase_service.create_knowledgebase(kb_data=kb_create, tenant_id=tenant_id)
             await session.commit() # commit for background worker to use the knowledgebase id
 
         import app.worker as background_worker

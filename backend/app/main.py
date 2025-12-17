@@ -6,7 +6,6 @@ import os
 import asyncio
 from fastapi import FastAPI
 import threading
-
 # setup models
 from utils.constants import DEFAULT_MODEL_DIR
 os.environ["PAIRAG_MODEL_DIR"] = DEFAULT_MODEL_DIR
@@ -84,6 +83,7 @@ def create_app():
     import api.v1.mcp_server_middleware as mcp_middleware
     from app.log_middleware import CustomLoggingMiddleware
     from fastapi.middleware.cors import CORSMiddleware
+    from api.request_validate_exception import validation_exception_handler
 
     app = FastAPI(lifespan=lifespan)
     add_config_router(app)
@@ -102,7 +102,6 @@ def create_app():
     )
     app.add_middleware(CustomLoggingMiddleware)
     app.add_exception_handler(ApiException, api_exception_handler)
-
-    return app
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 app = create_app()

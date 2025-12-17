@@ -22,3 +22,6 @@ def kb_key(tenant_id: str, kb_id: str) -> str:
 
 def kb_name_key(tenant_id: str, name: str) -> str:
     return f"tenant:{tenant_id}:kb_name:{name}"
+
+def vector_table_name_key(tenant_id: str, kb_id: str) -> str:
+    return f"tenant:{tenant_id}:kb_id:{kb_id}:vector_table_name"

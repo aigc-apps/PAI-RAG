@@ -24,6 +24,7 @@ async def retrieval(
     tenant_id: str = Depends(get_tenant_id),
     rag_service: RagService = Depends(get_rag_service),
 ):
+    logger.info(f"Retrieval request: {retrieval_request}, tenant_id: {tenant_id}")
     try:
         search_results: List[SearchResult] = await rag_service.aquery(
             query=retrieval_request.query,
