@@ -79,7 +79,7 @@ class AgentService:
                     prompt_set.act_with_plan_prompt = chatapp.prompts.get("act_with_plan", prompt_set.act_with_plan_prompt)
                     prompt_set.summary_prompt = chatapp.prompts.get("summary", prompt_set.summary_prompt)
 
-            tools = await self.aget_tools(
+            tools, cleanup_tools_func = await self.aget_tools(
                 messages=chat_request.messages,
                 enable_search=chat_request.enable_search,
                 enable_chatdb=chat_request.enable_chatdb,
@@ -94,6 +94,7 @@ class AgentService:
                 prompt_set=prompt_set,
                 tools=tools,
                 name="Planner",
+                cleanup_func=cleanup_tools_func,
             )
 
             return runner
@@ -111,7 +112,7 @@ class AgentService:
         mcp_ids: List[str] = [],
         kb_ids: List[str] = [],
         tenant_id: str = None,
-    ) -> List[FunctionTool]:
+    ) -> tuple[List[FunctionTool], Callable | None]:
         tools = []
 
         # 知识库工具
@@ -153,28 +154,28 @@ class AgentService:
             tools.extend(chatdb_tools)
             logger.info(f"Loaded {len(chatdb_tools)} chat_db tools.")
 
-        attachment_tools = await self.parse_attachment_tools(messages=messages, tenant_id=tenant_id)
+        attachment_tools, cleanup_code_sandbox = await self.parse_attachment_tools(messages=messages, tenant_id=tenant_id)
         tools.extend(attachment_tools)
         logger.info(f"Loaded {len(attachment_tools)} attachment tools.")
-        return tools
+        return tools, cleanup_code_sandbox
 
 
     async def parse_attachment_tools(
         self,
         messages: List[dict],
         tenant_id: str,
-    ):
+    ) -> tuple[List[FunctionTool], Callable | None]:
         file_service = await self._get_file_service()
         llm_service = await self._get_llm_service()
         rag_service = await self._get_rag_service()
 
         attachment_tools = []
         if not messages:
-            return []
+            return [], None
 
         user_message = messages[-1]
         if user_message.get("role") != "user":
-            return []
+            return [], None
 
         user_attachments = user_message.get("attachments", [])
         image_list = []
@@ -199,7 +200,7 @@ class AgentService:
         # 文件搜索工具
         if len(file_ids_to_read) > 0:
             logger.info(f"Loading file searcher tool with file ids to read: {file_ids_to_read}")
-            file_searcher_tool = await aget_file_searcher(rag_service=rag_service)
+            file_searcher_tool = await aget_file_searcher(rag_service=rag_service, tenant_id=tenant_id)
             attachment_tools.append(file_searcher_tool)
 
 
@@ -229,11 +230,12 @@ class AgentService:
                         attachment_names_in_message.append(name)
                         attachment_ids_in_message.append(attachment.get("id"))
 
+        cleanup_code_sandbox = None
         if len(attachment_names_in_message) > 0:
             codesandbox_service = await self._get_codesandbox_service()
             codesandbox_config = await codesandbox_service.get_codesandbox_config_or_create(tenant_id=tenant_id)
             if codesandbox_config and codesandbox_config.enabled:
-                codesandbox_tools = create_codesandbox_tools(
+                codesandbox_tools, cleanup_code_sandbox = create_codesandbox_tools(
                     codesandbox_config=codesandbox_config,
                     code_sandbox_attachments_ids=attachment_ids_in_message,
                     file_service=file_service,
@@ -247,4 +249,4 @@ class AgentService:
             reply_text = f"\n\n 可以参考以下文件的本地路径回答：\n\n {attachment_names_in_message}"
             append_text(user_message, reply_text)
 
-        return attachment_tools
+        return attachment_tools, cleanup_code_sandbox

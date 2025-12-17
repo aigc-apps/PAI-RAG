@@ -3,6 +3,7 @@ from common.llm.models import ChatResponseGenerator
 from common.llm.utils import convert_gen_to_stream_chat_completions, convert_gen_to_chat_completions, error_chunk_gen
 from fastapi import APIRouter
 from sse_starlette import EventSourceResponse
+
 from common.chat.models import ChatAgentRequest
 from openai.types.chat import ChatCompletionMessageParam
 import traceback
@@ -97,19 +98,22 @@ async def chat(
                     stream=chat_request.stream,
                 )
 
+
         async_response_gen = await agent.run_async(
             state=AgentState.from_messages(
                 messages=chat_request.messages,
                 enable_agent=chat_request.enable_agent,
             )
         )
-        return await generate_reponse(
+        response = await generate_reponse(
             async_response_gen,
             model=chat_request.model,
             stream=chat_request.stream,
             enable_output_check=chat_request.enable_output_guardrail,
             guardrail_hint=chat_request.guardrail_hint,
         )
+
+        return response
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
         return await generate_reponse(

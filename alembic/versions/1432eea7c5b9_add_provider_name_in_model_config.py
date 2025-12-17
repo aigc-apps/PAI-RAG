@@ -47,7 +47,6 @@ def upgrade() -> None:
     # SQLite 和 MySQL 不支持 UPDATE ... FROM 语法，需要根据数据库类型使用不同语法
     conn = op.get_bind()
     dialect_name = conn.dialect.name
-
     if dialect_name == 'sqlite':
         # SQLite 使用子查询语法
         op.execute(sa.text("""
