@@ -77,13 +77,15 @@ class BailianModelService:
         model_dict = await self._get_bailian_model_by_provider_model_id(provider_name, model_id, tenant_id)
         assert model_dict["type"] == "rerank", f"Model {model_id} is not a reranker model."
 
+        rerank_type = "dashscope" if provider_name in ["dashscope", "Tongyi"] else "openai_like"
+
         reranker_model = RerankerModelEntity.model_validate({
             "tenant_id": tenant_id,
             "model_id": model_id,
             "model_name": model_dict["model_name"],
-            "base_url": "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+            "base_url": model_dict["endpoint"],
             "encrypted_api_key": encrypt_key(model_dict["api_key"]),
-            "type": provider_name,
+            "type": rerank_type,
             "provider_name": provider_name,
         })
         logger.info(f"Reranker model {model_id} created: {reranker_model}")

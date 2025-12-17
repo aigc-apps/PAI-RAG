@@ -1,6 +1,6 @@
 """RAG Service layer for orchestrating business logic across knowledgebase entities."""
 
-from typing import Callable, Awaitable, Optional, List, Tuple
+from typing import Callable, Awaitable, Optional, List, Tuple, Dict
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -37,6 +37,7 @@ from common.tool.search_result import SearchResult
 from tools.utils.vectordb_retrieval import aquery_vector_store
 from utils.lru_cache import LruCache
 from db.db_context import create_db_session
+from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K, DEFAULT_SIMILARITY_THRESHOLD
 from loguru import logger
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
@@ -819,7 +820,7 @@ class RagService:
         kb_name: str = None,
         query: str = None,
         user_id: str = None,
-        retrieval_setting: Optional[RetrievalSetting] = None,
+        retrieval_setting_dict: Optional[Dict] = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
         document_ids: Optional[List[str]] = None,
         tenant_id: str = None,
@@ -850,28 +851,37 @@ class RagService:
 
         embed_model = create_embedding_model(embed_model_entity)
         query_embedding = await embed_model.aget_query_embedding(query)
-        query_mode = retrieval_type_to_search_mode(retrieval_setting.retrieval_mode)
+
+        retrieval_setting = RetrievalSetting.model_validate(retrieval_setting_dict) if retrieval_setting_dict else RetrievalSetting()
 
         base_retrieval_setting = RetrievalConfig.model_validate(kb.retrieval_config)
-        if not retrieval_setting:
-            retrieval_setting = base_retrieval_setting
-        else:
-            if retrieval_setting.retrieval_mode is None:
-                retrieval_setting.retrieval_mode = base_retrieval_setting.retrieval_mode
-            if retrieval_setting.vector_weight is None:
-                retrieval_setting.vector_weight = base_retrieval_setting.vector_weight
-            if retrieval_setting.enable_rerank is None:
-                retrieval_setting.enable_rerank = base_retrieval_setting.enable_rerank
-            if retrieval_setting.rerank_model is None:
-                retrieval_setting.rerank_model = base_retrieval_setting.rerank_model
-            if retrieval_setting.rerank_provider_name is None:
-                retrieval_setting.rerank_provider_name = base_retrieval_setting.rerank_provider_name
-            if retrieval_setting.rerank_top_k is None:
-                retrieval_setting.rerank_top_k = base_retrieval_setting.rerank_top_k
-            if retrieval_setting.similarity_threshold is None:
-                retrieval_setting.similarity_threshold = base_retrieval_setting.similarity_threshold
-            if retrieval_setting.top_k is None:
-                retrieval_setting.top_k = base_retrieval_setting.top_k
+        # save setting to dict
+        if retrieval_setting.retrieval_mode is None:
+            retrieval_setting.retrieval_mode = base_retrieval_setting.retrieval_mode
+            retrieval_setting_dict["retrieval_mode"] = retrieval_setting.retrieval_mode
+        if retrieval_setting.vector_weight is None:
+            retrieval_setting.vector_weight = base_retrieval_setting.vector_weight
+            retrieval_setting_dict["vector_weight"] = retrieval_setting.vector_weight
+        if retrieval_setting.enable_rerank is None:
+            retrieval_setting.enable_rerank = base_retrieval_setting.enable_rerank
+            retrieval_setting_dict["enable_rerank"] = retrieval_setting.enable_rerank
+        if retrieval_setting.rerank_model is None:
+            retrieval_setting.rerank_model = base_retrieval_setting.rerank_model
+            retrieval_setting_dict["rerank_model"] = retrieval_setting.rerank_model
+        if retrieval_setting.rerank_provider_name is None:
+            retrieval_setting.rerank_provider_name = base_retrieval_setting.rerank_provider_name
+            retrieval_setting_dict["rerank_provider_name"] = retrieval_setting.rerank_provider_name
+        if retrieval_setting.rerank_top_k is None:
+            retrieval_setting.rerank_top_k = base_retrieval_setting.rerank_top_k
+            retrieval_setting_dict["rerank_top_k"] = retrieval_setting.rerank_top_k
+        if retrieval_setting.similarity_threshold is None:
+            retrieval_setting.similarity_threshold = base_retrieval_setting.similarity_threshold
+            retrieval_setting_dict["similarity_threshold"] = retrieval_setting.similarity_threshold
+        if retrieval_setting.top_k is None:
+            retrieval_setting.top_k = base_retrieval_setting.top_k
+            retrieval_setting_dict["top_k"] = retrieval_setting.top_k
+
+        query_mode = retrieval_type_to_search_mode(retrieval_setting.retrieval_mode)
 
         if not document_ids:
             try:
@@ -897,7 +907,7 @@ class RagService:
             table_name=table_name,
         )
 
-        logger.info(f"Executing vector store query for query '{query}' against knowledgebase {kb_id}.")
+        logger.info(f"Executing vector store query for query '{query}' against knowledgebase {kb_id} retrieval setting: {retrieval_setting}.")
         text_result, dense_result = await aquery_vector_store(
             vector_store=vector_store,
             query=query,
@@ -917,7 +927,7 @@ class RagService:
         kb_name: str = None,
         query: str = None,
         user_id: str = None,
-        retrieval_setting: Optional[RetrievalSetting] = None,
+        retrieval_setting_dict: Optional[Dict] = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
         document_ids: Optional[List[str]] = None,
         tenant_id: str = None,
@@ -930,7 +940,7 @@ class RagService:
                     kb_name=kb_name,
                     query=query,
                     user_id=user_id,
-                    retrieval_setting=retrieval_setting,
+                    retrieval_setting_dict=retrieval_setting_dict,
                     metadata_condition=metadata_condition,
                     document_ids=document_ids,
                     tenant_id=tenant_id,
@@ -942,7 +952,7 @@ class RagService:
                 kb_name=kb_name,
                 query=query,
                 user_id=user_id,
-                retrieval_setting=retrieval_setting,
+                retrieval_setting_dict=retrieval_setting_dict,
                 metadata_condition=metadata_condition,
                 document_ids=document_ids,
                 tenant_id=tenant_id,
@@ -965,6 +975,8 @@ class RagService:
             logger.info("No query provided, returning empty results.")
             return []
 
+        retrieval_setting_dict = retrieval_setting.model_dump() if retrieval_setting else {}
+
         if kb_id:
             text_result, dense_result = await self.aquery_task(
                 session=self.session,
@@ -972,7 +984,7 @@ class RagService:
                 kb_id=kb_id,
                 user_id=user_id,
                 tenant_id=tenant_id,
-                retrieval_setting=retrieval_setting,
+                retrieval_setting_dict=retrieval_setting_dict,
                 metadata_condition=metadata_condition,
                 document_ids=document_ids,
             )
@@ -983,20 +995,20 @@ class RagService:
                 kb_name=kb_name,
                 user_id=user_id,
                 tenant_id=tenant_id,
-                retrieval_setting=retrieval_setting,
+                retrieval_setting_dict=retrieval_setting_dict,
                 metadata_condition=metadata_condition,
                 document_ids=document_ids,
             )
         elif kb_id_list:
             vector_query_tasks = []
             for task_id in kb_id_list:
-                task_setting=copy.copy(retrieval_setting)
+                task_setting_dict=copy.copy(retrieval_setting_dict)
                 vector_query_tasks.append(self.aquery_task(
                     kb_id=task_id,
                     user_id=user_id,
                     query=query,
                     tenant_id=tenant_id,
-                    retrieval_setting=task_setting,
+                    retrieval_setting_dict=task_setting_dict,
                     metadata_condition=metadata_condition,
                     document_ids=document_ids,
                 ))
@@ -1021,6 +1033,7 @@ class RagService:
         logger.info(f"Executing rerank phrase...text nodes: {text_nodes_count}, dense nodes: {dense_nodes_count}")
         reranker = None
 
+        retrieval_setting = RetrievalSetting.model_validate(retrieval_setting_dict)
 
         if retrieval_setting.enable_rerank and retrieval_setting.rerank_model and (text_nodes_count + dense_nodes_count > 1):
             reranker_service = await self._get_reranker_service()
@@ -1040,9 +1053,9 @@ class RagService:
                 text_result=text_result,
                 dense_result=dense_result,
                 rerank_model=reranker,
-                vector_weight=retrieval_setting.vector_weight,
-                top_k=retrieval_setting.top_k,
-                rerank_top_k=retrieval_setting.rerank_top_k,
+                vector_weight=retrieval_setting.vector_weight or DEFAULT_VECTOR_WEIGHT,
+                top_k=retrieval_setting.top_k or DEFAULT_SIMILARITY_TOP_K,
+                rerank_top_k=retrieval_setting.rerank_top_k or DEFAULT_RERANK_SIMILARITY_TOP_K,
             )
         except Exception as e:
             logger.error(f"Failed to rerank: {e}")
@@ -1050,8 +1063,10 @@ class RagService:
 
         records = []
         file_ids = []
+
+        similarity_threshold = retrieval_setting.similarity_threshold or DEFAULT_SIMILARITY_THRESHOLD
         for i, node in enumerate(reranked_result.nodes):
-            if reranked_result.similarities[i] >= retrieval_setting.similarity_threshold:
+            if reranked_result.similarities[i] >= similarity_threshold:
                 images = []
                 file_ids.append(node.metadata["doc_id"])
                 origin_text = node.text
