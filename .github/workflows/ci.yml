@@ -62,3 +62,4 @@ jobs:
           PAIRAG_RAG__llm__source: "DashScope"
           PAIRAG_RAG__llm__model: "qwen-max"
           TRACE_TOKEN: ${{ secrets.TRACE_TOKEN }}
+          DISABLE_REDIS_CACHE_IN_TESTS: "true"

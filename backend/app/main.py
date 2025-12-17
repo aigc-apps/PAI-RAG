@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     from service.model.embedding_service import EmbeddingService
     from rag.vector_store.local_chroma_service import LocalChromaService
     from db.sqlite_store import sync_sqlite_store_task, stop_event, sync_sqlite_store
+    import api.v1.mcp_server_middleware as mcp_middleware
 
     await init_db()
     logger.info("Initialized database tables.")
@@ -103,5 +104,6 @@ def create_app():
     app.add_middleware(CustomLoggingMiddleware)
     app.add_exception_handler(ApiException, api_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    return app
 
 app = create_app()

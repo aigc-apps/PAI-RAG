@@ -2,10 +2,13 @@ from aiocache.backends.redis import RedisCache
 from aiocache import SimpleMemoryCache
 from db.redis_conn import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB
 import os
+from loguru import logger
 
-if os.getenv("DISABLE_REDIS_CACHE", "false") == "true":
+if os.getenv("DISABLE_REDIS_CACHE_IN_TESTS", "false") == "true":
+    logger.info("Using SimpleMemory cache for tests.")
     redis_cache = SimpleMemoryCache()
 else:
+    logger.info("Using redis cache with namespace pairag.")
     redis_cache = RedisCache(
         namespace="pairag",
         endpoint=REDIS_HOST,
