@@ -150,9 +150,10 @@ async def create_permission(
     permission: PermissionEntity,
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
+    tenant_id: str = Depends(get_tenant_id),
 ):
     try:
-        permission = await role_service.create_permission(permission)
+        permission = await role_service.create_permission(permission, tenant_id=tenant_id)
         await session.commit()
         await session.refresh(permission)
         return success_response(data=permission, message="添加权限成功。")
@@ -174,9 +175,10 @@ async def list_permissions(
     size: int = Query(default=10, le=1000),
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
+    tenant_id: str = Depends(get_tenant_id),
 ):
     try:
-        permissions = await role_service.list_permissions(page=page, size=size, name=name)
+        permissions = await role_service.list_permissions(page=page, size=size, name=name, tenant_id=tenant_id)
         return success_response(data=permissions, message="查询权限成功")
     except Exception as e:
         logger.error(f"Failed to list permissions: {traceback.format_exc()}")
@@ -195,10 +197,11 @@ async def set_file_permission(
     update_request: UpdateRolePermission,
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
+    tenant_id: str = Depends(get_tenant_id),
 ):
     try:
         new_permissions = await role_service.set_file_permissions(
-            file_id, update_request.role_ids
+            file_id, update_request.role_ids, tenant_id=tenant_id
         )
         return success_response(data=new_permissions, message="更新权限成功")
     except ValueError as e:
@@ -215,9 +218,10 @@ async def delete_permission(
     permission_id: str,
     session: AsyncSession = Depends(get_db_session),
     role_service: RoleService = Depends(get_role_service),
+    tenant_id: str = Depends(get_tenant_id),
 ):
     try:
-        await role_service.delete_permission(permission_id)
+        await role_service.delete_permission(permission_id, tenant_id=tenant_id)
         logger.info(f"权限 {permission_id} 已删除.")
         return success_response(message=f"权限 {permission_id} 删除成功。")
     except ValueError as e:
