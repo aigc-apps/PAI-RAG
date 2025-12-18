@@ -5,6 +5,13 @@ on:
   workflow_dispatch:
   push:
     branches: ["feature"]
+    paths:
+      - 'backend/**'
+      - 'alembic/**'
+      - 'scripts/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - 'Dockerfile'
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -13,7 +20,7 @@ env:
 # There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
 jobs:
   build-and-push-image:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,10 +35,6 @@ jobs:
           CURRENT_TIME="`date +%Y%m%d%H%M%S`"
           echo "VERSION_TAG=$VERSION_TAG" >> $GITHUB_ENV
           echo "TIME_VERSION_TAG=$VERSION_TAG-$CURRENT_TIME" >> $GITHUB_ENV
-
-      - name: Copy local models
-        run: |
-          cp -r /home/ecs-user/model_repository_1121 ./model_repository
 
       - name: Login to ACR Hangzhou region
         uses: docker/login-action@v1

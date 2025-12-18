@@ -1,4 +1,12 @@
 # ==============================================================================
+# PAI-RAG API-only Image (Backend only, no frontend)
+# Requires base image with models: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag-base:latest
+# ==============================================================================
+
+# Base image argument (can be overridden at build time)
+ARG BASE_IMAGE=mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag-base:latest
+
+# ==============================================================================
 # Stage 1: Python dependencies builder
 # ==============================================================================
 FROM python:3.11-slim AS python-builder
@@ -22,25 +30,10 @@ RUN poetry install --no-interaction --no-ansi && \
     find /app/.venv -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 # ==============================================================================
-# Stage 2: Production image (API only)
+# Stage 2: Production image (inherits from base image with models)
 # ==============================================================================
-FROM python:3.11-slim AS prod
+FROM ${BASE_IMAGE} AS prod
 
-# Install system dependencies (minimal, no nodejs/npm/nginx)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0 \
-    libgomp1 \
-    curl \
-    libgdiplus \
-    wget \
-    procps \
-    redis-server \
-    gettext-base \
-    && rm -rf /etc/localtime \
-    && ln -s /usr/share/zoneinfo/Asia/Harbin /etc/localtime \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
 
 # Set up Python environment
 ENV VIRTUAL_ENV=/app/.venv \
@@ -48,13 +41,10 @@ ENV VIRTUAL_ENV=/app/.venv \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-WORKDIR /app
-
 # Copy virtual environment from builder
 COPY --from=python-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 # Copy application files (no frontend)
-COPY model_repository ./model_repository
 COPY resources ./resources
 COPY scripts ./scripts
 COPY backend ./backend
@@ -69,4 +59,3 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:8680/health || exit 1
 
 CMD ["./scripts/start-api.sh"]
-

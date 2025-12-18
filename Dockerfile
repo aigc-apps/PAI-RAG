@@ -1,4 +1,12 @@
 # ==============================================================================
+# PAI-RAG Full Image (Frontend + Backend)
+# Requires base image with models: registry.cn-hangzhou.aliyuncs.com/mybigpai/pairag-base:latest
+# ==============================================================================
+
+# Base image argument (can be overridden at build time)
+ARG BASE_IMAGE=mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag-base:latest
+
+# ==============================================================================
 # Stage 1: Python dependencies builder
 # ==============================================================================
 FROM python:3.11-slim AS python-builder
@@ -38,28 +46,15 @@ RUN cd frontend && npm ci && \
     rm -rf .next/cache /tmp/*
 
 # ==============================================================================
-# Stage 3: Production image
+# Stage 3: Production image (inherits from base image with models)
 # ==============================================================================
-FROM python:3.11-slim AS prod
+FROM ${BASE_IMAGE} AS prod
 
-# Install system dependencies
+# Install additional system dependencies for full image
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0 \
-    libgomp1 \
-    curl \
-    libgdiplus \
-    wget \
-    perl \
-    build-essential \
     nodejs \
     npm \
     nginx \
-    procps \
-    redis-server \
-    gettext-base \
-    && rm -rf /etc/localtime \
-    && ln -s /usr/share/zoneinfo/Asia/Harbin /etc/localtime \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -69,17 +64,12 @@ ENV VIRTUAL_ENV=/app/.venv \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-WORKDIR /app
-
-
 # Copy virtual environment from builder
 COPY --from=python-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
-# Copy application files
-# Copy built frontend (already has node_modules removed and .next built)
+# Copy built frontend
 COPY --from=frontend-builder /app/frontend /app/frontend
 
-COPY model_repository ./model_repository
 COPY resources ./resources
 COPY scripts ./scripts
 COPY backend ./backend

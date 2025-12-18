@@ -1,0 +1,39 @@
+# ==============================================================================
+# PAI-RAG Base Image
+# Contains: model_repository, resources (models and static assets)
+# 
+# This base image is built separately and updated only when models change.
+# Other Dockerfiles (Dockerfile, Dockerfile.api) inherit from this base.
+# ==============================================================================
+FROM python:3.11-slim AS base
+
+# Install minimal system dependencies needed for model loading
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libgomp1 \
+    curl \
+    libgdiplus \
+    wget \
+    perl \
+    build-essential \
+    procps \
+    redis-server \
+    gettext-base \
+    && rm -rf /etc/localtime \
+    && ln -s /usr/share/zoneinfo/Asia/Harbin /etc/localtime \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy model repository (large ML models - ~5GB+)
+COPY model_repository ./model_repository
+
+# Create marker file with build timestamp
+RUN echo "Built at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" > /app/.base-image-info
+
+# Labels for tracking
+LABEL maintainer="PAI-RAG Team" \
+      description="PAI-RAG Base Image with ML Models" \
+      version="1.0"

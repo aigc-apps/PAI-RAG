@@ -25,7 +25,7 @@ env:
 
 jobs:
   build-and-push-api-image:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,10 +39,6 @@ jobs:
           VERSION_TAG=$(poetry version --short)
           CURRENT_TIME="`date +%Y%m%d%H%M%S`"
           echo "API_VERSION_TAG=api-$VERSION_TAG-$CURRENT_TIME" >> $GITHUB_ENV
-
-      - name: Copy local models
-        run: |
-          cp -r /home/ecs-user/model_repository_1121 ./model_repository
 
       - name: Login to ACR Hangzhou region
         uses: docker/login-action@v1
