@@ -244,6 +244,7 @@ class KbFileClient:
                 file_id=file_item.id, task_id=task_id, status=FileStatus.failed, is_attachment=is_attachment, failed_reason=str(e), tenant_id=tenant_id,
             )
             logger.error(f"Error processing file: {traceback.format_exc()}")
+            raise
 
 
 kb_file_client = KbFileClient()

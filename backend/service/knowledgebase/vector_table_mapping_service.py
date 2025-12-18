@@ -3,7 +3,7 @@
 from typing import Optional
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from service.cache.redis_cache import redis_cache, vector_table_name_key
+from service.cache.redis_cache import cache_manager, vector_table_name_key
 from loguru import logger
 
 from db.models.knowledgebase.vector_table_mapping import (
@@ -39,7 +39,7 @@ class VectorTableMappingService:
             The vector table name
         """
         cache_key = vector_table_name_key(tenant_id, kb_id)
-        table_name = await redis_cache.get(cache_key)
+        table_name = await cache_manager.get_cache().get(cache_key)
         if table_name:
             logger.debug(f"Found vector table name in cache for tenant {tenant_id} and kb {kb_id}: {table_name}")
             return table_name
@@ -49,7 +49,7 @@ class VectorTableMappingService:
 
         if mapping:
             logger.debug(f"Found existing vector table mapping: {mapping.table_name}")
-            await redis_cache.set(cache_key, mapping.table_name)
+            await cache_manager.get_cache().set(cache_key, mapping.table_name)
             return mapping.table_name
 
         # Generate new table name
@@ -58,7 +58,7 @@ class VectorTableMappingService:
 
         # Store the mapping
         await self._create_mapping(tenant_id, kb_id, table_name)
-        await redis_cache.set(cache_key, table_name)
+        await cache_manager.get_cache().set(cache_key, table_name)
         return table_name
 
     async def _get_mapping(
@@ -120,7 +120,7 @@ class VectorTableMappingService:
         mapping = await self._get_mapping(tenant_id, kb_id)
         if mapping:
             cache_key = vector_table_name_key(tenant_id, kb_id)
-            await redis_cache.delete(cache_key)
+            await cache_manager.get_cache().delete(cache_key)
             await self.session.delete(mapping)
             await self.session.commit()
             logger.info(f"Deleted vector table mapping: tenant={tenant_id}, kb={kb_id}")
@@ -139,13 +139,13 @@ class VectorTableMappingService:
             The table name if mapping exists, None otherwise
         """
         cache_key = vector_table_name_key(tenant_id, kb_id)
-        table_name = await redis_cache.get(cache_key)
+        table_name = await cache_manager.get_cache().get(cache_key)
         if table_name:
             logger.debug(f"Found vector table name in cache for tenant {tenant_id} and kb {kb_id}: {table_name}")
             return table_name
 
         mapping = await self._get_mapping(tenant_id, kb_id)
         if mapping:
-            await redis_cache.set(cache_key, mapping.table_name)
+            await cache_manager.get_cache().set(cache_key, mapping.table_name)
             return mapping.table_name
         return None

@@ -52,7 +52,7 @@ def formatter(record):
 
 def format_logging():
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
-    logger.remove(0)
+    logger.remove()
     logger.add(
         sys.stderr,
         format=formatter,

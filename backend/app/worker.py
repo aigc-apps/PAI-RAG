@@ -5,9 +5,6 @@ dotenv.load_dotenv()
 from common.knowledgebase.types import FileStatus
 from db.models.knowledgebase.file import KbFileEntity
 
-from rag.split.file_split import split_file_tasks
-from rag.offline_db_helper import clear_useless_file_resources_async, delete_file_tasks_by_file_id_async, read_file_from_db, save_file_task_async, set_embedding_model_ready, update_file_status_async, update_file_content_async
-from utils.modelscope_utils import download_model_to_directory
 # Fix for macOS fork issues (like with ChromaDB)
 # this forces the application to use spawn instead of fork
 import os
@@ -18,15 +15,16 @@ if os.name != "nt":
 
 from celery import Celery
 import os
-from rag.kb_file_client import kb_file_client
-from rag.evaluation_tool import eval_client
 import asyncio
-from loguru import logger
 from typing import List
 from db.redis_conn import REDIS_URL
+from utils.format_logging import format_logging
+from loguru import logger
+
+format_logging()
+logger.info("Worker starting up...")
 
 DEFAULT_BROKER = REDIS_URL
-
 
 app = Celery(
     "PAIRAG_WORKER",
@@ -35,6 +33,17 @@ app = Celery(
 )
 
 async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachment: bool = False, tenant_id: str = None) -> None:
+    from rag.kb_file_client import kb_file_client
+    from rag.offline_db_helper import (
+        clear_useless_file_resources_async,
+        delete_file_tasks_by_file_id_async,
+        read_file_from_db,
+        save_file_task_async,
+        update_file_status_async,
+        update_file_content_async
+    )
+    from rag.split.file_split import split_file_tasks
+
     logger.info(f"[WORKER] Enqueueing file {file_id} for tenant {tenant_id} in background.")
     await update_file_status_async(file_id=file_id, status=FileStatus.parsing, tenant_id=tenant_id)
 
@@ -86,6 +95,7 @@ def enqueue_file_tasks(file_id: str, file_version: int, is_attachment: bool = Fa
 
 
 async def process_attachments_content_async(file_id: str, file_extension: str, tenant_id: str = None):
+    from rag.offline_db_helper import update_file_content_async, update_file_status_async
     try:
         await update_file_content_async(file_id=file_id, is_attachment=True, tenant_id=tenant_id)
         await update_file_status_async(file_id=file_id, status=FileStatus.succeeded, is_attachment=True, tenant_id=tenant_id)
@@ -117,6 +127,8 @@ def download_model(
     id: str,
     model_name: str,
     model_type: str="embedding"):
+    from utils.modelscope_utils import download_model_to_directory
+    from rag.offline_db_helper import set_embedding_model_ready
     logger.info(f"Downloading {model_type} model {id} {model_name}.")
     if model_type == "embedding":
         loop = asyncio.get_event_loop()
@@ -132,6 +144,8 @@ def download_model(
 
 @app.task(name="execute_evaluation_task")
 def execute_evaluation_task(dataset_id: str, experiment_id: str, exp_run_ids: List[str], is_evaluate_single_sample:bool=False, tenant_id: str = None):
+    from rag.evaluation_tool import eval_client
+
     logger.info(f"execute_evaluation_task exp_run_ids {exp_run_ids} dataset_id {dataset_id}.")
     loop = asyncio.get_event_loop()
     loop.run_until_complete(eval_client.create_evaluation_task(dataset_id, experiment_id, exp_run_ids, is_evaluate_single_sample, tenant_id=tenant_id))

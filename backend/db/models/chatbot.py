@@ -28,7 +28,7 @@ class ChatBotCreate(SQLModel):
     def validate_app_id(cls, v):
         if not v:
             raise ValueError("app_id is required")
-        if not re.match("^[a-zA-Z][a-zA-Z0-9]{2,63}$", v):
+        if not re.match("^[a-zA-Z][a-zA-Z0-9][\-_a-zA-Z0-9]{1,62}$", v):
             raise ValueError("app_id must be a valid name with length between 3 and 64")
         return v
 

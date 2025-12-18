@@ -887,7 +887,7 @@ class RagService:
             try:
                 document_ids = await query_file_ids_with_metadata_filter(session=session, kb_id=kb_id, user_id=user_id, metadata_filter=metadata_condition)
             except EmptyFilesException as e:
-                logger.error(f"No files found with the given metadata filter. error: {e}")
+                logger.warning(f"{e}")
                 return VectorStoreQueryResult(nodes=[], similarities=[], ids=[]), VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
 
 

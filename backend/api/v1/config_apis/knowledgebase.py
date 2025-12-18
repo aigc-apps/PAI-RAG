@@ -217,7 +217,7 @@ async def start_parse_task(
         logger.info(f"Uploaded {len(file_entities)} files successfully.")
         return success_response(data=file_entities, message="启动解析任务成功")
     except ValueError as e:
-        logger.error(f"启动解析任务失败。\nValueError:{e}")
+        logger.error(f"启动解析任务失败。\nValueError:{traceback.format_exc()}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"启动解析任务失败。\nException:{traceback.format_exc()}")
