@@ -1,0 +1,68 @@
+name: Publish API-only Docker image
+
+# Configures this workflow to run on manual dispatch or push to specific branches
+on:
+  workflow_dispatch:
+    inputs:
+      push_to_prod:
+        description: 'Push to production registry'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: ["feature"]
+    paths:
+      - 'backend/**'
+      - 'alembic/**'
+      - 'scripts/**'
+      - 'Dockerfile.api'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+
+# Environment variables for Container registry
+env:
+  TEST_REGISTRY: registry.cn-hangzhou.aliyuncs.com
+
+jobs:
+  build-and-push-api-image:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check disk space
+        run: df . -h
+
+      - name: Extract version
+        run: |
+          pip install poetry
+          VERSION_TAG=$(poetry version --short)
+          CURRENT_TIME="`date +%Y%m%d%H%M%S`"
+          echo "API_VERSION_TAG=api-$VERSION_TAG-$CURRENT_TIME" >> $GITHUB_ENV
+
+      - name: Copy local models
+        run: |
+          cp -r /home/ecs-user/model_repository_1121 ./model_repository
+
+      - name: Login to ACR Hangzhou region
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.TEST_REGISTRY }}
+          username: ${{ secrets.ACR_USER }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push API-only image
+        env:
+          API_IMAGE_TAG: ${{ env.API_VERSION_TAG }}
+        run: |
+          # Build using Dockerfile.api
+          docker build -f Dockerfile.api -t ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$API_IMAGE_TAG .
+          
+          # Always push to test registry
+          docker push ${{ env.TEST_REGISTRY }}/mybigpai/pai-rag:$API_IMAGE_TAG
+          
+      - name: Free disk space
+        run: |
+          docker image prune --filter "until=168h" --force -a
+          docker builder prune --filter "until=24h" -f
+
