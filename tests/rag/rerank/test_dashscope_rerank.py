@@ -5,9 +5,9 @@ import pytest
 import os
 from rag.rerank.dashscope_reranker import DashscopeReranker
 from rag.rerank.reranker import RerankResult
-from conftest import event_loop
-
-    
+import asyncio
+from utils.http_session import HttpSessionShared
+import aiohttp
 
 @pytest.fixture(scope="session")
 def sample_documents():
@@ -45,7 +45,8 @@ def dashscope_reranker():
 
 
 """DashscopeReranker 重排序效果测试 - 实际 API 调用"""
-def test_dashscope_rerank(event_loop, dashscope_reranker, sample_query, sample_documents):
+@pytest.mark.asyncio
+async def test_dashscope_rerank(dashscope_reranker, sample_query, sample_documents):
     """测试 rerank 的重排序效果 - 实际调用 DashScope API
     
     验证：
@@ -54,13 +55,16 @@ def test_dashscope_rerank(event_loop, dashscope_reranker, sample_query, sample_d
     3. 相关性分数是有效的浮点数
     4. 返回结果格式正确
     """
-    pytest.skip("跳过，目前有asyncio错误")
 
-    results = event_loop.run_until_complete(dashscope_reranker.rerank(
-        query=sample_query,
-        documents=sample_documents,
-        top_n=3
-    ))
+    # 解决session共享问题
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+        HttpSessionShared.default = session
+        
+        results = await dashscope_reranker.rerank(
+            query=sample_query,
+            documents=sample_documents,
+            top_n=3
+        )
 
     # 验证返回结果格式
     assert isinstance(results, list)
