@@ -156,7 +156,7 @@ class CodeSandboxTool:
         else:
             raise CodeSandboxAPIException("Failed to create sandbox instance: invalid response format")
 
-    async def _fetch_sandbox_health_status(self, sandbox_id: str) -> dict:
+    async def _fetch_sandbox_health_status(self, sandbox_id: str) -> str:
         """
         获取 sandbox 健康状态（单次请求）
 
@@ -164,7 +164,7 @@ class CodeSandboxTool:
             sandbox_id: sandbox ID
 
         Returns:
-            健康检查结果字典，包含 status 字段
+            健康检查结果字符串
 
         Raises:
             CodeSandboxAPIException: 当请求失败或响应格式无效时
