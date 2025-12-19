@@ -146,7 +146,7 @@ async def convert_gen_to_stream_chat_completions(
             logger.info("convert_gen_to_stream_chat_completions: response_generator closed.")
 
 
-    if not fail_fast and len(current_content) > CHECK_OUTPUT_CHUNK_OVERLAP:
+    if not fail_fast and len(current_content) > CHECK_OUTPUT_CHUNK_OVERLAP and enable_output_check and checker:
         check_tasks.append(asyncio.create_task(checker.acheck_output(text=current_content, current_result=output_check_result)))
 
     if not fail_fast and len(check_tasks) > 0:
