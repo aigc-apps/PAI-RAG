@@ -51,6 +51,9 @@ def upgrade() -> None:
     safe_add_column("pai_websearch_config", sa.Column('tenant_id', sa.String(255), nullable=True))
     safe_add_column("pai_file_metadata", sa.Column('tenant_id', sa.String(255), nullable=True))
 
+    safe_add_column("pai_experiment_sample_entity", sa.Column('tenant_id', sa.String(255), nullable=True))
+
+
     op.execute(sa.text(f"UPDATE pai_chatbot_model SET tenant_id = '{DEFAULT_TENANT_ID}' WHERE tenant_id IS NULL"))
     op.execute(sa.text(f"UPDATE pai_chatdb_config SET tenant_id = '{DEFAULT_TENANT_ID}' WHERE tenant_id IS NULL"))
     op.execute(sa.text(f"UPDATE pai_code_sandbox_config SET tenant_id = '{DEFAULT_TENANT_ID}' WHERE tenant_id IS NULL"))
@@ -79,6 +82,7 @@ def upgrade() -> None:
     op.execute(sa.text(f"UPDATE pai_vectordb_config SET tenant_id = '{DEFAULT_TENANT_ID}' WHERE tenant_id IS NULL"))
     op.execute(sa.text(f"UPDATE pai_websearch_config SET tenant_id = '{DEFAULT_TENANT_ID}' WHERE tenant_id IS NULL"))
     op.execute(sa.text(f"UPDATE pai_file_metadata SET tenant_id = '{DEFAULT_TENANT_ID}' WHERE tenant_id IS NULL"))
+    op.execute(sa.text(f"UPDATE pai_experiment_sample_entity SET tenant_id = '{DEFAULT_TENANT_ID}' WHERE tenant_id IS NULL"))
 
     if op.get_context().dialect.name == 'sqlite':
         with op.batch_alter_table('pai_knowledgebase_metadata') as batch_op:

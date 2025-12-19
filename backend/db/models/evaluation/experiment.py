@@ -90,6 +90,8 @@ class ExperimentSampleEntity(SQLModel, table=True):
         description="Reference to the experiment",
         ondelete="CASCADE",
     )
+    tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
+
     dataset_id: str = Field(
         foreign_key="pai_dataset.id",
         description="Reference to the dataset entry used",

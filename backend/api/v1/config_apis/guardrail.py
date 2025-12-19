@@ -28,7 +28,7 @@ async def add_guardrail_config(
 ):
     logger.info(f"Adding guardrail config: {new_guardrail_config}.")
     try:
-        guardrail_entity = await guardrail_service.create_guardrail(new_guardrail_config=new_guardrail_config, tenant_id=tenant_id)
+        guardrail_entity = await guardrail_service.create_or_update_guardrail_config(config_data=new_guardrail_config, tenant_id=tenant_id)
         return success_response(data=guardrail_entity, message="添加安全护栏配置成功.")
     except Exception as e:
         logger.error(f"Failed to add guardrail config: {traceback.format_exc()}")

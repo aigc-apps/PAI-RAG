@@ -70,6 +70,7 @@ class EvaluationService:
                 DatasetSampleEntity.dataset_id,
                 func.count(DatasetSampleEntity.id).label("dataset_count"),
             )
+            .where(DatasetSampleEntity.tenant_id == tenant_id)
             .group_by(DatasetSampleEntity.dataset_id)
             .subquery()
         )
@@ -80,6 +81,7 @@ class EvaluationService:
                 ExperimentEntity.dataset_id,
                 func.count(ExperimentEntity.id).label("experiments_count"),
             )
+            .where(ExperimentEntity.tenant_id == tenant_id)
             .group_by(ExperimentEntity.dataset_id)
             .subquery()
         )
@@ -95,6 +97,7 @@ class EvaluationService:
                     "experiments_count"
                 ),
             )
+            .where(DatasetEntity.tenant_id == tenant_id)
             .outerjoin(
                 dataset_count_subq, DatasetEntity.id == dataset_count_subq.c.dataset_id
             )

@@ -67,6 +67,16 @@ class AgentService:
                 if not chatapp:
                     raise ValueError(f"Model `{chat_request.model}` not found.")
 
+                chat_request.model = chatapp.model_id
+                chat_request.mcp_ids = chatapp.mcp_ids
+                chat_request.kb_ids = chatapp.kb_ids
+                chat_request.enable_search = chatapp.enable_search
+                chat_request.enable_chatdb = chatapp.enable_chatdb
+                chat_request.enable_agent = chatapp.enable_agent
+                chat_request.enable_input_guardrail = chatapp.enable_input_guardrail
+                chat_request.enable_output_guardrail = chatapp.enable_output_guardrail
+                chat_request.guardrail_hint = chatapp.guardrail_hint
+
                 llm_model = await llm_service.get_llm_by_model_id(chatapp.model_id, tenant_id=tenant_id)
                 if not llm_model:
                     raise ValueError(f"LLM model {chatapp.model_id} not found.")
