@@ -158,9 +158,12 @@ def with_async_db_session(func):
         session = AsyncSessionLocal()
         try:
             kwargs["session"] = session
-            return await func(*args, **kwargs)
+            result = await func(*args, **kwargs)
+            await session.commit()
+            return result
         except Exception as e:
             logger.error(f"Execution error: {e}")
+            await session.rollback()
             raise
         finally:
             await session.close()

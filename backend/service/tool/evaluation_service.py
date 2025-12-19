@@ -747,68 +747,6 @@ class EvaluationService:
             size=pagination.size,
         )
 
-    async def evaluate_experiment_sample(
-        self,
-        experiment_id: str,
-        experiment_sample_id: str,
-        tenant_id: str,
-        status: Optional[str] = None,
-        output: Optional[str] = None,
-        score: Optional[float] = None,
-        error: Optional[str] = None,
-    ) -> ExperimentSampleEntity:
-        """
-        Update an ExperimentSample entity (typically for re-evaluation).
-        Note: Caller is responsible for committing the session.
-
-        Args:
-            experiment_id: Experiment ID
-            experiment_sample_id: ExperimentSample entity ID
-            status: Updated status
-            output: Updated output
-            score: Updated score
-            error: Updated error message
-
-        Returns:
-            Updated ExperimentSampleEntity (not yet committed)
-
-        Raises:
-            ValueError: If ExperimentSample entity not found
-        """
-        query = select(ExperimentSampleEntity).where(ExperimentSampleEntity.id == experiment_sample_id, ExperimentSampleEntity.tenant_id == tenant_id)
-        experiment_sample_execution = await self.session.exec(query)
-        experiment_sample = experiment_sample_execution.first()
-        if not experiment_sample:
-            raise ValueError(
-                f"实验样本 '{experiment_sample_id}' 不存在。"
-            )
-
-        if experiment_sample.experiment_id != experiment_id:
-            raise ValueError(
-                f"实验样本 '{experiment_sample_id}' 不属于实验 '{experiment_id}'。"
-            )
-
-        logger.info(f"Updating ExperimentSample {experiment_sample_id}")
-
-        # Update fields
-        if status is not None:
-            experiment_sample.status = status
-        if output is not None:
-            experiment_sample.actual_output = output
-        if score is not None:
-            experiment_sample.score = score
-        if error is not None:
-            experiment_sample.error = error
-
-        self.session.add(experiment_sample)
-
-        # Flush to ensure changes are staged
-        await self.session.flush()
-        await self.session.refresh(experiment_sample)
-
-        logger.info(f"Updated ExperimentSample entity: {experiment_sample.id}")
-        return experiment_sample
-
     # ========== RunConfig Operations ==========
 
     async def get_run_config(self, config_id: str, tenant_id: str) -> Optional[RunConfigEntity]:
