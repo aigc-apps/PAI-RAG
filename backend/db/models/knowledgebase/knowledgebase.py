@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import re
 import uuid
-from pydantic import ConfigDict, field_validator
+from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime, Text, UniqueConstraint
 from common.knowledgebase.constants import (
@@ -18,7 +18,7 @@ from common.knowledgebase.constants import (
 from common.knowledgebase.types import VectorIndexRetrievalType
 from typing import Optional
 from common.system_constants import DEFAULT_TENANT_ID
-
+from pydantic import field_serializer
 
 class ChunkConfig(SQLModel):
     chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE)
@@ -91,7 +91,10 @@ class KbEntity(SQLModel, table=True):
             raise ValueError("知识库名称只能包含字母、数字和下划线。")
         return v
 
-    # Pydantic V2 配置
-    model_config = ConfigDict(json_encoders={
-        datetime: lambda v: v.isoformat()
-    })
+    @field_serializer("created_at", "updated_at")
+    def serialize_dt(self, dt: datetime, _info):
+        # If the datetime is naive, assume it's UTC and add 'Z'
+        if dt.tzinfo is None:
+            return f"{dt.isoformat()}Z"
+        # If it's already aware, convert to ISO format
+        return dt.isoformat()

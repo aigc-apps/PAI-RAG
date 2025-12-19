@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import uuid
-from pydantic import model_validator
+from pydantic import model_validator, field_serializer
 from sqlalchemy import Column, DateTime, UniqueConstraint, Text
 from sqlmodel import Field, SQLModel
 from common.system_constants import DEFAULT_TENANT_ID
@@ -69,3 +69,11 @@ class UserRoleEntity(SQLModel, table=True):
         if not self.id:
             self.id = uuid.uuid4().hex
         return self
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_dt(self, dt: datetime, _info):
+        # If the datetime is naive, assume it's UTC and add 'Z'
+        if dt.tzinfo is None:
+            return f"{dt.isoformat()}Z"
+        # If it's already aware, convert to ISO format
+        return dt.isoformat()
