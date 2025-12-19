@@ -5,6 +5,7 @@ from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
+from api.v1.utils.paginate import get_pagination_meta
 
 from db.models.evaluation.dataset import DatasetEntity, DatasetCreate, DatasetSampleEntity
 from db.models.evaluation.experiment import (
@@ -70,6 +71,7 @@ class EvaluationService:
                 DatasetSampleEntity.dataset_id,
                 func.count(DatasetSampleEntity.id).label("dataset_count"),
             )
+            .where(DatasetSampleEntity.tenant_id == tenant_id)
             .group_by(DatasetSampleEntity.dataset_id)
             .subquery()
         )
@@ -80,6 +82,7 @@ class EvaluationService:
                 ExperimentEntity.dataset_id,
                 func.count(ExperimentEntity.id).label("experiments_count"),
             )
+            .where(ExperimentEntity.tenant_id == tenant_id)
             .group_by(ExperimentEntity.dataset_id)
             .subquery()
         )
@@ -95,6 +98,7 @@ class EvaluationService:
                     "experiments_count"
                 ),
             )
+            .where(DatasetEntity.tenant_id == tenant_id)
             .outerjoin(
                 dataset_count_subq, DatasetEntity.id == dataset_count_subq.c.dataset_id
             )
@@ -668,6 +672,7 @@ class EvaluationService:
         tenant_id: str,
         page: int = 1,
         size: int = 10,
+        status: Optional[str] = None,
     ) -> PagedResult[List[ExperimentSampleEntity]]:
         """
         List ExperimentSample entities with pagination.
@@ -676,40 +681,70 @@ class EvaluationService:
             experiment_id: Experiment ID
             page: Page number (1-indexed)
             size: Page size
+            status: Optional status filter (running, success, failed, pending)
 
         Returns:
             PagedResult containing list of ExperimentSampleEntity and pagination metadata
         """
-        # Build base query
-        base_query = select(ExperimentSampleEntity).where(
+        logger.info(f"Get experiment samples for experiment_id {experiment_id}, tenant_id {tenant_id}, status={status}.")
+
+        # Build base conditions
+        conditions = [
             ExperimentSampleEntity.experiment_id == experiment_id,
-            ExperimentSampleEntity.tenant_id == tenant_id
-        )
+            ExperimentSampleEntity.tenant_id == tenant_id,
+        ]
+
+        # Apply status filter if provided
+        if status:
+            conditions.append(ExperimentSampleEntity.status == status)
 
         # Get total count
-        count_query = select(func.count()).select_from(base_query)
+        count_query = select(func.count()).select_from(
+            select(ExperimentSampleEntity).where(*conditions).subquery()
+        )
         total_result = await self.session.exec(count_query)
-        total = total_result.one_or_none() or 0
+        total_num = total_result.one_or_none() or 0
 
-        # Get paginated results
-        offset = (page - 1) * size
-        paginated_query = (
-            base_query.order_by(ExperimentSampleEntity.created_at.desc())
-            .offset(offset)
+        # Calculate pagination
+        pagination = get_pagination_meta(page, size, total_num)
+
+        # Build main query with JOIN
+        main_query = (
+            select(
+                ExperimentSampleEntity,
+                DatasetSampleEntity.input,
+                DatasetSampleEntity.expected_output,
+                DatasetSampleEntity.eval_metadata.label("dataset_metadata"),
+            )
+            .join(
+                DatasetSampleEntity,
+                ExperimentSampleEntity.sample_id == DatasetSampleEntity.id,
+            )
+            .where(*conditions)
+            .order_by(ExperimentSampleEntity.created_at.desc())
+            .offset(pagination.offset)
             .limit(size)
         )
-        results = await self.session.exec(paginated_query)
-        samples = list(results.all())
 
-        # Calculate pages
-        pages = (total + size - 1) // size if total > 0 else 0
+        results = await self.session.exec(main_query)
+
+        # Transform results
+        transformed_results = [
+            {
+                **row[0].model_dump(),
+                "input": row[1],
+                "expected_output": row[2],
+                "dataset_metadata": row[3],
+            }
+            for row in results.all()
+        ]
 
         return PagedResult(
-            items=samples,
-            total=total,
-            pages=pages,
-            page=page,
-            size=size,
+            items=transformed_results,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
         )
 
     async def evaluate_experiment_sample(
@@ -740,9 +775,9 @@ class EvaluationService:
         Raises:
             ValueError: If ExperimentSample entity not found
         """
-        experiment_sample = await self.session.get(
-            ExperimentSampleEntity, experiment_sample_id, ExperimentSampleEntity.tenant_id == tenant_id
-        )
+        query = select(ExperimentSampleEntity).where(ExperimentSampleEntity.id == experiment_sample_id, ExperimentSampleEntity.tenant_id == tenant_id)
+        experiment_sample_execution = await self.session.exec(query)
+        experiment_sample = experiment_sample_execution.first()
         if not experiment_sample:
             raise ValueError(
                 f"实验样本 '{experiment_sample_id}' 不存在。"
@@ -759,7 +794,7 @@ class EvaluationService:
         if status is not None:
             experiment_sample.status = status
         if output is not None:
-            experiment_sample.output = output
+            experiment_sample.actual_output = output
         if score is not None:
             experiment_sample.score = score
         if error is not None:

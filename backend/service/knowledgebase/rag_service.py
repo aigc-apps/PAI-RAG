@@ -394,38 +394,6 @@ class RagService:
         file_service = await self._get_file_service()
         return await file_service.add_file(kb_id=kb_id, file=file, tenant_id=tenant_id)
 
-
-    async def delete_file(self, kb_id: str, file_id: str, tenant_id: str) -> None:
-        """
-        Delete a file and all related chunks.
-        This orchestrates the deletion across file and chunk services.
-
-        Args:
-            kb_id: Knowledgebase ID
-            file_id: File ID
-
-        Raises:
-            ValueError: If file not found
-        """
-        file_service = await self._get_file_service()
-        file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        if not file_entity:
-            raise ValueError(f"文件 '{file_id}' 不存在。")
-
-        if file_entity.kb_id != kb_id:
-            raise ValueError(f"文件 '{file_id}' 不属于知识库 '{kb_id}'。")
-
-        # Delete related chunks in batch
-        chunk_service = await self._get_chunk_service()
-        chunk_ids = await chunk_service.delete_chunks_from_file(file_id, kb_id, tenant_id=tenant_id)
-        await self.adelete(kb_id=kb_id, node_ids=chunk_ids, tenant_id=tenant_id)
-
-        # Delete file itself
-        await file_service.delete_file(tenant_id=tenant_id, file_id=file_id, kb_id=kb_id)
-
-        logger.info(f"Deleted file {file_id} and all related chunks")
-
-
     ## Batch
     async def batch_delete_files(self, kb_id: str, file_ids: List[str], tenant_id: str) -> None:
         """
@@ -436,10 +404,8 @@ class RagService:
             kb_id: Knowledgebase ID
             file_ids: List of file IDs
         """
-        file_service = await self._get_file_service()
         for file_id in file_ids:
             await self.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        return await file_service.batch_delete_files(kb_id=kb_id, file_ids=file_ids, tenant_id=tenant_id)
 
 
     async def get_file_id_source_map(
@@ -1213,7 +1179,7 @@ class RagService:
             logger.error(f"Failed to delete nodes from vector store: {e}")
             raise
 
-    async def adelete_file(
+    async def delete_file(
         self,
         kb_id: str,
         file_id: str,
@@ -1260,3 +1226,7 @@ class RagService:
         except Exception as e:
             logger.error(f"Failed to delete file {file_id} from vector store: {e}")
             raise
+
+        file_service = await self._get_file_service()
+        await file_service.delete_file(file_id=file_id, kb_id=kb_id, tenant_id=tenant_id)
+        logger.info(f"Finished deleting file {file_id} from knowledgebase.")

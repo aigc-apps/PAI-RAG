@@ -117,16 +117,16 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   const [evaluatorConfig, setEvaluatorConfig] = useState<EvaluatorConfig>();
 
   // 数据状态
-  const [allExpItems, setAllItems] = useState<ExperimentSampleDetails[]>([]);
+  const [expItems, setExpItems] = useState<ExperimentSampleDetails[]>([]);
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
 
   // 筛选与分页
   const [statusFilter, setStatusFilter] = useState<StatusType | null>(null);
   const [page, setPage] = useState(1);
-  const pageRef = useRef(page);
   const pageSize = 10;
   const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   // 查看样本对话框
   const [isSampleDialogOpen, setIsSampleDialogOpen] = useState(false);
@@ -150,68 +150,49 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
     }
   };
 
-  // ========================
-  // 计算属性
-  // ========================
-
-  // 筛选后数据
-  const filteredItems = useMemo(() => {
-    if (!statusFilter) return allExpItems;
-    return allExpItems.filter(item => item.status === statusFilter);
-  }, [allExpItems, statusFilter]);
-
-  // 分页数据（基于筛选后）
-  const pageExpItems = useMemo(() => {
-    const startIndex = (page - 1) * pageSize;
-    return filteredItems.slice(startIndex, startIndex + pageSize);
-  }, [filteredItems, page, pageSize]);
-
-  // 动态计算总页数
+  // 当筛选条件变化时，重置到第一页
   useEffect(() => {
-    const newTotalPages = Math.ceil(filteredItems.length / pageSize);
-    setTotalPages(newTotalPages);
-  }, [filteredItems.length, pageSize]);
-
-  // 同步 pageRef
-  useEffect(() => {
-    pageRef.current = page;
-  }, [page]);
+    setPage(1);
+  }, [statusFilter]);
 
   // ========================
   // 数据获取与轮询
   // ========================
 
-  // 获取所有数据（用于筛选）
-  const fetchAllItems = async () => {
+  // 获取实验样本数据（支持筛选和分页）
+  const fetchExperimentSamples = useCallback(async () => {
     try {
-      const tmpPageSize = 1000;
-      const firstPageRes = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=1&size=${tmpPageSize}`);
-      if (!firstPageRes.ok) throw new Error('获取评估实验列表失败');
-      const json_data = await firstPageRes.json();
-      const tmpAllItems: ExperimentSampleDetails[] = [];
-
-      for (let curPage = 1; curPage <= json_data.data.pages; curPage++) {
-        console.log("加载所有数据，第", curPage, "页");
-        const response = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${curPage}&size=${tmpPageSize}`);
-        const data = await response.json();
-        tmpAllItems.push(...data.data.items);
+      // 构建查询参数
+      const params = new URLSearchParams({
+        page: page.toString(),
+        size: pageSize.toString(),
+      });
+      if (statusFilter) {
+        params.append('status', statusFilter);
       }
 
-      setAllItems(tmpAllItems);
-      console.log("✅ 所有数据加载完成，共", tmpAllItems.length, "条");
+      const response = await tenantFetch(
+        `/api/config/evaluation/${datasetId}/experiments/${expId}/samples?${params.toString()}`
+      );
+      
+      if (!response.ok) throw new Error('获取评估实验样本失败');
+      const data = await response.json();
+      
+      setExpItems(data.data.items);
+      setTotalPages(data.data.pages);
+      setTotalItems(data.data.total);
     } catch (err: any) {
-      console.error("fetchAllItems 错误:", err);
-      toast.error("加载完整数据失败");
+      console.error("fetchExperimentSamples 错误:", err);
+      toast.error("加载实验样本失败");
     }
-  };
+  }, [datasetId, expId, page, pageSize, statusFilter, tenantFetch]);
 
-  // 获取当前页 + 实验元数据
+  // 获取实验元数据（配置信息等）
   const fetchExperimentDetails = useCallback(async () => {
     try {
-      const [evalRes, expDataRes, detailsRes] = await Promise.all([
+      const [evalRes, expDataRes] = await Promise.all([
         tenantFetch(`/api/config/evaluation/${datasetId}`),
         tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}`),
-        tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}/samples?page=${pageRef.current}&size=${pageSize}`),
       ]);
 
       // 获取评估配置
@@ -240,19 +221,11 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
           setEvaluatorConfig(evaluatorConfigData.data);
         }
       }
-
-      // 获取当前页详情（仅用于触发 fetchAllItems，实际渲染用 allExpItems）
-      const details_data = await detailsRes.json();
-      setTotalPages(details_data.data.pages); // 初始总页数
-
-      // 加载所有数据
-      await fetchAllItems();
-
     } catch (err: any) {
       console.error("fetchExperimentDetails 错误:", err);
       toast.error(err.message || "加载实验详情失败");
     }
-  }, [datasetId, expId, pageSize]);
+  }, [datasetId, expId, tenantFetch]);
 
   // ========================
   // 重新评估单条样本
@@ -288,13 +261,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
 
     const startPolling = () => {
       // 检查是否有未完成项
-      const hasUnfinished = allExpItems.some(
+      const hasUnfinished = expItems.some(
         item => item.status !== 'success' && item.status !== 'failed'
       );
 
       if (hasUnfinished && experiment?.status !== 'success' && experiment?.status !== 'failed') {
         console.log('🔄 存在未完成实验，3秒后重新拉取...');
         pollTimeout = setTimeout(() => {
+          fetchExperimentSamples();
           fetchExperimentDetails();
         }, 3000);
       } else {
@@ -312,12 +286,17 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         console.log('🧹 轮询定时器已清理');
       }
     };
-  }, [allExpItems, experiment?.status, fetchExperimentDetails]);
+  }, [expItems, experiment?.status, fetchExperimentSamples, fetchExperimentDetails]);
 
-  // 首次加载
+  // 首次加载元数据
   useEffect(() => {
     fetchExperimentDetails();
   }, [fetchExperimentDetails]);
+
+  // 加载样本数据（page/filter 变化时重新加载）
+  useEffect(() => {
+    fetchExperimentSamples();
+  }, [fetchExperimentSamples]);
 
   // ========================
   // 交互函数
@@ -409,7 +388,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                 </h3>
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={getScoreDistributionData(allExpItems)} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                    <BarChart data={getScoreDistributionData(expItems)} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" />
                       <XAxis dataKey="range" tick={{ fontSize: 14 }} height={25} />
                       <YAxis tick={{ fontSize: 14 }} width={40} />
@@ -430,7 +409,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={getStatusDistributionData(allExpItems)}
+                        data={getStatusDistributionData(expItems)}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
@@ -440,7 +419,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         fill="#8884d8"
                         dataKey="value"
                       >
-                        {getStatusDistributionData(allExpItems).map((entry, index) => (
+                        {getStatusDistributionData(expItems).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as StatusKey] || "#8884d8"} />
                         ))}
                       </Pie>
@@ -452,7 +431,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
               </div>
 
               {/* 执行耗时 */}
-              {hasTimingData(allExpItems) && (
+              {hasTimingData(expItems) && (
                 <div className="flex flex-col bg-card rounded-lg border p-3 hover:shadow-sm transition-shadow h-[220px]">
                   <h3 className="font-semibold mb-2 flex items-center gap-1.5 text-sm">
                     <Clock className="h-3.5 w-3.5" /> 执行耗时
@@ -468,7 +447,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-blue-600 dark:text-blue-400 tabular-nums">
-                            {getAverageTime(allExpItems)}
+                            {getAverageTime(expItems)}
                           </span>
                           <span className="text-xs text-blue-500 dark:text-blue-500">s</span>
                         </div>
@@ -482,7 +461,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-green-600 dark:text-green-400 tabular-nums">
-                            {getMinTime(allExpItems)}
+                            {getMinTime(expItems)}
                           </span>
                           <span className="text-xs text-green-500 dark:text-green-500">s</span>
                         </div>
@@ -496,7 +475,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-red-600 dark:text-red-400 tabular-nums">
-                            {getMaxTime(allExpItems)}
+                            {getMaxTime(expItems)}
                           </span>
                           <span className="text-xs text-red-500 dark:text-red-500">s</span>
                         </div>
@@ -525,7 +504,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                 <div className="flex items-center gap-1">
                   <span className="text-gray-500 font-medium">平均得分:</span>
                   <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs py-0.5 px-2">
-                    {getAverageScore(allExpItems)}
+                    {getAverageScore(expItems)}
                   </Badge>
                 </div>
               </div>
@@ -707,7 +686,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         {/* 执行详情表格 */}
         <Card>
           <CardHeader>
-            <CardTitle>执行详情 ({allExpItems.length})</CardTitle>
+            <CardTitle>执行详情 ({totalItems})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border overflow-hidden">
@@ -763,14 +742,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pageExpItems.length === 0 ? (
+                  {expItems.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="h-24 text-center">
                         暂无数据
                       </TableCell>
                     </TableRow>
                   ) : (
-                    pageExpItems.map((sample) => (
+                    expItems.map((sample) => (
                       <Fragment key={sample.id}>
                         <TableRow className={isRowExpanded(sample.id) ? "bg-muted/50" : ""}>
                           <TableCell>
