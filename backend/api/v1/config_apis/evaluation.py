@@ -337,13 +337,14 @@ async def get_experiment_samples(
     experiment_id: str,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
+    status: str = Query(default=None, description="Filter by status: running, success, failed, pending"),
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
-    logger.info(f"Get experiment details for dataset_id {dataset_id}, experiment_id {experiment_id}.")
+    logger.info(f"Get experiment details for dataset_id {dataset_id}, experiment_id {experiment_id}, status={status}.")
     try:
-        experiment_samples = await evaluation_service.get_experiment_samples(experiment_id=experiment_id, tenant_id=tenant_id, page=page, size=size)
+        experiment_samples = await evaluation_service.get_experiment_samples(experiment_id=experiment_id, tenant_id=tenant_id, page=page, size=size, status=status)
         return success_response(data=experiment_samples, message="获取评估实验样本列表成功。")
     except Exception as e:
         logger.error(f"Failed to get experiment samples: {traceback.format_exc()}")

@@ -288,49 +288,6 @@ class FileService:
         return list(results.all())
 
     ## Batch
-    async def batch_delete_files(self, kb_id: str, file_ids: List[str], tenant_id: str) -> None:
-        """
-        Delete multiple File entities in batch.
-        Note: This will cascade delete related chunks.
-        Note: Caller is responsible for committing the session.
-
-        Args:
-            kb_id: Knowledgebase ID (for validation)
-            file_ids: List of file entity IDs to delete
-
-        Raises:
-            ValueError: If any file not found or doesn't belong to kb_id
-        """
-        if not file_ids:
-            return
-
-        # Get all files to validate
-        files = await self.session.exec(
-            select(KbFileEntity)
-            .where(KbFileEntity.id.in_(file_ids))
-            .where(KbFileEntity.kb_id == kb_id)
-            .where(KbFileEntity.tenant_id == tenant_id)
-        )
-        file_list = list(files.all())
-
-        if len(file_list) != len(file_ids):
-            found_ids = {f.id for f in file_list}
-            missing_ids = set(file_ids) - found_ids
-            raise ValueError(
-                f"以下文件不存在或不属于知识库 '{kb_id}': {', '.join(missing_ids)}"
-            )
-
-        # Delete all files
-        for file_entity in file_list:
-            await self.session.delete(file_entity)
-
-        # Flush to ensure deletions are staged
-        await self.session.flush()
-
-        logger.info(
-            f"Batch deleted {len(file_list)} File entities from knowledgebase {kb_id}"
-        )
-
     async def delete_files_from_kb(self, kb_id: str, tenant_id: str) -> None:
         """
         Delete all File entities for a knowledgebase.
