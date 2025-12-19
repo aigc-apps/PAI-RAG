@@ -242,13 +242,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
       );
 
       if (response.ok) {
-        alert("重新评估已启动！");
+        toast.success("重新评估已启动！");
       } else {
-        alert("重新评估启动失败! ");
+        const data = await response.json();
+        toast.error("重新评估启动失败: " + data.message);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Re-evaluate failed:", error);
-      alert("网络错误，重新评估失败");
+      toast.error("重新评估失败: " + error.message);
     }
   };
 

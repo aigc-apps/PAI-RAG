@@ -10,6 +10,7 @@ class EvaluatorConfigCreate(SQLModel):
     name: str = Field(default="")
     type: str = Field(default="") # ExactMatch, LLMJudge
     model_id: str = Field(default="")
+    model_provider_name: Optional[str] = Field(default="openai_like")
     case_sensitive: bool = Field(default=False)
     ignore_punctuation: bool = Field(default=False)
 

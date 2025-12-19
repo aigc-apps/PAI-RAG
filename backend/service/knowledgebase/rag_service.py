@@ -1227,6 +1227,10 @@ class RagService:
             logger.error(f"Failed to delete file {file_id} from vector store: {e}")
             raise
 
+        chunk_service = await self._get_chunk_service()
+        await chunk_service.delete_chunks_from_file(file_id=file_id, kb_id=kb_id, tenant_id=tenant_id)
+        logger.info(f"Finished deleting chunks from file {file_id} from knowledgebase.")
+
         file_service = await self._get_file_service()
         await file_service.delete_file(file_id=file_id, kb_id=kb_id, tenant_id=tenant_id)
         logger.info(f"Finished deleting file {file_id} from knowledgebase.")

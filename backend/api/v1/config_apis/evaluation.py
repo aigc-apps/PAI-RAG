@@ -359,39 +359,33 @@ async def evaluate_experiment_sample(
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
-    logger.info(f"evaluate_single_sample for dataset_id: {dataset_id}, exp_id: {experiment_id}, exp_run_id: {experiment_sample_entity.id}")
+    logger.info(f"evaluate_single_sample for dataset_id: {dataset_id}, experiment_id: {experiment_id}, exp_run_id: {experiment_sample_entity.id}")
     try:
-        await evaluation_service.evaluate_experiment_sample(
-            experiment_id=experiment_id,
-            tenant_id=tenant_id,
-            experiment_sample_id=experiment_sample_entity.id,
-            status=experiment_sample_entity.status,
-            output=experiment_sample_entity.actual_output,
-            score=experiment_sample_entity.score,
-            error=experiment_sample_entity.error_message,
+        import app.worker as background_worker
+
+        logger.info(f"重新评估 {experiment_sample_entity.id} 成功.")
+        background_worker.execute_evaluation_task.delay(
+            dataset_id=dataset_id, experiment_id=experiment_id, exp_run_ids=[experiment_sample_entity.id], tenant_id=tenant_id
         )
-        await session.commit()
         return success_response(message="重新开始评估该样本成功。")
     except ValueError as e:
         logger.error(f"Failed to evaluate experiment sample: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to evaluate experiment sample: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"重新开始评估该样本失败: '{e}'.")
 
-@evaluation_router.delete("/{dataset_id}/experiments/{exp_id}")
+@evaluation_router.delete("/{dataset_id}/experiments/{experiment_id}")
 async def delete_experiment(
     dataset_id: str,
-    exp_id: str,
+    experiment_id: str,
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     evaluation_service: EvaluationService = Depends(get_evaluation_service),
 ):
-    logger.info(f"Delete experiment for dataset_id {dataset_id} and exp_id {exp_id}.")
+    logger.info(f"Delete experiment for dataset_id {dataset_id} and experiment_id {experiment_id}.")
     try:
-        await evaluation_service.delete_experiment(exp_id=exp_id, tenant_id=tenant_id)
+        await evaluation_service.delete_experiment(experiment_id=experiment_id, tenant_id=tenant_id)
         await session.commit()
         return success_response(message="删除实验成功。")
     except ValueError as e:
