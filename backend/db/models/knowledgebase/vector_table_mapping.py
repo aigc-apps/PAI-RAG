@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 import hashlib
 import uuid
+from pydantic import field_serializer
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, DateTime, UniqueConstraint
 from common.system_constants import DEFAULT_TENANT_ID
@@ -36,6 +37,13 @@ class VectorTableMappingEntity(SQLModel, table=True):
         sa_column=Column(DateTime),
     )
 
+    @field_serializer("created_at", "updated_at")
+    def serialize_dt(self, dt: datetime, _info):
+        # If the datetime is naive, assume it's UTC and add 'Z'
+        if dt.tzinfo is None:
+            return f"{dt.isoformat()}Z"
+        # If it's already aware, convert to ISO format
+        return dt.isoformat()
 
 def generate_vector_table_name(tenant_id: str, kb_id: str) -> str:
     """

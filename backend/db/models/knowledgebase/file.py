@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from sqlmodel import Field, SQLModel
 from sqlalchemy import Column, JSON, DateTime, UniqueConstraint, Text, String
 from common.knowledgebase.types import FileStatus
@@ -49,3 +49,12 @@ class KbFileEntity(SQLModel, table=True):
     )
 
     file_metadata: dict = Field(default={}, sa_column=Column("file_metadata", JSON))
+
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_dt(self, dt: datetime, _info):
+        # If the datetime is naive, assume it's UTC and add 'Z'
+        if dt.tzinfo is None:
+            return f"{dt.isoformat()}Z"
+        # If it's already aware, convert to ISO format
+        return dt.isoformat()

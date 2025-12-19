@@ -430,6 +430,7 @@ async def _batch_reprocess_files(
     for file_entity in file_entities:
         file_entity.status = FileStatus.pending
         file_entity.file_version = file_version
+        file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         session.add(file_entity)
         reprocessed_count += 1
 
