@@ -33,7 +33,7 @@ class OssFileStore(BaseFileStore):
         self.bucket = oss2.Bucket(auth=auth, endpoint=endpoint, bucket_name=bucket)
         rule = CorsRule(
             allowed_origins=["*"],
-            allowed_methods=["GET", "HEAD"],
+            allowed_methods=["GET", "HEAD", "POST", "PUT", "DELETE"],
             allowed_headers=["*"],
             max_age_seconds=1000,
         )
