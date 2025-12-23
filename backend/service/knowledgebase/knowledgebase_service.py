@@ -295,9 +295,16 @@ class KnowledgebaseService:
             logger.info(
                 f"Updated Knowledgebase entity: {knowledgebase.id} (name: {knowledgebase.name})"
             )
-        except ValueError as e:
-            logger.error(f"ValueError when updating Knowledgebase: {e}")
-            raise ValueError(f"知识库更新失败: {e}") from e
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating Knowledgebase: {e.orig}")
+            if "UniqueViolationError" in str(e.orig):
+                raise ValueError(
+                    f"知识库名称 '{update_data.name}' 已经存在。"
+                ) from e
+            elif "Duplicate entry" in str(e.orig):
+                raise ValueError(f"知识库名称 '{update_data.name}' 已经存在。") from e
+            else:
+                raise ValueError(f"知识库创建失败: {e.orig}") from e
         return knowledgebase
 
     async def delete_knowledgebase(self, kb_id: str, tenant_id: str) -> None:
