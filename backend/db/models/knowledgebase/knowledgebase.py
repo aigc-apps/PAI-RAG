@@ -10,7 +10,6 @@ from common.knowledgebase.constants import (
     DEFAULT_SENTENCE_SEPARATOR,
     DEFAULT_PARSER_TYPE,
     DEFAULT_EMBEDDING_MODEL,
-    DEFAULT_SIMILARITY_THRESHOLD,
     DEFAULT_SIMILARITY_TOP_K,
     DEFAULT_RERANK_SIMILARITY_TOP_K,
     DEFAULT_VECTOR_WEIGHT,
@@ -34,7 +33,7 @@ class RetrievalConfig(SQLModel):
         default=VectorIndexRetrievalType.hybrid
     )
     top_k: int = Field(default=DEFAULT_SIMILARITY_TOP_K)
-    similarity_threshold: float = Field(default=DEFAULT_SIMILARITY_THRESHOLD)
+    similarity_threshold: float = Field(default=0)
     vector_weight: float = Field(default=DEFAULT_VECTOR_WEIGHT)
     enable_rerank: bool = Field(default=False)
     rerank_model: str = Field(default="")
@@ -51,6 +50,23 @@ class KnowledgebaseCreate(SQLModel):
     chunk_config: ChunkConfig | None = Field(default=None)
     retrieval_config: RetrievalConfig | None = Field(default=None)
 
+    @field_validator("chunk_config")
+    def validate_chunk_config(cls, v):
+        if not v:
+            return ChunkConfig()
+        if v.chunk_size <= v.chunk_overlap:
+            raise ValueError(f"切片大小`{v.chunk_size}`必须大于切片重叠`{v.chunk_overlap}`.")
+        return v
+
+    @field_validator("name")
+    def validate_name(cls, v):
+        if not v:
+            raise ValueError("知识库名称不能为空。")
+        if len(v) > 100:
+            raise ValueError("知识库名称不能超过 100 个字符。")
+        if not re.fullmatch(r"[\w-]+", v):
+            raise ValueError("知识库名称只能包含字母、数字和下划线。")
+        return v
 
 # table entity
 class KbEntity(SQLModel, table=True):
@@ -81,15 +97,6 @@ class KbEntity(SQLModel, table=True):
         default=lambda: RetrievalConfig(), sa_column=Column("retrieval_config", JSON)
     )
 
-    @field_validator("name")
-    def validate_name(cls, v):
-        if not v:
-            raise ValueError("知识库名称不能为空。")
-        if len(v) > 100:
-            raise ValueError("知识库名称不能超过 100 个字符。")
-        if not re.fullmatch(r"[\w-]+", v):
-            raise ValueError("知识库名称只能包含字母、数字和下划线。")
-        return v
 
     @field_serializer("created_at", "updated_at")
     def serialize_dt(self, dt: datetime, _info):
