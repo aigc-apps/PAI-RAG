@@ -50,6 +50,9 @@ class KbFileEntity(SQLModel, table=True):
 
     file_metadata: dict = Field(default={}, sa_column=Column("file_metadata", JSON))
 
+    chunk_config: dict | None = Field(
+        default=None, sa_column=Column("chunk_config", JSON)
+    )
 
     @field_serializer("created_at", "updated_at")
     def serialize_dt(self, dt: datetime, _info):

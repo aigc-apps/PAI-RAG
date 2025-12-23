@@ -5,6 +5,7 @@ import traceback
 from typing import List, Optional
 from common.knowledgebase.types import FileStatus
 from fastapi import APIRouter, Depends, File, Query, UploadFile, Form
+import json
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 from rag.file_item_utils import to_file_entity
@@ -13,6 +14,7 @@ from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.knowledgebase import (
     KbEntity,
     KnowledgebaseCreate,
+    ChunkConfig,
 )
 from db.db_context import get_db_session
 from sqlalchemy.exc import IntegrityError
@@ -231,15 +233,39 @@ async def upload_files(
     auto_parse: bool = Query(default=True),
     files: Optional[List[UploadFile]] = File(...),
     file_sources: Optional[List[str]] = Form(None),
+    chunk_config: Optional[str] = Form(None, description="JSON string of chunk_config, shared by all files in this upload"),
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
     file_service: FileService = Depends(get_file_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
     try:
         file_version = int(time.time())
         if not files:
             raise ApiException(code=400, message="没有上传任何文件。")
+
+
+        knowledgebase = await knowledgebase_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
+        if not knowledgebase:
+            raise ApiException.not_found(kb_id, "知识库")
+
+        kb_chunk_config = knowledgebase.chunk_config
+
+
+        parsed_chunk_config = None
+        if chunk_config:
+            try:
+                parsed_chunk_config = json.loads(chunk_config)
+                if not isinstance(parsed_chunk_config, dict):
+                    raise ValueError("chunk_config must be a JSON object")
+                # Validate chunk_config
+                ChunkConfig.model_validate(parsed_chunk_config)
+            except json.JSONDecodeError as e:
+                raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
+            except Exception as e:
+                raise ApiException(code=400, message=f"chunk_config 验证失败: {e}")
+
         file_items = await upload_form_files_async(kb_id=kb_id, files=files, tenant_id=tenant_id)
 
         file_names = [file_item.file_name for file_item in file_items]
@@ -262,9 +288,14 @@ async def upload_files(
         if file_sources:
             assert len(file_sources) == len(new_file_entities), "文件来源列表长度与文件列表长度不一致"
 
-        for i,file_entity in enumerate(new_file_entities):
+        # Apply chunk_config to all files if provided (shared by all files in this upload)
+        for i, file_entity in enumerate(new_file_entities):
             if file_sources:
                 file_entity.file_source = file_sources[i]
+
+            # All files share the same chunk_config if provided
+            if parsed_chunk_config:
+                file_entity.chunk_config = parsed_chunk_config
 
             if auto_parse:
                 import app.worker as background_worker
@@ -273,8 +304,22 @@ async def upload_files(
 
             session.add(file_entity)
 
+        await session.commit()
+
+
+        for file_entity in new_file_entities:
+            await session.refresh(file_entity)
+
+
+        response_entities = []
+        for file_entity in new_file_entities:
+            file_dict = file_entity.model_dump()
+            if not file_entity.chunk_config:
+                file_dict["chunk_config"] = kb_chunk_config
+            response_entities.append(file_dict)
+
         logger.info(f"Uploaded {len(new_file_entities)} files successfully.")
-        return success_response(data=new_file_entities, message="上传文件成功")
+        return success_response(data=response_entities, message="上传文件成功")
     except ValueError as e:
         logger.error(f"上传文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
@@ -455,6 +500,9 @@ class FileSourceParam(BaseModel):
     file_source: str = Field(default=None)
 
 
+class FileChunkConfigParam(BaseModel):
+    chunk_config: dict = Field(..., description="Chunk configuration for the file")
+
 
 @knowledgebase_router.post("/{kb_id}/files/{file_id}/source", response_model=ResponseModel[KbFileEntity])
 async def set_file_source(
@@ -477,6 +525,39 @@ async def set_file_source(
     await session.refresh(file_entity)
 
     return success_response(data=file_entity, message="更新文件来源成功")
+
+
+@knowledgebase_router.post("/{kb_id}/files/{file_id}/chunk_config", response_model=ResponseModel[KbFileEntity])
+async def set_file_chunk_config(
+    kb_id: str,
+    file_id: str,
+    body: FileChunkConfigParam,
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    rag_service: RagService = Depends(get_rag_service),
+):
+    try:
+        file_entity = await rag_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+        if not file_entity:
+            raise ApiException.not_found(file_id, "文件")
+
+        # Validate chunk_config
+        try:
+            ChunkConfig.model_validate(body.chunk_config)
+        except Exception as e:
+            raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
+
+        file_entity.chunk_config = body.chunk_config
+        session.add(file_entity)
+        await session.commit()
+        await session.refresh(file_entity)
+
+        return success_response(data=file_entity, message="更新文件 chunk_config 成功")
+    except ApiException:
+        raise
+    except Exception as e:
+        logger.error(f"更新文件 chunk_config 失败。\nException:{traceback.format_exc()}")
+        raise ApiException(code=500, message=f"更新文件 chunk_config 失败: {e}.")
 
 
 @knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks")

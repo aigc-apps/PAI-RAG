@@ -133,6 +133,10 @@ interface KnowledgeBaseFile {
   updated_at: string;
   failed_reason: string;
   file_extension?: string;
+  chunk_config?: {
+    parser_type?: string;
+    [key: string]: any;
+  };
   file_metadata: {
     [key: string]: any;
     file_url?: string;
@@ -190,6 +194,8 @@ export default function KnowledgeBaseDetailPage(
   const [previewError, setPreviewError] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState<Record<string, boolean>>({});
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [chunkConfigDialogOpen, setChunkConfigDialogOpen] = useState(false);
+  const [viewingChunkConfig, setViewingChunkConfig] = useState<{file_name: string; chunk_config: any} | null>(null);
   const [searchrecords, setSearchRecords] = useState(Array<SearchRecord>); // 搜索结果
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null); // 搜索错误信息
@@ -208,7 +214,22 @@ export default function KnowledgeBaseDetailPage(
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0); // 上传进度 0-100
   const [uploadStep, setUploadStep] = useState<'idle' | 'uploading' | 'uploaded' | 'parsing'>('idle'); // 上传步骤
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{id: string; file_name: string; file_path: string}>>([]);  // 已上传待解析的文件
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{id: string; file_name: string; file_path: string; chunk_config?: any}>>([]);  // 已上传待解析的文件
+  const [uploadChunkConfig, setUploadChunkConfig] = useState<{
+    parser_type: string;
+    separator?: string;
+    chunk_size?: string;
+    chunk_overlap?: string;
+    image_caption_model?: string;
+    image_caption_provider_name?: string;
+    table_config?: {
+      concat_rows?: boolean;
+      row_joiner?: string;
+      header_index_max?: number;
+      format_sheet_data_to_json?: boolean;
+      sheet_column_filters?: string[];
+    };
+  } | null>(null); // 上传时使用的 chunk_config
   const [deleting, setDeleting] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -461,6 +482,33 @@ export default function KnowledgeBaseDetailPage(
       const kb_data = json_data.data;
 
       setKnowledgeBase(kb_data); // 更新状态
+      // 初始化上传时的 chunk_config 为知识库的默认配置
+      if (kb_data?.chunk_config) {
+        const config: any = {
+          parser_type: kb_data.chunk_config.parser_type || 'structure',
+          image_caption_model: kb_data.chunk_config.image_caption_model,
+          image_caption_provider_name: kb_data.chunk_config.image_caption_provider_name,
+        };
+        
+                        if (kb_data.chunk_config.parser_type === 'table') {
+                          config.table_config = kb_data.chunk_config.table_config || {
+                            concat_rows: false,
+                            row_joiner: '\n',
+                            header_index_max: 0,
+                            format_sheet_data_to_json: false,
+                          };
+                        } else if (kb_data.chunk_config.parser_type === 'paragraph') {
+                          config.separator = kb_data.chunk_config.separator || '\n\n';
+          config.chunk_size = String(kb_data.chunk_config.chunk_size || 1000);
+          config.chunk_overlap = String(kb_data.chunk_config.chunk_overlap || 50);
+        } else {
+          config.separator = kb_data.chunk_config.separator || '\n\n';
+          config.chunk_size = String(kb_data.chunk_config.chunk_size || 1000);
+          config.chunk_overlap = String(kb_data.chunk_config.chunk_overlap || 50);
+        }
+        
+        setUploadChunkConfig(config);
+      }
       console.log('知识库详情数据:', kb_data);
 
       // 获取向量数据库类型
@@ -1023,6 +1071,28 @@ export default function KnowledgeBaseDetailPage(
         };
 
         // 添加 auto_parse=false 参数，只上传不解析
+        // 如果提供了 chunk_config，添加到 FormData
+        if (uploadChunkConfig) {
+          const chunkConfig: any = {
+            parser_type: uploadChunkConfig.parser_type,
+            image_caption_model: uploadChunkConfig.image_caption_model || null,
+            image_caption_provider_name: uploadChunkConfig.image_caption_provider_name || 'openai_like',
+          };
+          
+          if (uploadChunkConfig.parser_type === 'table' && uploadChunkConfig.table_config) {
+            chunkConfig.table_config = uploadChunkConfig.table_config;
+          } else if (uploadChunkConfig.parser_type === 'paragraph') {
+            chunkConfig.separator = uploadChunkConfig.separator || '\n\n';
+            chunkConfig.chunk_size = uploadChunkConfig.chunk_size ? parseInt(uploadChunkConfig.chunk_size) : 1000;
+            chunkConfig.chunk_overlap = uploadChunkConfig.chunk_overlap ? parseInt(uploadChunkConfig.chunk_overlap) : 50;
+          } else {
+            chunkConfig.separator = uploadChunkConfig.separator || '\n\n';
+            chunkConfig.chunk_size = uploadChunkConfig.chunk_size ? parseInt(uploadChunkConfig.chunk_size) : 1000;
+            chunkConfig.chunk_overlap = uploadChunkConfig.chunk_overlap ? parseInt(uploadChunkConfig.chunk_overlap) : 50;
+          }
+          
+          formData.append('chunk_config', JSON.stringify(chunkConfig));
+        }
         xhr.open('POST', `${API_PREFIX}/config/knowledgebases/${kbId}/files?auto_parse=false`);
         xhr.setRequestHeader('X-TENANT-ID', tenantId);
         xhr.send(formData);
@@ -1039,8 +1109,37 @@ export default function KnowledgeBaseDetailPage(
         id: file.id,
         file_name: file.file_name,
         file_path: file.file_path,
+        chunk_config: file.chunk_config, // 保存文件的 chunk_config
       }));
       setUploadedFiles(uploadedFileList);
+      // 更新显示的 chunk_config 为文件的 chunk_config（如果文件有的话）
+      if (uploadedFileList.length > 0 && uploadedFileList[0].chunk_config) {
+        const fileChunkConfig = uploadedFileList[0].chunk_config;
+        const config: any = {
+          parser_type: fileChunkConfig.parser_type || 'structure',
+          image_caption_model: fileChunkConfig.image_caption_model,
+          image_caption_provider_name: fileChunkConfig.image_caption_provider_name,
+        };
+        
+                        if (fileChunkConfig.parser_type === 'table') {
+                          config.table_config = fileChunkConfig.table_config || {
+                            concat_rows: false,
+                            row_joiner: '\n',
+                            header_index_max: 0,
+                            format_sheet_data_to_json: false,
+                          };
+                        } else if (fileChunkConfig.parser_type === 'paragraph') {
+                          config.separator = fileChunkConfig.separator || '\n\n';
+          config.chunk_size = String(fileChunkConfig.chunk_size || 1000);
+          config.chunk_overlap = String(fileChunkConfig.chunk_overlap || 50);
+        } else {
+          config.separator = fileChunkConfig.separator || '\n\n';
+          config.chunk_size = String(fileChunkConfig.chunk_size || 1000);
+          config.chunk_overlap = String(fileChunkConfig.chunk_overlap || 50);
+        }
+        
+        setUploadChunkConfig(config);
+      }
       setUploadStep('uploaded');
       setUploadProgress(100);
       toast.success("文件上传成功，请点击开始解析按钮启动解析任务。");
@@ -1059,6 +1158,82 @@ export default function KnowledgeBaseDetailPage(
     }
   };
 
+  // 更新已上传文件的 chunk_config
+  const updateUploadedFilesChunkConfig = async () => {
+    if (uploadedFiles.length === 0 || !uploadChunkConfig) {
+      return;
+    }
+
+    const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1";
+    
+    const chunkConfig: any = {
+      parser_type: uploadChunkConfig.parser_type,
+      image_caption_model: uploadChunkConfig.image_caption_model || null,
+      image_caption_provider_name: uploadChunkConfig.image_caption_provider_name || 'openai_like',
+    };
+    
+    if (uploadChunkConfig.parser_type === 'table' && uploadChunkConfig.table_config) {
+      chunkConfig.table_config = uploadChunkConfig.table_config;
+    } else if (uploadChunkConfig.parser_type === 'paragraph') {
+      chunkConfig.separator = uploadChunkConfig.separator || '\n\n';
+      // 如果为空字符串或undefined/null，使用默认值；否则转换为数字
+      chunkConfig.chunk_size = (uploadChunkConfig.chunk_size === '' || !uploadChunkConfig.chunk_size) 
+        ? 1000 
+        : parseInt(uploadChunkConfig.chunk_size);
+      chunkConfig.chunk_overlap = (uploadChunkConfig.chunk_overlap === '' || !uploadChunkConfig.chunk_overlap) 
+        ? 50 
+        : parseInt(uploadChunkConfig.chunk_overlap);
+    } else {
+      chunkConfig.separator = uploadChunkConfig.separator || '\n\n';
+      // 如果为空字符串或undefined/null，使用默认值；否则转换为数字
+      chunkConfig.chunk_size = (uploadChunkConfig.chunk_size === '' || !uploadChunkConfig.chunk_size) 
+        ? 1000 
+        : parseInt(uploadChunkConfig.chunk_size);
+      chunkConfig.chunk_overlap = (uploadChunkConfig.chunk_overlap === '' || !uploadChunkConfig.chunk_overlap) 
+        ? 50 
+        : parseInt(uploadChunkConfig.chunk_overlap);
+    }
+    
+    // 更新每个文件的 chunk_config
+    for (const file of uploadedFiles) {
+      try {
+        const updateRes = await tenantFetch(
+          `${API_PREFIX}/config/knowledgebases/${kbId}/files/${file.id}/chunk_config`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chunk_config: chunkConfig,
+            }),
+          },
+        );
+        
+        // 检查响应状态码
+        if (!updateRes.ok) {
+          const errorText = await updateRes.text();
+          throw new Error(`HTTP ${updateRes.status}: ${errorText.substring(0, 100)}`);
+        }
+        
+        // 检查响应内容类型
+        const contentType = updateRes.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await updateRes.text();
+          throw new Error(`响应不是 JSON 格式: ${text.substring(0, 100)}`);
+        }
+        
+        const updateResult = await updateRes.json();
+        if (updateResult.code !== 200) {
+          throw new Error(updateResult.message || `更新文件 ${file.file_name} 的 chunk_config 失败`);
+        }
+        console.log(`文件 ${file.file_name} 的 chunk_config 更新成功`);
+      } catch (error: any) {
+        console.error(`更新文件 ${file.file_name} 的 chunk_config 失败:`, error);
+        toast.error(`更新文件 ${file.file_name} 的切片配置失败: ${error.message || error}`);
+        // 继续处理其他文件，不中断流程
+      }
+    }
+  };
+
   const handleStartParse = async () => {
     if (uploadedFiles.length === 0) {
       toast.error("没有待解析的文件");
@@ -1069,6 +1244,11 @@ export default function KnowledgeBaseDetailPage(
 
     try {
       const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1";
+      
+      // 先更新每个文件的 chunk_config
+      await updateUploadedFilesChunkConfig();
+      
+      // 然后开始解析
       const res = await tenantFetch(
         `${API_PREFIX}/config/knowledgebases/${kbId}/files/parse`,
         {
@@ -1555,11 +1735,17 @@ export default function KnowledgeBaseDetailPage(
                   )}
                 </div>
                 <div className="flex gap-2 items-center">
-                <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
+                <Dialog open={uploadDialogOpen} onOpenChange={async (open) => {
                     // 只有在非上传/解析状态时才允许关闭
                     if (!open && (uploadStep === 'uploading' || uploadStep === 'parsing')) {
                       return;
                     }
+                    
+                    // 如果关闭对话框且文件已上传，先更新文件的 chunk_config
+                    if (!open && uploadStep === 'uploaded' && uploadedFiles.length > 0) {
+                      await updateUploadedFilesChunkConfig();
+                    }
+                    
                     setUploadDialogOpen(open);
                     if (!open) {
                       // 关闭时重置状态
@@ -1567,6 +1753,33 @@ export default function KnowledgeBaseDetailPage(
                       setUploadProgress(0);
                       setUploadedFiles([]);
                       setUploading(false);
+                      // 重置 chunk_config 为知识库的默认配置
+                      if (knowledgebase?.chunk_config) {
+                        const config: any = {
+                          parser_type: knowledgebase.chunk_config.parser_type || 'structure',
+                          image_caption_model: knowledgebase.chunk_config.image_caption_model,
+                          image_caption_provider_name: knowledgebase.chunk_config.image_caption_provider_name,
+                        };
+                        
+                        if (knowledgebase.chunk_config.parser_type === 'table') {
+                          config.table_config = knowledgebase.chunk_config.table_config || {
+                            concat_rows: false,
+                            row_joiner: '\n',
+                            header_index_max: 0,
+                            format_sheet_data_to_json: false,
+                          };
+                        } else if (knowledgebase.chunk_config.parser_type === 'paragraph') {
+                          config.separator = knowledgebase.chunk_config.separator || '\n\n';
+                          config.chunk_size = String(knowledgebase.chunk_config.chunk_size || 1000);
+                          config.chunk_overlap = String(knowledgebase.chunk_config.chunk_overlap || 50);
+                        } else {
+                          config.separator = knowledgebase.chunk_config.separator || '\n\n';
+                          config.chunk_size = String(knowledgebase.chunk_config.chunk_size || 1000);
+                          config.chunk_overlap = String(knowledgebase.chunk_config.chunk_overlap || 50);
+                        }
+                        
+                        setUploadChunkConfig(config);
+                      }
                     }
                   }}>
                     <DialogTrigger asChild>
@@ -1579,7 +1792,7 @@ export default function KnowledgeBaseDetailPage(
                         <Upload className="h-3 w-3" /> 上传文件
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>上传文件</DialogTitle>
                         <DialogDescription>
@@ -1592,20 +1805,22 @@ export default function KnowledgeBaseDetailPage(
                       
                       {/* 步骤1: 选择文件 */}
                       {uploadStep === 'idle' && (
-                        <div 
-                          className="flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors"
-                          onClick={() => {
-                            document.getElementById('file-upload')?.click();
-                          }}
-                        >
-                          <Upload className="h-12 w-12 text-muted-foreground mb-4" />
-                          <p className="text-sm text-muted-foreground text-center">
-                            支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            点击选择文件
-                          </p>
-                        </div>
+                        <>
+                          <div 
+                            className="flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors"
+                            onClick={() => {
+                              document.getElementById('file-upload')?.click();
+                            }}
+                          >
+                            <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                            <p className="text-sm text-muted-foreground text-center">
+                              支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              点击选择文件
+                            </p>
+                          </div>
+                        </>
                       )}
 
                       {/* 步骤2: 上传中 - 显示进度条 */}
@@ -1638,6 +1853,285 @@ export default function KnowledgeBaseDetailPage(
                               </div>
                             ))}
                           </div>
+                          
+                          {/* Chunk Config 配置 */}
+                          {uploadChunkConfig && (
+                            <div className="mb-4 border-t pt-4">
+                              <p className="text-sm font-medium mb-3">切片配置</p>
+                              <div className="space-y-3">
+                                <div className="flex gap-3 items-center">
+                                  <Label htmlFor="upload-parser-type" className="w-[80px] text-xs">
+                                    切片类型
+                                  </Label>
+                                  <Select
+                                    value={uploadChunkConfig.parser_type || 'structure'}
+                                    onValueChange={(value) => {
+                                      setUploadChunkConfig((prev) => {
+                                        if (!prev) return null;
+                                        const newConfig: any = {
+                                          ...prev,
+                                          parser_type: value,
+                                        };
+                                        
+                                        // 根据新的 parser_type 初始化相应的配置
+                                        if (value === 'table') {
+                                          newConfig.table_config = prev.table_config || {
+                                            concat_rows: false,
+                                            row_joiner: '\n',
+                                            header_index_max: 0,
+                                            format_sheet_data_to_json: false,
+                                          };
+                                          // 清除其他类型的配置
+                                          delete newConfig.chunk_size;
+                                          delete newConfig.chunk_overlap;
+                                          delete newConfig.separator;
+                                        } else if (value === 'paragraph') {
+                                          newConfig.separator = prev.separator || '\n\n';
+                                          newConfig.chunk_size = prev.chunk_size || '1000';
+                                          newConfig.chunk_overlap = prev.chunk_overlap || '50';
+                                          // 清除 table_config
+                                          delete newConfig.table_config;
+                                        } else {
+                                          newConfig.separator = prev.separator || '\n\n';
+                                          newConfig.chunk_size = prev.chunk_size || '1000';
+                                          newConfig.chunk_overlap = prev.chunk_overlap || '50';
+                                          // 清除 table_config
+                                          delete newConfig.table_config;
+                                        }
+                                        
+                                        return newConfig;
+                                      });
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[200px] h-7 text-xs">
+                                      <SelectValue placeholder="请选择切片类型" />
+                                    </SelectTrigger>
+                                    <SelectContent className="text-xs">
+                                      <SelectGroup>
+                                        <SelectItem value="structure" className="text-xs h-5">
+                                          结构化(structure)
+                                        </SelectItem>
+                                        <SelectItem value="token" className="text-xs h-5">
+                                          按token
+                                        </SelectItem>
+                                        <SelectItem value="table" className="text-xs h-5">
+                                          表格(table)
+                                        </SelectItem>
+                                        <SelectItem value="paragraph" className="text-xs h-5">
+                                          段落(paragraph)
+                                        </SelectItem>
+                                      </SelectGroup>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                {/* Table Config - 只在 parser_type === 'table' 时显示 */}
+                                {uploadChunkConfig.parser_type === 'table' && (
+                                  <div className="space-y-3">
+                                    {/* 第一行：最大表头行index 和 格式化为Json */}
+                                    <div className="flex gap-3 items-center">
+                                      <div className="flex gap-3 items-center flex-1">
+                                        <Label htmlFor="upload-header-index-max" className="w-[80px] text-xs">
+                                          最大表头行index
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          className="w-[200px] h-7 text-xs"
+                                          id="upload-header-index-max"
+                                          value={uploadChunkConfig.table_config?.header_index_max ?? 0}
+                                          onChange={(e) => {
+                                            setUploadChunkConfig((prev) => prev ? {
+                                              ...prev,
+                                              table_config: {
+                                                ...prev.table_config,
+                                                header_index_max: e.target.value ? parseInt(e.target.value) : 0,
+                                              },
+                                            } : null);
+                                          }}
+                                          min="0"
+                                        />
+                                      </div>
+                                      <div className="flex gap-3 items-center flex-1">
+                                        <Label htmlFor="upload-format-json" className="w-[80px] text-xs">
+                                          格式化为Json
+                                        </Label>
+                                        <Checkbox
+                                          id="upload-format-json"
+                                          checked={uploadChunkConfig.table_config?.format_sheet_data_to_json ?? false}
+                                          onCheckedChange={(checked) => {
+                                            setUploadChunkConfig((prev) => prev ? {
+                                              ...prev,
+                                              table_config: {
+                                                ...prev.table_config,
+                                                format_sheet_data_to_json: checked === true,
+                                              },
+                                            } : null);
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                    {/* 第二行：合并行 和 行分隔符 */}
+                                    <div className="flex gap-3 items-center">
+                                      <div className="flex gap-3 items-center flex-1">
+                                        <Label htmlFor="upload-concat-rows" className="w-[80px] text-xs">
+                                          合并行
+                                        </Label>
+                                        <Checkbox
+                                          id="upload-concat-rows"
+                                          checked={uploadChunkConfig.table_config?.concat_rows ?? false}
+                                          onCheckedChange={(checked) => {
+                                            setUploadChunkConfig((prev) => prev ? {
+                                              ...prev,
+                                              table_config: {
+                                                ...prev.table_config,
+                                                concat_rows: checked === true,
+                                              },
+                                            } : null);
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="flex gap-3 items-center flex-1">
+                                        <Label htmlFor="upload-row-joiner" className="w-[80px] text-xs">
+                                          行分隔符
+                                        </Label>
+                                        <Input
+                                          type="text"
+                                          className="w-[200px] h-7 text-xs"
+                                          id="upload-row-joiner"
+                                          value={uploadChunkConfig.table_config?.row_joiner || '\n'}
+                                          onChange={(e) => {
+                                            setUploadChunkConfig((prev) => prev ? {
+                                              ...prev,
+                                              table_config: {
+                                                ...prev.table_config,
+                                                row_joiner: e.target.value,
+                                              },
+                                            } : null);
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Paragraph Config - 只在 parser_type === 'paragraph' 时显示 */}
+                                {uploadChunkConfig.parser_type === 'paragraph' && (
+                                  <div className="space-y-3">
+                                    <div className="flex gap-3 items-center">
+                                      <Label htmlFor="upload-separator" className="w-[80px] text-xs">
+                                        分隔符
+                                      </Label>
+                                      <Input
+                                        type="text"
+                                        className="w-[200px] h-7 text-xs"
+                                        id="upload-separator"
+                                        value={uploadChunkConfig.separator || '\n\n'}
+                                        onChange={(e) => {
+                                          setUploadChunkConfig((prev) => prev ? {
+                                            ...prev,
+                                            separator: e.target.value,
+                                          } : null);
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex gap-3 items-center">
+                                      <Label htmlFor="upload-chunk-size" className="w-[80px] text-xs">
+                                        切片大小
+                                      </Label>
+                                      <Input
+                                        type="text"
+                                        inputMode="numeric"
+                                        className="w-[200px] h-7 text-xs"
+                                        id="upload-chunk-size"
+                                        value={uploadChunkConfig.chunk_size ?? ''}
+                                        placeholder="1000"
+                                        onChange={(e) => {
+                                          const value = e.target.value;
+                                          // 只允许数字和空字符串
+                                          if (value === '' || /^\d+$/.test(value)) {
+                                            setUploadChunkConfig((prev) => prev ? {
+                                              ...prev,
+                                              chunk_size: value,
+                                            } : null);
+                                          }
+                                        }}
+                                      />
+                                      <Label htmlFor="upload-chunk-overlap" className="w-[80px] text-xs ml-2">
+                                        切片重叠
+                                      </Label>
+                                      <Input
+                                        type="text"
+                                        inputMode="numeric"
+                                        className="w-[200px] h-7 text-xs"
+                                        id="upload-chunk-overlap"
+                                        value={uploadChunkConfig.chunk_overlap ?? ''}
+                                        placeholder="50"
+                                        onChange={(e) => {
+                                          const value = e.target.value;
+                                          // 只允许数字和空字符串
+                                          if (value === '' || /^\d+$/.test(value)) {
+                                            setUploadChunkConfig((prev) => prev ? {
+                                              ...prev,
+                                              chunk_overlap: value,
+                                            } : null);
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Default Config - 只在 parser_type 为 'structure' 或 'token' 时显示 */}
+                                {(uploadChunkConfig.parser_type === 'structure' || uploadChunkConfig.parser_type === 'token') && (
+                                  <div className="flex gap-3 items-center">
+                                    <Label htmlFor="upload-chunk-size" className="w-[80px] text-xs">
+                                      切片大小
+                                    </Label>
+                                    <Input
+                                      type="text"
+                                      inputMode="numeric"
+                                      className="w-[200px] h-7 text-xs"
+                                      id="upload-chunk-size"
+                                      value={uploadChunkConfig.chunk_size ?? ''}
+                                      placeholder="1000"
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        // 只允许数字和空字符串
+                                        if (value === '' || /^\d+$/.test(value)) {
+                                          setUploadChunkConfig((prev) => prev ? {
+                                            ...prev,
+                                            chunk_size: value,
+                                          } : null);
+                                        }
+                                      }}
+                                    />
+                                    <Label htmlFor="upload-chunk-overlap" className="w-[80px] text-xs ml-2">
+                                      切片重叠
+                                    </Label>
+                                    <Input
+                                      type="text"
+                                      inputMode="numeric"
+                                      className="w-[200px] h-7 text-xs"
+                                      id="upload-chunk-overlap"
+                                      value={uploadChunkConfig.chunk_overlap ?? ''}
+                                      placeholder="50"
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        // 只允许数字和空字符串
+                                        if (value === '' || /^\d+$/.test(value)) {
+                                          setUploadChunkConfig((prev) => prev ? {
+                                            ...prev,
+                                            chunk_overlap: value,
+                                          } : null);
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
                           <Button 
                             onClick={handleStartParse}
                             className="w-full"
@@ -1703,6 +2197,7 @@ export default function KnowledgeBaseDetailPage(
                           </TableHead>
                           <TableHead className="text-xs text-muted-foreground">文件大小</TableHead>
                           <TableHead className="text-xs text-muted-foreground">更新时间</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">切片类型</TableHead>
                           <TableHead>
                             <FileStatusFilter 
                               value={statusFilter as 'all' | 'succeeded' | 'failed' | 'pending' | 'parsing' | 'persisting'}
@@ -1747,6 +2242,28 @@ export default function KnowledgeBaseDetailPage(
                             </TableCell>
                             <TableCell className="text-xs p-1">
                               {formatBeijingTime(file.updated_at)}
+                            </TableCell>
+                            <TableCell className="text-xs p-1" onClick={(e) => e.stopPropagation()}>
+                              {file.chunk_config?.parser_type && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 cursor-pointer"
+                                  onClick={() => {
+                                    setViewingChunkConfig({
+                                      file_name: file.file_name,
+                                      chunk_config: file.chunk_config
+                                    });
+                                    setChunkConfigDialogOpen(true);
+                                  }}
+                                >
+                                  <span className="h-2 w-2 rounded-full bg-blue-500 mr-1.5 inline-block"></span>
+                                  {file.chunk_config.parser_type === 'structure' ? '结构化' :
+                                   file.chunk_config.parser_type === 'token' ? '按token' :
+                                   file.chunk_config.parser_type === 'table' ? '表格' :
+                                   file.chunk_config.parser_type === 'paragraph' ? '段落' :
+                                   file.chunk_config.parser_type}
+                                </Badge>
+                              )}
                             </TableCell>
                             <TableCell className="text-xs p-1">
                               {file.status === 'pending' ? (
@@ -3160,6 +3677,116 @@ export default function KnowledgeBaseDetailPage(
               }}
             >
               保存
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 切片配置查看对话框 */}
+      <Dialog open={chunkConfigDialogOpen} onOpenChange={(open) => {
+        setChunkConfigDialogOpen(open);
+        if (!open) {
+          setViewingChunkConfig(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">切片配置</DialogTitle>
+            <DialogDescription className="text-xs">
+              {viewingChunkConfig?.file_name}
+            </DialogDescription>
+          </DialogHeader>
+          {viewingChunkConfig?.chunk_config && (
+            <div className="space-y-4">
+              {/* 基本信息 */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">切片类型</Label>
+                <div className="text-xs text-muted-foreground">
+                  {viewingChunkConfig.chunk_config.parser_type === 'structure' ? '结构化' :
+                   viewingChunkConfig.chunk_config.parser_type === 'token' ? '按token' :
+                   viewingChunkConfig.chunk_config.parser_type === 'table' ? '表格' :
+                   viewingChunkConfig.chunk_config.parser_type === 'paragraph' ? '段落' :
+                   viewingChunkConfig.chunk_config.parser_type}
+                </div>
+              </div>
+
+              {/* 图片理解配置 */}
+              {(viewingChunkConfig.chunk_config.image_caption_model || viewingChunkConfig.chunk_config.image_caption_provider_name) && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">图片理解配置</Label>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {viewingChunkConfig.chunk_config.image_caption_model && (
+                      <div>模型: {viewingChunkConfig.chunk_config.image_caption_model}</div>
+                    )}
+                    {viewingChunkConfig.chunk_config.image_caption_provider_name && (
+                      <div>服务商: {viewingChunkConfig.chunk_config.image_caption_provider_name}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 表格配置 */}
+              {viewingChunkConfig.chunk_config.parser_type === 'table' && viewingChunkConfig.chunk_config.table_config && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">表格配置</Label>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <div>最大表头行索引: {viewingChunkConfig.chunk_config.table_config.header_index_max ?? '未设置'}</div>
+                    <div>格式化为JSON: {viewingChunkConfig.chunk_config.table_config.format_sheet_data_to_json ? '是' : '否'}</div>
+                    <div>合并行: {viewingChunkConfig.chunk_config.table_config.concat_rows ? '是' : '否'}</div>
+                    <div>行分隔符: {viewingChunkConfig.chunk_config.table_config.row_joiner ? `"${viewingChunkConfig.chunk_config.table_config.row_joiner}"` : '未设置'}</div>
+                    {viewingChunkConfig.chunk_config.table_config.sheet_column_filters && (
+                      <div>列过滤器: {Array.isArray(viewingChunkConfig.chunk_config.table_config.sheet_column_filters) 
+                        ? viewingChunkConfig.chunk_config.table_config.sheet_column_filters.join(', ')
+                        : viewingChunkConfig.chunk_config.table_config.sheet_column_filters}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 段落配置 */}
+              {viewingChunkConfig.chunk_config.parser_type === 'paragraph' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">段落配置</Label>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <div>分隔符: {viewingChunkConfig.chunk_config.separator ? `"${viewingChunkConfig.chunk_config.separator}"` : '未设置'}</div>
+                    <div>切片大小: {viewingChunkConfig.chunk_config.chunk_size ?? '未设置'}</div>
+                    <div>切片重叠: {viewingChunkConfig.chunk_config.chunk_overlap ?? '未设置'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* 其他类型配置（structure/token） */}
+              {(viewingChunkConfig.chunk_config.parser_type === 'structure' || viewingChunkConfig.chunk_config.parser_type === 'token') && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">切片配置</Label>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <div>分隔符: {viewingChunkConfig.chunk_config.separator ? `"${viewingChunkConfig.chunk_config.separator}"` : '未设置'}</div>
+                    <div>切片大小: {viewingChunkConfig.chunk_config.chunk_size ?? '未设置'}</div>
+                    <div>切片重叠: {viewingChunkConfig.chunk_config.chunk_overlap ?? '未设置'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* 原始 JSON（可选，用于调试） */}
+              <div className="space-y-2 border-t pt-2">
+                <Label className="text-xs font-semibold">完整配置（JSON）</Label>
+                <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">
+                  {JSON.stringify(viewingChunkConfig.chunk_config, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => {
+                setChunkConfigDialogOpen(false);
+                setViewingChunkConfig(null);
+              }}
+            >
+              关闭
             </Button>
           </div>
         </DialogContent>

@@ -7,8 +7,10 @@ from pairag.file.nodeparsers.sentence_parser import MySentenceSplitter
 from pairag.file.models.file_item import FileItem
 from pairag.file.readers.base import BaseReader
 from pairag.file.readers.csv2md_reader import Csv2MdReader
+from pairag.file.readers.csv_reader import CSVReader
 from pairag.file.readers.doc_reader import DocxReader
 from pairag.file.readers.excel2md_reader import Excel2MdReader
+from pairag.file.readers.excel_reader import ExcelReader
 from pairag.file.readers.html_reader import HtmlReader
 from pairag.file.readers.image_reader import ImageReader
 from pairag.file.readers.jsonl2md_reader import Json2MdReader
@@ -18,6 +20,7 @@ from pairag.file.readers.pptx_reader import PptxReader
 from pairag.file.readers.text_reader import TextReader
 from pairag.file.readers.simple_pdf_reader import SimplePdfReader
 from pairag.file.nodeparsers.token_parser import TokenTextSplitter
+from pairag.file.nodeparsers.paragraph_parser import ParagraphSplitter
 from pairag.file.nodeparsers.pai_markdown_parser import MarkdownNodeParser
 from pairag.file.nodeparsers.positional_markdown_parser import PositionalMarkdownNodeParser
 from pairag.file.store.base import BaseFileStore
@@ -26,7 +29,7 @@ from pairag.file.utils.tokenization import estimate_tokens_in_text
 from pairag.file.utils.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
-    DEFAULT_SENTENCE_SEPARATOR,
+    DEFAULT_PARAGRAPH_SEPARATOR,
     DEFAULT_PARSER_TYPE,
 )
 from pairag.file.utils.image_utils import MARKDOWN_IMAGE_PATTERN, markdown_image_text_to_chunk
@@ -57,11 +60,21 @@ DEFAULT_EXCLUDED_METADATA_KEYS = [
 
 
 
+class TableParserConfig(BaseModel):
+    """Configuration for table parser (CSV/Excel). Only used when parser_type == 'table'."""
+    concat_rows: Optional[bool] = Field(default=False, description="Whether to concatenate all rows into one document")
+    row_joiner: Optional[str] = Field(default="\n", description="Separator to use for joining each row")
+    header_index_max: Optional[int] = Field(default=0, description="Maximum row index to use as header")
+    format_sheet_data_to_json: Optional[bool] = Field(default=False, description="Whether to format sheet data as JSON")
+    sheet_column_filters: Optional[List[str]] = Field(default=None, description="List of column names to filter")
+
+
 class ChunkConfig(BaseModel):
     chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE)
     chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP)
     parser_type: str = Field(default=DEFAULT_PARSER_TYPE)
-    separator: str = Field(default=DEFAULT_SENTENCE_SEPARATOR)
+    separator: str = Field(default=DEFAULT_PARAGRAPH_SEPARATOR)
+    table_config: Optional[TableParserConfig] = Field(default=None, description="Table parser configuration (only used when parser_type == 'table')")
 
 
 class ReaderConfig(BaseModel):
@@ -92,7 +105,12 @@ class FileParser:
             self,
             file_extension: str,
             is_attachment: bool=False,
-            chunk_size: int=DEFAULT_CHUNK_SIZE) -> BaseReader:
+            chunk_config: Optional[ChunkConfig] = None) -> BaseReader:
+        chunk_size = chunk_config.chunk_size if chunk_config else DEFAULT_CHUNK_SIZE
+        parser_type = chunk_config.parser_type if chunk_config else DEFAULT_PARSER_TYPE
+        
+        table_config = chunk_config.table_config if chunk_config and chunk_config.table_config else None
+        
         if is_attachment:
             match file_extension:
                 case ".docx":
@@ -186,10 +204,34 @@ class FileParser:
                         image_caption_tool=self.image_caption_tool,
                     )
                 case ".xlsx":
+                    if parser_type.lower() == "table":
+                        return ExcelReader(
+                            concat_rows=table_config.concat_rows,
+                            row_joiner=table_config.row_joiner,
+                            header_max=table_config.header_index_max,
+                            format_sheet_data_to_json=table_config.format_sheet_data_to_json,
+                            sheet_column_filters=table_config.sheet_column_filters,
+                        )
                     return Excel2MdReader(chunk_size=chunk_size)
                 case ".xls":
+                    if parser_type.lower() == "table":
+                        return ExcelReader(
+                            concat_rows=table_config.concat_rows,
+                            row_joiner=table_config.row_joiner,
+                            header_max=table_config.header_index_max,
+                            format_sheet_data_to_json=table_config.format_sheet_data_to_json,
+                            sheet_column_filters=table_config.sheet_column_filters,
+                        )
                     return Excel2MdReader(chunk_size=chunk_size)
                 case ".csv":
+                    if parser_type.lower() == "table":
+                        return CSVReader(
+                            concat_rows=table_config.concat_rows,
+                            row_joiner=table_config.row_joiner,
+                            header_max=table_config.header_index_max,
+                            format_sheet_data_to_json=table_config.format_sheet_data_to_json,
+                            sheet_column_filters=table_config.sheet_column_filters,
+                        )
                     return Csv2MdReader(chunk_size=chunk_size)
                 case ".jsonl":
                     return Json2MdReader(chunk_size=chunk_size)
@@ -208,7 +250,7 @@ class FileParser:
         reader = self._get_reader(
             file_item.file_extension,
             is_attachment=is_attachment,
-            chunk_size=chunk_config.chunk_size if chunk_config else DEFAULT_CHUNK_SIZE)
+            chunk_config=chunk_config)
         return reader.read(file_item)
 
     def split_docs(
@@ -244,6 +286,14 @@ class FileParser:
                 parser = TokenTextSplitter(
                     chunk_size=chunk_config.chunk_size,
                     chunk_overlap=chunk_config.chunk_overlap,
+                    id_func=node_id_func,
+                )
+                chunks = parser.get_nodes_from_documents([doc_node])
+            elif chunk_config.parser_type.lower() == "paragraph":
+                parser = ParagraphSplitter(
+                    chunk_size=chunk_config.chunk_size,
+                    chunk_overlap=chunk_config.chunk_overlap,
+                    paragraph_separator=chunk_config.separator,
                     id_func=node_id_func,
                 )
                 chunks = parser.get_nodes_from_documents([doc_node])
