@@ -195,6 +195,10 @@ class MetadataService:
                 raise ValueError(
                     f"元数据名称 '{metadata_create.name}' 在知识库中已存在。"
                 ) from e
+            elif "Duplicate entry" in str(e.orig):
+                raise ValueError(
+                    f"元数据名称 '{metadata_create.name}' 在知识库中已存在。"
+                ) from e
             else:
                 raise ValueError(f"元数据创建失败: {e}") from e
 
@@ -226,21 +230,35 @@ class MetadataService:
         if not metadata_entity:
             raise ValueError(f"元数据 '{metadata_id}' 不存在。")
 
-        # Update metadata_entity
-        metadata_entity.name = update_data.name
-        metadata_entity.value_type = update_data.value_type
-        metadata_entity.description = update_data.description
-        metadata_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        self.session.add(metadata_entity)
+        try:
+            # Update metadata_entity
+            metadata_entity.name = update_data.name
+            metadata_entity.value_type = update_data.value_type
+            metadata_entity.description = update_data.description
+            metadata_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            self.session.add(metadata_entity)
 
-        # Flush to ensure changes are staged
-        await self.session.flush()
-        await self.session.refresh(metadata_entity)
+            # Flush to ensure changes are staged
+            await self.session.flush()
+            await self.session.refresh(metadata_entity)
 
-        logger.info(
-            f"Updated Metadata entity: {metadata_entity.id} (name: {metadata_entity.name})"
-        )
-        return metadata_entity
+            logger.info(
+                f"Updated Metadata entity: {metadata_entity.id} (name: {metadata_entity.name})"
+            )
+            return metadata_entity
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when updating Metadata: {e.orig}")
+
+            if "UniqueViolationError" in str(e.orig):
+                raise ValueError(
+                    f"元数据名称 '{update_data.name}' 在知识库中已存在。"
+                ) from e
+            elif "Duplicate entry" in str(e.orig):
+                raise ValueError(
+                    f"元数据名称 '{update_data.name}' 在知识库中已存在。"
+                ) from e
+            else:
+                raise ValueError(f"元数据更新失败: {e}") from e
 
     async def delete_metadata(self, kb_id: str, metadata_id: str, tenant_id: str) -> None:
         """

@@ -37,7 +37,7 @@ from common.tool.search_result import SearchResult
 from tools.utils.vectordb_retrieval import aquery_vector_store
 from utils.lru_cache import LruCache
 from db.db_context import create_db_session
-from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K, DEFAULT_SIMILARITY_THRESHOLD
+from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K
 from loguru import logger
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
@@ -1009,9 +1009,9 @@ class RagService:
                 tenant_id=tenant_id,
             )
             if not reranker_config:
-                raise ValueError(f"Reranker model not found for knowledgebase {kb_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
+                raise ValueError(f"Reranker model not found: provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
             reranker = create_reranker_model(reranker_config)
-            logger.info(f"Created reranker model {reranker_config.model_name} for knowledgebase {kb_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
+            logger.info(f"Created reranker model {reranker_config.model_name} with provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
 
         try:
             reranked_result = await arerank_fusion(
@@ -1031,7 +1031,7 @@ class RagService:
         file_ids = []
 
         seen_file_urls = {}
-        similarity_threshold = retrieval_setting.similarity_threshold or DEFAULT_SIMILARITY_THRESHOLD
+        similarity_threshold = retrieval_setting.similarity_threshold or 0 # 如果没有设置similarity_threshold，直接返回所有结果
         for i, node in enumerate(reranked_result.nodes):
             if reranked_result.similarities[i] >= similarity_threshold:
                 images = []

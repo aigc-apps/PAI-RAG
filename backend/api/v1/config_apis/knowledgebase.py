@@ -15,7 +15,6 @@ from db.models.knowledgebase.knowledgebase import (
     KnowledgebaseCreate,
 )
 from db.db_context import get_db_session
-from sqlalchemy.exc import IntegrityError
 from pairag.file.store.file_store_helper import file_store
 from common.chat.response_model import ResponseModel, success_response
 from api.api_exception import ApiException
@@ -45,16 +44,9 @@ async def create_knowledgebase(
     except ValueError as e:
         logger.error(f"创建知识库失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
-    except IntegrityError as e:
-        logger.error(f"创建知识库失败。\nIntegrityError:{e}")
-        if "UniqueViolationError" in str(e.orig):
-            raise ApiException(code=400, message="创建知识库失败: 知识库名称已存在。")
-        else:
-            raise ApiException(code=400, message=f"创建知识库失败: {e}.")
     except Exception as e:
         logger.exception(f"创建知识库失败。\nException:{traceback.format_exc()}")
         raise ApiException(code=400, message=f"创建知识库失败: {e}.")
-
 
 @knowledgebase_router.get("")
 async def list_knowledgebases(

@@ -2,14 +2,14 @@ from typing import BinaryIO
 
 from loguru import logger
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
-import chardet
+import charset_normalizer
 
 
 class CsvReader(BaseReader):
     def _read_file(self, file: BinaryIO):
         import pandas as pd
 
-        encoding = chardet.detect(file.read(1000))["encoding"]
+        encoding = charset_normalizer.detect(file.read(1000))["encoding"]
         file.seek(0)
         encoding = "utf-8"
         if encoding is not None and "GB" in encoding.upper():
