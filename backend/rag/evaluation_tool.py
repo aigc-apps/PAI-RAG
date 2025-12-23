@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 from loguru import logger
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -290,15 +291,18 @@ class PaiEvaluationClient:
                     }
                 ]
             except Exception as ex:
+                error_traceback = traceback.format_exc()
                 logger.error(f"Get gaia attachment file failed: {ex}")
+                logger.error(f"[WORKER] error traceback:\n{error_traceback}")
                 await update_experiment_run_result(
                     exp_run_id=exp_run_id,
-                    actual_output="",
+                    actual_output=f"Error: Failed to upload attachment file: {ex}",
                     trace_id=trace_id,
                     status="failed",
                     score=0.0,
                     tenant_id=tenant_id
                 )
+                return  # Exit early if attachment upload fails
 
         chat_request = ChatAgentRequest(
             model=run_config_entity.model_id,
@@ -326,8 +330,11 @@ class PaiEvaluationClient:
                                             output=output,
                                             tenant_id=tenant_id)
         except Exception as e:
-            output = f"Error: {e}"
-            logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {e}")
+            error_msg = str(e) if e else "Unknown error"
+            error_traceback = traceback.format_exc()
+            output = f"Error: {error_msg}"
+            logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {error_msg}")
+            logger.error(f"[WORKER] error traceback:\n{error_traceback}")
             await update_experiment_run_result(
                 exp_run_id=exp_run_id,
                 actual_output=output,

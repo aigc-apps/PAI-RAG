@@ -47,6 +47,7 @@ async def create_attachment_file(
         file_version = int(time.time())
 
         if not knowledgebase:
+            logger.info(f"Creating default_attachments knowledgebase for tenant {tenant_id}")
             kb_create = KnowledgebaseCreate(
                 name=ATTACHMENT_KNOWLEDGEBASE_NAME,
                 description="附件知识库",
@@ -54,6 +55,10 @@ async def create_attachment_file(
             )
             knowledgebase = await knowledgebase_service.create_knowledgebase(kb_data=kb_create, tenant_id=tenant_id)
             await session.commit() # commit for background worker to use the knowledgebase id
+            await session.refresh(knowledgebase)  # refresh to ensure knowledgebase is persisted
+            logger.info(f"Created default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+        else:
+            logger.info(f"Found existing default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
 
         import app.worker as background_worker
 

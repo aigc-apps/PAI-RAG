@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
     from extensions.trace.base import init_instrument, TraceConfig
     from common.system_constants import DEFAULT_TENANT_ID
     from service.model.embedding_service import EmbeddingService
+    from service.tool.evaluation_service import EvaluationService
     from rag.vector_store.local_chroma_service import LocalChromaService
     from db.sqlite_store import sync_sqlite_store_task, stop_event, sync_sqlite_store
     import api.v1.mcp_server_middleware as mcp_middleware
@@ -41,7 +42,9 @@ async def lifespan(app: FastAPI):
     session = await anext(session_getter)
     try:
         embedding_service = EmbeddingService(session)
+        evaluation_service = EvaluationService(session)
         _ = await embedding_service.get_default_embedding(tenant_id=DEFAULT_TENANT_ID)
+        _ = await evaluation_service.get_default_eval_dataset(tenant_id=DEFAULT_TENANT_ID)
         trace_service = TraceService(session)
         trace_config = await trace_service.get_trace_config(tenant_id=DEFAULT_TENANT_ID)
         if trace_config:

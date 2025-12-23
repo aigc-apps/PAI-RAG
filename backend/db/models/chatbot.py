@@ -14,7 +14,7 @@ class ChatBotCreate(SQLModel):
     model_id: str = Field(default=None)
     mcp_ids: List[str] = Field(default=[])
     kb_ids: List[str] = Field(default=[])
-    enable_search: bool = Field(default=True)
+    enable_search: bool = Field(default=False)
     enable_chatdb: Optional[bool] = Field(default=False)
     enable_vision: bool = Field(default=True)
     enable_agent: bool = Field(default=False)
