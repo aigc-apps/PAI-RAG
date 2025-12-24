@@ -32,7 +32,8 @@ async def aget_file_retrieve_results(
             "content": node.content if hasattr(node, "content") else "",
             "score": node.score if hasattr(node, "score") else 0,
         })
-    data = {"query_str": query_str, "content": search_results}
+    content_dict = [result.model_dump() for result in search_results]
+    data = {"query_str": query_str, "content": content_dict}
     return json.dumps(data, ensure_ascii=False)
 
 

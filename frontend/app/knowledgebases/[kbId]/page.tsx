@@ -345,8 +345,8 @@ export default function KnowledgeBaseDetailPage(
         return;
       }
 
-      // 成功情况
-      setSearchRecords(search_json.records || []);
+      const records = search_json.records || search_json.data?.records || [];
+      setSearchRecords(records);
       setSearchError(null);
     } catch (err: any) {
       const errorMessage = err.message || '搜索知识库失败';

@@ -81,15 +81,17 @@ async def asearch_knowledgebase(
 
             # Build the node in the required format
             # Include all metadata fields but structure the required ones at the top level
+            # score_node is a SearchResult object, use attribute access instead of .get()
+            images = score_node.images or []
             node = NodeResult(
-                score=score_node.get("score", 0),
+                score=score_node.score,
                 metadata=NodeMetadata(
-                    file_path=file_path,
-                    image_url=[img.get("url", "") for img in score_node.get("images", []) if img.get("url", "")],
-                    title=title,
-                    doc_name=doc_name,
+                    file_path=file_path or "",
+                    image_url=[img.get("url", "") for img in images if isinstance(img, dict) and img.get("url", "")],
+                    title=title or "",
+                    doc_name=doc_name or "",
                 ),
-                text=score_node.get("content", ""),
+                text=score_node.content,
             )
             nodes.append(node)
 

@@ -113,7 +113,7 @@ class Planner(BaseAgent):
                     logger.info(f"Single tool execution detected, tool: {tool_name}.")
 
                     if not tool_name or tool_name not in self.tool_fn_map:
-                        logger.warning(f"Unknown tool_call: {tool_name}, ignore it.")
+                        logger.warning(f"Unknown tool_call: {tool_name}, not in {list(self.tool_fn_map.keys())}, ignore it.")
                     else:
                         state.current_tool_call = selected_tool
 

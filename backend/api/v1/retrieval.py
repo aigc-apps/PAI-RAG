@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
-from common.chat.response_model import ResponseModel, to_dict
+from common.chat.response_model import ResponseModel, success_response
 from api.api_exception import ApiException
 from db.db_context import get_db_session
 from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
@@ -46,7 +45,8 @@ async def retrieval(
                 title=node.title,
                 metadata=node.metadata,
             ))
-        return JSONResponse(status_code=200, content={"records": to_dict(records)})
+        retrieval_response = NewRetrievalResponse(records=records)
+        return success_response(data=retrieval_response, message="检索成功")
     except ValueError as e:
         logger.error(f"Failed to retrieve: {traceback.format_exc()}")
         raise ApiException(code=400, message=f"Failed to retrieve: {e}")
