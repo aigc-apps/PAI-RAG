@@ -73,11 +73,11 @@ async def asearch_knowledgebase(
         nodes = []
         for score_node in node_results:
             # Extract title - prefer title, then file_name
-            title = score_node.title if hasattr(score_node, "title") else ""
+            title = score_node.title
             # Extract doc_name - prefer doc_name, then file_name
-            doc_name = score_node.title if hasattr(score_node, "title") else ""
+            doc_name = score_node.title
             # Extract file_path
-            file_path = score_node.url if hasattr(score_node, "url") else ""
+            file_path = score_node.url
 
             # Build the node in the required format
             # Include all metadata fields but structure the required ones at the top level
