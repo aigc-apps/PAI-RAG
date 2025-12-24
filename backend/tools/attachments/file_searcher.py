@@ -6,7 +6,6 @@ from loguru import logger
 from common.chat.models import RetrievalSetting
 from service.knowledgebase.rag_service import RagService
 from common.knowledgebase.constants import ATTACHMENT_KNOWLEDGEBASE_NAME
-from common.tool.search_result import SearchResult
 
 
 async def aget_file_retrieve_results(
@@ -19,7 +18,7 @@ async def aget_file_retrieve_results(
     if not doc_ids:
         return []
 
-    search_results: List[SearchResult] = await rag_service.aquery(
+    search_results = await rag_service.aquery(
         query=query_str,
         kb_name=ATTACHMENT_KNOWLEDGEBASE_NAME,
         retrieval_setting=RetrievalSetting(top_k=5, score_threshold=0.1),
@@ -28,11 +27,19 @@ async def aget_file_retrieve_results(
     )
     records = []
     for node in search_results:
-        records.append({
-            "title": node.title,
-            "content": node.content,
-            "score": node.score,
-        })
+        # Handle both dict and SearchResult object types
+        if isinstance(node, dict):
+            records.append({
+                "title": node.get("title", ""),
+                "content": node.get("content", ""),
+                "score": node.get("score", 0),
+            })
+        else:
+            records.append({
+                "title": node.title if hasattr(node, "title") else "",
+                "content": node.content if hasattr(node, "content") else "",
+                "score": node.score if hasattr(node, "score") else 0,
+            })
     data = {"query_str": query_str, "content": search_results}
     return json.dumps(data, ensure_ascii=False)
 

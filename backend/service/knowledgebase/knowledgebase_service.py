@@ -71,19 +71,7 @@ class KnowledgebaseService:
         if kb_data:
             logger.info(f"Get knowledgebase entity from cache: {name}")
             kb_entity = KbEntity.model_validate(kb_data)
-            # Verify the knowledgebase still exists in database
-            # This prevents issues when cache has stale data after deletion
-            verify_statement = select(KbEntity).where(KbEntity.id == kb_entity.id, KbEntity.tenant_id == tenant_id)
-            verify_result = await self.session.exec(verify_statement)
-            if verify_result.first():
-                return kb_entity
-            else:
-                # Cache has stale data, delete it and continue to query database
-                logger.warning(f"Cache has stale data for knowledgebase {name}, deleting cache entry")
-                await cache_manager.get_cache().delete(cache_key)
-                # Also delete ID-based cache if it exists
-                cache_id_key = kb_key(tenant_id, kb_entity.id)
-                await cache_manager.get_cache().delete(cache_id_key)
+            return kb_entity
 
         statement = select(KbEntity).where(KbEntity.name == name, KbEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)

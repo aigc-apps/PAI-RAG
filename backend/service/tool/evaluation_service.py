@@ -88,9 +88,8 @@ class EvaluationService:
 
                 GAIA_DATASET_PATH = "./resources/dataset/gaia/gaia_level_1_27.jsonl"
                 try:
-                    # Lazy import to avoid circular import
-                    from rag.evaluation_tool import eval_client
-                    file_results = eval_client.load_dataset_from_local_path(file_path=GAIA_DATASET_PATH)
+                    from utils.upload_file_utils import load_eval_dataset_from_local_path
+                    file_results = load_eval_dataset_from_local_path(file_path=GAIA_DATASET_PATH)
 
                     # Prepare samples for batch creation
                     samples = []
