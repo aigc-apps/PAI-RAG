@@ -36,16 +36,25 @@ async def create_knowledgebase(
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
+    knowledgebase = None
     try:
         knowledgebase = await rag_service.create_knowledgebase(kb_data=kb_data, tenant_id=tenant_id)
-
+        await session.commit()
+        await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
         return success_response(data=knowledgebase, message="知识库创建成功。")
     except ValueError as e:
         logger.error(f"创建知识库失败。\nValueError:{e}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_data.name)
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.exception(f"创建知识库失败。\nException:{traceback.format_exc()}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_data.name)
         raise ApiException(code=400, message=f"创建知识库失败: {e}.")
 
 @knowledgebase_router.get("")
@@ -104,16 +113,34 @@ async def update_knowledgebase(
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
+    knowledgebase = None
+    old_kb_name = None
     try:
-        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, update_data=update_data, tenant_id=tenant_id)
+        old_kb = await knowledgebase_service.get_knowledgebase(kb_id, tenant_id)
+        if old_kb:
+            old_kb_name = old_kb.name
 
+        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, update_data=update_data, tenant_id=tenant_id)
+        await session.commit()
+        await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
         return success_response(data=knowledgebase, message="知识库更新成功。")
     except ValueError as e:
         logger.error(f"更新知识库失败。\nValueError:{e}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, knowledgebase.name)
+        elif old_kb_name:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, old_kb_name)
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"更新知识库失败。\nException:{traceback.format_exc()}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, knowledgebase.name)
+        elif old_kb_name:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, old_kb_name)
         raise ApiException(code=400, message=f"更新知识库失败: {e}.")
 
 

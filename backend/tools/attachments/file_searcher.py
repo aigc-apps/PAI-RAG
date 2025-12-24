@@ -27,19 +27,11 @@ async def aget_file_retrieve_results(
     )
     records = []
     for node in search_results:
-        # Handle both dict and SearchResult object types
-        if isinstance(node, dict):
-            records.append({
-                "title": node.get("title", ""),
-                "content": node.get("content", ""),
-                "score": node.get("score", 0),
-            })
-        else:
-            records.append({
-                "title": node.title if hasattr(node, "title") else "",
-                "content": node.content if hasattr(node, "content") else "",
-                "score": node.score if hasattr(node, "score") else 0,
-            })
+        records.append({
+            "title": node.title if hasattr(node, "title") else "",
+            "content": node.content if hasattr(node, "content") else "",
+            "score": node.score if hasattr(node, "score") else 0,
+        })
     data = {"query_str": query_str, "content": search_results}
     return json.dumps(data, ensure_ascii=False)
 
