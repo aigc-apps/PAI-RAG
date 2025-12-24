@@ -118,6 +118,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
 
   // 数据状态
   const [expItems, setExpItems] = useState<ExperimentSampleDetails[]>([]);
+  const [allExpItemsForStats, setAllExpItemsForStats] = useState<ExperimentSampleDetails[]>([]); // 用于统计的所有数据
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
 
@@ -158,6 +159,55 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   // ========================
   // 数据获取与轮询
   // ========================
+
+  // 获取所有实验样本数据（用于统计，不分页，不筛选状态）
+  const fetchAllExperimentSamplesForStats = useCallback(async () => {
+    try {
+      // 使用最大size值获取所有数据用于统计
+      const params = new URLSearchParams({
+        page: '1',
+        size: '1000', // 后端限制最大1000，如果超过需要分页获取
+      });
+
+      const response = await tenantFetch(
+        `/api/config/evaluation/${datasetId}/experiments/${expId}/samples?${params.toString()}`
+      );
+      
+      if (!response.ok) throw new Error('获取评估实验样本失败');
+      const data = await response.json();
+      
+      // 如果总数超过1000，需要分页获取所有数据
+      if (data.data.total > 1000) {
+        const allItems: ExperimentSampleDetails[] = [];
+        const totalPages = Math.ceil(data.data.total / 1000);
+        
+        // 获取第一页数据
+        allItems.push(...data.data.items);
+        
+        // 获取剩余页数据
+        for (let p = 2; p <= totalPages; p++) {
+          const pageParams = new URLSearchParams({
+            page: p.toString(),
+            size: '1000',
+          });
+          const pageResponse = await tenantFetch(
+            `/api/config/evaluation/${datasetId}/experiments/${expId}/samples?${pageParams.toString()}`
+          );
+          if (pageResponse.ok) {
+            const pageData = await pageResponse.json();
+            allItems.push(...pageData.data.items);
+          }
+        }
+        
+        setAllExpItemsForStats(allItems);
+      } else {
+        setAllExpItemsForStats(data.data.items);
+      }
+    } catch (err: any) {
+      console.error("fetchAllExperimentSamplesForStats 错误:", err);
+      // 统计失败不影响主流程，只记录错误
+    }
+  }, [datasetId, expId, tenantFetch]);
 
   // 获取实验样本数据（支持筛选和分页）
   const fetchExperimentSamples = useCallback(async () => {
@@ -261,8 +311,8 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
     let pollTimeout: NodeJS.Timeout | null = null;
 
     const startPolling = () => {
-      // 检查是否有未完成项
-      const hasUnfinished = expItems.some(
+      // 检查是否有未完成项（使用全量数据检查）
+      const hasUnfinished = allExpItemsForStats.some(
         item => item.status !== 'success' && item.status !== 'failed'
       );
 
@@ -271,6 +321,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         pollTimeout = setTimeout(() => {
           fetchExperimentSamples();
           fetchExperimentDetails();
+          fetchAllExperimentSamplesForStats(); // 同时更新统计数据
         }, 3000);
       } else {
         console.log('✅ 所有实验已完成，停止轮询。');
@@ -287,7 +338,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         console.log('🧹 轮询定时器已清理');
       }
     };
-  }, [expItems, experiment?.status, fetchExperimentSamples, fetchExperimentDetails]);
+  }, [allExpItemsForStats, experiment?.status, fetchExperimentSamples, fetchExperimentDetails, fetchAllExperimentSamplesForStats]);
 
   // 首次加载元数据
   useEffect(() => {
@@ -298,6 +349,11 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   useEffect(() => {
     fetchExperimentSamples();
   }, [fetchExperimentSamples]);
+
+  // 加载所有样本数据用于统计（仅在实验ID变化时加载）
+  useEffect(() => {
+    fetchAllExperimentSamplesForStats();
+  }, [fetchAllExperimentSamplesForStats]);
 
   // ========================
   // 交互函数
@@ -389,7 +445,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                 </h3>
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={getScoreDistributionData(expItems)} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                    <BarChart data={getScoreDistributionData(allExpItemsForStats)} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" />
                       <XAxis dataKey="range" tick={{ fontSize: 14 }} height={25} />
                       <YAxis tick={{ fontSize: 14 }} width={40} />
@@ -410,7 +466,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={getStatusDistributionData(expItems)}
+                        data={getStatusDistributionData(allExpItemsForStats)}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
@@ -420,7 +476,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         fill="#8884d8"
                         dataKey="value"
                       >
-                        {getStatusDistributionData(expItems).map((entry, index) => (
+                        {getStatusDistributionData(allExpItemsForStats).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name as StatusKey] || "#8884d8"} />
                         ))}
                       </Pie>
@@ -432,7 +488,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
               </div>
 
               {/* 执行耗时 */}
-              {hasTimingData(expItems) && (
+              {hasTimingData(allExpItemsForStats) && (
                 <div className="flex flex-col bg-card rounded-lg border p-3 hover:shadow-sm transition-shadow h-[220px]">
                   <h3 className="font-semibold mb-2 flex items-center gap-1.5 text-sm">
                     <Clock className="h-3.5 w-3.5" /> 执行耗时
@@ -448,7 +504,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-blue-600 dark:text-blue-400 tabular-nums">
-                            {getAverageTime(expItems)}
+                            {getAverageTime(allExpItemsForStats)}
                           </span>
                           <span className="text-xs text-blue-500 dark:text-blue-500">s</span>
                         </div>
@@ -462,7 +518,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-green-600 dark:text-green-400 tabular-nums">
-                            {getMinTime(expItems)}
+                            {getMinTime(allExpItemsForStats)}
                           </span>
                           <span className="text-xs text-green-500 dark:text-green-500">s</span>
                         </div>
@@ -476,7 +532,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-red-600 dark:text-red-400 tabular-nums">
-                            {getMaxTime(expItems)}
+                            {getMaxTime(allExpItemsForStats)}
                           </span>
                           <span className="text-xs text-red-500 dark:text-red-500">s</span>
                         </div>
@@ -505,7 +561,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                 <div className="flex items-center gap-1">
                   <span className="text-gray-500 font-medium">平均得分:</span>
                   <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs py-0.5 px-2">
-                    {getAverageScore(expItems)}
+                    {getAverageScore(allExpItemsForStats)}
                   </Badge>
                 </div>
               </div>
