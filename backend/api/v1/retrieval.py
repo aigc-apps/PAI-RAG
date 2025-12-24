@@ -41,10 +41,10 @@ async def retrieval(
         records = []
         for node in search_results:
             records.append(DocRecord(
-                content=node.get("content", ""),
-                score=node.get("score", 0),
-                title=node.get("title", ""),
-                metadata=node.get("metadata", {}),
+                content=node.content,
+                score=node.score,
+                title=node.title,
+                metadata=node.metadata,
             ))
         return JSONResponse(status_code=200, content={"records": to_dict(records)})
     except ValueError as e:
