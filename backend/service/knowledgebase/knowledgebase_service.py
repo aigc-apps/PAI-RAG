@@ -290,7 +290,8 @@ class KnowledgebaseService:
             await self.session.flush()
             await self.session.refresh(knowledgebase)
 
-            await cache_manager.get_cache().set(cache_key, knowledgebase.model_dump(mode="json"))
+            # Note: Cache will be written after transaction commit in API layer
+            # to ensure cache consistency with database
 
             logger.info(
                 f"Updated Knowledgebase entity: {knowledgebase.id} (name: {knowledgebase.name})"
@@ -320,12 +321,16 @@ class KnowledgebaseService:
         Raises:
             ValueError: If Knowledgebase entity not found
         """
-        cache_key = kb_key(tenant_id, kb_id)
-        await cache_manager.get_cache().delete(cache_key)
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
         if not knowledgebase:
             raise ValueError(f"知识库 '{kb_id}' 不存在。")
+
+        # Delete both ID-based and name-based cache entries
+        cache_key = kb_key(tenant_id, kb_id)
+        cache_name_key = kb_name_key(tenant_id, knowledgebase.name)
+        await cache_manager.get_cache().delete(cache_key)
+        await cache_manager.get_cache().delete(cache_name_key)
 
         # Delete knowledgebase entity only
         await self.session.delete(knowledgebase)
@@ -345,3 +350,35 @@ class KnowledgebaseService:
         statement = select(KbEntity).where(KbEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
+
+    async def write_cache_after_commit(self, kb_entity: KbEntity, tenant_id: str) -> None:
+        """
+        Write cache after database transaction commit.
+        This ensures cache consistency with database.
+
+        Args:
+            kb_entity: Knowledgebase entity to cache
+            tenant_id: Tenant ID
+        """
+        cache_key = kb_key(tenant_id, kb_entity.id)
+        cache_name_key = kb_name_key(tenant_id, kb_entity.name)
+        await cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json"))
+        await cache_manager.get_cache().set(cache_name_key, kb_entity.model_dump(mode="json"))
+        logger.info(f"Written cache for knowledgebase {kb_entity.id} (name: {kb_entity.name}) after commit")
+
+    async def delete_cache_on_rollback(self, kb_id: str, tenant_id: str, kb_name: Optional[str] = None) -> None:
+        """
+        Delete cache entries when database transaction rolls back.
+        This ensures cache consistency with database.
+
+        Args:
+            kb_id: Knowledgebase ID
+            tenant_id: Tenant ID
+            kb_name: Optional knowledgebase name (if known)
+        """
+        cache_key = kb_key(tenant_id, kb_id)
+        await cache_manager.get_cache().delete(cache_key)
+        if kb_name:
+            cache_name_key = kb_name_key(tenant_id, kb_name)
+            await cache_manager.get_cache().delete(cache_name_key)
+        logger.info(f"Deleted cache for knowledgebase {kb_id} on rollback")

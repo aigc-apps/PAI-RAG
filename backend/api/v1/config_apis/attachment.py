@@ -7,6 +7,7 @@ from db.models.knowledgebase.knowledgebase import (
     KnowledgebaseCreate,
 )
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from db.db_context import get_db_session
 from rag.file_item_utils import to_file_entity
 from common.chat.response_model import success_response
@@ -41,19 +42,43 @@ async def create_attachment_file(
     rag_service: RagService = Depends(get_rag_service),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    knowledgebase = None
     try:
         knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(ATTACHMENT_KNOWLEDGEBASE_NAME, tenant_id=tenant_id)
         default_embedding_config = await embedding_service.get_default_embedding(tenant_id=tenant_id)
         file_version = int(time.time())
 
         if not knowledgebase:
+            logger.info(f"Creating default_attachments knowledgebase for tenant {tenant_id}")
             kb_create = KnowledgebaseCreate(
                 name=ATTACHMENT_KNOWLEDGEBASE_NAME,
                 description="附件知识库",
                 embedding_model=default_embedding_config.model_id,
             )
             knowledgebase = await knowledgebase_service.create_knowledgebase(kb_data=kb_create, tenant_id=tenant_id)
-            await session.commit() # commit for background worker to use the knowledgebase id
+            try:
+                await session.commit() # commit for background worker to use the knowledgebase id
+                await session.refresh(knowledgebase)  # refresh to ensure knowledgebase is persisted
+                # Write cache after successful commit to ensure consistency
+                await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
+                logger.info(f"Created default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+            except IntegrityError:
+                # Handle race condition: another request may have created the knowledgebase concurrently
+                await session.rollback()
+                if knowledgebase:
+                    await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_create.name)
+
+                knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(ATTACHMENT_KNOWLEDGEBASE_NAME, tenant_id=tenant_id)
+                if not knowledgebase:
+                    raise ApiException(code=500, message="无法创建或获取附件知识库: 并发创建冲突")
+                logger.info(f"Retrieved existing default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+            except Exception:
+                await session.rollback()
+                if knowledgebase:
+                    await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_create.name)
+                raise
+        else:
+            logger.info(f"Found existing default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
 
         import app.worker as background_worker
 
@@ -99,8 +124,9 @@ async def create_attachment_file(
     file_entity.status = FileStatus.cancelled
     file_entity.failed_reason = f"文件{file_item.file_name}上传超时。"
     try:
-        await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity, tenant_id=tenant_id)
-        await session.commit()
+        if knowledgebase:
+            await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity, tenant_id=tenant_id)
+            await session.commit()
     except Exception:
         logger.error(f"Failed to save file {file_item.file_name} to database: {traceback.format_exc()}")
         await session.rollback()

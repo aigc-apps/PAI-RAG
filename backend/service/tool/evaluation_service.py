@@ -48,6 +48,87 @@ class EvaluationService:
         datasets = await self.session.exec(select(DatasetEntity).where(DatasetEntity.id == dataset_id, DatasetEntity.tenant_id == tenant_id))
         return datasets.first()
 
+    async def get_default_eval_dataset(self, tenant_id: str) -> Optional[DatasetEntity]:
+        """
+        Get the default GAIA evaluation dataset.
+        If it doesn't exist, create it and load samples from the GAIA dataset file.
+
+        Args:
+            tenant_id: Tenant ID
+
+        Returns:
+            DatasetEntity if found or created, None otherwise
+        """
+        statement = select(DatasetEntity).where(
+            DatasetEntity.name == "GAIA",
+            DatasetEntity.tenant_id == tenant_id
+        )
+        result = await self.session.exec(statement)
+        default_dataset = result.first()
+
+        if not default_dataset:
+            logger.info(f"No default GAIA dataset was found for tenant {tenant_id}, creating it.")
+
+            # Create GAIA dataset
+            gaia_dataset_data = DatasetCreate(
+                name="GAIA",
+                description="GAIA评估",
+                type="built-in"
+            )
+
+            try:
+                default_dataset = await self.create_dataset(
+                    dataset_data=gaia_dataset_data,
+                    tenant_id=tenant_id
+                )
+                await self.session.commit()
+                await self.session.refresh(default_dataset)
+
+                logger.info(f"Created default GAIA dataset: {default_dataset.id}")
+
+                GAIA_DATASET_PATH = "./resources/dataset/gaia/gaia_level_1_27.jsonl"
+                try:
+                    from utils.upload_file_utils import load_eval_dataset_from_local_path
+                    file_results = load_eval_dataset_from_local_path(file_path=GAIA_DATASET_PATH)
+
+                    # Prepare samples for batch creation
+                    samples = []
+                    for line in file_results:
+                        samples.append({
+                            "input": line["input"],
+                            "expected_output": line.get("expected_output"),
+                            "metadata": line.get("metadata") or {}
+                        })
+
+                    # Batch create dataset samples
+                    if samples:
+                        await self.batch_create_dataset_samples(
+                            dataset_id=default_dataset.id,
+                            samples=samples,
+                            tenant_id=tenant_id
+                        )
+                        await self.session.commit()
+                        logger.info(f"Loaded {len(samples)} samples into GAIA dataset.")
+
+                except FileNotFoundError:
+                    logger.warning(f"GAIA dataset file not found at {GAIA_DATASET_PATH}, dataset created without samples.")
+                except Exception as e:
+                    logger.error(f"Failed to load GAIA dataset samples: {e}")
+
+            except IntegrityError as e:
+                logger.error(f"IntegrityError when creating default GAIA dataset: {e.orig}")
+                await self.session.rollback()
+                result = await self.session.exec(statement)
+                default_dataset = result.first()
+                if not default_dataset:
+                    raise ValueError(f"默认评估数据集创建失败: {e}") from e
+            except Exception as e:
+                logger.error(f"Error creating default GAIA dataset: {e}")
+                await self.session.rollback()
+                raise
+
+        return default_dataset
+
     async def list_datasets(
         self,
         tenant_id: str,

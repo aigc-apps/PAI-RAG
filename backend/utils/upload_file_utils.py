@@ -5,6 +5,7 @@ from pairag.file.store.file_store_helper import file_store
 from rag.split.excel_split import convert_xls_to_xlsx
 from pydantic import BaseModel
 from loguru import logger
+import json
 
 
 async def upload_form_files_async(
@@ -66,3 +67,29 @@ async def upload_file_names_async(
         file_items.append(file_item)
         logger.info(f"Retrieved file {file_name} from file_store to tenant_id {tenant_id} successfully.")
     return file_items
+
+
+def load_eval_dataset_from_local_path(file_path: str) -> List[dict]:
+    results = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            for line_num, line in enumerate(file, 1):
+                line = line.strip()
+                if not line:  # 跳过空行
+                    continue
+                try:
+                    entry_data = json.loads(line)
+                    if "input" in entry_data:  # 只有包含 "input" 的才保留
+                        results.append(entry_data)
+                    else:
+                        logger.warning(f"Warning: Line {line_num} missing 'input' field, skipped.")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Warning: Line {line_num} is not valid JSON, skipped. Error: {e}")
+    except FileNotFoundError:
+        logger.error(f"File '{file_path}' not found.")
+        raise
+    except Exception as e:
+        logger.error(f"Fail to read file '{file_path}': {e}")
+        raise
+
+    return results

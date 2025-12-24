@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 from loguru import logger
 from db.db_context import with_async_db_session
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -198,30 +199,6 @@ class PaiEvaluationClient:
     def __init__(self):
         pass
 
-    def load_dataset_from_local_path(self, file_path: str):
-        results = []
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                for line_num, line in enumerate(file, 1):
-                    line = line.strip()
-                    if not line:  # 跳过空行
-                        continue
-                    try:
-                        entry_data = json.loads(line)
-                        if "input" in entry_data:  # 只有包含 "input" 的才保留
-                            results.append(entry_data)
-                        else:
-                            logger.warning(f"Warning: Line {line_num} missing 'input' field, skipped.")
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"Warning: Line {line_num} is not valid JSON, skipped. Error: {e}")
-        except FileNotFoundError:
-            logger.error(f"File '{file_path}' not found.")
-            raise
-        except Exception as e:
-            logger.error(f"Fail to read file '{file_path}': {e}")
-            raise
-
-        return results
 
     async def load_dataset_from_upload_file(self, file: UploadFile):
         results = []
@@ -290,15 +267,18 @@ class PaiEvaluationClient:
                     }
                 ]
             except Exception as ex:
+                error_traceback = traceback.format_exc()
                 logger.error(f"Get gaia attachment file failed: {ex}")
+                logger.error(f"[WORKER] error traceback:\n{error_traceback}")
                 await update_experiment_run_result(
                     exp_run_id=exp_run_id,
-                    actual_output="",
+                    actual_output=f"Error: Failed to upload attachment file: {ex}",
                     trace_id=trace_id,
                     status="failed",
                     score=0.0,
                     tenant_id=tenant_id
                 )
+                return  # Exit early if attachment upload fails
 
         chat_request = ChatAgentRequest(
             model=run_config_entity.model_id,
@@ -326,8 +306,11 @@ class PaiEvaluationClient:
                                             output=output,
                                             tenant_id=tenant_id)
         except Exception as e:
-            output = f"Error: {e}"
-            logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {e}")
+            error_msg = str(e) if e else "Unknown error"
+            error_traceback = traceback.format_exc()
+            output = f"Error: {error_msg}"
+            logger.error(f"[WORKER] evaluation task for exp_run_id {exp_run_id} failed with error: {error_msg}")
+            logger.error(f"[WORKER] error traceback:\n{error_traceback}")
             await update_experiment_run_result(
                 exp_run_id=exp_run_id,
                 actual_output=output,

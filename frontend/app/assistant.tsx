@@ -9,7 +9,17 @@ import { useChatOptions } from './providers/chat';
 
 export const Assistant = () => {
   const [optionsVisible, setoptionsVisible] = useState(true);
-  const {model, updateModel, user_id, updateUser} = useChatOptions();
+  const {
+    model, 
+    updateModel, 
+    user_id, 
+    updateUser,
+    updateEnablePlanning,
+    updateEnableSearch,
+    updateMcpIds,
+    updateKbIds,
+    updateEnableChatdb,
+  } = useChatOptions();
 
   // 模型选择回调
   const handleModelChange = async (
@@ -17,8 +27,17 @@ export const Assistant = () => {
     source: string,
     model_id: string,
   ) => {
-
     updateModel(model_id);
+
+    // 如果选择的是模型（不是 chatapp），重置所有配置值为默认值
+    // 这样可以避免使用之前 chatapp 保存的配置值
+    if (source !== 'chatbot') {
+      updateEnablePlanning(false);
+      updateEnableSearch(false);
+      updateEnableChatdb(false);
+      updateMcpIds([]);
+      updateKbIds([]);
+    }
 
     setoptionsVisible(source !== 'chatbot');
     console.log(source);

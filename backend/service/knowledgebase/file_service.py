@@ -11,6 +11,7 @@ from db.models.knowledgebase.file import KbFileEntity
 from common.chat.response_model import PagedResult
 
 
+
 class FileService:
     """Service layer for File entity CRUD operations using dependency injection."""
 
@@ -41,6 +42,7 @@ class FileService:
         Returns:
             KbFileEntity if found, None otherwise
         """
+        logger.info(f"kb_id is {kb_id}, file_id is {file_id}, tenant_id is {tenant_id}")
         statement = select(KbFileEntity).where(
             KbFileEntity.kb_id == kb_id, KbFileEntity.id == file_id, KbFileEntity.tenant_id == tenant_id
         )

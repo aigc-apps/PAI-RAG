@@ -1063,7 +1063,7 @@ class RagService:
                         url=file_url,
                         title=node.metadata.get("file_name", ""),
                         metadata=node.metadata,
-                    ).model_dump())
+                    ))
 
         # TODO add file source map
         logger.info(f"Get {len(records)} nodes above given threshold {retrieval_setting.similarity_threshold}.")
