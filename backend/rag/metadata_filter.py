@@ -90,7 +90,7 @@ async def query_file_ids_with_metadata_filter(
         if metadata_filter.logical_operator.lower() == "and":
             sub_clauses.append(and_(*filters))
         else:
-            sub_clauses.append(where_clause = or_(*filters))
+            sub_clauses.append(or_(*filters))
 
     # 文档没有指定权限，可公开访问
     has_role_binding = exists().where(PermissionEntity.name == KbFileEntity.id)
