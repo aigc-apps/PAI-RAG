@@ -45,6 +45,7 @@ async def retrieval(
                 title=node.title,
                 metadata=node.metadata,
             ))
+        # 使用统一的响应格式
         retrieval_response = NewRetrievalResponse(records=records)
         return success_response(data=retrieval_response, message="检索成功")
     except ValueError as e:
