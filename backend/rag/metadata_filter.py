@@ -27,7 +27,10 @@ def _build_metadata_condition_(
         case "contains":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}%")
         case "not contains":
-            condition_filter = ~KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}%")
+            condition_filter = or_(
+                KbFileEntity.file_metadata[condition.name].as_string().is_(None),
+                ~KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}%")
+            )
         case "start with":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().like(f"{condition.value}%")
         case "end with":
@@ -41,13 +44,25 @@ def _build_metadata_condition_(
         case "is not" | "≠":
             if isinstance(condition.value, str):
                 # 添加json_quote ""
-                condition_filter = KbFileEntity.file_metadata[condition.name].as_string() != f'{condition.value}'
+                condition_filter = or_(
+                    KbFileEntity.file_metadata[condition.name].as_string().is_(None),
+                    KbFileEntity.file_metadata[condition.name].as_string() != f'{condition.value}'
+                )
             else:
-                condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) != condition.value
+                condition_filter = or_(
+                    KbFileEntity.file_metadata[condition.name].as_string().cast(Float).is_(None),
+                    KbFileEntity.file_metadata[condition.name].as_string().cast(Float) != condition.value
+                )
         case "empty":
-            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().is_(None)
+            condition_filter = or_(
+                KbFileEntity.file_metadata[condition.name].as_string().is_(None),
+                KbFileEntity.file_metadata[condition.name].as_string() == ''
+            )
         case "not empty":
-            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().isnot(None)
+            condition_filter = and_(
+                KbFileEntity.file_metadata[condition.name].as_string().isnot(None),
+                KbFileEntity.file_metadata[condition.name].as_string() != ''
+            )
         case "before" | "<":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) < condition.value
         case "after" | ">":

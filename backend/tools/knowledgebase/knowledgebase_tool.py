@@ -4,18 +4,39 @@ from functools import partial
 from llama_index.core.tools import FunctionTool
 import json
 from loguru import logger
+from common.chat.models import MetadataFilteringCondition
 
 
-async def aget_knowledgebase_result(query: str, kb_id: str, user_id: str | None =None, rag_service: RagService | None = None, tenant_id: str = None) -> str:
+async def aget_knowledgebase_result(
+    query: str,
+    kb_id: str,
+    user_id: str | None =None,
+    rag_service: RagService | None = None,
+    tenant_id: str = None,
+    metadata_condition: Optional[MetadataFilteringCondition] = None,
+) -> str:
     """Get aliyun search tool"""
     logger.info(f"Searching knowledgebase with kb {kb_id} and user {user_id}.")
-    records = await rag_service.aquery(query=query, kb_id=kb_id, user_id=user_id, tenant_id=tenant_id)
+    records = await rag_service.aquery(query=query, kb_id=kb_id, user_id=user_id, tenant_id=tenant_id, metadata_condition=metadata_condition)
     records_dict = [record.model_dump() for record in records]
     return json.dumps({"result": records_dict}, ensure_ascii=False)
 
 
-async def aget_knowledgebase_tool(kb_id: str, tenant_id: str, user_id: Optional[str] = None, rag_service: RagService = None):
-    aquery_knowledgebase_func = partial(aget_knowledgebase_result, kb_id=kb_id, user_id=user_id, rag_service=rag_service, tenant_id=tenant_id)
+async def aget_knowledgebase_tool(
+    kb_id: str,
+    tenant_id: str,
+    user_id: Optional[str] = None,
+    rag_service: RagService = None,
+    metadata_condition: Optional[MetadataFilteringCondition] = None,
+):
+    aquery_knowledgebase_func = partial(
+        aget_knowledgebase_result,
+        kb_id=kb_id,
+        user_id=user_id,
+        rag_service=rag_service,
+        tenant_id=tenant_id,
+        metadata_condition=metadata_condition,
+    )
     knowledgebase = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
     if not knowledgebase:
         raise ValueError(f"Knowledgebase {kb_id} not found.")

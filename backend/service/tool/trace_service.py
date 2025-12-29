@@ -22,6 +22,22 @@ class TraceService:
         """
         self.session = session
 
+    async def init_trace(self):
+        statement = select(TraceModelEntity).where(TraceModelEntity.enabled)
+        result = await self.session.exec(statement)
+        config = result.first()
+        if config and config.is_enabled():
+            init_instrument(TraceConfig(
+                endpoint=config.endpoint,
+                token=config.token,
+                service_name=config.service_name,
+                user_args=config.user_args,
+                enabled=config.enabled,
+            ))
+            logger.info("Initialized trace config.")
+        else:
+            logger.info("Trace config not enabled.")
+
     async def get_trace_config(
         self,
         tenant_id: str,

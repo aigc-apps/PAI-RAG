@@ -33,6 +33,7 @@ class RetrievalResult(BaseModel):
 class RetrievalToolResponse(BaseModel):
     status: str
     status_code: int
+    message: Optional[str] = None
     data: RetrievalResult
     request_id: str
 
@@ -102,9 +103,10 @@ async def asearch_knowledgebase(
                 total=len(nodes),
                 nodes=nodes
             ),
+            message=None,
             request_id=request_id
         )
-    except Exception:
+    except Exception as ex:
         logger.exception(f"Retrieval tool failed: {traceback.format_exc()}")
         return RetrievalToolResponse(
             status="ERROR",
@@ -113,6 +115,7 @@ async def asearch_knowledgebase(
                 total=0,
                 nodes=[]
             ),
+            message=str(ex),
             request_id=request_id
         )
 

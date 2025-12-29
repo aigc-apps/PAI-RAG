@@ -545,13 +545,13 @@ export default function KnowledgeBaseDetailPage(
         rerank_top_k: retrievalSetting.rerank_top_k ?? knowledgebase?.retrieval_config?.rerank_top_k ?? 5,
       };
 
+      knowledgebase.retrieval_config = retrieval_config;
+
       // 调用更新知识库接口，只更新retrieval_config
       const res = await tenantFetch(`/api/config/knowledgebases/${kbId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          retrieval_config: retrieval_config,
-        }),
+        body: JSON.stringify(knowledgebase),
       });
 
       if (!res.ok) {
