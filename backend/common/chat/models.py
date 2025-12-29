@@ -102,6 +102,7 @@ class ChatAgentRequest(BaseModel):
     enable_input_guardrail: Optional[bool] = False
     enable_output_guardrail: Optional[bool] = False
     guardrail_hint: Optional[str] = DEFAULT_GUARDRAIL_ADVICE
+    metadata_condition: Optional[MetadataFilteringCondition] = None
 
     # llm args
     temperature: Optional[float] = None

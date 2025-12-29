@@ -14,7 +14,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from agent.base import BaseAgent
 from agent.planner import PlanAgentPromptSet, Planner
 from loguru import logger
-from typing import List, Callable, Awaitable, Dict
+from typing import List, Callable, Awaitable, Dict, Optional
+from common.chat.models import MetadataFilteringCondition
 
 
 def append_text(user_message: Dict, text: str):
@@ -96,6 +97,7 @@ class AgentService:
                 mcp_ids=chat_request.mcp_ids,
                 kb_ids=chat_request.kb_ids,
                 user_id=chat_request.user_id,
+                metadata_condition=chat_request.metadata_condition,
                 tenant_id=tenant_id,
             )
 
@@ -119,6 +121,7 @@ class AgentService:
         enable_search: bool = False,
         enable_chatdb: bool = False,
         user_id: str = None,
+        metadata_condition: Optional[MetadataFilteringCondition] = None,
         mcp_ids: List[str] = [],
         kb_ids: List[str] = [],
         tenant_id: str = None,
@@ -128,7 +131,7 @@ class AgentService:
         # 知识库工具
         rag_service = await self._get_rag_service()
         for kb_id in kb_ids:
-            tools.append(await aget_knowledgebase_tool(kb_id=kb_id, user_id=user_id, rag_service=rag_service, tenant_id=tenant_id))
+            tools.append(await aget_knowledgebase_tool(kb_id=kb_id, user_id=user_id, rag_service=rag_service, tenant_id=tenant_id, metadata_condition=metadata_condition))
         logger.info(f"Resolved {len(kb_ids)} knowledgebase tools.")
 
         # 搜索工具

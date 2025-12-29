@@ -10,6 +10,7 @@ from openai.types.chat.chat_completion_chunk import ChoiceDelta, Choice as Chunk
 from openai.types.chat.chat_completion import Choice
 from extensions.guardrail.config import CHECK_OUTPUT_CHUNK_SIZE, CHECK_OUTPUT_CHUNK_OVERLAP
 from extensions.guardrail.guardrail_check import GuardrailChecker
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from loguru import logger
 
@@ -73,6 +74,7 @@ async def convert_gen_to_stream_chat_completions(
     enable_output_check: bool = False,
     guardrail_hint: str | None = None,
     checker: GuardrailChecker | None = None,
+    session: AsyncSession = None,
 ):
     logger.info(f"convert_gen_to_stream_chat_completions: model={model}, enable_output_check={enable_output_check}, guardrail_hint={guardrail_hint}")
     if enable_output_check and not checker:
@@ -144,6 +146,8 @@ async def convert_gen_to_stream_chat_completions(
         if response_generator and hasattr(response_generator, "aclose"):
             await response_generator.aclose()
             logger.info("convert_gen_to_stream_chat_completions: response_generator closed.")
+            await session.close()
+            logger.info("convert_gen_to_stream_chat_completions: session closed.")
 
 
     if not fail_fast and len(current_content) > CHECK_OUTPUT_CHUNK_OVERLAP and enable_output_check and checker:

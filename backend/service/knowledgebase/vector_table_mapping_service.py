@@ -5,7 +5,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from service.cache.redis_cache import cache_manager, vector_table_name_key
 from loguru import logger
-
+import traceback
 from db.models.knowledgebase.vector_table_mapping import (
     VectorTableMappingEntity,
     generate_vector_table_name,
@@ -100,11 +100,19 @@ class VectorTableMappingService:
             kb_id=kb_id,
             table_name=table_name,
         )
-        self.session.add(mapping)
-        await self.session.commit()
-        await self.session.refresh(mapping)
-        logger.info(f"Created vector table mapping: tenant={tenant_id}, kb={kb_id}, table={table_name}")
-        return mapping
+        try:
+            self.session.add(mapping)
+            await self.session.commit()
+            await self.session.refresh(mapping)
+            logger.info(f"Created vector table mapping: tenant={tenant_id}, kb={kb_id}, table={table_name}")
+            return mapping
+        except Exception as ex:
+            logger.error(f"Failed to create vector table mapping: {traceback.format_exc()}")
+            await self.session.rollback()
+            if "UniqueViolationError" in str(ex.orig) or "Duplicate entry" in str(ex.orig):
+                pass
+            else:
+                raise ValueError(f"Failed to create vector table mapping: {ex}") from ex
 
     async def delete_mapping(self, tenant_id: str, kb_id: str) -> bool:
         """

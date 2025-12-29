@@ -22,14 +22,12 @@ def min_max_normalize_scores(scores: List[float]) -> List[float]:
     return [(x - min_score) / (max_score - min_score) for x in scores]
 
 
-
-
-
 def weight_rerank(
     text_result: VectorStoreQueryResult,
     dense_result: VectorStoreQueryResult,
     vector_weight: float = DEFAULT_VECTOR_WEIGHT,
     top_k: int = DEFAULT_SIMILARITY_TOP_K,
+    similarity_threshold: float = 0,
 ) -> VectorStoreQueryResult:
     """
     Merge text and dense search results using weighted sum.
@@ -69,7 +67,17 @@ def weight_rerank(
         # 如果dense_result有结果，则返回dense_result
         return dense_result
 
-    ids, nodes, scores = zip(*sorted(zip(ids, nodes, scores), key=lambda x: x[2], reverse=True))
+    # Filter out scores below similarity_threshold before sorting
+    filtered_data = [
+        (id, node, score)
+        for id, node, score in zip(ids, nodes, scores)
+        if score >= similarity_threshold
+    ]
+
+    if not filtered_data:
+        return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
+
+    ids, nodes, scores = zip(*sorted(filtered_data, key=lambda x: x[2], reverse=True))
     ids, nodes, scores = map(list, (ids, nodes, scores))
 
     top_k_nodes = nodes[:top_k]
@@ -113,6 +121,32 @@ def merge_vector_store_results_by_text(text_result: VectorStoreQueryResult, dens
         similarities=similarities,
     )
 
+def filter_node_result(result: VectorStoreQueryResult, similarity_threshold: float = 0) -> VectorStoreQueryResult:
+    """
+    Filter nodes by similarity threshold.
+
+    Args:
+        result: VectorStoreQueryResult to filter
+        similarity_threshold: Similarity threshold to filter nodes by
+
+    Returns:
+        VectorStoreQueryResult with nodes filtered by similarity threshold
+    """
+
+    if not result:
+        return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
+
+    filtered_data = [
+        (id, node, score)
+        for id, node, score in zip(result.ids, result.nodes, result.similarities)
+        if score >= similarity_threshold
+    ]
+    if not filtered_data:
+        return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
+
+    ids, nodes, scores = zip(*sorted(filtered_data, key=lambda x: x[2], reverse=True))
+    ids, nodes, scores = map(list, (ids, nodes, scores))
+    return VectorStoreQueryResult(nodes=nodes, ids=ids, similarities=scores)
 
 
 async def arerank_fusion(
@@ -123,29 +157,33 @@ async def arerank_fusion(
     vector_weight: float = DEFAULT_VECTOR_WEIGHT,
     top_k: int = DEFAULT_SIMILARITY_TOP_K,
     rerank_top_k: int = DEFAULT_RERANK_SIMILARITY_TOP_K,
+    similarity_threshold: float = 0,
 ) -> VectorStoreQueryResult:
     if not text_result:
         if not rerank_model:
-            return dense_result
+            return filter_node_result(dense_result, similarity_threshold)
         else:
             return await rerank_model.vector_store_rerank(
                 query=query,
                 result=dense_result,
-                top_n=rerank_top_k)
+                top_n=rerank_top_k,
+                similarity_threshold=similarity_threshold)
     elif not dense_result:
         if not rerank_model:
-            return text_result
+            return filter_node_result(text_result, similarity_threshold)
         else:
             return await rerank_model.vector_store_rerank(
                 query=query,
                 result=text_result,
-                top_n=rerank_top_k)
+                top_n=rerank_top_k,
+                similarity_threshold=similarity_threshold)
     else:
         if not rerank_model:
-            return weight_rerank(text_result, dense_result, vector_weight,top_k)
+            return weight_rerank(text_result, dense_result, vector_weight, top_k, similarity_threshold)
         else:
             merged_result = merge_vector_store_results_by_text(text_result, dense_result)
             return await rerank_model.vector_store_rerank(
-                            query=query,
-                            result=merged_result,
-                        top_n=rerank_top_k)
+                query=query,
+                result=merged_result,
+                top_n=rerank_top_k,
+                similarity_threshold=similarity_threshold)

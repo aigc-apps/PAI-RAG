@@ -481,9 +481,10 @@ async def set_file_source(
     file_id: str,
     body: FileSourceParam,
     tenant_id: str = Depends(get_tenant_id),
+    file_service: FileService = Depends(get_file_service),
     session: AsyncSession = Depends(get_db_session),
 ):
-    file_entity = await session.get(KbFileEntity, file_id)
+    file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
     if not file_entity:
         raise ApiException.not_found(file_id, "文件")
 
@@ -491,8 +492,9 @@ async def set_file_source(
         raise ApiException(code=400, message="文件来源不能为空。")
 
     file_entity.file_source = body.file_source
+    logger.info(f"Set file source: {file_entity.id} -> {body.file_source}")
     session.add(file_entity)
-
+    await session.commit()
     await session.refresh(file_entity)
 
     return success_response(data=file_entity, message="更新文件来源成功")

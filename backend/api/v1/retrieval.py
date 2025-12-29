@@ -35,7 +35,7 @@ async def retrieval(
             tenant_id=tenant_id,
         )
         logger.info(
-            f"Retrieved {len(search_results)} for query '{retrieval_request.query}' against knowledgebase {retrieval_request.knowledge_id}."
+            f"Retrieved {len(search_results)} for query '{retrieval_request.query}'."
         )
         records = []
         for node in search_results:
