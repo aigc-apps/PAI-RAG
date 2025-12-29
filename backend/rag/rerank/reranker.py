@@ -68,7 +68,8 @@ class OpenAICompatibleReranker:
         query: str,
         documents: List[str],
         model: Optional[str] = None,
-        top_n: Optional[int] = None
+        top_n: Optional[int] = None,
+        similarity_threshold: float = 0,
     ) -> List[RerankResult]:
         """
         执行文档重排序
@@ -78,7 +79,7 @@ class OpenAICompatibleReranker:
             documents: 需要排序的文档列表
             model: 覆盖默认模型
             top_n: 返回的最相关文档数量
-
+            similarity_threshold: 相似度阈值
         Returns:
             排序好的结果列表，每个结果包含index, score, doc字段
 
@@ -147,6 +148,9 @@ class OpenAICompatibleReranker:
                         raise RuntimeError("响应格式错误: 结果中缺少index字段")
 
                     score = item.get("relevance_score", 0.0)
+                    if score < similarity_threshold:
+                        continue
+
                     # 提取文档文本
                     if "document" in item and isinstance(item["document"], dict):
                         doc = item["document"].get("text", "")
@@ -188,6 +192,7 @@ class OpenAICompatibleReranker:
         result: VectorStoreQueryResult,
         top_n: Optional[int] = None,
         model: Optional[str] = None,
+        similarity_threshold: float = 0,
     ) -> VectorStoreQueryResult:
         """
         执行vector store query result重排序
@@ -197,7 +202,7 @@ class OpenAICompatibleReranker:
             result: 需要排序的vector store query result
             top_n: 返回的最相关node数量
             model: 覆盖默认模型
-
+            similarity_threshold: 相似度阈值
         Returns:
             API响应结果
 
@@ -214,13 +219,15 @@ class OpenAICompatibleReranker:
 
         origin_nodes = result.nodes
         documents=[node.text for node in origin_nodes]
-        rerank_results = await self.rerank(query, documents, model, top_n)
+        rerank_results = await self.rerank(query, documents, model, top_n, similarity_threshold)
 
         return_nodes = []
+        return_ids = []
         return_similarities = []
         for rerank_result in rerank_results:
             node = origin_nodes[rerank_result.index]
             node.metadata["rerank"] = True
             return_nodes.append(node)
+            return_ids.append(node.node_id)
             return_similarities.append(rerank_result.score)
-        return VectorStoreQueryResult(nodes=return_nodes, similarities=return_similarities)
+        return VectorStoreQueryResult(nodes=return_nodes, ids=return_ids, similarities=return_similarities)

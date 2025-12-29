@@ -309,8 +309,9 @@ class RerankerService:
             RerankerModelEntity.model_id == model_id,
             RerankerModelEntity.tenant_id == tenant_id
         )
-        if provider_name:
-            statement = statement.where(RerankerModelEntity.provider_name == provider_name)
+        # if provider_name:
+        #     statement = statement.where(RerankerModelEntity.provider_name == provider_name)
+        # 为了兼容旧数据，不指定 provider_name 查询。直接通过model_id查询， 因为model_id有唯一性
         reranker_entity = await self.session.exec(statement)
         reranker = reranker_entity.first()
         return reranker

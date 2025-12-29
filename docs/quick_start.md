@@ -3,7 +3,8 @@
 ## 系统要求
 
 - Python 3.11
-- Node.js 16+ (推荐使用LTS版本)
+- Node.js 20+ (推荐使用LTS版本)
+- Redis server
 - Git
 - Conda (推荐Miniconda)
 
@@ -34,6 +35,11 @@ docker-compose up -d
 
 
 ### 方式二：本地源码启动
+
+本地需要安装redis-server和node.js。
+```bash
+apt-get install -y nodejs npm redis-server
+```
 
 1. 克隆项目代码到本地
 

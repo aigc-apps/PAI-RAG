@@ -366,8 +366,8 @@ export default function KnowledgeBaseDetailPage(
         return;
       }
 
-      // 成功情况
-      setSearchRecords(search_json.records || []);
+      const records = search_json.records || search_json.data?.records || [];
+      setSearchRecords(records);
       setSearchError(null);
     } catch (err: any) {
       const errorMessage = err.message || '搜索知识库失败';
@@ -593,13 +593,13 @@ export default function KnowledgeBaseDetailPage(
         rerank_top_k: retrievalSetting.rerank_top_k ?? knowledgebase?.retrieval_config?.rerank_top_k ?? 5,
       };
 
+      knowledgebase.retrieval_config = retrieval_config;
+
       // 调用更新知识库接口，只更新retrieval_config
       const res = await tenantFetch(`/api/config/knowledgebases/${kbId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          retrieval_config: retrieval_config,
-        }),
+        body: JSON.stringify(knowledgebase),
       });
 
       if (!res.ok) {

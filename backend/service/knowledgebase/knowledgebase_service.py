@@ -18,7 +18,6 @@ from db.models.knowledgebase.file import KbFileEntity
 from common.chat.response_model import PagedResult
 from service.cache.redis_cache import cache_manager, kb_key, kb_name_key
 
-
 class KnowledgebaseService:
     """Service layer for Knowledgebase entity CRUD operations using dependency injection."""
 
@@ -210,10 +209,10 @@ class KnowledgebaseService:
             (kb_data.retrieval_config or RetrievalConfig()).model_dump()
         )
 
-        knowledgebase = KbEntity.model_validate(kb_data, update={"tenant_id": tenant_id})
-        self.session.add(knowledgebase)
-
         try:
+            knowledgebase = KbEntity.model_validate(kb_data, update={"tenant_id": tenant_id})
+            self.session.add(knowledgebase)
+
             # Flush to get the ID, but don't commit
             await self.session.flush()
             await self.session.refresh(knowledgebase)
@@ -222,16 +221,20 @@ class KnowledgebaseService:
                 f"Created Knowledgebase entity: {knowledgebase.id} (name: {knowledgebase.name})"
             )
             return knowledgebase
+        except ValueError as e:
+            logger.error(f"ValueError when creating Knowledgebase: {e}")
+            raise ValueError(f"知识库创建失败: {e}") from e
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating Knowledgebase: {e.orig}")
-
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
                     f"知识库名称 '{kb_data.name}' 已经存在。"
                 ) from e
+            elif "Duplicate entry" in str(e.orig):
+                raise ValueError(f"知识库名称 '{kb_data.name}' 已经存在。") from e
             else:
-                raise ValueError(f"知识库创建失败: {e}") from e
+                raise ValueError(f"知识库创建失败: {e.orig}") from e
 
     async def update_knowledgebase(
         self, kb_id: str, update_data: KnowledgebaseCreate, tenant_id: str
@@ -261,36 +264,48 @@ class KnowledgebaseService:
         cache_name_key = kb_name_key(tenant_id, knowledgebase.name)
         await cache_manager.get_cache().delete(cache_name_key)
 
+        try:
 
-        logger.info(f"Updating Knowledgebase {kb_id} with data: {update_data}")
+            logger.info(f"Updating Knowledgebase {kb_id} with data: {update_data}")
 
-        # Update fields
-        if update_data.name is not None:
-            knowledgebase.name = update_data.name
-        if update_data.description is not None:
-            knowledgebase.description = update_data.description
-        if update_data.embedding_model is not None:
-            knowledgebase.embedding_model = update_data.embedding_model
-        if update_data.embedding_provider_name is not None:
-            knowledgebase.embedding_provider_name = update_data.embedding_provider_name
-        if update_data.chunk_config is not None:
-            knowledgebase.chunk_config = update_data.chunk_config.model_dump()
-        if update_data.retrieval_config is not None:
-            knowledgebase.retrieval_config = update_data.retrieval_config.model_dump()
+            # Update fields
+            if update_data.name is not None:
+                knowledgebase.name = update_data.name
+            if update_data.description is not None:
+                knowledgebase.description = update_data.description
+            if update_data.embedding_model is not None:
+                knowledgebase.embedding_model = update_data.embedding_model
+            if update_data.embedding_provider_name is not None:
+                knowledgebase.embedding_provider_name = update_data.embedding_provider_name
+            if update_data.chunk_config is not None:
+                knowledgebase.chunk_config = update_data.chunk_config.model_dump()
+            if update_data.retrieval_config is not None:
+                knowledgebase.retrieval_config = update_data.retrieval_config.model_dump()
 
-        knowledgebase.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            knowledgebase.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-        self.session.add(knowledgebase)
+            self.session.add(knowledgebase)
 
-        # Flush to ensure changes are staged
-        await self.session.flush()
-        await self.session.refresh(knowledgebase)
+            # Flush to ensure changes are staged
+            await self.session.flush()
+            await self.session.refresh(knowledgebase)
 
-        await cache_manager.get_cache().set(cache_key, knowledgebase.model_dump(mode="json"))
+            # Note: Cache will be written after transaction commit in API layer
+            # to ensure cache consistency with database
 
-        logger.info(
-            f"Updated Knowledgebase entity: {knowledgebase.id} (name: {knowledgebase.name})"
-        )
+            logger.info(
+                f"Updated Knowledgebase entity: {knowledgebase.id} (name: {knowledgebase.name})"
+            )
+        except IntegrityError as e:
+            logger.error(f"IntegrityError when creating Knowledgebase: {e.orig}")
+            if "UniqueViolationError" in str(e.orig):
+                raise ValueError(
+                    f"知识库名称 '{update_data.name}' 已经存在。"
+                ) from e
+            elif "Duplicate entry" in str(e.orig):
+                raise ValueError(f"知识库名称 '{update_data.name}' 已经存在。") from e
+            else:
+                raise ValueError(f"知识库创建失败: {e.orig}") from e
         return knowledgebase
 
     async def delete_knowledgebase(self, kb_id: str, tenant_id: str) -> None:
@@ -306,12 +321,16 @@ class KnowledgebaseService:
         Raises:
             ValueError: If Knowledgebase entity not found
         """
-        cache_key = kb_key(tenant_id, kb_id)
-        await cache_manager.get_cache().delete(cache_key)
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
         if not knowledgebase:
             raise ValueError(f"知识库 '{kb_id}' 不存在。")
+
+        # Delete both ID-based and name-based cache entries
+        cache_key = kb_key(tenant_id, kb_id)
+        cache_name_key = kb_name_key(tenant_id, knowledgebase.name)
+        await cache_manager.get_cache().delete(cache_key)
+        await cache_manager.get_cache().delete(cache_name_key)
 
         # Delete knowledgebase entity only
         await self.session.delete(knowledgebase)
@@ -331,3 +350,35 @@ class KnowledgebaseService:
         statement = select(KbEntity).where(KbEntity.tenant_id == tenant_id)
         results = await self.session.exec(statement)
         return list(results.all())
+
+    async def write_cache_after_commit(self, kb_entity: KbEntity, tenant_id: str) -> None:
+        """
+        Write cache after database transaction commit.
+        This ensures cache consistency with database.
+
+        Args:
+            kb_entity: Knowledgebase entity to cache
+            tenant_id: Tenant ID
+        """
+        cache_key = kb_key(tenant_id, kb_entity.id)
+        cache_name_key = kb_name_key(tenant_id, kb_entity.name)
+        await cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json"))
+        await cache_manager.get_cache().set(cache_name_key, kb_entity.model_dump(mode="json"))
+        logger.info(f"Written cache for knowledgebase {kb_entity.id} (name: {kb_entity.name}) after commit")
+
+    async def delete_cache_on_rollback(self, kb_id: str, tenant_id: str, kb_name: Optional[str] = None) -> None:
+        """
+        Delete cache entries when database transaction rolls back.
+        This ensures cache consistency with database.
+
+        Args:
+            kb_id: Knowledgebase ID
+            tenant_id: Tenant ID
+            kb_name: Optional knowledgebase name (if known)
+        """
+        cache_key = kb_key(tenant_id, kb_id)
+        await cache_manager.get_cache().delete(cache_key)
+        if kb_name:
+            cache_name_key = kb_name_key(tenant_id, kb_name)
+            await cache_manager.get_cache().delete(cache_name_key)
+        logger.info(f"Deleted cache for knowledgebase {kb_id} on rollback")

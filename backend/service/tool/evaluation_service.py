@@ -5,6 +5,7 @@ from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
+from api.v1.utils.paginate import get_pagination_meta
 
 from db.models.evaluation.dataset import DatasetEntity, DatasetCreate, DatasetSampleEntity
 from db.models.evaluation.experiment import (
@@ -47,6 +48,87 @@ class EvaluationService:
         datasets = await self.session.exec(select(DatasetEntity).where(DatasetEntity.id == dataset_id, DatasetEntity.tenant_id == tenant_id))
         return datasets.first()
 
+    async def get_default_eval_dataset(self, tenant_id: str) -> Optional[DatasetEntity]:
+        """
+        Get the default GAIA evaluation dataset.
+        If it doesn't exist, create it and load samples from the GAIA dataset file.
+
+        Args:
+            tenant_id: Tenant ID
+
+        Returns:
+            DatasetEntity if found or created, None otherwise
+        """
+        statement = select(DatasetEntity).where(
+            DatasetEntity.name == "GAIA",
+            DatasetEntity.tenant_id == tenant_id
+        )
+        result = await self.session.exec(statement)
+        default_dataset = result.first()
+
+        if not default_dataset:
+            logger.info(f"No default GAIA dataset was found for tenant {tenant_id}, creating it.")
+
+            # Create GAIA dataset
+            gaia_dataset_data = DatasetCreate(
+                name="GAIA",
+                description="GAIA评估",
+                type="built-in"
+            )
+
+            try:
+                default_dataset = await self.create_dataset(
+                    dataset_data=gaia_dataset_data,
+                    tenant_id=tenant_id
+                )
+                await self.session.commit()
+                await self.session.refresh(default_dataset)
+
+                logger.info(f"Created default GAIA dataset: {default_dataset.id}")
+
+                GAIA_DATASET_PATH = "./resources/dataset/gaia/gaia_level_1_27.jsonl"
+                try:
+                    from utils.upload_file_utils import load_eval_dataset_from_local_path
+                    file_results = load_eval_dataset_from_local_path(file_path=GAIA_DATASET_PATH)
+
+                    # Prepare samples for batch creation
+                    samples = []
+                    for line in file_results:
+                        samples.append({
+                            "input": line["input"],
+                            "expected_output": line.get("expected_output"),
+                            "metadata": line.get("metadata") or {}
+                        })
+
+                    # Batch create dataset samples
+                    if samples:
+                        await self.batch_create_dataset_samples(
+                            dataset_id=default_dataset.id,
+                            samples=samples,
+                            tenant_id=tenant_id
+                        )
+                        await self.session.commit()
+                        logger.info(f"Loaded {len(samples)} samples into GAIA dataset.")
+
+                except FileNotFoundError:
+                    logger.warning(f"GAIA dataset file not found at {GAIA_DATASET_PATH}, dataset created without samples.")
+                except Exception as e:
+                    logger.error(f"Failed to load GAIA dataset samples: {e}")
+
+            except IntegrityError as e:
+                logger.error(f"IntegrityError when creating default GAIA dataset: {e.orig}")
+                await self.session.rollback()
+                result = await self.session.exec(statement)
+                default_dataset = result.first()
+                if not default_dataset:
+                    raise ValueError(f"默认评估数据集创建失败: {e}") from e
+            except Exception as e:
+                logger.error(f"Error creating default GAIA dataset: {e}")
+                await self.session.rollback()
+                raise
+
+        return default_dataset
+
     async def list_datasets(
         self,
         tenant_id: str,
@@ -70,6 +152,7 @@ class EvaluationService:
                 DatasetSampleEntity.dataset_id,
                 func.count(DatasetSampleEntity.id).label("dataset_count"),
             )
+            .where(DatasetSampleEntity.tenant_id == tenant_id)
             .group_by(DatasetSampleEntity.dataset_id)
             .subquery()
         )
@@ -80,6 +163,7 @@ class EvaluationService:
                 ExperimentEntity.dataset_id,
                 func.count(ExperimentEntity.id).label("experiments_count"),
             )
+            .where(ExperimentEntity.tenant_id == tenant_id)
             .group_by(ExperimentEntity.dataset_id)
             .subquery()
         )
@@ -95,6 +179,7 @@ class EvaluationService:
                     "experiments_count"
                 ),
             )
+            .where(DatasetEntity.tenant_id == tenant_id)
             .outerjoin(
                 dataset_count_subq, DatasetEntity.id == dataset_count_subq.c.dataset_id
             )
@@ -668,6 +753,7 @@ class EvaluationService:
         tenant_id: str,
         page: int = 1,
         size: int = 10,
+        status: Optional[str] = None,
     ) -> PagedResult[List[ExperimentSampleEntity]]:
         """
         List ExperimentSample entities with pagination.
@@ -676,103 +762,71 @@ class EvaluationService:
             experiment_id: Experiment ID
             page: Page number (1-indexed)
             size: Page size
+            status: Optional status filter (running, success, failed, pending)
 
         Returns:
             PagedResult containing list of ExperimentSampleEntity and pagination metadata
         """
-        # Build base query
-        base_query = select(ExperimentSampleEntity).where(
+        logger.info(f"Get experiment samples for experiment_id {experiment_id}, tenant_id {tenant_id}, status={status}.")
+
+        # Build base conditions
+        conditions = [
             ExperimentSampleEntity.experiment_id == experiment_id,
-            ExperimentSampleEntity.tenant_id == tenant_id
-        )
+            ExperimentSampleEntity.tenant_id == tenant_id,
+        ]
+
+        # Apply status filter if provided
+        if status:
+            conditions.append(ExperimentSampleEntity.status == status)
 
         # Get total count
-        count_query = select(func.count()).select_from(base_query)
+        count_query = select(func.count()).select_from(
+            select(ExperimentSampleEntity).where(*conditions).subquery()
+        )
         total_result = await self.session.exec(count_query)
-        total = total_result.one_or_none() or 0
+        total_num = total_result.one_or_none() or 0
 
-        # Get paginated results
-        offset = (page - 1) * size
-        paginated_query = (
-            base_query.order_by(ExperimentSampleEntity.created_at.desc())
-            .offset(offset)
+        # Calculate pagination
+        pagination = get_pagination_meta(page, size, total_num)
+
+        # Build main query with JOIN
+        main_query = (
+            select(
+                ExperimentSampleEntity,
+                DatasetSampleEntity.input,
+                DatasetSampleEntity.expected_output,
+                DatasetSampleEntity.eval_metadata.label("dataset_metadata"),
+            )
+            .join(
+                DatasetSampleEntity,
+                ExperimentSampleEntity.sample_id == DatasetSampleEntity.id,
+            )
+            .where(*conditions)
+            .order_by(ExperimentSampleEntity.created_at.desc())
+            .offset(pagination.offset)
             .limit(size)
         )
-        results = await self.session.exec(paginated_query)
-        samples = list(results.all())
 
-        # Calculate pages
-        pages = (total + size - 1) // size if total > 0 else 0
+        results = await self.session.exec(main_query)
+
+        # Transform results
+        transformed_results = [
+            {
+                **row[0].model_dump(),
+                "input": row[1],
+                "expected_output": row[2],
+                "dataset_metadata": row[3],
+            }
+            for row in results.all()
+        ]
 
         return PagedResult(
-            items=samples,
-            total=total,
-            pages=pages,
-            page=page,
-            size=size,
+            items=transformed_results,
+            total=pagination.total,
+            pages=pagination.pages,
+            page=pagination.page,
+            size=pagination.size,
         )
-
-    async def evaluate_experiment_sample(
-        self,
-        experiment_id: str,
-        experiment_sample_id: str,
-        tenant_id: str,
-        status: Optional[str] = None,
-        output: Optional[str] = None,
-        score: Optional[float] = None,
-        error: Optional[str] = None,
-    ) -> ExperimentSampleEntity:
-        """
-        Update an ExperimentSample entity (typically for re-evaluation).
-        Note: Caller is responsible for committing the session.
-
-        Args:
-            experiment_id: Experiment ID
-            experiment_sample_id: ExperimentSample entity ID
-            status: Updated status
-            output: Updated output
-            score: Updated score
-            error: Updated error message
-
-        Returns:
-            Updated ExperimentSampleEntity (not yet committed)
-
-        Raises:
-            ValueError: If ExperimentSample entity not found
-        """
-        experiment_sample = await self.session.get(
-            ExperimentSampleEntity, experiment_sample_id, ExperimentSampleEntity.tenant_id == tenant_id
-        )
-        if not experiment_sample:
-            raise ValueError(
-                f"实验样本 '{experiment_sample_id}' 不存在。"
-            )
-
-        if experiment_sample.experiment_id != experiment_id:
-            raise ValueError(
-                f"实验样本 '{experiment_sample_id}' 不属于实验 '{experiment_id}'。"
-            )
-
-        logger.info(f"Updating ExperimentSample {experiment_sample_id}")
-
-        # Update fields
-        if status is not None:
-            experiment_sample.status = status
-        if output is not None:
-            experiment_sample.output = output
-        if score is not None:
-            experiment_sample.score = score
-        if error is not None:
-            experiment_sample.error = error
-
-        self.session.add(experiment_sample)
-
-        # Flush to ensure changes are staged
-        await self.session.flush()
-        await self.session.refresh(experiment_sample)
-
-        logger.info(f"Updated ExperimentSample entity: {experiment_sample.id}")
-        return experiment_sample
 
     # ========== RunConfig Operations ==========
 

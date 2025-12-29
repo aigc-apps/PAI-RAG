@@ -1,6 +1,6 @@
 """RAG Service layer for orchestrating business logic across knowledgebase entities."""
 
-from typing import Callable, Awaitable, Optional, List, Tuple, Dict
+from typing import Callable, Awaitable, Optional, List, Tuple
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -37,7 +37,7 @@ from common.tool.search_result import SearchResult
 from tools.utils.vectordb_retrieval import aquery_vector_store
 from utils.lru_cache import LruCache
 from db.db_context import create_db_session
-from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K, DEFAULT_SIMILARITY_THRESHOLD
+from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K
 from loguru import logger
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
@@ -394,38 +394,6 @@ class RagService:
         file_service = await self._get_file_service()
         return await file_service.add_file(kb_id=kb_id, file=file, tenant_id=tenant_id)
 
-
-    async def delete_file(self, kb_id: str, file_id: str, tenant_id: str) -> None:
-        """
-        Delete a file and all related chunks.
-        This orchestrates the deletion across file and chunk services.
-
-        Args:
-            kb_id: Knowledgebase ID
-            file_id: File ID
-
-        Raises:
-            ValueError: If file not found
-        """
-        file_service = await self._get_file_service()
-        file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        if not file_entity:
-            raise ValueError(f"文件 '{file_id}' 不存在。")
-
-        if file_entity.kb_id != kb_id:
-            raise ValueError(f"文件 '{file_id}' 不属于知识库 '{kb_id}'。")
-
-        # Delete related chunks in batch
-        chunk_service = await self._get_chunk_service()
-        chunk_ids = await chunk_service.delete_chunks_from_file(file_id, kb_id, tenant_id=tenant_id)
-        await self.adelete(kb_id=kb_id, node_ids=chunk_ids, tenant_id=tenant_id)
-
-        # Delete file itself
-        await file_service.delete_file(tenant_id=tenant_id, file_id=file_id, kb_id=kb_id)
-
-        logger.info(f"Deleted file {file_id} and all related chunks")
-
-
     ## Batch
     async def batch_delete_files(self, kb_id: str, file_ids: List[str], tenant_id: str) -> None:
         """
@@ -436,21 +404,17 @@ class RagService:
             kb_id: Knowledgebase ID
             file_ids: List of file IDs
         """
-        file_service = await self._get_file_service()
         for file_id in file_ids:
             await self.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        return await file_service.batch_delete_files(kb_id=kb_id, file_ids=file_ids, tenant_id=tenant_id)
 
 
     async def get_file_id_source_map(
         self,
-        kb_id: str,
         file_ids: List[str],
         tenant_id: str,
     ):
         file_source_results = (await self.session.exec(
             select( KbFileEntity.id, KbFileEntity.file_source ).where(
-                KbFileEntity.kb_id == kb_id,
                 KbFileEntity.id.in_(file_ids),
                 KbFileEntity.tenant_id == tenant_id,
             )
@@ -812,6 +776,53 @@ class RagService:
         return file_entity
 
 
+    async def format_search_result(self, reranked_result: VectorStoreQueryResult, tenant_id: str):
+        records = []
+        file_ids = []
+
+        seen_file_urls = {}
+
+        file_ids = set()
+        for node in reranked_result.nodes:
+            file_id = node.metadata.get("doc_id")
+            if file_id:
+                file_ids.add(file_id)
+
+        file_source_map = await self.get_file_id_source_map(file_ids=file_ids, tenant_id=tenant_id)
+
+        for i, node in enumerate(reranked_result.nodes):
+            images = []
+            origin_text = node.text
+            pattern = MARKDOWN_IMAGE_PATTERN
+            matches = re.findall(pattern, origin_text, re.DOTALL)
+            for _, (src, desc)  in enumerate(matches):
+                image_url = await file_store.get_url_async(file_path=src, tenant_id=tenant_id)
+                origin_text = origin_text.replace(src, image_url)
+                images.append({"url": image_url, "desc": desc})
+            node.text = origin_text
+
+            # TODO: Add file source
+            file_url = file_source_map.get(node.metadata.get("doc_id"), None)
+            file_path = node.metadata.get("file_path")
+            if not file_url and file_path:
+                if file_path in seen_file_urls:
+                    file_url = seen_file_urls[file_path]
+                else:
+                    file_url = await file_store.get_url_async(file_path=file_path, tenant_id=tenant_id)
+                    seen_file_urls[file_path] = file_url
+
+            records.append(
+                SearchResult(
+                    score=reranked_result.similarities[i],
+                    content=origin_text[:3000],
+                    images=images,
+                    url=file_url,
+                    title=node.metadata.get("file_name", ""),
+                    metadata=node.metadata,
+                ))
+        return records
+
+
     # 当需要发起SessionScope并发时，每个查询都需要独立的session实例
     async def _aquery_vector_store(
         self,
@@ -820,7 +831,7 @@ class RagService:
         kb_name: str = None,
         query: str = None,
         user_id: str = None,
-        retrieval_setting_dict: Optional[Dict] = None,
+        retrieval_setting: Optional[RetrievalSetting] = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
         document_ids: Optional[List[str]] = None,
         tenant_id: str = None,
@@ -852,34 +863,27 @@ class RagService:
         embed_model = create_embedding_model(embed_model_entity)
         query_embedding = await embed_model.aget_query_embedding(query)
 
-        retrieval_setting = RetrievalSetting.model_validate(retrieval_setting_dict) if retrieval_setting_dict else RetrievalSetting()
+        if not retrieval_setting:
+            retrieval_setting = RetrievalSetting()
 
         base_retrieval_setting = RetrievalConfig.model_validate(kb.retrieval_config)
         # save setting to dict
         if retrieval_setting.retrieval_mode is None:
             retrieval_setting.retrieval_mode = base_retrieval_setting.retrieval_mode
-            retrieval_setting_dict["retrieval_mode"] = retrieval_setting.retrieval_mode
         if retrieval_setting.vector_weight is None:
             retrieval_setting.vector_weight = base_retrieval_setting.vector_weight
-            retrieval_setting_dict["vector_weight"] = retrieval_setting.vector_weight
         if retrieval_setting.enable_rerank is None:
             retrieval_setting.enable_rerank = base_retrieval_setting.enable_rerank
-            retrieval_setting_dict["enable_rerank"] = retrieval_setting.enable_rerank
         if retrieval_setting.rerank_model is None:
             retrieval_setting.rerank_model = base_retrieval_setting.rerank_model
-            retrieval_setting_dict["rerank_model"] = retrieval_setting.rerank_model
         if retrieval_setting.rerank_provider_name is None:
             retrieval_setting.rerank_provider_name = base_retrieval_setting.rerank_provider_name
-            retrieval_setting_dict["rerank_provider_name"] = retrieval_setting.rerank_provider_name
         if retrieval_setting.rerank_top_k is None:
             retrieval_setting.rerank_top_k = base_retrieval_setting.rerank_top_k
-            retrieval_setting_dict["rerank_top_k"] = retrieval_setting.rerank_top_k
         if retrieval_setting.similarity_threshold is None:
             retrieval_setting.similarity_threshold = base_retrieval_setting.similarity_threshold
-            retrieval_setting_dict["similarity_threshold"] = retrieval_setting.similarity_threshold
         if retrieval_setting.top_k is None:
             retrieval_setting.top_k = base_retrieval_setting.top_k
-            retrieval_setting_dict["top_k"] = retrieval_setting.top_k
 
         query_mode = retrieval_type_to_search_mode(retrieval_setting.retrieval_mode)
 
@@ -888,7 +892,7 @@ class RagService:
                 document_ids = await query_file_ids_with_metadata_filter(session=session, kb_id=kb_id, user_id=user_id, metadata_filter=metadata_condition)
             except EmptyFilesException as e:
                 logger.warning(f"{e}")
-                return VectorStoreQueryResult(nodes=[], similarities=[], ids=[]), VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
+                return VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
 
 
         vector_db_service = await self._get_vector_db_service(session)
@@ -917,8 +921,43 @@ class RagService:
             top_k=retrieval_setting.top_k,
             use_docid_filter=is_docid_filter_supported(vector_store),
         )
-        logger.info(f"Retrieved {len(text_result.nodes) if text_result else 0} text nodes and {len(dense_result.nodes) if dense_result else 0} dense nodes for query '{query}' against knowledgebase {kb_id}.")
-        return text_result, dense_result
+
+        text_nodes_count = len(text_result.nodes) if text_result else 0
+        dense_nodes_count = len(dense_result.nodes) if dense_result else 0
+
+        logger.info(f"Retrieved {text_nodes_count} text nodes and {dense_nodes_count} dense nodes for query '{query}' against knowledgebase {kb_id}.")
+
+        reranker = None
+        if retrieval_setting.enable_rerank and retrieval_setting.rerank_model and (text_nodes_count + dense_nodes_count > 1):
+            reranker_service = await self._get_reranker_service(session)
+            reranker_config = await reranker_service.get_reranker_model_by_provider_model_id(
+                provider_name=retrieval_setting.rerank_provider_name,
+                model_id=retrieval_setting.rerank_model,
+                tenant_id=tenant_id,
+            )
+            if not reranker_config:
+                raise ValueError(f"Reranker model not found: provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
+            reranker = create_reranker_model(reranker_config)
+            logger.info(f"Created reranker model {reranker_config.model_name} with provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
+
+        try:
+            similarity_threshold = retrieval_setting.similarity_threshold or 0 # 如果没有设置similarity_threshold，直接返回所有结果
+
+            reranked_result = await arerank_fusion(
+                query=query,
+                text_result=text_result,
+                dense_result=dense_result,
+                rerank_model=reranker,
+                similarity_threshold=similarity_threshold,
+                vector_weight=retrieval_setting.vector_weight or DEFAULT_VECTOR_WEIGHT,
+                top_k=retrieval_setting.top_k or DEFAULT_SIMILARITY_TOP_K,
+                rerank_top_k=retrieval_setting.rerank_top_k or DEFAULT_RERANK_SIMILARITY_TOP_K,
+            )
+            return reranked_result
+        except Exception as e:
+            logger.error(f"Failed to rerank: {e}")
+            raise
+
 
     async def aquery_task(
         self,
@@ -927,7 +966,7 @@ class RagService:
         kb_name: str = None,
         query: str = None,
         user_id: str = None,
-        retrieval_setting_dict: Optional[Dict] = None,
+        retrieval_setting: Optional[RetrievalSetting] = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
         document_ids: Optional[List[str]] = None,
         tenant_id: str = None,
@@ -940,7 +979,7 @@ class RagService:
                     kb_name=kb_name,
                     query=query,
                     user_id=user_id,
-                    retrieval_setting_dict=retrieval_setting_dict,
+                    retrieval_setting=retrieval_setting,
                     metadata_condition=metadata_condition,
                     document_ids=document_ids,
                     tenant_id=tenant_id,
@@ -952,7 +991,7 @@ class RagService:
                 kb_name=kb_name,
                 query=query,
                 user_id=user_id,
-                retrieval_setting_dict=retrieval_setting_dict,
+                retrieval_setting=retrieval_setting,
                 metadata_condition=metadata_condition,
                 document_ids=document_ids,
                 tenant_id=tenant_id,
@@ -975,132 +1014,76 @@ class RagService:
             logger.info("No query provided, returning empty results.")
             return []
 
-        retrieval_setting_dict = retrieval_setting.model_dump() if retrieval_setting else {}
 
         if kb_id:
-            text_result, dense_result = await self.aquery_task(
+            reranked_result = await self.aquery_task(
                 session=self.session,
                 query=query,
                 kb_id=kb_id,
                 user_id=user_id,
                 tenant_id=tenant_id,
-                retrieval_setting_dict=retrieval_setting_dict,
+                retrieval_setting=retrieval_setting,
                 metadata_condition=metadata_condition,
                 document_ids=document_ids,
             )
         elif kb_name:
-            text_result, dense_result = await self.aquery_task(
+            reranked_result = await self.aquery_task(
                 session=self.session,
                 query=query,
                 kb_name=kb_name,
                 user_id=user_id,
                 tenant_id=tenant_id,
-                retrieval_setting_dict=retrieval_setting_dict,
+                retrieval_setting=retrieval_setting,
                 metadata_condition=metadata_condition,
                 document_ids=document_ids,
             )
         elif kb_id_list:
+            if retrieval_setting.top_k and retrieval_setting.rerank_top_k is None:
+                retrieval_setting.rerank_top_k = retrieval_setting.top_k
+
             vector_query_tasks = []
             for task_id in kb_id_list:
-                task_setting_dict=copy.copy(retrieval_setting_dict)
+                task_retrieval_setting = copy.copy(retrieval_setting)
+
                 vector_query_tasks.append(self.aquery_task(
                     kb_id=task_id,
                     user_id=user_id,
                     query=query,
                     tenant_id=tenant_id,
-                    retrieval_setting_dict=task_setting_dict,
+                    retrieval_setting=task_retrieval_setting,
                     metadata_condition=metadata_condition,
                     document_ids=document_ids,
                 ))
             results = await asyncio.gather(*vector_query_tasks)
-            text_result = VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
-            dense_result = VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
-            for sub_text_result, sub_dense_result in results:
-                if sub_text_result and sub_text_result.nodes:
-                    text_result.nodes.extend(sub_text_result.nodes)
-                    text_result.similarities.extend(sub_text_result.similarities)
-                    text_result.ids.extend(sub_text_result.ids)
+            reranked_result = VectorStoreQueryResult(nodes=[], similarities=[], ids=[])
+            for i, sub_reranked_result in enumerate(results):
+                if sub_reranked_result and sub_reranked_result.nodes:
+                    logger.info(f"Retrieved {len(sub_reranked_result.nodes)} nodes from knowledgebase {kb_id_list[i]}")
+                    reranked_result.nodes.extend(sub_reranked_result.nodes)
+                    reranked_result.similarities.extend(sub_reranked_result.similarities)
+                    reranked_result.ids.extend(sub_reranked_result.ids)
 
-                if sub_dense_result and sub_dense_result.nodes:
-                    dense_result.nodes.extend(sub_dense_result.nodes)
-                    dense_result.similarities.extend(sub_dense_result.similarities)
-                    dense_result.ids.extend(sub_dense_result.ids)
+            # Truncate to top_k if results exceed limit
+            top_k = retrieval_setting.top_k if retrieval_setting else DEFAULT_SIMILARITY_TOP_K
+            if not top_k:
+                top_k = DEFAULT_SIMILARITY_TOP_K
+
+            # Sort by similarity descending and take top_k
+            sorted_indices = sorted(
+                range(len(reranked_result.similarities)),
+                key=lambda i: reranked_result.similarities[i],
+                reverse=True
+            )[:top_k]
+            reranked_result = VectorStoreQueryResult(
+                nodes=[reranked_result.nodes[i] for i in sorted_indices],
+                similarities=[reranked_result.similarities[i] for i in sorted_indices],
+                ids=[reranked_result.ids[i] for i in sorted_indices],
+            )
+            logger.info(f"Truncated merged results from {len(reranked_result.nodes)} nodes to top_k={top_k}")
         else:
             raise ValueError("No valid knowledgebase ID or name provided.")
 
-        text_nodes_count = len(text_result.nodes) if text_result else 0
-        dense_nodes_count = len(dense_result.nodes) if dense_result else 0
-        logger.info(f"Executing rerank phrase...text nodes: {text_nodes_count}, dense nodes: {dense_nodes_count}")
-        reranker = None
-
-        retrieval_setting = RetrievalSetting.model_validate(retrieval_setting_dict)
-
-        if retrieval_setting.enable_rerank and retrieval_setting.rerank_model and (text_nodes_count + dense_nodes_count > 1):
-            reranker_service = await self._get_reranker_service()
-            reranker_config = await reranker_service.get_reranker_model_by_provider_model_id(
-                provider_name=retrieval_setting.rerank_provider_name,
-                model_id=retrieval_setting.rerank_model,
-                tenant_id=tenant_id,
-            )
-            if not reranker_config:
-                raise ValueError(f"Reranker model not found for knowledgebase {kb_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
-            reranker = create_reranker_model(reranker_config)
-            logger.info(f"Created reranker model {reranker_config.model_name} for knowledgebase {kb_id} and provider {retrieval_setting.rerank_provider_name} and model {retrieval_setting.rerank_model}.")
-
-        try:
-            reranked_result = await arerank_fusion(
-                query=query,
-                text_result=text_result,
-                dense_result=dense_result,
-                rerank_model=reranker,
-                vector_weight=retrieval_setting.vector_weight or DEFAULT_VECTOR_WEIGHT,
-                top_k=retrieval_setting.top_k or DEFAULT_SIMILARITY_TOP_K,
-                rerank_top_k=retrieval_setting.rerank_top_k or DEFAULT_RERANK_SIMILARITY_TOP_K,
-            )
-        except Exception as e:
-            logger.error(f"Failed to rerank: {e}")
-            raise
-
-        records = []
-        file_ids = []
-
-        seen_file_urls = {}
-        similarity_threshold = retrieval_setting.similarity_threshold or DEFAULT_SIMILARITY_THRESHOLD
-        for i, node in enumerate(reranked_result.nodes):
-            if reranked_result.similarities[i] >= similarity_threshold:
-                images = []
-                file_ids.append(node.metadata["doc_id"])
-                origin_text = node.text
-                pattern = MARKDOWN_IMAGE_PATTERN
-                matches = re.findall(pattern, origin_text, re.DOTALL)
-                for _, (src, desc)  in enumerate(matches):
-                    image_url = await file_store.get_url_async(file_path=src, tenant_id=tenant_id)
-                    origin_text = origin_text.replace(src, image_url)
-                    images.append({"url": image_url, "desc": desc})
-                node.text = origin_text
-
-                # TODO: Add file source
-                file_url = node.metadata.get("file_source")
-                file_path = node.metadata.get("file_path")
-                if not file_url and file_path:
-                    if file_path in seen_file_urls:
-                        file_url = seen_file_urls[file_path]
-                    else:
-                        file_url = await file_store.get_url_async(file_path=file_path, tenant_id=tenant_id)
-                        seen_file_urls[file_path] = file_url
-
-                records.append(
-                    SearchResult(
-                        score=reranked_result.similarities[i],
-                        content=origin_text[:3000],
-                        images=images,
-                        url=file_url,
-                        title=node.metadata.get("file_name", ""),
-                        metadata=node.metadata,
-                    ).model_dump())
-
-        # TODO add file source map
-        logger.info(f"Get {len(records)} nodes above given threshold {retrieval_setting.similarity_threshold}.")
+        records = await self.format_search_result(reranked_result, tenant_id)
         return records
 
     async def ainsert(
@@ -1213,7 +1196,7 @@ class RagService:
             logger.error(f"Failed to delete nodes from vector store: {e}")
             raise
 
-    async def adelete_file(
+    async def delete_file(
         self,
         kb_id: str,
         file_id: str,
@@ -1260,3 +1243,11 @@ class RagService:
         except Exception as e:
             logger.error(f"Failed to delete file {file_id} from vector store: {e}")
             raise
+
+        chunk_service = await self._get_chunk_service()
+        await chunk_service.delete_chunks_from_file(file_id=file_id, kb_id=kb_id, tenant_id=tenant_id)
+        logger.info(f"Finished deleting chunks from file {file_id} from knowledgebase.")
+
+        file_service = await self._get_file_service()
+        await file_service.delete_file(file_id=file_id, kb_id=kb_id, tenant_id=tenant_id)
+        logger.info(f"Finished deleting file {file_id} from knowledgebase.")

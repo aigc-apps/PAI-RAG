@@ -8,8 +8,9 @@ from openai.types.chat import ChatCompletionChunk, ChatCompletion, ChatCompletio
 from openai.types.completion_usage import CompletionUsage
 from openai.types.chat.chat_completion_chunk import ChoiceDelta, Choice as ChunkChoice
 from openai.types.chat.chat_completion import Choice
-from extensions.guardrail.config import CHECK_OUTPUT_CHUNK_SIZE
+from extensions.guardrail.config import CHECK_OUTPUT_CHUNK_SIZE, CHECK_OUTPUT_CHUNK_OVERLAP
 from extensions.guardrail.guardrail_check import GuardrailChecker
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from loguru import logger
 
@@ -73,7 +74,13 @@ async def convert_gen_to_stream_chat_completions(
     enable_output_check: bool = False,
     guardrail_hint: str | None = None,
     checker: GuardrailChecker | None = None,
+    session: AsyncSession = None,
 ):
+    logger.info(f"convert_gen_to_stream_chat_completions: model={model}, enable_output_check={enable_output_check}, guardrail_hint={guardrail_hint}")
+    if enable_output_check and not checker:
+        logger.warning("convert_gen_to_stream_chat_completions: checker is None, set enable_output_check to False")
+        enable_output_check = False
+
     chunk_index = 0
     chat_id = uuid.uuid4().hex
     total_usage = CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
@@ -82,58 +89,71 @@ async def convert_gen_to_stream_chat_completions(
     current_content = ""
     check_tasks = []
     output_check_result = TextCheckResult()
+    fail_fast = False
 
-    async for chunk in response_generator:
-        # 出错直接返回
-        if output_check_result.reject:
-            break
+    try:
+        async for chunk in response_generator:
+            # 出错直接返回
+            if output_check_result.reject:
+                logger.info("convert_gen_to_stream_chat_completions: output_check_result.reject=True, break")
+                fail_fast = True
+                break
 
-        if chunk.usage:
-            total_usage.prompt_tokens += chunk.usage.prompt_tokens
-            total_usage.completion_tokens += chunk.usage.completion_tokens
-            total_usage.total_tokens += chunk.usage.total_tokens
-            continue
+            if chunk.usage:
+                total_usage.prompt_tokens += chunk.usage.prompt_tokens
+                total_usage.completion_tokens += chunk.usage.completion_tokens
+                total_usage.total_tokens += chunk.usage.total_tokens
+                continue
 
-        if isinstance(chunk, ToolResultChunk):
-            citations, citation_details = extract_citations(chunk)
+            if isinstance(chunk, ToolResultChunk):
+                citations, citation_details = extract_citations(chunk)
 
-        current_content += chunk.delta
-        if enable_output_check and checker and len(current_content) >= CHECK_OUTPUT_CHUNK_SIZE:
-            check_tasks.append(asyncio.create_task(checker.acheck_output(text=current_content, current_result=output_check_result)))
-            current_content = ""
+            current_content += chunk.delta
+            if enable_output_check and checker and len(current_content) >= CHECK_OUTPUT_CHUNK_SIZE:
+                check_tasks.append(asyncio.create_task(checker.acheck_output(text=current_content, current_result=output_check_result)))
+                current_content = current_content[-CHECK_OUTPUT_CHUNK_OVERLAP:]
+
+            completion_chunk = ChatCompletionChunk(
+                id=chat_id,
+                choices=[
+                    ChunkChoice(
+                        delta=ChoiceDelta(
+                            role="assistant",
+                            content=chunk.delta,
+                            reasoning_content=chunk.reasoning_delta if isinstance(chunk, ReasoningChunk) else None,
+                        ),
+                        index=chunk_index,
+                        finish_reason=None,
+                    )
+                ],
+                actions=[action.model_dump(mode="json") for action in chunk.tool_calls] if chunk.tool_calls else None,
+                observation=chunk.model_dump(mode="json") if isinstance(chunk, ToolResultChunk) else None,
+                trace_id=chunk.trace_id if isinstance(chunk, TextChunk) else None,
+                model=model,
+                created=int(time.time()),
+                citations=citations,
+                citation_details=citation_details,
+                object="chat.completion.chunk",
+            )
+            chunk_index += 1
+
+            yield json.dumps(completion_chunk.model_dump(mode="json"), ensure_ascii=False)
+
+            if isinstance(chunk, ErrorChunk):
+                fail_fast = True
+                break
+    finally:
+        if response_generator and hasattr(response_generator, "aclose"):
+            await response_generator.aclose()
+            logger.info("convert_gen_to_stream_chat_completions: response_generator closed.")
+            await session.close()
+            logger.info("convert_gen_to_stream_chat_completions: session closed.")
 
 
-        completion_chunk = ChatCompletionChunk(
-            id=chat_id,
-            choices=[
-                ChunkChoice(
-                    delta=ChoiceDelta(
-                        role="assistant",
-                        content=chunk.delta,
-                        reasoning_content=chunk.reasoning_delta if isinstance(chunk, ReasoningChunk) else None,
-                    ),
-                    index=chunk_index,
-                    finish_reason=None,
-                )
-            ],
-            actions=[action.model_dump(mode="json") for action in chunk.tool_calls] if chunk.tool_calls else None,
-            observation=chunk.model_dump(mode="json") if isinstance(chunk, ToolResultChunk) else None,
-            trace_id=chunk.trace_id if isinstance(chunk, TextChunk) else None,
-            model=model,
-            created=int(time.time()),
-            citations=citations,
-            citation_details=citation_details,
-            object="chat.completion.chunk",
-        )
-        chunk_index += 1
+    if not fail_fast and len(current_content) > CHECK_OUTPUT_CHUNK_OVERLAP and enable_output_check and checker:
+        check_tasks.append(asyncio.create_task(checker.acheck_output(text=current_content, current_result=output_check_result)))
 
-        yield json.dumps(completion_chunk.model_dump(mode="json"), ensure_ascii=False)
-
-        if isinstance(chunk, ErrorChunk):
-            break
-
-
-    if not output_check_result.reject and len(check_tasks) > 0:
+    if not fail_fast and len(check_tasks) > 0:
         await asyncio.gather(*check_tasks)
 
     if output_check_result.reject:

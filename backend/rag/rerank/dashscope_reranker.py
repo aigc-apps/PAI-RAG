@@ -63,7 +63,8 @@ class DashscopeReranker:
         query: str,
         documents: List[str],
         model: Optional[str] = None,
-        top_n: Optional[int] = None
+        top_n: Optional[int] = None,
+        similarity_threshold: float = 0,
     ) -> List[RerankResult]:
         """
         执行文档重排序
@@ -73,7 +74,7 @@ class DashscopeReranker:
             documents: 需要排序的文档列表，最多包含500个文档，每个文档长度不超过4,000个Token
             model: 覆盖默认模型，支持 "qwen3-rerank" 或 "gte-rerank-v2"
             top_n: 返回的最相关文档数量
-
+            similarity_threshold: 相似度阈值
         Returns:
             排序好的结果列表，每个结果包含index, score, doc字段
 
@@ -150,6 +151,10 @@ class DashscopeReranker:
                         raise RuntimeError("响应格式错误: 结果中缺少index字段")
 
                     score = item.get("relevance_score", 0.0)
+
+                    if score < similarity_threshold:
+                        continue
+
                     # 提取文档文本
                     if "document" in item and isinstance(item["document"], dict):
                         doc = item["document"].get("text", "")
@@ -165,8 +170,8 @@ class DashscopeReranker:
 
                 # 确保结果按score降序排序
                 rerank_results.sort(key=lambda x: x.score, reverse=True)
-
                 return rerank_results
+
         except aiohttp.ClientError as e:
             raise RuntimeError(f"API请求失败: {str(e)}") from e
         except json.JSONDecodeError as e:
@@ -177,6 +182,7 @@ class DashscopeReranker:
         query: str,
         result: VectorStoreQueryResult,
         top_n: Optional[int] = None,
+        similarity_threshold: float = 0,
         model: Optional[str] = None,
     ) -> VectorStoreQueryResult:
         """
@@ -203,13 +209,15 @@ class DashscopeReranker:
 
         origin_nodes = result.nodes
         documents = [node.text for node in origin_nodes]
-        rerank_results = await self.rerank(query, documents, model, top_n)
+        rerank_results = await self.rerank(query, documents, model, top_n, similarity_threshold)
 
         return_nodes = []
+        return_ids = []
         return_similarities = []
         for rerank_result in rerank_results:
             node = origin_nodes[rerank_result.index]
             node.metadata["rerank"] = True
             return_nodes.append(node)
+            return_ids.append(node.node_id)
             return_similarities.append(rerank_result.score)
-        return VectorStoreQueryResult(nodes=return_nodes, similarities=return_similarities)
+        return VectorStoreQueryResult(nodes=return_nodes, ids=return_ids, similarities=return_similarities)

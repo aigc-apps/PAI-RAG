@@ -1,5 +1,6 @@
 """Tabular parser-CSV parser.
 
+
 Contains parsers for tabular data files.
 
 """
@@ -10,13 +11,12 @@ from fsspec import AbstractFileSystem
 
 import pandas as pd
 from llama_index.core.schema import Document
-from pairag.file.readers.base import BaseReader
-from pairag.file.models.file_item import FileItem
-import chardet
 import os
-
+from pairag.file.readers.base import BaseReader, FileItem, Document, List
+import charset_normalizer
 
 class CSVReader(BaseReader):
+
 
     def __init__(
         self,
@@ -37,7 +37,7 @@ class CSVReader(BaseReader):
         self._sheet_column_filters = sheet_column_filters if sheet_column_filters is not None else None
 
     def _read_file(self, file: Any):
-        encoding = chardet.detect(file.read(10000))["encoding"]
+        encoding = charset_normalizer.detect(file.read(1000))["encoding"]
         file.seek(0)
         encoding = "utf-8"
         if encoding is not None and "GB" in encoding.upper():

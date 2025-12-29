@@ -376,8 +376,9 @@ class EmbeddingService:
             EmbeddingModelEntity.model_id == model_id,
             EmbeddingModelEntity.tenant_id == tenant_id
         )
-        if provider_name:
-            statement = statement.where(EmbeddingModelEntity.provider_name == provider_name)
+        # if provider_name:
+        #     statement = statement.where(EmbeddingModelEntity.provider_name == provider_name)
+        # 为了兼容旧数据，不指定 provider_name 查询。直接通过model_id查询， 因为model_id有唯一性
         embedding_entity = await self.session.exec(statement)
         embedding = embedding_entity.first()
         return embedding

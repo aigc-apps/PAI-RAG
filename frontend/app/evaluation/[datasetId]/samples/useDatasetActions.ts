@@ -32,7 +32,7 @@ export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
 
       const result = await res.json();
       toast.success('实验创建成功');
-      router.push(`/evaluation/${datasetId}/${result.data.id}`);
+      router.push(`/evaluation/${datasetId}/experiments/${result.data.id}`);
       return result.data.id;
     } catch (error) {
       console.error('实验创建失败:', error);

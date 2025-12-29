@@ -17,7 +17,6 @@ from db.models.knowledgebase.knowledgebase import (
     ChunkConfig,
 )
 from db.db_context import get_db_session
-from sqlalchemy.exc import IntegrityError
 from pairag.file.store.file_store_helper import file_store
 from common.chat.response_model import ResponseModel, success_response
 from api.api_exception import ApiException
@@ -39,24 +38,26 @@ async def create_knowledgebase(
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
+    knowledgebase = None
     try:
         knowledgebase = await rag_service.create_knowledgebase(kb_data=kb_data, tenant_id=tenant_id)
-
+        await session.commit()
+        await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
         return success_response(data=knowledgebase, message="知识库创建成功。")
     except ValueError as e:
         logger.error(f"创建知识库失败。\nValueError:{e}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_data.name)
         raise ApiException(code=400, message=str(e))
-    except IntegrityError as e:
-        logger.error(f"创建知识库失败。\nIntegrityError:{e}")
-        if "UniqueViolationError" in str(e.orig):
-            raise ApiException(code=400, message="创建知识库失败: 知识库名称已存在。")
-        else:
-            raise ApiException(code=400, message=f"创建知识库失败: {e}.")
     except Exception as e:
         logger.exception(f"创建知识库失败。\nException:{traceback.format_exc()}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_data.name)
         raise ApiException(code=400, message=f"创建知识库失败: {e}.")
-
 
 @knowledgebase_router.get("")
 async def list_knowledgebases(
@@ -114,16 +115,34 @@ async def update_knowledgebase(
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
+    knowledgebase = None
+    old_kb_name = None
     try:
-        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, update_data=update_data, tenant_id=tenant_id)
+        old_kb = await knowledgebase_service.get_knowledgebase(kb_id, tenant_id)
+        if old_kb:
+            old_kb_name = old_kb.name
 
+        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, update_data=update_data, tenant_id=tenant_id)
+        await session.commit()
+        await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
         return success_response(data=knowledgebase, message="知识库更新成功。")
     except ValueError as e:
         logger.error(f"更新知识库失败。\nValueError:{e}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, knowledgebase.name)
+        elif old_kb_name:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, old_kb_name)
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"更新知识库失败。\nException:{traceback.format_exc()}")
+        await session.rollback()
+        if knowledgebase:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, knowledgebase.name)
+        elif old_kb_name:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, old_kb_name)
         raise ApiException(code=400, message=f"更新知识库失败: {e}.")
 
 
@@ -510,9 +529,10 @@ async def set_file_source(
     file_id: str,
     body: FileSourceParam,
     tenant_id: str = Depends(get_tenant_id),
+    file_service: FileService = Depends(get_file_service),
     session: AsyncSession = Depends(get_db_session),
 ):
-    file_entity = await session.get(KbFileEntity, file_id)
+    file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
     if not file_entity:
         raise ApiException.not_found(file_id, "文件")
 
@@ -520,8 +540,9 @@ async def set_file_source(
         raise ApiException(code=400, message="文件来源不能为空。")
 
     file_entity.file_source = body.file_source
+    logger.info(f"Set file source: {file_entity.id} -> {body.file_source}")
     session.add(file_entity)
-
+    await session.commit()
     await session.refresh(file_entity)
 
     return success_response(data=file_entity, message="更新文件来源成功")

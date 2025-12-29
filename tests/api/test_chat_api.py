@@ -114,7 +114,7 @@ class TestChatAPI:
         }
         
         response = client.post("/v1/chat/completions", json=chat_payload)
-        assert response.status_code == 422
+        assert response.status_code == 400
 
     def test_chat_completions_empty_messages(self, client: Client):
         """Test chat with empty messages array."""

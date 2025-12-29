@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import { EvalConfig } from '@/app/evaluation/[datasetId]/types';
 import { StatusBadge } from '@/app/evaluation/components/status-badge';
 import { useExperiments } from '@/app/evaluation/[datasetId]/experiments/useExperiments';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 export default function EvalExperimentsDetailsPage(
   { params }: { params: Promise<{ datasetId: string }> }
@@ -55,12 +56,12 @@ export default function EvalExperimentsDetailsPage(
     isLoading,
     deleteExperiment
   } = useExperiments({ datasetId, page, pageSize });
-
+  const { tenantFetch } = useTenantFetch();
   // 加载评估配置
   useEffect(() => {
     const fetchEvalConfig = async () => {
       try {
-        const response = await fetch(`/api/config/evaluation/${datasetId}`);
+        const response = await tenantFetch(`/api/config/evaluation/${datasetId}`);
         if (!response.ok) throw new Error('获取评估配置失败');
         const data = await response.json();
         setEvalConfig(data.data);
@@ -157,7 +158,7 @@ export default function EvalExperimentsDetailsPage(
                           <Button
                             variant="link"
                             className="truncate max-w-[120px] font-medium group-hover:underline"
-                            onClick={() => router.push(`/evaluation/${datasetId}/${item.id}`)}
+                            onClick={() => router.push(`/evaluation/${datasetId}/experiments/${item.id}`)}
                           >
                             {item.id.substring(0, 8)}...
                           </Button>
@@ -232,7 +233,7 @@ export default function EvalExperimentsDetailsPage(
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => router.push(`/evaluation/${datasetId}/${item.id}`)}
+                              onClick={() => router.push(`/evaluation/${datasetId}/experiments/${item.id}`)}
                             >
                               <Eye className="mr-2 h-4 w-4" />
                               <span>查看详情</span>

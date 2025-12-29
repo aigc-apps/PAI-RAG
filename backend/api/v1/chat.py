@@ -43,25 +43,27 @@ async def generate_reponse(
     enable_output_check: bool = False,
     guardrail_hint: str | None = None,
     checker: GuardrailChecker | None = None,
+    session: AsyncSession = None,
 ):
     if stream:
         return EventSourceResponse(
             convert_gen_to_stream_chat_completions(
-                model,
-                chunk_gen,
-                enable_output_check,
-                guardrail_hint,
-                checker,
+                model=model,
+                response_generator=chunk_gen,
+                enable_output_check=enable_output_check,
+                guardrail_hint=guardrail_hint,
+                checker=checker,
+                session=session,
             ),
             media_type="text/event-stream",
         )
     else:
         return await convert_gen_to_chat_completions(
-            model,
-            chunk_gen,
-            enable_output_check,
-            guardrail_hint,
-            checker,
+            model=model,
+            response_generator=chunk_gen,
+            enable_output_check=enable_output_check,
+            guardrail_hint=guardrail_hint,
+            checker=checker,
         )
 
 
@@ -93,9 +95,10 @@ async def chat(
             check_result = await checker.acheck_input(text=user_message)
             if check_result.reject:
                 return await generate_reponse(
-                    error_chunk_gen(message=check_result.advice or chat_request.guardrail_hint),
+                    chunk_gen=error_chunk_gen(message=check_result.advice or chat_request.guardrail_hint),
                     model=chat_request.model,
                     stream=chat_request.stream,
+                    session=session,
                 )
 
 
@@ -106,25 +109,29 @@ async def chat(
             )
         )
         response = await generate_reponse(
-            async_response_gen,
+            chunk_gen=async_response_gen,
             model=chat_request.model,
             stream=chat_request.stream,
             enable_output_check=chat_request.enable_output_guardrail,
             guardrail_hint=chat_request.guardrail_hint,
+            checker=checker,
+            session=session,
         )
 
         return response
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
         return await generate_reponse(
-            error_chunk_gen(message=f"请求失败: {ve}"),
+            chunk_gen=error_chunk_gen(message=f"请求失败: {ve}"),
             model=chat_request.model,
             stream=chat_request.stream,
+            session=session,
         )
     except Exception as ex:
         logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
         return await generate_reponse(
-            error_chunk_gen(message=f"未知错误: {ex}"),
+            chunk_gen=error_chunk_gen(message=f"未知错误: {ex}"),
             model=chat_request.model,
             stream=chat_request.stream,
+            session=session,
         )
