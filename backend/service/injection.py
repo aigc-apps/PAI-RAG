@@ -10,6 +10,8 @@ from service.model.reranker_service import RerankerService
 from service.tool.websearch_service import WebsearchService
 from service.tool.chatdb_service import ChatdbService
 from service.tool.chatapp_service import ChatappService
+from service.tool.faq_config_service import FAQConfigService
+from service.tool.faq_item_service import FAQItemService
 from service.tool.codesandbox_service import CodesandboxService
 from service.tool.evaluation_service import EvaluationService
 from service.tool.guardrail_service import GuardrailService
@@ -436,6 +438,36 @@ async def get_chatapp_service(
         ChatappService instance with the injected session
     """
     return ChatappService(session)
+
+
+async def get_faq_config_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> FAQConfigService:
+    """
+    FastAPI dependency injection function for FAQConfigService.
+
+    Args:
+        session: Database session (injected via Depends)
+
+    Returns:
+        FAQConfigService instance with the injected session
+    """
+    return FAQConfigService(session)
+
+
+async def get_faq_item_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> FAQItemService:
+    """
+    FastAPI dependency injection function for FAQItemService.
+
+    Args:
+        session: Database session (injected via Depends)
+
+    Returns:
+        FAQItemService instance with the injected session
+    """
+    return FAQItemService(session)
 
 
 async def get_codesandbox_service(

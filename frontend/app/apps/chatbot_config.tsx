@@ -63,6 +63,7 @@ export interface Chatbot {
   enable_search: boolean;
   enable_agent: boolean;
   enable_chatdb: boolean;
+  faq_id?: string | null;
   mcp_ids: string[];
   kb_ids: string[];
   model_id: string;
@@ -90,6 +91,7 @@ const default_chat_config = {
   updated_at: "",
   enable_agent: false,
   enable_chatdb: false,
+  faq_id: null,
   enable_input_guardrail: false,
   enable_output_guardrail: false,
   guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
@@ -498,6 +500,21 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             setBotConfig({
               ...botConfig,
               enable_agent: checked,
+            });
+          }}
+        />
+      </div>
+      <div className="flex gap-6">
+        <Label htmlFor="enable_faq" className="w-[90px]">
+          启用FAQ
+        </Label>
+        <Switch
+          id="enable_faq"
+          checked={botConfig.enable_faq || false}
+          onCheckedChange={(checked) => {
+            setBotConfig({
+              ...botConfig,
+              enable_faq: checked,
             });
           }}
         />

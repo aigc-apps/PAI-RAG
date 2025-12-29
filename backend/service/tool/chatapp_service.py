@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from loguru import logger
 
 from db.models.chatbot import ChatBotCreate, ChatBotEntity
+from db.models.faq_config import FAQConfigEntity
 from common.chat.response_model import PagedResult
 
 
@@ -104,6 +105,7 @@ class ChatappService:
 
         Args:
             app_data: ChatApp creation data
+            tenant_id: Tenant ID
 
         Returns:
             Created ChatBotEntity (not yet committed)
@@ -118,6 +120,31 @@ class ChatappService:
             # Flush to get the ID, but don't commit
             await self.session.flush()
             await self.session.refresh(chatbot)
+
+            # If enable_faq is True, create FAQ config and set faq_id
+            if app_data.enable_faq:
+                faq_config = FAQConfigEntity(
+                    chatbot_id=chatbot.id,
+                    tenant_id=tenant_id,
+                    score_threshold=0.9,
+                    embedding_model="BAAI/bge-m3",
+                    question_in_retrieval=True,
+                    question_in_response=False,
+                    answer_in_retrieval=False,
+                    answer_in_response=True,
+                )
+                self.session.add(faq_config)
+                await self.session.flush()
+                await self.session.refresh(faq_config)
+
+                # Update chatbot with faq_id
+                chatbot.faq_id = faq_config.id
+                await self.session.flush()
+                await self.session.refresh(chatbot)
+
+                logger.info(
+                    f"Created FAQ config: {faq_config.id} for ChatApp: {chatbot.id} (app_id: {chatbot.app_id})"
+                )
 
             logger.info(
                 f"Created ChatApp entity: {chatbot.id} (app_id: {chatbot.app_id})"
@@ -157,6 +184,33 @@ class ChatappService:
 
         logger.info(f"Updating ChatApp {id} with data: {update_data}")
 
+        # Handle enable_faq field: create FAQ config if enabling, clear faq_id if disabling
+        if update_data.enable_faq is not None:
+            if update_data.enable_faq:
+                # Enable FAQ: create FAQ config if not exists
+                if not chatbot.faq_id:
+                    faq_config = FAQConfigEntity(
+                        chatbot_id=chatbot.id,
+                        tenant_id=tenant_id,
+                        score_threshold=0.9,
+                        embedding_model="BAAI/bge-m3",
+                        question_in_retrieval=True,
+                        question_in_response=False,
+                        answer_in_retrieval=False,
+                        answer_in_response=True,
+                    )
+                    self.session.add(faq_config)
+                    await self.session.flush()
+                    await self.session.refresh(faq_config)
+                    chatbot.faq_id = faq_config.id
+                    logger.info(
+                        f"Created FAQ config: {faq_config.id} for ChatApp: {chatbot.id}"
+                    )
+            else:
+                # Disable FAQ: clear faq_id (but keep FAQ config and items)
+                chatbot.faq_id = None
+                logger.info(f"Disabled FAQ for ChatApp: {chatbot.id}")
+
         # Update fields
         if update_data.app_id is not None:
             chatbot.app_id = update_data.app_id
@@ -182,6 +236,9 @@ class ChatappService:
             chatbot.enable_output_guardrail = update_data.enable_output_guardrail
         if update_data.guardrail_hint is not None:
             chatbot.guardrail_hint = update_data.guardrail_hint
+        # Only update faq_id if enable_faq is not provided (to allow manual faq_id updates)
+        if update_data.faq_id is not None and update_data.enable_faq is None:
+            chatbot.faq_id = update_data.faq_id
         if update_data.prompts is not None:
             chatbot.prompts = update_data.prompts
 
