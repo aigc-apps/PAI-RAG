@@ -588,7 +588,7 @@ class RagService:
         file_ids = [relation.file_id for relation in file_metadata_list]
         if file_ids:
             file_service = await self._get_file_service()
-            file_list = await file_service.get_files_by_ids(kb_id, file_ids)
+            file_list = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=file_ids, tenant_id=tenant_id)
             # If name changed, update all related files' file_metadata key names
             if old_name != new_name:
                 logger.info(
