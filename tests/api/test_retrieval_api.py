@@ -24,7 +24,7 @@ class TestRetrievalAPI:
         response = client.post("/v1/retrieval", json=retrieval_payload)
         assert response.status_code == 200
         resp_json = response.json()
-        assert "records" in resp_json["data"]
+        assert "records" in resp_json
 
     def test_retrieval_with_retrieval_setting(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with custom retrieval settings that override KB defaults."""
@@ -42,7 +42,7 @@ class TestRetrievalAPI:
         response = client.post("/v1/retrieval", json=retrieval_payload)
         assert response.status_code == 200
         resp_json = response.json()
-        assert "records" in resp_json["data"]
+        assert "records" in resp_json
 
     def test_retrieval_with_metadata_condition(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with metadata filtering conditions."""
@@ -66,7 +66,7 @@ class TestRetrievalAPI:
         response = client.post("/v1/retrieval", json=retrieval_payload)
         assert response.status_code == 200
         resp_json = response.json()
-        assert "records" in resp_json["data"]
+        assert "records" in resp_json
 
     def test_retrieval_with_user_id(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with user_id for personalization/tracking."""
@@ -81,7 +81,7 @@ class TestRetrievalAPI:
         response = client.post("/v1/retrieval", json=retrieval_payload)
         assert response.status_code == 200
         resp_json = response.json()
-        assert "records" in resp_json["data"]
+        assert "records" in resp_json
 
     def test_retrieval_invalid_knowledge_id(self, client: Client, test_knowledgebase:Any):
         """Test retrieval with non-existent knowledge_id should fail."""
