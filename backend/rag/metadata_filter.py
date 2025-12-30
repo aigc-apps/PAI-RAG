@@ -1,4 +1,4 @@
-from sqlalchemy import Float, and_, exists, or_
+from sqlalchemy import Double, and_, exists, or_
 
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -40,7 +40,7 @@ def _build_metadata_condition_(
                 # 添加json_quote ""
                 condition_filter = KbFileEntity.file_metadata[condition.name].as_string() == f'{condition.value}'
             else:
-                condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) == condition.value
+                condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Double) == condition.value
         case "is not" | "≠":
             if isinstance(condition.value, str):
                 # 添加json_quote ""
@@ -50,8 +50,8 @@ def _build_metadata_condition_(
                 )
             else:
                 condition_filter = or_(
-                    KbFileEntity.file_metadata[condition.name].as_string().cast(Float).is_(None),
-                    KbFileEntity.file_metadata[condition.name].as_string().cast(Float) != condition.value
+                    KbFileEntity.file_metadata[condition.name].as_string().cast(Double).is_(None),
+                    KbFileEntity.file_metadata[condition.name].as_string().cast(Double) != condition.value
                 )
         case "empty":
             condition_filter = or_(
@@ -64,13 +64,13 @@ def _build_metadata_condition_(
                 KbFileEntity.file_metadata[condition.name].as_string() != ''
             )
         case "before" | "<":
-            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) < condition.value
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Double) < condition.value
         case "after" | ">":
-            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) > condition.value
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Double) > condition.value
         case "≤" | "<=":
-            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) <= condition.value
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Double) <= condition.value
         case "≥" | ">=":
-            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Float) >= condition.value
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Double) >= condition.value
         case _:
             logger.warning(f"Unknown operator {condition.comparison_operator}")
             return None

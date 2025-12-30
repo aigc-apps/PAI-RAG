@@ -413,6 +413,9 @@ class RagService:
         file_ids: List[str],
         tenant_id: str,
     ):
+        if not file_ids:
+            return {}
+
         file_source_results = (await self.session.exec(
             select( KbFileEntity.id, KbFileEntity.file_source ).where(
                 KbFileEntity.id.in_(file_ids),
