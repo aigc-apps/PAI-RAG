@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 import aiohttp
 from utils.http_session import HttpSessionShared
+from extensions.trace.rag_wrapper import reranker_wrapper
 
 
 @dataclass
@@ -186,10 +187,11 @@ class OpenAICompatibleReranker:
         except json.JSONDecodeError as e:
             raise RuntimeError(f"响应解析失败: {str(e)}") from e
 
+    @reranker_wrapper
     async def vector_store_rerank(
         self,
         query: str,
-        result: VectorStoreQueryResult,
+        vector_result: VectorStoreQueryResult,
         top_n: Optional[int] = None,
         model: Optional[str] = None,
         similarity_threshold: float = 0,
@@ -199,7 +201,7 @@ class OpenAICompatibleReranker:
 
         Args:
             query: 查询语句
-            result: 需要排序的vector store query result
+            vector_result: 需要排序的vector store query result
             top_n: 返回的最相关node数量
             model: 覆盖默认模型
             similarity_threshold: 相似度阈值
@@ -214,10 +216,13 @@ class OpenAICompatibleReranker:
         # 参数验证
         if not query:
             raise ValueError("查询内容不能为空")
-        if not result:
+        if not vector_result:
             raise ValueError("VectorStoreQueryResult列表不能为空")
 
-        origin_nodes = result.nodes
+        if not vector_result.nodes or len(vector_result.nodes) <= 1:
+            return vector_result
+
+        origin_nodes = vector_result.nodes
         documents=[node.text for node in origin_nodes]
         rerank_results = await self.rerank(query, documents, model, top_n, similarity_threshold)
 
