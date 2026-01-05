@@ -19,4 +19,4 @@ class TraceModelEntity(TraceModel, table=True):
 
     id: str = Field(default_factory=lambda x: str(uuid.uuid4().hex), primary_key=True)
     def is_enabled(self) -> bool:
-        return self.enabled and self.service_name and self.token and self.endpoint
+        return self.enabled and self.service_name and self.endpoint

@@ -23,7 +23,19 @@ from openinference.semconv.trace import SpanAttributes, MessageAttributes, Messa
 from extensions.trace.reloadable_exporter import ReloadableOTLPSpanExporter
 from extensions.trace import context as trace_context
 from extensions.trace.trace_config import TraceConfig
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.baggage.propagation import W3CBaggagePropagator
+from opentelemetry.propagators.composite import CompositePropagator
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+
+def setup_propagator(app):
+    set_global_textmap(CompositePropagator([
+        TraceContextTextMapPropagator(),  # 处理 traceparent
+        W3CBaggagePropagator()           # 处理 baggage
+    ]))
+    FastAPIInstrumentor.instrument_app(app)
 
 # trace_provider为singleton, 不支持覆盖，故修改trace配置时，默认覆盖exporter和resource
 # 这样如果用户填错密码，还可以成功刷新

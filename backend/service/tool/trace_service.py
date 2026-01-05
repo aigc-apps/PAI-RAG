@@ -5,9 +5,28 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
-
+import os
 from db.models.trace import TraceModel, TraceModelEntity
 from extensions.trace.base import init_instrument, TraceConfig
+from common.system_constants import DEFAULT_TENANT_ID
+
+
+DEFAULT_SERVICE_NAME = "pai-rag"
+
+def _load_trace_config_from_env() -> TraceModelEntity:
+    logger.info("Loading trace config from environment variables.")
+    trace_endpoint = os.getenv("TRACE_ENDPOINT")
+    if trace_endpoint:
+        logger.info(f"Trace endpoint: {trace_endpoint}")
+        return TraceModelEntity.model_validate({
+            "endpoint": trace_endpoint,
+            "token": os.getenv("TRACE_TOKEN",""),
+            "service_name": os.getenv("TRACE_SERVICE_NAME", DEFAULT_SERVICE_NAME),
+            "tenant_id": DEFAULT_TENANT_ID,
+            "id": "default_trace_id",
+        })
+    else:
+        return None
 
 
 class TraceService:
@@ -23,9 +42,12 @@ class TraceService:
         self.session = session
 
     async def init_trace(self):
-        statement = select(TraceModelEntity).where(TraceModelEntity.enabled)
-        result = await self.session.exec(statement)
-        config = result.first()
+        config = _load_trace_config_from_env()
+        if not config:
+            statement = select(TraceModelEntity).where(TraceModelEntity.enabled)
+            result = await self.session.exec(statement)
+            config = result.first()
+
         if config and config.is_enabled():
             init_instrument(TraceConfig(
                 endpoint=config.endpoint,

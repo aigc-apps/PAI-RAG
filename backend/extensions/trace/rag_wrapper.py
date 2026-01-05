@@ -6,6 +6,7 @@ from enum import Enum
 from common.tool.search_result import SearchResult
 from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
+from opentelemetry import context
 
 from extensions.trace.utils import pydantic_to_dict
 
@@ -14,8 +15,6 @@ from extensions.trace.tracer import get_tracer
 GEN_AI_SPAN_KIND = "gen_ai.span.kind"
 GEN_AI_OPERATION_NAME = "gen_ai.operation.name"
 INPUT_MESSAGES = "gen_ai.input.messages"
-RETRIEVER_DOCUMENTS = "agentscope.retrieval.documents"
-RETRIEVER_DOCUMENTS_SIZE = "agentscope.retrieval.documents_size"
 
 INPUT_VALUE = SpanAttributes.INPUT_VALUE
 OUTPUT_VALUE = SpanAttributes.OUTPUT_VALUE
@@ -31,12 +30,7 @@ RERANKER_OPERATION_NAME = "rerank_documents"
 EMBEDDING_MDOEL_NAME = "gen_ai.request.model"
 EMBEDDING_DIMENSION_COUNT = "gen_ai.embeddings.dimension.count"
 
-RERANKER_QUERY = "agentscope.reranker.query"
 RERANKER_MODEL_NAME = "gen_ai.request.model"
-RERANKER_TOP_K = "agentscope.reranker.top_k"
-RERANKER_INPUT_DOCUMENTS = "agentscope.reranker.input.documents"
-RERANKER_OUTPUT_DOCUMENTS = "agentscope.reranker.output.documents"
-
 
 # whether to disable legacy trace and only use agentscope data contract
 DISABLE_LEGACY_TRACE = os.getenv("DISABLE_LEGACY_TRACE", "false").lower() in ["true", "1", "yes", "y"]
@@ -68,11 +62,18 @@ def query_knowledgebase_wrapper(func):
             "content": query,
             "metadata": kwargs,
         }]
-        with get_tracer().start_as_current_span(RetrieverSpanNames.KNOWLEDGE_RETRIEVER) as span:
+        ctx = context.get_current()
+        with get_tracer().start_as_current_span(RetrieverSpanNames.KNOWLEDGE_RETRIEVER, context=ctx) as span:
             try:
                 span.set_attribute(GEN_AI_SPAN_KIND, RETRIEVER_SPAN_KIND)
                 span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
-                span.set_attribute(INPUT_VALUE, query)
+                retrieval_setting = kwargs.get("retrieval_setting", None)
+                input_data = {
+                    "query": query,
+                    "top_k": retrieval_setting.top_k if retrieval_setting else None,
+                    "score_threshold": retrieval_setting.similarity_threshold if retrieval_setting else None,
+                }
+                span.set_attribute(INPUT_VALUE, json.dumps(input_data, ensure_ascii=False))
 
                 span.set_attribute(GEN_AI_OPERATION_NAME, RETRIEVER_OPERATION_NAME)
 
@@ -86,10 +87,12 @@ def query_knowledgebase_wrapper(func):
                     }
                     for doc in results
                 ]
-                output_value = json.dumps(pydantic_to_dict(output_documents), ensure_ascii=False)
-                span.set_attribute(RETRIEVER_DOCUMENTS, output_value)
+                output_data = {
+                    "documents": output_documents,
+                    "document_size": len(output_documents),
+                }
+                output_value = json.dumps(pydantic_to_dict(output_data), ensure_ascii=False)
                 span.set_attribute(OUTPUT_VALUE, output_value)
-                span.set_attribute(RETRIEVER_DOCUMENTS_SIZE, len(results))
                 span.set_status(STATUS_OK)
                 return results
             except Exception as e:
@@ -118,24 +121,32 @@ def text_search_wrapper(func):
             try:
                 span.set_attribute(GEN_AI_SPAN_KIND, RETRIEVER_SPAN_KIND)
                 span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
-                span.set_attribute(INPUT_VALUE, query)
+                input_data = {
+                    "query": query,
+                    "top_k": kwargs.get("top_k", None),
+                }
+                span.set_attribute(INPUT_VALUE, json.dumps(input_data, ensure_ascii=False))
 
                 span.set_attribute(GEN_AI_OPERATION_NAME, RETRIEVER_OPERATION_NAME)
 
                 text_search_result = await func(*args, **kwargs)
-                output_documents = [
-                    {
-                        "id": text_search_result.ids[i],
-                        "content": text_search_result.nodes[i].text,
-                        "score": text_search_result.similarities[i],
-                        "metadata": text_search_result.nodes[i].metadata,
-                    }
-                    for i in range(len(text_search_result.nodes))
-                ]
-                output_value = json.dumps(pydantic_to_dict(output_documents), ensure_ascii=False)
-                span.set_attribute(RETRIEVER_DOCUMENTS, output_value)
+                output_documents =[]
+                if text_search_result and text_search_result.nodes:
+                    output_documents = [
+                        {
+                            "id": text_search_result.ids[i],
+                            "content": text_search_result.nodes[i].text,
+                            "score": text_search_result.similarities[i],
+                            "metadata": text_search_result.nodes[i].metadata,
+                        }
+                        for i in range(len(text_search_result.nodes))
+                    ]
+                output_data = {
+                    "documents": output_documents,
+                    "document_size": len(output_documents),
+                }
+                output_value = json.dumps(pydantic_to_dict(output_data), ensure_ascii=False)
                 span.set_attribute(OUTPUT_VALUE, output_value)
-                span.set_attribute(RETRIEVER_DOCUMENTS_SIZE, len(text_search_result.nodes))
                 span.set_status(STATUS_OK)
                 return text_search_result
             except Exception as e:
@@ -164,12 +175,17 @@ def vector_search_wrapper(func):
             try:
                 span.set_attribute(GEN_AI_SPAN_KIND, RETRIEVER_SPAN_KIND)
                 span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
-                span.set_attribute(INPUT_VALUE, query)
-
+                input_data = {
+                    "query": query,
+                    "top_k": kwargs.get("top_k", None),
+                }
+                span.set_attribute(INPUT_VALUE, json.dumps(input_data, ensure_ascii=False))
                 span.set_attribute(GEN_AI_OPERATION_NAME, RETRIEVER_OPERATION_NAME)
 
                 vector_search_result = await func(*args, **kwargs)
-                output_documents = [
+                output_documents =[]
+                if vector_search_result and vector_search_result.nodes:
+                    output_documents = [
                     {
                         "id": vector_search_result.ids[i],
                         "content": vector_search_result.nodes[i].text,
@@ -178,10 +194,12 @@ def vector_search_wrapper(func):
                     }
                     for i in range(len(vector_search_result.nodes))
                 ]
-                output_value = json.dumps(pydantic_to_dict(output_documents), ensure_ascii=False)
-                span.set_attribute(RETRIEVER_DOCUMENTS, output_value)
+                output_data = {
+                    "documents": output_documents,
+                    "document_size": len(output_documents),
+                }
+                output_value = json.dumps(pydantic_to_dict(output_data), ensure_ascii=False)
                 span.set_attribute(OUTPUT_VALUE, output_value)
-                span.set_attribute(RETRIEVER_DOCUMENTS_SIZE, len(vector_search_result.nodes))
                 span.set_status(STATUS_OK)
                 return vector_search_result
             except Exception as e:
@@ -245,9 +263,13 @@ def reranker_wrapper(func):
         try:
             span = get_tracer().start_span(RetrieverSpanNames.RERANKER)
             span.set_attribute(GEN_AI_SPAN_KIND, RERANKER_SPAN_KIND)
-            span.set_attribute(RERANKER_QUERY, query)
             span.set_attribute(RERANKER_MODEL_NAME, self.model)
-            span.set_attribute(RERANKER_TOP_K, top_n)
+            messages = [{
+                "role": "user",
+                "content": query,
+            }]
+            span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
+
             if vector_result and vector_result.nodes:
                 input_documents = [
                     {
@@ -258,21 +280,33 @@ def reranker_wrapper(func):
                     }
                     for i in range(len(vector_result.nodes))
                 ]
-                span.set_attribute(RERANKER_INPUT_DOCUMENTS, json.dumps(pydantic_to_dict(input_documents), ensure_ascii=False))
             else:
-                span.set_attribute(RERANKER_INPUT_DOCUMENTS, json.dumps([], ensure_ascii=False))
+                input_documents = []
+
+            input_value = {
+                "documents": input_documents,
+                "query": query,
+                "document_size": len(input_documents),
+                "top_k": top_n,
+            }
+            span.set_attribute(INPUT_VALUE, json.dumps(pydantic_to_dict(input_value), ensure_ascii=False))
 
             rerank_result = await func(self, *args, **kwargs)
-            output_documents = [
-                {
-                    "id": rerank_result.ids[i],
-                    "content": rerank_result.nodes[i].text,
-                    "score": rerank_result.similarities[i],
-                    "metadata": rerank_result.nodes[i].metadata,
-                }
-                for i in range(len(rerank_result.nodes))
-            ]
-            span.set_attribute(RERANKER_OUTPUT_DOCUMENTS, json.dumps(pydantic_to_dict(output_documents), ensure_ascii=False))
+            output_documents = []
+            if rerank_result and rerank_result.nodes:
+                output_documents = [
+                    {
+                        "id": rerank_result.ids[i],
+                        "content": rerank_result.nodes[i].text,
+                        "score": rerank_result.similarities[i],
+                        "metadata": rerank_result.nodes[i].metadata,
+                    }
+                    for i in range(len(rerank_result.nodes))
+                ]
+            output_value = {
+                "documents": output_documents
+            }
+            span.set_attribute(OUTPUT_VALUE, json.dumps(pydantic_to_dict(output_value), ensure_ascii=False))
             span.set_status(STATUS_OK)
             span.end()
             return rerank_result
