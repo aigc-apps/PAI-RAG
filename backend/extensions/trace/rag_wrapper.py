@@ -6,7 +6,6 @@ from enum import Enum
 from common.tool.search_result import SearchResult
 from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
-from opentelemetry import context
 
 from extensions.trace.utils import pydantic_to_dict
 
@@ -59,11 +58,15 @@ def query_knowledgebase_wrapper(func):
         query = kwargs.get("query", "[unknown]")
         messages = [{
             "role": "user",
-            "content": query,
+            "parts": [
+                {
+                    "type": "text",
+                    "content": query,
+                }
+            ],
             "metadata": kwargs,
         }]
-        ctx = context.get_current()
-        with get_tracer().start_as_current_span(RetrieverSpanNames.KNOWLEDGE_RETRIEVER, context=ctx) as span:
+        with get_tracer().start_as_current_span(RetrieverSpanNames.KNOWLEDGE_RETRIEVER) as span:
             try:
                 span.set_attribute(GEN_AI_SPAN_KIND, RETRIEVER_SPAN_KIND)
                 span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
@@ -115,7 +118,12 @@ def text_search_wrapper(func):
         query = kwargs.get("query", "[unknown]")
         messages = [{
             "role": "user",
-            "content": query,
+            "parts": [
+                {
+                    "type": "text",
+                    "content": query,
+                }
+            ],
         }]
         with get_tracer().start_as_current_span(RetrieverSpanNames.TEXT_RETRIEVER) as span:
             try:
@@ -169,7 +177,12 @@ def vector_search_wrapper(func):
         query = kwargs.get("query", "[unknown]")
         messages = [{
             "role": "user",
-            "content": query,
+            "parts": [
+                {
+                    "type": "text",
+                    "content": query,
+                }
+            ],
         }]
         with get_tracer().start_as_current_span(RetrieverSpanNames.VECTOR_RETRIEVER) as span:
             try:
@@ -223,7 +236,12 @@ def embedding_wrapper(func):
         embedding_model_entity = kwargs.get("embedding_model_entity", None)
         messages = [{
             "role": "user",
-            "content": query,
+            "parts": [
+                {
+                    "type": "text",
+                    "content": query,
+                }
+            ],
         }]
         try:
             span = get_tracer().start_span(RetrieverSpanNames.EMBEDDING)
@@ -266,7 +284,12 @@ def reranker_wrapper(func):
             span.set_attribute(RERANKER_MODEL_NAME, self.model)
             messages = [{
                 "role": "user",
-                "content": query,
+                "parts": [
+                    {
+                        "type": "text",
+                        "content": query,
+                    }
+                ],
             }]
             span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
 

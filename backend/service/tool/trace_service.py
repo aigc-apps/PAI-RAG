@@ -24,6 +24,7 @@ def _load_trace_config_from_env() -> TraceModelEntity:
             "service_name": os.getenv("TRACE_SERVICE_NAME", DEFAULT_SERVICE_NAME),
             "tenant_id": DEFAULT_TENANT_ID,
             "id": "default_trace_id",
+            "enabled": True
         })
     else:
         return None
@@ -42,6 +43,7 @@ class TraceService:
         self.session = session
 
     async def init_trace(self):
+        exporter_type = os.getenv("TRACE_EXPORTER_TYPE", "grpc")
         config = _load_trace_config_from_env()
         if not config:
             statement = select(TraceModelEntity).where(TraceModelEntity.enabled)
@@ -55,6 +57,7 @@ class TraceService:
                 service_name=config.service_name,
                 user_args=config.user_args,
                 enabled=config.enabled,
+                exporter_type=exporter_type,
             ))
             logger.info("Initialized trace config.")
         else:
@@ -125,6 +128,7 @@ class TraceService:
                 service_name=config.service_name,
                 user_args=config.user_args,
                 enabled=config.enabled,
+                exporter_type="grpc", # 默认grpc
             ))
             return config
 

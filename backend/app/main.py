@@ -99,9 +99,9 @@ def create_app():
         allow_credentials=False,
     )
     app.add_middleware(CustomLoggingMiddleware)
+    setup_propagator(app)
     app.add_exception_handler(ApiException, api_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
-    setup_propagator(app)
     return app
 
 app = create_app()

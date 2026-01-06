@@ -45,7 +45,7 @@ from opentelemetry.util.re import parse_env_headers
 
 
 # pylint: disable=no-member
-class ReloadableOTLPSpanExporter(OTLPSpanExporter):
+class ReloadableGrpcOTLPSpanExporter(OTLPSpanExporter):
     # pylint: disable=unsubscriptable-object
     """OTLP span exporter
 
