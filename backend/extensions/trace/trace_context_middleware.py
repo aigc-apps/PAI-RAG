@@ -14,7 +14,6 @@ class TraceContextMiddleware(BaseHTTPMiddleware):
         # 提取 trace context
         carrier = dict(request.headers)
         propagator = get_global_textmap()
-        print(f"carrier: {carrier}")
         extracted_context = propagator.extract(carrier=carrier)
 
         # 在提取的 context 中执行
