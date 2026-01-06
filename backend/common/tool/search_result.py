@@ -3,6 +3,7 @@ from typing import List
 
 
 class SearchResult(BaseModel):
+    id: str | None = None
     title: str | None = None
     content: str | None = None
     url: str | None = None

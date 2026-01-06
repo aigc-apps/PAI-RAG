@@ -81,6 +81,7 @@ def create_app():
     from app.log_middleware import CustomLoggingMiddleware
     from fastapi.middleware.cors import CORSMiddleware
     from api.request_validate_exception import validation_exception_handler
+    from extensions.trace.base import setup_propagator
 
     app = FastAPI(lifespan=lifespan)
     add_config_router(app)
@@ -98,6 +99,7 @@ def create_app():
         allow_credentials=False,
     )
     app.add_middleware(CustomLoggingMiddleware)
+    setup_propagator(app)
     app.add_exception_handler(ApiException, api_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     return app

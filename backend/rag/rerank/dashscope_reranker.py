@@ -4,6 +4,7 @@ from llama_index.core.vector_stores.types import VectorStoreQueryResult
 import aiohttp
 from utils.http_session import HttpSessionShared
 from rag.rerank.reranker import RerankResult
+from extensions.trace.rag_wrapper import reranker_wrapper
 from loguru import logger
 
 
@@ -177,10 +178,11 @@ class DashscopeReranker:
         except json.JSONDecodeError as e:
             raise RuntimeError(f"响应解析失败: {str(e)}") from e
 
+    @reranker_wrapper
     async def vector_store_rerank(
         self,
         query: str,
-        result: VectorStoreQueryResult,
+        vector_result: VectorStoreQueryResult,
         top_n: Optional[int] = None,
         similarity_threshold: float = 0,
         model: Optional[str] = None,
@@ -204,10 +206,13 @@ class DashscopeReranker:
         # 参数验证
         if not query:
             raise ValueError("查询内容不能为空")
-        if not result:
+        if not vector_result:
             raise ValueError("VectorStoreQueryResult列表不能为空")
 
-        origin_nodes = result.nodes
+        if not vector_result.nodes or len(vector_result.nodes) <= 1:
+            return vector_result
+
+        origin_nodes = vector_result.nodes
         documents = [node.text for node in origin_nodes]
         rerank_results = await self.rerank(query, documents, model, top_n, similarity_threshold)
 

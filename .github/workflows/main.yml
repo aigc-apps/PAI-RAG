@@ -63,6 +63,7 @@ jobs:
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           TRACE_TOKEN: ${{ secrets.TRACE_TOKEN }}
           DISABLE_REDIS_CACHE_IN_TESTS: "true"
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
 
       - name: Get Cover
         uses: orgoro/coverage@v3.1

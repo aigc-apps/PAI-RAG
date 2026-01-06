@@ -17,6 +17,6 @@ class TraceModel(SQLModel):
 class TraceModelEntity(TraceModel, table=True):
     __tablename__ = "pai_trace_config"
 
-    id: str = Field(default=lambda x: str(uuid.uuid4().hex), primary_key=True)
+    id: str = Field(default_factory=lambda x: str(uuid.uuid4().hex), primary_key=True)
     def is_enabled(self) -> bool:
-        return self.enabled and self.service_name and self.token and self.endpoint
+        return self.enabled and self.service_name and self.endpoint

@@ -165,7 +165,7 @@ async def arerank_fusion(
         else:
             return await rerank_model.vector_store_rerank(
                 query=query,
-                result=dense_result,
+                vector_result=dense_result,
                 top_n=rerank_top_k,
                 similarity_threshold=similarity_threshold)
     elif not dense_result:
@@ -174,7 +174,7 @@ async def arerank_fusion(
         else:
             return await rerank_model.vector_store_rerank(
                 query=query,
-                result=text_result,
+                vector_result=text_result,
                 top_n=rerank_top_k,
                 similarity_threshold=similarity_threshold)
     else:
@@ -184,6 +184,6 @@ async def arerank_fusion(
             merged_result = merge_vector_store_results_by_text(text_result, dense_result)
             return await rerank_model.vector_store_rerank(
                 query=query,
-                result=merged_result,
+                vector_result=merged_result,
                 top_n=rerank_top_k,
                 similarity_threshold=similarity_threshold)
