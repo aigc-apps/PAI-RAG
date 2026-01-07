@@ -13,6 +13,7 @@ from extensions.guardrail.guardrail_check import GuardrailChecker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from loguru import logger
+from extensions.trace.context import get_request_id
 
 
 def parse_llm_json(json_str: str) -> dict:
@@ -82,7 +83,7 @@ async def convert_gen_to_stream_chat_completions(
         enable_output_check = False
 
     chunk_index = 0
-    chat_id = uuid.uuid4().hex
+    chat_id = get_request_id() or uuid.uuid4().hex
     total_usage = CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
     citations, citation_details = [], []
 
@@ -208,7 +209,8 @@ async def convert_gen_to_chat_completions(
     guardrail_hint: str | None = None,
     checker: GuardrailChecker | None = None,
 ):
-    chat_id = uuid.uuid4().hex
+    chat_id = get_request_id() or uuid.uuid4().hex
+
     total_usage = CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
 
     reasoning_content = ""

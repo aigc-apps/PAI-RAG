@@ -1,7 +1,7 @@
 import logging
 import sys
+from extensions.trace.context import get_request_id
 from loguru import logger
-from asgi_correlation_id.context import correlation_id
 
 
 class InterceptHandler(logging.Handler):
@@ -28,7 +28,7 @@ class InterceptHandler(logging.Handler):
 
 # 自定义日志格式，加入 request_id
 def formatter(record):
-    record["extra"]["request_id"] = correlation_id.get()
+    record["extra"]["request_id"] = get_request_id()
     if record["extra"].get("request_id", None):
         return (
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "

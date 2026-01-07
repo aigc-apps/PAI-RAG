@@ -1,5 +1,4 @@
 import traceback
-import uuid
 from typing import List, Optional
 from loguru import logger
 from common.chat.models import RetrievalSetting
@@ -43,9 +42,8 @@ async def asearch_knowledgebase(
     retrieval_setting: Optional[RetrievalSetting] = None,
     metadata_condition: Optional[MetadataFilteringCondition] = None,
     rag_service: RagService = None,
+    request_id: str = None,
 ) -> RetrievalToolResponse:
-    request_id = str(uuid.uuid4())
-
     # TODO: Handle images if needed in the future
     # For now, images are accepted but not used in retrieval
     if image_list:

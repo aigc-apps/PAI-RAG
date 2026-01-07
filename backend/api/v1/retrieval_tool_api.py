@@ -8,6 +8,7 @@ from common.chat.models import MetadataFilteringCondition
 from service.knowledgebase.rag_service import RagService
 from service.injection import get_rag_service, get_tenant_id
 from loguru import logger
+from extensions.trace.context import get_request_id
 
 retrieval_tool_router = APIRouter()
 
@@ -32,7 +33,8 @@ async def mcp_retrieval(
     Input: {"query": "xxx", "images": ["1.jpg", "2.jpg"]}
     Output: {"status": "SUCCESS", "status_code": 200, "data": {"total": 2, "nodes": [...]}, "request_id": "..."}
     """
-    logger.info(f"Retrieval tool request: {request}, knowledgebase_id: {knowledgebase_id}, tenant_id: {tenant_id}")
+    request_id = get_request_id()
+    logger.info(f"Retrieval tool request: {request}, knowledgebase_id: {knowledgebase_id}, tenant_id: {tenant_id}, request_id: {request_id}")
 
     result = await asearch_knowledgebase(
         query=request.query,
@@ -42,5 +44,8 @@ async def mcp_retrieval(
         metadata_condition=request.metadata_condition,
         rag_service=rag_service,
         tenant_id=tenant_id,
+        request_id=request_id,
     )
-    return JSONResponse(status_code=result.status_code, content=result.model_dump())
+    result_data = result.model_dump()
+    logger.info(f"Retrieval tool response: {result_data}, request_id: {request_id}")
+    return JSONResponse(status_code=result.status_code, content=result_data)
