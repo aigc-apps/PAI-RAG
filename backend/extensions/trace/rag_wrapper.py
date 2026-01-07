@@ -282,6 +282,8 @@ def reranker_wrapper(func):
             span = get_tracer().start_span(RetrieverSpanNames.RERANKER)
             span.set_attribute(GEN_AI_SPAN_KIND, RERANKER_SPAN_KIND)
             span.set_attribute(RERANKER_MODEL_NAME, self.model)
+            span.set_attribute(GEN_AI_OPERATION_NAME, RERANKER_OPERATION_NAME)
+
             messages = [{
                 "role": "user",
                 "parts": [
