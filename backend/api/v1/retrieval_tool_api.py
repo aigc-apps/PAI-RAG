@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
-from sqlmodel.ext.asyncio.session import AsyncSession
-from db.db_context import get_db_session
 from common.chat.models import RetrievalSetting
 from api.v1.mcp.kb_retriever_tool import asearch_knowledgebase
 from common.chat.models import MetadataFilteringCondition
@@ -27,7 +25,6 @@ async def mcp_retrieval(
     knowledgebase_id: str,
     request: RetrievalToolRequest,
     tenant_id: str = Depends(get_tenant_id),
-    session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
     """
