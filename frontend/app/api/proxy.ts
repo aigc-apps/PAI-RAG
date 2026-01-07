@@ -68,23 +68,73 @@ export async function proxyRequest(request: NextRequest) {
   }
 
   // 创建 AbortController 用于超时控制
-  const timeoutMs = parseInt(process.env.PROXY_TIMEOUT_MS || '60000', 10); // 默认 60 秒
+  // 对于可能返回流式响应或需要LLM调用的请求，使用更长的超时时间
+  const defaultTimeoutMs = parseInt(process.env.PROXY_TIMEOUT_MS || '60000', 10); // 默认 60 秒
+  const streamingTimeoutMs = parseInt(process.env.PROXY_STREAMING_TIMEOUT_MS || '300000', 10); // 流式响应默认 5 分钟
+  
+  // 判断是否是可能返回流式响应或需要LLM调用的请求路径
+  // 包括：
+  // - /threads/* 下的所有路径（可能涉及LLM调用，如生成标题、消息等）
+  // - /chat/completions 和 /chat（流式响应）
+  const isPotentialStreamingPath = pathname.includes('/threads/') ||
+                                    pathname.includes('/chat/completions') ||
+                                    pathname.includes('/chat');
+  
+  // 对于可能返回流式响应或需要LLM调用的请求，使用更长的超时时间
+  const initialTimeoutMs = isPotentialStreamingPath ? streamingTimeoutMs : defaultTimeoutMs;
+  
   const controller = new AbortController();
   let timeoutId: NodeJS.Timeout | null = null;
 
   try {
-    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    // 根据请求路径设置初始超时时间
+    timeoutId = setTimeout(() => controller.abort(), initialTimeoutMs);
 
     const res = await fetch(upstreamUrl.toString(), {
       method,
       headers,
       body,
       signal: controller.signal,
+      // 添加 keepalive 选项，保持连接活跃
+      keepalive: true,
     });
 
+    // 检查是否是流式响应
+    const contentType = res.headers.get('content-type') || '';
+    const isStreaming = contentType.includes('text/event-stream') || 
+                        contentType.includes('stream') ||
+                        res.headers.get('transfer-encoding') === 'chunked';
+
+    if (isStreaming && res.body) {
+      // 流式响应：清除当前超时，使用更长的超时时间
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      // 对于流式响应，创建一个新的超时控制器，使用更长的超时时间
+      // 注意：这里我们不能直接修改signal，但可以在流式传输过程中监控
+      // 实际上，对于流式响应，我们应该让客户端控制超时，而不是在代理层强制超时
+      // 流式响应：直接传递流，不设置超时限制（由客户端或Next.js处理）
+      return new NextResponse(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: res.headers,
+      });
+    }
+
+    // 非流式响应：清除超时（响应已完全接收）
     if (timeoutId) clearTimeout(timeoutId);
 
-    // 读取响应数据
+    // 检查响应是否正常
+    if (!res.ok && !res.body) {
+      return NextResponse.json(
+        { 
+          error: 'Proxy request failed', 
+          message: `Backend returned status ${res.status} without body`,
+        }, 
+        { status: res.status }
+      );
+    }
+
+    // 非流式响应：读取完整数据
     const responseData = await res.blob(); // 通用处理（支持 JSON、text、binary）
     const responseHeaders = new Headers(res.headers);
     responseHeaders.set('content-length', responseData.size.toString());
@@ -99,25 +149,57 @@ export async function proxyRequest(request: NextRequest) {
     });
   } catch (error: any) {
     if (timeoutId) clearTimeout(timeoutId);
-    console.log("Proxy request failed: ", error);
     
-    // 处理超时错误
-    if (error.name === 'AbortError' || error.code === 'UND_ERR_HEADERS_TIMEOUT') {
+    // 记录错误详情用于调试
+    console.error("Proxy request failed: ", {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      cause: error.cause,
+      stack: error.stack
+    });
+    
+    // 处理连接关闭错误
+    if (error.cause?.code === 'UND_ERR_SOCKET' || 
+        error.message?.includes('other side closed') ||
+        error.message?.includes('fetch failed') ||
+        error.message?.includes('ECONNREFUSED') ||
+        error.message?.includes('ENOTFOUND')) {
+      return NextResponse.json(
+        { 
+          error: 'Proxy connection closed', 
+          message: 'Backend connection was closed unexpectedly. This may happen if the request takes too long or the backend service restarted.',
+          details: error.cause?.message || error.message,
+          code: error.cause?.code || 'CONNECTION_CLOSED'
+        }, 
+        { status: 502 } // Bad Gateway - 后端服务问题
+      );
+    }
+    
+    // 处理超时错误（包括AbortError）
+    if (error.name === 'AbortError' || 
+        error.code === 'UND_ERR_HEADERS_TIMEOUT' ||
+        error.code === 20 || // DOMException.ABORT_ERR
+        error.message?.includes('aborted') ||
+        error.message?.includes('This operation was aborted')) {
       return NextResponse.json(
         { 
           error: 'Proxy request timeout', 
-          message: `Request exceeded timeout of ${timeoutMs}ms`,
-          details: error.message 
+          message: `Request exceeded timeout of ${initialTimeoutMs}ms. ${isPotentialStreamingPath ? 'This is a streaming endpoint, which may take longer to respond.' : 'Please try again or contact support if the issue persists.'}`,
+          details: error.message,
+          code: 'TIMEOUT'
         }, 
         { status: 504 }
       );
     }
     
+    // 处理其他错误
     return NextResponse.json(
       { 
         error: 'Proxy request failed', 
         message: error.message || String(error),
-        details: error.cause?.message || error.stack 
+        details: error.cause?.message || error.stack,
+        code: error.code || 'UNKNOWN_ERROR'
       }, 
       { status: 500 }
     );

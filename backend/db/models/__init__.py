@@ -14,7 +14,6 @@ from db.models.knowledgebase.user_role import RoleEntity, UserRoleEntity, Permis
 from db.models.knowledgebase.metadata import KbMetadataEntity, FileMetadataEntity
 from db.models.prompt import PromptModelEntity
 from db.models.chatbot import ChatBotEntity
-from db.models.faq_config import FAQConfigEntity
 from db.models.faq_item import FAQItemEntity
 from db.models.guardrail import GuardrailConfigEntity
 from db.models.code_sandbox import CodeSandboxConfigEntity

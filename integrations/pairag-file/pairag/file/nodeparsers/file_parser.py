@@ -11,6 +11,7 @@ from pairag.file.readers.csv_reader import CSVReader
 from pairag.file.readers.doc_reader import DocxReader
 from pairag.file.readers.excel2md_reader import Excel2MdReader
 from pairag.file.readers.excel_reader import ExcelReader
+from pairag.file.readers.faq_reader import FAQReader
 from pairag.file.readers.html_reader import HtmlReader
 from pairag.file.readers.image_reader import ImageReader
 from pairag.file.readers.jsonl2md_reader import Json2MdReader
@@ -208,9 +209,15 @@ class FileParser:
                         return ExcelReader(
                             concat_rows=table_config.concat_rows,
                             row_joiner=table_config.row_joiner,
-                            header_max=table_config.header_index_max,
+                            header_index_max=table_config.header_index_max,
                             format_sheet_data_to_json=table_config.format_sheet_data_to_json,
                             sheet_column_filters=table_config.sheet_column_filters,
+                        )
+                    elif parser_type.lower() == "faq":
+                        return FAQReader(
+                            header_index_max=table_config.header_index_max,
+                            question_column_index=table_config.question_column_index,
+                            answer_column_index=table_config.answer_column_index,
                         )
                     return Excel2MdReader(chunk_size=chunk_size)
                 case ".xls":
@@ -218,9 +225,15 @@ class FileParser:
                         return ExcelReader(
                             concat_rows=table_config.concat_rows,
                             row_joiner=table_config.row_joiner,
-                            header_max=table_config.header_index_max,
+                            header_index_max=table_config.header_index_max,
                             format_sheet_data_to_json=table_config.format_sheet_data_to_json,
                             sheet_column_filters=table_config.sheet_column_filters,
+                        )
+                    elif parser_type.lower() == "faq":
+                        return FAQReader(
+                            header_index_max=table_config.header_index_max,
+                            question_column_index=table_config.question_column_index,
+                            answer_column_index=table_config.answer_column_index,
                         )
                     return Excel2MdReader(chunk_size=chunk_size)
                 case ".csv":
@@ -228,7 +241,7 @@ class FileParser:
                         return CSVReader(
                             concat_rows=table_config.concat_rows,
                             row_joiner=table_config.row_joiner,
-                            header_max=table_config.header_index_max,
+                            header_index_max=table_config.header_index_max,
                             format_sheet_data_to_json=table_config.format_sheet_data_to_json,
                             sheet_column_filters=table_config.sheet_column_filters,
                         )
@@ -280,6 +293,7 @@ class FileParser:
                     TextNode(
                         id_=node_id,
                         text=doc_node.text,
+                        metadata=doc_node.metadata,
                     )
                 )
             elif chunk_config.parser_type.lower() == "token":

@@ -1938,17 +1938,18 @@ export default function KnowledgeBaseDetailPage(
                                           type="number"
                                           className="w-[200px] h-7 text-xs"
                                           id="upload-header-index-max"
-                                          value={uploadChunkConfig.table_config?.header_index_max ?? 0}
+                                          value={uploadChunkConfig.table_config?.header_index_max ?? ''}
                                           onChange={(e) => {
                                             setUploadChunkConfig((prev) => prev ? {
                                               ...prev,
                                               table_config: {
                                                 ...prev.table_config,
-                                                header_index_max: e.target.value ? parseInt(e.target.value) : 0,
+                                                header_index_max: e.target.value === '' ? null : (parseInt(e.target.value) || 0),
                                               },
                                             } : null);
                                           }}
                                           min="0"
+                                          placeholder="留空表示不使用标题行"
                                         />
                                       </div>
                                       <div className="flex gap-3 items-center flex-1">

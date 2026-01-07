@@ -27,6 +27,9 @@ class TableParserConfig(SQLModel):
     header_index_max: Optional[int] = Field(default=0, description="Maximum row index to use as header")
     format_sheet_data_to_json: bool = Field(default=False, description="Whether to format sheet data as JSON")
     sheet_column_filters: Optional[List[str]] = Field(default=None, description="List of column names to filter")
+    question_column_index: Optional[int] = Field(default=0, description="Index of question column")
+    answer_column_index: Optional[int] = Field(default=1, description="Index of answer column")
+
 
 
 class ChunkConfig(SQLModel):

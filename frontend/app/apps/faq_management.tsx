@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Plus, Edit, Trash2, Settings, HelpCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings, HelpCircle, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { Switch } from '@/components/ui/switch';
@@ -67,10 +67,23 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadConfig, setUploadConfig] = useState<{
+    header_index_max: number | null;
+    question_column_index: number;
+    answer_column_index: number;
+  }>({
+    header_index_max: 0,
+    question_column_index: 0,
+    answer_column_index: 1,
+  });
+  const [uploading, setUploading] = useState(false);
   const [editingFaq, setEditingFaq] = useState<FAQItem | null>(null);
   const [formData, setFormData] = useState<FAQItem>({ question: '', answer: '' });
   const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [faqConfigData, setFaqConfigData] = useState<{
+    active: boolean;
     score_threshold: number;
     embedding_model: string;
     question_in_retrieval: boolean;
@@ -82,54 +95,32 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
   const handleToggleFAQ = async (checked: boolean) => {
     try {
-      if (checked) {
-        // 开启FAQ：创建或获取FAQ配置，设置faq_id
-        const configResponse = await tenantFetch(`/api/config/apps/${botConfig.app_id}/faq-config`);
-        if (!configResponse.ok) throw new Error('获取FAQ配置失败');
-        const configData = await configResponse.json();
-        const faqConfigId = configData.data.id;
+      // 更新 faq_config.active 字段
+      const res = await tenantFetch(`/api/config/apps/${appId}/faq-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          active: checked,
+        }),
+      });
 
-        const res = await tenantFetch(`/api/config/apps/${botConfig.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...botConfig,
-            faq_id: faqConfigId,
-          }),
+      if (!res.ok) throw new Error('更新失败');
+      
+      const data = await res.json();
+      // 更新本地状态
+      if (data.data) {
+        setFaqConfigData({
+          active: data.data.active ?? checked,
+          score_threshold: data.data.similarity_threshold ?? data.data.score_threshold ?? faqConfigData?.score_threshold ?? 0.9,
+          embedding_model: data.data.embedding_model ?? faqConfigData?.embedding_model ?? '',
+          question_in_retrieval: data.data.question_in_retrieval ?? faqConfigData?.question_in_retrieval ?? true,
+          question_in_response: data.data.question_in_response ?? faqConfigData?.question_in_response ?? false,
+          answer_in_retrieval: data.data.answer_in_retrieval ?? faqConfigData?.answer_in_retrieval ?? false,
+          answer_in_response: data.data.answer_in_response ?? faqConfigData?.answer_in_response ?? true,
         });
-
-        if (!res.ok) throw new Error('更新失败');
-        
-        setBotConfig({ ...botConfig, faq_id: faqConfigId });
-        // 加载FAQ配置数据
-        if (configData.data) {
-          setFaqConfigData({
-            score_threshold: configData.data.score_threshold ?? 0.9,
-            embedding_model: configData.data.embedding_model ?? '',
-            question_in_retrieval: configData.data.question_in_retrieval ?? true,
-            question_in_response: configData.data.question_in_response ?? false,
-            answer_in_retrieval: configData.data.answer_in_retrieval ?? false,
-            answer_in_response: configData.data.answer_in_response ?? true,
-          });
-        }
-        toast.success('已启用FAQ回复');
-      } else {
-        // 关闭FAQ：清空faq_id
-        const res = await tenantFetch(`/api/config/apps/${botConfig.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...botConfig,
-            faq_id: null,
-          }),
-        });
-
-        if (!res.ok) throw new Error('更新失败');
-        
-        setBotConfig({ ...botConfig, faq_id: null });
-        setFaqConfigData(null);
-        toast.success('已关闭FAQ回复');
       }
+      
+      toast.success(checked ? '已启用FAQ回复' : '已关闭FAQ回复');
     } catch (error: any) {
       toast.error(error.message || '更新失败');
     }
@@ -138,20 +129,20 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   useEffect(() => {
     fetchFAQs();
     fetchEmbeddingModels();
-    if (botConfig.faq_id) {
-      fetchFAQConfig();
-    }
-  }, [appId, botConfig.faq_id]);
+    // 无论 enable_faq 是否为 true，都加载 FAQ 配置以获取 active 状态
+    fetchFAQConfig();
+  }, [appId]);
 
   const fetchFAQConfig = async () => {
     try {
-      const res = await tenantFetch(`/api/config/apps/${botConfig.app_id}/faq-config`);
+      const res = await tenantFetch(`/api/config/apps/${appId}/faq-config`);
       if (res.ok) {
         const data = await res.json();
         if (data.data) {
           // 从后端返回的数据中提取配置字段
           setFaqConfigData({
-            score_threshold: data.data.score_threshold ?? 0.9,
+            active: data.data.active ?? false,
+            score_threshold: data.data.score_threshold ?? data.data.similarity_threshold ?? 0.9,
             embedding_model: data.data.embedding_model ?? '',
             question_in_retrieval: data.data.question_in_retrieval ?? true,
             question_in_response: data.data.question_in_response ?? false,
@@ -159,8 +150,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             answer_in_response: data.data.answer_in_response ?? true,
           });
         } else {
-          // 初始化默认配置（与后端一致）
+          // 如果没有配置数据，设置默认值（active 默认为 false）
           setFaqConfigData({
+            active: false,
             score_threshold: 0.9,
             embedding_model: '',
             question_in_retrieval: true,
@@ -169,9 +161,30 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             answer_in_response: true,
           });
         }
+      } else if (res.status === 404) {
+        // FAQ 配置不存在，设置默认值
+        setFaqConfigData({
+          active: false,
+          score_threshold: 0.9,
+          embedding_model: '',
+          question_in_retrieval: true,
+          question_in_response: false,
+          answer_in_retrieval: false,
+          answer_in_response: true,
+        });
       }
     } catch (error: any) {
       console.error('获取FAQ配置失败:', error);
+      // 即使出错也设置默认值，确保开关可以显示
+      setFaqConfigData({
+        active: false,
+        score_threshold: 0.9,
+        embedding_model: '',
+        question_in_retrieval: true,
+        question_in_response: false,
+        answer_in_retrieval: false,
+        answer_in_response: true,
+      });
     }
   };
 
@@ -264,13 +277,88 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     }
   };
 
+  const handleUploadFiles = async () => {
+    if (uploadFiles.length === 0) {
+      toast.error('请选择要上传的文件');
+      return;
+    }
+
+    // 验证文件类型
+    const validFiles = uploadFiles.filter(
+      (file) =>
+        file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+    );
+
+    if (validFiles.length === 0) {
+      toast.error('请选择有效的Excel文件（.xlsx 或 .xls）');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // 构建 table_config (扁平结构，不嵌套 faq_config)
+      const tableConfig = {
+        header_index_max: uploadConfig.header_index_max,
+        question_column_index: uploadConfig.question_column_index,
+        answer_column_index: uploadConfig.answer_column_index,
+      };
+
+      // 创建 FormData
+      const formData = new FormData();
+      validFiles.forEach((file) => {
+        formData.append('files', file);
+      });
+      formData.append('table_config', JSON.stringify(tableConfig));
+
+      const res = await tenantFetch(`/api/config/apps/${appId}/faq-files`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || '上传失败');
+      }
+
+      const data = await res.json();
+      const successCount = data.data?.filter(
+        (item: any) => item.chunks_count > 0
+      ).length || 0;
+      const totalChunks = data.data?.reduce(
+        (sum: number, item: any) => sum + (item.chunks_count || 0),
+        0
+      ) || 0;
+
+      toast.success(
+        `成功上传 ${successCount}/${validFiles.length} 个文件，共提取 ${totalChunks} 个片段`
+      );
+
+      // 关闭对话框并重置状态
+      setIsUploadDialogOpen(false);
+      setUploadFiles([]);
+      setUploadConfig({
+        header_index_max: 0,
+        question_column_index: 0,
+        answer_column_index: 1,
+      });
+
+      // 刷新FAQ列表
+      fetchFAQs();
+    } catch (error: any) {
+      toast.error(error.message || '上传失败');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSaveConfig = async () => {
     try {
-      const res = await tenantFetch(`/api/config/apps/${botConfig.app_id}/faq-config`, {
+      const res = await tenantFetch(`/api/config/apps/${appId}/faq-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          score_threshold: faqConfigData?.score_threshold,
+          active: faqConfigData?.active ?? true,
+          similarity_threshold: faqConfigData?.score_threshold,
           embedding_model: faqConfigData?.embedding_model,
           question_in_retrieval: faqConfigData?.question_in_retrieval,
           question_in_response: faqConfigData?.question_in_response,
@@ -281,7 +369,14 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
       if (!res.ok) throw new Error('保存配置失败');
       
-      setFaqConfigData(faqConfigData);
+      const data = await res.json();
+      // 更新本地状态，确保包含 active 字段
+      if (data.data && faqConfigData) {
+        setFaqConfigData({
+          ...faqConfigData,
+          active: data.data.active ?? faqConfigData.active,
+        });
+      }
       setIsConfigDialogOpen(false);
       toast.success('配置保存成功');
     } catch (error: any) {
@@ -296,11 +391,11 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           <Label htmlFor="enable_faq_switch">开启FAQ回复</Label>
           <Switch
             id="enable_faq_switch"
-            checked={!!botConfig.faq_id}
+            checked={faqConfigData?.active ?? false}
             onCheckedChange={handleToggleFAQ}
           />
         </div>
-        {botConfig.faq_id && (
+        {botConfig.enable_faq && faqConfigData && (
           <Button
             variant="outline"
             size="sm"
@@ -318,6 +413,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
         <Button onClick={() => handleOpenDialog()} size="sm">
           <Plus className="w-4 h-4 mr-2" />
           新增FAQ
+        </Button>
+        <Button onClick={() => setIsUploadDialogOpen(true)} size="sm" variant="outline">
+          <Upload className="w-4 h-4 mr-2" />
+          上传文件
         </Button>
       </div>
 
@@ -444,15 +543,15 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                       onValueChange={(value) =>
                         setFaqConfigData({ ...faqConfigData!, score_threshold: value[0] })
                       }
-                      min={0.8}
-                      max={1.0}
+                      min={0}
+                      max={1}
                       step={0.01}
                       className="w-full"
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>0.8 · 容易匹配</span>
+                      <span>0 · 容易匹配</span>
                       <span className="font-medium">{(faqConfigData?.score_threshold ?? 0.9).toFixed(2)}</span>
-                      <span>1.0 · 精准匹配</span>
+                      <span>1 · 精准匹配</span>
                     </div>
                   </div>
                 </div>
@@ -607,6 +706,145 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             </Button>
             <Button onClick={handleSaveConfig}>
               保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 上传文件对话框 */}
+      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>上传文件</DialogTitle>
+            <DialogDescription>
+              选择文件进行上传
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* 文件选择 */}
+            <div className="space-y-2">
+              <Label htmlFor="file-upload">选择文件</Label>
+              <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                <input
+                  id="file-upload"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setUploadFiles(files);
+                  }}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer flex flex-col items-center gap-2"
+                >
+                  <Upload className="w-8 h-8 text-muted-foreground" />
+                  <span className="text-sm font-medium">点击选择文件</span>
+                  <span className="text-xs text-muted-foreground">支持的文件类型: xlsx, xls</span>
+                </label>
+                {uploadFiles.length > 0 && (
+                  <div className="mt-4 space-y-2 text-left">
+                    <div className="text-xs text-muted-foreground mb-2">已选择 {uploadFiles.length} 个文件:</div>
+                    {uploadFiles.map((file, index) => (
+                      <div key={index} className="text-sm text-foreground bg-muted/50 rounded px-2 py-1">
+                        {file.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 配置项 */}
+            <div className="space-y-4 border-t pt-4">
+              <Label>文件解析配置</Label>
+              
+              {/* 标题行下标 */}
+              <div className="space-y-2">
+                <Label htmlFor="header_index_max" className="text-sm">
+                  标题行下标
+                </Label>
+                <Input
+                  id="header_index_max"
+                  type="number"
+                  min="0"
+                  value={uploadConfig.header_index_max ?? ''}
+                  onChange={(e) =>
+                    setUploadConfig({
+                      ...uploadConfig,
+                      header_index_max: e.target.value === '' ? null : parseInt(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="留空表示不使用标题行，默认: 0"
+                />
+                <p className="text-xs text-muted-foreground">
+                  留空表示不使用任何行作为标题行，列将使用数字索引（0, 1, 2...）
+                </p>
+              </div>
+
+              {/* 问题列 */}
+              <div className="space-y-2">
+                <Label htmlFor="question_column_index" className="text-sm">
+                  问题列
+                </Label>
+                <Input
+                  id="question_column_index"
+                  type="number"
+                  min="0"
+                  value={uploadConfig.question_column_index}
+                  onChange={(e) =>
+                    setUploadConfig({
+                      ...uploadConfig,
+                      question_column_index: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="默认: 0"
+                />
+              </div>
+
+              {/* 答案列 */}
+              <div className="space-y-2">
+                <Label htmlFor="answer_column_index" className="text-sm">
+                  答案列
+                </Label>
+                <Input
+                  id="answer_column_index"
+                  type="number"
+                  min="0"
+                  value={uploadConfig.answer_column_index}
+                  onChange={(e) =>
+                    setUploadConfig({
+                      ...uploadConfig,
+                      answer_column_index: parseInt(e.target.value) || 1,
+                    })
+                  }
+                  placeholder="默认: 1"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsUploadDialogOpen(false);
+                setUploadFiles([]);
+                setUploadConfig({
+                  header_index_max: 0,
+                  question_column_index: 0,
+                  answer_column_index: 1,
+                });
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleUploadFiles}
+              disabled={uploadFiles.length === 0 || uploading}
+            >
+              {uploading ? '上传中...' : '上传'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -53,8 +53,17 @@ interface PromptConfig {
   act: string;
   act_with_plan: string;
   summary: string;
-};
+}
 
+interface FAQConfig {
+  active?: boolean;
+  similarity_threshold?: number;
+  embedding_model?: string;
+  question_in_retrieval?: boolean;
+  question_in_response?: boolean;
+  answer_in_retrieval?: boolean;
+  answer_in_response?: boolean;
+}
 
 export interface Chatbot {
   id: string;
@@ -63,7 +72,8 @@ export interface Chatbot {
   enable_search: boolean;
   enable_agent: boolean;
   enable_chatdb: boolean;
-  faq_id?: string | null;
+  enable_faq?: boolean;
+  faq_config?: FAQConfig | null;
   mcp_ids: string[];
   kb_ids: string[];
   model_id: string;
@@ -91,7 +101,8 @@ const default_chat_config = {
   updated_at: "",
   enable_agent: false,
   enable_chatdb: false,
-  faq_id: null,
+  enable_faq: false,
+  faq_config: null,
   enable_input_guardrail: false,
   enable_output_guardrail: false,
   guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",

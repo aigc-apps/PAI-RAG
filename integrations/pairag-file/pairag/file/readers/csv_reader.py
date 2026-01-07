@@ -23,7 +23,7 @@ class CSVReader(BaseReader):
         *args: Any,
         concat_rows: Optional[bool] = False,
         row_joiner: Optional[str] = "\n",
-        header_max: Optional[int] = 0,
+        header_index_max: Optional[int] = 0,
         format_sheet_data_to_json: Optional[bool] = False,
         sheet_column_filters: Optional[List[str]] = None,
         **kwargs: Any,
@@ -32,19 +32,10 @@ class CSVReader(BaseReader):
         super().__init__(*args, **kwargs)
         self._concat_rows = concat_rows if concat_rows is not None else False
         self._row_joiner = row_joiner if row_joiner is not None else "\n"
-        self._pandas_config = {'header': header_max} if header_max is not None else {}
+        self._header_index_max = header_index_max if header_index_max is not None else 0
         self._format_sheet_data_to_json = format_sheet_data_to_json if format_sheet_data_to_json is not None else False
         self._sheet_column_filters = sheet_column_filters if sheet_column_filters is not None else None
-
-    def _read_file(self, file: Any):
-        encoding = charset_normalizer.detect(file.read(1000))["encoding"]
-        file.seek(0)
-        encoding = "utf-8"
-        if encoding is not None and "GB" in encoding.upper():
-            encoding = "GB18030"
-
-        df = pd.read_csv(file, encoding=encoding, **self._pandas_config)
-        return df
+        self._pandas_config = {'header': self._header_index_max} if self._header_index_max is not None else {}
 
     def load_data(
         self,

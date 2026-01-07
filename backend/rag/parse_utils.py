@@ -28,7 +28,7 @@ def sanitize_text(text: str) -> str:
 def get_node_texts_for_embedding(nodes) -> list[str]:
     texts = []
     for node in nodes:
-        base_text = f"filename: {node.metadata['file_name']}"
+        base_text = f"filename: {node.metadata.get('file_name', '')}"
         chapter_name = node.metadata.get('chapter_name', '').strip()
         if chapter_name:
             base_text += f"\n\nchapter_name: {chapter_name}"

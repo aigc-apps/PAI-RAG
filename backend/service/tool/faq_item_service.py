@@ -7,7 +7,14 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from loguru import logger
 
 from db.models.faq_item import FAQItemCreate, FAQItemEntity
+from db.models.faq_config import FAQConfigCreate
+from db.models.chatbot import ChatBotEntity
 from common.chat.response_model import PagedResult
+from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
+from service.knowledgebase.knowledgebase_service import KnowledgebaseService
+from service.knowledgebase.rag_service import RagService
+from pairag.file.utils.tokenization import estimate_tokens_in_text
+from llama_index.core.schema import TextNode
 
 
 class FAQItemService:
@@ -21,6 +28,151 @@ class FAQItemService:
             session: Database session (injected dependency)
         """
         self.session = session
+
+    async def get_faq_knowledgebase(self, chatbot_id: str, tenant_id: str):
+        """
+        Get FAQ knowledgebase for the given chatbot.
+
+        Args:
+            chatbot_id: Chatbot ID
+            tenant_id: Tenant ID
+
+        Returns:
+            Knowledgebase entity if found, None otherwise
+        """
+        # Get chatbot to get app_id
+        chatbot = await self.session.exec(
+            select(ChatBotEntity).where(
+                ChatBotEntity.id == chatbot_id, ChatBotEntity.tenant_id == tenant_id
+            )
+        )
+        chatbot = chatbot.first()
+        if not chatbot:
+            return None
+
+        # Get knowledgebase by name
+        kb_name = f"{chatbot.app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
+        knowledgebase_service = KnowledgebaseService(self.session)
+        return await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
+
+    async def save_faq_to_knowledgebase(
+        self, faq_item: FAQItemEntity, tenant_id: str, rag_service: Optional[RagService] = None
+    ) -> None:
+        """
+        Save FAQ item to knowledgebase.
+
+        Args:
+            faq_item: FAQ Item entity
+            tenant_id: Tenant ID
+        """
+        try:
+            # Get FAQ knowledgebase
+            kb = await self.get_faq_knowledgebase(faq_item.chatbot_id, tenant_id)
+            if not kb:
+                logger.warning(
+                    f"FAQ knowledgebase not found for chatbot {faq_item.chatbot_id}, skipping save to KB"
+                )
+                return
+
+            # Get FAQ config from chatbot to determine what to include in chunk_text
+            chatbot = await self.session.exec(
+                select(ChatBotEntity).where(
+                    ChatBotEntity.id == faq_item.chatbot_id,
+                    ChatBotEntity.tenant_id == tenant_id,
+                )
+            )
+            chatbot = chatbot.first()
+
+            faq_config = None
+            if chatbot and chatbot.faq_config:
+                faq_config = FAQConfigCreate.model_validate(chatbot.faq_config)
+
+            # Build chunk_text based on faq_config settings
+            chunk_parts = []
+            if faq_config:
+                if faq_config.question_in_retrieval:
+                    chunk_parts.append(f"问题: {faq_item.question}")
+                if faq_config.answer_in_retrieval:
+                    chunk_parts.append(f"答案: {faq_item.answer}")
+            else:
+                chunk_parts.append(f"问题: {faq_item.question}")
+
+            chunk_text = "\n".join(chunk_parts) if chunk_parts else ""
+
+            if not chunk_text:
+                logger.warning(
+                    f"FAQ item {faq_item.id} has no content to save (both question_in_retrieval and answer_in_retrieval are false)"
+                )
+                return
+
+            # Create metadata for TextNode
+            node_metadata = {
+                "faq_item_id": faq_item.id,
+                "chatbot_id": faq_item.chatbot_id,
+                "question": faq_item.question,
+                "answer": faq_item.answer,
+                "token_count": estimate_tokens_in_text(chunk_text),
+            }
+
+            # Create TextNode directly (no KbChunkEntity needed for FAQ items)
+            kb_node = TextNode(
+                id_=faq_item.id,
+                text=chunk_text,
+                metadata=node_metadata,
+            )
+
+            # Insert into vector store if rag_service is provided
+            if rag_service:
+                if faq_item.active:
+                    await rag_service.ainsert(kb_id=kb.id, nodes=[kb_node], tenant_id=tenant_id)
+                    logger.info(
+                        f"Inserted FAQ item {faq_item.id} into knowledgebase {kb.id}"
+                    )
+                else:
+                    logger.info(
+                        f"FAQ item {faq_item.id} is inactive, skipping vector store insertion"
+                    )
+            else:
+                logger.warning(
+                    f"RagService not provided, skipping vector store insertion for FAQ item {faq_item.id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to save FAQ item to knowledgebase: {e}")
+
+    async def delete_faq_from_knowledgebase(
+        self, faq_item: FAQItemEntity, tenant_id: str, rag_service: Optional[RagService] = None
+    ) -> None:
+        """
+        Delete FAQ item from knowledgebase.
+
+        Args:
+            faq_item: FAQ Item entity
+            tenant_id: Tenant ID
+        """
+        try:
+            # Get FAQ knowledgebase
+            kb = await self.get_faq_knowledgebase(faq_item.chatbot_id, tenant_id)
+            if not kb:
+                logger.warning(
+                    f"FAQ knowledgebase not found for chatbot {faq_item.chatbot_id}, skipping delete from KB"
+                )
+                return
+
+            # Delete from vector store using faq_item.id as node_id
+            if rag_service:
+                await rag_service.adelete(kb_id=kb.id, node_ids=[faq_item.id], tenant_id=tenant_id)
+                logger.info(
+                    f"Deleted FAQ item {faq_item.id} from knowledgebase {kb.id}"
+                )
+            else:
+                logger.warning(
+                    f"RagService not provided, skipping vector store deletion for FAQ item {faq_item.id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to delete FAQ item from knowledgebase: {e}")
+            # Don't raise exception, just log the error
 
     async def get_faq_item(self, id: str, tenant_id: str) -> Optional[FAQItemEntity]:
         """
@@ -43,7 +195,6 @@ class FAQItemService:
     async def list_faq_items(
         self,
         chatbot_id: str,
-        faq_id: Optional[str] = None,
         tenant_id: str = None,
         page: int = 1,
         size: int = 100,
@@ -53,7 +204,6 @@ class FAQItemService:
 
         Args:
             chatbot_id: Chatbot ID
-            faq_id: Optional FAQ Config ID filter
             tenant_id: Tenant ID
             page: Page number (1-indexed)
             size: Page size
@@ -66,9 +216,6 @@ class FAQItemService:
             FAQItemEntity.chatbot_id == chatbot_id,
             FAQItemEntity.tenant_id == tenant_id,
         )
-
-        if faq_id is not None:
-            base_query = base_query.where(FAQItemEntity.faq_id == faq_id)
 
         # Get total count
         count_query = select(func.count()).select_from(base_query)
@@ -97,7 +244,6 @@ class FAQItemService:
     async def create_faq_item(
         self,
         chatbot_id: str,
-        faq_id: str,
         faq_item_data: FAQItemCreate,
         tenant_id: str,
     ) -> FAQItemEntity:
@@ -107,7 +253,6 @@ class FAQItemService:
 
         Args:
             chatbot_id: Chatbot ID
-            faq_id: FAQ Config ID
             faq_item_data: FAQ Item creation data
             tenant_id: Tenant ID
 
@@ -116,7 +261,7 @@ class FAQItemService:
         """
         faq_item = FAQItemEntity.model_validate(
             faq_item_data,
-            update={"chatbot_id": chatbot_id, "faq_id": faq_id, "tenant_id": tenant_id},
+            update={"chatbot_id": chatbot_id, "tenant_id": tenant_id},
         )
         self.session.add(faq_item)
 
@@ -126,15 +271,17 @@ class FAQItemService:
             await self.session.refresh(faq_item)
 
             logger.info(
-                f"Created FAQ Item entity: {faq_item.id} (chatbot_id: {chatbot_id}, faq_id: {faq_id})"
+                f"Created FAQ Item entity: {faq_item.id} (chatbot_id: {chatbot_id})"
             )
+
+
             return faq_item
         except Exception as e:
             logger.error(f"Error creating FAQ Item: {e}")
             raise ValueError(f"创建FAQ条目失败: {e}") from e
 
     async def update_faq_item(
-        self, id: str, update_data: FAQItemCreate, tenant_id: str
+        self, id: str, update_data: FAQItemCreate, tenant_id: str, rag_service: Optional[RagService] = None
     ) -> FAQItemEntity:
         """
         Update an existing FAQ Item entity.
@@ -162,8 +309,6 @@ class FAQItemService:
             faq_item.question = update_data.question
         if update_data.answer is not None:
             faq_item.answer = update_data.answer
-        if update_data.faq_id is not None:
-            faq_item.faq_id = update_data.faq_id
         if update_data.chatbot_id is not None:
             faq_item.chatbot_id = update_data.chatbot_id
         if update_data.file_id is not None:
@@ -179,9 +324,14 @@ class FAQItemService:
         await self.session.refresh(faq_item)
 
         logger.info(f"Updated FAQ Item entity: {faq_item.id}")
+
+        # Update FAQ in knowledgebase (delete old, insert new if active)
+        await self.delete_faq_from_knowledgebase(faq_item, tenant_id, rag_service)
+        await self.save_faq_to_knowledgebase(faq_item, tenant_id, rag_service)
+
         return faq_item
 
-    async def delete_faq_item(self, id: str, tenant_id: str) -> None:
+    async def delete_faq_item(self, id: str, tenant_id: str, rag_service: Optional[RagService] = None) -> None:
         """
         Delete a FAQ Item entity.
         Note: Caller is responsible for committing the session.
@@ -196,6 +346,9 @@ class FAQItemService:
         faq_item = await self.get_faq_item(id=id, tenant_id=tenant_id)
         if not faq_item:
             raise ValueError(f"FAQ条目 '{id}' 不存在。")
+
+        # Delete from knowledgebase first
+        await self.delete_faq_from_knowledgebase(faq_item, tenant_id, rag_service)
 
         # Delete from database (staged, not committed)
         await self.session.delete(faq_item)

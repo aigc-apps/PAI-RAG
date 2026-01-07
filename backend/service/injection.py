@@ -645,6 +645,9 @@ async def get_agent_service(
     async def file_service_getter():
         return await get_file_service(session)
 
+    async def faq_config_service_getter():
+        return await get_faq_config_service(session)
+
     return AgentService(
         session=session,
         llm_service_getter=llm_service_getter,
@@ -655,6 +658,7 @@ async def get_agent_service(
         chatdb_service_getter=chatdb_service_getter,
         rag_service_getter=rag_service_getter,
         file_service_getter=file_service_getter,
+        faq_config_service_getter=faq_config_service_getter,
     )
 
 

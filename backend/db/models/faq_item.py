@@ -9,7 +9,6 @@ from common.system_constants import DEFAULT_TENANT_ID
 class FAQItemCreate(SQLModel):
     question: str = Field(default=None, sa_column=Column(Text))
     answer: str = Field(default=None, sa_column=Column(Text))
-    faq_id: str = Field(default=None, index=True)
     chatbot_id: str = Field(default=None, index=True)
     file_id: Optional[str] = Field(default=None)
     active: bool = Field(default=True)

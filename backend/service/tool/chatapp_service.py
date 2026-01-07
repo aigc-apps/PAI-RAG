@@ -8,8 +8,13 @@ from sqlalchemy.exc import IntegrityError
 from loguru import logger
 
 from db.models.chatbot import ChatBotCreate, ChatBotEntity
-from db.models.faq_config import FAQConfigEntity
+from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig, ChunkConfig, TableParserConfig
 from common.chat.response_model import PagedResult
+from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
+from common.knowledgebase.types import VectorIndexRetrievalType
+from service.knowledgebase.knowledgebase_service import KnowledgebaseService
+from service.model.embedding_service import EmbeddingService
+from service.tool.faq_config_service import FAQConfigService
 
 
 class ChatappService:
@@ -23,6 +28,74 @@ class ChatappService:
             session: Database session (injected dependency)
         """
         self.session = session
+
+    async def _ensure_faq_knowledgebase(self, chatbot_id: str, app_id: str, tenant_id: str) -> None:
+        """
+        Ensure FAQ knowledgebase exists for the given chatbot_id and app_id.
+        Creates it if it doesn't exist.
+        Uses embedding_model from faq_config if available, otherwise uses default.
+
+        Args:
+            chatbot_id: ChatApp chatbot_id
+            app_id: ChatApp app_id
+            tenant_id: Tenant ID
+        """
+        kb_name = f"{app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
+        knowledgebase_service = KnowledgebaseService(self.session)
+        embedding_service = EmbeddingService(self.session)
+        faq_config_service = FAQConfigService(self.session)
+
+        knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
+
+        if not knowledgebase:
+            logger.info(f"Creating FAQ knowledgebase {kb_name} for app_id {app_id} and tenant {tenant_id}")
+
+            # Get FAQ config to get embedding_model
+            faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
+                chatbot_id=chatbot_id, tenant_id=tenant_id
+            )
+
+            # Use embedding_model from faq_config if available, otherwise use default
+            if faq_config and faq_config.embedding_model:
+                embedding_model = faq_config.embedding_model
+                logger.info(f"Using embedding_model {embedding_model} from FAQ config for knowledgebase {kb_name}")
+            else:
+                default_embedding_config = await embedding_service.get_default_embedding(tenant_id=tenant_id)
+                embedding_model = default_embedding_config.model_id
+                logger.info(f"Using default embedding_model {embedding_model} for knowledgebase {kb_name}")
+
+            # Set default retrieval_config
+            default_similarity_threshold = faq_config.similarity_threshold if faq_config else 0.9
+
+            retrieval_config = RetrievalConfig(
+                retrieval_mode=VectorIndexRetrievalType.vector,
+                top_k=1,
+                enable_rerank=False,
+                rerank_top_k=None,
+                vector_weight=1.0,
+                similarity_threshold=default_similarity_threshold,
+            )
+
+            chunk_config = ChunkConfig(
+                table_config=TableParserConfig(
+                header_index_max=0,
+                question_column_index=0,
+                answer_column_index=1,
+                ),
+                parser_type="faq",
+            )
+
+            kb_create = KnowledgebaseCreate(
+                name=kb_name,
+                description="faq知识库",
+                embedding_model=embedding_model,
+                retrieval_config=retrieval_config,
+                chunk_config=chunk_config,
+            )
+            knowledgebase = await knowledgebase_service.create_knowledgebase(kb_data=kb_create, tenant_id=tenant_id)
+            await self.session.flush()
+            await self.session.refresh(knowledgebase)
+            logger.info(f"Created FAQ knowledgebase {knowledgebase.id} (name: {kb_name}) for app_id {app_id}")
 
     async def get_chatapp(self, id: str, tenant_id: str) -> Optional[ChatBotEntity]:
         """
@@ -121,29 +194,22 @@ class ChatappService:
             await self.session.flush()
             await self.session.refresh(chatbot)
 
-            # If enable_faq is True, create FAQ config and set faq_id
+            # If enable_faq is True, create FAQ config
             if app_data.enable_faq:
-                faq_config = FAQConfigEntity(
-                    chatbot_id=chatbot.id,
-                    tenant_id=tenant_id,
-                    score_threshold=0.9,
-                    embedding_model="BAAI/bge-m3",
-                    question_in_retrieval=True,
-                    question_in_response=False,
-                    answer_in_retrieval=False,
-                    answer_in_response=True,
+                # Initialize FAQ config with default values
+                faq_config_service = FAQConfigService(self.session)
+                await faq_config_service.get_or_create_faq_config(
+                    chatbot_id=chatbot.id, tenant_id=tenant_id
                 )
-                self.session.add(faq_config)
-                await self.session.flush()
-                await self.session.refresh(faq_config)
 
-                # Update chatbot with faq_id
-                chatbot.faq_id = faq_config.id
+                # Ensure FAQ knowledgebase exists (uses embedding_model from faq_config)
+                await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
+
                 await self.session.flush()
                 await self.session.refresh(chatbot)
 
                 logger.info(
-                    f"Created FAQ config: {faq_config.id} for ChatApp: {chatbot.id} (app_id: {chatbot.app_id})"
+                    f"Created FAQ config for ChatApp: {chatbot.id} (app_id: {chatbot.app_id})"
                 )
 
             logger.info(
@@ -184,32 +250,24 @@ class ChatappService:
 
         logger.info(f"Updating ChatApp {id} with data: {update_data}")
 
-        # Handle enable_faq field: create FAQ config if enabling, clear faq_id if disabling
-        if update_data.enable_faq is not None:
-            if update_data.enable_faq:
-                # Enable FAQ: create FAQ config if not exists
-                if not chatbot.faq_id:
-                    faq_config = FAQConfigEntity(
-                        chatbot_id=chatbot.id,
-                        tenant_id=tenant_id,
-                        score_threshold=0.9,
-                        embedding_model="BAAI/bge-m3",
-                        question_in_retrieval=True,
-                        question_in_response=False,
-                        answer_in_retrieval=False,
-                        answer_in_response=True,
-                    )
-                    self.session.add(faq_config)
-                    await self.session.flush()
-                    await self.session.refresh(faq_config)
-                    chatbot.faq_id = faq_config.id
-                    logger.info(
-                        f"Created FAQ config: {faq_config.id} for ChatApp: {chatbot.id}"
-                    )
-            else:
-                # Disable FAQ: clear faq_id (but keep FAQ config and items)
-                chatbot.faq_id = None
-                logger.info(f"Disabled FAQ for ChatApp: {chatbot.id}")
+        if update_data.enable_faq:
+            # Enable FAQ: create FAQ config if not exists
+            if not chatbot.faq_config:
+                faq_config_service = FAQConfigService(self.session)
+                await faq_config_service.get_or_create_faq_config(
+                    chatbot_id=chatbot.id, tenant_id=tenant_id
+                )
+
+                # Ensure FAQ knowledgebase exists (uses embedding_model from faq_config)
+                await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
+
+                logger.info(
+                    f"Created FAQ config for ChatApp: {chatbot.id}"
+                )
+        else:
+            # Disable FAQ: clear faq_config (but keep FAQ items)
+            chatbot.faq_config = None
+            logger.info(f"Disabled FAQ for ChatApp: {chatbot.id}")
 
         # Update fields
         if update_data.app_id is not None:
@@ -236,11 +294,10 @@ class ChatappService:
             chatbot.enable_output_guardrail = update_data.enable_output_guardrail
         if update_data.guardrail_hint is not None:
             chatbot.guardrail_hint = update_data.guardrail_hint
-        # Only update faq_id if enable_faq is not provided (to allow manual faq_id updates)
-        if update_data.faq_id is not None and update_data.enable_faq is None:
-            chatbot.faq_id = update_data.faq_id
         if update_data.prompts is not None:
             chatbot.prompts = update_data.prompts
+        if update_data.enable_faq is not None:
+            chatbot.enable_faq = update_data.enable_faq
 
         chatbot.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.session.add(chatbot)
