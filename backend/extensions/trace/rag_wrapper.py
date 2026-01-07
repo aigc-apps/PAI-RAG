@@ -77,7 +77,6 @@ def query_knowledgebase_wrapper(func):
                     "score_threshold": retrieval_setting.similarity_threshold if retrieval_setting else None,
                 }
                 span.set_attribute(INPUT_VALUE, json.dumps(input_data, ensure_ascii=False))
-
                 span.set_attribute(GEN_AI_OPERATION_NAME, RETRIEVER_OPERATION_NAME)
 
                 results: List[SearchResult] = await func(self, *args, **kwargs)
