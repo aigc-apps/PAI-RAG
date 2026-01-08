@@ -16,12 +16,17 @@ class NodeMetadata(BaseModel):
     file_path: str
     image_url: List[str]
     title: str
+    content: str
     doc_name: str
+
+class NodeInfo(BaseModel):
+    metadata: NodeMetadata
+    text: str = Field(description="The text content of the node")
+
 
 class NodeResult(BaseModel):
     score: float
-    metadata: NodeMetadata
-    text: str = Field(description="The text content of the node")
+    node: NodeInfo
 
 
 class RetrievalToolResponse(BaseModel):
@@ -80,13 +85,16 @@ async def asearch_knowledgebase(
             images = score_node.images or []
             node = NodeResult(
                 score=score_node.score,
-                metadata=NodeMetadata(
-                    file_path=file_path or "",
-                    image_url=[img.get("url", "") for img in images if isinstance(img, dict) and img.get("url", "")],
-                    title=title or "",
-                    doc_name=doc_name or "",
-                ),
-                text=score_node.content,
+                node=NodeInfo(
+                    text=score_node.content,
+                    metadata=NodeMetadata(
+                        file_path=file_path or "",
+                        image_url=[img.get("url", "") for img in images if isinstance(img, dict) and img.get("url", "")],
+                        title=title or "",
+                        doc_name=doc_name or "",
+                        content=score_node.content,
+                    ),
+                )
             )
             nodes.append(node)
 
