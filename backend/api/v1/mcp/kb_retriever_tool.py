@@ -16,7 +16,6 @@ class NodeMetadata(BaseModel):
     file_path: str
     image_url: List[str]
     title: str
-    content: str
     doc_name: str
 
 class NodeInfo(BaseModel):
@@ -92,7 +91,6 @@ async def asearch_knowledgebase(
                         image_url=[img.get("url", "") for img in images if isinstance(img, dict) and img.get("url", "")],
                         title=title or "",
                         doc_name=doc_name or "",
-                        content=score_node.content,
                     ),
                 )
             )
