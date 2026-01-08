@@ -70,7 +70,7 @@ class ReloadableGrpcOTLPSpanExporter(OTLPSpanExporter):
             Union[TypingSequence[Tuple[str, str]], Dict[str, str], str]
         ] = None,
         timeout: Optional[int] = None,
-        compression: Optional[Compression] = None,
+        compression: Optional[Compression] = Compression.Gzip,
     ):
         if insecure is None:
             insecure = environ.get(OTEL_EXPORTER_OTLP_TRACES_INSECURE)

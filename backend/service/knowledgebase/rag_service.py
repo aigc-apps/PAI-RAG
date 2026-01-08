@@ -832,6 +832,7 @@ class RagService:
     @embedding_wrapper
     async def embed_query(self, query: str, embedding_model_entity: EmbeddingModelEntity) -> List[float]:
         embed_model = create_embedding_model(embedding_model_entity)
+        # skip tracing for embedding vectors
         query_embedding = await embed_model.aget_query_embedding(query)
         return query_embedding
 
