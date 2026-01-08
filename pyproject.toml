@@ -79,7 +79,6 @@ alembic = "^1.16.2"
 celery = "^5.5.3"
 chromadb = "^1.3.5"
 redis = "^6.2.0"
-opentelemetry-exporter-otlp-proto-grpc = "^1.36.0"
 tavily-python = "^0.7.12"
 rapidfuzz = "^3.14.1"
 xiyan-mcp-server = "^0.1.7"
@@ -89,6 +88,9 @@ aiofiles = "24.1.0"
 alibabacloud-credentials = "1.0.1"
 pairag-file = {url = "https://pai-rag.oss-cn-hangzhou.aliyuncs.com/packages/python_wheels/pairag_file-2.1.24.2-py3-none-any.whl"}
 aiocache = "^0.12.3"
+opentelemetry-instrumentation-fastapi = "^0.60b1"
+opentelemetry-exporter-otlp-proto-http = "^1.39.1"
+opentelemetry-exporter-otlp-proto-grpc = "^1.39.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

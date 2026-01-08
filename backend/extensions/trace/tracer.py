@@ -14,7 +14,6 @@ class ContextAwareTracer:
     def start_as_current_span(self, *args, **kwargs):
         return self._tracer.start_as_current_span(*args, **kwargs)
 
-
 def get_tracer():
     tracer = trace.get_tracer(__name__)
     return ContextAwareTracer(tracer)

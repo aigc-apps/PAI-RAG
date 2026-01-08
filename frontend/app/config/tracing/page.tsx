@@ -32,7 +32,7 @@ export default function TracingConfig() {
 
         if (!res.ok) throw new Error('加载配置失败');
 
-        const data = await res.json();
+        const data = (await res.json()).data;
         setEndpoint(data['endpoint'] || '');
         setToken(data['token'] || '');
         setServiceName(data['service_name'] || '');

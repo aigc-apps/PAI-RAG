@@ -19,6 +19,7 @@ from db.models.knowledgebase.metadata import (
     KbMetadataEntity,
     KbMetadataEntityCreate,
 )
+from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.chunk import KbChunkEntity, create_text_node_from_chunk
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from service.knowledgebase.utils.metadata_utils import validate_metadata_value
@@ -38,6 +39,7 @@ from tools.utils.vectordb_retrieval import aquery_vector_store
 from utils.lru_cache import LruCache
 from db.db_context import create_db_session
 from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K
+from extensions.trace.rag_wrapper import query_knowledgebase_wrapper, embedding_wrapper
 from loguru import logger
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
@@ -413,6 +415,9 @@ class RagService:
         file_ids: List[str],
         tenant_id: str,
     ):
+        if not file_ids:
+            return {}
+
         file_source_results = (await self.session.exec(
             select( KbFileEntity.id, KbFileEntity.file_source ).where(
                 KbFileEntity.id.in_(file_ids),
@@ -588,7 +593,7 @@ class RagService:
         file_ids = [relation.file_id for relation in file_metadata_list]
         if file_ids:
             file_service = await self._get_file_service()
-            file_list = await file_service.get_files_by_ids(kb_id, file_ids)
+            file_list = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=file_ids, tenant_id=tenant_id)
             # If name changed, update all related files' file_metadata key names
             if old_name != new_name:
                 logger.info(
@@ -813,6 +818,7 @@ class RagService:
 
             records.append(
                 SearchResult(
+                    id=reranked_result.ids[i],
                     score=reranked_result.similarities[i],
                     content=origin_text[:3000],
                     images=images,
@@ -823,8 +829,14 @@ class RagService:
         return records
 
 
+    @embedding_wrapper
+    async def embed_query(self, query: str, embedding_model_entity: EmbeddingModelEntity) -> List[float]:
+        embed_model = create_embedding_model(embedding_model_entity)
+        query_embedding = await embed_model.aget_query_embedding(query)
+        return query_embedding
+
     # 当需要发起SessionScope并发时，每个查询都需要独立的session实例
-    async def _aquery_vector_store(
+    async def _aquery_task(
         self,
         session: AsyncSession,
         kb_id: str = None,
@@ -860,8 +872,7 @@ class RagService:
         if not embed_model_entity:
             raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
 
-        embed_model = create_embedding_model(embed_model_entity)
-        query_embedding = await embed_model.aget_query_embedding(query)
+        query_embedding = await self.embed_query(query=query, embedding_model_entity=embed_model_entity)
 
         if not retrieval_setting:
             retrieval_setting = RetrievalSetting()
@@ -973,7 +984,7 @@ class RagService:
     ):
         if session is None:
             async with create_db_session() as new_session:
-                return await self._aquery_vector_store(
+                return await self._aquery_task(
                     session=new_session,
                     kb_id=kb_id,
                     kb_name=kb_name,
@@ -985,7 +996,7 @@ class RagService:
                     tenant_id=tenant_id,
                 )
         else:
-            return await self._aquery_vector_store(
+            return await self._aquery_task(
                 session=session,
                 kb_id=kb_id,
                 kb_name=kb_name,
@@ -998,6 +1009,7 @@ class RagService:
             )
 
     ## VectorDB Retrieval Service
+    @query_knowledgebase_wrapper
     async def aquery(
         self,
         query: str,

@@ -8,7 +8,6 @@ from opentelemetry.context import attach, detach
 from opentelemetry.trace import set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
-
 from extensions.trace import context as trace_context
 from extensions.trace.utils import pydantic_to_dict
 

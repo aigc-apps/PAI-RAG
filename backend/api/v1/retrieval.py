@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends
-from common.chat.response_model import ResponseModel, success_response
+from common.chat.response_model import ResponseModel
 from api.api_exception import ApiException
-from db.db_context import get_db_session
 from common.chat.models import DocRecord, NewRetrievalResponse, RetrievalRequest
-from sqlmodel.ext.asyncio.session import AsyncSession
 from service.injection import get_rag_service, get_tenant_id
 from service.knowledgebase.rag_service import RagService
 from typing import List
 from common.tool.search_result import SearchResult
+from fastapi.responses import JSONResponse
 import traceback
+from extensions.trace.context import get_request_id
 from loguru import logger
 
 
@@ -19,11 +19,11 @@ retrieval_router = APIRouter()
 )
 async def retrieval(
     retrieval_request: RetrievalRequest,
-    session: AsyncSession = Depends(get_db_session),
     tenant_id: str = Depends(get_tenant_id),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    logger.info(f"Retrieval request: {retrieval_request}, tenant_id: {tenant_id}")
+    request_id = get_request_id()
+    logger.info(f"Retrieval request: {retrieval_request}, tenant_id: {tenant_id}, request_id: {request_id}")
     try:
         search_results: List[SearchResult] = await rag_service.aquery(
             query=retrieval_request.query,
@@ -35,7 +35,7 @@ async def retrieval(
             tenant_id=tenant_id,
         )
         logger.info(
-            f"Retrieved {len(search_results)} for query '{retrieval_request.query}'."
+            f"Retrieved {len(search_results)} for query '{retrieval_request.query}', request_id: {request_id}"
         )
         records = []
         for node in search_results:
@@ -47,7 +47,10 @@ async def retrieval(
             ))
         # 使用统一的响应格式
         retrieval_response = NewRetrievalResponse(records=records)
-        return success_response(data=retrieval_response, message="检索成功")
+        retrieval_response_data = retrieval_response.model_dump()
+        logger.info(f"Retrieval response: {retrieval_response_data}, request_id: {request_id}")
+
+        return JSONResponse(status_code=200, content=retrieval_response_data)
     except ValueError as e:
         logger.error(f"Failed to retrieve: {traceback.format_exc()}")
         raise ApiException(code=400, message=f"Failed to retrieve: {e}")

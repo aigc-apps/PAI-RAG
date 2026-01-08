@@ -1,7 +1,7 @@
 import os
 import socket
 from functools import wraps
-from typing import Callable, AsyncGenerator
+from typing import Callable, AsyncGenerator, Union
 from loguru import logger
 
 from opentelemetry import trace
@@ -14,21 +14,41 @@ from opentelemetry.sdk.resources import (
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
+    ConsoleSpanExporter,
+    SimpleSpanProcessor,
 )
 from opentelemetry.trace import Span
 from opentelemetry.context import attach, detach
 from openinference.instrumentation.openai import OpenAIInstrumentor
 from openinference.semconv.trace import SpanAttributes, MessageAttributes, MessageContentAttributes
 
-from extensions.trace.reloadable_exporter import ReloadableOTLPSpanExporter
+from extensions.trace.grpc_exporter import ReloadableGrpcOTLPSpanExporter
+from extensions.trace.http_exporter import ReloadableHttpOTLPSpanExporter
 from extensions.trace import context as trace_context
 from extensions.trace.trace_config import TraceConfig
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.baggage.propagation import W3CBaggagePropagator
+from opentelemetry.propagators.composite import CompositePropagator
+from extensions.trace.baggage_processor import LoongSuiteBaggageSpanProcessor
+from extensions.trace.trace_context_middleware import TraceContextMiddleware
+
+
+ENABLE_TRACE_DEBUG = os.getenv("ENABLE_TRACE_DEBUG", "false").lower() in ["true", "1", "yes", "y"]
+
+
+def setup_propagator(app):
+    set_global_textmap(CompositePropagator([
+        TraceContextTextMapPropagator(),  # 处理 traceparent
+        W3CBaggagePropagator()           # 处理 baggage
+    ]))
+    app.add_middleware(TraceContextMiddleware)
 
 
 # trace_provider为singleton, 不支持覆盖，故修改trace配置时，默认覆盖exporter和resource
 # 这样如果用户填错密码，还可以成功刷新
 trace_config: TraceConfig = None
-exporter: ReloadableOTLPSpanExporter = None
+exporter: Union[ReloadableGrpcOTLPSpanExporter, ReloadableHttpOTLPSpanExporter] = None
 resource: Resource = None
 trace_provider: TracerProvider = None
 
@@ -49,16 +69,12 @@ def init_instrument(config: TraceConfig):
     if config.user_args:
         trace_context.init_custom_context(config.user_args.values())
 
-    grpc_endpoint = config.endpoint
+    trace_endpoint = config.endpoint
     token = config.token
     service_name = config.service_name
     service_app_name = config.service_name
 
     attributes = {SERVICE_NAME: service_name, HOST_NAME: socket.gethostname()}
-
-    if not token:
-        logger.error("token not provided in trace config.")
-        raise ValueError("token must be provided!")
 
     attributes["service.app.name"] = service_app_name
 
@@ -73,19 +89,31 @@ def init_instrument(config: TraceConfig):
 
     global exporter
     if exporter is None:
-        exporter = ReloadableOTLPSpanExporter(
-            endpoint=grpc_endpoint, headers=(f"Authentication={token}")
-        )
+        if config.exporter_type == "grpc":
+            logger.info(f"Use grpc exporter: {trace_endpoint}")
+            exporter = ReloadableGrpcOTLPSpanExporter(
+                endpoint=trace_endpoint, headers=(f"Authentication={token}")
+            )
+        elif config.exporter_type == "http":
+            logger.info(f"Use http exporter: {trace_endpoint}")
+            exporter = ReloadableHttpOTLPSpanExporter(
+                endpoint=trace_endpoint, headers=(f"Authentication={token}")
+            )
+        else:
+            raise ValueError(f"Invalid exporter type: {config.exporter_type}")
     else:
-        exporter.reload(endpoint=grpc_endpoint, headers=(f"Authentication={token}"))
+        exporter.reload(endpoint=trace_endpoint, headers=(f"Authentication={token}"))
 
     global trace_provider
     if trace_provider is None:
         span_processor = BatchSpanProcessor(exporter)
         trace_provider = TracerProvider(
-            resource=resource, active_span_processor=span_processor
+            resource=resource
         )
-
+        trace_provider.add_span_processor(span_processor)
+        trace_provider.add_span_processor(LoongSuiteBaggageSpanProcessor())
+        if ENABLE_TRACE_DEBUG:
+            trace_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
         trace.set_tracer_provider(trace_provider)
 
     OpenAIInstrumentor().instrument()

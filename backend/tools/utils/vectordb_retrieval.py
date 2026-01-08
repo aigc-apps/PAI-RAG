@@ -6,7 +6,7 @@ from llama_index.core.vector_stores.types import VectorStoreQuery, MetadataFilte
 from loguru import logger
 import asyncio
 from rag.rerank.fusion_reranker import min_max_normalize_scores
-
+from extensions.trace.rag_wrapper import text_search_wrapper, vector_search_wrapper
 
 def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
     if retrieval_type == VectorIndexRetrievalType.fulltext:
@@ -15,6 +15,48 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
         return VectorStoreQueryMode.HYBRID
     else:
         return VectorStoreQueryMode.DEFAULT
+
+
+@text_search_wrapper
+async def _aquery_text(
+    vector_store: BasePydanticVectorStore,
+    query: str,
+    document_ids: List[str],
+    top_k: int,
+    metadata_filters: Optional[MetadataFilters] = None,
+) -> VectorStoreQueryResult:
+    query_kwargs = {
+        "query_str": query,
+        "similarity_top_k": top_k,
+        "mode": VectorStoreQueryMode.TEXT_SEARCH,
+    }
+    if metadata_filters:
+        query_kwargs["filters"] = metadata_filters
+    elif document_ids:
+        query_kwargs["doc_ids"] = document_ids
+    return await vector_store.aquery(VectorStoreQuery(**query_kwargs))
+
+
+@vector_search_wrapper
+async def _aquery_vector(
+    vector_store: BasePydanticVectorStore,
+    query: str,
+    query_embedding: List[float],
+    document_ids: List[str],
+    top_k: int,
+    metadata_filters: Optional[MetadataFilters] = None,
+) -> VectorStoreQueryResult:
+    query_kwargs = {
+        "query_embedding": query_embedding,
+        "similarity_top_k": top_k,
+        "mode": VectorStoreQueryMode.DEFAULT,
+        "query_str": query,
+    }
+    if metadata_filters:
+        query_kwargs["filters"] = metadata_filters
+    elif document_ids:
+        query_kwargs["doc_ids"] = document_ids
+    return await vector_store.aquery(VectorStoreQuery(**query_kwargs))
 
 
 async def aquery_vector_store(
@@ -50,45 +92,51 @@ async def aquery_vector_store(
     else:
         logger.info("Using doc_id as filters.")
 
-    def _build_query_kwargs(mode: VectorStoreQueryMode):
-        kwargs = {
-            "query_embedding": query_embedding,
-            "similarity_top_k": top_k,
-            "query_str": query,
-            "mode": mode,
-        }
-        if use_docid_filter:
-            kwargs["doc_ids"] = document_ids
-        elif metadata_filters:
-            kwargs["filters"] = metadata_filters
-        return kwargs
 
     try:
         if query_mode == VectorStoreQueryMode.HYBRID:
             # 混合模式：并行执行文本搜索和向量搜索
-            text_query = VectorStoreQuery(**_build_query_kwargs(VectorStoreQueryMode.TEXT_SEARCH))
-            dense_query = VectorStoreQuery(**_build_query_kwargs(VectorStoreQueryMode.DEFAULT))
-
-            text_result_task = vector_store.aquery(text_query)
-            dense_result_task = vector_store.aquery(dense_query)
+            text_result_task = _aquery_text(
+                vector_store=vector_store,
+                query=query,
+                document_ids=document_ids,
+                top_k=top_k,
+                metadata_filters=metadata_filters,
+            )
+            dense_result_task = _aquery_vector(
+                vector_store=vector_store,
+                query=query,
+                query_embedding=query_embedding,
+                document_ids=document_ids,
+                top_k=top_k,
+                metadata_filters=metadata_filters,
+            )
             text_result, dense_result = await asyncio.gather(text_result_task, dense_result_task)
 
             logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
+        elif query_mode == VectorStoreQueryMode.TEXT_SEARCH:
+            text_result = await _aquery_text(
+                vector_store=vector_store,
+                query=query,
+                document_ids=document_ids,
+                top_k=top_k,
+                metadata_filters=metadata_filters,
+            )
+            logger.info(f"{query_mode} mode: Retrieved {len(text_result.nodes)} nodes.")
         else:
-            vector_query = VectorStoreQuery(**_build_query_kwargs(query_mode))
-            query_result = await vector_store.aquery(vector_query)
-
-            if query_mode == VectorStoreQueryMode.TEXT_SEARCH:
-                text_result = query_result
-            else:
-                dense_result = query_result
-
-            logger.info(f"{query_mode} mode: Retrieved {len(query_result.nodes)} nodes.")
+            dense_result = await _aquery_vector(
+                vector_store=vector_store,
+                query=query,
+                query_embedding=query_embedding,
+                document_ids=document_ids,
+                top_k=top_k,
+                metadata_filters=metadata_filters,
+            )
+            logger.info(f"{query_mode} mode: Retrieved {len(dense_result.nodes)} nodes.")
 
         # TEXT_SEARCH 模式的分数归一化
         if text_result and text_result.similarities:
             text_result.similarities = min_max_normalize_scores(text_result.similarities)
-
     except Exception as e:
         logger.error(f"Failed to query vector store: {e}")
         raise

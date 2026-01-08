@@ -1,5 +1,4 @@
 import traceback
-import uuid
 from typing import List, Optional
 from loguru import logger
 from common.chat.models import RetrievalSetting
@@ -25,16 +24,12 @@ class NodeResult(BaseModel):
     text: str = Field(description="The text content of the node")
 
 
-class RetrievalResult(BaseModel):
-    total: int
-    nodes: List[NodeResult] = []
-
-
 class RetrievalToolResponse(BaseModel):
     status: str
     status_code: int
     message: Optional[str] = None
-    data: RetrievalResult
+    total: int
+    nodes: List[NodeResult] = []
     request_id: str
 
 
@@ -47,9 +42,8 @@ async def asearch_knowledgebase(
     retrieval_setting: Optional[RetrievalSetting] = None,
     metadata_condition: Optional[MetadataFilteringCondition] = None,
     rag_service: RagService = None,
+    request_id: str = None,
 ) -> RetrievalToolResponse:
-    request_id = str(uuid.uuid4())
-
     # TODO: Handle images if needed in the future
     # For now, images are accepted but not used in retrieval
     if image_list:
@@ -99,10 +93,8 @@ async def asearch_knowledgebase(
         return RetrievalToolResponse(
             status="SUCCESS",
             status_code=200,
-            data=RetrievalResult(
-                total=len(nodes),
-                nodes=nodes
-            ),
+            total=len(nodes),
+            nodes=nodes,
             message=None,
             request_id=request_id
         )
@@ -111,10 +103,8 @@ async def asearch_knowledgebase(
         return RetrievalToolResponse(
             status="ERROR",
             status_code=500,
-            data=RetrievalResult(
-                total=0,
-                nodes=[]
-            ),
+            total=0,
+            nodes=[],
             message=str(ex),
             request_id=request_id
         )
