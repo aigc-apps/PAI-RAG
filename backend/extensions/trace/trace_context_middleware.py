@@ -6,12 +6,15 @@ from opentelemetry.propagate import get_global_textmap
 from opentelemetry import context
 from opentelemetry.baggage import get_baggage
 import uuid
-
+import os
+from loguru import logger
 
 from extensions.trace.context import (
     AGENTSCOPE_REQUEST_ID_KEY,
     set_request_id,
 )
+
+ENABLE_TRACE_CONTEXT_DEBUG = os.getenv("ENABLE_TRACE_CONTEXT_DEBUG", "false").lower() in ["true", "1", "yes", "y"]
 
 
 class TraceContextMiddleware(BaseHTTPMiddleware):
@@ -22,6 +25,8 @@ class TraceContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # 提取 trace context
         carrier = dict(request.headers)
+        if ENABLE_TRACE_CONTEXT_DEBUG:
+            logger.info(f"Trace context debug headers: {carrier}")
         propagator = get_global_textmap()
         extracted_context = propagator.extract(carrier=carrier)
 
