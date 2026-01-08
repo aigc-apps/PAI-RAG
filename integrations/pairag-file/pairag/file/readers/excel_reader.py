@@ -5,9 +5,9 @@ Contains parsers for tabular data files.
 """
 
 import os
+from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from fsspec import AbstractFileSystem
+from typing import Any, BinaryIO, Dict, List, Optional
 from loguru import logger
 from openpyxl import load_workbook
 
@@ -36,25 +36,31 @@ class ExcelReader(BaseReader):
         self._header_index_max = header_index_max  # Allow None to indicate no header row
         self._format_sheet_data_to_json = format_sheet_data_to_json if format_sheet_data_to_json is not None else False
         self._sheet_column_filters = sheet_column_filters if sheet_column_filters is not None else None
-        self._pandas_config = {'header': None} if self._header_index_max is None else {'header': self._header_index_max}
+        # Use list of rows from 0 to header_index_max as MultiIndex column names
+        if self._header_index_max is None:
+            self._pandas_config = {'header': None}
+        else:
+            self._pandas_config = {'header': list(range(self._header_index_max + 1))}
 
     def read_xlsx(
         self,
-        file: Path,
-        fs: Optional[AbstractFileSystem] = None,
+        file: BinaryIO,
+        file_extension: Optional[str] = None,
     ):
-        """Parse Excel file。"""
-        if fs:
-            with fs.open(file) as f:
-                excel = pd.ExcelFile(
-                    load_workbook(f, data_only=True), engine="openpyxl"
-                )
-        else:
-            excel = pd.ExcelFile(load_workbook(file, data_only=True), engine="openpyxl")
+        """Parse Excel file (supports both .xls and .xlsx with merge_cells handling)."""
+        file.seek(0)
+        
+        if file_extension and file_extension.lower() == ".xls":
+            df_temp = pd.read_excel(file, sheet_name=0, engine='xlrd')
+            xlsx_file = BytesIO()
+            df_temp.to_excel(xlsx_file, engine='openpyxl', index=False)
+            xlsx_file.seek(0)
+            file = xlsx_file
+        
+        excel = pd.ExcelFile(load_workbook(file, data_only=True), engine="openpyxl")
         sheet_name = excel.sheet_names[0]
         sheet = excel.book[sheet_name]
         df = excel.parse(sheet_name, **self._pandas_config)
-
 
         for item in sheet.merged_cells:
             top_col, top_row, bottom_col, bottom_row = item.bounds
@@ -70,45 +76,45 @@ class ExcelReader(BaseReader):
             df.iloc[top_row:bottom_row, top_col:bottom_col] = base_value
         return df
 
-    def load_data(
-        self,
-        file: Path,
-        extra_info: Optional[Dict] = None,
-        fs: Optional[AbstractFileSystem] = None,
-    ) -> List[Document]:
-        """Parse Excel file. only process the first sheet"""
+    
 
-        logger.info(f"Parsing workbook {file}.")
+    def read(self, file_item: FileItem) -> List[Document]:
+        """Read Excel file from FileItem."""
+        extra_info = file_item.metadata()
         
-        # Convert .xls to .xlsx if needed
-        file_path = Path(file)
-        if file_path.suffix.lower() == ".xls":
-            tmp_file_dir = Path("/tmp/pairag_excels")
-            tmp_file_dir.mkdir(parents=True, exist_ok=True)
-            workbook_file = tmp_file_dir / f"{file_path.stem}.xlsx"
-            logger.info(f"Transfer {file} to {workbook_file}.")
-            pd.read_excel(file, engine="xlrd").to_excel(workbook_file, index=False, engine="openpyxl")
-        else:
-            workbook_file = file
-
-        df = self.read_xlsx(workbook_file, fs)
-
+        # Use file_item.file directly, unified handling for both .xls and .xlsx
+        file_item.file.seek(0)
+        df = self.read_xlsx(file_item.file, file_item.file_extension)
+        
         if self._sheet_column_filters:
             df = df[self._sheet_column_filters]
 
+        # Handle MultiIndex column names by joining them with separator
+        def format_column_name(col):
+            if isinstance(col, tuple):
+                # MultiIndex column: join with space
+                return " ".join(str(c) for c in col if pd.notna(c) and str(c).strip())
+            else:
+                return str(col)
+
         if self._format_sheet_data_to_json:
             text_list = df.apply(
-                lambda row: str(dict(zip(df.columns, row.astype(str)))), axis=1
+                lambda row: str(dict(zip(
+                    [format_column_name(col) for col in df.columns], 
+                    [str(v) if pd.notna(v) else '' for v in row]
+                ))), axis=1
             ).tolist()
         else:
             text_list = [
-                "\n".join([f"{k}:{v}" for k, v in record.items()])
+                "\n".join([
+                    f"{format_column_name(k)}:{str(v) if pd.notna(v) else ''}" 
+                    for k, v in record.items()
+                ])
                 for record in df.to_dict("records")
             ]
 
         if self._concat_rows:
-            logger.info(f"Parsed workbook {workbook_file} into single document.")
-
+            logger.info(f"Parsed workbook {file_item.file_name} into single document.")
             return [
                 Document(
                     text=(self._row_joiner).join(text_list), metadata=extra_info or {}
@@ -122,11 +128,5 @@ class ExcelReader(BaseReader):
                 row_metadata["row_number"] = i + 1
                 docs.append(Document(text=text, metadata=row_metadata))
 
-            logger.info(f"Parsed workbook {workbook_file} into {len(docs)} documents.")
+            logger.info(f"Parsed workbook {file_item.file_name} into {len(docs)} documents.")
             return docs
-
-    def read(self, file_item: FileItem) -> List[Document]:
-        """Read Excel file from FileItem."""
-        file_path = Path(file_item.file_path)
-        extra_info = file_item.metadata()
-        return self.load_data(file_path, extra_info=extra_info)

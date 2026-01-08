@@ -72,7 +72,7 @@ class AgentService:
                 if not chatapp:
                     raise ValueError(f"Model `{chat_request.model}` not found.")
 
-                chatapp_id = chatapp.id
+                chatapp_id = chatapp.app_id
                 chat_request.model = chatapp.model_id
                 chat_request.mcp_ids = chatapp.mcp_ids
                 chat_request.faq_config = chatapp.faq_config

@@ -32,10 +32,11 @@ from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.knowledgebase.file_service import FileService
 from service.model.embedding_service import EmbeddingService
 from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig, ChunkConfig, TableParserConfig
-from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
+from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME, DEFAULT_FAQ_SIMILARITY_THRESHOLD
 from common.knowledgebase.types import VectorIndexRetrievalType, FileStatus
 from rag.file_item_utils import to_file_entity
 from typing import Optional, List
+from io import BytesIO
 import json
 from api.api_exception import ApiException
 import traceback
@@ -328,7 +329,7 @@ async def upload_faq_files(
             else:
                 embedding_model = default_embedding_config.model_id
 
-            default_similarity_threshold = faq_config.similarity_threshold if faq_config else 0.9
+            default_similarity_threshold = faq_config.similarity_threshold if faq_config else DEFAULT_FAQ_SIMILARITY_THRESHOLD
 
             retrieval_config = RetrievalConfig(
                 retrieval_mode=VectorIndexRetrievalType.vector,
@@ -401,6 +402,7 @@ async def upload_faq_files(
             temp_file_path = None
             try:
                 file_content = await file.read()
+                file_content_io = BytesIO(file_content)
                 file_extension = "." + (file.filename.split(".")[-1] if "." in file.filename else "")
 
                 # Create temporary file to store file content
@@ -421,7 +423,7 @@ async def upload_faq_files(
                 file_item = FileItem(
                     id=file_id,
                     file_path=temp_file_path,
-                    file=file_content,
+                    file=file_content_io,
                     kb_id=knowledgebase.id,
                     file_extension=file_extension,
                     file_name=file.filename or f"faq_file_{file_id}",
@@ -505,9 +507,12 @@ async def upload_faq_files(
                         # Commit all FAQ items
                         await session.commit()
 
-                        # Refresh all created items
+                        # Refresh all created items (skip if refresh fails)
                         for faq_item in created_faq_items:
-                            await session.refresh(faq_item)
+                            try:
+                                await session.refresh(faq_item)
+                            except Exception as refresh_error:
+                                logger.debug(f"Could not refresh FAQ item {faq_item.id} (may not be persistent): {refresh_error}")
 
                 logger.info(f"Saved {saved_faq_count}/{len(nodes)} FAQ items to database from file {file_item.file_name}.")
 

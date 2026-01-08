@@ -59,10 +59,10 @@ interface FAQConfig {
   active?: boolean;
   similarity_threshold?: number;
   embedding_model?: string;
-  question_in_retrieval?: boolean;
-  question_in_response?: boolean;
-  answer_in_retrieval?: boolean;
-  answer_in_response?: boolean;
+  enable_question_in_retrieval?: boolean;
+  enable_question_in_response?: boolean;
+  enable_answer_in_retrieval?: boolean;
+  enable_answer_in_response?: boolean;
 }
 
 export interface Chatbot {

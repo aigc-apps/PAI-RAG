@@ -6,8 +6,8 @@ Contains parsers for tabular data files.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from fsspec import AbstractFileSystem
+from typing import Any, BinaryIO, Dict, List, Optional
+from loguru import logger
 
 import pandas as pd
 from llama_index.core.schema import Document
@@ -37,19 +37,25 @@ class CSVReader(BaseReader):
         self._sheet_column_filters = sheet_column_filters if sheet_column_filters is not None else None
         self._pandas_config = {'header': self._header_index_max} if self._header_index_max is not None else {}
 
-    def load_data(
-        self,
-        file: Path,
-        extra_info: Optional[Dict] = None,
-        fs: Optional[AbstractFileSystem] = None,
-    ) -> List[Document]:
-        """Parse csv file."""
-        if fs:
-            with fs.open(file) as f:
-                df = self._read_file(f)
+    def _read_file(self, file: BinaryIO):
+        """Read CSV file from binary file object."""
+        encoding = charset_normalizer.detect(file.read(1000))["encoding"]
+        file.seek(0)
+        if encoding is None or "GB" in encoding.upper():
+            encoding = "GB18030"
         else:
-            with open(file, "rb") as f:
-                df = self._read_file(f)
+            encoding = "utf-8"
+        
+        df = pd.read_csv(file, encoding=encoding, **self._pandas_config)
+        return df
+
+    def read(self, file_item: FileItem) -> List[Document]:
+        """Read CSV file from FileItem."""
+        extra_info = file_item.metadata()
+        
+        # Use file_item.file directly, similar to Csv2MdReader
+        file_item.file.seek(0)
+        df = self._read_file(file_item.file)
 
         if self._sheet_column_filters:
             df = df[self._sheet_column_filters]
@@ -64,10 +70,9 @@ class CSVReader(BaseReader):
                 for record in df.to_dict("records")
             ]
 
-        file_name = os.path.basename(file)
         extra_info = extra_info or {}
-        extra_info["file_path"] = str(file)
-        extra_info["file_name"] = file_name
+        extra_info["file_path"] = file_item.file_path
+        extra_info["file_name"] = file_item.file_name
 
         if self._concat_rows:
             return [
@@ -78,15 +83,8 @@ class CSVReader(BaseReader):
             ]
         else:
             docs = []
-            extra_info = extra_info or {}
             for i, text in enumerate(text_list):
                 row_metadata = extra_info.copy()
                 row_metadata["row_number"] = i + 1
                 docs.append(Document(text=text, metadata=row_metadata))
             return docs
-
-    def read(self, file_item: FileItem) -> List[Document]:
-        """Read CSV file from FileItem."""
-        file_path = Path(file_item.file_path)
-        extra_info = file_item.metadata()
-        return self.load_data(file_path, extra_info=extra_info)

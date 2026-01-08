@@ -3,9 +3,9 @@
 """
 
 import os
+from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from fsspec import AbstractFileSystem
+from typing import Any, BinaryIO, Dict, List, Optional
 from loguru import logger
 from openpyxl import load_workbook
 
@@ -31,25 +31,31 @@ class FAQReader(BaseReader):
         self._answer_column_index = answer_column_index if answer_column_index is not None else 1
         self._header_index_max = header_index_max  # Allow None to indicate no header row
         # When header_index_max is None, pandas will use numeric column indices (0, 1, 2, ...)
-        self._pandas_config = {'header': None} if self._header_index_max is None else {'header': self._header_index_max}
+        # Use list of rows from 0 to header_index_max as MultiIndex column names
+        if self._header_index_max is None:
+            self._pandas_config = {'header': None}
+        else:
+            self._pandas_config = {'header': list(range(self._header_index_max + 1))}
 
     def read_xlsx(
         self,
-        file: Path,
-        fs: Optional[AbstractFileSystem] = None,
+        file: BinaryIO,
+        file_extension: Optional[str] = None,
     ):
-        """Parse Excel file。"""
-        if fs:
-            with fs.open(file) as f:
-                excel = pd.ExcelFile(
-                    load_workbook(f, data_only=True), engine="openpyxl"
-                )
-        else:
-            excel = pd.ExcelFile(load_workbook(file, data_only=True), engine="openpyxl")
+        """Parse Excel file (supports both .xls and .xlsx with merge_cells handling)."""
+        file.seek(0)
+        
+        if file_extension and file_extension.lower() == ".xls":
+            df_temp = pd.read_excel(file, sheet_name=0, engine='xlrd')
+            xlsx_file = BytesIO()
+            df_temp.to_excel(xlsx_file, engine='openpyxl', index=False)
+            xlsx_file.seek(0)
+            file = xlsx_file
+        
+        excel = pd.ExcelFile(load_workbook(file, data_only=True), engine="openpyxl")
         sheet_name = excel.sheet_names[0]
         sheet = excel.book[sheet_name]
         df = excel.parse(sheet_name, **self._pandas_config)
-
 
         for item in sheet.merged_cells:
             top_col, top_row, bottom_col, bottom_row = item.bounds
@@ -65,29 +71,7 @@ class FAQReader(BaseReader):
             df.iloc[top_row:bottom_row, top_col:bottom_col] = base_value
         return df
 
-    def load_data(
-        self,
-        file: Path,
-        extra_info: Optional[Dict] = None,
-        fs: Optional[AbstractFileSystem] = None,
-    ) -> List[Document]:
-        """Parse Excel file. only process the first sheet"""
-
-        logger.info(f"Parsing workbook {file}.")
-        
-        # Convert .xls to .xlsx if needed
-        file_path = Path(file)
-        if file_path.suffix.lower() == ".xls":
-            tmp_file_dir = Path("/tmp/pairag_excels")
-            tmp_file_dir.mkdir(parents=True, exist_ok=True)
-            workbook_file = tmp_file_dir / f"{file_path.stem}.xlsx"
-            logger.info(f"Transfer {file} to {workbook_file}.")
-            pd.read_excel(file, engine="xlrd").to_excel(workbook_file, index=False, engine="openpyxl")
-        else:
-            workbook_file = file
-
-        df = self.read_xlsx(workbook_file, fs)
-        return self._process_dataframe(df, extra_info, str(workbook_file))
+    
     
     def _process_dataframe(self, df: pd.DataFrame, extra_info: Optional[Dict] = None, file_name: Optional[str] = None) -> List[Document]:
         """Process DataFrame and create FAQ documents."""
@@ -131,6 +115,9 @@ class FAQReader(BaseReader):
         """Read Excel file from FileItem."""
         extra_info = file_item.metadata()
         
-        file_path = Path(file_item.file_path)
-        return self.load_data(file_path, extra_info=extra_info)
+        # Use file_item.file directly, unified handling for both .xls and .xlsx
+        file_item.file.seek(0)
+        df = self.read_xlsx(file_item.file, file_item.file_extension)
+        
+        return self._process_dataframe(df, extra_info, file_item.file_name)
         

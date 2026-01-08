@@ -8,9 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from loguru import logger
 
 from db.models.chatbot import ChatBotCreate, ChatBotEntity
-from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig, ChunkConfig, TableParserConfig
+from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig, ChunkConfig, TableParserConfig, KbEntity
 from common.chat.response_model import PagedResult
-from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
+from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME, DEFAULT_FAQ_SIMILARITY_THRESHOLD
 from common.knowledgebase.types import VectorIndexRetrievalType
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.model.embedding_service import EmbeddingService
@@ -29,7 +29,7 @@ class ChatappService:
         """
         self.session = session
 
-    async def _ensure_faq_knowledgebase(self, chatbot_id: str, app_id: str, tenant_id: str) -> None:
+    async def _ensure_faq_knowledgebase(self, chatbot_id: str, app_id: str, tenant_id: str) -> KbEntity:
         """
         Ensure FAQ knowledgebase exists for the given chatbot_id and app_id.
         Creates it if it doesn't exist.
@@ -39,6 +39,9 @@ class ChatappService:
             chatbot_id: ChatApp chatbot_id
             app_id: ChatApp app_id
             tenant_id: Tenant ID
+
+        Returns:
+            KbEntity representing the FAQ knowledgebase
         """
         kb_name = f"{app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
         knowledgebase_service = KnowledgebaseService(self.session)
@@ -65,7 +68,7 @@ class ChatappService:
                 logger.info(f"Using default embedding_model {embedding_model} for knowledgebase {kb_name}")
 
             # Set default retrieval_config
-            default_similarity_threshold = faq_config.similarity_threshold if faq_config else 0.9
+            default_similarity_threshold = faq_config.similarity_threshold if faq_config else DEFAULT_FAQ_SIMILARITY_THRESHOLD
 
             retrieval_config = RetrievalConfig(
                 retrieval_mode=VectorIndexRetrievalType.vector,
@@ -96,6 +99,8 @@ class ChatappService:
             await self.session.flush()
             await self.session.refresh(knowledgebase)
             logger.info(f"Created FAQ knowledgebase {knowledgebase.id} (name: {kb_name}) for app_id {app_id}")
+
+        return knowledgebase
 
     async def get_chatapp(self, id: str, tenant_id: str) -> Optional[ChatBotEntity]:
         """
@@ -184,8 +189,13 @@ class ChatappService:
             Created ChatBotEntity (not yet committed)
 
         Raises:
-            ValueError: If app_id already exists (IntegrityError converted)
+            ValueError: If app_id already exists
         """
+        # Check if app_id already exists
+        existing_chatbot = await self.get_chatapp_by_app_id(app_id=app_data.app_id, tenant_id=tenant_id)
+        if existing_chatbot:
+            raise ValueError(f"应用ID '{app_data.app_id}' 已经存在，无法创建。")
+
         chatbot = ChatBotEntity.model_validate(app_data, update={"tenant_id": tenant_id})
         self.session.add(chatbot)
 
@@ -196,14 +206,23 @@ class ChatappService:
 
             # If enable_faq is True, create FAQ config
             if app_data.enable_faq:
-                # Initialize FAQ config with default values
+                # Ensure FAQ knowledgebase exists first (to get kb_id)
+                knowledgebase = await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
+
+                # Initialize FAQ config with default values and set kb_id
                 faq_config_service = FAQConfigService(self.session)
-                await faq_config_service.get_or_create_faq_config(
+                faq_config = await faq_config_service.get_or_create_faq_config(
                     chatbot_id=chatbot.id, tenant_id=tenant_id
                 )
 
-                # Ensure FAQ knowledgebase exists (uses embedding_model from faq_config)
-                await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
+                # Update faq_config with kb_id
+                if not faq_config.kb_id or faq_config.kb_id != knowledgebase.id:
+                    faq_config.kb_id = knowledgebase.id
+                    await faq_config_service.update_faq_config(
+                        chatbot_id=chatbot.id,
+                        update_data=faq_config,
+                        tenant_id=tenant_id
+                    )
 
                 await self.session.flush()
                 await self.session.refresh(chatbot)
@@ -237,12 +256,13 @@ class ChatappService:
         Args:
             id: ChatApp entity ID
             update_data: Updated ChatApp data
+            tenant_id: Tenant ID
 
         Returns:
             Updated ChatBotEntity (not yet committed)
 
         Raises:
-            ValueError: If ChatApp entity not found
+            ValueError: If ChatApp entity not found or app_id already exists
         """
         chatbot = await self.get_chatapp(id=id, tenant_id=tenant_id)
         if not chatbot:
@@ -250,16 +270,32 @@ class ChatappService:
 
         logger.info(f"Updating ChatApp {id} with data: {update_data}")
 
+        # Check if app_id is being updated and if it conflicts with existing records
+        if update_data.app_id is not None and update_data.app_id != chatbot.app_id:
+            existing_chatbot = await self.get_chatapp_by_app_id(app_id=update_data.app_id, tenant_id=tenant_id)
+            if existing_chatbot and existing_chatbot.id != id:
+                raise ValueError(f"应用ID '{update_data.app_id}' 已经存在，无法更新。")
+
         if update_data.enable_faq:
             # Enable FAQ: create FAQ config if not exists
             if not chatbot.faq_config:
+                # Ensure FAQ knowledgebase exists first (to get kb_id)
+                knowledgebase = await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
+
+                # Initialize FAQ config with default values and set kb_id
                 faq_config_service = FAQConfigService(self.session)
-                await faq_config_service.get_or_create_faq_config(
+                faq_config = await faq_config_service.get_or_create_faq_config(
                     chatbot_id=chatbot.id, tenant_id=tenant_id
                 )
 
-                # Ensure FAQ knowledgebase exists (uses embedding_model from faq_config)
-                await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
+                # Update faq_config with kb_id
+                if not faq_config.kb_id or faq_config.kb_id != knowledgebase.id:
+                    faq_config.kb_id = knowledgebase.id
+                    await faq_config_service.update_faq_config(
+                        chatbot_id=chatbot.id,
+                        update_data=faq_config,
+                        tenant_id=tenant_id
+                    )
 
                 logger.info(
                     f"Created FAQ config for ChatApp: {chatbot.id}"

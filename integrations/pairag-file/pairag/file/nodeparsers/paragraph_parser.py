@@ -93,8 +93,11 @@ class ParagraphSplitter(TextSplitter):
 
     def _split_text(self, text: str, paragraph_separator: str = None, chunk_size: int = None, chunk_overlap: int = None) -> tuple[list[str], list[int]]:
         """Split incoming text and return chunks using tokenizer."""
-        splits: list[str] = []
-        token_counts: list[int] = []
+        final_splits: list[str] = []
+        final_token_counts: list[int] = []
+        
+        if not text:
+            return [], []
         
         if chunk_size is None:
             chunk_size = DEFAULT_CHUNK_SIZE
@@ -105,17 +108,30 @@ class ParagraphSplitter(TextSplitter):
         if paragraph_separator is None:
             paragraph_separator = DEFAULT_PARAGRAPH_SEPARATOR
 
-        splits = self._split_text_with_regex(text, paragraph_separator)
-        for split in splits:
+        # First split by paragraph separator
+        paragraph_splits = self._split_text_with_regex(text, paragraph_separator)
+        
+        # Process each paragraph split
+        for split in paragraph_splits:
+            # Ensure split is a string
+            if not isinstance(split, str):
+                split = str(split) if split is not None else ""
+            
+            # Skip empty splits
+            if not split:
+                continue
+                
             token_count = estimate_tokens_in_text(split)
             if token_count <= chunk_size:
-                splits.append(split)
-                token_counts.append(token_count)
+                final_splits.append(split)
+                final_token_counts.append(token_count)
             else:
-                splits.extend(self._split_text_on_tokens(split, chunk_size, chunk_overlap))
-                token_counts.extend(token_counts)
+                # Split further using tokenizer
+                sub_splits, sub_token_counts = self._split_text_on_tokens(split, chunk_size, chunk_overlap)
+                final_splits.extend(sub_splits)
+                final_token_counts.extend(sub_token_counts)
         
-        return splits, token_counts
+        return final_splits, final_token_counts
 
     def _parse_nodes(
         self, nodes: Sequence[BaseNode], show_progress: bool = False, **kwargs: Any

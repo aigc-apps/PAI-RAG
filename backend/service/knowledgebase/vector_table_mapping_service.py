@@ -72,8 +72,22 @@ class VectorTableMappingService:
         table_name = generate_vector_table_name(tenant_id, kb_id)
         logger.debug(f"Generated new vector table name: {table_name}")
 
-        # Store the mapping
-        await self._create_mapping(tenant_id, kb_id, table_name)
+        # Store the mapping (with retry logic for race conditions)
+        try:
+            mapping = await self._create_mapping(tenant_id, kb_id, table_name)
+            # Use the actual table_name from the mapping (in case we got an existing one)
+            table_name = mapping.table_name
+        except Exception as create_ex:
+            # If creation failed, try one more time to get existing mapping
+            # (another concurrent task might have created it)
+            logger.warning(f"Failed to create mapping, retrying to get existing: {create_ex}")
+            existing_mapping = await self._get_mapping(tenant_id, kb_id)
+            if existing_mapping:
+                logger.info(f"Found existing mapping after creation failure for tenant={tenant_id}, kb={kb_id}")
+                table_name = existing_mapping.table_name
+            else:
+                raise
+
         try:
             await asyncio.wait_for(
                 cache_manager.get_cache().set(cache_key, table_name),
@@ -108,6 +122,7 @@ class VectorTableMappingService:
     ) -> VectorTableMappingEntity:
         """
         Create a new vector table mapping.
+        Note: This method does not commit the transaction. The caller is responsible for committing.
 
         Args:
             tenant_id: The tenant ID
@@ -117,6 +132,12 @@ class VectorTableMappingService:
         Returns:
             The created VectorTableMappingEntity
         """
+        # First check if mapping already exists (race condition protection)
+        existing_mapping = await self._get_mapping(tenant_id, kb_id)
+        if existing_mapping:
+            logger.debug(f"Mapping already exists for tenant={tenant_id}, kb={kb_id}, returning existing")
+            return existing_mapping
+
         mapping = VectorTableMappingEntity(
             tenant_id=tenant_id,
             kb_id=kb_id,
@@ -124,17 +145,44 @@ class VectorTableMappingService:
         )
         try:
             self.session.add(mapping)
-            await self.session.commit()
-            await self.session.refresh(mapping)
-            logger.info(f"Created vector table mapping: tenant={tenant_id}, kb={kb_id}, table={table_name}")
-            return mapping
+            try:
+                await self.session.flush()
+                await self.session.refresh(mapping)
+                logger.info(f"Created vector table mapping: tenant={tenant_id}, kb={kb_id}, table={table_name}")
+                return mapping
+            except Exception as flush_ex:
+                # Check if it's a "Session is already flushing" error
+                error_str = str(flush_ex).lower()
+                if "already flushing" in error_str or "invalidrequesterror" in error_str:
+                    logger.warning(f"Session flush conflict detected, trying to get existing mapping for tenant={tenant_id}, kb={kb_id}")
+                    # Remove the failed mapping from session to avoid conflicts
+                    try:
+                        self.session.expunge(mapping)
+                    except Exception:
+                        pass
+                    # Try to get existing mapping (another concurrent task may have created it)
+                    existing_mapping = await self._get_mapping(tenant_id, kb_id)
+                    if existing_mapping:
+                        logger.info(f"Found existing vector table mapping after flush conflict for tenant={tenant_id}, kb={kb_id}")
+                        return existing_mapping
+                    # If no existing mapping, log and re-raise
+                    logger.error("No existing mapping found after flush conflict, re-raising error")
+                    raise
+                raise
         except Exception as ex:
             logger.error(f"Failed to create vector table mapping: {traceback.format_exc()}")
-            await self.session.rollback()
-            if "UniqueViolationError" in str(ex.orig) or "Duplicate entry" in str(ex.orig):
-                pass
-            else:
-                raise ValueError(f"Failed to create vector table mapping: {ex}") from ex
+            # Check if it's a unique constraint violation
+            error_msg = str(ex)
+            if hasattr(ex, 'orig'):
+                error_msg = str(ex.orig)
+
+            if "UniqueViolationError" in error_msg or "Duplicate entry" in error_msg or "UNIQUE constraint" in error_msg:
+                # If duplicate, try to get the existing mapping
+                existing_mapping = await self._get_mapping(tenant_id, kb_id)
+                if existing_mapping:
+                    logger.info(f"Found existing vector table mapping after unique constraint violation for tenant={tenant_id}, kb={kb_id}")
+                    return existing_mapping
+            raise ValueError(f"Failed to create vector table mapping: {ex}") from ex
 
     async def delete_mapping(self, tenant_id: str, kb_id: str) -> bool:
         """

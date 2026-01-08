@@ -11,7 +11,7 @@ from service.knowledgebase.rag_service import RagService
 from service.tool.chatapp_service import ChatappService
 from service.tool.faq_config_service import FAQConfigService
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
-from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
+from common.knowledgebase.constants import DEFAULT_FAQ_SIMILARITY_THRESHOLD
 from common.knowledgebase.types import VectorIndexRetrievalType
 from common.tool.search_result import SearchResult
 import traceback
@@ -42,31 +42,28 @@ async def faq_retrieval(
 ):
     logger.info(f"FAQ Retrieval request: chatapp_id={retrieval_request.chatapp_id}, query={retrieval_request.query}, tenant_id={tenant_id}")
     try:
-        # Try to get chatbot by id first, if not found, try by app_id
-        chatbot = await chatapp_service.get_chatapp(id=retrieval_request.chatapp_id, tenant_id=tenant_id)
-        if not chatbot:
-            chatbot = await chatapp_service.get_chatapp_by_app_id(
-                app_id=retrieval_request.chatapp_id,
-                tenant_id=tenant_id
-            )
+        chatbot = await chatapp_service.get_chatapp_by_app_id(
+            app_id=retrieval_request.chatapp_id,
+            tenant_id=tenant_id
+        )
         if not chatbot:
             raise ApiException(code=404, message=f"应用 '{retrieval_request.chatapp_id}' 不存在。")
 
         # Get FAQ config to get similarity_threshold
-        faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
-            chatbot_id=chatbot.id, tenant_id=tenant_id
-        )
+        faq_config = chatbot.faq_config
+        if not faq_config:
+            raise ApiException(code=404, message=f"FAQ配置 '{retrieval_request.chatapp_id}' 不存在。")
 
-        # Get FAQ knowledgebase by name: {app_id}_{FAQ_KNOWLEDGEBASE_NAME}
-        kb_name = f"{chatbot.app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
+
+        kb_id = faq_config.kb_id
         knowledgebase_service = KnowledgebaseService(session)
-        kb = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
+        kb = await knowledgebase_service.get_knowledgebase(kb_id, tenant_id=tenant_id)
 
         if not kb:
-            raise ApiException(code=404, message=f"FAQ知识库 '{kb_name}' 不存在。")
+            raise ApiException(code=404, message=f"FAQ知识库 '{kb_id}' 不存在。")
 
         # Set default retrieval_setting if not provided, or merge with defaults
-        default_similarity_threshold = faq_config.similarity_threshold if faq_config else 0.9
+        default_similarity_threshold = faq_config.similarity_threshold if faq_config else DEFAULT_FAQ_SIMILARITY_THRESHOLD
 
         if retrieval_request.retrieval_setting is None:
             retrieval_setting = RetrievalSetting(

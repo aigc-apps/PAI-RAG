@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from common.knowledgebase.constants import DEFAULT_EMBEDDING_MODEL, DEFAULT_FAQ_SIMILARITY_THRESHOLD
 from loguru import logger
 
 from db.models.faq_config import FAQConfigCreate
@@ -26,12 +27,13 @@ class FAQConfigService:
         """Get default FAQ config values."""
         return {
             "active": True,
-            "similarity_threshold": 0.9,
-            "embedding_model": "BAAI/bge-m3",
-            "question_in_retrieval": True,
-            "question_in_response": False,
-            "answer_in_retrieval": False,
-            "answer_in_response": True,
+            "similarity_threshold": DEFAULT_FAQ_SIMILARITY_THRESHOLD,
+            "embedding_model": DEFAULT_EMBEDDING_MODEL,
+            "enable_question_in_retrieval": True,
+            "enable_question_in_response": False,
+            "enable_answer_in_retrieval": False,
+            "enable_answer_in_response": True,
+            "kb_id": None,
         }
 
     async def get_faq_config_by_chatbot_id(
@@ -96,16 +98,12 @@ class FAQConfigService:
         chatbot.faq_config = default_config
         self.session.add(chatbot)
 
-        try:
-            await self.session.flush()
-            await self.session.refresh(chatbot)
-            logger.info(
-                f"Created FAQ config for chatbot_id: {chatbot_id}"
-            )
-            return FAQConfigCreate.model_validate(default_config)
-        except Exception as e:
-            logger.error(f"Error creating FAQ config: {e}")
-            raise ValueError(f"创建FAQ配置失败: {e}") from e
+        await self.session.flush()
+        await self.session.refresh(chatbot)
+        logger.info(
+            f"Created FAQ config for chatbot_id: {chatbot_id}"
+        )
+        return FAQConfigCreate.model_validate(default_config)
 
     async def update_faq_config(
         self, chatbot_id: str, update_data: FAQConfigCreate, tenant_id: str

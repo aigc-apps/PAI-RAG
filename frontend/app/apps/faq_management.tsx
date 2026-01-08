@@ -41,6 +41,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
+import { Checkbox } from '@/components/ui/checkbox';
+
+const DEFAULT_SCORE_THRESHOLD = 0.8;
 
 interface FAQItem {
   id?: string;
@@ -65,6 +69,11 @@ interface FAQManagementProps {
 export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, setBotConfig }) => {
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 10;
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -86,10 +95,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     active: boolean;
     score_threshold: number;
     embedding_model: string;
-    question_in_retrieval: boolean;
-    question_in_response: boolean;
-    answer_in_retrieval: boolean;
-    answer_in_response: boolean;
+    enable_question_in_retrieval: boolean;
+    enable_question_in_response: boolean;
+    enable_answer_in_retrieval: boolean;
+    enable_answer_in_response: boolean;
   } | null>(null);
   const { tenantFetch } = useTenantFetch();
 
@@ -111,12 +120,12 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       if (data.data) {
         setFaqConfigData({
           active: data.data.active ?? checked,
-          score_threshold: data.data.similarity_threshold ?? data.data.score_threshold ?? faqConfigData?.score_threshold ?? 0.9,
+          score_threshold: data.data.similarity_threshold ?? data.data.score_threshold ?? faqConfigData?.score_threshold ?? DEFAULT_SCORE_THRESHOLD,
           embedding_model: data.data.embedding_model ?? faqConfigData?.embedding_model ?? '',
-          question_in_retrieval: data.data.question_in_retrieval ?? faqConfigData?.question_in_retrieval ?? true,
-          question_in_response: data.data.question_in_response ?? faqConfigData?.question_in_response ?? false,
-          answer_in_retrieval: data.data.answer_in_retrieval ?? faqConfigData?.answer_in_retrieval ?? false,
-          answer_in_response: data.data.answer_in_response ?? faqConfigData?.answer_in_response ?? true,
+          enable_question_in_retrieval: data.data.enable_question_in_retrieval ?? faqConfigData?.enable_question_in_retrieval ?? true,
+          enable_question_in_response: data.data.enable_question_in_response ?? faqConfigData?.enable_question_in_response ?? false,
+          enable_answer_in_retrieval: data.data.enable_answer_in_retrieval ?? faqConfigData?.enable_answer_in_retrieval ?? false,
+          enable_answer_in_response: data.data.enable_answer_in_response ?? faqConfigData?.enable_answer_in_response ?? true,
         });
       }
       
@@ -131,7 +140,12 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     fetchEmbeddingModels();
     // 无论 enable_faq 是否为 true，都加载 FAQ 配置以获取 active 状态
     fetchFAQConfig();
-  }, [appId]);
+  }, [appId, page]);
+
+  // 当页面切换时，清空选中项
+  useEffect(() => {
+    setSelectedItems(new Set());
+  }, [page]);
 
   const fetchFAQConfig = async () => {
     try {
@@ -142,35 +156,35 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           // 从后端返回的数据中提取配置字段
           setFaqConfigData({
             active: data.data.active ?? false,
-            score_threshold: data.data.score_threshold ?? data.data.similarity_threshold ?? 0.9,
+            score_threshold: data.data.score_threshold ?? data.data.similarity_threshold ?? DEFAULT_SCORE_THRESHOLD,
             embedding_model: data.data.embedding_model ?? '',
-            question_in_retrieval: data.data.question_in_retrieval ?? true,
-            question_in_response: data.data.question_in_response ?? false,
-            answer_in_retrieval: data.data.answer_in_retrieval ?? false,
-            answer_in_response: data.data.answer_in_response ?? true,
+            enable_question_in_retrieval: data.data.enable_question_in_retrieval ?? true,
+            enable_question_in_response: data.data.enable_question_in_response ?? false,
+            enable_answer_in_retrieval: data.data.enable_answer_in_retrieval ?? false,
+            enable_answer_in_response: data.data.enable_answer_in_response ?? true,
           });
         } else {
           // 如果没有配置数据，设置默认值（active 默认为 false）
           setFaqConfigData({
             active: false,
-            score_threshold: 0.9,
+            score_threshold: DEFAULT_SCORE_THRESHOLD,
             embedding_model: '',
-            question_in_retrieval: true,
-            question_in_response: false,
-            answer_in_retrieval: false,
-            answer_in_response: true,
+            enable_question_in_retrieval: true,
+            enable_question_in_response: false,
+            enable_answer_in_retrieval: false,
+            enable_answer_in_response: true,
           });
         }
       } else if (res.status === 404) {
         // FAQ 配置不存在，设置默认值
         setFaqConfigData({
           active: false,
-          score_threshold: 0.9,
+          score_threshold: DEFAULT_SCORE_THRESHOLD,
           embedding_model: '',
-          question_in_retrieval: true,
-          question_in_response: false,
-          answer_in_retrieval: false,
-          answer_in_response: true,
+          enable_question_in_retrieval: true,
+          enable_question_in_response: false,
+          enable_answer_in_retrieval: false,
+          enable_answer_in_response: true,
         });
       }
     } catch (error: any) {
@@ -178,12 +192,12 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       // 即使出错也设置默认值，确保开关可以显示
       setFaqConfigData({
         active: false,
-        score_threshold: 0.9,
+        score_threshold: DEFAULT_SCORE_THRESHOLD,
         embedding_model: '',
-        question_in_retrieval: true,
-        question_in_response: false,
-        answer_in_retrieval: false,
-        answer_in_response: true,
+        enable_question_in_retrieval: true,
+        enable_question_in_response: false,
+        enable_answer_in_retrieval: false,
+        enable_answer_in_response: true,
       });
     }
   };
@@ -203,16 +217,32 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   const fetchFAQs = async () => {
     try {
       setLoading(true);
-      const res = await tenantFetch(`/api/config/apps/${appId}/faqs`);
+      const res = await tenantFetch(`/api/config/apps/${appId}/faqs?page=${page}&size=${pageSize}`);
       if (res.ok) {
         const data = await res.json();
-        setFaqs(data.data?.items || []);
+        console.log('FAQ分页数据:', data);
+        const items = data.data?.items || [];
+        const total = data.data?.total || 0;
+        const pages = data.data?.pages || 1;
+        
+        setFaqs(items);
+        setTotalItems(total);
+        setTotalPages(pages);
+        
+        console.log(`FAQ分页信息: 当前页=${page}, 总页数=${pages}, 总条数=${total}, 当前页数据=${items.length}条`);
+      } else {
+        console.error('获取FAQ列表失败:', res.status, res.statusText);
       }
     } catch (error: any) {
       console.error('获取FAQ列表失败:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setPage(newPage);
   };
 
   const handleOpenDialog = (faq?: FAQItem) => {
@@ -254,7 +284,12 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       
       toast.success(editingFaq ? '更新成功' : '创建成功');
       handleCloseDialog();
-      fetchFAQs();
+      // 如果是新增，跳转到第一页；如果是更新，保持在当前页
+      if (!editingFaq) {
+        setPage(1);
+      } else {
+        fetchFAQs();
+      }
     } catch (error: any) {
       toast.error(error.message || '保存失败');
     }
@@ -271,11 +306,94 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       if (!res.ok) throw new Error('删除失败');
       
       toast.success('删除成功');
-      fetchFAQs();
+      
+      // 从选中项中移除
+      setSelectedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(faqId);
+        return newSet;
+      });
+      
+      // 如果当前页只有一条数据，删除后应该跳转到上一页
+      if (faqs.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        fetchFAQs();
+      }
     } catch (error: any) {
       toast.error(error.message || '删除失败');
     }
   };
+
+  const handleSelectItem = (faqId: string) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(faqId)) {
+        newSet.delete(faqId);
+      } else {
+        newSet.add(faqId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const currentPageIds = faqs.filter(faq => faq.id).map(faq => faq.id!);
+    const allSelected = currentPageIds.every(id => selectedItems.has(id));
+    
+    if (allSelected) {
+      // 取消全选当前页
+      setSelectedItems(prev => {
+        const newSet = new Set(prev);
+        currentPageIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    } else {
+      // 全选当前页
+      setSelectedItems(prev => {
+        const newSet = new Set(prev);
+        currentPageIds.forEach(id => newSet.add(id));
+        return newSet;
+      });
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedItems.size === 0) {
+      toast.error('请先选择要删除的FAQ');
+      return;
+    }
+
+    if (!confirm(`确定要删除选中的 ${selectedItems.size} 条FAQ吗？`)) return;
+
+    try {
+      const deletePromises = Array.from(selectedItems).map(faqId =>
+        tenantFetch(`/api/config/apps/${appId}/faqs/${faqId}`, {
+          method: 'DELETE',
+        })
+      );
+
+      const results = await Promise.all(deletePromises);
+      const failedCount = results.filter(res => !res.ok).length;
+      const successCount = selectedItems.size - failedCount;
+
+      if (failedCount > 0) {
+        toast.error(`删除失败 ${failedCount} 条，成功 ${successCount} 条`);
+      } else {
+        toast.success(`成功删除 ${successCount} 条FAQ`);
+      }
+
+      // 清空选中项
+      setSelectedItems(new Set());
+      
+      // 刷新列表
+      fetchFAQs();
+    } catch (error: any) {
+      toast.error(error.message || '批量删除失败');
+    }
+  };
+
+  const isAllSelected = faqs.length > 0 && faqs.filter(faq => faq.id).every(faq => selectedItems.has(faq.id!));
 
   const handleUploadFiles = async () => {
     if (uploadFiles.length === 0) {
@@ -360,10 +478,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           active: faqConfigData?.active ?? true,
           similarity_threshold: faqConfigData?.score_threshold,
           embedding_model: faqConfigData?.embedding_model,
-          question_in_retrieval: faqConfigData?.question_in_retrieval,
-          question_in_response: faqConfigData?.question_in_response,
-          answer_in_retrieval: faqConfigData?.answer_in_retrieval,
-          answer_in_response: faqConfigData?.answer_in_response,
+          enable_question_in_retrieval: faqConfigData?.enable_question_in_retrieval,
+          enable_question_in_response: faqConfigData?.enable_question_in_response,
+          enable_answer_in_retrieval: faqConfigData?.enable_answer_in_retrieval,
+          enable_answer_in_response: faqConfigData?.enable_answer_in_response,
         }),
       });
 
@@ -418,6 +536,16 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           <Upload className="w-4 h-4 mr-2" />
           上传文件
         </Button>
+        {selectedItems.size > 0 && (
+          <Button 
+            onClick={handleBatchDelete} 
+            size="sm" 
+            variant="destructive"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            删除选中 ({selectedItems.size})
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -427,41 +555,76 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           暂无FAQ，点击"新增FAQ"添加
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[200px]">问题</TableHead>
-              <TableHead>答案</TableHead>
-              <TableHead className="w-[120px]">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {faqs.map((faq) => (
-              <TableRow key={faq.id}>
-                <TableCell className="font-medium">{faq.question}</TableCell>
-                <TableCell className="max-w-md truncate">{faq.answer}</TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenDialog(faq)}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => faq.id && handleDelete(faq.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </TableCell>
+        <>
+          <div className="mb-4 text-sm text-muted-foreground">
+            共 {totalItems} 条FAQ，第 {page} / {totalPages} 页
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="全选"
+                  />
+                </TableHead>
+                <TableHead className="w-[200px]">问题</TableHead>
+                <TableHead>答案</TableHead>
+                <TableHead className="w-[120px]">操作</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {faqs.map((faq) => (
+                <TableRow key={faq.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={faq.id ? selectedItems.has(faq.id) : false}
+                      onCheckedChange={() => faq.id && handleSelectItem(faq.id)}
+                      aria-label={`选择 ${faq.question}`}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">{faq.question}</TableCell>
+                  <TableCell className="max-w-md truncate">{faq.answer}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenDialog(faq)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => faq.id && handleDelete(faq.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {totalItems > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-muted-foreground">
+                  显示第 {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, totalItems)} 条，共 {totalItems} 条
+                </div>
+              </div>
+              <div className="flex justify-center">
+                <PaginationComponent
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -539,7 +702,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                   </div>
                   <div className="space-y-2">
                     <Slider
-                      value={[faqConfigData?.score_threshold ?? 0.9]}
+                      value={[faqConfigData?.score_threshold ?? DEFAULT_SCORE_THRESHOLD]}
                       onValueChange={(value) =>
                         setFaqConfigData({ ...faqConfigData!, score_threshold: value[0] })
                       }
@@ -550,7 +713,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>0 · 容易匹配</span>
-                      <span className="font-medium">{(faqConfigData?.score_threshold ?? 0.9).toFixed(2)}</span>
+                      <span className="font-medium">{(faqConfigData?.score_threshold ?? DEFAULT_SCORE_THRESHOLD).toFixed(2)}</span>
                       <span>1 · 精准匹配</span>
                     </div>
                   </div>
@@ -613,9 +776,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                     </div>
                     <Switch
                       id="question_in_retrieval"
-                      checked={faqConfigData?.question_in_retrieval ?? true}
+                      checked={faqConfigData?.enable_question_in_retrieval ?? true}
                       onCheckedChange={(checked) =>
-                        setFaqConfigData({ ...faqConfigData!, question_in_retrieval: checked })
+                        setFaqConfigData({ ...faqConfigData!, enable_question_in_retrieval: checked })
                       }
                     />
                   </div>
@@ -637,9 +800,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                     </div>
                     <Switch
                       id="question_in_response"
-                      checked={faqConfigData?.question_in_response ?? false}
+                      checked={faqConfigData?.enable_question_in_response ?? false}
                       onCheckedChange={(checked) =>
-                        setFaqConfigData({ ...faqConfigData!, question_in_response: checked })
+                        setFaqConfigData({ ...faqConfigData!, enable_question_in_response: checked })
                       }
                     />
                   </div>
@@ -666,9 +829,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                     </div>
                     <Switch
                       id="answer_in_retrieval"
-                      checked={faqConfigData?.answer_in_retrieval ?? false}
+                      checked={faqConfigData?.enable_answer_in_retrieval ?? false}
                       onCheckedChange={(checked) =>
-                        setFaqConfigData({ ...faqConfigData!, answer_in_retrieval: checked })
+                        setFaqConfigData({ ...faqConfigData!, enable_answer_in_retrieval: checked })
                       }
                     />
                   </div>
@@ -690,9 +853,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                     </div>
                     <Switch
                       id="answer_in_response"
-                      checked={faqConfigData?.answer_in_response ?? true}
+                      checked={faqConfigData?.enable_answer_in_response ?? true}
                       onCheckedChange={(checked) =>
-                        setFaqConfigData({ ...faqConfigData!, answer_in_response: checked })
+                        setFaqConfigData({ ...faqConfigData!, enable_answer_in_response: checked })
                       }
                     />
                   </div>

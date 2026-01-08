@@ -10,7 +10,6 @@ from db.models.faq_item import FAQItemCreate, FAQItemEntity
 from db.models.faq_config import FAQConfigCreate
 from db.models.chatbot import ChatBotEntity
 from common.chat.response_model import PagedResult
-from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.knowledgebase.rag_service import RagService
 from pairag.file.utils.tokenization import estimate_tokens_in_text
@@ -50,10 +49,21 @@ class FAQItemService:
         if not chatbot:
             return None
 
-        # Get knowledgebase by name
-        kb_name = f"{chatbot.app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
+        # Convert dict to FAQConfigCreate object
+        if not chatbot.faq_config:
+            return None
+
+        try:
+            faq_config = FAQConfigCreate.model_validate(chatbot.faq_config)
+        except Exception as e:
+            logger.warning(f"Failed to validate FAQ config for chatbot {chatbot_id}: {e}")
+            return None
+
+        if not faq_config.kb_id:
+            return None
+
         knowledgebase_service = KnowledgebaseService(self.session)
-        return await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
+        return await knowledgebase_service.get_knowledgebase(faq_config.kb_id, tenant_id=tenant_id)
 
     async def save_faq_to_knowledgebase(
         self, faq_item: FAQItemEntity, tenant_id: str, rag_service: Optional[RagService] = None
@@ -90,9 +100,9 @@ class FAQItemService:
             # Build chunk_text based on faq_config settings
             chunk_parts = []
             if faq_config:
-                if faq_config.question_in_retrieval:
+                if faq_config.enable_question_in_retrieval:
                     chunk_parts.append(f"问题: {faq_item.question}")
-                if faq_config.answer_in_retrieval:
+                if faq_config.enable_answer_in_retrieval:
                     chunk_parts.append(f"答案: {faq_item.answer}")
             else:
                 chunk_parts.append(f"问题: {faq_item.question}")
@@ -101,7 +111,7 @@ class FAQItemService:
 
             if not chunk_text:
                 logger.warning(
-                    f"FAQ item {faq_item.id} has no content to save (both question_in_retrieval and answer_in_retrieval are false)"
+                    f"FAQ item {faq_item.id} has no content to save (both enable_question_in_retrieval and enable_answer_in_retrieval are false)"
                 )
                 return
 

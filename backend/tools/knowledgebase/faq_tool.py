@@ -1,12 +1,12 @@
 from service.knowledgebase.rag_service import RagService
 from service.tool.chatapp_service import ChatappService
 from service.tool.faq_config_service import FAQConfigService
+from db.models.faq_config import FAQConfigCreate
 from typing import Annotated, Optional
 from functools import partial
 from llama_index.core.tools import FunctionTool
 import json
 from loguru import logger
-from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
 
 
 async def aget_faq_result(
@@ -21,23 +21,26 @@ async def aget_faq_result(
     """Get FAQ search result from FAQ knowledgebase"""
     logger.info(f"Searching FAQ with chatapp_id {chatapp_id} and user {user_id}.")
 
-    # Try to get chatbot by id first, if not found, try by app_id
-    chatbot = await chatapp_service.get_chatapp(id=chatapp_id, tenant_id=tenant_id)
-    if not chatbot:
-        chatbot = await chatapp_service.get_chatapp_by_app_id(
-            app_id=chatapp_id,
-            tenant_id=tenant_id
-        )
+    chatbot = await chatapp_service.get_chatapp_by_app_id(
+        app_id=chatapp_id,
+        tenant_id=tenant_id
+    )
     if not chatbot:
         raise ValueError(f"应用 '{chatapp_id}' 不存在。")
 
+    # Convert dict to FAQConfigCreate object
+    kb_id = None
+    if chatbot.faq_config:
+        try:
+            faq_config = FAQConfigCreate.model_validate(chatbot.faq_config)
+            kb_id = faq_config.kb_id
+        except Exception as e:
+            logger.warning(f"Failed to validate FAQ config for chatbot {chatapp_id}: {e}")
 
-    # Get FAQ knowledgebase by name: {app_id}_{FAQ_KNOWLEDGEBASE_NAME}
-    kb_name = f"{chatbot.app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
-    kb = await rag_service.get_knowledgebase_by_name(name=kb_name, tenant_id=tenant_id)
+    kb = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
 
     if not kb:
-        raise ValueError(f"FAQ知识库 '{kb_name}' 不存在。")
+        raise ValueError(f"FAQ知识库 '{kb_id}' 不存在。")
 
 
     records = await rag_service.aquery(
@@ -60,8 +63,8 @@ async def aget_faq_result(
         except Exception as e:
             logger.warning(f"Failed to get FAQ config: {e}, using defaults")
 
-    question_in_response = faq_config.question_in_response if faq_config else False
-    answer_in_response = faq_config.answer_in_response if faq_config else True
+    question_in_response = faq_config.enable_question_in_response if faq_config else False
+    answer_in_response = faq_config.enable_answer_in_response if faq_config else True
 
     records_dict = []
     for record in records:
@@ -104,20 +107,6 @@ async def aget_faq_tool(
         tenant_id=tenant_id,
     )
 
-    chatbot = await chatapp_service.get_chatapp(id=chatapp_id, tenant_id=tenant_id)
-    if not chatbot:
-        chatbot = await chatapp_service.get_chatapp_by_app_id(
-            app_id=chatapp_id,
-            tenant_id=tenant_id
-        )
-    if not chatbot:
-        raise ValueError(f"应用 '{chatapp_id}' 不存在。")
-
-    kb_name = f"{chatbot.app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
-    kb = await rag_service.get_knowledgebase_by_name(name=kb_name, tenant_id=tenant_id)
-
-    if not kb:
-        raise ValueError(f"FAQ知识库 '{kb_name}' 不存在。")
 
     async def query_faq_handler(
         query: Annotated[
@@ -132,6 +121,6 @@ async def aget_faq_tool(
     search_faq_tool = FunctionTool.from_defaults(
         async_fn=query_faq_handler,
         name=f"search-faq-{chatapp_id}",
-        description=f"根据上下文从FAQ知识库中搜索和用户查询相关的内容。\n应用ID: {chatbot.app_id}\n知识库名称: {kb.name}\n知识库描述: {kb.description}\n",
+        description="根据上下文从FAQ知识库中搜索和用户查询相关的内容。",
     )
     return search_faq_tool

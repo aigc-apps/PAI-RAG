@@ -34,28 +34,28 @@ def upgrade() -> None:
     )
     safe_add_column(
         'pai_chatbot_faq_config',
-        sa.Column('question_in_retrieval', sa.Boolean(), nullable=True)
+        sa.Column('enable_question_in_retrieval', sa.Boolean(), nullable=True)
     )
     safe_add_column(
         'pai_chatbot_faq_config',
-        sa.Column('question_in_response', sa.Boolean(), nullable=True)
+        sa.Column('enable_question_in_response', sa.Boolean(), nullable=True)
     )
     safe_add_column(
         'pai_chatbot_faq_config',
-        sa.Column('answer_in_retrieval', sa.Boolean(), nullable=True)
+        sa.Column('enable_answer_in_retrieval', sa.Boolean(), nullable=True)
     )
     safe_add_column(
         'pai_chatbot_faq_config',
-        sa.Column('answer_in_response', sa.Boolean(), nullable=True)
+        sa.Column('enable_answer_in_response', sa.Boolean(), nullable=True)
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column('pai_chatbot_faq_config', 'answer_in_response')
-    op.drop_column('pai_chatbot_faq_config', 'answer_in_retrieval')
-    op.drop_column('pai_chatbot_faq_config', 'question_in_response')
-    op.drop_column('pai_chatbot_faq_config', 'question_in_retrieval')
+    op.drop_column('pai_chatbot_faq_config', 'enable_answer_in_response')
+    op.drop_column('pai_chatbot_faq_config', 'enable_answer_in_retrieval')
+    op.drop_column('pai_chatbot_faq_config', 'enable_question_in_response')
+    op.drop_column('pai_chatbot_faq_config', 'enable_question_in_retrieval')
     op.drop_column('pai_chatbot_faq_config', 'embedding_model')
     op.drop_column('pai_chatbot_faq_config', 'score_threshold')
 
