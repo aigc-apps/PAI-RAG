@@ -71,7 +71,7 @@ async def create_faq_item(
             raise ApiException(code=400, message="请先启用FAQ功能。")
 
         faq_item = await faq_item_service.create_faq_item(
-            chatbot_id=chatbot.id,
+            chatbot_id=chatbot.app_id,
             faq_item_data=faq_item_create,
             tenant_id=tenant_id,
         )
@@ -81,13 +81,11 @@ async def create_faq_item(
         return success_response(data=faq_item, message="创建FAQ成功。")
     except ValueError as e:
         logger.error(f"Failed to create FAQ item: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except ApiException:
         raise
     except Exception as e:
         logger.error(f"Failed to create FAQ item: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"创建FAQ失败: {traceback.format_exc()}")
 
 @app_router.get("/{app_id}/faqs", tags=["FAQ"])
@@ -108,7 +106,7 @@ async def list_faq_items(
             raise ApiException(code=404, message=f"应用 '{app_id}' 不存在。")
 
         faq_items = await faq_item_service.list_faq_items(
-            chatbot_id=chatbot.id,
+            chatbot_id=chatbot.app_id,
             tenant_id=tenant_id,
             page=page,
             size=size,
@@ -142,11 +140,9 @@ async def update_faq_item(
         return success_response(data=faq_item, message="更新FAQ成功。")
     except ValueError as e:
         logger.error(f"Failed to update FAQ item: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to update FAQ item: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"更新FAQ失败: {traceback.format_exc()}")
 
 @app_router.delete("/{app_id}/faqs/{faq_item_id}", tags=["FAQ"])
@@ -164,11 +160,9 @@ async def delete_faq_item(
         return success_response(message=f"FAQ'{faq_item_id}'删除成功。")
     except ValueError as e:
         logger.error(f"Failed to delete FAQ item: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to delete FAQ item: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"删除FAQ失败: {traceback.format_exc()}")
 
 @app_router.get("/{app_id}/faq-config", response_model=ResponseModel[FAQConfigCreate], tags=["FAQ"])
@@ -193,13 +187,11 @@ async def get_faq_config(
         return success_response(data=faq_config, message="获取FAQ配置成功。")
     except ValueError as e:
         logger.error(f"Failed to get FAQ config: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except ApiException:
         raise
     except Exception as e:
         logger.error(f"Failed to get FAQ config: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"获取FAQ配置失败: {traceback.format_exc()}")
 
 @app_router.put("/{app_id}/faq-config", response_model=ResponseModel[FAQConfigCreate], tags=["FAQ"])
@@ -210,6 +202,7 @@ async def update_faq_config(
     session: AsyncSession = Depends(get_db_session),
     chatapp_service: ChatappService = Depends(get_chatapp_service),
     faq_config_service: FAQConfigService = Depends(get_faq_config_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
     """Update FAQ config for an app."""
     try:
@@ -218,70 +211,24 @@ async def update_faq_config(
         if not chatbot:
             raise ApiException(code=404, message=f"应用 '{app_id}' 不存在。")
 
-        # Get or create FAQ config
-        await faq_config_service.get_or_create_faq_config(
-            chatbot_id=chatbot.id, tenant_id=tenant_id
-        )
-
-        # Update FAQ config using the service method which handles individual fields
-        updated_faq_config = await faq_config_service.update_faq_config(
+        # Update FAQ config with full synchronization logic
+        updated_faq_config = await faq_config_service.update_faq_config_with_sync(
+            app_id=app_id,
             chatbot_id=chatbot.id,
             update_data=faq_config_data,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            knowledgebase_service=knowledgebase_service
         )
-
-        # Update corresponding knowledgebase if embedding_model or similarity_threshold changed
-        if faq_config_data.embedding_model is not None or faq_config_data.similarity_threshold is not None:
-            kb_name = f"{app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
-            knowledgebase_service = KnowledgebaseService(session)
-            kb = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
-
-            if kb:
-                # Prepare update data for knowledgebase
-                kb_update_data = KnowledgebaseCreate()
-                update_fields = []
-
-                # Update embedding_model if provided
-                if faq_config_data.embedding_model is not None:
-                    kb_update_data.embedding_model = faq_config_data.embedding_model
-                    update_fields.append(f"embedding_model={faq_config_data.embedding_model}")
-
-                # Update retrieval_config.similarity_threshold if provided
-                if faq_config_data.similarity_threshold is not None:
-                    # Get current retrieval_config or create default
-                    current_retrieval_config = RetrievalConfig.model_validate(kb.retrieval_config) if kb.retrieval_config else RetrievalConfig(
-                        retrieval_mode=VectorIndexRetrievalType.vector,
-                        top_k=1,
-                        enable_rerank=False,
-                        rerank_top_k=None,
-                        vector_weight=1.0,
-                        similarity_threshold=faq_config_data.similarity_threshold,
-                    )
-                    # Update similarity_threshold
-                    current_retrieval_config.similarity_threshold = faq_config_data.similarity_threshold
-                    kb_update_data.retrieval_config = current_retrieval_config
-                    update_fields.append(f"similarity_threshold={faq_config_data.similarity_threshold}")
-
-                # Update knowledgebase only if there are fields to update
-                if kb_update_data.embedding_model is not None or kb_update_data.retrieval_config is not None:
-                    await knowledgebase_service.update_knowledgebase(
-                        kb_id=kb.id,
-                        update_data=kb_update_data,
-                        tenant_id=tenant_id
-                    )
-                    logger.info(f"Updated FAQ knowledgebase {kb_name} with {', '.join(update_fields)}")
 
         await session.commit()
         return success_response(data=updated_faq_config, message="更新FAQ配置成功。")
     except ValueError as e:
         logger.error(f"Failed to update FAQ config: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except ApiException:
         raise
     except Exception as e:
         logger.error(f"Failed to update FAQ config: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"更新FAQ配置失败: {traceback.format_exc()}")
 
 MAX_CHECK_ATTEMPTS = 100
@@ -468,7 +415,7 @@ async def upload_faq_files(
                     faq_item_data = FAQItemCreate(
                         question=question,
                         answer=answer,
-                        chatbot_id=chatbot.id,
+                        chatbot_id=chatbot.app_id,
                         file_id=file_id,
                         active=True,
                     )
@@ -479,7 +426,7 @@ async def upload_faq_files(
                     for faq_item_data in tqdm(faq_items_to_create, desc=f"Creating FAQ Items for file {file_item.file_name}"):
                         try:
                             faq_item = await faq_item_service.create_faq_item(
-                                chatbot_id=chatbot.id,
+                                chatbot_id=chatbot.app_id,
                                 faq_item_data=faq_item_data,
                                 tenant_id=tenant_id,
                             )
@@ -542,7 +489,6 @@ async def upload_faq_files(
         )
     except Exception as e:
         logger.error(f"Failed to process FAQ file: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=400, message=f"文件处理失败: {e}")
 
 
@@ -560,11 +506,9 @@ async def create_chatbot(
         return success_response(data=chatbot, message="创建应用成功。")
     except ValueError as e:
         logger.error(f"Failed to create chatapp: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to create chatapp: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"创建应用失败: {traceback.format_exc()}")
 
 
@@ -607,11 +551,9 @@ async def update_chatbot(
         return success_response(data=chatbot, message="更新应用成功。")
     except ValueError as e:
         logger.error(f"Failed to update chatapp: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to update chatapp: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"更新应用失败: {traceback.format_exc()}")
 
 
@@ -621,16 +563,15 @@ async def delete_chatbot(
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     chatapp_service: ChatappService = Depends(get_chatapp_service),
+    rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        await chatapp_service.delete_chatapp(id=id, tenant_id=tenant_id)
+        await chatapp_service.delete_chatapp(id=id, tenant_id=tenant_id, rag_service=rag_service)
         await session.commit()
         return success_response(message=f"应用'{id}'删除成功。")
     except ValueError as e:
         logger.error(f"Failed to delete chatapp: {str(e)}")
-        await session.rollback()
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to delete chatapp: {traceback.format_exc()}")
-        await session.rollback()
         raise ApiException(code=500, message=f"删除应用失败: {traceback.format_exc()}")

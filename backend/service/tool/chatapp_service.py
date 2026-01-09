@@ -15,6 +15,9 @@ from common.knowledgebase.types import VectorIndexRetrievalType
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.model.embedding_service import EmbeddingService
 from service.tool.faq_config_service import FAQConfigService
+from db.models.faq_config import FAQConfigCreate
+from db.models.faq_item import FAQItemEntity
+from service.knowledgebase.rag_service import RagService
 
 
 class ChatappService:
@@ -276,14 +279,11 @@ class ChatappService:
             if existing_chatbot and existing_chatbot.id != id:
                 raise ValueError(f"应用ID '{update_data.app_id}' 已经存在，无法更新。")
 
+        faq_config_service = FAQConfigService(self.session)
         if update_data.enable_faq:
-            # Enable FAQ: create FAQ config if not exists
             if not chatbot.faq_config:
-                # Ensure FAQ knowledgebase exists first (to get kb_id)
                 knowledgebase = await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
 
-                # Initialize FAQ config with default values and set kb_id
-                faq_config_service = FAQConfigService(self.session)
                 faq_config = await faq_config_service.get_or_create_faq_config(
                     chatbot_id=chatbot.id, tenant_id=tenant_id
                 )
@@ -300,9 +300,25 @@ class ChatappService:
                 logger.info(
                     f"Created FAQ config for ChatApp: {chatbot.id}"
                 )
+            else:
+                current_config = FAQConfigCreate.model_validate(chatbot.faq_config)
+                if not current_config.active:
+                    current_config.active = True
+                    await faq_config_service.update_faq_config(
+                        chatbot_id=chatbot.id,
+                        update_data=current_config,
+                        tenant_id=tenant_id
+                    )
+                    logger.info(f"Updated FAQ config active to True for ChatApp: {chatbot.id}")
         else:
-            # Disable FAQ: clear faq_config (but keep FAQ items)
-            chatbot.faq_config = None
+            current_config = FAQConfigCreate.model_validate(chatbot.faq_config)
+
+            current_config.active = False
+            await faq_config_service.update_faq_config(
+                chatbot_id=chatbot.id,
+                update_data=current_config,
+                tenant_id=tenant_id
+            )
             logger.info(f"Disabled FAQ for ChatApp: {chatbot.id}")
 
         # Update fields
@@ -345,13 +361,15 @@ class ChatappService:
         logger.info(f"Updated ChatApp entity: {chatbot.id} (app_id: {chatbot.app_id})")
         return chatbot
 
-    async def delete_chatapp(self, id: str, tenant_id: str) -> None:
+    async def delete_chatapp(self, id: str, tenant_id: str, rag_service: Optional[RagService] = None) -> None:
         """
         Delete a ChatApp entity.
         Note: Caller is responsible for committing the session.
 
         Args:
             id: ChatApp entity ID
+            tenant_id: Tenant ID
+            rag_service: Optional RagService for deleting FAQ knowledgebase
 
         Raises:
             ValueError: If ChatApp entity not found
@@ -360,7 +378,38 @@ class ChatappService:
         if not chatbot:
             raise ValueError(f"应用 '{id}' 不存在。")
 
+        # Delete FAQ knowledgebase if exists
+        if chatbot.faq_config:
+            try:
+                faq_config = FAQConfigCreate.model_validate(chatbot.faq_config)
+                if faq_config.kb_id and rag_service:
+                    try:
+                        await rag_service.delete_knowledgebase(kb_id=faq_config.kb_id, tenant_id=tenant_id)
+                        logger.info(f"Deleted FAQ knowledgebase {faq_config.kb_id} for ChatApp: {id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete FAQ knowledgebase {faq_config.kb_id}: {e}")
+                        # Continue with chatbot deletion even if KB deletion fails
+            except Exception as e:
+                logger.warning(f"Failed to parse FAQ config for chatbot {id}: {e}")
+                # Continue with chatbot deletion even if FAQ config parsing fails
+
+        try:
+            faq_items = await self.session.exec(
+                select(FAQItemEntity).where(
+                    FAQItemEntity.chatbot_id == chatbot.app_id,
+                    FAQItemEntity.tenant_id == tenant_id
+                )
+            )
+            faq_items_list = list(faq_items.all())
+            if faq_items_list:
+                for faq_item in faq_items_list:
+                    await self.session.delete(faq_item)
+                logger.info(f"Deleted {len(faq_items_list)} FAQ items for ChatApp: {id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete FAQ items for chatbot {id}: {e}")
+
         # Delete from database (staged, not committed)
+        # FAQ items should be automatically deleted via CASCADE foreign key constraint if it exists
         await self.session.delete(chatbot)
 
         # Flush to ensure deletion is staged

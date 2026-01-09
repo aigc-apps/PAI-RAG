@@ -55,5 +55,6 @@ async def aget_knowledgebase_tool(
         async_fn=query_knowledgebase_handler,
         name=f"search-knowledgebase-{kb_id}",
         description=f"根据上下文从知识库中搜索和用户查询相关的内容。\n知识库名称: {knowledgebase.name}\n知识库描述: {knowledgebase.description}\n",
+        return_direct=False,
     )
     return search_knowledgebase_tool

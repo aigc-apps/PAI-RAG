@@ -101,7 +101,8 @@ async def aget_image_parser_tool(
         name="image-parser",
         description="""解析上传的图片内容。适用于用户提问涉及图片中的信息（如图表、文字、产品图等）。
 参数：
-- question: 可选，用户想问的具体问题，例如“图中智能床的价格是多少？”、“请提取表格数据”等。
+- question: 可选，用户想问的具体问题，例如"图中智能床的价格是多少？"、"请提取表格数据"等。
 返回：包含图片分析结果的 JSON 对象。""",
+        return_direct=False,
     )
     return image_parser_tool

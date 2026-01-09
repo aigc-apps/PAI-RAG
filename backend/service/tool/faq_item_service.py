@@ -42,7 +42,7 @@ class FAQItemService:
         # Get chatbot to get app_id
         chatbot = await self.session.exec(
             select(ChatBotEntity).where(
-                ChatBotEntity.id == chatbot_id, ChatBotEntity.tenant_id == tenant_id
+                ChatBotEntity.app_id == chatbot_id, ChatBotEntity.tenant_id == tenant_id
             )
         )
         chatbot = chatbot.first()
@@ -66,7 +66,7 @@ class FAQItemService:
         return await knowledgebase_service.get_knowledgebase(faq_config.kb_id, tenant_id=tenant_id)
 
     async def save_faq_to_knowledgebase(
-        self, faq_item: FAQItemEntity, tenant_id: str, rag_service: Optional[RagService] = None
+        self, faq_item: FAQItemEntity, tenant_id: str, rag_service: RagService
     ) -> None:
         """
         Save FAQ item to knowledgebase.
@@ -76,6 +76,12 @@ class FAQItemService:
             tenant_id: Tenant ID
         """
         try:
+            if not faq_item.question or not faq_item.answer:
+                logger.warning(
+                    f"FAQ item {faq_item.id} has no question or answer, skipping save to KB"
+                )
+                return
+
             # Get FAQ knowledgebase
             kb = await self.get_faq_knowledgebase(faq_item.chatbot_id, tenant_id)
             if not kb:
@@ -87,7 +93,7 @@ class FAQItemService:
             # Get FAQ config from chatbot to determine what to include in chunk_text
             chatbot = await self.session.exec(
                 select(ChatBotEntity).where(
-                    ChatBotEntity.id == faq_item.chatbot_id,
+                    ChatBotEntity.app_id == faq_item.chatbot_id,
                     ChatBotEntity.tenant_id == tenant_id,
                 )
             )
@@ -101,19 +107,13 @@ class FAQItemService:
             chunk_parts = []
             if faq_config:
                 if faq_config.enable_question_in_retrieval:
-                    chunk_parts.append(f"问题: {faq_item.question}")
+                    chunk_parts.append(f"{faq_item.question}")
                 if faq_config.enable_answer_in_retrieval:
-                    chunk_parts.append(f"答案: {faq_item.answer}")
+                    chunk_parts.append(f"{faq_item.answer}")
             else:
-                chunk_parts.append(f"问题: {faq_item.question}")
+                chunk_parts.append(f"{faq_item.question}")
 
             chunk_text = "\n".join(chunk_parts) if chunk_parts else ""
-
-            if not chunk_text:
-                logger.warning(
-                    f"FAQ item {faq_item.id} has no content to save (both enable_question_in_retrieval and enable_answer_in_retrieval are false)"
-                )
-                return
 
             # Create metadata for TextNode
             node_metadata = {
@@ -131,27 +131,22 @@ class FAQItemService:
                 metadata=node_metadata,
             )
 
-            # Insert into vector store if rag_service is provided
-            if rag_service:
-                if faq_item.active:
-                    await rag_service.ainsert(kb_id=kb.id, nodes=[kb_node], tenant_id=tenant_id)
-                    logger.info(
-                        f"Inserted FAQ item {faq_item.id} into knowledgebase {kb.id}"
-                    )
-                else:
-                    logger.info(
-                        f"FAQ item {faq_item.id} is inactive, skipping vector store insertion"
-                    )
+
+            if faq_item.active:
+                await rag_service.ainsert(kb_id=kb.id, nodes=[kb_node], tenant_id=tenant_id)
+                logger.info(
+                    f"Inserted FAQ item {faq_item.id} into knowledgebase {kb.id}"
+                )
             else:
-                logger.warning(
-                    f"RagService not provided, skipping vector store insertion for FAQ item {faq_item.id}"
+                logger.info(
+                    f"FAQ item {faq_item.id} is inactive, skipping vector store insertion"
                 )
 
         except Exception as e:
             logger.error(f"Failed to save FAQ item to knowledgebase: {e}")
 
     async def delete_faq_from_knowledgebase(
-        self, faq_item: FAQItemEntity, tenant_id: str, rag_service: Optional[RagService] = None
+        self, faq_item: FAQItemEntity, tenant_id: str, rag_service: RagService
     ) -> None:
         """
         Delete FAQ item from knowledgebase.
@@ -170,15 +165,10 @@ class FAQItemService:
                 return
 
             # Delete from vector store using faq_item.id as node_id
-            if rag_service:
-                await rag_service.adelete(kb_id=kb.id, node_ids=[faq_item.id], tenant_id=tenant_id)
-                logger.info(
-                    f"Deleted FAQ item {faq_item.id} from knowledgebase {kb.id}"
-                )
-            else:
-                logger.warning(
-                    f"RagService not provided, skipping vector store deletion for FAQ item {faq_item.id}"
-                )
+            await rag_service.adelete(kb_id=kb.id, node_ids=[faq_item.id], tenant_id=tenant_id)
+            logger.info(
+                f"Deleted FAQ item {faq_item.id} from knowledgebase {kb.id}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to delete FAQ item from knowledgebase: {e}")

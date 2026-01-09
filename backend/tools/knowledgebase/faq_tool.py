@@ -55,15 +55,14 @@ async def aget_faq_result(
     )
 
     faq_config = None
-    if faq_config_service:
-        try:
-            faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
-                chatbot_id=chatbot.id, tenant_id=tenant_id
-            )
-        except Exception as e:
-            logger.warning(f"Failed to get FAQ config: {e}, using defaults")
+    try:
+        faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
+            chatbot_id=chatbot.id, tenant_id=tenant_id
+        )
+    except Exception as e:
+        logger.warning(f"Failed to get FAQ config: {e}, using defaults")
 
-    question_in_response = faq_config.enable_question_in_response if faq_config else False
+    question_in_response = faq_config.enable_question_in_response if faq_config else True
     answer_in_response = faq_config.enable_answer_in_response if faq_config else True
 
     records_dict = []
@@ -75,13 +74,16 @@ async def aget_faq_result(
         answer = metadata.get('answer', '') or ''
 
         content_parts = []
-        if question_in_response and question:
-            content_parts.append(f"问题：{question}")
-        if answer_in_response and answer:
-            content_parts.append(f"答案：{answer}")
+        if not faq_config.return_direct:
+            if question_in_response and question:
+                content_parts.append(f"问题：{question}")
+            if answer_in_response and answer:
+                content_parts.append(f"答案：{answer}")
 
-        if content_parts:
-            record_dict['content'] = '\n'.join(content_parts)
+            if content_parts:
+                record_dict['content'] = '\n'.join(content_parts)
+        else:
+            record_dict['content'] = answer
 
         records_dict.append(record_dict)
 
@@ -97,6 +99,22 @@ async def aget_faq_tool(
     faq_config_service: FAQConfigService = None,
 ):
     """Create a FAQ search tool for the given chatapp_id."""
+    # Get faq_config to determine return_direct value
+    return_direct = False
+    try:
+        chatbot = await chatapp_service.get_chatapp_by_app_id(
+            app_id=chatapp_id,
+            tenant_id=tenant_id
+        )
+        if chatbot:
+            faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
+                chatbot_id=chatbot.id, tenant_id=tenant_id
+            )
+            if faq_config:
+                return_direct = faq_config.return_direct if faq_config.return_direct is not None else False
+    except Exception as e:
+        logger.warning(f"Failed to get FAQ config for return_direct: {e}, using default False")
+
     aquery_faq_func = partial(
         aget_faq_result,
         chatapp_id=chatapp_id,
@@ -122,5 +140,6 @@ async def aget_faq_tool(
         async_fn=query_faq_handler,
         name=f"search-faq-{chatapp_id}",
         description="根据上下文从FAQ知识库中搜索和用户查询相关的内容。",
+        return_direct=return_direct,
     )
     return search_faq_tool

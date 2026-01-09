@@ -40,5 +40,6 @@ async def aget_file_reader(file_service: FileService = None, tenant_id: str = No
         async_fn=aread_file_content,
         name="read-file",
         description="根据提供的附件ID读取文件的内容。\n参数：\n- file_id (str, 必需): 要读取的文件的ID。",
+        return_direct=False,
     )
     return read_file_tool

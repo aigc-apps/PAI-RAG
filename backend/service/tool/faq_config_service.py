@@ -4,11 +4,14 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from common.knowledgebase.constants import DEFAULT_EMBEDDING_MODEL, DEFAULT_FAQ_SIMILARITY_THRESHOLD
+from common.knowledgebase.constants import DEFAULT_EMBEDDING_MODEL, DEFAULT_FAQ_SIMILARITY_THRESHOLD, FAQ_KNOWLEDGEBASE_NAME
+from common.knowledgebase.types import VectorIndexRetrievalType
 from loguru import logger
 
 from db.models.faq_config import FAQConfigCreate
 from db.models.chatbot import ChatBotEntity
+from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig
+from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 
 
 class FAQConfigService:
@@ -30,9 +33,10 @@ class FAQConfigService:
             "similarity_threshold": DEFAULT_FAQ_SIMILARITY_THRESHOLD,
             "embedding_model": DEFAULT_EMBEDDING_MODEL,
             "enable_question_in_retrieval": True,
-            "enable_question_in_response": False,
+            "enable_question_in_response": True,
             "enable_answer_in_retrieval": False,
             "enable_answer_in_response": True,
+            "return_direct": False,
             "kb_id": None,
         }
 
@@ -154,3 +158,108 @@ class FAQConfigService:
 
         logger.info(f"Updated FAQ Config for chatbot: {chatbot_id}")
         return FAQConfigCreate.model_validate(chatbot.faq_config)
+
+    async def update_faq_config_with_sync(
+        self,
+        app_id: str,
+        chatbot_id: str,
+        update_data: FAQConfigCreate,
+        tenant_id: str,
+        knowledgebase_service: Optional[KnowledgebaseService] = None
+    ) -> FAQConfigCreate:
+        """
+        Update FAQ config with full synchronization logic:
+        - Get or create FAQ config
+        - Sync chatbot.enable_faq with faq_config.active
+        - Update FAQ config
+        - Update corresponding knowledgebase if embedding_model or similarity_threshold changed
+
+        Note: Caller is responsible for committing the session.
+
+        Args:
+            app_id: Chatbot app_id (used for knowledgebase name)
+            chatbot_id: Chatbot ID
+            update_data: Updated FAQ Config data
+            tenant_id: Tenant ID
+            knowledgebase_service: Optional KnowledgebaseService for updating knowledgebase
+
+        Returns:
+            Updated FAQConfigCreate
+
+        Raises:
+            ValueError: If Chatbot not found
+        """
+        # Get chatbot entity
+        chatbot = await self.session.exec(
+            select(ChatBotEntity).where(
+                ChatBotEntity.id == chatbot_id,
+                ChatBotEntity.tenant_id == tenant_id,
+            )
+        )
+        chatbot = chatbot.first()
+
+        if not chatbot:
+            raise ValueError(f"Chatbot '{chatbot_id}' 不存在。")
+
+        # Get or create FAQ config (this will use the same chatbot entity if it exists)
+        await self.get_or_create_faq_config(
+            chatbot_id=chatbot_id, tenant_id=tenant_id
+        )
+
+        # Refresh chatbot to get latest state
+        await self.session.refresh(chatbot)
+
+        # Sync chatbot.enable_faq with faq_config.active
+        if update_data.active is not None:
+            if chatbot.enable_faq != update_data.active:
+                chatbot.enable_faq = update_data.active
+                logger.info(f"Synced chatbot.enable_faq to {update_data.active} for chatbot {chatbot_id}")
+
+        # Update FAQ config
+        updated_faq_config = await self.update_faq_config(
+            chatbot_id=chatbot_id,
+            update_data=update_data,
+            tenant_id=tenant_id
+        )
+
+        # Update corresponding knowledgebase if embedding_model or similarity_threshold changed
+        if knowledgebase_service and (update_data.embedding_model is not None or update_data.similarity_threshold is not None):
+            kb_name = f"{app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
+            kb = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
+
+            if kb:
+                # Prepare update data for knowledgebase
+                kb_update_data = KnowledgebaseCreate()
+                update_fields = []
+
+                # Update embedding_model if provided
+                if update_data.embedding_model is not None:
+                    kb_update_data.embedding_model = update_data.embedding_model
+                    update_fields.append(f"embedding_model={update_data.embedding_model}")
+
+                # Update retrieval_config.similarity_threshold if provided
+                if update_data.similarity_threshold is not None:
+                    # Get current retrieval_config or create default
+                    current_retrieval_config = RetrievalConfig.model_validate(kb.retrieval_config) if kb.retrieval_config else RetrievalConfig(
+                        retrieval_mode=VectorIndexRetrievalType.vector,
+                        top_k=1,
+                        enable_rerank=False,
+                        rerank_top_k=None,
+                        vector_weight=1.0,
+                        similarity_threshold=update_data.similarity_threshold,
+                    )
+                    # Update similarity_threshold
+                    current_retrieval_config.similarity_threshold = update_data.similarity_threshold
+                    kb_update_data.retrieval_config = current_retrieval_config
+                    update_fields.append(f"similarity_threshold={update_data.similarity_threshold}")
+
+                # Update knowledgebase only if there are fields to update
+                if kb_update_data.embedding_model is not None or kb_update_data.retrieval_config is not None:
+                    await knowledgebase_service.update_knowledgebase(
+                        kb_id=kb.id,
+                        update_data=kb_update_data,
+                        tenant_id=tenant_id
+                    )
+                    logger.info(f"Updated FAQ knowledgebase {kb_name} with {', '.join(update_fields)}")
+
+        return updated_faq_config

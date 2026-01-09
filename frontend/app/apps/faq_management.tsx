@@ -99,6 +99,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     enable_question_in_response: boolean;
     enable_answer_in_retrieval: boolean;
     enable_answer_in_response: boolean;
+    return_direct: boolean;
   } | null>(null);
   const { tenantFetch } = useTenantFetch();
 
@@ -118,16 +119,23 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       const data = await res.json();
       // 更新本地状态
       if (data.data) {
-        setFaqConfigData({
-          active: data.data.active ?? checked,
-          score_threshold: data.data.similarity_threshold ?? data.data.score_threshold ?? faqConfigData?.score_threshold ?? DEFAULT_SCORE_THRESHOLD,
-          embedding_model: data.data.embedding_model ?? faqConfigData?.embedding_model ?? '',
-          enable_question_in_retrieval: data.data.enable_question_in_retrieval ?? faqConfigData?.enable_question_in_retrieval ?? true,
-          enable_question_in_response: data.data.enable_question_in_response ?? faqConfigData?.enable_question_in_response ?? false,
-          enable_answer_in_retrieval: data.data.enable_answer_in_retrieval ?? faqConfigData?.enable_answer_in_retrieval ?? false,
-          enable_answer_in_response: data.data.enable_answer_in_response ?? faqConfigData?.enable_answer_in_response ?? true,
-        });
+          setFaqConfigData({
+            active: data.data.active ?? checked,
+            score_threshold: data.data.similarity_threshold ?? data.data.score_threshold ?? faqConfigData?.score_threshold ?? DEFAULT_SCORE_THRESHOLD,
+            embedding_model: data.data.embedding_model ?? faqConfigData?.embedding_model ?? '',
+            enable_question_in_retrieval: data.data.enable_question_in_retrieval ?? faqConfigData?.enable_question_in_retrieval ?? true,
+            enable_question_in_response: data.data.enable_question_in_response ?? faqConfigData?.enable_question_in_response ?? false,
+            enable_answer_in_retrieval: data.data.enable_answer_in_retrieval ?? faqConfigData?.enable_answer_in_retrieval ?? false,
+            enable_answer_in_response: data.data.enable_answer_in_response ?? faqConfigData?.enable_answer_in_response ?? true,
+            return_direct: data.data.return_direct ?? faqConfigData?.return_direct ?? false,
+          });
       }
+      
+      // 同步更新 botConfig.enable_faq
+      setBotConfig({
+        ...botConfig,
+        enable_faq: checked,
+      });
       
       toast.success(checked ? '已启用FAQ回复' : '已关闭FAQ回复');
     } catch (error: any) {
@@ -159,9 +167,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             score_threshold: data.data.score_threshold ?? data.data.similarity_threshold ?? DEFAULT_SCORE_THRESHOLD,
             embedding_model: data.data.embedding_model ?? '',
             enable_question_in_retrieval: data.data.enable_question_in_retrieval ?? true,
-            enable_question_in_response: data.data.enable_question_in_response ?? false,
+            enable_question_in_response: data.data.enable_question_in_response ?? true,
             enable_answer_in_retrieval: data.data.enable_answer_in_retrieval ?? false,
             enable_answer_in_response: data.data.enable_answer_in_response ?? true,
+            return_direct: data.data.return_direct ?? false,
           });
         } else {
           // 如果没有配置数据，设置默认值（active 默认为 false）
@@ -170,9 +179,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             score_threshold: DEFAULT_SCORE_THRESHOLD,
             embedding_model: '',
             enable_question_in_retrieval: true,
-            enable_question_in_response: false,
+            enable_question_in_response: true,
             enable_answer_in_retrieval: false,
             enable_answer_in_response: true,
+            return_direct: false,
           });
         }
       } else if (res.status === 404) {
@@ -185,6 +195,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           enable_question_in_response: false,
           enable_answer_in_retrieval: false,
           enable_answer_in_response: true,
+          return_direct: false,
         });
       }
     } catch (error: any) {
@@ -198,6 +209,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
         enable_question_in_response: false,
         enable_answer_in_retrieval: false,
         enable_answer_in_response: true,
+        return_direct: false,
       });
     }
   };
@@ -482,6 +494,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           enable_question_in_response: faqConfigData?.enable_question_in_response,
           enable_answer_in_retrieval: faqConfigData?.enable_answer_in_retrieval,
           enable_answer_in_response: faqConfigData?.enable_answer_in_response,
+          return_direct: faqConfigData?.return_direct ?? false,
         }),
       });
 
@@ -513,7 +526,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             onCheckedChange={handleToggleFAQ}
           />
         </div>
-        {botConfig.enable_faq && faqConfigData && (
+        {faqConfigData && (
           <Button
             variant="outline"
             size="sm"
@@ -856,6 +869,35 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                       checked={faqConfigData?.enable_answer_in_response ?? true}
                       onCheckedChange={(checked) =>
                         setFaqConfigData({ ...faqConfigData!, enable_answer_in_response: checked })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* 直接返回设置 */}
+                <div className="space-y-3">
+                  <Label>返回设置</Label>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="return_direct" className="text-sm font-normal">
+                        直接返回结果
+                      </Label>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">开启后，FAQ工具将直接返回搜索结果，不经过LLM加工处理</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Switch
+                      id="return_direct"
+                      checked={faqConfigData?.return_direct ?? false}
+                      onCheckedChange={(checked) =>
+                        setFaqConfigData({ ...faqConfigData!, return_direct: checked })
                       }
                     />
                   </div>

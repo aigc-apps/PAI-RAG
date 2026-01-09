@@ -10,6 +10,7 @@ from common.llm.models import TextChunk, ChatResponseGenerator, ToolResultChunk
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.json_utils import parse_tool_arguments
+from agent.tool_utils import check_and_handle_return_direct
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -157,6 +158,19 @@ class ActorWithPlan(BaseAgent):
                                         result=tool_content,
                                         error=tool_error
                                     )
+
+                                    # Check if tool has return_direct=True, if so, return directly
+                                    tool_obj = self.tool_fn_map[function_name]
+                                    return_chunk = check_and_handle_return_direct(
+                                        tool_obj=tool_obj,
+                                        tool_name=function_name,
+                                        tool_content=tool_content,
+                                        tool_error=tool_error,
+                                        agent_name=self.name,
+                                    )
+                                    if return_chunk:
+                                        yield return_chunk
+                                        return
                         else:
                             break
 

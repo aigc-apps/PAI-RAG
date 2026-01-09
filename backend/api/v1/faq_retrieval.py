@@ -22,7 +22,7 @@ faq_retrieval_router = APIRouter()
 
 
 class FAQRetrievalRequest(BaseModel):
-    chatapp_id: str  # ChatApp ID (can be chatbot.id or app_id)
+    chatapp_id: str  # chatbot.id
     query: str  # 查询内容
     user_id: Optional[str] = None
     retrieval_setting: Optional[RetrievalSetting] = None

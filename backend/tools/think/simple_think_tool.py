@@ -48,6 +48,7 @@ async def aget_simple_think_tool(cache_key: str):
         async_fn=simple_think_handler,
         name="think",
         description="记录思考内容。用于复杂推理或缓存记忆。",
+        return_direct=False,
     )
     openai_tools = []
     tools_name_to_fn = {}
