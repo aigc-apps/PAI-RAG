@@ -20,6 +20,7 @@ from opentelemetry.sdk.environment_variables import (
     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
     OTEL_EXPORTER_OTLP_TRACES_HEADERS,
 )
+from opentelemetry.exporter.otlp.proto.http import Compression
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.environment_variables import (
     OTEL_EXPORTER_OTLP_HEADERS,
@@ -38,7 +39,7 @@ class ReloadableHttpOTLPSpanExporter(OTLPSpanExporter):
         credentials: Credentials object for server authentication
         headers: Headers to send when exporting
         timeout: Backend request timeout in seconds
-        compression: gRPC compression method to use
+        compression: compression method to use
     """
     def __init__(
         self,
@@ -62,6 +63,7 @@ class ReloadableHttpOTLPSpanExporter(OTLPSpanExporter):
             endpoint=endpoint,
             headers=headers,
             timeout=timeout,
+            compression=Compression.Gzip,
         )
 
     def reload(
