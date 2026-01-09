@@ -19,6 +19,7 @@ def retrieval_type_to_search_mode(retrieval_type: VectorIndexRetrievalType):
 
 @text_search_wrapper
 async def _aquery_text(
+    kb_id: str,
     vector_store: BasePydanticVectorStore,
     query: str,
     document_ids: List[str],
@@ -41,11 +42,17 @@ async def _aquery_text(
     if text_result and text_result.nodes:
         for node in text_result.nodes:
             node.metadata.pop("page_bbox", None)
+
+    if text_result and text_result.nodes:
+        logger.info(f"Retrieved {len(text_result.nodes)} text nodes for query '{query}' against knowledgebase {kb_id}.")
+    else:
+        logger.info(f"No text nodes retrieved for query '{query}' against knowledgebase {kb_id}.")
     return text_result
 
 
 @vector_search_wrapper
 async def _aquery_vector(
+    kb_id: str,
     vector_store: BasePydanticVectorStore,
     query: str,
     query_embedding: List[float],
@@ -67,10 +74,16 @@ async def _aquery_vector(
     if dense_result and dense_result.nodes:
         for node in dense_result.nodes:
             node.metadata.pop("page_bbox", None)
+
+    if dense_result and dense_result.nodes:
+        logger.info(f"Retrieved {len(dense_result.nodes)} dense nodes for query '{query}' against knowledgebase {kb_id}.")
+    else:
+        logger.info(f"No dense nodes retrieved for query '{query}' against knowledgebase {kb_id}.")
     return dense_result
 
 
 async def aquery_vector_store(
+    kb_id: str,
     vector_store: BasePydanticVectorStore,
     query: str,
     query_embedding: List[float],
@@ -108,6 +121,7 @@ async def aquery_vector_store(
         if query_mode == VectorStoreQueryMode.HYBRID:
             # 混合模式：并行执行文本搜索和向量搜索
             text_result_task = _aquery_text(
+                kb_id=kb_id,
                 vector_store=vector_store,
                 query=query,
                 document_ids=document_ids,
@@ -115,6 +129,7 @@ async def aquery_vector_store(
                 metadata_filters=metadata_filters,
             )
             dense_result_task = _aquery_vector(
+                kb_id=kb_id,
                 vector_store=vector_store,
                 query=query,
                 query_embedding=query_embedding,
@@ -127,6 +142,7 @@ async def aquery_vector_store(
             logger.info(f"HYBRID mode: Retrieved {len(text_result.nodes)} text nodes and {len(dense_result.nodes)} dense nodes.")
         elif query_mode == VectorStoreQueryMode.TEXT_SEARCH:
             text_result = await _aquery_text(
+                kb_id=kb_id,
                 vector_store=vector_store,
                 query=query,
                 document_ids=document_ids,
@@ -136,6 +152,7 @@ async def aquery_vector_store(
             logger.info(f"{query_mode} mode: Retrieved {len(text_result.nodes)} nodes.")
         else:
             dense_result = await _aquery_vector(
+                kb_id=kb_id,
                 vector_store=vector_store,
                 query=query,
                 query_embedding=query_embedding,
