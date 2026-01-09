@@ -26,6 +26,7 @@ TOTAL_TOKENS = "gen_ai.usage.total_tokens"
 INPUT_MESSAGES = "gen_ai.input.messages"
 OUTPUT_MESSAGES = "gen_ai.output.messages"
 TOOL_CALLS = "gen_ai.output.tool_calls"
+GEN_AI_OPERATION_NAME = "gen_ai.operation.name"
 
 INPUT_VALUE = SpanAttributes.INPUT_VALUE
 INPUT_QUERY = "input.query"
@@ -64,8 +65,9 @@ def pai_llm_wrapper(func):
         except Exception as e:
             logger.warning(f"Failed to extract request text: {e}")
 
-        span = get_tracer().start_span(func.__qualname__)
+        span = get_tracer().start_span(f"chat {self.model}")
         span.set_attribute(GEN_AI_MODEL, self.model)
+        span.set_attribute(GEN_AI_OPERATION_NAME, "chat")
         span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
 
         tools = kwargs.get("tools")

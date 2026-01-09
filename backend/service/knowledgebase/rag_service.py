@@ -927,6 +927,7 @@ class RagService:
 
         logger.info(f"Executing vector store query for query '{query}' against knowledgebase {kb_id} retrieval setting: {retrieval_setting}.")
         text_result, dense_result = await aquery_vector_store(
+            kb_id=kb_id,
             vector_store=vector_store,
             query=query,
             query_embedding=query_embedding,
