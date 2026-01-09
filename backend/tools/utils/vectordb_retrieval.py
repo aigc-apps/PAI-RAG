@@ -34,7 +34,14 @@ async def _aquery_text(
         query_kwargs["filters"] = metadata_filters
     elif document_ids:
         query_kwargs["doc_ids"] = document_ids
-    return await vector_store.aquery(VectorStoreQuery(**query_kwargs))
+    text_result = await vector_store.aquery(VectorStoreQuery(**query_kwargs))
+    # TEXT_SEARCH 模式的分数归一化
+    if text_result and text_result.similarities:
+        text_result.similarities = min_max_normalize_scores(text_result.similarities)
+    if text_result and text_result.nodes:
+        for node in text_result.nodes:
+            node.metadata.pop("page_bbox", None)
+    return text_result
 
 
 @vector_search_wrapper
@@ -56,7 +63,11 @@ async def _aquery_vector(
         query_kwargs["filters"] = metadata_filters
     elif document_ids:
         query_kwargs["doc_ids"] = document_ids
-    return await vector_store.aquery(VectorStoreQuery(**query_kwargs))
+    dense_result = await vector_store.aquery(VectorStoreQuery(**query_kwargs))
+    if dense_result and dense_result.nodes:
+        for node in dense_result.nodes:
+            node.metadata.pop("page_bbox", None)
+    return dense_result
 
 
 async def aquery_vector_store(
@@ -133,10 +144,6 @@ async def aquery_vector_store(
                 metadata_filters=metadata_filters,
             )
             logger.info(f"{query_mode} mode: Retrieved {len(dense_result.nodes)} nodes.")
-
-        # TEXT_SEARCH 模式的分数归一化
-        if text_result and text_result.similarities:
-            text_result.similarities = min_max_normalize_scores(text_result.similarities)
     except Exception as e:
         logger.error(f"Failed to query vector store: {e}")
         raise

@@ -1,9 +1,11 @@
 # init trace
 from dotenv import load_dotenv
+import os
+
+# don't trace for elasticsearch client
+os.environ["OTEL_PYTHON_INSTRUMENTATION_ELASTICSEARCH_ENABLED"] = "false"
 load_dotenv()
 
-import os
-import asyncio
 from fastapi import FastAPI
 import threading
 # setup models

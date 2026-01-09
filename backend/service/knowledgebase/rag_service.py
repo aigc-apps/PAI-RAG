@@ -40,6 +40,7 @@ from utils.lru_cache import LruCache
 from db.db_context import create_db_session
 from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K
 from extensions.trace.rag_wrapper import query_knowledgebase_wrapper, embedding_wrapper
+from openinference.instrumentation import suppress_tracing
 from loguru import logger
 
 MARKDOWN_IMAGE_PATTERN = r'!\[.*?\]\((.*?)\)\s*\n*\s*图片的描述:\s*(.*?)(?=\n\n|$)'
@@ -832,8 +833,10 @@ class RagService:
     @embedding_wrapper
     async def embed_query(self, query: str, embedding_model_entity: EmbeddingModelEntity) -> List[float]:
         embed_model = create_embedding_model(embedding_model_entity)
-        query_embedding = await embed_model.aget_query_embedding(query)
-        return query_embedding
+        # skip tracing for embedding vectors
+        with suppress_tracing():
+            query_embedding = await embed_model.aget_query_embedding(query)
+            return query_embedding
 
     # 当需要发起SessionScope并发时，每个查询都需要独立的session实例
     async def _aquery_task(
