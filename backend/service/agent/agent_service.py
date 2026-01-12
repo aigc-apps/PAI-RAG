@@ -147,7 +147,7 @@ class AgentService:
         logger.info(f"Resolved {len(kb_ids)} knowledgebase tools.")
 
         # FAQ工具
-        if faq_config:
+        if faq_config and faq_config.get("active"):
             tools.append(await aget_faq_tool(chatapp_id=chatapp_id, user_id=user_id, rag_service=rag_service, chatapp_service=chatapp_service, faq_config_service=faq_config_service, tenant_id=tenant_id))
             logger.info("Resolved FAQ tool.")
 
