@@ -225,13 +225,32 @@ export default function KnowledgeBaseDetailPage(
     table_config?: {
       concat_rows?: boolean;
       row_joiner?: string;
-      header_index_max?: number;
+      header_index_max?: number | null;
       format_sheet_data_to_json?: boolean;
       sheet_column_filters?: string[];
     };
   } | null>(null); // 上传时使用的 chunk_config
   const [deleting, setDeleting] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessChunkConfigDialogOpen, setReprocessChunkConfigDialogOpen] = useState(false);
+  const [reprocessChunkConfig, setReprocessChunkConfig] = useState<{
+    parser_type: string;
+    separator?: string;
+    chunk_size?: string;
+    chunk_overlap?: string;
+    image_caption_model?: string;
+    image_caption_provider_name?: string;
+    table_config?: {
+      concat_rows?: boolean;
+      row_joiner?: string;
+      header_index_max?: number | null;
+      format_sheet_data_to_json?: boolean;
+      sheet_column_filters?: string[];
+    };
+  } | null>(null);
+  const [pendingReprocessFileId, setPendingReprocessFileId] = useState<string | null>(null);
+  const [pendingReprocessFileIds, setPendingReprocessFileIds] = useState<string[]>([]);
+  const [isBatchReprocess, setIsBatchReprocess] = useState(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [editingMetadata, setEditingMetadata] = useState<{ [k: string]: any }>(
     {},
@@ -633,15 +652,87 @@ export default function KnowledgeBaseDetailPage(
 
 
   const handleReprocessFile = async (file_id: string) => {
+    // 找到文件对象，获取其chunk_config或使用知识库默认配置
+    const file = kbfiles.find(f => f.id === file_id);
+    const defaultConfig = knowledgebase?.chunk_config || {
+      parser_type: 'structure',
+      chunk_size: '1000',
+      chunk_overlap: '50',
+    };
+    
+    // 初始化切片配置：优先使用文件的chunk_config，否则使用知识库默认配置
+    const initialConfig: any = file?.chunk_config || defaultConfig;
+    const config: any = {
+      parser_type: initialConfig.parser_type || 'structure',
+      image_caption_model: initialConfig.image_caption_model,
+      image_caption_provider_name: initialConfig.image_caption_provider_name || 'openai_like',
+    };
+    
+    if (initialConfig.parser_type === 'table') {
+      config.table_config = initialConfig.table_config || {
+        concat_rows: false,
+        row_joiner: '\n',
+        header_index_max: 0,
+        format_sheet_data_to_json: false,
+      };
+    } else if (initialConfig.parser_type === 'paragraph') {
+      config.separator = initialConfig.separator || '\n\n';
+      config.chunk_size = String(initialConfig.chunk_size || 1000);
+      config.chunk_overlap = String(initialConfig.chunk_overlap || 50);
+    } else {
+      config.separator = initialConfig.separator || '\n\n';
+      config.chunk_size = String(initialConfig.chunk_size || 1000);
+      config.chunk_overlap = String(initialConfig.chunk_overlap || 50);
+    }
+    
+    setReprocessChunkConfig(config);
+    setPendingReprocessFileId(file_id);
+    setIsBatchReprocess(false);
+    setReprocessChunkConfigDialogOpen(true);
+  };
+
+  const confirmReprocessFile = async () => {
+    if (!pendingReprocessFileId) return;
+    
     try {
+      const body: any = {};
+      if (reprocessChunkConfig) {
+        // 转换配置格式以匹配API要求
+        const chunkConfig: any = {
+          parser_type: reprocessChunkConfig.parser_type,
+          image_caption_model: reprocessChunkConfig.image_caption_model || null,
+          image_caption_provider_name: reprocessChunkConfig.image_caption_provider_name || 'openai_like',
+        };
+        
+        if (reprocessChunkConfig.parser_type === 'table' && reprocessChunkConfig.table_config) {
+          chunkConfig.table_config = reprocessChunkConfig.table_config;
+        } else {
+          chunkConfig.separator = reprocessChunkConfig.separator || '\n\n';
+          chunkConfig.chunk_size = reprocessChunkConfig.chunk_size ? parseInt(reprocessChunkConfig.chunk_size) : 1000;
+          chunkConfig.chunk_overlap = reprocessChunkConfig.chunk_overlap ? parseInt(reprocessChunkConfig.chunk_overlap) : 50;
+        }
+        
+        body.chunk_config = chunkConfig;
+      }
+      
       const res = await tenantFetch(
-        `/api/config/knowledgebases/${kbId}/files/${file_id}`,
+        `/api/config/knowledgebases/${kbId}/files/${pendingReprocessFileId}`,
         {
           method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
         },
       );
-      if (!res.ok) throw new Error(`重新解析 ${file_id} 失败`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `重新解析失败`);
+      }
       toast.success("文件入队成功。");
+      setReprocessChunkConfigDialogOpen(false);
+      setPendingReprocessFileId(null);
+      setReprocessChunkConfig(null);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -715,8 +806,76 @@ export default function KnowledgeBaseDetailPage(
     }
 
     setShowBatchReprocessDialog(false);
+    
+    // 获取第一个文件的chunk_config或使用知识库默认配置
+    const fileIds = Array.from(selectedFiles);
+    const firstFile = kbfiles.find(f => fileIds.includes(f.id));
+    const defaultConfig = knowledgebase?.chunk_config || {
+      parser_type: 'structure',
+      chunk_size: '1000',
+      chunk_overlap: '50',
+    };
+    
+    // 初始化切片配置：优先使用第一个文件的chunk_config，否则使用知识库默认配置
+    const initialConfig: any = firstFile?.chunk_config || defaultConfig;
+    const config: any = {
+      parser_type: initialConfig.parser_type || 'structure',
+      image_caption_model: initialConfig.image_caption_model,
+      image_caption_provider_name: initialConfig.image_caption_provider_name || 'openai_like',
+    };
+    
+    if (initialConfig.parser_type === 'table') {
+      config.table_config = initialConfig.table_config || {
+        concat_rows: false,
+        row_joiner: '\n',
+        header_index_max: 0,
+        format_sheet_data_to_json: false,
+      };
+    } else if (initialConfig.parser_type === 'paragraph') {
+      config.separator = initialConfig.separator || '\n\n';
+      config.chunk_size = String(initialConfig.chunk_size || 1000);
+      config.chunk_overlap = String(initialConfig.chunk_overlap || 50);
+    } else {
+      config.separator = initialConfig.separator || '\n\n';
+      config.chunk_size = String(initialConfig.chunk_size || 1000);
+      config.chunk_overlap = String(initialConfig.chunk_overlap || 50);
+    }
+    
+    setReprocessChunkConfig(config);
+    setPendingReprocessFileIds(fileIds);
+    setIsBatchReprocess(true);
+    setReprocessChunkConfigDialogOpen(true);
+  };
+
+  const confirmBatchReprocessFiles = async () => {
+    if (pendingReprocessFileIds.length === 0) return;
+    
     setReprocessing(true);
     try {
+      const body: any = {
+        operation: 'reprocess',
+        file_id_list: pendingReprocessFileIds,
+      };
+      
+      if (reprocessChunkConfig) {
+        // 转换配置格式以匹配API要求
+        const chunkConfig: any = {
+          parser_type: reprocessChunkConfig.parser_type,
+          image_caption_model: reprocessChunkConfig.image_caption_model || null,
+          image_caption_provider_name: reprocessChunkConfig.image_caption_provider_name || 'openai_like',
+        };
+        
+        if (reprocessChunkConfig.parser_type === 'table' && reprocessChunkConfig.table_config) {
+          chunkConfig.table_config = reprocessChunkConfig.table_config;
+        } else {
+          chunkConfig.separator = reprocessChunkConfig.separator || '\n\n';
+          chunkConfig.chunk_size = reprocessChunkConfig.chunk_size ? parseInt(reprocessChunkConfig.chunk_size) : 1000;
+          chunkConfig.chunk_overlap = reprocessChunkConfig.chunk_overlap ? parseInt(reprocessChunkConfig.chunk_overlap) : 50;
+        }
+        
+        body.chunk_config = chunkConfig;
+      }
+      
       const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/batch`,
         {
@@ -724,10 +883,7 @@ export default function KnowledgeBaseDetailPage(
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            operation: 'reprocess',
-            file_id_list: Array.from(selectedFiles),
-          }),
+          body: JSON.stringify(body),
         },
       );
       if (!res.ok) {
@@ -735,8 +891,11 @@ export default function KnowledgeBaseDetailPage(
         throw new Error(errorData.message || `批量重新解析失败`);
       }
       const result = await res.json();
-      toast.success(result.message || `成功将 ${selectedFiles.size} 个文件加入重新处理队列`);
+      toast.success(result.message || `成功将 ${pendingReprocessFileIds.length} 个文件加入重新处理队列`);
       setSelectedFiles(new Set()); // 清空选择
+      setReprocessChunkConfigDialogOpen(false);
+      setPendingReprocessFileIds([]);
+      setReprocessChunkConfig(null);
     } catch (error: any) {
       toast.error(error.message || "批量重新解析失败");
     } finally {
@@ -3788,6 +3947,379 @@ export default function KnowledgeBaseDetailPage(
               }}
             >
               关闭
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 重新解析切片配置对话框 */}
+      <Dialog open={reprocessChunkConfigDialogOpen} onOpenChange={(open) => {
+        setReprocessChunkConfigDialogOpen(open);
+        if (!open) {
+          setReprocessChunkConfig(null);
+          setPendingReprocessFileId(null);
+          setPendingReprocessFileIds([]);
+        }
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {isBatchReprocess ? `批量重新解析 - 设置切片配置` : `重新解析 - 设置切片配置`}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {isBatchReprocess 
+                ? `为 ${pendingReprocessFileIds.length} 个文件设置切片配置`
+                : `为文件设置切片配置，配置将在重新解析时应用`}
+            </DialogDescription>
+          </DialogHeader>
+          {reprocessChunkConfig && (
+            <div className="space-y-4">
+              {/* 切片类型 */}
+              <div className="flex gap-3 items-center flex-wrap">
+                <Label htmlFor="reprocess-parserType" className="w-[120px] text-xs shrink-0">
+                  切片类型
+                  <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={reprocessChunkConfig.parser_type || 'structure'}
+                  onValueChange={(value) => {
+                    setReprocessChunkConfig((prev) => {
+                      if (!prev) return null;
+                      const newConfig: any = {
+                        ...prev,
+                        parser_type: value,
+                      };
+                      
+                      // 根据新的 parser_type 初始化相应的配置
+                      if (value === 'table') {
+                        newConfig.table_config = prev.table_config || {
+                          concat_rows: false,
+                          row_joiner: '\n',
+                          header_index_max: 0,
+                          format_sheet_data_to_json: false,
+                        };
+                        // 清除其他类型的配置
+                        delete newConfig.chunk_size;
+                        delete newConfig.chunk_overlap;
+                        delete newConfig.separator;
+                      } else if (value === 'paragraph') {
+                        newConfig.separator = prev.separator || '\n\n';
+                        newConfig.chunk_size = prev.chunk_size || '1000';
+                        newConfig.chunk_overlap = prev.chunk_overlap || '50';
+                        // 清除 table_config
+                        delete newConfig.table_config;
+                      } else {
+                        newConfig.separator = prev.separator || '\n\n';
+                        newConfig.chunk_size = prev.chunk_size || '1000';
+                        newConfig.chunk_overlap = prev.chunk_overlap || '50';
+                        // 清除 table_config
+                        delete newConfig.table_config;
+                      }
+                      
+                      return newConfig;
+                    });
+                  }}
+                >
+                  <SelectTrigger className="w-[200px] h-6 text-xs">
+                    <SelectValue placeholder="请选择切片类型" />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectGroup>
+                      <SelectItem value="structure" className="text-xs h-5">
+                        结构化(structure)
+                      </SelectItem>
+                      <SelectItem value="token" className="text-xs h-5">
+                        按token
+                      </SelectItem>
+                      <SelectItem value="table" className="text-xs h-5">
+                        表格(table)
+                      </SelectItem>
+                      <SelectItem value="paragraph" className="text-xs h-5">
+                        段落(paragraph)
+                      </SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground shrink-0">选择文档切片方式</p>
+              </div>
+
+              {/* Table Config - 只在 parser_type === 'table' 时显示 */}
+              {reprocessChunkConfig.parser_type === 'table' && (
+                <div className="space-y-3">
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <div className="flex gap-3 items-center min-w-[280px]">
+                      <Label htmlFor="reprocess-table-header-index-max" className="w-[120px] text-xs shrink-0">
+                        最大表头行index
+                      </Label>
+                      <Input
+                        type="number"
+                        className="w-[200px] h-6 text-xs"
+                        id="reprocess-table-header-index-max"
+                        value={reprocessChunkConfig.table_config?.header_index_max ?? 0}
+                        onChange={(e) =>
+                          setReprocessChunkConfig((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              table_config: {
+                                ...prev.table_config,
+                                header_index_max: e.target.value ? parseInt(e.target.value) : 0,
+                              },
+                            };
+                          })
+                        }
+                        min="0"
+                      />
+                    </div>
+                    <div className="flex gap-3 items-center min-w-[200px]">
+                      <Label htmlFor="reprocess-table-format-json" className="w-[120px] text-xs shrink-0">
+                        格式化为Json
+                      </Label>
+                      <Checkbox
+                        id="reprocess-table-format-json"
+                        checked={reprocessChunkConfig.table_config?.format_sheet_data_to_json ?? false}
+                        onCheckedChange={(checked) =>
+                          setReprocessChunkConfig((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              table_config: {
+                                ...prev.table_config,
+                                format_sheet_data_to_json: checked === true,
+                              },
+                            };
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <div className="flex gap-3 items-center min-w-[200px]">
+                      <Label htmlFor="reprocess-table-concat-rows" className="w-[120px] text-xs shrink-0">
+                        合并行
+                      </Label>
+                      <Checkbox
+                        id="reprocess-table-concat-rows"
+                        checked={reprocessChunkConfig.table_config?.concat_rows ?? false}
+                        onCheckedChange={(checked) =>
+                          setReprocessChunkConfig((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              table_config: {
+                                ...prev.table_config,
+                                concat_rows: checked === true,
+                              },
+                            };
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="flex gap-3 items-center min-w-[280px]">
+                      <Label htmlFor="reprocess-table-row-joiner" className="w-[120px] text-xs shrink-0">
+                        行分隔符
+                      </Label>
+                      <Input
+                        type="text"
+                        className="w-[200px] h-6 text-xs"
+                        id="reprocess-table-row-joiner"
+                        value={reprocessChunkConfig.table_config?.row_joiner || '\n'}
+                        onChange={(e) =>
+                          setReprocessChunkConfig((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              table_config: {
+                                ...prev.table_config,
+                                row_joiner: e.target.value,
+                              },
+                            };
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Paragraph Config - 只在 parser_type === 'paragraph' 时显示 */}
+              {reprocessChunkConfig.parser_type === 'paragraph' && (
+                <div className="space-y-3">
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <Label htmlFor="reprocess-paragraph-separator" className="w-[120px] text-xs shrink-0">
+                      分隔符
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      type="text"
+                      className="w-[200px] h-6 text-xs"
+                      id="reprocess-paragraph-separator"
+                      value={reprocessChunkConfig.separator || '\n\n'}
+                      onChange={(e) =>
+                        setReprocessChunkConfig((prev) => {
+                          if (!prev) return null;
+                          return {
+                            ...prev,
+                            separator: e.target.value,
+                          };
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <div className="flex gap-3 items-center min-w-[320px]">
+                      <Label htmlFor="reprocess-chunkSize" className="w-[120px] text-xs shrink-0">
+                        切片大小
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        className="w-[200px] h-6 text-xs"
+                        id="reprocess-chunkSize"
+                        value={reprocessChunkConfig.chunk_size ?? ''}
+                        placeholder="1000"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // 只允许数字和空字符串
+                          if (value === '' || /^\d+$/.test(value)) {
+                            setReprocessChunkConfig((prev) => {
+                              if (!prev) return null;
+                              return {
+                                ...prev,
+                                chunk_size: value,
+                              };
+                            });
+                          }
+                        }}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground shrink-0">推荐值: 1000</p>
+                    </div>
+                    <div className="flex gap-3 items-center min-w-[320px]">
+                      <Label htmlFor="reprocess-chunkOverlap" className="w-[120px] text-xs shrink-0">
+                        切片重叠
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        className="w-[200px] h-6 text-xs"
+                        id="reprocess-chunkOverlap"
+                        value={reprocessChunkConfig.chunk_overlap ?? ''}
+                        placeholder="50"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // 只允许数字和空字符串
+                          if (value === '' || /^\d+$/.test(value)) {
+                            setReprocessChunkConfig((prev) => {
+                              if (!prev) return null;
+                              return {
+                                ...prev,
+                                chunk_overlap: value,
+                              };
+                            });
+                          }
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground shrink-0">推荐值: 50</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Default Config - 只在 parser_type 为 'structure' 或 'token' 时显示 */}
+              {(reprocessChunkConfig.parser_type === 'structure' || reprocessChunkConfig.parser_type === 'token') && (
+                <div className="flex gap-3 items-center flex-wrap">
+                  <div className="flex gap-3 items-center min-w-[320px]">
+                    <Label htmlFor="reprocess-chunkSize-default" className="w-[120px] text-xs shrink-0">
+                      切片大小
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      className="w-[200px] h-6 text-xs"
+                      id="reprocess-chunkSize-default"
+                      value={reprocessChunkConfig.chunk_size ?? ''}
+                      placeholder="1000"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // 只允许数字和空字符串
+                        if (value === '' || /^\d+$/.test(value)) {
+                          setReprocessChunkConfig((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              chunk_size: value,
+                            };
+                          });
+                        }
+                      }}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground shrink-0">推荐值: 1000</p>
+                  </div>
+                  <div className="flex gap-3 items-center min-w-[320px]">
+                    <Label htmlFor="reprocess-chunkOverlap-default" className="w-[120px] text-xs shrink-0">
+                      切片重叠
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      className="w-[200px] h-6 text-xs"
+                      id="reprocess-chunkOverlap-default"
+                      value={reprocessChunkConfig.chunk_overlap ?? ''}
+                      placeholder="50"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // 只允许数字和空字符串
+                        if (value === '' || /^\d+$/.test(value)) {
+                          setReprocessChunkConfig((prev) => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              chunk_overlap: value,
+                            };
+                          });
+                        }
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground shrink-0">推荐值: 50</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => {
+                setReprocessChunkConfigDialogOpen(false);
+                setReprocessChunkConfig(null);
+                setPendingReprocessFileId(null);
+                setPendingReprocessFileIds([]);
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => {
+                if (isBatchReprocess) {
+                  confirmBatchReprocessFiles();
+                } else {
+                  confirmReprocessFile();
+                }
+              }}
+              disabled={reprocessing}
+            >
+              {reprocessing ? '处理中...' : '确认重新解析'}
             </Button>
           </div>
         </DialogContent>
