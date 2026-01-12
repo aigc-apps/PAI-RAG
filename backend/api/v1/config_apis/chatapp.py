@@ -388,7 +388,7 @@ async def upload_faq_files(
 
                 if not nodes:
                     logger.warning(f"No nodes parsed from file {file_item.file_name}.")
-                    response_data.append({"file_name": file_item.file_name, "chunks_count": 0})
+                    response_data.append({"file_name": file_item.file_name, "items_count": 0})
                     continue
 
                 # Sanitize text
@@ -463,11 +463,17 @@ async def upload_faq_files(
 
                 logger.info(f"Saved {saved_faq_count}/{len(nodes)} FAQ items to database from file {file_item.file_name}.")
 
+                # Add successful result to response_data
+                response_data.append({
+                    "file_name": file_item.file_name,
+                    "items_count": saved_faq_count
+                })
+                total_chunks += saved_faq_count
             except Exception as file_error:
                 logger.error(f"Failed to process FAQ file {file.filename}: {traceback.format_exc()}")
                 response_data.append({
                     "file_name": file.filename,
-                    "chunks_count": 0,
+                    "items_count": 0,
                     "error": str(file_error)
                 })
                 # Continue processing other files even if one fails

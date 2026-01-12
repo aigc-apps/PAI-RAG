@@ -451,13 +451,18 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       }
 
       const data = await res.json();
-      const successCount = data.data?.filter(
-        (item: any) => item.chunks_count > 0
-      ).length || 0;
-      const totalChunks = data.data?.reduce(
-        (sum: number, item: any) => sum + (item.chunks_count || 0),
+      const responseData = data.data || [];
+      
+      // 计算成功上传的文件数（items_count > 0 表示成功提取到FAQ片段）
+      const successCount = responseData.filter(
+        (item: any) => item.items_count > 0
+      ).length;
+      
+      // 计算总片段数
+      const totalChunks = responseData.reduce(
+        (sum: number, item: any) => sum + (item.items_count || 0),
         0
-      ) || 0;
+      );
 
       toast.success(
         `成功上传 ${successCount}/${validFiles.length} 个文件，共提取 ${totalChunks} 个片段`
