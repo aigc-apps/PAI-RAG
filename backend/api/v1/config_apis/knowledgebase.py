@@ -210,6 +210,13 @@ async def start_parse_task(
         if not kb_entity:
             raise ValueError(f"知识库 {kb_id} 不存在。")
 
+        # Validate chunk_config if provided
+        if parse_request.chunk_config:
+            try:
+                ChunkConfig.model_validate(parse_request.chunk_config)
+            except Exception as e:
+                raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
+
         file_items = await upload_file_names_async(kb_id=kb_id, parse_tasks=parse_request.files, tenant_id=tenant_id)
 
         file_version = int(time.time())
@@ -230,13 +237,23 @@ async def start_parse_task(
             else:
                 file_entity = to_file_entity(file_item=file_item)
 
+            # Update chunk_config if provided
+            if parse_request.chunk_config:
+                file_entity.chunk_config = parse_request.chunk_config
+
             file_entity.file_version = file_version
             background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
             session.add(file_entity)
             file_entities.append(file_entity)
 
+        await session.commit()
+        for file_entity in file_entities:
+            await session.refresh(file_entity)
+
         logger.info(f"Uploaded {len(file_entities)} files successfully.")
         return success_response(data=file_entities, message="启动解析任务成功")
+    except ApiException:
+        raise
     except ValueError as e:
         logger.error(f"启动解析任务失败。\nValueError:{traceback.format_exc()}")
         raise ApiException(code=400, message=str(e))
@@ -566,10 +583,6 @@ class FileSourceParam(BaseModel):
     file_source: str = Field(default=None)
 
 
-class FileChunkConfigParam(BaseModel):
-    chunk_config: dict = Field(..., description="Chunk configuration for the file")
-
-
 @knowledgebase_router.post("/{kb_id}/files/{file_id}/source", response_model=ResponseModel[KbFileEntity])
 async def set_file_source(
     kb_id: str,
@@ -593,39 +606,6 @@ async def set_file_source(
     await session.refresh(file_entity)
 
     return success_response(data=file_entity, message="更新文件来源成功")
-
-
-@knowledgebase_router.post("/{kb_id}/files/{file_id}/chunk_config", response_model=ResponseModel[KbFileEntity])
-async def set_file_chunk_config(
-    kb_id: str,
-    file_id: str,
-    body: FileChunkConfigParam,
-    tenant_id: str = Depends(get_tenant_id),
-    session: AsyncSession = Depends(get_db_session),
-    rag_service: RagService = Depends(get_rag_service),
-):
-    try:
-        file_entity = await rag_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        if not file_entity:
-            raise ApiException.not_found(file_id, "文件")
-
-        # Validate chunk_config
-        try:
-            ChunkConfig.model_validate(body.chunk_config)
-        except Exception as e:
-            raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
-
-        file_entity.chunk_config = body.chunk_config
-        session.add(file_entity)
-        await session.commit()
-        await session.refresh(file_entity)
-
-        return success_response(data=file_entity, message="更新文件 chunk_config 成功")
-    except ApiException:
-        raise
-    except Exception as e:
-        logger.error(f"更新文件 chunk_config 失败。\nException:{traceback.format_exc()}")
-        raise ApiException(code=500, message=f"更新文件 chunk_config 失败: {e}.")
 
 
 @knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks")

@@ -1317,14 +1317,12 @@ export default function KnowledgeBaseDetailPage(
     }
   };
 
-  // 更新已上传文件的 chunk_config
-  const updateUploadedFilesChunkConfig = async () => {
-    if (uploadedFiles.length === 0 || !uploadChunkConfig) {
-      return;
+  // 构建 chunk_config 对象
+  const buildChunkConfig = () => {
+    if (!uploadChunkConfig) {
+      return undefined;
     }
 
-    const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1";
-    
     const chunkConfig: any = {
       parser_type: uploadChunkConfig.parser_type,
       image_caption_model: uploadChunkConfig.image_caption_model || null,
@@ -1353,44 +1351,7 @@ export default function KnowledgeBaseDetailPage(
         : parseInt(uploadChunkConfig.chunk_overlap);
     }
     
-    // 更新每个文件的 chunk_config
-    for (const file of uploadedFiles) {
-      try {
-        const updateRes = await tenantFetch(
-          `${API_PREFIX}/config/knowledgebases/${kbId}/files/${file.id}/chunk_config`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chunk_config: chunkConfig,
-            }),
-          },
-        );
-        
-        // 检查响应状态码
-        if (!updateRes.ok) {
-          const errorText = await updateRes.text();
-          throw new Error(`HTTP ${updateRes.status}: ${errorText.substring(0, 100)}`);
-        }
-        
-        // 检查响应内容类型
-        const contentType = updateRes.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await updateRes.text();
-          throw new Error(`响应不是 JSON 格式: ${text.substring(0, 100)}`);
-        }
-        
-        const updateResult = await updateRes.json();
-        if (updateResult.code !== 200) {
-          throw new Error(updateResult.message || `更新文件 ${file.file_name} 的 chunk_config 失败`);
-        }
-        console.log(`文件 ${file.file_name} 的 chunk_config 更新成功`);
-      } catch (error: any) {
-        console.error(`更新文件 ${file.file_name} 的 chunk_config 失败:`, error);
-        toast.error(`更新文件 ${file.file_name} 的切片配置失败: ${error.message || error}`);
-        // 继续处理其他文件，不中断流程
-      }
-    }
+    return chunkConfig;
   };
 
   const handleStartParse = async () => {
@@ -1404,21 +1365,27 @@ export default function KnowledgeBaseDetailPage(
     try {
       const API_PREFIX = process.env.NEXT_PUBLIC_DEVELOP_MODE === "true" ? "/api" : "/v1";
       
-      // 先更新每个文件的 chunk_config
-      await updateUploadedFilesChunkConfig();
+      // 构建请求体，包含 files 和可选的 chunk_config
+      const requestBody: any = {
+        files: uploadedFiles.map(f => ({
+          file_name: f.file_name,
+          file_path: f.file_path,
+        })),
+      };
       
-      // 然后开始解析
+      // 如果有配置的 chunk_config，添加到请求体中
+      const chunkConfig = buildChunkConfig();
+      if (chunkConfig) {
+        requestBody.chunk_config = chunkConfig;
+      }
+      
+      // 开始解析（chunk_config 会在解析时一起更新）
       const res = await tenantFetch(
         `${API_PREFIX}/config/knowledgebases/${kbId}/files/parse`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            files: uploadedFiles.map(f => ({
-              file_name: f.file_name,
-              file_path: f.file_path,
-            })),
-          }),
+          body: JSON.stringify(requestBody),
         },
       );
 
@@ -1900,10 +1867,7 @@ export default function KnowledgeBaseDetailPage(
                       return;
                     }
                     
-                    // 如果关闭对话框且文件已上传，先更新文件的 chunk_config
-                    if (!open && uploadStep === 'uploaded' && uploadedFiles.length > 0) {
-                      await updateUploadedFilesChunkConfig();
-                    }
+                    // 注意：chunk_config 现在只在解析时更新，关闭对话框时不再单独更新
                     
                     setUploadDialogOpen(open);
                     if (!open) {
