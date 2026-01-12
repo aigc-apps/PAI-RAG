@@ -23,6 +23,7 @@ OUTPUT_TOKENS = "gen_ai.usage.completion_tokens"
 TOTAL_TOKENS = "gen_ai.usage.total_tokens"
 INPUT_MESSAGES = "gen_ai.input.messages"
 OUTPUT_MESSAGES = "gen_ai.output.messages"
+GEN_AI_OPERATION_NAME = "gen_ai.operation.name"
 
 INPUT_VALUE = SpanAttributes.INPUT_VALUE
 INPUT_QUERY = "input.query"
@@ -68,7 +69,8 @@ def pai_agent_wrapper(func):
         except Exception as e:
             logger.warning(f"Failed to extract request text: {e}")
 
-        span = get_tracer().start_span(func.__qualname__)
+        span = get_tracer().start_span(f"invoke_agent {self.__class__.__name__.lower()}")
+        span.set_attribute(GEN_AI_OPERATION_NAME, "invoke_agent")
         span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
 
         span.set_attribute(INPUT_VALUE, request_text)
@@ -130,9 +132,10 @@ async def instrument_async_call(
     Usage:
         return await instrument_async_call(async_fn, fn_args)
     """
-    with get_tracer().start_as_current_span(f"FunctionCall.{async_fn.metadata.name}") as span:
+    with get_tracer().start_as_current_span(f"execute_tool {async_fn.metadata.name}") as span:
         try:
             span.set_attribute(GEN_AI_SPAN_KIND, "TOOL")
+            span.set_attribute(GEN_AI_OPERATION_NAME, "execute_tool")
             span.set_attribute(TOOL_NAME, async_fn.metadata.name)
             span.set_attribute(TOOL_DESCRIPTION, async_fn.metadata.description)
             span.set_attribute(TOOL_PARAMETERS, json.dumps(async_fn.metadata.fn_schema.model_json_schema(), ensure_ascii=False))
