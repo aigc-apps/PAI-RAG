@@ -179,6 +179,7 @@ Returns:
   ]
 }
 """,
+        return_direct=False,
     )
     return visit_tool
 

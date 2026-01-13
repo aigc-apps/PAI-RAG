@@ -678,6 +678,7 @@ class CodeSandboxTool:
             async_fn=_wrapped_list_files,
             name="list-sandbox-files",
             description=description,
+            return_direct=False,
         )
 
     async def aupload_files_to_code_sandbox(self, file_ids: List[str], sandbox_id: str = None):

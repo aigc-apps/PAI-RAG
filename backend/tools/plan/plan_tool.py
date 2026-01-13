@@ -32,6 +32,7 @@ async def aget_plan_tool():
         async_fn=plan_func,
         name="planning-tool",
         description=PLAN_TOOL_DESCRIPTION,
+        return_direct=False,
     )
 
     return plan_tool
@@ -53,6 +54,7 @@ async def aget_respond_tool():
         async_fn=response_func,
         name="respond-tool",
         description=RESPONSE_TOOL_DESCRIPTION,
+        return_direct=False,
     )
 
     return response_tool

@@ -30,13 +30,17 @@ from llama_index.core.embeddings import BaseEmbedding
 from pairag.file.store.file_store_helper import file_store
 from loguru import logger
 from rag.parse_utils import sanitize_text, get_node_texts_for_embedding
-from common.knowledgebase.constants import DEFAULT_SENTENCE_SEPARATOR
+from common.knowledgebase.constants import DEFAULT_PARAGRAPH_SEPARATOR
 
 
 class KbFileClient:
 
-    async def create_file_parser(self, knowledgebase: KbEntity, image_caption_tool: Optional[ImageCaptionTool] = None):
-        chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
+    async def create_file_parser(self, knowledgebase: KbEntity, file_entity: Optional[KbFileEntity] = None, image_caption_tool: Optional[ImageCaptionTool] = None):
+        # Prioritize file's chunk_config if available, otherwise use knowledgebase's chunk_config
+        if file_entity and file_entity.chunk_config:
+            chunk_config = ChunkConfig.model_validate(file_entity.chunk_config)
+        else:
+            chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
 
         image_caption_tool = None
         if chunk_config.image_caption_model:
@@ -48,7 +52,7 @@ class KbFileClient:
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
 
         if not chunk_config.separator:
-            chunk_config.separator = DEFAULT_SENTENCE_SEPARATOR
+            chunk_config.separator = DEFAULT_PARAGRAPH_SEPARATOR
 
         file_parser = FileParser(
             file_store=file_store,
@@ -151,7 +155,7 @@ class KbFileClient:
                 return
             # parsing file
             logger.info(f"Parsing file {file_item.file_name}.")
-            file_parser = await self.create_file_parser(knowledgebase)
+            file_parser = await self.create_file_parser(knowledgebase, file_entity=file_entity)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
             await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment, documents=documents, tenant_id=tenant_id)
             for node in nodes:

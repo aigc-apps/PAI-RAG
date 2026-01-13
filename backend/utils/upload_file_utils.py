@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import UploadFile
 from pairag.file.models.file_item import FileItem
 from pairag.file.store.file_store_helper import file_store
@@ -50,6 +50,7 @@ class ParseFileTask(BaseModel):
 
 class StartParseTaskRequest(BaseModel):
     files: List[ParseFileTask]
+    chunk_config: Optional[dict] = None
 
 
 async def upload_file_names_async(

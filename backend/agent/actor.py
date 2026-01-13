@@ -14,6 +14,7 @@ from agent.prompts import SUMMARY_PROMPT
 from common.chat.constants import MessageRole
 from opentelemetry import trace
 from utils.json_utils import parse_tool_arguments
+from agent.tool_utils import check_and_handle_return_direct
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -118,6 +119,19 @@ class Actor(BaseAgent):
 
                         state.current_tool_call = None
                         observations += message_content + "\n\n"
+
+                        # Check if tool has return_direct=True, if so, return directly
+                        tool_obj = self.tool_fn_map[tool_name]
+                        return_chunk = check_and_handle_return_direct(
+                            tool_obj=tool_obj,
+                            tool_name=tool_name,
+                            tool_content=tool_content,
+                            tool_error=tool_error,
+                            agent_name=self.name,
+                        )
+                        if return_chunk:
+                            yield return_chunk
+                            return
                     act_prompt = self.build_prompt(state)
                     messages = [{"role": "system", "content": act_prompt}] + messages
 
@@ -211,6 +225,19 @@ class Actor(BaseAgent):
                                 error=tool_error
                             )
                             observations += message_content + "\n\n"
+
+                            # Check if tool has return_direct=True, if so, return directly
+                            tool_obj = self.tool_fn_map[function_name]
+                            return_chunk = check_and_handle_return_direct(
+                                tool_obj=tool_obj,
+                                tool_name=function_name,
+                                tool_content=tool_content,
+                                tool_error=tool_error,
+                                agent_name=self.name,
+                            )
+                            if return_chunk:
+                                yield return_chunk
+                                return
 
                     # 超出步数保护
                     if react_step > self.max_steps:

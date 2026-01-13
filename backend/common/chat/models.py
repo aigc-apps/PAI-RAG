@@ -94,6 +94,7 @@ class ChatAgentRequest(BaseModel):
 
     mcp_ids: Optional[List[str]] = []
     kb_ids: Optional[List[str]] = []
+    faq_config: Optional[dict] = None
     enable_search: Optional[bool] = False
     enable_agent: Optional[bool] = False
     enable_chatdb: Optional[bool] = False

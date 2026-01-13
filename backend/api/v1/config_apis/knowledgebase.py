@@ -4,7 +4,8 @@ import time
 import traceback
 from typing import List, Optional
 from common.knowledgebase.types import FileStatus
-from fastapi import APIRouter, Depends, File, Query, UploadFile, Form
+from fastapi import APIRouter, Depends, File, Query, UploadFile, Form, Body
+import json
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 from rag.file_item_utils import to_file_entity
@@ -13,6 +14,7 @@ from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.knowledgebase import (
     KbEntity,
     KnowledgebaseCreate,
+    ChunkConfig,
 )
 from db.db_context import get_db_session
 from pairag.file.store.file_store_helper import file_store
@@ -208,6 +210,13 @@ async def start_parse_task(
         if not kb_entity:
             raise ValueError(f"知识库 {kb_id} 不存在。")
 
+        # Validate chunk_config if provided
+        if parse_request.chunk_config:
+            try:
+                ChunkConfig.model_validate(parse_request.chunk_config)
+            except Exception as e:
+                raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
+
         file_items = await upload_file_names_async(kb_id=kb_id, parse_tasks=parse_request.files, tenant_id=tenant_id)
 
         file_version = int(time.time())
@@ -228,13 +237,23 @@ async def start_parse_task(
             else:
                 file_entity = to_file_entity(file_item=file_item)
 
+            # Update chunk_config if provided
+            if parse_request.chunk_config:
+                file_entity.chunk_config = parse_request.chunk_config
+
             file_entity.file_version = file_version
             background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
             session.add(file_entity)
             file_entities.append(file_entity)
 
+        await session.commit()
+        for file_entity in file_entities:
+            await session.refresh(file_entity)
+
         logger.info(f"Uploaded {len(file_entities)} files successfully.")
         return success_response(data=file_entities, message="启动解析任务成功")
+    except ApiException:
+        raise
     except ValueError as e:
         logger.error(f"启动解析任务失败。\nValueError:{traceback.format_exc()}")
         raise ApiException(code=400, message=str(e))
@@ -250,15 +269,39 @@ async def upload_files(
     auto_parse: bool = Query(default=True),
     files: Optional[List[UploadFile]] = File(...),
     file_sources: Optional[List[str]] = Form(None),
+    chunk_config: Optional[str] = Form(None, description="JSON string of chunk_config, shared by all files in this upload"),
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
     file_service: FileService = Depends(get_file_service),
+    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
     try:
         file_version = int(time.time())
         if not files:
             raise ApiException(code=400, message="没有上传任何文件。")
+
+
+        knowledgebase = await knowledgebase_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
+        if not knowledgebase:
+            raise ApiException.not_found(kb_id, "知识库")
+
+        kb_chunk_config = knowledgebase.chunk_config
+
+
+        parsed_chunk_config = None
+        if chunk_config:
+            try:
+                parsed_chunk_config = json.loads(chunk_config)
+                if not isinstance(parsed_chunk_config, dict):
+                    raise ValueError("chunk_config must be a JSON object")
+                # Validate chunk_config
+                ChunkConfig.model_validate(parsed_chunk_config)
+            except json.JSONDecodeError as e:
+                raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
+            except Exception as e:
+                raise ApiException(code=400, message=f"chunk_config 验证失败: {e}")
+
         file_items = await upload_form_files_async(kb_id=kb_id, files=files, tenant_id=tenant_id)
 
         file_names = [file_item.file_name for file_item in file_items]
@@ -281,9 +324,14 @@ async def upload_files(
         if file_sources:
             assert len(file_sources) == len(new_file_entities), "文件来源列表长度与文件列表长度不一致"
 
-        for i,file_entity in enumerate(new_file_entities):
+        # Apply chunk_config to all files if provided (shared by all files in this upload)
+        for i, file_entity in enumerate(new_file_entities):
             if file_sources:
                 file_entity.file_source = file_sources[i]
+
+            # All files share the same chunk_config if provided
+            if parsed_chunk_config:
+                file_entity.chunk_config = parsed_chunk_config
 
             if auto_parse:
                 import app.worker as background_worker
@@ -292,8 +340,22 @@ async def upload_files(
 
             session.add(file_entity)
 
+        await session.commit()
+
+
+        for file_entity in new_file_entities:
+            await session.refresh(file_entity)
+
+
+        response_entities = []
+        for file_entity in new_file_entities:
+            file_dict = file_entity.model_dump()
+            if not file_entity.chunk_config:
+                file_dict["chunk_config"] = kb_chunk_config
+            response_entities.append(file_dict)
+
         logger.info(f"Uploaded {len(new_file_entities)} files successfully.")
-        return success_response(data=new_file_entities, message="上传文件成功")
+        return success_response(data=response_entities, message="上传文件成功")
     except ValueError as e:
         logger.error(f"上传文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
@@ -327,21 +389,44 @@ async def get_kb_file(
         raise ApiException(code=400, message=f"查询文件失败: {e}.")
 
 
+class ReprocessFileRequest(BaseModel):
+    chunk_config: Optional[dict] = Field(default=None, description="Optional chunk configuration for the file")
+
+
 @knowledgebase_router.put("/{kb_id}/files/{file_id}")
 async def reprocess_file(
     kb_id: str,
     file_id: str,
+    body: Optional[ReprocessFileRequest] = Body(None),
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     file_service: FileService = Depends(get_file_service),
+    rag_service: RagService = Depends(get_rag_service),
 ):
     try:
         file_entities = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=[file_id], tenant_id=tenant_id)
         if not file_entities:
             raise ApiException.not_found(file_id, "文件")
 
-        reprocessed_count = await _batch_reprocess_files(kb_id=kb_id, file_entities=file_entities, session=session, tenant_id=tenant_id)
+        # 如果提供了 chunk_config，先验证并更新
+        chunk_config = None
+        if body and body.chunk_config:
+            try:
+                ChunkConfig.model_validate(body.chunk_config)
+                chunk_config = body.chunk_config
+            except Exception as e:
+                raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
+
+        reprocessed_count = await _batch_reprocess_files(
+            kb_id=kb_id,
+            file_entities=file_entities,
+            session=session,
+            tenant_id=tenant_id,
+            chunk_config=chunk_config
+        )
         return success_response(data=reprocessed_count, message=f"成功将 {reprocessed_count} 个文件加入重新处理队列。")
+    except ApiException:
+        raise
     except ValueError as e:
         logger.error(f"重新处理文件失败。\nValueError:{e}")
         raise ApiException(code=400, message=str(e))
@@ -369,10 +454,10 @@ async def delete_file(
         raise ApiException(code=400, message=f"删除文件失败: {e}.")
 
 
-
 class BatchOperationRequest(BaseModel):
     operation: str = Field(..., description="操作类型: 'delete' 或 'reprocess'")
     file_id_list: List[str] = Field(..., description="要操作的文件ID列表")
+    chunk_config: Optional[dict] = Field(default=None, description="Optional chunk configuration for reprocess operation, shared by all files")
 
 
 @knowledgebase_router.post("/{kb_id}/files/batch", response_model=ResponseModel[dict])
@@ -422,8 +507,24 @@ async def batch_operations(
             raise ApiException(code=400, message=f"删除文件失败: {e}.")
     elif request.operation == "reprocess":
         try:
-            reprocessed_count = await _batch_reprocess_files(kb_id=kb_id, file_entities=file_entities, session=session, tenant_id=tenant_id)
+            chunk_config = None
+            if request.chunk_config:
+                try:
+                    ChunkConfig.model_validate(request.chunk_config)
+                    chunk_config = request.chunk_config
+                except Exception as e:
+                    raise ApiException(code=400, message=f"chunk_config 格式错误: {e}")
+
+            reprocessed_count = await _batch_reprocess_files(
+                kb_id=kb_id,
+                file_entities=file_entities,
+                session=session,
+                tenant_id=tenant_id,
+                chunk_config=chunk_config
+            )
             return success_response(data=reprocessed_count, message=f"成功将 {reprocessed_count} 个文件加入重新处理队列。")
+        except ApiException:
+            raise
         except ValueError as e:
             logger.error(f"重新处理文件失败。\nValueError:{e}")
             raise ApiException(code=400, message=str(e))
@@ -437,9 +538,11 @@ async def _batch_reprocess_files(
     file_entities: List[KbFileEntity],
     session: AsyncSession,
     tenant_id: str,
+    chunk_config: Optional[dict] = None,
 ) -> ResponseModel[dict]:
     """
     批量重新处理文件的内部实现
+    如果提供了 chunk_config，会在重新解析之前更新所有文件的 chunk_config
     """
     import app.worker as background_worker
 
@@ -450,6 +553,12 @@ async def _batch_reprocess_files(
         file_entity.status = FileStatus.pending
         file_entity.file_version = file_version
         file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # 如果提供了 chunk_config，更新文件的 chunk_config
+        if chunk_config:
+            file_entity.chunk_config = chunk_config
+            logger.info(f"Updated chunk_config for file {file_entity.id} before reprocessing.")
+
         session.add(file_entity)
         reprocessed_count += 1
 
@@ -472,7 +581,6 @@ async def _batch_reprocess_files(
 
 class FileSourceParam(BaseModel):
     file_source: str = Field(default=None)
-
 
 
 @knowledgebase_router.post("/{kb_id}/files/{file_id}/source", response_model=ResponseModel[KbFileEntity])

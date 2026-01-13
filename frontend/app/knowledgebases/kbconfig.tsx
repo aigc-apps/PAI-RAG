@@ -103,11 +103,18 @@ export interface KbConfig {
   description: string;
   chunk_config: {
     parser_type: string; // 切片类型
-    separator: string; // 切片标识符
-    chunk_size: string; // 切片大小
-    chunk_overlap: string; // 切片重叠大小
+    separator?: string; // 切片标识符
+    chunk_size?: string; // 切片大小
+    chunk_overlap?: string; // 切片重叠大小
     image_caption_model?: string; // 图片理解模型ID
     image_caption_provider_name?: string; // 图片理解模型服务商
+    table_config?: {
+      concat_rows?: boolean;
+      row_joiner?: string;
+      header_index_max?: number;
+      format_sheet_data_to_json?: boolean;
+      sheet_column_filters?: string[];
+    };
   };
   embedding_model: string; //向量模型名称
   embedding_provider_name?: string; // 向量模型服务商
@@ -341,13 +348,43 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               <Select
                 value={kb.chunk_config.parser_type || 'structure'}
                 onValueChange={(value) => {
-                  setKb((prev) => ({
-                    ...prev,
-                    chunk_config: {
+                  setKb((prev) => {
+                    const newConfig: any = {
                       ...prev.chunk_config,
                       parser_type: value,
-                    },
-                  }));
+                    };
+                    
+                    // 根据新的 parser_type 初始化相应的配置
+                    if (value === 'table') {
+                      newConfig.table_config = prev.chunk_config.table_config || {
+                        concat_rows: false,
+                        row_joiner: '\n',
+                        header_index_max: 0,
+                        format_sheet_data_to_json: false,
+                      };
+                      // 清除其他类型的配置
+                      delete newConfig.chunk_size;
+                      delete newConfig.chunk_overlap;
+                      delete newConfig.separator;
+                    } else if (value === 'paragraph') {
+                      newConfig.separator = prev.chunk_config.separator || '\n\n';
+                      newConfig.chunk_size = prev.chunk_config.chunk_size || '1000';
+                      newConfig.chunk_overlap = prev.chunk_config.chunk_overlap || '50';
+                      // 清除 table_config
+                      delete newConfig.table_config;
+                    } else {
+                      newConfig.separator = prev.chunk_config.separator || '\n\n';
+                      newConfig.chunk_size = prev.chunk_config.chunk_size || '1000';
+                      newConfig.chunk_overlap = prev.chunk_config.chunk_overlap || '50';
+                      // 清除 table_config
+                      delete newConfig.table_config;
+                    }
+                    
+                    return {
+                      ...prev,
+                      chunk_config: newConfig,
+                    };
+                  });
                 }}
               >
                 <SelectTrigger className="w-60 h-6 text-xs">
@@ -361,60 +398,259 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     <SelectItem value="token" className="text-xs h-5">
                       按token
                     </SelectItem>
+                    <SelectItem value="table" className="text-xs h-5">
+                      表格(table)
+                    </SelectItem>
+                    <SelectItem value="paragraph" className="text-xs h-5">
+                      段落(paragraph)
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">选择文档切片方式</p>
             </div>
 
-            <div className="flex gap-3 items-center">
-              <Label htmlFor="chunkSize" className="w-[100px] text-xs">
-                切片大小
-                <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                type="number"
-                className="w-60 h-6 text-xs"
-                id="chunkSize"
-                value={kb.chunk_config.chunk_size}
-                onChange={(e) =>
-                  setKb((prev) => ({
-                    ...prev,
-                    chunk_config: {
-                      ...prev.chunk_config,
-                      chunk_size: e.target.value,
-                    },
-                  }))
-                }
-                min="100"
-                max="2000"
-                required
-              />
-              <p className="text-xs text-muted-foreground">推荐值: 1000</p>
+            {/* Table Config - 只在 parser_type === 'table' 时显示 */}
+            {kb.chunk_config.parser_type === 'table' && (
+              <div className="space-y-3">
+                <div className="flex gap-3 items-center">
+                  <div className="flex gap-3 items-center flex-1">
+                    <Label htmlFor="table-header-index-max" className="w-[100px] text-xs">
+                      最大表头行index
+                    </Label>
+                    <Input
+                      type="number"
+                      className="w-60 h-6 text-xs"
+                      id="table-header-index-max"
+                      value={kb.chunk_config.table_config?.header_index_max ?? 0}
+                      onChange={(e) =>
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            table_config: {
+                              ...prev.chunk_config.table_config,
+                              header_index_max: e.target.value ? parseInt(e.target.value) : 0,
+                            },
+                          },
+                        }))
+                      }
+                      min="0"
+                    />
+                  </div>
+                  <div className="flex gap-3 items-center flex-1">
+                    <Label htmlFor="table-format-json" className="w-[100px] text-xs">
+                      格式化为Json
+                    </Label>
+                    <Checkbox
+                      id="table-format-json"
+                      checked={kb.chunk_config.table_config?.format_sheet_data_to_json ?? false}
+                      onCheckedChange={(checked) =>
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            table_config: {
+                              ...prev.chunk_config.table_config,
+                              format_sheet_data_to_json: checked === true,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 items-center">
+                  <div className="flex gap-3 items-center flex-1">
+                    <Label htmlFor="table-concat-rows" className="w-[100px] text-xs">
+                      合并行
+                    </Label>
+                    <Checkbox
+                      id="table-concat-rows"
+                      checked={kb.chunk_config.table_config?.concat_rows ?? false}
+                      onCheckedChange={(checked) =>
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            table_config: {
+                              ...prev.chunk_config.table_config,
+                              concat_rows: checked === true,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="flex gap-3 items-center flex-1">
+                    <Label htmlFor="table-row-joiner" className="w-[100px] text-xs">
+                      行分隔符
+                    </Label>
+                    <Input
+                      type="text"
+                      className="w-60 h-6 text-xs"
+                      id="table-row-joiner"
+                      value={kb.chunk_config.table_config?.row_joiner || '\n'}
+                      onChange={(e) =>
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            table_config: {
+                              ...prev.chunk_config.table_config,
+                              row_joiner: e.target.value,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
-              <Label htmlFor="chunkOverlap" className="w-[100px] ml-20 text-xs">
-                切片重叠
-                <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                type="number"
-                className="w-60 h-6 text-xs"
-                id="chunkOverlap"
-                value={kb.chunk_config.chunk_overlap}
-                onChange={(e) =>
-                  setKb((prev) => ({
-                    ...prev,
-                    chunk_config: {
-                      ...prev.chunk_config,
-                      chunk_overlap: e.target.value,
-                    },
-                  }))
-                }
-                min="0"
-                max="200"
-              />
-              <p className="text-xs text-muted-foreground">推荐值: 50</p>
-            </div>
+            {/* Paragraph Config - 只在 parser_type === 'paragraph' 时显示 */}
+            {kb.chunk_config.parser_type === 'paragraph' && (
+              <div className="space-y-3">
+                <div className="flex gap-3 items-center">
+                  <Label htmlFor="paragraph-separator" className="w-[100px] text-xs">
+                    分隔符
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    className="w-60 h-6 text-xs"
+                    id="paragraph-separator"
+                    value={kb.chunk_config.separator || '\n\n'}
+                    onChange={(e) =>
+                      setKb((prev) => ({
+                        ...prev,
+                        chunk_config: {
+                          ...prev.chunk_config,
+                          separator: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex gap-3 items-center">
+                  <Label htmlFor="chunkSize" className="w-[100px] text-xs">
+                    切片大小
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    className="w-60 h-6 text-xs"
+                    id="chunkSize"
+                    value={kb.chunk_config.chunk_size ?? ''}
+                    placeholder="1000"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // 只允许数字和空字符串
+                      if (value === '' || /^\d+$/.test(value)) {
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            chunk_size: value,
+                          },
+                        }));
+                      }
+                    }}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">推荐值: 1000</p>
+
+                  <Label htmlFor="chunkOverlap" className="w-[100px] ml-20 text-xs">
+                    切片重叠
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    className="w-60 h-6 text-xs"
+                    id="chunkOverlap"
+                    value={kb.chunk_config.chunk_overlap ?? ''}
+                    placeholder="50"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // 只允许数字和空字符串
+                      if (value === '' || /^\d+$/.test(value)) {
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            chunk_overlap: value,
+                          },
+                        }));
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">推荐值: 50</p>
+                </div>
+              </div>
+            )}
+
+            {/* Default Config - 只在 parser_type 为 'structure' 或 'token' 时显示 */}
+            {(kb.chunk_config.parser_type === 'structure' || kb.chunk_config.parser_type === 'token') && (
+              <div className="flex gap-3 items-center">
+                <Label htmlFor="chunkSize" className="w-[100px] text-xs">
+                  切片大小
+                  <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  className="w-60 h-6 text-xs"
+                  id="chunkSize"
+                  value={kb.chunk_config.chunk_size ?? ''}
+                  placeholder="1000"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // 只允许数字和空字符串
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setKb((prev) => ({
+                        ...prev,
+                        chunk_config: {
+                          ...prev.chunk_config,
+                          chunk_size: value,
+                        },
+                      }));
+                    }
+                  }}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">推荐值: 1000</p>
+
+                <Label htmlFor="chunkOverlap" className="w-[100px] ml-20 text-xs">
+                  切片重叠
+                  <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  className="w-60 h-6 text-xs"
+                  id="chunkOverlap"
+                  value={kb.chunk_config.chunk_overlap ?? ''}
+                  placeholder="50"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // 只允许数字和空字符串
+                    if (value === '' || /^\d+$/.test(value)) {
+                      setKb((prev) => ({
+                        ...prev,
+                        chunk_config: {
+                          ...prev.chunk_config,
+                          chunk_overlap: value,
+                        },
+                      }));
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">推荐值: 50</p>
+              </div>
+            )}
 
             <div className="flex gap-3 items-center">
               <Label htmlFor="imageCaptionModel" className="w-[100px] text-xs">

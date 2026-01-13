@@ -67,5 +67,6 @@ Parameters:
 - doc_ids (List[str]): The IDs of the documents to search.
 - kwargs (dict, optional): Additional arguments for the tool.
 """,
+        return_direct=False,
     )
     return search_tool

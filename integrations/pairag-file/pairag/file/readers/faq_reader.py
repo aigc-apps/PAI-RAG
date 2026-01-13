@@ -1,6 +1,4 @@
-"""Tabular parser-Excel parser.
-
-Contains parsers for tabular data files.
+"""Tabular parser-Excel parser for FAQ file。
 
 """
 
@@ -17,25 +15,22 @@ from pairag.file.readers.base import BaseReader
 from pairag.file.models.file_item import FileItem
 
 
-class ExcelReader(BaseReader):
+class FAQReader(BaseReader):
 
     def __init__(
         self,
         *args: Any,
-        concat_rows: Optional[bool] = False,
-        row_joiner: Optional[str] = "\n",
         header_index_max: Optional[int] = 0,
-        format_sheet_data_to_json: Optional[bool] = False,
-        sheet_column_filters: Optional[List[str]] = None,
+        question_column_index: Optional[int] = 0,
+        answer_column_index: Optional[int] = 1,
         **kwargs: Any,
     ) -> None:
         """Init params."""
         super().__init__(*args, **kwargs)
-        self._concat_rows = concat_rows if concat_rows is not None else False
-        self._row_joiner = row_joiner  if row_joiner is not None else "\n"
+        self._question_column_index = question_column_index if question_column_index is not None else 0
+        self._answer_column_index = answer_column_index if answer_column_index is not None else 1
         self._header_index_max = header_index_max  # Allow None to indicate no header row
-        self._format_sheet_data_to_json = format_sheet_data_to_json if format_sheet_data_to_json is not None else False
-        self._sheet_column_filters = sheet_column_filters if sheet_column_filters is not None else None
+        # When header_index_max is None, pandas will use numeric column indices (0, 1, 2, ...)
         # Use list of rows from 0 to header_index_max as MultiIndex column names
         if self._header_index_max is None:
             self._pandas_config = {'header': None}
@@ -77,6 +72,44 @@ class ExcelReader(BaseReader):
         return df
 
     
+    
+    def _process_dataframe(self, df: pd.DataFrame, extra_info: Optional[Dict] = None, file_name: Optional[str] = None) -> List[Document]:
+        """Process DataFrame and create FAQ documents."""
+
+        # Get question and answer columns by index
+        if len(df.columns) <= self._question_column_index:
+            raise ValueError(f"Question column index {self._question_column_index} is out of range. DataFrame has {len(df.columns)} columns.")
+        if len(df.columns) <= self._answer_column_index:
+            raise ValueError(f"Answer column index {self._answer_column_index} is out of range. DataFrame has {len(df.columns)} columns.")
+        
+        question_column = df.columns[self._question_column_index]
+        answer_column = df.columns[self._answer_column_index]
+
+        # Build documents for each row
+        docs = []
+        extra_info = extra_info or {}
+        
+        for i, row in df.iterrows():
+            question = str(row[question_column]) if pd.notna(row[question_column]) else ""
+            answer = str(row[answer_column]) if pd.notna(row[answer_column]) else ""
+            
+            if not question.strip() and not answer.strip():
+                continue
+            
+            
+            
+            chunk_text = f"问题: {question}\n答案: {answer}"
+            
+            row_metadata = extra_info.copy()
+            row_metadata["row_number"] = i + 1
+            row_metadata["question"] = question
+            row_metadata["answer"] = answer
+            
+            docs.append(Document(text=chunk_text, metadata=row_metadata))
+
+        file_display_name = file_name if file_name else "file"
+        logger.info(f"Parsed workbook {file_display_name} into {len(docs)} FAQ documents.")
+        return docs
 
     def read(self, file_item: FileItem) -> List[Document]:
         """Read Excel file from FileItem."""
@@ -86,47 +119,5 @@ class ExcelReader(BaseReader):
         file_item.file.seek(0)
         df = self.read_xlsx(file_item.file, file_item.file_extension)
         
-        if self._sheet_column_filters:
-            df = df[self._sheet_column_filters]
-
-        # Handle MultiIndex column names by joining them with separator
-        def format_column_name(col):
-            if isinstance(col, tuple):
-                # MultiIndex column: join with space
-                return " ".join(str(c) for c in col if pd.notna(c) and str(c).strip())
-            else:
-                return str(col)
-
-        if self._format_sheet_data_to_json:
-            text_list = df.apply(
-                lambda row: str(dict(zip(
-                    [format_column_name(col) for col in df.columns], 
-                    [str(v) if pd.notna(v) else '' for v in row]
-                ))), axis=1
-            ).tolist()
-        else:
-            text_list = [
-                "\n".join([
-                    f"{format_column_name(k)}:{str(v) if pd.notna(v) else ''}" 
-                    for k, v in record.items()
-                ])
-                for record in df.to_dict("records")
-            ]
-
-        if self._concat_rows:
-            logger.info(f"Parsed workbook {file_item.file_name} into single document.")
-            return [
-                Document(
-                    text=(self._row_joiner).join(text_list), metadata=extra_info or {}
-                )
-            ]
-        else:
-            docs = []
-            extra_info = extra_info or {}
-            for i, text in enumerate(text_list):
-                row_metadata = extra_info.copy()
-                row_metadata["row_number"] = i + 1
-                docs.append(Document(text=text, metadata=row_metadata))
-
-            logger.info(f"Parsed workbook {file_item.file_name} into {len(docs)} documents.")
-            return docs
+        return self._process_dataframe(df, extra_info, file_item.file_name)
+        

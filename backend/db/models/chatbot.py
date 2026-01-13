@@ -21,6 +21,8 @@ class ChatBotCreate(SQLModel):
     enable_input_guardrail: Optional[bool] = Field(default=False)
     enable_output_guardrail: Optional[bool] = Field(default=False)
     guardrail_hint: Optional[str] = Field(default=None, sa_column=Column(Text))
+    enable_faq: Optional[bool] = Field(default=False)
+    faq_config: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     prompts: Optional[dict] = Field(default={})
 
 
@@ -45,6 +47,7 @@ class ChatBotEntity(ChatBotCreate, table=True):
     id: str = Field(primary_key=True, default_factory=lambda: str(uuid.uuid4().hex))
     mcp_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     kb_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    faq_config: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     prompts: Optional[dict] = Field(default_factory=dict, sa_column=Column(JSON))
     tenant_id: Optional[str] = Field(default=DEFAULT_TENANT_ID)
 

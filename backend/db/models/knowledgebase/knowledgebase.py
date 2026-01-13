@@ -7,7 +7,7 @@ from sqlalchemy import Column, JSON, DateTime, Text, UniqueConstraint
 from common.knowledgebase.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP,
-    DEFAULT_SENTENCE_SEPARATOR,
+    DEFAULT_PARAGRAPH_SEPARATOR,
     DEFAULT_PARSER_TYPE,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_SIMILARITY_TOP_K,
@@ -15,17 +15,31 @@ from common.knowledgebase.constants import (
     DEFAULT_VECTOR_WEIGHT,
 )
 from common.knowledgebase.types import VectorIndexRetrievalType
-from typing import Optional
+from typing import Optional, List
 from common.system_constants import DEFAULT_TENANT_ID
 from pydantic import field_serializer
+
+
+class TableParserConfig(SQLModel):
+    """Configuration for table parser (CSV/Excel). Only used when parser_type == 'table'."""
+    concat_rows: bool = Field(default=False, description="Whether to concatenate all rows into one document")
+    row_joiner: str = Field(default="\n", description="Separator to use for joining each row")
+    header_index_max: Optional[int] = Field(default=0, description="Maximum row index to use as header")
+    format_sheet_data_to_json: bool = Field(default=False, description="Whether to format sheet data as JSON")
+    sheet_column_filters: Optional[List[str]] = Field(default=None, description="List of column names to filter")
+    question_column_index: Optional[int] = Field(default=0, description="Index of question column")
+    answer_column_index: Optional[int] = Field(default=1, description="Index of answer column")
+
+
 
 class ChunkConfig(SQLModel):
     chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE)
     chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP)
     parser_type: str = Field(default=DEFAULT_PARSER_TYPE)
-    separator: str = Field(default=DEFAULT_SENTENCE_SEPARATOR)
+    separator: str = Field(default=DEFAULT_PARAGRAPH_SEPARATOR)
     image_caption_model: Optional[str] = Field(default=None)
     image_caption_provider_name: str = Field(default="openai_like")
+    table_config: Optional[TableParserConfig] = Field(default=None, description="Table parser configuration (only used when parser_type == 'table')")
 
 
 class RetrievalConfig(SQLModel):

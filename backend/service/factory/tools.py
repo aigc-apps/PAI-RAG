@@ -53,12 +53,14 @@ def create_search_tools(websearch_config: WebSearchConfigEntity) -> List[Functio
             async_fn=aget_search_result,
             name="tavily-websearch",
             description="从 Tavily 搜索引擎中搜索给定查询的最新内容。",
+            return_direct=False,
         )
     else:
         search_tool = FunctionTool.from_defaults(
             async_fn=aget_search_result,
             name="aliyun-websearch",
             description="从阿里云搜索引擎中搜索给定查询的最新内容。",
+            return_direct=False,
         )
 
     search_cache.put(search_key, search_tool)
@@ -85,6 +87,7 @@ def create_chatdb_tools(chatdb_config: ChatDbConfigEntity, chatdb_llm: PaiLlm) -
             async_fn=chatdb_client.execute_async,
             name="chat-db",
             description="使用自然语言从给定的数据库中获取数据。输入参数: query(str类型),表示用户的查询意图，需结合上下文信息生成。",
+            return_direct=False,
         )
     chatdb_cache.put(chatdb_key, chatdb_tool)
     return [chatdb_tool]
@@ -156,6 +159,7 @@ def create_codesandbox_tools(
                 # Returns
                     - A string containing all printed output from execution, including Markdown image references if plots are generated.
             """,
+        return_direct=False,
     )
 
     # 安装包的工具
@@ -199,6 +203,7 @@ def create_codesandbox_tools(
                     - Install with version: `{"package_name": "pandas==1.5.0"}`
                     - Install multiple packages: `{"package_name": "numpy scipy matplotlib"}`
             """,
+        return_direct=False,
     )
 
     # 清理函数

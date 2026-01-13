@@ -1,6 +1,7 @@
 from common.chat.models import ChatAgentRequest
 from service.factory.model_factory import create_llm
 from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
+from tools.knowledgebase.faq_tool import aget_faq_tool
 from service.factory.tools import create_search_tools, create_chatdb_tools, create_codesandbox_tools
 from service.factory.mcp_factory import create_mcp_tools_async
 from tools.attachments.file_searcher import aget_file_searcher
@@ -42,10 +43,12 @@ class AgentService:
         chatdb_service_getter: Callable[[], Awaitable],
         rag_service_getter: Callable[[], Awaitable],
         file_service_getter: Callable[[], Awaitable],
+        faq_config_service_getter: Callable[[], Awaitable],
     ):
         self.session = session
         self._get_llm_service = llm_service_getter
         self._get_chatapp_service = chatapp_service_getter
+        self._get_faq_config_service = faq_config_service_getter
         self._get_websearch_service = websearch_service_getter
         self._get_codesandbox_service = codesandbox_service_getter
         self._get_chatdb_service = chatdb_service_getter
@@ -59,6 +62,7 @@ class AgentService:
             llm_model = await llm_service.get_llm_by_model_id(chat_request.model, tenant_id=tenant_id)
 
             prompt_set = PlanAgentPromptSet()
+            chatapp_id = None
 
             if llm_model:
                 llm = create_llm(llm_model)
@@ -68,8 +72,10 @@ class AgentService:
                 if not chatapp:
                     raise ValueError(f"Model `{chat_request.model}` not found.")
 
+                chatapp_id = chatapp.app_id
                 chat_request.model = chatapp.model_id
                 chat_request.mcp_ids = chatapp.mcp_ids
+                chat_request.faq_config = chatapp.faq_config
                 chat_request.kb_ids = chatapp.kb_ids
                 chat_request.enable_search = chatapp.enable_search
                 chat_request.enable_chatdb = chatapp.enable_chatdb
@@ -96,7 +102,9 @@ class AgentService:
                 enable_chatdb=chat_request.enable_chatdb,
                 mcp_ids=chat_request.mcp_ids,
                 kb_ids=chat_request.kb_ids,
+                faq_config=chat_request.faq_config,
                 user_id=chat_request.user_id,
+                chatapp_id=chatapp_id,
                 metadata_condition=chat_request.metadata_condition,
                 tenant_id=tenant_id,
             )
@@ -125,14 +133,23 @@ class AgentService:
         mcp_ids: List[str] = [],
         kb_ids: List[str] = [],
         tenant_id: str = None,
+        chatapp_id: Optional[str] = None,
+        faq_config: Optional[dict] = None,
     ) -> tuple[List[FunctionTool], Callable | None]:
         tools = []
 
         # 知识库工具
         rag_service = await self._get_rag_service()
+        chatapp_service = await self._get_chatapp_service()
+        faq_config_service = await self._get_faq_config_service()
         for kb_id in kb_ids:
             tools.append(await aget_knowledgebase_tool(kb_id=kb_id, user_id=user_id, rag_service=rag_service, tenant_id=tenant_id, metadata_condition=metadata_condition))
         logger.info(f"Resolved {len(kb_ids)} knowledgebase tools.")
+
+        # FAQ工具
+        if faq_config and faq_config.get("active"):
+            tools.append(await aget_faq_tool(chatapp_id=chatapp_id, user_id=user_id, rag_service=rag_service, chatapp_service=chatapp_service, faq_config_service=faq_config_service, tenant_id=tenant_id))
+            logger.info("Resolved FAQ tool.")
 
         # 搜索工具
         if enable_search:
