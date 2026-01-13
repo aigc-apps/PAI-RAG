@@ -15,7 +15,7 @@ from db.op.safe_add import safe_add_column
 
 # revision identifiers, used by Alembic.
 revision: str = '4fc61e385531'
-down_revision: Union[str, Sequence[str], None] = '1432eea7c5b9'
+down_revision: Union[str, Sequence[str], None] = '1f0950a076a7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -31,6 +31,10 @@ class OssFileStore(BaseFileStore):
 
         auth = oss2.ProviderAuth(credentials_provider)
         self.bucket = oss2.Bucket(auth=auth, endpoint=endpoint, bucket_name=bucket)
+        self.endpoint = endpoint
+        # 判断是否为内网地址，如果是则生成对应的公网地址用于签名 URL
+        self.is_internal = "-internal" in endpoint.lower()
+        self.public_endpoint = endpoint.replace("-internal", "").replace("-Internal", "") if self.is_internal else endpoint
         rule = CorsRule(
             allowed_origins=["*"],
             allowed_methods=["GET", "HEAD", "POST", "PUT", "DELETE"],
@@ -48,6 +52,9 @@ class OssFileStore(BaseFileStore):
         try:
             oss_file_key = os.path.join(self.prefix_path, file_path)
             oss_url = self.bucket.sign_url("GET", oss_file_key, 3600)
+            # 如果是内网地址，替换为公网地址以便外部访问
+            if self.is_internal:
+                oss_url = oss_url.replace(self.endpoint, self.public_endpoint)
             logger.info(f"Get url {oss_url} for file {file_path}.")
             return oss_url
         except Exception as e:
@@ -80,6 +87,9 @@ class OssFileStore(BaseFileStore):
         try:
             oss_file_key = os.path.join(self.prefix_path, file_path)
             oss_url = self.bucket.sign_url("GET", oss_file_key, 3600)
+            # 如果是内网地址，替换为公网地址以便外部访问
+            if self.is_internal:
+                oss_url = oss_url.replace(self.endpoint, self.public_endpoint)
             logger.info(f"Get url {oss_url} for file {file_path}.")
             return oss_url
         except Exception as e:

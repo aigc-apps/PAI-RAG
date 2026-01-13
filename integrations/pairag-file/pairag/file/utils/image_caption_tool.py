@@ -12,15 +12,13 @@ from loguru import logger
 import base64
 
 
-context_prompt_str = """
-# 下面是图片上下文描述，注意这段信息可能与图片内容矛盾或者无关，以图片内容为准。
-{context_str}
+system_prompt_str = """
+你是一个图片处理专家，善于找到文档中包含信息的图片，并提取图片里的文字信息，给图片生成简洁完整的描述。
 
-"""
-
-caption_prompt_str = """
-# 任务
-请使用中文为下面的图片生成简要且完整的描述。请用上图描述了/上图展示了xx开头， 不要超过300个字符。
+## 任务描述
+你需要判断图片是否包含有用的信息：
+- 如果图片仅包含常见的图标、空白图片，商标，简短词语等，不适合用于展示给用户。请直接返回`[NO_IMAGE_CONTENT]`，不要返回任何其他内容。
+- 如果图片包含适合展示给用户浏览的有用信息，如产品说明、操作步骤、截图等，请生成该图片的简要描述，用上图描述了/上图展示了xx开头， 不要超过300个字符。
 """
 
 
@@ -47,21 +45,16 @@ class ImageCaptionTool:
         context_str: 上下文描述。
         """
         logger.info(f"[图像解析] 正在解析图片: {image_url}")
-        prompt = caption_prompt_str
-        if context_str:
-            prompt += context_prompt_str.format(context_str=context_str)
-
         messages = [
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[
-                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成简洁完整的描述和标签。"),
+                    TextBlock(text=system_prompt_str),
                 ],
             ),
             ChatMessage(
                 role=MessageRole.USER,
                 content=[
-                    TextBlock(text=prompt),
                     ImageBlock(url=image_url),
                 ],
             ),
@@ -69,6 +62,8 @@ class ImageCaptionTool:
         result = self._get_result(messages)
         logger.info(f"[图像解析] 图片链接: {image_url} \n图片描述: {result}")
 
+        if "NO_IMAGE_CONTENT" in result:
+            return None
         return result
 
 
@@ -81,26 +76,22 @@ class ImageCaptionTool:
         logger.info(f"[图像解析] 正在解析图片")
         image_base64 = base64.b64encode(image_data).decode('utf-8')
 
-        prompt = caption_prompt_str
-        if context_str:
-            prompt += context_prompt_str.format(context_str=context_str)
-
         messages = [
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[
-                    TextBlock(text="你是一个图片处理专家，善于提取图片里的文字信息，并给图片生成简洁完整的描述和标签。"),
+                    TextBlock(text=system_prompt_str),
                 ],
             ),
             ChatMessage(
                 role=MessageRole.USER,
                 content=[
-                    TextBlock(text=prompt),
                     ImageBlock(image=image_base64),
                 ],
             ),
         ]
         result = self._get_result(messages)
         logger.info(f"[图像解析] 解析图片结果: {result}")
-
+        if "NO_IMAGE_CONTENT" in result:
+            return None
         return result

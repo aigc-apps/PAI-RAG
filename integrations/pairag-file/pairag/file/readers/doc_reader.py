@@ -272,15 +272,15 @@ class DocxReader(BaseReader):
                                                     tenant_id=tenant_id,
                                                 )
                                                 image_alt_text = self.image_caption_tool.extract_image(image_blob)
-                                                
-                                                cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                                                image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
-                                                markdown.append(f"{image_text}\n")
-                                                images.append(upload_result.file_path)
+                                                if image_alt_text:
+                                                    cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                                                    image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
+                                                    markdown.append(f"{image_text}\n")
+                                                    images.append(upload_result.file_path)
 
-                                                logger.info(
-                                                    f"Successfully saved image {upload_result.file_path}."
-                                                )
+                                                    logger.info(
+                                                        f"Successfully saved image {upload_result.file_path}."
+                                                    )
                                             except Exception as ex:
                                                 logger.exception(
                                                     f"Failed to save image from URL: {upload_result.file_path}. Error: {ex}"
