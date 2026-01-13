@@ -219,7 +219,7 @@ class ChatappService:
                 )
 
                 # Update faq_config with kb_id
-                if not faq_config.kb_id or faq_config.kb_id != knowledgebase.id:
+                if not faq_config.kb_id:
                     faq_config.kb_id = knowledgebase.id
                     await faq_config_service.update_faq_config(
                         chatbot_id=chatbot.id,
@@ -289,7 +289,7 @@ class ChatappService:
                 )
 
                 # Update faq_config with kb_id
-                if not faq_config.kb_id or faq_config.kb_id != knowledgebase.id:
+                if not faq_config.kb_id:
                     faq_config.kb_id = knowledgebase.id
                     await faq_config_service.update_faq_config(
                         chatbot_id=chatbot.id,

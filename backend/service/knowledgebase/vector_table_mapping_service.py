@@ -6,14 +6,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from service.cache.redis_cache import cache_manager, vector_table_name_key
 from loguru import logger
 import traceback
-import asyncio
 from db.models.knowledgebase.vector_table_mapping import (
     VectorTableMappingEntity,
     generate_vector_table_name,
 )
-
-# Cache operation timeout in seconds
-CACHE_TIMEOUT = 5
 
 
 class VectorTableMappingService:
@@ -44,15 +40,12 @@ class VectorTableMappingService:
         """
         cache_key = vector_table_name_key(tenant_id, kb_id)
         try:
-            table_name = await asyncio.wait_for(
-                cache_manager.get_cache().get(cache_key),
-                timeout=CACHE_TIMEOUT
-            )
+            table_name = await cache_manager.get_cache().get(cache_key)
             if table_name:
                 logger.debug(f"Found vector table name in cache for tenant {tenant_id} and kb {kb_id}: {table_name}")
                 return table_name
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache get operation failed or timed out for {cache_key}: {e}, falling back to database")
+        except Exception as e:
+            logger.warning(f"Cache get operation failed for {cache_key}: {e}, falling back to database")
 
         # Try to find existing mapping
         mapping = await self._get_mapping(tenant_id, kb_id)
@@ -60,12 +53,9 @@ class VectorTableMappingService:
         if mapping:
             logger.debug(f"Found existing vector table mapping: {mapping.table_name}")
             try:
-                await asyncio.wait_for(
-                    cache_manager.get_cache().set(cache_key, mapping.table_name),
-                    timeout=CACHE_TIMEOUT
-                )
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"Cache set operation failed or timed out for {cache_key}: {e}")
+                await cache_manager.get_cache().set(cache_key, mapping.table_name)
+            except Exception as e:
+                logger.warning(f"Cache set operation failed for {cache_key}: {e}")
             return mapping.table_name
 
         # Generate new table name
@@ -89,12 +79,9 @@ class VectorTableMappingService:
                 raise
 
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().set(cache_key, table_name),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache set operation failed or timed out for {cache_key}: {e}")
+            await cache_manager.get_cache().set(cache_key, table_name)
+        except Exception as e:
+            logger.warning(f"Cache set operation failed for {cache_key}: {e}")
         return table_name
 
     async def _get_mapping(
@@ -199,12 +186,9 @@ class VectorTableMappingService:
         if mapping:
             cache_key = vector_table_name_key(tenant_id, kb_id)
             try:
-                await asyncio.wait_for(
-                    cache_manager.get_cache().delete(cache_key),
-                    timeout=CACHE_TIMEOUT
-                )
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"Cache delete operation failed or timed out for {cache_key}: {e}")
+                await cache_manager.get_cache().delete(cache_key)
+            except Exception as e:
+                logger.warning(f"Cache delete operation failed for {cache_key}: {e}")
             await self.session.delete(mapping)
             await self.session.commit()
             logger.info(f"Deleted vector table mapping: tenant={tenant_id}, kb={kb_id}")
@@ -224,24 +208,18 @@ class VectorTableMappingService:
         """
         cache_key = vector_table_name_key(tenant_id, kb_id)
         try:
-            table_name = await asyncio.wait_for(
-                cache_manager.get_cache().get(cache_key),
-                timeout=CACHE_TIMEOUT
-            )
+            table_name = await cache_manager.get_cache().get(cache_key)
             if table_name:
                 logger.debug(f"Found vector table name in cache for tenant {tenant_id} and kb {kb_id}: {table_name}")
                 return table_name
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache get operation failed or timed out for {cache_key}: {e}, falling back to database")
+        except Exception as e:
+            logger.warning(f"Cache get operation failed for {cache_key}: {e}, falling back to database")
 
         mapping = await self._get_mapping(tenant_id, kb_id)
         if mapping:
             try:
-                await asyncio.wait_for(
-                    cache_manager.get_cache().set(cache_key, mapping.table_name),
-                    timeout=CACHE_TIMEOUT
-                )
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"Cache set operation failed or timed out for {cache_key}: {e}")
+                await cache_manager.get_cache().set(cache_key, mapping.table_name)
+            except Exception as e:
+                logger.warning(f"Cache set operation failed for {cache_key}: {e}")
             return mapping.table_name
         return None

@@ -7,7 +7,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import or_, and_
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
-import asyncio
 
 from db.models.knowledgebase.knowledgebase import (
     KnowledgebaseCreate,
@@ -19,9 +18,6 @@ from db.models.knowledgebase.file import KbFileEntity
 from common.chat.response_model import PagedResult
 from service.cache.redis_cache import cache_manager, kb_key, kb_name_key
 from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME
-
-# Cache operation timeout in seconds
-CACHE_TIMEOUT = 5
 
 class KnowledgebaseService:
     """Service layer for Knowledgebase entity CRUD operations using dependency injection."""
@@ -50,27 +46,21 @@ class KnowledgebaseService:
         """
         cache_key = kb_key(tenant_id, kb_id)
         try:
-            kb_data = await asyncio.wait_for(
-                cache_manager.get_cache().get(cache_key),
-                timeout=CACHE_TIMEOUT
-            )
+            kb_data = await cache_manager.get_cache().get(cache_key)
             if kb_data:
                 logger.info(f"Get knowledgebase entity from cache: {kb_id}")
                 kb_entity = KbEntity.model_validate(kb_data)
                 return kb_entity
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache get operation failed or timed out for {cache_key}: {e}, falling back to database")
+        except Exception as e:
+            logger.warning(f"Cache get operation failed for {cache_key}: {e}")
 
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         kb_entity = result.first()
         if kb_entity:
             try:
-                await asyncio.wait_for(
-                    cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json")),
-                    timeout=CACHE_TIMEOUT
-                )
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"Cache set operation failed or timed out for {cache_key}: {e}")
+                await cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json"))
+            except Exception as e:
+                logger.warning(f"Cache set operation failed for {cache_key}: {e}")
         return kb_entity
 
     async def get_knowledgebase_by_name(self, name: str, tenant_id: str) -> Optional[KbEntity]:
@@ -85,28 +75,22 @@ class KnowledgebaseService:
         """
         cache_key = kb_name_key(tenant_id, name)
         try:
-            kb_data = await asyncio.wait_for(
-                cache_manager.get_cache().get(cache_key),
-                timeout=CACHE_TIMEOUT
-            )
+            kb_data = await cache_manager.get_cache().get(cache_key)
             if kb_data:
                 logger.info(f"Get knowledgebase entity from cache: {name}")
                 kb_entity = KbEntity.model_validate(kb_data)
                 return kb_entity
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache get operation failed or timed out for {cache_key}: {e}, falling back to database")
+        except Exception as e:
+            logger.warning(f"Cache get operation failed for {cache_key}: {e}, falling back to database")
 
         statement = select(KbEntity).where(KbEntity.name == name, KbEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         kb_entity = result.first()
         if kb_entity:
             try:
-                await asyncio.wait_for(
-                    cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json")),
-                    timeout=CACHE_TIMEOUT
-                )
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"Cache set operation failed or timed out for {cache_key}: {e}")
+                await cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json"))
+            except Exception as e:
+                logger.warning(f"Cache set operation failed for {cache_key}: {e}")
         return kb_entity
 
     async def get_knowledgebases_by_ids(self, tenant_id: str, kb_ids: List[str]) -> List[KbEntity]:
@@ -287,12 +271,9 @@ class KnowledgebaseService:
         """
         cache_key = kb_key(tenant_id, kb_id)
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().delete(cache_key),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache delete operation failed or timed out for {cache_key}: {e}")
+            await cache_manager.get_cache().delete(cache_key)
+        except Exception as e:
+            logger.warning(f"Cache delete operation failed for {cache_key}: {e}")
 
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
@@ -301,12 +282,9 @@ class KnowledgebaseService:
 
         cache_name_key = kb_name_key(tenant_id, knowledgebase.name)
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().delete(cache_name_key),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache delete operation failed or timed out for {cache_name_key}: {e}")
+            await cache_manager.get_cache().delete(cache_name_key)
+        except Exception as e:
+            logger.warning(f"Cache delete operation failed for {cache_name_key}: {e}")
 
         try:
 
@@ -374,19 +352,13 @@ class KnowledgebaseService:
         cache_key = kb_key(tenant_id, kb_id)
         cache_name_key = kb_name_key(tenant_id, knowledgebase.name)
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().delete(cache_key),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache delete operation failed or timed out for {cache_key}: {e}")
+            await cache_manager.get_cache().delete(cache_key)
+        except Exception as e:
+            logger.warning(f"Cache delete operation failed for {cache_key}: {e}")
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().delete(cache_name_key),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache delete operation failed or timed out for {cache_name_key}: {e}")
+            await cache_manager.get_cache().delete(cache_name_key)
+        except Exception as e:
+            logger.warning(f"Cache delete operation failed for {cache_name_key}: {e}")
 
         # Delete knowledgebase entity only
         await self.session.delete(knowledgebase)
@@ -419,19 +391,13 @@ class KnowledgebaseService:
         cache_key = kb_key(tenant_id, kb_entity.id)
         cache_name_key = kb_name_key(tenant_id, kb_entity.name)
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json")),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache set operation failed or timed out for {cache_key}: {e}")
+            await cache_manager.get_cache().set(cache_key, kb_entity.model_dump(mode="json"))
+        except Exception as e:
+            logger.warning(f"Cache set operation failed for {cache_key}: {e}")
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().set(cache_name_key, kb_entity.model_dump(mode="json")),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache set operation failed or timed out for {cache_name_key}: {e}")
+            await cache_manager.get_cache().set(cache_name_key, kb_entity.model_dump(mode="json"))
+        except Exception as e:
+            logger.warning(f"Cache set operation failed for {cache_name_key}: {e}")
         logger.info(f"Written cache for knowledgebase {kb_entity.id} (name: {kb_entity.name}) after commit")
 
     async def delete_cache_on_rollback(self, kb_id: str, tenant_id: str, kb_name: Optional[str] = None) -> None:
@@ -446,19 +412,13 @@ class KnowledgebaseService:
         """
         cache_key = kb_key(tenant_id, kb_id)
         try:
-            await asyncio.wait_for(
-                cache_manager.get_cache().delete(cache_key),
-                timeout=CACHE_TIMEOUT
-            )
-        except (asyncio.TimeoutError, Exception) as e:
-            logger.warning(f"Cache delete operation failed or timed out for {cache_key}: {e}")
+            await cache_manager.get_cache().delete(cache_key)
+        except Exception as e:
+            logger.warning(f"Cache delete operation failed for {cache_key}: {e}")
         if kb_name:
             cache_name_key = kb_name_key(tenant_id, kb_name)
             try:
-                await asyncio.wait_for(
-                    cache_manager.get_cache().delete(cache_name_key),
-                    timeout=CACHE_TIMEOUT
-                )
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.warning(f"Cache delete operation failed or timed out for {cache_name_key}: {e}")
+                await cache_manager.get_cache().delete(cache_name_key)
+            except Exception as e:
+                logger.warning(f"Cache delete operation failed for {cache_name_key}: {e}")
         logger.info(f"Deleted cache for knowledgebase {kb_id} on rollback")
