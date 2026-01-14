@@ -19,32 +19,33 @@ class ImageReader(BaseReader):
         """
         Read a CSV file and return a list of Documents.
         """
+        docs = []
         if not self.image_caption_tool:
             logger.warning(
                 "Will not parse image files when image store is not configured."
             )
-            return []
+            return docs
         try:
             file_item.file.seek(0)
             save_image_name = f"{file_item.kb_id}/images/{file_item.file_md5}.jpeg"
 
             image_file = compress_image_if_needed(file_item.file)
             if not image_file:
-                return []
+                return docs
 
             upload_result = self.file_store.write(file=image_file, file_name=file_item.file_name, file_path=save_image_name, tenant_id=file_item.tenant_id)
             image_file.seek(0)
             image_data = image_file.read()
             image_alt_text = self.image_caption_tool.extract_image(image_data)
-            cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-            image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
+            if image_alt_text:
+                cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
 
-            metadata = file_item.metadata()
-
-            docs = [Document(id_=file_item.id, text=image_text, metadata=metadata)]
+                metadata = file_item.metadata()
+                docs.append(Document(id_=file_item.id, text=image_text, metadata=metadata))
             logger.info(f"Successfully read {file_item.file_name}.")
 
             return docs
         except Exception as e:
             logger.exception(e)
-            return []
+            return docs

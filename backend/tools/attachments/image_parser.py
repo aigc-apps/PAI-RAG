@@ -70,7 +70,7 @@ async def aget_image_analysis_from_db(
 
 async def aget_image_analysis(
     image_list: List[str],
-    question: Optional[str] = None,
+    question: str = None,
     llm_service: LlmService = None,
     tenant_id: str = None):
     """Get read file tool"""
@@ -93,15 +93,15 @@ async def aget_image_parser_tool(
     创建 image-parser 工具，用于解析上传的图片内容。
     """
     async def aget_image_analysis_func(
-        question: Optional[str] = None,
+        query: str = "请描述图片的内容。",
     ):
-        return await aget_image_analysis(image_list=image_list, question=question, llm_service=llm_service, tenant_id=tenant_id)
+        return await aget_image_analysis(image_list=image_list, question=query, llm_service=llm_service, tenant_id=tenant_id)
     image_parser_tool = FunctionTool.from_defaults(
         async_fn=aget_image_analysis_func,
         name="image-parser",
         description="""解析上传的图片内容。适用于用户提问涉及图片中的信息（如图表、文字、产品图等）。
 参数：
-- question: 可选，用户想问的具体问题，例如"图中智能床的价格是多少？"、"请提取表格数据"等。
+- query: 用户的查询意图，例如"图中智能床的价格是多少？"、"请提取表格数据"等"。
 返回：包含图片分析结果的 JSON 对象。""",
         return_direct=False,
     )

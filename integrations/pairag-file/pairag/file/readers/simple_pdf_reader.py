@@ -73,15 +73,17 @@ class SimplePdfReader(BaseReader):
                             image_file.seek(0)
                             image_data = image_file.read()
                             image_alt_text = self.image_caption_tool.extract_image(image_data)
-                            cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                            content.text = markdown_image_text_to_chunk(upload_result.file_path, cleaned_alt)
-
-                            md_content = md_content.replace(origin_image_text, content.text)
-
-                            logger.info(
-                                f"Successfully saved image {upload_result.file_path} from URL: {image_path}"
-                            )
+                            if image_alt_text:
+                                cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                                content.text = markdown_image_text_to_chunk(upload_result.file_path, cleaned_alt)
+                                md_content = md_content.replace(origin_image_text, content.text)
+                                logger.info(
+                                    f"Successfully saved image {upload_result.file_path} from URL: {image_path}"
+                                )
+                            else:
+                                md_content = md_content.replace(origin_image_text, "")
                         except Exception as ex:
+                            md_content = md_content.replace(origin_image_text, "")
                             logger.exception(
                                 f"Failed to save image from URL: {image_path}. Error: {ex}"
                             )

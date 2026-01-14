@@ -214,6 +214,7 @@ export default function KnowledgeBaseDetailPage(
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0); // 上传进度 0-100
   const [uploadStep, setUploadStep] = useState<'idle' | 'uploading' | 'uploaded' | 'parsing'>('idle'); // 上传步骤
+  const [isDragging, setIsDragging] = useState(false); // 拖拽状态
   const [uploadedFiles, setUploadedFiles] = useState<Array<{id: string; file_name: string; file_path: string; chunk_config?: any}>>([]);  // 已上传待解析的文件
   const [uploadChunkConfig, setUploadChunkConfig] = useState<{
     parser_type: string;
@@ -294,6 +295,7 @@ export default function KnowledgeBaseDetailPage(
     rerank_top_k?: number;
   }>({});
   const [rerankerModels, setRerankerModels] = useState<Array<{id: string; model_id: string; model_name: string}>>([]);
+  const [visionModels, setVisionModels] = useState<Array<{id: string; model_id: string; model: string; provider_name?: string}>>([]);
   const [retrievalSettingOpen, setRetrievalSettingOpen] = useState(true);
   const [vectorDbType, setVectorDbType] = useState<string>('local');
   const { tenantFetch, tenantId } = useTenantFetch();
@@ -485,11 +487,12 @@ export default function KnowledgeBaseDetailPage(
   const fetchKbConfigs = useCallback(async () => {
     try {
       setLoadingMsg('获取知识库配置中...');
-      const [kbRes, metaRes, rerankerRes, vectordbRes] = await Promise.all([
+      const [kbRes, metaRes, rerankerRes, vectordbRes, visionRes] = await Promise.all([
         tenantFetch(`/api/config/knowledgebases/${kbId}`),
         tenantFetch(`/api/config/knowledgebases/${kbId}/metadata`),
         tenantFetch(`/api/config/rerankers`),
         tenantFetch(`/api/config/vectordb`),
+        tenantFetch(`/api/config/llms?vision_support=true&size=1000`),
       ]);
 
       if (!kbRes.ok) {
@@ -579,6 +582,18 @@ export default function KnowledgeBaseDetailPage(
       if (rerankerRes.ok) {
         const rerankerData = (await rerankerRes.json())?.data?.items || [];
         setRerankerModels(rerankerData);
+      }
+
+      // 获取图片理解模型列表
+      if (visionRes.ok) {
+        const visionData = (await visionRes.json())?.data?.items || [];
+        const mappedVisionModels = visionData.map((m: any) => ({ 
+          id: m.id, 
+          model_id: m.model_id, 
+          model: m.model, 
+          provider_name: m.provider_name 
+        }));
+        setVisionModels(mappedVisionModels);
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -1930,17 +1945,45 @@ export default function KnowledgeBaseDetailPage(
                       {uploadStep === 'idle' && (
                         <>
                           <div 
-                            className="flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors"
+                            className={`flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg transition-colors ${
+                              isDragging 
+                                ? 'border-primary bg-primary/10' 
+                                : 'hover:bg-muted/50'
+                            }`}
                             onClick={() => {
                               document.getElementById('file-upload')?.click();
                             }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(true);
+                            }}
+                            onDragEnter={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(true);
+                            }}
+                            onDragLeave={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(false);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(false);
+                              const files = e.dataTransfer.files;
+                              if (files && files.length > 0) {
+                                handleFileUpload(files);
+                              }
+                            }}
                           >
-                            <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                            <Upload className={`h-12 w-12 mb-4 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
                             <p className="text-sm text-muted-foreground text-center">
                               支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
                             </p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              点击选择文件
+                            <p className={`text-xs mt-2 ${isDragging ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                              {isDragging ? '释放文件以上传' : '点击选择文件或拖拽文件到此处'}
                             </p>
                           </div>
                         </>
@@ -2252,6 +2295,40 @@ export default function KnowledgeBaseDetailPage(
                                     />
                                   </div>
                                 )}
+
+                                {/* 图片理解模型 */}
+                                <div className="flex gap-3 items-center">
+                                  <Label htmlFor="upload-image-caption-model" className="w-[80px] text-xs">
+                                    图片理解模型
+                                  </Label>
+                                  <Select
+                                    value={uploadChunkConfig.image_caption_model || 'DISABLED'}
+                                    onValueChange={(value) => {
+                                      const selectedModel = visionModels.find(m => m.model_id === value);
+                                      setUploadChunkConfig((prev) => prev ? {
+                                        ...prev,
+                                        image_caption_model: value !== "DISABLED" ? value : undefined,
+                                        image_caption_provider_name: selectedModel?.provider_name || prev.image_caption_provider_name,
+                                      } : null);
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[200px] h-7 text-xs">
+                                      <SelectValue placeholder="请选择图片理解模型" />
+                                    </SelectTrigger>
+                                    <SelectContent className="text-xs">
+                                      <SelectGroup>
+                                        <SelectItem value="DISABLED" className="text-xs h-5">
+                                          不使用图片理解模型
+                                        </SelectItem>
+                                        {visionModels.map((model) => (
+                                          <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                                            {model.model_id} ({model.model})
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -3936,6 +4013,28 @@ export default function KnowledgeBaseDetailPage(
                 : `为文件设置切片配置，配置将在重新解析时应用`}
             </DialogDescription>
           </DialogHeader>
+
+          {/* 待处理文件列表 */}
+          <div className="border rounded-lg p-3 mb-2 max-h-32 overflow-y-auto bg-muted/30">
+            <p className="text-xs text-muted-foreground mb-2 font-medium">待处理的文件：</p>
+            {isBatchReprocess ? (
+              <div className="space-y-1">
+                {pendingReprocessFileIds.map((fileId, index) => {
+                  const file = kbfiles.find(f => f.id === fileId);
+                  return (
+                    <div key={fileId} className="text-xs py-0.5 border-b last:border-b-0 text-muted-foreground">
+                      {index + 1}. {file?.file_name || fileId}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">
+                {kbfiles.find(f => f.id === pendingReprocessFileId)?.file_name || pendingReprocessFileId}
+              </div>
+            )}
+          </div>
+
           {reprocessChunkConfig && (
             <div className="space-y-4">
               {/* 切片类型 */}
@@ -4254,6 +4353,44 @@ export default function KnowledgeBaseDetailPage(
                   </div>
                 </div>
               )}
+
+              {/* 图片理解模型 */}
+              <div className="flex gap-3 items-center flex-wrap">
+                <Label htmlFor="reprocess-image-caption-model" className="w-[120px] text-xs shrink-0">
+                  图片理解模型
+                </Label>
+                <Select
+                  value={reprocessChunkConfig.image_caption_model || 'DISABLED'}
+                  onValueChange={(value) => {
+                    const selectedModel = visionModels.find(m => m.model_id === value);
+                    setReprocessChunkConfig((prev) => {
+                      if (!prev) return null;
+                      return {
+                        ...prev,
+                        image_caption_model: value !== "DISABLED" ? value : undefined,
+                        image_caption_provider_name: selectedModel?.provider_name || prev.image_caption_provider_name,
+                      };
+                    });
+                  }}
+                >
+                  <SelectTrigger className="w-[200px] h-6 text-xs">
+                    <SelectValue placeholder="请选择图片理解模型" />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectGroup>
+                      <SelectItem value="DISABLED" className="text-xs h-5">
+                        不使用图片理解模型
+                      </SelectItem>
+                      {visionModels.map((model) => (
+                        <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                          {model.model_id} ({model.model})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground shrink-0">用于理解图片内容</p>
+              </div>
             </div>
           )}
           <div className="flex justify-end gap-2 pt-4">

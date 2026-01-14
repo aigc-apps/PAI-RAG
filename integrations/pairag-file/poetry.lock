@@ -1027,14 +1027,14 @@ files = [
 
 [[package]]
 name = "fastpdf4llm"
-version = "0.1.4"
+version = "0.1.5"
 description = "A fast PDF to Markdown converter optimized for LLM processing"
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "fastpdf4llm-0.1.4-py3-none-any.whl", hash = "sha256:d5d29972282b4861dddce05be49d963b31900f6253cae2ed5a22a0d11e1f81b1"},
-    {file = "fastpdf4llm-0.1.4.tar.gz", hash = "sha256:9beb30fcc5e7478fd180f703d92b26c40cb978cb7fdd72826fafcefc38f0ba8c"},
+    {file = "fastpdf4llm-0.1.5-py3-none-any.whl", hash = "sha256:6cad84cd25286abc1eece0206286e220c456bccb807e96d000a7d58b7e04f5cd"},
+    {file = "fastpdf4llm-0.1.5.tar.gz", hash = "sha256:39163c412009e2366da4dac65cd25d31da99d26de2c09e1bc8c00e0304ac2362"},
 ]
 
 [package.dependencies]
@@ -4495,4 +4495,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "11d4511fac2559332d4678d9cf4f0de1f27bb85818b980e16bf8473007cc090d"
+content-hash = "efce9d2aa3476a6c064d3f93edbeb66ba676667416254f36becc5bb1ef0835c2"

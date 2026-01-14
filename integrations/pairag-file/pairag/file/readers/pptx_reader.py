@@ -39,11 +39,12 @@ class PptxReader(BaseReader):
                     upload_result = self.file_store.write(file=image_file, file_name=image_name, file_path=save_image_name, tenant_id=tenant_id)
                     image_file.seek(0)
                     image_alt_text = self.image_caption_tool.extract_image(image_file.read())
-                    cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                    image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
-                    markdown.append(f"{image_text}\n\n")
-                    images.append(upload_result.file_path)
-                    logger.info(f"Successfully saved image {upload_result.file_path}.")
+                    if image_alt_text:
+                        cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                        image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)
+                        markdown.append(f"{image_text}\n\n")
+                        images.append(upload_result.file_path)
+                        logger.info(f"Successfully saved image {upload_result.file_path}.")
                 except Exception as ex:
                     logger.exception(f"Failed to save image: {upload_result.file_path}. Error: {ex}")
         return markdown, images

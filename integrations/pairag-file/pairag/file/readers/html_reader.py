@@ -144,19 +144,22 @@ class HtmlReader(BaseReader):
                         image_file.seek(0)
                         image_data = image_file.read()
                         image_alt_text = self.image_caption_tool.extract_image(image_data)
-                        cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
-                        
-                        image_text = to_markdown_image_text(save_image_name, cleaned_alt)
-                        content = content.replace(
-                            full_match,
-                            image_text,
-                        )
-                        saved_images.append(save_image_name)
-
-                        logger.info(
-                            f"Successfully saved image {save_image_name} from URL: {image_url}"
-                        )
+                        if image_alt_text:
+                            cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
+                            
+                            image_text = to_markdown_image_text(save_image_name, cleaned_alt)
+                            content = content.replace(
+                                full_match,
+                                image_text,
+                            )
+                            saved_images.append(save_image_name)
+                            logger.info(
+                                f"Successfully saved image {save_image_name} from URL: {image_url}"
+                            )
+                        else:
+                            content = content.replace(full_match, "")
                     except Exception as ex:
+                        content = content.replace(full_match, "")
                         logger.exception(
                             f"Failed to save image from URL: {image_url}. Error: {ex}"
                         )
