@@ -165,72 +165,6 @@ async def delete_faq_item(
         logger.error(f"Failed to delete FAQ item: {traceback.format_exc()}")
         raise ApiException(code=500, message=f"删除FAQ失败: {traceback.format_exc()}")
 
-@app_router.get("/{app_id}/faq-config", response_model=ResponseModel[FAQConfigCreate], tags=["FAQ"])
-async def get_faq_config(
-    app_id: str,
-    tenant_id: str = Depends(get_tenant_id),
-    session: AsyncSession = Depends(get_db_session),
-    chatapp_service: ChatappService = Depends(get_chatapp_service),
-    faq_config_service: FAQConfigService = Depends(get_faq_config_service),
-):
-    """Get FAQ config for an app."""
-    try:
-        # Get chatbot by app_id to get chatbot_id
-        chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
-        if not chatbot:
-            raise ApiException(code=404, message=f"应用 '{app_id}' 不存在。")
-
-        faq_config = await faq_config_service.get_or_create_faq_config(
-            chatbot_id=chatbot.id, tenant_id=tenant_id
-        )
-        await session.commit()
-        return success_response(data=faq_config, message="获取FAQ配置成功。")
-    except ValueError as e:
-        logger.error(f"Failed to get FAQ config: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except ApiException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get FAQ config: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"获取FAQ配置失败: {traceback.format_exc()}")
-
-@app_router.put("/{app_id}/faq-config", response_model=ResponseModel[FAQConfigCreate], tags=["FAQ"])
-async def update_faq_config(
-    app_id: str,
-    faq_config_data: FAQConfigCreate,
-    tenant_id: str = Depends(get_tenant_id),
-    session: AsyncSession = Depends(get_db_session),
-    chatapp_service: ChatappService = Depends(get_chatapp_service),
-    faq_config_service: FAQConfigService = Depends(get_faq_config_service),
-    knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
-):
-    """Update FAQ config for an app."""
-    try:
-        # Get chatbot by app_id to get chatbot_id
-        chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
-        if not chatbot:
-            raise ApiException(code=404, message=f"应用 '{app_id}' 不存在。")
-
-        # Update FAQ config with full synchronization logic
-        updated_faq_config = await faq_config_service.update_faq_config_with_sync(
-            app_id=app_id,
-            chatbot_id=chatbot.id,
-            update_data=faq_config_data,
-            tenant_id=tenant_id,
-            knowledgebase_service=knowledgebase_service
-        )
-
-        await session.commit()
-        return success_response(data=updated_faq_config, message="更新FAQ配置成功。")
-    except ValueError as e:
-        logger.error(f"Failed to update FAQ config: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except ApiException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to update FAQ config: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"更新FAQ配置失败: {traceback.format_exc()}")
-
 MAX_CHECK_ATTEMPTS = 100
 CHECK_INTERVAL = 3
 
@@ -267,8 +201,8 @@ async def upload_faq_files(
         if not knowledgebase:
             logger.info(f"Creating FAQ knowledgebase {kb_name} for tenant {tenant_id}")
             faq_config_service = FAQConfigService(session)
-            faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
-                chatbot_id=chatbot.id, tenant_id=tenant_id
+            faq_config = await faq_config_service.get_or_create_faq_config(
+                chatbot=chatbot
             )
 
             if faq_config and faq_config.embedding_model:

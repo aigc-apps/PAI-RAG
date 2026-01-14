@@ -74,6 +74,7 @@ class AgentService:
 
                 chatapp_id = chatapp.app_id
                 chat_request.model = chatapp.model_id
+                chat_request.enable_faq = chatapp.enable_faq
                 chat_request.mcp_ids = chatapp.mcp_ids
                 chat_request.faq_config = chatapp.faq_config
                 chat_request.kb_ids = chatapp.kb_ids
@@ -102,6 +103,7 @@ class AgentService:
                 enable_chatdb=chat_request.enable_chatdb,
                 mcp_ids=chat_request.mcp_ids,
                 kb_ids=chat_request.kb_ids,
+                enable_faq=chat_request.enable_faq,
                 faq_config=chat_request.faq_config,
                 user_id=chat_request.user_id,
                 chatapp_id=chatapp_id,
@@ -128,6 +130,7 @@ class AgentService:
         messages: List[dict],
         enable_search: bool = False,
         enable_chatdb: bool = False,
+        enable_faq: bool = False,
         user_id: str = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
         mcp_ids: List[str] = [],
@@ -142,7 +145,7 @@ class AgentService:
         chatapp_service = await self._get_chatapp_service()
         faq_config_service = await self._get_faq_config_service()
 
-        if faq_config and faq_config.get("active"):
+        if enable_faq and faq_config:
             tools.append(await aget_faq_tool(chatapp_id=chatapp_id, user_id=user_id, rag_service=rag_service, chatapp_service=chatapp_service, faq_config_service=faq_config_service, tenant_id=tenant_id))
             logger.info("Resolved FAQ tool (highest priority).")
 

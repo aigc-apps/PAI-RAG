@@ -54,14 +54,6 @@ async def aget_faq_result(
         f"Retrieved {len(records)} FAQ results for query '{query}' from knowledgebase {kb.id}."
     )
 
-    faq_config = None
-    try:
-        faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
-            chatbot_id=chatbot.id, tenant_id=tenant_id
-        )
-    except Exception as e:
-        logger.warning(f"Failed to get FAQ config: {e}, using defaults")
-
     question_in_response = faq_config.enable_question_in_response if faq_config else True
     answer_in_response = faq_config.enable_answer_in_response if faq_config else True
     return_direct = faq_config.return_direct if faq_config else False
@@ -111,12 +103,8 @@ async def aget_faq_tool(
             app_id=chatapp_id,
             tenant_id=tenant_id
         )
-        if chatbot:
-            faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
-                chatbot_id=chatbot.id, tenant_id=tenant_id
-            )
-            if faq_config:
-                return_direct = faq_config.return_direct if faq_config.return_direct is not None else False
+        if chatbot and chatbot.faq_config:
+            return_direct = chatbot.faq_config.get("return_direct", False)
     except Exception as e:
         logger.warning(f"Failed to get FAQ config for return_direct: {e}, using default False")
 

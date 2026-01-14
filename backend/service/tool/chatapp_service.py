@@ -32,7 +32,7 @@ class ChatappService:
         """
         self.session = session
 
-    async def _ensure_faq_knowledgebase(self, chatbot_id: str, app_id: str, tenant_id: str) -> KbEntity:
+    async def _ensure_faq_knowledgebase(self, faq_config: FAQConfigCreate, app_id: str, tenant_id: str) -> KbEntity:
         """
         Ensure FAQ knowledgebase exists for the given chatbot_id and app_id.
         Creates it if it doesn't exist.
@@ -49,17 +49,11 @@ class ChatappService:
         kb_name = f"{app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
         knowledgebase_service = KnowledgebaseService(self.session)
         embedding_service = EmbeddingService(self.session)
-        faq_config_service = FAQConfigService(self.session)
-
         knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
 
         if not knowledgebase:
             logger.info(f"Creating FAQ knowledgebase {kb_name} for app_id {app_id} and tenant {tenant_id}")
 
-            # Get FAQ config to get embedding_model
-            faq_config = await faq_config_service.get_faq_config_by_chatbot_id(
-                chatbot_id=chatbot_id, tenant_id=tenant_id
-            )
 
             # Use embedding_model from faq_config if available, otherwise use default
             if faq_config and faq_config.embedding_model:
@@ -209,22 +203,21 @@ class ChatappService:
 
             # If enable_faq is True, create FAQ config
             if app_data.enable_faq:
-                # Ensure FAQ knowledgebase exists first (to get kb_id)
-                knowledgebase = await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
-
                 # Initialize FAQ config with default values and set kb_id
                 faq_config_service = FAQConfigService(self.session)
                 faq_config = await faq_config_service.get_or_create_faq_config(
-                    chatbot_id=chatbot.id, tenant_id=tenant_id
+                    chatbot=chatbot
                 )
+
+                # Ensure FAQ knowledgebase exists first (to get kb_id)
+                knowledgebase = await self._ensure_faq_knowledgebase(faq_config=faq_config, app_id=chatbot.app_id, tenant_id=tenant_id)
 
                 # Update faq_config with kb_id
                 if not faq_config.kb_id:
                     faq_config.kb_id = knowledgebase.id
                     await faq_config_service.update_faq_config(
-                        chatbot_id=chatbot.id,
-                        update_data=faq_config,
-                        tenant_id=tenant_id
+                        chatbot=chatbot,
+                        update_data=faq_config
                     )
 
                 await self.session.flush()
@@ -280,46 +273,13 @@ class ChatappService:
                 raise ValueError(f"应用ID '{update_data.app_id}' 已经存在，无法更新。")
 
         faq_config_service = FAQConfigService(self.session)
-        if update_data.enable_faq:
-            if not chatbot.faq_config:
-                knowledgebase = await self._ensure_faq_knowledgebase(chatbot.id, chatbot.app_id, tenant_id)
-
-                faq_config = await faq_config_service.get_or_create_faq_config(
-                    chatbot_id=chatbot.id, tenant_id=tenant_id
-                )
-
-                # Update faq_config with kb_id
-                if not faq_config.kb_id:
-                    faq_config.kb_id = knowledgebase.id
-                    await faq_config_service.update_faq_config(
-                        chatbot_id=chatbot.id,
-                        update_data=faq_config,
-                        tenant_id=tenant_id
-                    )
-
-                logger.info(
-                    f"Created FAQ config for ChatApp: {chatbot.id}"
-                )
-            else:
-                current_config = FAQConfigCreate.model_validate(chatbot.faq_config)
-                if not current_config.active:
-                    current_config.active = True
-                    await faq_config_service.update_faq_config(
-                        chatbot_id=chatbot.id,
-                        update_data=current_config,
-                        tenant_id=tenant_id
-                    )
-                    logger.info(f"Updated FAQ config active to True for ChatApp: {chatbot.id}")
-        else:
-            current_config = FAQConfigCreate.model_validate(chatbot.faq_config)
-
-            current_config.active = False
+        if update_data.faq_config:
+            current_config = FAQConfigCreate.model_validate(update_data.faq_config)
             await faq_config_service.update_faq_config(
-                chatbot_id=chatbot.id,
-                update_data=current_config,
-                tenant_id=tenant_id
+                chatbot=chatbot,
+                update_data=current_config
             )
-            logger.info(f"Disabled FAQ for ChatApp: {chatbot.id}")
+            logger.info(f"Updated FAQ config to: {current_config}")
 
         # Update fields
         if update_data.app_id is not None:
