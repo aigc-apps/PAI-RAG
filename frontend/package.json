@@ -68,7 +68,8 @@
     "tailwind-merge": "^3.2.0",
     "tw-animate-css": "^1.2.8",
     "uuid": "^11.1.0",
-    "zustand": "^5.0.5"
+    "zustand": "^5.0.5",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -78,6 +79,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/js-yaml": "^4.0.9",
     "eslint": "^9.33.0",
     "eslint-config-next": "15.3.1",
     "eslint-config-prettier": "^10.1.8",
