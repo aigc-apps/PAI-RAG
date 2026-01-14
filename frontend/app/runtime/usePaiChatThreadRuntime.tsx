@@ -341,6 +341,58 @@ export class MyModelAdapter implements ChatModelAdapter {
           } as ChatModelRunResult;
         }
       }
+      
+      // 流结束时，检查是否有未完成的工具调用，将它们从eventQueue中移除（隐藏）
+      const cancelledToolCallIds = new Set<string>();
+      for (const toolCallId in currentToolCallMap) {
+        const toolCall = currentToolCallMap[toolCallId];
+        if (toolCall.state === 'running') {
+          // 标记为已取消，但不添加到eventQueue，这样前端就不会显示
+          cancelledToolCallIds.add(toolCallId);
+        }
+      }
+      
+      // 从eventQueue中移除已取消的工具调用
+      const filteredEventQueue = eventQueue.filter((event) => {
+        if (event.type === 'tool-call') {
+          return !cancelledToolCallIds.has(event.data.id);
+        }
+        return true;
+      });
+      
+      // 发送最终结果，已取消的工具调用已被过滤掉
+      if (filteredEventQueue.length > 0) {
+        yield {
+          content: filteredEventQueue
+            .map((event) => {
+              if (event.type === "reasoning") {
+                return {
+                  type: "reasoning" as const,
+                  text: event.data,
+                };
+              } else if (event.type === "text") {
+                return {
+                  type: 'text' as const,
+                  text: event.data,
+                };
+              } else if (event.type === 'tool-call') {
+                const toolCall = event.data;
+                return {
+                  type: 'tool-call' as const,
+                  toolCallId: toolCall.id,
+                  toolName: toolCall.function.name,
+                  argsText: JSON.stringify(toolCall.function.arguments),
+                  args: toolCall.function.arguments,
+                  state: toolCall.state,
+                  result: toolCall.result,
+                  isError: toolCall.isError,
+                };
+              }
+              return null;
+            })
+            .filter(Boolean),
+        } as ChatModelRunResult;
+      }
     }
 
     this.options.onFinish?.(unstable_getMessage());

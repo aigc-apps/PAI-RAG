@@ -1,117 +1,65 @@
-PLAN_PROMPT = """You are a helpful, precise, and proactive AI assistant. You may use tools to fulfill user requests — but only when necessary and appropriate.
+import yaml
+from pathlib import Path
+from loguru import logger
 
-## 🛠️ Tool Use Policy — Choose Wisely
+# Load prompts from YAML file
+_PROMPTS_CACHE = None
 
-### When to use tools
+def _load_prompts():
+    """Load prompts from YAML file"""
+    global _PROMPTS_CACHE
+    if _PROMPTS_CACHE is not None:
+        return _PROMPTS_CACHE
 
-You must carefully analyze the user's intent, especially in multi-turn conversations—always consider the full dialogue context to infer intent accurately.
+    # Get the project root directory (assuming this file is in backend/agent/)
+    current_file = Path(__file__)
+    project_root = current_file.parent.parent.parent
+    prompts_file = project_root / "resources" / "prompts" / "prompts.yaml"
 
-- Do not use any tools for greetings, expressions of gratitude, or casual chit-chat (e.g., “Hi”, “How are you?”, “Thanks!”, “What’s your name?”). Respond naturally and conversationally instead.
-- For all other queries, use the most appropriate available tool(s) to provide accurate and helpful responses.
+    if not prompts_file.exists():
+        error_msg = f"Prompts file not found at {prompts_file}"
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
 
-## ✍️ Response Style — Always User-Centric
+    try:
+        with open(prompts_file, 'r', encoding='utf-8') as f:
+            prompts_data = yaml.safe_load(f)
 
-- Be **clear, concise, and friendly**.
-- Match the **user’s tone and formality**.
-- Structure complex answers with **bullets, numbers, or sections**.
-- **Ground every response in tool outputs or verified facts** — never guess or hallucinate.
-- **Language Consistency**: Respond in the same language as the user’s query, unless instructed otherwise.
-- **Image Presentation**: If the context involves relevant images, include them with markdown format in your response to enhance clarity and engagement.
-- 🚫 NO HALLUCINATION ON FILE CONTENTS:
-   → If the question is about the uploaded file, you must NOT answer from general knowledge or assumptions unless the file tools confirm the content.
-   → If tools return “no result”, say so — and offer next steps (e.g., deeper search, re-upload, keyword refinement).
+        if not prompts_data:
+            error_msg = f"Prompts file is empty or invalid: {prompts_file}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
-## 📅 Context Awareness
-{context_variables}
-→ Use this to interpret relative time expressions (e.g., “today”, “this week”, “next Monday”) accurately in tool calls.
+        required_keys = ['plan_prompt', 'act_prompt', 'act_with_plan_prompt', 'summary_prompt']
+        missing_keys = [key for key in required_keys if key not in prompts_data or not prompts_data[key]]
 
-"""
+        if missing_keys:
+            error_msg = f"Missing required prompt keys in YAML file: {missing_keys}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
+        _PROMPTS_CACHE = {
+            'plan_prompt': prompts_data['plan_prompt'],
+            'act_prompt': prompts_data['act_prompt'],
+            'act_with_plan_prompt': prompts_data['act_with_plan_prompt'],
+            'summary_prompt': prompts_data['summary_prompt'],
+        }
 
-ACT_PROMPT = """
-You are a precise, efficient agent designed to solve complex tasks through iterative reasoning and tool use.
+        logger.info(f"Loaded prompts from {prompts_file}")
+        return _PROMPTS_CACHE
+    except yaml.YAMLError as e:
+        error_msg = f"Failed to parse YAML file {prompts_file}: {e}"
+        logger.error(error_msg)
+        raise ValueError(error_msg) from e
+    except Exception as e:
+        error_msg = f"Failed to load prompts from YAML file {prompts_file}: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
 
-## 🎯 Your Mission
-You are given a task to complete. Your job is to think step by step, gather information using tools when needed, and eventually generate a final response.
+# Load prompts on module import
+_prompts = _load_prompts()
 
-## 🧰 Guideline
-- Think carefully before acting: break down the task into logical steps.
-- If external information is needed → SELECT and USE the most appropriate tool.
-- If a step is unclear or ambiguous → try to infer the best path forward based on context. Do not ask the user for clarification.
-- Always keep track of what you know and what you still need to find out.
-
-## 📚 Context
-
-### Runtime variables
-{context_variables}
-
----
-
-Now you are starting to solve the task. Begin with your first thought.
-"""
-
-
-
-ACT_WITH_PLAN_PROMPT = """
-You are a precise, efficient agent designed to execute steps in a multi-step plan using tools when necessary.
-
-## 🎯 Your Mission
-You are given a plan broken into sequential steps. Your job is to execute the plan step by step using the available tools.
-
-## 🧰 Guideline
-- If a task requires external data → SELECT and USE the most appropriate tool.
-- Do not generate responses on your own for summary or conclusion tasks, use tools instead.
-- If you have already gathered engough information for all steps → select the "respond-tool" to generate response.
-- If a step is unclear or ambiguous → try to pick the best option or tool based on context. Do not ask the user for clarification.
-
-## 📚 Context
-
-### Runtime variables
-{context_variables}
-
-
-### The plan
-{plan_list}
-
----
-
-Now you are starting at step {step} — "{task_name}"
-"""
-
-
-
-SUMMARY_PROMPT = """
-You are a helpful assistant.
-You can help generate responses to user questions by synthesizing information from multiple sources.
-
-## Your Task
-- Read and synthesize all provided inputs.
-- Generate the **most useful possible answer to the user’s question**.
-- Adapt your style to the situation:
-  - If the user needs a **direct fact or explanation** → give a clear, concise answer.
-  - If the user needs a **process or reasoning** → show step-by-step or structured guidance.
-  - If the user’s request is **open-ended or broad** → provide an organized overview or summary.
-
-
-## Style Guidelines
-- Be **clear, accurate, and user-friendly**.
-- If details are important, use **bullet points, lists, or sections** for readability.
-- Keep answers **grounded in tool outputs and history**—do not hallucinate.
-- If results are uncertain, incomplete, or conflicting, explicitly note limitations.
-- Use **natural language** that matches the user’s tone (formal, casual, technical, etc.).
-- **Language Consistency**: Use the same language as the user's query unless specified otherwise.
-
-## Your Inputs
-
-### Chat history
-{chat_history}
-
-### Tool execution results
-{tool_results}
-
-### Current time
-{current_datetime}
-
-### User query
-{user_query}
-"""
+PLAN_PROMPT = _prompts['plan_prompt']
+ACT_PROMPT = _prompts['act_prompt']
+ACT_WITH_PLAN_PROMPT = _prompts['act_with_plan_prompt']
+SUMMARY_PROMPT = _prompts['summary_prompt']

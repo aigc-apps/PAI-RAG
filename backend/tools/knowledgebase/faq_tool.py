@@ -64,6 +64,7 @@ async def aget_faq_result(
 
     question_in_response = faq_config.enable_question_in_response if faq_config else True
     answer_in_response = faq_config.enable_answer_in_response if faq_config else True
+    return_direct = faq_config.return_direct if faq_config else False
 
     records_dict = []
     for record in records:
@@ -74,7 +75,7 @@ async def aget_faq_result(
         answer = metadata.get('answer', '') or ''
 
         content_parts = []
-        if not faq_config.return_direct:
+        if not return_direct:
             if question_in_response and question:
                 content_parts.append(f"问题：{question}")
             if answer_in_response and answer:
@@ -82,12 +83,16 @@ async def aget_faq_result(
 
             if content_parts:
                 record_dict['content'] = '\n'.join(content_parts)
+            else:
+                record_dict['content'] = ''
         else:
-            record_dict['content'] = answer
+            record_dict['content'] = answer if answer else ''
 
         records_dict.append(record_dict)
 
-    return json.dumps({"result": records_dict}, ensure_ascii=False)
+    result = json.dumps({"result": records_dict}, ensure_ascii=False)
+    logger.info(f"FAQ tool returning {len(records_dict)} results for query '{query}'")
+    return result
 
 
 async def aget_faq_tool(
@@ -139,7 +144,20 @@ async def aget_faq_tool(
     search_faq_tool = FunctionTool.from_defaults(
         async_fn=query_faq_handler,
         name=f"search-faq-{chatapp_id}",
-        description="根据上下文从FAQ知识库中搜索和用户查询相关的内容。",
+        description='''【最高优先级工具 - 必须优先调用且优先使用结果】
+
+这是回答用户问题的首选工具。使用规则如下：
+
+1. **必须首先调用**：每当用户提出任何问题时，你必须首先调用此工具从FAQ知识库中检索答案。即使你认为自己知道答案，也必须先调用此工具。
+
+2. **必须优先使用结果**：
+   - 如果FAQ工具返回的结果中result数组不为空（即len(result) > 0），说明找到了相关FAQ答案
+   - **此时你必须优先直接使用这些FAQ结果来回答用户，当这些答案已经足够回答用户的问题时绝对不要再调用任何其他工具**（包括知识库工具、搜索工具等）
+
+3. **在以下情况才可以使用其他工具**：
+   - FAQ工具返回的result数组为空（len(result) == 0），表示FAQ知识库中没有相关信息
+   - 或者FAQ工具调用失败
+''',
         return_direct=return_direct,
     )
     return search_faq_tool

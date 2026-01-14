@@ -298,8 +298,15 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       handleCloseDialog();
       // 如果是新增，跳转到第一页；如果是更新，保持在当前页
       if (!editingFaq) {
-        setPage(1);
+        // 如果当前不在第一页，跳转到第一页（会触发useEffect刷新）
+        // 如果已经在第一页，直接刷新列表
+        if (page !== 1) {
+          setPage(1);
+        } else {
+          fetchFAQs();
+        }
       } else {
+        // 更新时刷新当前页列表
         fetchFAQs();
       }
     } catch (error: any) {
@@ -520,127 +527,142 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     }
   };
 
+  const isFAQActive = faqConfigData?.active ?? false;
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Label htmlFor="enable_faq_switch">开启FAQ回复</Label>
-          <Switch
-            id="enable_faq_switch"
-            checked={faqConfigData?.active ?? false}
-            onCheckedChange={handleToggleFAQ}
-          />
+      <div className="flex justify-between items-center gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="enable_faq_switch">开启FAQ回复</Label>
+            <Switch
+              id="enable_faq_switch"
+              checked={isFAQActive}
+              onCheckedChange={handleToggleFAQ}
+            />
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {isFAQActive ? '如需关闭FAQ功能，请点击关闭FAQ' : '如需使用FAQ功能，请点击开启FAQ'}
+          </span>
         </div>
-        {faqConfigData && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (!faqConfigData) {
-                fetchFAQConfig();
-              }
-              setIsConfigDialogOpen(true);
-            }}
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            配置
-          </Button>
-        )}
-        <Button onClick={() => handleOpenDialog()} size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          新增FAQ
-        </Button>
-        <Button onClick={() => setIsUploadDialogOpen(true)} size="sm" variant="outline">
-          <Upload className="w-4 h-4 mr-2" />
-          上传文件
-        </Button>
-        {selectedItems.size > 0 && (
-          <Button 
-            onClick={handleBatchDelete} 
-            size="sm" 
-            variant="destructive"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            删除选中 ({selectedItems.size})
-          </Button>
+        {isFAQActive && (
+          <div className="flex items-center gap-4">
+            {faqConfigData && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!faqConfigData) {
+                    fetchFAQConfig();
+                  }
+                  setIsConfigDialogOpen(true);
+                }}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                配置
+              </Button>
+            )}
+            <Button onClick={() => handleOpenDialog()} size="sm">
+              <Plus className="w-4 h-4 mr-2" />
+              新增FAQ
+            </Button>
+            <Button onClick={() => setIsUploadDialogOpen(true)} size="sm" variant="outline">
+              <Upload className="w-4 h-4 mr-2" />
+              上传文件
+            </Button>
+            {selectedItems.size > 0 && (
+              <Button 
+                onClick={handleBatchDelete} 
+                size="sm" 
+                variant="destructive"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                删除选中 ({selectedItems.size})
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
-      {loading ? (
-        <div className="text-center py-8 text-muted-foreground">加载中...</div>
-      ) : faqs.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          暂无FAQ，点击"新增FAQ"添加
-        </div>
-      ) : (
+      {isFAQActive && (
         <>
-          <div className="mb-4 text-sm text-muted-foreground">
-            共 {totalItems} 条FAQ，第 {page} / {totalPages} 页
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px]">
-                  <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="全选"
-                  />
-                </TableHead>
-                <TableHead className="w-[200px]">问题</TableHead>
-                <TableHead>答案</TableHead>
-                <TableHead className="w-[120px]">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {faqs.map((faq) => (
-                <TableRow key={faq.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={faq.id ? selectedItems.has(faq.id) : false}
-                      onCheckedChange={() => faq.id && handleSelectItem(faq.id)}
-                      aria-label={`选择 ${faq.question}`}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">{faq.question}</TableCell>
-                  <TableCell className="max-w-md truncate">{faq.answer}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenDialog(faq)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => faq.id && handleDelete(faq.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {totalItems > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm text-muted-foreground">
-                  显示第 {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, totalItems)} 条，共 {totalItems} 条
-                </div>
-              </div>
-              <div className="flex justify-center">
-                <PaginationComponent
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                />
-              </div>
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">加载中...</div>
+          ) : faqs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              暂无FAQ，点击"新增FAQ"添加
             </div>
+          ) : (
+            <>
+              <div className="mb-4 text-sm text-muted-foreground">
+                共 {totalItems} 条FAQ，第 {page} / {totalPages} 页
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={isAllSelected}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="全选"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[200px]">问题</TableHead>
+                    <TableHead>答案</TableHead>
+                    <TableHead className="w-[120px]">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {faqs.map((faq) => (
+                    <TableRow key={faq.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={faq.id ? selectedItems.has(faq.id) : false}
+                          onCheckedChange={() => faq.id && handleSelectItem(faq.id)}
+                          aria-label={`选择 ${faq.question}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{faq.question}</TableCell>
+                      <TableCell className="max-w-md truncate">{faq.answer}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenDialog(faq)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => faq.id && handleDelete(faq.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {totalItems > 0 && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-muted-foreground">
+                      显示第 {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, totalItems)} 条，共 {totalItems} 条
+                    </div>
+                  </div>
+                  <div className="flex justify-center">
+                    <PaginationComponent
+                      currentPage={page}
+                      totalPages={totalPages}
+                      onPageChange={handlePageChange}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

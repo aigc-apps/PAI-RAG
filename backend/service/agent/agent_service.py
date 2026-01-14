@@ -138,18 +138,18 @@ class AgentService:
     ) -> tuple[List[FunctionTool], Callable | None]:
         tools = []
 
-        # 知识库工具
         rag_service = await self._get_rag_service()
         chatapp_service = await self._get_chatapp_service()
         faq_config_service = await self._get_faq_config_service()
+
+        if faq_config and faq_config.get("active"):
+            tools.append(await aget_faq_tool(chatapp_id=chatapp_id, user_id=user_id, rag_service=rag_service, chatapp_service=chatapp_service, faq_config_service=faq_config_service, tenant_id=tenant_id))
+            logger.info("Resolved FAQ tool (highest priority).")
+
+        # 知识库工具
         for kb_id in kb_ids:
             tools.append(await aget_knowledgebase_tool(kb_id=kb_id, user_id=user_id, rag_service=rag_service, tenant_id=tenant_id, metadata_condition=metadata_condition))
         logger.info(f"Resolved {len(kb_ids)} knowledgebase tools.")
-
-        # FAQ工具
-        if faq_config and faq_config.get("active"):
-            tools.append(await aget_faq_tool(chatapp_id=chatapp_id, user_id=user_id, rag_service=rag_service, chatapp_service=chatapp_service, faq_config_service=faq_config_service, tenant_id=tenant_id))
-            logger.info("Resolved FAQ tool.")
 
         # 搜索工具
         if enable_search:
