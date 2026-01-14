@@ -214,6 +214,7 @@ export default function KnowledgeBaseDetailPage(
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0); // 上传进度 0-100
   const [uploadStep, setUploadStep] = useState<'idle' | 'uploading' | 'uploaded' | 'parsing'>('idle'); // 上传步骤
+  const [isDragging, setIsDragging] = useState(false); // 拖拽状态
   const [uploadedFiles, setUploadedFiles] = useState<Array<{id: string; file_name: string; file_path: string; chunk_config?: any}>>([]);  // 已上传待解析的文件
   const [uploadChunkConfig, setUploadChunkConfig] = useState<{
     parser_type: string;
@@ -1944,17 +1945,45 @@ export default function KnowledgeBaseDetailPage(
                       {uploadStep === 'idle' && (
                         <>
                           <div 
-                            className="flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg hover:bg-muted/50 transition-colors"
+                            className={`flex flex-col items-center justify-center py-8 px-4 cursor-pointer border-2 border-dashed rounded-lg transition-colors ${
+                              isDragging 
+                                ? 'border-primary bg-primary/10' 
+                                : 'hover:bg-muted/50'
+                            }`}
                             onClick={() => {
                               document.getElementById('file-upload')?.click();
                             }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(true);
+                            }}
+                            onDragEnter={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(true);
+                            }}
+                            onDragLeave={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(false);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsDragging(false);
+                              const files = e.dataTransfer.files;
+                              if (files && files.length > 0) {
+                                handleFileUpload(files);
+                              }
+                            }}
                           >
-                            <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                            <Upload className={`h-12 w-12 mb-4 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
                             <p className="text-sm text-muted-foreground text-center">
                               支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
                             </p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              点击选择文件
+                            <p className={`text-xs mt-2 ${isDragging ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                              {isDragging ? '释放文件以上传' : '点击选择文件或拖拽文件到此处'}
                             </p>
                           </div>
                         </>
