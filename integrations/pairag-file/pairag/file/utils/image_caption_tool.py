@@ -1,15 +1,8 @@
-import traceback
-from typing import List
-from llama_index.core.base.llms.types import (
-    ChatMessage,
-    MessageRole,
-    ImageBlock,
-    TextBlock,
-    ChatResponse,
-)
-from llama_index.core.multi_modal_llms import MultiModalLLM
+from typing import Optional
 from loguru import logger
 import base64
+
+from pairag.file.utils.multimodal_llm import OpenAIMultimodalLLM
 
 
 system_prompt_str = """
@@ -21,77 +14,81 @@ system_prompt_str = """
 - 如果图片包含适合展示给用户浏览的有用信息，如产品说明、操作步骤、截图等，请生成该图片的简要描述，用上图描述了/上图展示了xx开头， 不要超过300个字符。
 """
 
+# Image MIME type mapping
+IMAGE_MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+}
+
+
+def get_image_mime_type(file_extension: str) -> str:
+    """
+    Get the MIME type for an image file extension.
+    
+    Args:
+        file_extension: File extension (e.g., '.jpg', '.png')
+        
+    Returns:
+        MIME type string (e.g., 'image/jpeg')
+    """
+    ext = file_extension.lower() if file_extension.startswith('.') else f'.{file_extension.lower()}'
+    return IMAGE_MIME_TYPES.get(ext, "image/jpeg")  # Default to jpeg
+
+
+def encode_image_to_data_url(image_data: bytes, file_extension: str = ".jpg") -> str:
+    """
+    Encode image data to a base64 data URL with proper MIME type prefix.
+    
+    Args:
+        image_data: Raw image bytes
+        file_extension: File extension to determine MIME type
+        
+    Returns:
+        Data URL string (e.g., 'data:image/jpeg;base64,...')
+    """
+    mime_type = get_image_mime_type(file_extension)
+    image_base64 = base64.b64encode(image_data).decode('utf-8')
+    return f"data:{mime_type};base64,{image_base64}"
+
 
 class ImageCaptionTool:
-    def __init__(self, multimodal_llm: MultiModalLLM):
+    def __init__(self, multimodal_llm: OpenAIMultimodalLLM):
         assert (
             multimodal_llm is not None
         ), "Must provide a multimodal_llm for the image captioning tool."
 
         self.multimodal_llm = multimodal_llm
 
-    def _get_result(self, messages: List[ChatMessage]) -> str:
-        try:
-            response: ChatResponse = self.multimodal_llm.chat(messages)
-            return response.message.content
-        except Exception:
-            logger.error(f"解析图片出错: {traceback.format_exc()}")
-            raise
-
-    def extract_url(self, image_url: str, context_str=None) -> str:
+    def extract_image(self, image_data: bytes, file_extension: str = ".jpg") -> Optional[str]:
         """
-        Run the image captioning model on the given image URL.
-        image_url: 图片链接
-        context_str: 上下文描述。
+        Run the image captioning model on the given image data.
+        
+        Args:
+            image_data: Raw image bytes
+            file_extension: File extension (e.g., '.jpg', '.png') for MIME type detection
+            
+        Returns:
+            Image caption/description string, or None if no content detected
         """
-        logger.info(f"[图像解析] 正在解析图片: {image_url}")
-        messages = [
-            ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=[
-                    TextBlock(text=system_prompt_str),
-                ],
-            ),
-            ChatMessage(
-                role=MessageRole.USER,
-                content=[
-                    ImageBlock(url=image_url),
-                ],
-            ),
-        ]
-        result = self._get_result(messages)
-        logger.info(f"[图像解析] 图片链接: {image_url} \n图片描述: {result}")
+        logger.info(f"[图像解析] 正在解析图片, 文件类型: {file_extension}")
+        
+        # Encode image with proper MIME type prefix
+        image_data_url = encode_image_to_data_url(image_data, file_extension)
 
-        if "NO_IMAGE_CONTENT" in result:
+        caption_result = self.multimodal_llm.chat_with_images(
+            system_prompt=system_prompt_str,
+            image_urls=[image_data_url],
+        )
+
+        logger.info(f"[图像解析] 解析图片结果: {caption_result}")
+        if not caption_result or "NO_IMAGE_CONTENT" in caption_result:
             return None
-        return result
-
-
-    def extract_image(self, image_data: bytes, context_str=None) -> str:
-        """
-        Run the image captioning model on the given image URL.
-        image_data: 图片数据
-        context_str: 上下文描述。
-        """
-        logger.info(f"[图像解析] 正在解析图片")
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
-
-        messages = [
-            ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=[
-                    TextBlock(text=system_prompt_str),
-                ],
-            ),
-            ChatMessage(
-                role=MessageRole.USER,
-                content=[
-                    ImageBlock(image=image_base64),
-                ],
-            ),
-        ]
-        result = self._get_result(messages)
-        logger.info(f"[图像解析] 解析图片结果: {result}")
-        if "NO_IMAGE_CONTENT" in result:
-            return None
-        return result
+        return caption_result

@@ -331,6 +331,8 @@ class ASTTreeBuilder:
     def handle_image(self, node: Image):
         image_url = node.src
         alt_text = self.render_span_tokens(node.children)
+        if alt_text == "image.png":
+            alt_text = None
         content = markdown_image_text_to_chunk(image_url, alt_text)
         new_node = TreeNode(
             level=self.stack[-1].level + 1, category="image", content=content

@@ -15,11 +15,11 @@ from pairag.file.utils.image_caption_tool import ImageCaptionTool
 REGEX_H1 = "===+"
 REGEX_H2 = "---+"
 MARKDOWN_IMAGE_PATTERN = re.compile(
-    r"!\[.*?\]\((https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))\)",
+    r"!\[.*?\]\((https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff)(?:\?[^\s)]*)?)\)",
     re.IGNORECASE,
 )
 HTML_IMAGE_PATTERN = re.compile(
-    r'<img[^>]*src=["\'](https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff))["\'][^>]*>',
+    r'<img[^>]*src=["\'](https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff)(?:\?[^\s"\']*)?)["\'][^>]*>',
     re.IGNORECASE,
 )
 
@@ -40,6 +40,7 @@ class MarkdownReader(BaseReader):
         for match in image_matches:
             full_match = match.group(0)  # 整个匹配
             local_url = match.group(1)  # 捕获的URL
+            should_remove_image = True
             if self.image_caption_tool:
                 image_file, image_name = get_image_from_url(local_url)
                 if image_name:
@@ -59,15 +60,13 @@ class MarkdownReader(BaseReader):
                             logger.info(
                                 f"Successfully saved image {upload_result.file_path} from URL: {local_url}"
                             )
-                        else:
-                            content = content.replace(full_match, "")
+                            should_remove_image = False
                     except Exception as ex:
-                        content = content.replace(full_match, "")
-                        logger.exception(
-                            f"Failed to save image from URL: {local_url}. Error: {ex}"
-                        )
-            else:
-                content = content.replace(full_match, "") # 移除图片链接
+                        logger.warning(f"Failed to save image from URL: {local_url}. {ex}.")
+            
+            if should_remove_image:
+                content = content.replace(full_match, "")
+                logger.warning(f"Failed to save image from URL: {local_url}. Remove image from contents.")
         return content, saved_images
 
     def read(self, file_item: FileItem) -> List[Document]:

@@ -72,10 +72,14 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachmen
             part_count = file_task.file_part
             current_task = await save_file_task_async(task_entity=file_task, tenant_id=tenant_id)
 
-        if current_task:
+        # directly process the file if there is only one task
+        if current_task and num_tasks == 1:
             logger.info(f"[WORKER] Processing file {file_id} part {current_task.file_part} with task {current_task.id}.")
             await kb_file_client.process_file_async(task_id=current_task.id, is_attachment=is_attachment, tenant_id=tenant_id)
             logger.info(f"[WORKER] Processed file {file_id} part {current_task.file_part} with task {current_task.id} successfully.")
+        else:
+            process_file_task.delay(task_id=current_task.id, is_attachment=is_attachment, tenant_id=tenant_id)
+            logger.info(f"[WORKER] Enqueued file {file_id} part {current_task.file_part} with task {current_task.id} successfully.")
 
         chunk_ids_to_delete = await clear_useless_file_resources_async(file_id=file_id, kb_id=file_entity.kb_id, part_count=part_count, tenant_id=tenant_id)
         await kb_file_client.adelete_chunks_from_vectordb(kb_id=file_entity.kb_id, node_ids=chunk_ids_to_delete, tenant_id=tenant_id)
@@ -107,7 +111,7 @@ async def process_attachments_content_async(file_id: str, file_extension: str, t
 @app.task(name="enqueue_attachments_file_tasks")
 def enqueue_attachments_file_tasks(file_id: str, file_version: int, file_extension: str, is_attachment: bool = False, tenant_id: str = None):
     loop = asyncio.get_event_loop()
-    if file_extension in [".xlsx", ".csv", ".jpg", ".png", ".jpeg", ".jsonl"]:
+    if file_extension in [".xlsx", ".csv", ".jpg", ".png", ".jpeg", ".jsonl", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv"]:
         loop.run_until_complete(process_attachments_content_async(file_id=file_id, file_extension=file_extension, tenant_id=tenant_id))
     else:
         loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment, tenant_id=tenant_id))
@@ -116,6 +120,7 @@ def enqueue_attachments_file_tasks(file_id: str, file_version: int, file_extensi
 # Enqueue file for processing, split into multiple tasks for large excels.
 @app.task(name="process_file_task")
 def process_file_task(task_id: str, is_attachment: bool = False, tenant_id: str = None):
+    from rag.kb_file_client import kb_file_client
     loop = asyncio.get_event_loop()
     logger.info(f"Processing file {task_id}.")
     loop.run_until_complete(kb_file_client.process_file_async(task_id=task_id, is_attachment=is_attachment, tenant_id=tenant_id))

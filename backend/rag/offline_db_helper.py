@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import List
 from db.models.knowledgebase.file_task import KbFileTaskEntity
+from db.models.llm import LlmModelEntity
 from loguru import logger
 from sqlalchemy import delete, or_, func
 from sqlmodel import select, update
@@ -105,6 +106,21 @@ async def set_embedding_model_ready(
         await session.rollback()
         raise e
 
+
+@with_async_db_session
+async def get_llm_model_from_db(
+    session: AsyncSession,
+    model_id: str,
+    tenant_id: str,
+    provider_name: str,
+) -> LlmModelEntity:
+    llm_service = await get_llm_service(session=session)
+    llm_entity = await llm_service.get_llm_model_by_provider_model_id(
+        provider_name=provider_name,
+        model_id=model_id,
+        tenant_id=tenant_id,
+    )
+    return llm_entity
 
 @with_async_db_session
 async def get_openailike_llm_from_db(

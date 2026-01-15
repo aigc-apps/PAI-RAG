@@ -15,6 +15,12 @@ SUPPORTED_FILE_EXT = [
     ".jpg",
     ".jpeg",
     ".png",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".mkv",
 ]
 
 

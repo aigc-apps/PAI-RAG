@@ -5,6 +5,11 @@ import {
 } from '@assistant-ui/react';
 import { toast } from 'sonner';
 
+// Helper function to determine attachment type
+const getAttachmentType = (mimeType: string): 'image' | 'document' | 'file' => {
+  return 'document';
+};
+
 export class UploadAttachmentAdapter implements AttachmentAdapter {
   public accept = '*/*';
   private tenantFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -21,11 +26,14 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     // Validate file size
     const { v4: uuidv4 } = require('uuid');
     const fid = uuidv4();
+    const contentType = file.type || 'application/octet-stream';
+    const attachmentType = getAttachmentType(contentType);
+    
     yield {
       id: fid,
-      type: file.type.startsWith('image/') ? 'image' : 'document',
+      type: attachmentType,
       name: file.name,
-      contentType: file.type || 'application/octet-stream',
+      contentType: contentType,
       file,
       status: {
         type: 'running',
@@ -35,18 +43,19 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     } as PendingAttachment;
 
     const maxSize = 10 * 1024 * 1024; // 10MB limit
+    
     if (file.size > maxSize) {
-      toast.error('File size exceeds 10MB limit');
+      toast.error(`File size exceeds 10MB limit`);
       yield {
         id: fid,
-        type: file.type.startsWith('image/') ? 'image' : 'document',
+        type: attachmentType,
         name: file.name,
-        contentType: file.type || 'application/octet-stream',
+        contentType: contentType,
         file,
         status: {
           type: 'incomplete',
           reason: 'error',
-          error: new Error('File size exceeds 10MB limit'),
+          error: new Error(`File size exceeds 10MB limit`),
         },
       } as PendingAttachment;
       return;
@@ -73,9 +82,9 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       // 返回成功状态
       yield {
         id: fid,
-        type: file.type.startsWith('image/') ? 'image' : 'document',
+        type: attachmentType,
         name: file.name,
-        contentType: file.type || 'application/octet-stream',
+        contentType: contentType,
         file,
         status: {
           type: 'running',
@@ -90,9 +99,9 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       toast.error(error.message || '上传失败，请稍后重试');
       yield {
         id: fid,
-        type: file.type.startsWith('image/') ? 'image' : 'document',
+        type: attachmentType,
         name: file.name,
-        contentType: file.type || 'application/octet-stream',
+        contentType: contentType,
         file,
         status: {
           type: 'incomplete',
@@ -103,37 +112,24 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       return;
     }
   }
+  
   public async send(
     attachment: PendingAttachment,
   ): Promise<CompleteAttachment> {
     if (attachment.status.type === 'incomplete') {
       throw new Error('Attachment upload failed');
     }
-    if (attachment.type === 'image') {
-      const base64 = await this.fileToBase64DataURL(attachment.file);
-      return {
-        id: attachment.id,
-        type: 'image',
-        name: attachment.name,
-        contentType: attachment.contentType || 'application/octet-stream',
-        status: { type: 'complete' },
-        content: [
-          {
-            type: 'image',
-            image: base64, // data:image/jpeg;base64,... format
-          },
-        ],
-      };
-    } else {
-      return {
-        id: attachment.id,
-        type: 'document',
-        name: attachment.name,
-        contentType: attachment.contentType || 'application/octet-stream',
-        content: [],
-        status: { type: 'complete' },
-      };
-    }
+    
+    const contentType = attachment.contentType || 'application/octet-stream';
+    console.log("upload attachment success:", attachment);
+    return {
+      id: attachment.id,
+      type: 'document',
+      name: attachment.name,
+      contentType: contentType,
+      content: [],
+      status: { type: 'complete' },
+    } as CompleteAttachment;
   }
 
   public async remove(attachment: PendingAttachment): Promise<void> {
@@ -141,15 +137,4 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     console.log('removing attachment:', attachment);
   }
 
-  private async fileToBase64DataURL(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        // FileReader result is already a data URL
-        resolve(reader.result as string);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
 }

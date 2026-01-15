@@ -3122,6 +3122,25 @@ export default function KnowledgeBaseDetailPage(
                               height="100%"
                               title="文件预览"
                             />
+                          ) : previewFile?.file_extension === '.mp4' ||
+                            previewFile?.file_extension === '.avi' ||
+                            previewFile?.file_extension === '.mov' ||
+                            previewFile?.file_extension === '.wmv' ||
+                            previewFile?.file_extension === '.flv' ||
+                            previewFile?.file_extension === '.mkv' ||
+                            previewFile?.file_extension === '.webm' ? (
+                            <video
+                              src={previewFile?.file_metadata?.file_url}
+                              controls
+                              autoPlay={false}
+                              style={{
+                                width: '100%',
+                                maxHeight: '100%',
+                                objectFit: 'contain',
+                              }}
+                            >
+                              您的浏览器不支持视频播放
+                            </video>
                           ) : previewFile?.file_extension === '.md' ||
                             previewFile?.file_extension === '.txt' ? (
                             <MarkdownViewer file_url={previewFile?.file_metadata?.file_url || ''} />

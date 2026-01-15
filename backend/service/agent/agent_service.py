@@ -4,10 +4,9 @@ from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from tools.knowledgebase.faq_tool import aget_faq_tool
 from service.factory.tools import create_search_tools, create_chatdb_tools, create_codesandbox_tools
 from service.factory.mcp_factory import create_mcp_tools_async
-from tools.attachments.file_searcher import aget_file_searcher
 from tools.search.visit_webpage import aget_visit_webpage_tool
 from tools.attachments.file_reader import aget_file_reader
-from tools.attachments.image_parser import aget_image_parser_tool
+from tools.attachments.multimodal_parser import aget_multimodal_parser_tool
 import os
 from tools.code.code_sandbox_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
 from llama_index.core.tools.function_tool import FunctionTool
@@ -200,7 +199,6 @@ class AgentService:
     ) -> tuple[List[FunctionTool], Callable | None]:
         file_service = await self._get_file_service()
         llm_service = await self._get_llm_service()
-        rag_service = await self._get_rag_service()
 
         attachment_tools = []
         if not messages:
@@ -211,37 +209,35 @@ class AgentService:
             return [], None
 
         user_attachments = user_message.get("attachments", [])
-        image_list = []
+        image_ids = []
         file_ids_to_read = []
-
+        video_ids = []
         for attachment in user_attachments:
             attachment_file_id = attachment.get("id")
-            if str(attachment.get("contentType")).startswith("image/"):
-                attachment_content = attachment.get("content", "")
-
-                if isinstance(attachment_content, List):
-                    for content in attachment_content:
-                        if isinstance(content, dict) and content.get("type") == "image":
-                            image_list.append(content.get("image"))
-
-                attachment_tools.append(await aget_image_parser_tool(image_list=image_list, llm_service=llm_service, tenant_id=tenant_id))
+            attachment_content_type = attachment.get("contentType")
+            if str(attachment_content_type).startswith("image/"):
+                image_ids.append(attachment_file_id)
+            elif str(attachment_content_type).startswith("video/"):
+                video_ids.append(attachment_file_id)
             else:
                 file_ids_to_read.append(attachment_file_id)
-                attachment_tools.append(await aget_file_reader(file_service=file_service, tenant_id=tenant_id))
 
+        image_base64_list = []
+        video_base64_list = []
+        if image_ids:
+            image_base64_list = await file_service.get_file_base64_list(file_ids=image_ids, tenant_id=tenant_id)
+        if video_ids:
+            video_base64_list = await file_service.get_file_base64_list(file_ids=video_ids, tenant_id=tenant_id)
 
-        # 文件搜索工具
-        if len(file_ids_to_read) > 0:
-            logger.info(f"Loading file searcher tool with file ids to read: {file_ids_to_read}")
-            file_searcher_tool = await aget_file_searcher(rag_service=rag_service, tenant_id=tenant_id)
-            attachment_tools.append(file_searcher_tool)
+        if image_base64_list or video_base64_list:
+            attachment_tools.append(await aget_multimodal_parser_tool(image_list=image_base64_list, video_list=video_base64_list, llm_service=llm_service, tenant_id=tenant_id))
 
-
-        # 只在user message最后追加列出文件结果，不使用 tool_call / tool 消息， 增加相关hint提示
-
-        if len(file_ids_to_read) > 0:
-            reply_text = f"\n\n 可以阅读的文件的ID列表: \n\n {file_ids_to_read}"
-            append_text(user_message, reply_text)
+        if file_ids_to_read:
+            file_contents_map = await file_service.get_file_contents_map(file_ids=file_ids_to_read, tenant_id=tenant_id)
+            if file_contents_map:
+                attachment_tools.append(await aget_file_reader(file_contents_map=file_contents_map))
+                reply_text = f"\n\n 可以阅读的文件列表: \n\n {file_contents_map.keys()}"
+                append_text(user_message, reply_text)
 
         # coding tool
         attachment_names_in_message = []

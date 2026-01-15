@@ -404,7 +404,7 @@ async def reprocess_file(
     rag_service: RagService = Depends(get_rag_service),
 ):
     try:
-        file_entities = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=[file_id], tenant_id=tenant_id)
+        file_entities = await file_service.get_files_by_ids(file_ids=[file_id], tenant_id=tenant_id)
         if not file_entities:
             raise ApiException.not_found(file_id, "文件")
 
@@ -485,7 +485,7 @@ async def batch_operations(
         )
 
     # 验证所有文件是否存在
-    file_entities = await file_service.get_files_by_ids(kb_id=kb_id, file_ids=request.file_id_list, tenant_id=tenant_id)
+    file_entities = await file_service.get_files_by_ids(file_ids=request.file_id_list, tenant_id=tenant_id)
     found_file_ids = {entity.id for entity in file_entities}
     not_found_ids = [file_id for file_id in request.file_id_list if file_id not in found_file_ids]
 

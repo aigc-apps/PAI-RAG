@@ -11,7 +11,7 @@ from common.knowledgebase.types import (
 
 from rag.offline_db_helper import (
     get_embedding_from_db,
-    get_openailike_llm_from_db,
+    get_llm_model_from_db,
     get_file_task_async,
     read_file_from_db,
     save_chunks_to_db_async,
@@ -25,9 +25,12 @@ from rag.offline_db_helper import (
 from pairag.file.models.file_item import FileItem
 from pairag.file.nodeparsers.file_parser import FileParser
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
+from pairag.file.utils.video_caption_tool import VideoCaptionTool
+from pairag.file.utils.multimodal_llm import OpenAIMultimodalLLM
 from rag.vector_store.vector_connection import cleanup_vector_store_async
 from llama_index.core.embeddings import BaseEmbedding
 from pairag.file.store.file_store_helper import file_store
+from common.encrypt_utils import decrypt_key
 from loguru import logger
 from rag.parse_utils import sanitize_text, get_node_texts_for_embedding
 from common.knowledgebase.constants import DEFAULT_PARAGRAPH_SEPARATOR
@@ -43,13 +46,20 @@ class KbFileClient:
             chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config)
 
         image_caption_tool = None
+        video_caption_tool = None
         if chunk_config.image_caption_model:
-            multimodal_llm = await get_openailike_llm_from_db(
+            llm_config = await get_llm_model_from_db(
                 model_id=chunk_config.image_caption_model,
                 tenant_id=knowledgebase.tenant_id,
                 provider_name=chunk_config.image_caption_provider_name,
             )
+            if not llm_config:
+                logger.error(f"Image caption model {chunk_config.image_caption_model} not found.")
+                raise ValueError(f"Image caption model {chunk_config.image_caption_model} not found.")
+
+            multimodal_llm = OpenAIMultimodalLLM(base_url=llm_config.base_url, api_key=decrypt_key(llm_config.encrypted_api_key), model=llm_config.model)
             image_caption_tool = ImageCaptionTool(multimodal_llm=multimodal_llm)
+            video_caption_tool = VideoCaptionTool(multimodal_llm=multimodal_llm)
 
         if not chunk_config.separator:
             chunk_config.separator = DEFAULT_PARAGRAPH_SEPARATOR
@@ -57,6 +67,7 @@ class KbFileClient:
         file_parser = FileParser(
             file_store=file_store,
             image_caption_tool=image_caption_tool,
+            video_caption_tool=video_caption_tool,
             chunk_config=chunk_config,
         )
         return file_parser
@@ -215,8 +226,9 @@ class KbFileClient:
                         logger.warning("Will not remove previous data as vector store does not support removing nodes.")
                         pass
 
-                for i in tqdm(range(0, len(nodes), 1000), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
-                    batch_nodes = nodes[i:i + 1000]
+                embed_batch_size = embed_model.embed_batch_size
+                for i in tqdm(range(0, len(nodes), embed_batch_size), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
+                    batch_nodes = nodes[i:i + embed_batch_size]
                     texts_to_embed = get_node_texts_for_embedding(batch_nodes)
                     embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
                     for j in range(len(batch_nodes)):
