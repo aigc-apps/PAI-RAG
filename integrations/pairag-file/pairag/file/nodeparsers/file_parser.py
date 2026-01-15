@@ -20,12 +20,14 @@ from pairag.file.readers.mineru_reader import MineruPdfReader
 from pairag.file.readers.pptx_reader import PptxReader
 from pairag.file.readers.text_reader import TextReader
 from pairag.file.readers.simple_pdf_reader import SimplePdfReader
+from pairag.file.readers.video_reader import VideoReader
 from pairag.file.nodeparsers.token_parser import TokenTextSplitter
 from pairag.file.nodeparsers.paragraph_parser import ParagraphSplitter
 from pairag.file.nodeparsers.pai_markdown_parser import MarkdownNodeParser
 from pairag.file.nodeparsers.positional_markdown_parser import PositionalMarkdownNodeParser
 from pairag.file.store.base import BaseFileStore
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
+from pairag.file.utils.video_caption_tool import VideoCaptionTool
 from pairag.file.utils.tokenization import estimate_tokens_in_text
 from pairag.file.utils.constants import (
     DEFAULT_CHUNK_SIZE,
@@ -93,11 +95,13 @@ class FileParser:
         self,
         file_store: BaseFileStore,
         image_caption_tool: ImageCaptionTool = None,
+        video_caption_tool: VideoCaptionTool = None,
         reader_config: Optional[ReaderConfig] = ReaderConfig(),
         chunk_config: Optional[ChunkConfig] = ChunkConfig(),
     ):
         self.file_store = file_store
         self.image_caption_tool = image_caption_tool
+        self.video_caption_tool = video_caption_tool
         self.chunk_config = chunk_config
         self.reader_config = reader_config
 
@@ -146,6 +150,36 @@ class FileParser:
                     return Csv2MdReader(chunk_size=chunk_size)
                 case ".jsonl":
                     return Json2MdReader(chunk_size=chunk_size)
+                case ".mp4":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".avi":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".mov":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".wmv":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".flv":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".mkv":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
                 case _:
                     raise ValueError(f"不支持的附件文件类型: {file_extension}")
         else:
@@ -250,6 +284,36 @@ class FileParser:
                     return Json2MdReader(chunk_size=chunk_size)
                 case ".txt":
                     return TextReader()
+                case ".mp4":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".avi":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".mov":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".wmv":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".flv":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
+                case ".mkv":
+                    return VideoReader(
+                        file_store=self.file_store,
+                        video_caption_tool=self.video_caption_tool,
+                    )
                 case _:
                     raise ValueError(f"不支持的文件类型: {file_extension}")
 

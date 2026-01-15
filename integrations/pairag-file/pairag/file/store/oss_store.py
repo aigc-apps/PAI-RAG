@@ -86,7 +86,8 @@ class OssFileStore(BaseFileStore):
     async def get_url_async(self, file_path: str, tenant_id: str) -> Optional[str]:
         try:
             oss_file_key = os.path.join(self.prefix_path, file_path)
-            oss_url = self.bucket.sign_url("GET", oss_file_key, 3600)
+            sign_url_task = asyncio.to_thread(self.bucket.sign_url, method="GET", key=oss_file_key, expires=3600)
+            oss_url = await sign_url_task
             # 如果是内网地址，替换为公网地址以便外部访问
             if self.is_internal:
                 oss_url = oss_url.replace(self.endpoint, self.public_endpoint)

@@ -2,7 +2,9 @@
 import time
 import traceback
 import asyncio
-from fastapi import APIRouter, File, UploadFile, Form, Depends
+from typing import List
+from fastapi import APIRouter, File, UploadFile, Form, Depends, Query
+from pydantic import BaseModel
 from db.models.knowledgebase.knowledgebase import (
     KnowledgebaseCreate,
 )
@@ -14,17 +16,101 @@ from common.chat.response_model import success_response
 from common.knowledgebase.types import FileStatus
 from datetime import datetime, timezone
 from api.api_exception import ApiException
-from service.knowledgebase.rag_service import RagService
-from service.injection import get_rag_service, get_embedding_service, get_knowledgebase_service, get_file_service, get_file_task_service, get_tenant_id
+from service.injection import get_embedding_service, get_knowledgebase_service, get_file_service, get_tenant_id
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.knowledgebase.file_service import FileService
-from service.knowledgebase.file_task_service import FileTaskService
 from service.model.embedding_service import EmbeddingService
 from common.knowledgebase.constants import ATTACHMENT_KNOWLEDGEBASE_NAME
+from tools.utils.attachments import is_multimodal_file_type, get_file_mime_type
 from utils.upload_file_utils import upload_form_files_async
+from pairag.file.store.file_store_helper import file_store
 from loguru import logger
 
 attachments_router = APIRouter()
+
+
+class AttachmentUrlItem(BaseModel):
+    id: str
+    url: str | None
+    content_type: str | None
+    file_name: str | None
+    file_content: str | None  # For text files
+
+
+class AttachmentUrlsResponse(BaseModel):
+    items: List[AttachmentUrlItem]
+
+
+# Supported text file extensions for inline content preview
+TEXT_FILE_EXTENSIONS = {".txt", ".md", ".json", ".yaml", ".yml", ".xml", ".csv", ".log", ".py", ".js", ".ts", ".html", ".css"}
+
+
+@attachments_router.get("/urls")
+async def get_attachment_urls(
+    ids: str = Query(..., description="Comma-separated attachment IDs"),
+    file_service: FileService = Depends(get_file_service),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """
+    Get URLs for attachments by their IDs.
+    Supports batch requests with comma-separated IDs.
+    For text files, also returns the file content for inline preview.
+    """
+    try:
+        # Parse comma-separated IDs
+        file_ids = [id.strip() for id in ids.split(",") if id.strip()]
+
+        if not file_ids:
+            return success_response(data=AttachmentUrlsResponse(items=[]))
+
+        # Get file entities
+        file_entities = await file_service.get_files_by_ids(file_ids=file_ids, tenant_id=tenant_id)
+
+        # Build URL map
+        result_items = []
+        for file_id in file_ids:
+            # Find matching file entity
+            file_entity = next((f for f in file_entities if f.id == file_id), None)
+
+            if not file_entity:
+                result_items.append(AttachmentUrlItem(
+                    id=file_id,
+                    url=None,
+                    content_type=None,
+                    file_name=None,
+                    file_content=None,
+                ))
+                continue
+
+            # Get URL for the file
+            url = None
+            if file_entity.file_path:
+                try:
+                    url = await file_store.get_url_async(file_path=file_entity.file_path, tenant_id=tenant_id)
+                except Exception as e:
+                    logger.warning(f"Failed to get URL for file {file_id}: {e}")
+
+            # Get content type based on file extension
+            content_type = get_file_mime_type(file_entity.file_extension)
+
+            # For text files, include the file content for inline preview
+            file_content = None
+            if file_entity.file_extension and file_entity.file_extension.lower() in TEXT_FILE_EXTENSIONS:
+                file_content = file_entity.file_content
+
+            result_items.append(AttachmentUrlItem(
+                id=file_id,
+                url=url,
+                content_type=content_type,
+                file_name=file_entity.file_name,
+                file_content=file_content,
+            ))
+
+        return success_response(data=AttachmentUrlsResponse(items=result_items))
+
+    except Exception as e:
+        logger.error(f"Failed to get attachment URLs: {traceback.format_exc()}")
+        raise ApiException(code=500, message=f"获取附件URL失败: {e}")
 
 
 MAX_CHECK_ATTEMPTS = 100
@@ -38,8 +124,6 @@ async def create_attachment_file(
     embedding_service: EmbeddingService = Depends(get_embedding_service),
     knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
     file_service: FileService = Depends(get_file_service),
-    file_task_service: FileTaskService = Depends(get_file_task_service),
-    rag_service: RagService = Depends(get_rag_service),
     tenant_id: str = Depends(get_tenant_id),
 ):
     knowledgebase = None
@@ -101,8 +185,12 @@ async def create_attachment_file(
         session.add(file_entity)
         await session.commit()
 
-        background_worker.enqueue_attachments_file_tasks.delay(file_entity.id, file_entity.file_version, file_entity.file_extension, is_attachment=True, tenant_id=tenant_id)
-        logger.info(f"Enqueued file {file_entity.id} for background processing...")
+        if is_multimodal_file_type(file_entity.file_extension):
+            logger.info(f"File {file_entity.id} is a multimodal file, skipping background processing...")
+            return success_response(data=file_entity, message=f"文件{file_item.file_name}上传成功")
+        else:
+            background_worker.enqueue_attachments_file_tasks.delay(file_entity.id, file_entity.file_version, file_entity.file_extension, is_attachment=True, tenant_id=tenant_id)
+            logger.info(f"Enqueued file {file_entity.id} for background processing...")
     except Exception as e:
         logger.error(f"Failed to save file {file_id} to database: {traceback.format_exc()}")
         raise ApiException(code=400, message=f"文件{file_id}上传失败: {e}")

@@ -61,3 +61,10 @@ class KbFileEntity(SQLModel, table=True):
             return f"{dt.isoformat()}Z"
         # If it's already aware, convert to ISO format
         return dt.isoformat()
+
+    def get_file_content(self) -> str:
+        content = f"📄 文件“{self.file_name}” 的内容如下：\n\n {self.file_content}"
+        if self.file_content_length > 1000:
+            content += "\n\n[The file content is too long, has been truncated]"
+
+        return content
