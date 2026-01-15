@@ -63,10 +63,12 @@ interface EmbeddingModel {
 interface FAQManagementProps {
   appId: string;
   botConfig: Chatbot;
-  setBotConfig: (config: Chatbot) => void;
+  onConfigChange: (updates: Partial<Chatbot>) => void;
+  onSave: (updatedConfig?: Partial<Chatbot>) => Promise<boolean>;
+  saving?: boolean;
 }
 
-export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, setBotConfig }) => {
+export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, onConfigChange, onSave, saving = false }) => {
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -92,7 +94,6 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   const [formData, setFormData] = useState<FAQItem>({ question: '', answer: '' });
   const [embeddingModels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [faqConfigData, setFaqConfigData] = useState<{
-    active: boolean;
     score_threshold: number;
     embedding_model: string;
     enable_question_in_retrieval: boolean;
@@ -103,106 +104,20 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   } | null>(null);
   const { tenantFetch } = useTenantFetch();
 
-  const handleToggleFAQ = async (checked: boolean) => {
-    try {
-      // 更新 faq_config.active 字段
-      const res = await tenantFetch(`/api/config/apps/${appId}/faq-config`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          active: checked,
-        }),
-      });
-
-      if (!res.ok) throw new Error('更新失败');
-      
-      const data = await res.json();
-      // 更新本地状态
-      if (data.data) {
-          setFaqConfigData({
-            active: data.data.active ?? checked,
-            score_threshold: data.data.similarity_threshold ?? data.data.score_threshold ?? faqConfigData?.score_threshold ?? DEFAULT_SCORE_THRESHOLD,
-            embedding_model: data.data.embedding_model ?? faqConfigData?.embedding_model ?? '',
-            enable_question_in_retrieval: data.data.enable_question_in_retrieval ?? faqConfigData?.enable_question_in_retrieval ?? true,
-            enable_question_in_response: data.data.enable_question_in_response ?? faqConfigData?.enable_question_in_response ?? false,
-            enable_answer_in_retrieval: data.data.enable_answer_in_retrieval ?? faqConfigData?.enable_answer_in_retrieval ?? false,
-            enable_answer_in_response: data.data.enable_answer_in_response ?? faqConfigData?.enable_answer_in_response ?? true,
-            return_direct: data.data.return_direct ?? faqConfigData?.return_direct ?? false,
-          });
-      }
-      
-      // 同步更新 botConfig.enable_faq
-      setBotConfig({
-        ...botConfig,
-        enable_faq: checked,
-      });
-      
-      toast.success(checked ? '已启用FAQ回复' : '已关闭FAQ回复');
-    } catch (error: any) {
-      toast.error(error.message || '更新失败');
-    }
-  };
-
+  // Sync faqConfigData with botConfig.faq_config
   useEffect(() => {
-    fetchFAQs();
-    fetchEmbeddingModels();
-    // 无论 enable_faq 是否为 true，都加载 FAQ 配置以获取 active 状态
-    fetchFAQConfig();
-  }, [appId, page]);
-
-  // 当页面切换时，清空选中项
-  useEffect(() => {
-    setSelectedItems(new Set());
-  }, [page]);
-
-  const fetchFAQConfig = async () => {
-    try {
-      const res = await tenantFetch(`/api/config/apps/${appId}/faq-config`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.data) {
-          // 从后端返回的数据中提取配置字段
-          setFaqConfigData({
-            active: data.data.active ?? false,
-            score_threshold: data.data.score_threshold ?? data.data.similarity_threshold ?? DEFAULT_SCORE_THRESHOLD,
-            embedding_model: data.data.embedding_model ?? '',
-            enable_question_in_retrieval: data.data.enable_question_in_retrieval ?? true,
-            enable_question_in_response: data.data.enable_question_in_response ?? true,
-            enable_answer_in_retrieval: data.data.enable_answer_in_retrieval ?? false,
-            enable_answer_in_response: data.data.enable_answer_in_response ?? true,
-            return_direct: data.data.return_direct ?? false,
-          });
-        } else {
-          // 如果没有配置数据，设置默认值（active 默认为 false）
-          setFaqConfigData({
-            active: false,
-            score_threshold: DEFAULT_SCORE_THRESHOLD,
-            embedding_model: '',
-            enable_question_in_retrieval: true,
-            enable_question_in_response: true,
-            enable_answer_in_retrieval: false,
-            enable_answer_in_response: true,
-            return_direct: false,
-          });
-        }
-      } else if (res.status === 404) {
-        // FAQ 配置不存在，设置默认值
-        setFaqConfigData({
-          active: false,
-          score_threshold: DEFAULT_SCORE_THRESHOLD,
-          embedding_model: '',
-          enable_question_in_retrieval: true,
-          enable_question_in_response: false,
-          enable_answer_in_retrieval: false,
-          enable_answer_in_response: true,
-          return_direct: false,
-        });
-      }
-    } catch (error: any) {
-      console.error('获取FAQ配置失败:', error);
-      // 即使出错也设置默认值，确保开关可以显示
+    if (botConfig.faq_config) {
       setFaqConfigData({
-        active: false,
+        score_threshold: botConfig.faq_config.similarity_threshold ?? DEFAULT_SCORE_THRESHOLD,
+        embedding_model: botConfig.faq_config.embedding_model ?? '',
+        enable_question_in_retrieval: botConfig.faq_config.enable_question_in_retrieval ?? true,
+        enable_question_in_response: botConfig.faq_config.enable_question_in_response ?? false,
+        enable_answer_in_retrieval: botConfig.faq_config.enable_answer_in_retrieval ?? false,
+        enable_answer_in_response: botConfig.faq_config.enable_answer_in_response ?? true,
+        return_direct: botConfig.faq_config.return_direct ?? false,
+      });
+    } else {
+      setFaqConfigData({
         score_threshold: DEFAULT_SCORE_THRESHOLD,
         embedding_model: '',
         enable_question_in_retrieval: true,
@@ -212,7 +127,30 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
         return_direct: false,
       });
     }
+  }, [botConfig.faq_config]);
+
+  const handleToggleFAQ = async (checked: boolean) => {
+    try {
+      onConfigChange({ enable_faq: checked });
+      const success = await onSave({ enable_faq: checked });
+      if (success) {
+        toast.success(checked ? '已启用FAQ回复' : '已关闭FAQ回复');
+      }
+    } catch (error: any) {
+      toast.error(error.message || '更新失败');
+    }
   };
+
+  useEffect(() => {
+    fetchFAQs();
+    fetchEmbeddingModels();
+  }, [appId, page]);
+
+  // 当页面切换时，清空选中项
+  useEffect(() => {
+    setSelectedItems(new Set());
+  }, [page]);
+
 
   const fetchEmbeddingModels = async () => {
     try {
@@ -494,40 +432,32 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   };
 
   const handleSaveConfig = async () => {
+    if (!faqConfigData) return;
+    
     try {
-      const res = await tenantFetch(`/api/config/apps/${appId}/faq-config`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          active: faqConfigData?.active ?? true,
-          similarity_threshold: faqConfigData?.score_threshold,
-          embedding_model: faqConfigData?.embedding_model,
-          enable_question_in_retrieval: faqConfigData?.enable_question_in_retrieval,
-          enable_question_in_response: faqConfigData?.enable_question_in_response,
-          enable_answer_in_retrieval: faqConfigData?.enable_answer_in_retrieval,
-          enable_answer_in_response: faqConfigData?.enable_answer_in_response,
-          return_direct: faqConfigData?.return_direct ?? false,
-        }),
-      });
-
-      if (!res.ok) throw new Error('保存配置失败');
+      const updatedFaqConfig = {
+        similarity_threshold: faqConfigData.score_threshold,
+        embedding_model: faqConfigData.embedding_model,
+        enable_question_in_retrieval: faqConfigData.enable_question_in_retrieval,
+        enable_question_in_response: faqConfigData.enable_question_in_response,
+        enable_answer_in_retrieval: faqConfigData.enable_answer_in_retrieval,
+        enable_answer_in_response: faqConfigData.enable_answer_in_response,
+        return_direct: faqConfigData.return_direct,
+      };
       
-      const data = await res.json();
-      // 更新本地状态，确保包含 active 字段
-      if (data.data && faqConfigData) {
-        setFaqConfigData({
-          ...faqConfigData,
-          active: data.data.active ?? faqConfigData.active,
-        });
+      onConfigChange({ faq_config: updatedFaqConfig });
+      const success = await onSave({ faq_config: updatedFaqConfig });
+      
+      if (success) {
+        setIsConfigDialogOpen(false);
+        toast.success('配置保存成功');
       }
-      setIsConfigDialogOpen(false);
-      toast.success('配置保存成功');
     } catch (error: any) {
       toast.error(error.message || '保存配置失败');
     }
   };
 
-  const isFAQActive = faqConfigData?.active ?? false;
+  const isFAQActive = botConfig.enable_faq ?? false;
 
   return (
     <div className="space-y-4">
@@ -547,21 +477,14 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
         </div>
         {isFAQActive && (
           <div className="flex items-center gap-4">
-            {faqConfigData && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (!faqConfigData) {
-                    fetchFAQConfig();
-                  }
-                  setIsConfigDialogOpen(true);
-                }}
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                配置
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsConfigDialogOpen(true)}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              配置
+            </Button>
             <Button onClick={() => handleOpenDialog()} size="sm">
               <Plus className="w-4 h-4 mr-2" />
               新增FAQ

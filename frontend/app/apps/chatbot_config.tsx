@@ -44,8 +44,6 @@ import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '.
 
 // Add import for ResettableTextarea
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
-import { toast } from 'sonner';
-import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
 
 interface PromptConfig {
@@ -56,13 +54,13 @@ interface PromptConfig {
 }
 
 interface FAQConfig {
-  active?: boolean;
   similarity_threshold?: number;
   embedding_model?: string;
   enable_question_in_retrieval?: boolean;
   enable_question_in_response?: boolean;
   enable_answer_in_retrieval?: boolean;
   enable_answer_in_response?: boolean;
+  return_direct?: boolean;
 }
 
 export interface Chatbot {
@@ -84,209 +82,107 @@ export interface Chatbot {
   prompts: PromptConfig;
 }
 
-
+// Props interface for controlled component
 interface ChatbotConfigProps {
-  chatbotId: string | undefined;
+  botConfig: Chatbot;
+  onConfigChange: (updates: Partial<Chatbot>) => void;
+  onSave: () => Promise<boolean | void> | void;
+  saving?: boolean;
+  llms: LlmConfig[];
+  mcps: McpConfig[];
+  kbs: KbConfig[];
+  isCreate?: boolean;
+  saveErrorMsg?: string;
 }
 
-
-const default_chat_config = {
-  id: '',
-  app_id: '',
-  description: '',
-  enable_search: false,
-  mcp_ids: [],
-  kb_ids: [],
-  model_id: "",
-  updated_at: "",
-  enable_agent: false,
-  enable_chatdb: false,
-  enable_faq: false,
-  faq_config: null,
-  enable_input_guardrail: false,
-  enable_output_guardrail: false,
-  guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
-  prompts: {
-    plan: PLAN_PROMPT,
-    act: ACT_PROMPT,
-    act_with_plan: ACT_WITH_PLAN_PROMPT,
-    summary: SUMMARY_PROMPT,
-  }
-};
-
-// 知识库配置卡片
+// 知识库配置卡片 - 受控组件
 export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
-  chatbotId,
+  botConfig,
+  onConfigChange,
+  onSave,
+  saving = false,
+  llms,
+  mcps,
+  kbs,
+  isCreate = false,
+  saveErrorMsg: externalErrorMsg,
 }) => {
   const [openPrompt, setOpenPrompt] = useState(false);
-  const [botConfig, setBotConfig] = useState<Chatbot>(default_chat_config);
-  const [llms, setLlms] = useState<LlmConfig[]>([]);
-  const [mcps, setMcps] = useState<McpConfig[]>([]);
-  const [kbs, setKbs] = useState<KbConfig[]>([]);
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
-  const isCreate: boolean = chatbotId === undefined || chatbotId === '';
   const [planPrompt, setPlanPrompt] = useState('');
   const [actPrompt, setActPrompt] = useState('');
   const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
   const [summarizePrompt, setSummarizePrompt] = useState('');
-  const { tenantFetch } = useTenantFetch();
 
   const router = useRouter();
-  // const [isLoading, setIsLoading] = useState(false);
 
+  // Sync selected names when botConfig changes
   useEffect(() => {
-    const fetchModelConfigs = async () => {
-      try {
-        if (!isCreate) {
-          const [llmRes, mcpRes, kbRes, botRes] = await Promise.all([
-            tenantFetch(`/api/config/llms`),
-            tenantFetch(`/api/config/mcps`),
-            tenantFetch(`/api/config/knowledgebases`),
-            tenantFetch(`/api/config/apps?app_id=${chatbotId}`)]);
-          const llmData = (await llmRes.json())?.data.items || [];
-          console.log('llmData', llmData);
-          setLlms([...llmData]);
+    const kbnames = kbs
+      .filter((item) => botConfig.kb_ids?.includes(item.id))
+      .map((item) => item.name);
+    setSelectedKbNames(kbnames);
 
-          const [] = await Promise.all([]);
+    const mcpnames = mcps
+      .filter((item) => botConfig.mcp_ids?.includes(item.id))
+      .map((item) => item.name);
+    setSelectedMcpNames(mcpnames);
 
-          const mcpData =
-            ((await mcpRes.json())?.data.items as McpConfig[]) || [];
-          console.log('mcpData', mcpData);
-          setMcps([...mcpData]);
-
-          const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
-          console.log('kbData', kbData);
-          setKbs([...kbData]);
-
-          const botData = await botRes.json();
-          botData.data.kb_ids = botData.data.kb_ids.filter(
-            (kb_id: string) => {
-              return kbData.some((kb: any) => kb.id === kb_id);
-            }
-          )
-          botData.data.mcp_ids = botData.data.mcp_ids.filter(
-            (mcp_id: string) => {
-              return mcpData.some((mcp: any) => mcp.id === mcp_id);
-            }
-          )
-
-          setBotConfig(botData.data);
-          console.log('chatbotData: ', botData.data);
-
-          const kbnames = kbData
-            .filter((item) => botData.data.kb_ids.includes(item.id))
-            .map((item) => item.name);
-          setSelectedKbNames([...kbnames]);
-          console.log('selectedKbNames', kbnames);
-
-          const mcpnames = mcpData
-            .filter((item) => botData.data.mcp_ids.includes(item.id))
-            .map((item) => item.name);
-          setSelectedMcpNames([...mcpnames]);
-          console.log('selectedMcpNames', mcpnames);
-
-          setPlanPrompt(botData.data.prompts?.plan || PLAN_PROMPT);
-          setActPrompt(botData.data.prompts?.act || ACT_PROMPT);
-          setActWithPlanPrompt(botData.data.prompts?.act_with_plan || ACT_WITH_PLAN_PROMPT);
-          setSummarizePrompt(botData.data.prompts?.summary || SUMMARY_PROMPT);
-        }
-        else {
-          const [llmRes, mcpRes, kbRes] = await Promise.all([
-            tenantFetch(`/api/config/llms`),
-            tenantFetch(`/api/config/mcps`),
-            tenantFetch(`/api/config/knowledgebases`)]);
-
-          const llmData = (await llmRes.json())?.data.items || [];
-          console.log('llmData', llmData);
-          setLlms([...llmData]);
-
-          const [] = await Promise.all([]);
-
-          const mcpData =
-            ((await mcpRes.json())?.data.items as McpConfig[]) || [];
-          console.log('mcpData', mcpData);
-          setMcps([...mcpData]);
-
-          const kbData = ((await kbRes.json())?.data.items as KbConfig[]) || [];
-          console.log('kbData', kbData);
-          setKbs([...kbData]);
-
-          setPlanPrompt(PLAN_PROMPT);
-          setActPrompt(ACT_PROMPT);
-          setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT);
-          setSummarizePrompt(SUMMARY_PROMPT);
-        }
-      } catch (err: unknown) {
-        console.log(err || '加载失败');
-      }
-    };
-    fetchModelConfigs();
-  }, [chatbotId, isCreate]);
-
-  const handleSaveChatConfig = async () => {
-    console.log('保存应用结果:', botConfig);
-    const submit_url = isCreate
-      ? `/api/config/apps`
-      : `/api/config/apps/${botConfig.id}`;
-    const updateMethod = isCreate ? 'POST' : 'PUT';
-    try {
-      const res = await tenantFetch(submit_url, {
-        method: updateMethod,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(botConfig), // 包装为数组
-      });
-
-      if (!res.ok) throw new Error(`保存应用失败: ${await res.text()}`);
-      router.push('/apps');
-      setSaveErrorMsg('');
-      // onSaveSuccess(jsondata.data as KbConfig);
-    } catch (err: any) {
-      console.log('保存应用失败', err.message);
-      setSaveErrorMsg(err.message);
-    }
-  };
+    // Initialize prompts from botConfig
+    setPlanPrompt(botConfig.prompts?.plan || PLAN_PROMPT);
+    setActPrompt(botConfig.prompts?.act || ACT_PROMPT);
+    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || ACT_WITH_PLAN_PROMPT);
+    setSummarizePrompt(botConfig.prompts?.summary || SUMMARY_PROMPT);
+  }, [botConfig, kbs, mcps]);
 
   const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
-    console.log('handleKbSelect', kb_id, kb_name, checked);
     if (checked) {
-      const kb_ids = botConfig.kb_ids.includes(kb_id)
+      const kb_ids = botConfig.kb_ids?.includes(kb_id)
         ? botConfig.kb_ids
-        : [...botConfig.kb_ids, kb_id];
-      setBotConfig((prev) => ({ ...prev, kb_ids: kb_ids }));
+        : [...(botConfig.kb_ids || []), kb_id];
+      onConfigChange({ kb_ids });
       if (!selectedKbNames.includes(kb_name)) {
         setSelectedKbNames((prev) => [...prev, kb_name]);
       }
     } else {
-      const kb_ids = botConfig.kb_ids.filter((id) => id !== kb_id);
-      setBotConfig((prev) => ({ ...prev, kb_ids: kb_ids }));
+      const kb_ids = (botConfig.kb_ids || []).filter((id) => id !== kb_id);
+      onConfigChange({ kb_ids });
       if (selectedKbNames.includes(kb_name)) {
         setSelectedKbNames((prev) => prev.filter((name) => name !== kb_name));
       }
     }
   };
-  const handleMcpSelect = (
-    mcp_id: string,
-    mcp_name: string,
-    checked: boolean,
-  ) => {
+
+  const handleMcpSelect = (mcp_id: string, mcp_name: string, checked: boolean) => {
     if (checked) {
-      const mcp_ids = botConfig.mcp_ids.includes(mcp_id)
+      const mcp_ids = botConfig.mcp_ids?.includes(mcp_id)
         ? botConfig.mcp_ids
-        : [...botConfig.mcp_ids, mcp_id];
-      setBotConfig((prev) => ({ ...prev, mcp_ids: mcp_ids }));
+        : [...(botConfig.mcp_ids || []), mcp_id];
+      onConfigChange({ mcp_ids });
       if (!selectedMcpNames.includes(mcp_name)) {
         setSelectedMcpNames((prev) => [...prev, mcp_name]);
       }
     } else {
-      const mcp_ids = botConfig.mcp_ids.filter((id) => id !== mcp_id);
-      setBotConfig((prev) => ({ ...prev, mcp_ids: mcp_ids }));
+      const mcp_ids = (botConfig.mcp_ids || []).filter((id) => id !== mcp_id);
+      onConfigChange({ mcp_ids });
       if (selectedMcpNames.includes(mcp_name)) {
         setSelectedMcpNames((prev) => prev.filter((name) => name !== mcp_name));
       }
     }
   };
+
+  const handleSave = async () => {
+    setSaveErrorMsg('');
+    try {
+      await onSave();
+    } catch (err: any) {
+      setSaveErrorMsg(err.message || '保存失败');
+    }
+  };
+
+  const displayErrorMsg = externalErrorMsg || saveErrorMsg;
 
   return (
     <div className="grid gap-4 py-6 px-6">
@@ -299,12 +195,11 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         </Label>
         <Input
           id="appid"
-          value={botConfig.app_id}
-          onChange={(e) =>
-            setBotConfig((prev) => ({ ...prev, app_id: e.target.value }))
-          }
+          value={botConfig.app_id || ''}
+          onChange={(e) => onConfigChange({ app_id: e.target.value })}
           placeholder="请输入应用ID, 如chatbot"
           required
+          disabled={!isCreate}
         />
         <p className="text-sm text-muted-foreground">
           可输入大小写字母和数字,必须字母开头,3-64个字符。
@@ -315,13 +210,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         <Label htmlFor="description">描述</Label>
         <Textarea
           id="description"
-          value={botConfig.description}
-          onChange={(e) =>
-            setBotConfig((prev) => ({
-              ...prev,
-              description: e.target.value,
-            }))
-          }
+          value={botConfig.description || ''}
+          onChange={(e) => onConfigChange({ description: e.target.value })}
           placeholder="应用描述（可选）"
           rows={3}
         />
@@ -333,13 +223,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         <div className="px-6">
           {llms.length > 0 ? (
             <Select
-              value={botConfig.model_id}
-              onValueChange={(value) =>
-                setBotConfig((prev) => ({
-                  ...prev,
-                  model_id: value,
-                }))
-              }
+              value={botConfig.model_id || ''}
+              onValueChange={(value) => onConfigChange({ model_id: value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="请选择基模型" />
@@ -380,7 +265,6 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               </DialogHeader>
 
               <div className="flex-1 overflow-hidden">
-                {/* 外层 Tabs：分 Plan、Act 两大块 */}
                 <Tabs defaultValue="plan_group" className="h-full flex flex-col">
                   <TabsList className="flex space-x-2">
                     <TabsTrigger value="plan_group">规划提示词</TabsTrigger>
@@ -388,7 +272,6 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                   </TabsList>
 
                   <div className="flex-1 overflow-hidden mt-4">
-                    {/* Plan 块内容：内部再分 3 个子 Tab */}
                     <TabsContent value="plan_group" className="h-full flex flex-col">
                       <Tabs defaultValue="plan" className="h-full flex flex-col">
                         <TabsList className="grid grid-cols-3">
@@ -428,7 +311,6 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                       </Tabs>
                     </TabsContent>
 
-                    {/* Act 块内容：单独一个 Textarea */}
                     <TabsContent value="act_group" className="h-full flex flex-col">
                       <ResettableTextarea
                         value={actPrompt}
@@ -445,15 +327,14 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               <DialogFooter className="gap-2 sm:gap-0">
                 <DialogClose asChild>
                   <Button variant="outline" onClick={() => {
-                    setActPrompt(botConfig.prompts.act);
-                    setPlanPrompt(botConfig.prompts.plan);
-                    setActWithPlanPrompt(botConfig.prompts.act_with_plan);
-                    setSummarizePrompt(botConfig.prompts.summary);
+                    setActPrompt(botConfig.prompts?.act || ACT_PROMPT);
+                    setPlanPrompt(botConfig.prompts?.plan || PLAN_PROMPT);
+                    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || ACT_WITH_PLAN_PROMPT);
+                    setSummarizePrompt(botConfig.prompts?.summary || SUMMARY_PROMPT);
                   }}>取消</Button>
                 </DialogClose>
                 <Button type="button" onClick={() => {
-                  setBotConfig({
-                    ...botConfig,
+                  onConfigChange({
                     prompts: {
                       plan: planPrompt,
                       act: actPrompt,
@@ -476,13 +357,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         </Label>
         <Switch
           id="enable_search"
-          checked={botConfig.enable_search}
-          onCheckedChange={(checked) => {
-            setBotConfig({
-              ...botConfig,
-              enable_search: checked,
-            });
-          }}
+          checked={botConfig.enable_search || false}
+          onCheckedChange={(checked) => onConfigChange({ enable_search: checked })}
         />
       </div>
       <div className="flex gap-6">
@@ -491,13 +367,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         </Label>
         <Switch
           id="enable_chatdb"
-          checked={botConfig.enable_chatdb}
-          onCheckedChange={(checked) => {
-            setBotConfig({
-              ...botConfig,
-              enable_chatdb: checked,
-            });
-          }}
+          checked={botConfig.enable_chatdb || false}
+          onCheckedChange={(checked) => onConfigChange({ enable_chatdb: checked })}
         />
       </div>
       <div className="flex gap-6">
@@ -506,13 +377,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         </Label>
         <Switch
           id="enable_agent"
-          checked={botConfig.enable_agent}
-          onCheckedChange={(checked) => {
-            setBotConfig({
-              ...botConfig,
-              enable_agent: checked,
-            });
-          }}
+          checked={botConfig.enable_agent || false}
+          onCheckedChange={(checked) => onConfigChange({ enable_agent: checked })}
         />
       </div>
       <div className="flex gap-6">
@@ -522,12 +388,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         <Switch
           id="enable_faq"
           checked={botConfig.enable_faq || false}
-          onCheckedChange={(checked) => {
-            setBotConfig({
-              ...botConfig,
-              enable_faq: checked,
-            });
-          }}
+          onCheckedChange={(checked) => onConfigChange({ enable_faq: checked })}
         />
       </div>
       <div className="flex">
@@ -542,7 +403,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                   variant="outline"
                   className="text-sm text-muted-foreground"
                 >
-                  已选{botConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
+                  已选{botConfig?.kb_ids?.length || 0}个，可多选 <ChevronDownIcon />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
@@ -551,7 +412,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                 {kbs.map((kb) => (
                   <DropdownMenuCheckboxItem
                     key={kb.id}
-                    checked={botConfig.kb_ids.includes(kb.id)}
+                    checked={botConfig.kb_ids?.includes(kb.id) || false}
                     onCheckedChange={(checked) =>
                       handleKbSelect(kb.id, kb.name, checked)
                     }
@@ -590,7 +451,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                   variant="outline"
                   className="text-sm text-muted-foreground"
                 >
-                  已选{botConfig.mcp_ids.length}个，可多选 <ChevronDownIcon />
+                  已选{botConfig.mcp_ids?.length || 0}个，可多选 <ChevronDownIcon />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
@@ -599,7 +460,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                 {mcps.map((mcp) => (
                   <DropdownMenuCheckboxItem
                     key={mcp.id}
-                    checked={botConfig.mcp_ids.includes(mcp.id)}
+                    checked={botConfig.mcp_ids?.includes(mcp.id) || false}
                     onCheckedChange={(checked) =>
                       handleMcpSelect(mcp.id, mcp.name, checked)
                     }
@@ -636,12 +497,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             <Switch
               id="enable_input_check"
               checked={botConfig.enable_input_guardrail || false}
-              onCheckedChange={(checked) => {
-                setBotConfig({
-                  ...botConfig,
-                  enable_input_guardrail: checked,
-                });
-              }}
+              onCheckedChange={(checked) => onConfigChange({ enable_input_guardrail: checked })}
             />
             <Label htmlFor="input_guardrail" className="w-[120px]">
               输入护栏
@@ -651,12 +507,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             <Switch
               id="enable_output_check"
               checked={botConfig.enable_output_guardrail || false}
-              onCheckedChange={(checked) => {
-                setBotConfig({
-                  ...botConfig,
-                  enable_output_guardrail: checked,
-                });
-              }}
+              onCheckedChange={(checked) => onConfigChange({ enable_output_guardrail: checked })}
             />
             <Label htmlFor="output_guardrail" className="w-[120px]">
               输出护栏
@@ -667,13 +518,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             <Input
               className="w-120"
               value={botConfig.guardrail_hint || "作为人工智能助手，我无法回应包含不当或敏感信息的内容。"}
-              onChange={(e) => {
-                setBotConfig({
-                  ...botConfig,
-                  guardrail_hint: e.target.value,
-                });
-
-              }}
+              onChange={(e) => onConfigChange({ guardrail_hint: e.target.value })}
             />
             <Label htmlFor="guardrail_hint" className="w-[120px]">
               默认护栏提示
@@ -681,11 +526,11 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           </div>
         </div>
       </div>
-      {saveErrorMsg && (
+      {displayErrorMsg && (
         <Alert variant="destructive">
           <Terminal />
           <AlertTitle>{isCreate ? '创建应用失败' : '保存应用失败'}</AlertTitle>
-          <AlertDescription>{saveErrorMsg}</AlertDescription>
+          <AlertDescription>{displayErrorMsg}</AlertDescription>
         </Alert>
       )}
       <div className="pt-6 flex gap-6">
@@ -701,11 +546,10 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
 
         <Button
           className="w-20"
-          onClick={() => {
-            handleSaveChatConfig();
-          }}
+          onClick={handleSave}
+          disabled={saving}
         >
-          {isCreate ? '创建应用' : '保存应用'}
+          {saving ? '保存中...' : (isCreate ? '创建应用' : '保存应用')}
         </Button>
       </div>
     </div>
