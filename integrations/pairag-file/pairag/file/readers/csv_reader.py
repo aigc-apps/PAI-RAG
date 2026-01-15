@@ -41,10 +41,7 @@ class CSVReader(BaseReader):
         """Read CSV file from binary file object."""
         encoding = charset_normalizer.detect(file.read(1000))["encoding"]
         file.seek(0)
-        if encoding is None or "GB" in encoding.upper():
-            encoding = "GB18030"
-        else:
-            encoding = "utf-8"
+
         
         df = pd.read_csv(file, encoding=encoding, **self._pandas_config)
         return df

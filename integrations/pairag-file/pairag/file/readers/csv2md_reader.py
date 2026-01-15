@@ -18,9 +18,6 @@ class Csv2MdReader(BaseReader):
 
         encoding = charset_normalizer.detect(file.read(1000))["encoding"]
         file.seek(0)
-        encoding = "utf-8"
-        if encoding is not None and "GB" in encoding.upper():
-            encoding = "GB18030"
 
         df = pd.read_csv(file, encoding=encoding)
         return df
