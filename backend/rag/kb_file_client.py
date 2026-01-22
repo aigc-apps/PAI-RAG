@@ -3,7 +3,7 @@ from typing import List, Optional
 from db.models.knowledgebase.file_task import KbFileTaskEntity
 from tqdm import tqdm
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.knowledgebase.knowledgebase import KbEntity, ChunkConfig
+from db.models.knowledgebase.knowledgebase import KbEntity, ChunkConfig, TableParserConfig
 from common.knowledgebase.types import (
     ChunkStatus,
     FileStatus,
@@ -63,6 +63,10 @@ class KbFileClient:
 
         if not chunk_config.separator:
             chunk_config.separator = DEFAULT_PARAGRAPH_SEPARATOR
+
+        # Ensure table_config is not None
+        if chunk_config.table_config is None:
+            chunk_config.table_config = TableParserConfig()
 
         file_parser = FileParser(
             file_store=file_store,

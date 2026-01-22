@@ -6,10 +6,8 @@ from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
 from pairag.file.nodeparsers.sentence_parser import MySentenceSplitter
 from pairag.file.models.file_item import FileItem
 from pairag.file.readers.base import BaseReader
-from pairag.file.readers.csv2md_reader import Csv2MdReader
 from pairag.file.readers.csv_reader import CSVReader
 from pairag.file.readers.doc_reader import DocxReader
-from pairag.file.readers.excel2md_reader import Excel2MdReader
 from pairag.file.readers.excel_reader import ExcelReader
 from pairag.file.readers.faq_reader import FAQReader
 from pairag.file.readers.html_reader import HtmlReader
@@ -70,6 +68,8 @@ class TableParserConfig(BaseModel):
     header_index_max: Optional[int] = Field(default=0, description="Maximum row index to use as header")
     format_sheet_data_to_json: Optional[bool] = Field(default=False, description="Whether to format sheet data as JSON")
     sheet_column_filters: Optional[List[str]] = Field(default=None, description="List of column names to filter")
+    question_column_index: Optional[int] = Field(default=0, description="Column index for question (used for FAQ parser)")
+    answer_column_index: Optional[int] = Field(default=1, description="Column index for answer (used for FAQ parser)")
 
 
 class ChunkConfig(BaseModel):
@@ -77,7 +77,7 @@ class ChunkConfig(BaseModel):
     chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP)
     parser_type: str = Field(default=DEFAULT_PARSER_TYPE)
     separator: str = Field(default=DEFAULT_PARAGRAPH_SEPARATOR)
-    table_config: Optional[TableParserConfig] = Field(default=None, description="Table parser configuration (only used when parser_type == 'table')")
+    table_config: Optional[TableParserConfig] = Field(default=TableParserConfig(), description="Table parser configuration (only used when parser_type == 'table')")
 
 
 class ReaderConfig(BaseModel):
@@ -114,7 +114,7 @@ class FileParser:
         chunk_size = chunk_config.chunk_size if chunk_config else DEFAULT_CHUNK_SIZE
         parser_type = chunk_config.parser_type if chunk_config else DEFAULT_PARSER_TYPE
         
-        table_config = chunk_config.table_config if chunk_config and chunk_config.table_config else None
+        table_config = chunk_config.table_config if chunk_config and chunk_config.table_config else TableParserConfig()
         
         if is_attachment:
             match file_extension:
@@ -139,15 +139,21 @@ class FileParser:
                         file_store=self.file_store,
                     )
                 case ".xlsx":
-                    return Excel2MdReader(chunk_size=chunk_size)
+                    return ExcelReader(
+                            concat_rows=True,
+                        )
                 case ".xls":
-                    return Excel2MdReader(chunk_size=chunk_size)
+                    return ExcelReader(
+                            concat_rows=True,
+                        )
                 case ".pptx":
                     return PptxReader(
                         file_store=self.file_store,
                     )
                 case ".csv":
-                    return Csv2MdReader(chunk_size=chunk_size)
+                    return CSVReader(
+                            concat_rows=True,
+                        )
                 case ".jsonl":
                     return Json2MdReader(chunk_size=chunk_size)
                 case ".mp4":
@@ -239,47 +245,41 @@ class FileParser:
                         image_caption_tool=self.image_caption_tool,
                     )
                 case ".xlsx":
-                    if parser_type.lower() == "table":
-                        return ExcelReader(
+                    if parser_type.lower() == "faq":
+                        return FAQReader(
+                            header_index_max=table_config.header_index_max,
+                            question_column_index=table_config.question_column_index,
+                            answer_column_index=table_config.answer_column_index,
+                        )
+                    return ExcelReader(
                             concat_rows=table_config.concat_rows,
                             row_joiner=table_config.row_joiner,
                             header_index_max=table_config.header_index_max,
                             format_sheet_data_to_json=table_config.format_sheet_data_to_json,
                             sheet_column_filters=table_config.sheet_column_filters,
                         )
-                    elif parser_type.lower() == "faq":
-                        return FAQReader(
-                            header_index_max=table_config.header_index_max,
-                            question_column_index=table_config.question_column_index,
-                            answer_column_index=table_config.answer_column_index,
-                        )
-                    return Excel2MdReader(chunk_size=chunk_size)
                 case ".xls":
-                    if parser_type.lower() == "table":
-                        return ExcelReader(
-                            concat_rows=table_config.concat_rows,
-                            row_joiner=table_config.row_joiner,
-                            header_index_max=table_config.header_index_max,
-                            format_sheet_data_to_json=table_config.format_sheet_data_to_json,
-                            sheet_column_filters=table_config.sheet_column_filters,
-                        )
-                    elif parser_type.lower() == "faq":
+                    if parser_type.lower() == "faq":
                         return FAQReader(
                             header_index_max=table_config.header_index_max,
                             question_column_index=table_config.question_column_index,
                             answer_column_index=table_config.answer_column_index,
                         )
-                    return Excel2MdReader(chunk_size=chunk_size)
-                case ".csv":
-                    if parser_type.lower() == "table":
-                        return CSVReader(
+                    return ExcelReader(
                             concat_rows=table_config.concat_rows,
                             row_joiner=table_config.row_joiner,
                             header_index_max=table_config.header_index_max,
                             format_sheet_data_to_json=table_config.format_sheet_data_to_json,
                             sheet_column_filters=table_config.sheet_column_filters,
                         )
-                    return Csv2MdReader(chunk_size=chunk_size)
+                case ".csv":
+                    return CSVReader(
+                            concat_rows=table_config.concat_rows,
+                            row_joiner=table_config.row_joiner,
+                            header_index_max=table_config.header_index_max,
+                            format_sheet_data_to_json=table_config.format_sheet_data_to_json,
+                            sheet_column_filters=table_config.sheet_column_filters,
+                        )
                 case ".jsonl":
                     return Json2MdReader(chunk_size=chunk_size)
                 case ".txt":
@@ -352,14 +352,12 @@ class FileParser:
 
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 # 表格格式文档
-                node_id = uuid.uuid4().hex
-                chunks.append(
-                    TextNode(
-                        id_=node_id,
-                        text=doc_node.text,
-                        metadata=doc_node.metadata,
-                    )
+                parser = TokenTextSplitter(
+                    chunk_size=chunk_config.chunk_size,
+                    chunk_overlap=0,
+                    id_func=node_id_func,
                 )
+                chunks = parser.get_nodes_from_documents([doc_node])
             elif chunk_config.parser_type.lower() == "token":
                 parser = TokenTextSplitter(
                     chunk_size=chunk_config.chunk_size,

@@ -1255,6 +1255,8 @@ export default function KnowledgeBaseDetailPage(
           
           if (uploadChunkConfig.parser_type === 'table' && uploadChunkConfig.table_config) {
             chunkConfig.table_config = uploadChunkConfig.table_config;
+            // 添加 chunk_size
+            chunkConfig.chunk_size = uploadChunkConfig.chunk_size ? parseInt(uploadChunkConfig.chunk_size) : 1000;
           } else if (uploadChunkConfig.parser_type === 'paragraph') {
             chunkConfig.separator = uploadChunkConfig.separator || '\n\n';
             chunkConfig.chunk_size = uploadChunkConfig.chunk_size ? parseInt(uploadChunkConfig.chunk_size) : 1000;
@@ -1302,6 +1304,8 @@ export default function KnowledgeBaseDetailPage(
                             header_index_max: 0,
                             format_sheet_data_to_json: false,
                           };
+                          // 添加 chunk_size
+                          config.chunk_size = String(fileChunkConfig.chunk_size || 1000);
                         } else if (fileChunkConfig.parser_type === 'paragraph') {
                           config.separator = fileChunkConfig.separator || '\n\n';
           config.chunk_size = String(fileChunkConfig.chunk_size || 1000);
@@ -1346,6 +1350,10 @@ export default function KnowledgeBaseDetailPage(
     
     if (uploadChunkConfig.parser_type === 'table' && uploadChunkConfig.table_config) {
       chunkConfig.table_config = uploadChunkConfig.table_config;
+      // 添加 chunk_size
+      chunkConfig.chunk_size = (uploadChunkConfig.chunk_size === '' || !uploadChunkConfig.chunk_size) 
+        ? 1000 
+        : parseInt(uploadChunkConfig.chunk_size);
     } else if (uploadChunkConfig.parser_type === 'paragraph') {
       chunkConfig.separator = uploadChunkConfig.separator || '\n\n';
       // 如果为空字符串或undefined/null，使用默认值；否则转换为数字
@@ -2047,8 +2055,9 @@ export default function KnowledgeBaseDetailPage(
                                             header_index_max: 0,
                                             format_sheet_data_to_json: false,
                                           };
+                                          // 保留chunk_size，设置默认值
+                                          newConfig.chunk_size = prev.chunk_size || '1000';
                                           // 清除其他类型的配置
-                                          delete newConfig.chunk_size;
                                           delete newConfig.chunk_overlap;
                                           delete newConfig.separator;
                                         } else if (value === 'paragraph') {
@@ -2177,6 +2186,31 @@ export default function KnowledgeBaseDetailPage(
                                           }}
                                         />
                                       </div>
+                                    </div>
+                                    {/* 第三行：切片大小 */}
+                                    <div className="flex gap-3 items-center">
+                                      <Label htmlFor="upload-table-chunk-size" className="w-[80px] text-xs">
+                                        切片大小
+                                      </Label>
+                                      <Input
+                                        type="text"
+                                        inputMode="numeric"
+                                        className="w-[200px] h-7 text-xs"
+                                        id="upload-table-chunk-size"
+                                        value={uploadChunkConfig.chunk_size ?? ''}
+                                        placeholder="1000"
+                                        onChange={(e) => {
+                                          const value = e.target.value;
+                                          // 只允许数字和空字符串
+                                          if (value === '' || /^\d+$/.test(value)) {
+                                            setUploadChunkConfig((prev) => prev ? {
+                                              ...prev,
+                                              chunk_size: value,
+                                            } : null);
+                                          }
+                                        }}
+                                      />
+                                      <p className="text-xs text-muted-foreground ml-2">推荐值: 1000</p>
                                     </div>
                                   </div>
                                 )}
@@ -4080,8 +4114,9 @@ export default function KnowledgeBaseDetailPage(
                           header_index_max: 0,
                           format_sheet_data_to_json: false,
                         };
+                        // 保留chunk_size，设置默认值
+                        newConfig.chunk_size = prev.chunk_size || '1000';
                         // 清除其他类型的配置
-                        delete newConfig.chunk_size;
                         delete newConfig.chunk_overlap;
                         delete newConfig.separator;
                       } else if (value === 'paragraph') {
@@ -4219,6 +4254,37 @@ export default function KnowledgeBaseDetailPage(
                           })
                         }
                       />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <div className="flex gap-3 items-center min-w-[320px]">
+                      <Label htmlFor="reprocess-table-chunkSize" className="w-[120px] text-xs shrink-0">
+                        切片大小
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        className="w-[200px] h-6 text-xs"
+                        id="reprocess-table-chunkSize"
+                        value={reprocessChunkConfig.chunk_size ?? ''}
+                        placeholder="1000"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // 只允许数字和空字符串
+                          if (value === '' || /^\d+$/.test(value)) {
+                            setReprocessChunkConfig((prev) => {
+                              if (!prev) return null;
+                              return {
+                                ...prev,
+                                chunk_size: value,
+                              };
+                            });
+                          }
+                        }}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground shrink-0">推荐值: 1000</p>
                     </div>
                   </div>
                 </div>

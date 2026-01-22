@@ -362,8 +362,9 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                         header_index_max: 0,
                         format_sheet_data_to_json: false,
                       };
+                      // 保留chunk_size，设置默认值
+                      newConfig.chunk_size = prev.chunk_config.chunk_size || '1000';
                       // 清除其他类型的配置
-                      delete newConfig.chunk_size;
                       delete newConfig.chunk_overlap;
                       delete newConfig.separator;
                     } else if (value === 'paragraph') {
@@ -505,6 +506,35 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       }
                     />
                   </div>
+                </div>
+                <div className="flex gap-3 items-center">
+                  <Label htmlFor="table-chunkSize" className="w-[100px] text-xs">
+                    切片大小
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    className="w-60 h-6 text-xs"
+                    id="table-chunkSize"
+                    value={kb.chunk_config.chunk_size ?? ''}
+                    placeholder="1000"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // 只允许数字和空字符串
+                      if (value === '' || /^\d+$/.test(value)) {
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            chunk_size: value,
+                          },
+                        }));
+                      }
+                    }}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">推荐值: 1000</p>
                 </div>
               </div>
             )}

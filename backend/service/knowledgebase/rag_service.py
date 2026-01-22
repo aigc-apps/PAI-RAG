@@ -38,9 +38,8 @@ from common.tool.search_result import SearchResult
 from tools.utils.vectordb_retrieval import aquery_vector_store
 from utils.lru_cache import LruCache
 from db.db_context import create_db_session
-from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K, DEFAULT_RETRIEVAL_CONTENT_SIZE
+from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K
 from extensions.trace.rag_wrapper import query_knowledgebase_wrapper, embedding_wrapper
-from pairag.file.nodeparsers.token_parser import TokenTextSplitter
 from openinference.instrumentation import suppress_tracing
 from loguru import logger
 
@@ -819,14 +818,11 @@ class RagService:
                     seen_file_urls[file_path] = file_url
 
 
-            # 使用TokenTextSplitter将文本按token分割，每个chunk不超过DEFAULT_RETRIEVAL_CONTENT_SIZE个token，取第一个分割结果作为返回内容，确保返回的内容不超过DEFAULT_RETRIEVAL_CONTENT_SIZE个token
-            splits, _ = TokenTextSplitter(chunk_size=DEFAULT_RETRIEVAL_CONTENT_SIZE, chunk_overlap=0).split_text(origin_text)
-            content = splits[0]
             records.append(
                 SearchResult(
                     id=reranked_result.ids[i],
                     score=reranked_result.similarities[i],
-                    content=content,
+                    content=origin_text,
                     images=images,
                     url=file_url,
                     title=node.metadata.get("file_name", ""),
