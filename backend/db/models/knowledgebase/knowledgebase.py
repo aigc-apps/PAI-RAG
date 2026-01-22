@@ -39,7 +39,7 @@ class ChunkConfig(SQLModel):
     separator: str = Field(default=DEFAULT_PARAGRAPH_SEPARATOR)
     image_caption_model: Optional[str] = Field(default=None)
     image_caption_provider_name: str = Field(default="openai_like")
-    table_config: Optional[TableParserConfig] = Field(default=None, description="Table parser configuration (only used when parser_type == 'table')")
+    table_config: Optional[TableParserConfig] = Field(default_factory=TableParserConfig, description="Table parser configuration (only used when parser_type == 'table')")
 
 
 class RetrievalConfig(SQLModel):

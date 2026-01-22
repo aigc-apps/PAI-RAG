@@ -817,11 +817,12 @@ class RagService:
                     file_url = await file_store.get_url_async(file_path=file_path, tenant_id=tenant_id)
                     seen_file_urls[file_path] = file_url
 
+
             records.append(
                 SearchResult(
                     id=reranked_result.ids[i],
                     score=reranked_result.similarities[i],
-                    content=origin_text[:3000],
+                    content=origin_text,
                     images=images,
                     url=file_url,
                     title=node.metadata.get("file_name", ""),

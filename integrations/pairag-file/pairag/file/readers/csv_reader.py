@@ -74,6 +74,7 @@ class CSVReader(BaseReader):
         if self._concat_rows:
             return [
                 Document(
+                    id_=file_item.id,
                     text=(self._row_joiner).join(text_list),
                     metadata=extra_info,
                 )
@@ -83,5 +84,5 @@ class CSVReader(BaseReader):
             for i, text in enumerate(text_list):
                 row_metadata = extra_info.copy()
                 row_metadata["row_number"] = i + 1
-                docs.append(Document(text=text, metadata=row_metadata))
+                docs.append(Document(id_=file_item.id, text=text, metadata=row_metadata))
             return docs
