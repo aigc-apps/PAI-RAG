@@ -139,21 +139,15 @@ class FileParser:
                         file_store=self.file_store,
                     )
                 case ".xlsx":
-                    return ExcelReader(
-                            concat_rows=True,
-                        )
+                    return ExcelReader()
                 case ".xls":
-                    return ExcelReader(
-                            concat_rows=True,
-                        )
+                    return ExcelReader()
                 case ".pptx":
                     return PptxReader(
                         file_store=self.file_store,
                     )
                 case ".csv":
-                    return CSVReader(
-                            concat_rows=True,
-                        )
+                    return CSVReader()
                 case ".jsonl":
                     return Json2MdReader(chunk_size=chunk_size)
                 case ".mp4":
