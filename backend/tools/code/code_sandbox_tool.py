@@ -27,7 +27,7 @@ DEFAULT_CODE_SANDBOX_DIR_PATH = '/home/user'
 DEFAULT_CODE_SANDBOX_SYSTEM_FILES = ('.bash_logout', '.bashrc', '.profile')
 TRIPLE_QUOTE_PATTERN = re.compile(r'```[^\n]*\n(.+?)```', re.DOTALL)
 XML_CODE_PATTERN = re.compile(r'<code>(.*?)</code>', re.DOTALL)
-IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg'}
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.heic', '.webp'}
 ext_pattern = '|'.join(ext[1:] for ext in IMAGE_EXTENSIONS)
 MARKDOWN_IMG_PATTERN = re.compile(rf'(!\[[^\]]*\]\()([^\)]+\.(?:{ext_pattern}))(\))', re.IGNORECASE)
 
@@ -447,7 +447,7 @@ class CodeSandboxTool:
 
                 image_file = BytesIO(image_blob)
 
-                if ext != '.svg':
+                if ext != '.svg' :
                     image_file = compress_image_if_needed(image_file)
                     if not image_file:
                         logger.warning(f"Image compression failed for {file_name}, skipping.")

@@ -12,6 +12,7 @@ mime_type_map = {
     ".bmp": "image/bmp",
     ".webp": "image/webp",
     ".svg": "image/svg+xml",
+    ".heic": "image/heic",
     # Videos
     ".mp4": "video/mp4",
     ".avi": "video/x-msvideo",
@@ -48,6 +49,7 @@ multimodal_file_types = [
     ".jpg",
     ".jpeg",
     ".png",
+    ".heic",
     ".gif",
     ".bmp",
     ".webp",

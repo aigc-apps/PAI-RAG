@@ -195,12 +195,16 @@ async def create_attachment_file(
         logger.error(f"Failed to save file {file_id} to database: {traceback.format_exc()}")
         raise ApiException(code=400, message=f"文件{file_id}上传失败: {e}")
 
+    await session.commit()
     attempt = 0
     while attempt < MAX_CHECK_ATTEMPTS:
         await asyncio.sleep(CHECK_INTERVAL)
         attempt += 1
-        logger.info(f"Checking file {file_item.file_name} processing status... Attempt {attempt} of {MAX_CHECK_ATTEMPTS}")
+        logger.info(f"Checking file {file_item.file_name} processing status {file_entity.status}... Attempt {attempt} of {MAX_CHECK_ATTEMPTS}")
+
+        # 提交事务，确保文件状态是最新的
         await session.refresh(file_entity)
+        await session.commit()
         if file_entity.status == FileStatus.succeeded:
             logger.info(f"File {file_item.file_name} processing completed successfully")
             return success_response(data=file_entity, message=f"文件{file_item.file_name}上传成功")

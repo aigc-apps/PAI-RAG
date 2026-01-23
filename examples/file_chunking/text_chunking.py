@@ -125,6 +125,8 @@ class ChunkArgs:
             ".txt",
             ".docx",
             ".pptx",
+            ".doc",
+            ".ppt",
             ".md",
             ".jsonl",
         ],
@@ -399,6 +401,12 @@ def custom_file_reader(
         ),
         ".htm": PaiHtmlReader(
             image_store=image_store,  # Store html images
+        ),
+        ".doc": PaiDocxReader(
+            image_store=image_store,  # Store doc images
+        ),
+        ".ppt": PaiPptxReader(
+            image_store=image_store,  # Store ppt images
         ),
         ".docx": PaiDocxReader(
             image_store=image_store,  # Store docx images

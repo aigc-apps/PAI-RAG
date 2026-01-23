@@ -2,7 +2,6 @@ from typing import List, Optional
 from fastapi import UploadFile
 from pairag.file.models.file_item import FileItem
 from pairag.file.store.file_store_helper import file_store
-from rag.split.excel_split import convert_xls_to_xlsx
 from pydantic import BaseModel
 from loguru import logger
 import json
@@ -18,9 +17,6 @@ async def upload_form_files_async(
         logger.info(f"Uploading file {single_file.filename} to tenant_id {tenant_id}...")
         file_name = single_file.filename
         file_data = single_file.file
-        if single_file.filename.endswith(".xls"):
-            file_data = convert_xls_to_xlsx(file_data)
-            file_name = file_name[:-4] + ".xlsx"
 
         destination_file_path = f"{kb_id}/docs/{file_name}"
         upload_result = await file_store.write_async(

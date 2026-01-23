@@ -3,25 +3,15 @@
 import os
 from io import BytesIO
 import uuid
-from typing import BinaryIO, Iterator, List
+from typing import Iterator, List
 from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.file_task import KbFileTaskEntity
 import pandas as pd
+from rag.convert.office_converter import convert_xls_to_xlsx
 from rag.split.constants import MAX_PART_ROW_NUM
 from pairag.file.store.file_store_helper import file_store
 from openpyxl import load_workbook
 from loguru import logger
-
-def convert_xls_to_xlsx(input_file: BinaryIO):
-    try:
-        output_file = BytesIO()
-        df = pd.read_excel(input_file, sheet_name=0, engine='xlrd')
-        df.to_excel(output_file, engine='openpyxl', index=False)
-        output_file.seek(0)
-        logger.info("✅ 转换成功: xls to xlsx")
-        return output_file
-    except Exception as e:
-        logger.error(f"❌ 转换失败: {e}")
 
 def _create_file_task(
     file_entity: KbFileEntity,

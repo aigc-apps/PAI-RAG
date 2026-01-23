@@ -22,7 +22,7 @@ class FileItem:
         self.id = id
         self.file_path = file_path
         self.kb_id = kb_id
-        self.file_extension = file_extension
+        self.file_extension = file_extension.lower()
         self.file_name = file_name
         self.file_md5 = file_md5
         self.file_size = file_size
@@ -40,7 +40,7 @@ class FileItem:
     ):
         if not file_name:
             file_name = os.path.basename(file_path)
-        file_extension = os.path.splitext(file_name)[1]
+        file_extension = os.path.splitext(file_path)[1].lower()
         ensure_file_type_is_supported(file_extension)
 
         file.seek(0)
