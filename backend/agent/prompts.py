@@ -6,6 +6,7 @@ from loguru import logger
 _PROMPTS_CACHE = None
 
 def _load_prompts():
+    logger.info("Loading prompts...")
     """Load prompts from YAML file"""
     global _PROMPTS_CACHE
     if _PROMPTS_CACHE is not None:

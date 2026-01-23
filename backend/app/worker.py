@@ -86,9 +86,9 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachmen
         if num_tasks == 0:
             await update_file_status_async(file_id=file_id, status=FileStatus.succeeded, tenant_id=tenant_id)
             logger.info("No tasks enqueued. Mark file as completed.")
-    except Exception:
+    except Exception as ex:
         logger.error(f"[WORKER] Enqueueing file {file_id} failed, error: {traceback.format_exc()}")
-        await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(traceback.format_exc()), tenant_id=tenant_id)
+        await update_file_status_async(file_id=file_id, status=FileStatus.failed, failed_reason=str(ex), tenant_id=tenant_id)
 
 @app.task(name="enqueue_file_tasks")
 def enqueue_file_tasks(file_id: str, file_version: int, is_attachment: bool = False, tenant_id: str = None):
@@ -111,7 +111,7 @@ async def process_attachments_content_async(file_id: str, file_extension: str, t
 @app.task(name="enqueue_attachments_file_tasks")
 def enqueue_attachments_file_tasks(file_id: str, file_version: int, file_extension: str, is_attachment: bool = False, tenant_id: str = None):
     loop = asyncio.get_event_loop()
-    if file_extension in [".xlsx", ".csv", ".jpg", ".png", ".jpeg", ".jsonl", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv"]:
+    if file_extension in [".xlsx", ".xls", ".csv", ".jpg", ".png", ".jpeg", ".jsonl", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv"]:
         loop.run_until_complete(process_attachments_content_async(file_id=file_id, file_extension=file_extension, tenant_id=tenant_id))
     else:
         loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment, tenant_id=tenant_id))

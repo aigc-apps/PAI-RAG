@@ -235,11 +235,11 @@ async def update_file_content_async(
         raise ValueError(f"File {file_id} not found.")
 
     if is_attachment:
-        if file.file_extension in [".xlsx"]:
+        if file.file_extension in [".xlsx", ".xls"]:
             file_data = await file_store.read_async(file_path=file.file_path, tenant_id=tenant_id)
             df = pd.read_excel(file_data)
-            file.file_content = df.head(10).to_csv(index=False)
-            if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE or len(df) > 10:
+            file.file_content = df.head(20).to_csv(index=False)
+            if len(file.file_content) > DEFAULT_ATTACHMENT_MAX_SIZE or len(df) > 20:
                 file.file_content = file.file_content[0:DEFAULT_ATTACHMENT_MAX_SIZE] + " \n\n [truncated] The content is too long, has been truncated."
             file.file_content_length = len(file.file_content)
         elif file.file_extension in [".csv"]:

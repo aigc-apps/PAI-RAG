@@ -40,9 +40,9 @@ import re
 import os
 
 
-IMAGE_DOC_TYPES = set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"])
+IMAGE_DOC_TYPES = set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".heic", ".webp"])
 DOC_TYPES_DO_NOT_NEED_CHUNKING = set([".csv", ".xlsx", ".xls", ".jsonl"])
-DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx", ".htm", ".html", ".pptx"])
+DOC_TYPES_CONVERT_TO_MD = set([".md", ".pdf", ".docx", ".htm", ".html", ".pptx", ".doc", ".ppt"])
 DEFAULT_EXCLUDED_METADATA_KEYS = [
     "file_type",
     "file_size",
@@ -118,6 +118,10 @@ class FileParser:
         
         if is_attachment:
             match file_extension:
+                case ".doc":
+                    return DocxReader(file_store=self.file_store)
+                case ".ppt":
+                    return PptxReader(file_store=self.file_store)
                 case ".docx":
                     return DocxReader(file_store=self.file_store)
                 case ".pdf":
@@ -135,6 +139,26 @@ class FileParser:
                         file_store=self.file_store,
                     )
                 case ".jpeg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".heic":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".webp":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".svg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".bmp":
+                    return ImageReader(
+                        file_store=self.file_store,
+                    )
+                case ".gif":
                     return ImageReader(
                         file_store=self.file_store,
                     )
@@ -189,6 +213,16 @@ class FileParser:
                         file_store=self.file_store,
                         image_caption_tool=self.image_caption_tool,
                     )
+                case ".doc":
+                    return DocxReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".ppt":
+                    return PptxReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
                 case ".docx":
                     return DocxReader(
                         file_store=self.file_store,
@@ -229,6 +263,31 @@ class FileParser:
                         image_caption_tool=self.image_caption_tool,
                     )
                 case ".png":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".heic":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".webp":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".svg":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".bmp":
+                    return ImageReader(
+                        file_store=self.file_store,
+                        image_caption_tool=self.image_caption_tool,
+                    )
+                case ".gif":
                     return ImageReader(
                         file_store=self.file_store,
                         image_caption_tool=self.image_caption_tool,

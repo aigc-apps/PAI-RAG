@@ -34,7 +34,13 @@ from common.encrypt_utils import decrypt_key
 from loguru import logger
 from rag.parse_utils import sanitize_text, get_node_texts_for_embedding
 from common.knowledgebase.constants import DEFAULT_PARAGRAPH_SEPARATOR
+from rag.convert.office_converter import convert_doc_to_docx, convert_ppt_to_pptx
 
+def convert_file_if_needed(file_item: FileItem):
+    if file_item.file_extension == ".ppt":
+        file_item.file = convert_ppt_to_pptx(file_item.file)
+    elif file_item.file_extension == ".doc":
+        file_item.file = convert_doc_to_docx(file_item.file)
 
 class KbFileClient:
 
@@ -171,6 +177,7 @@ class KbFileClient:
             # parsing file
             logger.info(f"Parsing file {file_item.file_name}.")
             file_parser = await self.create_file_parser(knowledgebase, file_entity=file_entity)
+            convert_file_if_needed(file_item)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
             await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment, documents=documents, tenant_id=tenant_id)
             for node in nodes:

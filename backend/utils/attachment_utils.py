@@ -13,7 +13,13 @@ CONTENT_TYPE_MAP = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
+    ".heic": "image/heic",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
 }
+
 class AttachmentFile(BaseModel):
     id: str
     name: str

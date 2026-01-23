@@ -26,6 +26,7 @@ IMAGE_MIME_TYPES = {
     ".ico": "image/x-icon",
     ".tiff": "image/tiff",
     ".tif": "image/tiff",
+    ".heic": "image/heic",
 }
 
 

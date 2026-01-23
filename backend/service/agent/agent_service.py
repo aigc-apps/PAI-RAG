@@ -252,7 +252,7 @@ class AgentService:
                         if not name:
                             logger.warning("Attachment missing 'name' field, skipping: %s", attachment)
                             continue
-                        if attachment_file_entity.file_extension not in [".xlsx", ".csv"]:
+                        if attachment_file_entity.file_extension not in [".xlsx", ".csv", ".xls"]:
                             logger.info(f"Attachment {name} is not a spreadsheet file, skipping: {attachment_file_entity.file_extension}")
                             continue
 
