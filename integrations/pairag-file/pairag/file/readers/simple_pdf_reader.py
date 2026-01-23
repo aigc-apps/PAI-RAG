@@ -81,8 +81,10 @@ class SimplePdfReader(BaseReader):
                                     f"Successfully saved image {upload_result.file_path} from URL: {image_path}"
                                 )
                             else:
+                                content.text = content.text.replace(origin_image_text, "")
                                 md_content = md_content.replace(origin_image_text, "")
                         except Exception as ex:
+                            content.text = content.text.replace(origin_image_text, "")
                             md_content = md_content.replace(origin_image_text, "")
                             logger.exception(
                                 f"Failed to save image from URL: {image_path}. Error: {ex}"
