@@ -1,7 +1,7 @@
 from loguru import logger
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.utils.split_dataframe import split_dataframe
-
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 
 class Json2MdReader(BaseReader):
     def __init__(
@@ -24,6 +24,8 @@ class Json2MdReader(BaseReader):
         """
         df = self._read_file(file_item)
         text_list = split_dataframe(df=df, max_tokens=self.chunk_size)
+        for text in text_list:
+            text = replace_consecutive_spaces(text)
 
         metadata = file_item.metadata()
         docs = [Document(id_=file_item.id, text=text, metadata=metadata) for text in text_list]

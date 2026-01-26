@@ -14,7 +14,7 @@ from llama_index.core.schema import Document
 import os
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 import charset_normalizer
-
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 class CSVReader(BaseReader):
 
 
@@ -39,9 +39,11 @@ class CSVReader(BaseReader):
 
     def _read_file(self, file: BinaryIO):
         """Read CSV file from binary file object."""
-        encoding = charset_normalizer.detect(file.read(1000))["encoding"]
+        encoding = charset_normalizer.detect(file.read(10240)).get("encoding")
         file.seek(0)
-
+        if not encoding:
+            logger.error("Failed to detect encoding, using utf-8")
+            encoding = "utf-8"
         
         df = pd.read_csv(file, encoding=encoding, **self._pandas_config)
         return df
@@ -53,7 +55,6 @@ class CSVReader(BaseReader):
         # Use file_item.file directly, similar to Csv2MdReader
         file_item.file.seek(0)
         df = self._read_file(file_item.file)
-
         if self._sheet_column_filters:
             df = df[self._sheet_column_filters]
 
@@ -66,6 +67,9 @@ class CSVReader(BaseReader):
                 "\n".join([f"{k}:{v}" for k, v in record.items()])
                 for record in df.to_dict("records")
             ]
+        
+        for text in text_list:
+            text = replace_consecutive_spaces(text)
 
         extra_info = extra_info or {}
         extra_info["file_path"] = file_item.file_path

@@ -7,6 +7,7 @@ from pairag.file.store.base import BaseFileStore
 from pairag.file.utils.image_utils import get_image_from_url
 from llama_index.core.schema import Document
 from pairag.file.utils.image_utils import to_markdown_image_text
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 from loguru import logger
 
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
@@ -73,6 +74,7 @@ class MarkdownReader(BaseReader):
         file_item.file.seek(0)
 
         md_content = file_item.file.read().decode("utf-8")
+        md_content = replace_consecutive_spaces(md_content)
 
         md_content, _ = self.replace_image_by_pattern(
             md_content, MARKDOWN_IMAGE_PATTERN, file_item.kb_id + "/images/{}", tenant_id=file_item.tenant_id,

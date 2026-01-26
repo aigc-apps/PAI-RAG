@@ -113,7 +113,8 @@ class StructuredNodeParser(BaseModel):
         title_stack: Optional[List[TreeNode]] = None,
     ) -> TextNode:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
-        doc_node.extra_info['chapter_name'] = "\n".join([h.content for h in title_stack])
+        if title_stack:
+            doc_node.extra_info['title'] = "\n".join([h.content for h in title_stack])
         text_node = TextNode(
             id_=uuid.uuid4().hex,
             text=chunk_content,

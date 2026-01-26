@@ -242,13 +242,11 @@ async def start_parse_task(
                 file_entity.chunk_config = parse_request.chunk_config
 
             file_entity.file_version = file_version
-            background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
             session.add(file_entity)
-            file_entities.append(file_entity)
-
-        await session.commit()
-        for file_entity in file_entities:
+            await session.commit()
             await session.refresh(file_entity)
+            background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
+            file_entities.append(file_entity)
 
         logger.info(f"Uploaded {len(file_entities)} files successfully.")
         return success_response(data=file_entities, message="启动解析任务成功")
@@ -316,6 +314,7 @@ async def upload_files(
                 file_entity = existing_file_entity_dict[file_item.file_name]
                 file_entity.file_md5 = file_item.file_md5
                 file_entity.file_size = file_item.file_size
+                file_entity.status = FileStatus.pending
                 file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             file_entity.file_version = file_version

@@ -30,11 +30,13 @@ def get_node_texts_for_embedding(nodes) -> list[str]:
     for node in nodes:
         base_text = ""
         file_name = node.metadata.get('file_name', '').strip()
-        chapter_name = node.metadata.get('chapter_name', '').strip()
+        title = node.metadata.get('title', '').strip() or node.metadata.get('chapter_name', '').strip()
         if file_name:
             base_text += f"file_name: {file_name}"
-        if chapter_name:
-            base_text += f"\n\nchapter_name: {chapter_name}"
+        if title:
+            if base_text:
+                base_text += "\n"
+            base_text += f"title: {title}"
 
         base_text += f"\n\n{node.text}"
 

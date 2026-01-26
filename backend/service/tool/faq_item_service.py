@@ -225,7 +225,7 @@ class FAQItemService:
         # Get paginated results
         offset = (page - 1) * size
         paginated_query = (
-            base_query.offset(offset).limit(size).order_by(FAQItemEntity.created_at.desc())
+            base_query.offset(offset).limit(size).order_by(FAQItemEntity.created_at.desc(), FAQItemEntity.id.asc())
         )
         results = await self.session.exec(paginated_query)
         faq_items = list(results.all())
