@@ -22,6 +22,7 @@ from pairag.file.store.base import BaseFileStore
 from pairag.file.models.file_item import FileItem
 from llama_index.core.schema import Document
 from pairag.file.utils.async_helper import run_sync
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 
 
 def sanitize_filename(filename: str) -> str:
@@ -125,6 +126,9 @@ class MineruPdfReader(BaseReader):
                 lang="ch",
             )
         )
+        md_content = replace_consecutive_spaces(md_content)
+        for content in content_list:
+            content.text = replace_consecutive_spaces(content.text)
         metadata = file_item.metadata()
         metadata["content_list"] = content_list
 

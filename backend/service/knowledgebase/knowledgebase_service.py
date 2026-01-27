@@ -171,7 +171,7 @@ class KnowledgebaseService:
             )
             .outerjoin(file_count_subquery, KbEntity.id == file_count_subquery.c.kb_id)
             .where(where_condition)
-            .order_by(KbEntity.created_at.desc())
+            .order_by(KbEntity.created_at.desc(), KbEntity.id.asc())
             .offset(offset)
             .limit(size)
         )

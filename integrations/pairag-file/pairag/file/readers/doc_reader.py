@@ -14,6 +14,7 @@ from pairag.file.utils.markdown_tree_utils import (
 )
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import to_markdown_image_text
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 
 class DocxReader(BaseReader):
     def __init__(
@@ -306,7 +307,7 @@ class DocxReader(BaseReader):
             markdown_content, images = self.convert_docx_to_markdown(
                 docx_file, file_item.kb_id + "/images/{}", tenant_id=file_item.tenant_id,
             )
-
+            markdown_content = replace_consecutive_spaces(markdown_content)
             metadata = file_item.metadata()
 
             docs = [Document(id_=file_item.id, text=markdown_content, metadata=metadata)]

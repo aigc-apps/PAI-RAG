@@ -8,6 +8,7 @@ from pairag.file.utils.image_utils import get_image_from_url
 from pairag.file.utils.markdown_tree_utils import PaiTable, convert_table_to_markdown
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import to_markdown_image_text
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 
 MARKDOWN_IMAGE_PATTERN = re.compile(
     r"!\[.*?\]\((https?://[^\s)]+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff)(?:\?[^\s)]*)?)\)",
@@ -174,6 +175,7 @@ class HtmlReader(BaseReader):
         try:
             file_item.file.seek(0)
             html_content = file_item.file.read().decode("utf-8")
+            html_content = replace_consecutive_spaces(html_content)
 
             modified_html, tables = self._extract_tables(html_content)
 

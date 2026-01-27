@@ -1,6 +1,7 @@
 from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
 from pairag.file.utils.video_caption_tool import VideoCaptionTool
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 from loguru import logger
 
 
@@ -30,6 +31,7 @@ class VideoReader(BaseReader):
 
             video_data = file_item.file.read()
             video_alt_text = self.video_caption_tool.extract_video(video_data, file_item.file_extension)
+            video_alt_text = replace_consecutive_spaces(video_alt_text)
             if video_alt_text:
                 metadata = file_item.metadata()
                 docs.append(Document(id_=file_item.id, text=video_alt_text, metadata=metadata))

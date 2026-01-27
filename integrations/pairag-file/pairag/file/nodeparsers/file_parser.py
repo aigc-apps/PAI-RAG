@@ -90,6 +90,7 @@ def node_id_func(i: int, doc: BaseNode) -> str:
     return uuid.uuid4().hex
 
 
+
 class FileParser:
     def __init__(
         self,
@@ -405,12 +406,23 @@ class FileParser:
 
             elif doc_type in DOC_TYPES_DO_NOT_NEED_CHUNKING:
                 # 表格格式文档
-                parser = TokenTextSplitter(
-                    chunk_size=chunk_config.chunk_size,
-                    chunk_overlap=0,
-                    id_func=node_id_func,
-                )
-                chunks = parser.get_nodes_from_documents([doc_node])
+                token_count = estimate_tokens_in_text(doc_node.text)
+
+                if token_count > chunk_config.chunk_size:
+                    parser = TokenTextSplitter(
+                        chunk_size=chunk_config.chunk_size,
+                        chunk_overlap=0,
+                        id_func=node_id_func,
+                    )
+                    chunks = parser.get_nodes_from_documents([doc_node])
+                else:
+                    chunks.append(TextNode(
+                        id_=uuid.uuid4().hex,
+                        text=doc_node.text,
+                        metadata={
+                            "token_count": token_count,
+                        }
+                    ))
             elif chunk_config.parser_type.lower() == "token":
                 parser = TokenTextSplitter(
                     chunk_size=chunk_config.chunk_size,

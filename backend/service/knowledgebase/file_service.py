@@ -167,7 +167,7 @@ class FileService:
         # Get paginated results
         offset = (page - 1) * size
         paginated_query = (
-            base_query.order_by(KbFileEntity.updated_at.desc())
+            base_query.order_by(KbFileEntity.updated_at.desc(), KbFileEntity.id.asc())
             .offset(offset)
             .limit(size)
         )

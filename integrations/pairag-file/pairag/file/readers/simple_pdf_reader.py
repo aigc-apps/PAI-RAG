@@ -7,6 +7,7 @@ from pairag.file.store.base import BaseFileStore
 from pairag.file.store.oss_store import OssFileStore
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import get_image_from_url, markdown_image_text_to_chunk
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 from llama_index.core.schema import Document
 from fastpdf4llm import to_content_list, ProgressInfo
 from loguru import logger
@@ -54,6 +55,9 @@ class SimplePdfReader(BaseReader):
 
     def read(self, file_item: FileItem) -> List[Document]:
         content_list = to_content_list(file_item.file, progress_callback=progress_callback, extract_images=self.extract_images)
+        for content in content_list:
+            content.text = replace_consecutive_spaces(content.text)
+
         md_content = "\n\n".join([content.text.rstrip("\n") for content in content_list])
 
         if self.extract_images and self.image_caption_tool:
@@ -61,6 +65,7 @@ class SimplePdfReader(BaseReader):
             logger.info(f"[MinerU] replacing image by pattern...")
             save_name_template = file_item.kb_id + "/images/{}"
             for content in content_list:
+                content.text = replace_consecutive_spaces(content.text)
                 if content.type == "image" and content.text:
                     origin_image_text = content.text
                     image_path = extract_image_path(origin_image_text)

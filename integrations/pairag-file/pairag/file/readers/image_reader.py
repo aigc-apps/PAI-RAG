@@ -4,6 +4,7 @@ from pairag.file.readers.base import BaseReader, FileItem, Document, List
 from pairag.file.store.base import BaseFileStore
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import to_markdown_image_text
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 from PIL import Image
 from pillow_heif import register_heif_opener
 
@@ -53,6 +54,7 @@ class ImageReader(BaseReader):
             image_file.seek(0)
             image_data = image_file.read()
             image_alt_text = self.image_caption_tool.extract_image(image_data, file_extension=file_item.file_extension)
+            image_alt_text = replace_consecutive_spaces(image_alt_text)
             if image_alt_text:
                 cleaned_alt = re.sub(r'\n', ' ', image_alt_text).replace('\r', '').strip()
                 image_text = to_markdown_image_text(upload_result.file_path, cleaned_alt)

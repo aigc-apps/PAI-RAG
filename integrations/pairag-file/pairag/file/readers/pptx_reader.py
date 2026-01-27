@@ -10,6 +10,7 @@ from pairag.file.utils.markdown_tree_utils import PaiTable, convert_table_to_mar
 from pairag.file.utils.image_caption_tool import ImageCaptionTool
 from pairag.file.utils.image_utils import to_markdown_image_text
 from pptx.enum.shapes import PP_PLACEHOLDER
+from pairag.file.utils.text_utils import replace_consecutive_spaces
 import re
 
 
@@ -190,7 +191,7 @@ class PptxReader(BaseReader):
             )
 
             metadata = file_item.metadata()
-
+            markdown_content = replace_consecutive_spaces(markdown_content)
             docs = [Document(id_=file_item.id, text=markdown_content, metadata=metadata)]
             logger.info(f"Successfully read {file_item.file_name}.")
 
