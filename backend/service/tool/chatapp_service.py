@@ -314,6 +314,27 @@ class ChatappService:
         chatbot.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.session.add(chatbot)
 
+        # If FAQ is enabled, ensure faq_config and FAQ knowledgebase exist
+        if chatbot.enable_faq:
+            if not chatbot.faq_config:
+                faq_config = await faq_config_service.get_or_create_faq_config(chatbot=chatbot)
+            else:
+                faq_config = FAQConfigCreate.model_validate(chatbot.faq_config)
+
+
+            knowledgebase = await self._ensure_faq_knowledgebase(
+                faq_config=faq_config,
+                app_id=chatbot.app_id,
+                tenant_id=tenant_id
+            )
+
+            if not faq_config.kb_id:
+                faq_config.kb_id = knowledgebase.id
+                await faq_config_service.update_faq_config(
+                    chatbot=chatbot,
+                    update_data=faq_config
+                )
+
         # Flush to ensure changes are staged
         await self.session.flush()
         await self.session.refresh(chatbot)
