@@ -337,8 +337,22 @@ class PaiEvaluationClient:
         run_config_entity: RunConfigEntity = await get_run_config_entity(run_config_id=experiment_entity.run_config_id, tenant_id=tenant_id)
         evaluator_config: EvaluatorConfigEntity = await get_evaluator_config_entity(evaluator_config_id=experiment_entity.evaluator_config_id, tenant_id=tenant_id)
         logger.info(f"[WORKER]run_config_entity: {run_config_entity} \n evaluator_config: {evaluator_config}")
-        for exp_run_id in exp_run_ids:
-            await self.evaluate_one_sample(experiment_id=experiment_id, exp_run_id=exp_run_id, tenant_id=tenant_id)
+
+        # 获取并行数，默认为1
+        parallel_count = getattr(run_config_entity, 'parallel_count', None) or 1
+        parallel_count = max(1, min(parallel_count, 50))  # 限制在1-50之间
+        logger.info(f"[WORKER] Using parallel_count: {parallel_count} for experiment {experiment_id}")
+
+        # 使用 Semaphore 控制并行数
+        semaphore = asyncio.Semaphore(parallel_count)
+
+        async def evaluate_with_semaphore(exp_run_id: str):
+            async with semaphore:
+                await self.evaluate_one_sample(experiment_id=experiment_id, exp_run_id=exp_run_id, tenant_id=tenant_id)
+
+        # 并行执行所有评估任务
+        tasks = [evaluate_with_semaphore(exp_run_id) for exp_run_id in exp_run_ids]
+        await asyncio.gather(*tasks)
 
         if not is_evaluate_single_sample:
             while not await is_evaluation_completed(experiment_id=experiment_id, tenant_id=tenant_id):

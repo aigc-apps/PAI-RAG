@@ -40,7 +40,7 @@ import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { useRouter } from 'next/navigation';
 import { RunConfig } from '@/app/evaluation/[datasetId]/types';
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
-import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
+import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT, getPrompts } from '@/app/common/prompts';
 import { set } from "date-fns";
 
 
@@ -72,7 +72,18 @@ export function RunConfigFormDialog({
   const router = useRouter();
   const [localConfig, setLocalConfig] = useState<RunConfig>(
     mode === 'edit' && config
-      ? { ...config }
+      ? {
+          ...config,
+          // 确保 prompts 字段存在且有默认值
+          prompts: {
+            plan: config.prompts?.plan || PLAN_PROMPT,
+            act: config.prompts?.act || ACT_PROMPT,
+            act_with_plan: config.prompts?.act_with_plan || ACT_WITH_PLAN_PROMPT,
+            summary: config.prompts?.summary || SUMMARY_PROMPT,
+          },
+          // 确保 parallel_count 有默认值
+          parallel_count: config.parallel_count || 1,
+        }
       : {
         id: "",
         name: "",
@@ -85,6 +96,7 @@ export function RunConfigFormDialog({
         enable_input_guardrail: false,
         enable_output_guardrail: false,
         guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+        parallel_count: 1,
         prompts: {
           plan: PLAN_PROMPT,
           act: ACT_PROMPT,
@@ -101,26 +113,78 @@ export function RunConfigFormDialog({
     mcps.filter(mcp => localConfig.mcp_ids.includes(mcp.id)).map(mcp => mcp.name)
   );
 
-  const [planPrompt, setPlanPrompt] = useState('');
-  const [actPrompt, setActPrompt] = useState('');
-  const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
-  const [summarizePrompt, setSummarizePrompt] = useState('');
+  const [planPrompt, setPlanPrompt] = useState(PLAN_PROMPT);
+  const [actPrompt, setActPrompt] = useState(ACT_PROMPT);
+  const [actWithPlanPrompt, setActWithPlanPrompt] = useState(ACT_WITH_PLAN_PROMPT);
+  const [summarizePrompt, setSummarizePrompt] = useState(SUMMARY_PROMPT);
   const [openPrompt, setOpenPrompt] = useState(false);
+  const [defaultPrompts, setDefaultPrompts] = useState({
+    plan: PLAN_PROMPT,
+    act: ACT_PROMPT,
+    act_with_plan: ACT_WITH_PLAN_PROMPT,
+    summary: SUMMARY_PROMPT,
+  });
+
+  // 从 API 加载默认提示词
+  useEffect(() => {
+    const loadDefaultPrompts = async () => {
+      try {
+        const prompts = await getPrompts();
+        if (prompts) {
+          const newDefaults = {
+            plan: prompts.plan_prompt || PLAN_PROMPT,
+            act: prompts.act_prompt || ACT_PROMPT,
+            act_with_plan: prompts.act_with_plan_prompt || ACT_WITH_PLAN_PROMPT,
+            summary: prompts.summary_prompt || SUMMARY_PROMPT,
+          };
+          setDefaultPrompts(newDefaults);
+          
+          // 如果当前是创建模式且提示词为空，则使用从 API 获取的默认值
+          if (mode === 'new' && !config) {
+            setPlanPrompt(newDefaults.plan);
+            setActPrompt(newDefaults.act);
+            setActWithPlanPrompt(newDefaults.act_with_plan);
+            setSummarizePrompt(newDefaults.summary);
+            // 同时更新 localConfig 中的 prompts
+            setLocalConfig(prev => ({
+              ...prev,
+              prompts: {
+                plan: newDefaults.plan,
+                act: newDefaults.act,
+                act_with_plan: newDefaults.act_with_plan,
+                summary: newDefaults.summary,
+              },
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load default prompts:', error);
+        // 如果加载失败，使用导入的常量（可能是空字符串，但至少不会报错）
+      }
+    };
+    
+    loadDefaultPrompts();
+  }, []); // 只在组件挂载时执行一次
 
   // 当 config 或 mode 变化时重置表单
   useEffect(() => {
     if (mode === 'edit' && config) {
-      setLocalConfig({ ...config });
+      setLocalConfig({ 
+        ...config,
+        parallel_count: config.parallel_count || 1,
+      });
       setSelectedKbNames(
         kbs.filter(kb => config.kb_ids.includes(kb.id)).map(kb => kb.name)
       );
       setSelectedMcpNames(
         mcps.filter(mcp => config.mcp_ids.includes(mcp.id)).map(mcp => mcp.name)
       );
-      setPlanPrompt(config.prompts.plan);
-      setActPrompt(config.prompts.act);
-      setActWithPlanPrompt(config.prompts.act_with_plan);
-      setSummarizePrompt(config.prompts.summary);
+          // 安全地读取提示词，如果不存在则使用默认值
+          const prompts = config.prompts || {};
+          setPlanPrompt(prompts.plan || defaultPrompts.plan);
+          setActPrompt(prompts.act || defaultPrompts.act);
+          setActWithPlanPrompt(prompts.act_with_plan || defaultPrompts.act_with_plan);
+          setSummarizePrompt(prompts.summary || defaultPrompts.summary);
     } else {
       setLocalConfig({
         id: "",
@@ -134,6 +198,7 @@ export function RunConfigFormDialog({
         enable_input_guardrail: false,
         enable_output_guardrail: false,
         guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+        parallel_count: 1,
         prompts: {
           plan: PLAN_PROMPT,
           act: ACT_PROMPT,
@@ -143,8 +208,13 @@ export function RunConfigFormDialog({
       });
       setSelectedKbNames([]);
       setSelectedMcpNames([]);
+      // 初始化提示词为默认值（使用从 API 加载的默认值）
+      setPlanPrompt(defaultPrompts.plan);
+      setActPrompt(defaultPrompts.act);
+      setActWithPlanPrompt(defaultPrompts.act_with_plan);
+      setSummarizePrompt(defaultPrompts.summary);
     }
-  }, [mode, config, kbs, mcps]);
+  }, [mode, config, kbs, mcps, defaultPrompts]);
 
   const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
     setLocalConfig(prev => {
@@ -289,27 +359,27 @@ export function RunConfigFormDialog({
                               <TabsContent value="plan" className="h-full flex flex-col">
                                 <ResettableTextarea
                                   value={planPrompt}
-                                  onReset={() => setPlanPrompt(PLAN_PROMPT)}
+                                  onReset={() => setPlanPrompt(defaultPrompts.plan)}
                                   onChange={(e) => setPlanPrompt(e.target.value)}
-                                  defaultValue={PLAN_PROMPT}
+                                  defaultValue={defaultPrompts.plan}
                                   placeholder="输入规划阶段的提示词..."
                                 />
                               </TabsContent>
                               <TabsContent value="act_with_plan" className="h-full flex flex-col">
                                 <ResettableTextarea
                                   value={actWithPlanPrompt}
-                                  onReset={() => setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT)}
+                                  onReset={() => setActWithPlanPrompt(defaultPrompts.act_with_plan)}
                                   onChange={(e) => setActWithPlanPrompt(e.target.value)}
-                                  defaultValue={ACT_WITH_PLAN_PROMPT}
+                                  defaultValue={defaultPrompts.act_with_plan}
                                   placeholder="输入规划驱动行动阶段的提示词..."
                                 />
                               </TabsContent>
                               <TabsContent value="summary" className="h-full flex flex-col">
                                 <ResettableTextarea
                                   value={summarizePrompt}
-                                  onReset={() => setSummarizePrompt(SUMMARY_PROMPT)}
+                                  onReset={() => setSummarizePrompt(defaultPrompts.summary)}
                                   onChange={(e) => setSummarizePrompt(e.target.value)}
-                                  defaultValue={SUMMARY_PROMPT}
+                                  defaultValue={defaultPrompts.summary}
                                   placeholder="输入总结阶段的提示词..."
                                 />
                               </TabsContent>
@@ -321,9 +391,9 @@ export function RunConfigFormDialog({
                         <TabsContent value="act_group" className="h-full flex flex-col">
                           <ResettableTextarea
                             value={actPrompt}
-                            onReset={() => setActPrompt(ACT_PROMPT)}
+                            onReset={() => setActPrompt(defaultPrompts.act)}
                             onChange={(e) => setActPrompt(e.target.value)}
-                            defaultValue={ACT_PROMPT}
+                            defaultValue={defaultPrompts.act}
                             placeholder="输入行动阶段的提示词..."
                           />
                         </TabsContent>
@@ -334,10 +404,12 @@ export function RunConfigFormDialog({
                   <DialogFooter className="gap-2 sm:gap-0">
                     <DialogClose asChild>
                       <Button variant="outline" onClick={() => {
-                        setActPrompt(localConfig.prompts.act);
-                        setPlanPrompt(localConfig.prompts.plan);
-                        setActWithPlanPrompt(localConfig.prompts.act_with_plan);
-                        setSummarizePrompt(localConfig.prompts.summary);
+                        // 安全地读取提示词，如果不存在则使用默认值
+                        const prompts = localConfig.prompts || {};
+                        setActPrompt(prompts.act || defaultPrompts.act);
+                        setPlanPrompt(prompts.plan || defaultPrompts.plan);
+                        setActWithPlanPrompt(prompts.act_with_plan || defaultPrompts.act_with_plan);
+                        setSummarizePrompt(prompts.summary || defaultPrompts.summary);
                       }}>取消</Button>
                     </DialogClose>
                     <Button type="button" onClick={() => {
@@ -482,6 +554,31 @@ export function RunConfigFormDialog({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* 任务并行数 */}
+          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+            <Label htmlFor="parallel_count">任务并行数</Label>
+            <div className="space-y-1">
+              <Input
+                id="parallel_count"
+                type="number"
+                min="1"
+                max="50"
+                value={localConfig.parallel_count || 1}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  setLocalConfig((prev) => ({
+                    ...prev,
+                    parallel_count: isNaN(value) || value < 1 ? 1 : value,
+                  }));
+                }}
+                placeholder="请输入并行任务数，默认为1"
+              />
+              <Label htmlFor="parallel_count" className="text-xs text-muted-foreground">
+                设置评估实验的并行任务数，建议值：1-10
+              </Label>
             </div>
           </div>
 

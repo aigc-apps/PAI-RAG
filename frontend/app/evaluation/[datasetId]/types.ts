@@ -30,6 +30,7 @@ export interface RunConfig {
     enable_input_guardrail?: boolean;
     enable_output_guardrail?: boolean;
     guardrail_hint?: string;
+    parallel_count?: number;
     prompts: {
       plan: string;
       act: string;
@@ -45,6 +46,7 @@ export interface EvaluatorConfig {
     model_id: string;    
     case_sensitive?: boolean;
     ignore_punctuation?: boolean;
+    llm_judge_prompt?: string;
 }
 
 export interface ExperimentItem {

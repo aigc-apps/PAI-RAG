@@ -919,6 +919,7 @@ class EvaluationService:
             enable_input_guardrail=config_data.enable_input_guardrail,
             enable_output_guardrail=config_data.enable_output_guardrail,
             guardrail_hint=config_data.guardrail_hint,
+            parallel_count=config_data.parallel_count or 1,
             prompts=config_data.prompts,
             tenant_id=tenant_id,
         )
@@ -984,6 +985,8 @@ class EvaluationService:
             run_config.enable_output_guardrail = update_data.enable_output_guardrail
         if update_data.guardrail_hint is not None:
             run_config.guardrail_hint = update_data.guardrail_hint
+        if update_data.parallel_count is not None:
+            run_config.parallel_count = update_data.parallel_count
         if update_data.prompts is not None:
             run_config.prompts = update_data.prompts
 
@@ -1108,6 +1111,7 @@ class EvaluationService:
             model_id=config_data.model_id,
             case_sensitive=config_data.case_sensitive,
             ignore_punctuation=config_data.ignore_punctuation,
+            llm_judge_prompt=config_data.llm_judge_prompt,
             tenant_id=tenant_id,
         )
 
@@ -1158,6 +1162,8 @@ class EvaluationService:
             eval_config.type = update_data.type
         if update_data.model_id is not None:
             eval_config.model_id = update_data.model_id
+        if update_data.llm_judge_prompt is not None:
+            eval_config.llm_judge_prompt = update_data.llm_judge_prompt
         if update_data.case_sensitive is not None:
             eval_config.case_sensitive = update_data.case_sensitive
         if update_data.ignore_punctuation is not None:

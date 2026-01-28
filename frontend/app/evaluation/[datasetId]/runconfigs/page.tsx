@@ -46,6 +46,7 @@ const default_eval_run_config = {
     enable_input_guardrail: false,
     enable_output_guardrail: false,
     guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+    parallel_count: 1,
     prompts: {
         plan: PLAN_PROMPT,
         act: ACT_PROMPT,

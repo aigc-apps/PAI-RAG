@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from evaluation.evaluator.base import BaseEvaluator
 from evaluation.evaluator.exact_match_evaluator import ExactMatchEvaluator
 from evaluation.evaluator.llm_judge_evaluator import LLMJudgeEvaluator
+from evaluation.evaluator.prompts.eval_prompts import LLM_JUDGE_PROMPT
 from llama_index.core.llms import LLM
 
 class EvaluatorConfig(BaseModel):
@@ -29,8 +30,12 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
         )
     elif eval_type == "LLMJudge":
         assert eval_llm is not None, "Must provide eval llm instance"
+        # 如果配置中有自定义的 prompt（非 None 且非空字符串），使用自定义的，否则使用默认的
+        custom_prompt = eval_config.get("llm_judge_prompt")
+        prompt_template = (custom_prompt and custom_prompt.strip()) or LLM_JUDGE_PROMPT
         return LLMJudgeEvaluator(
-            llm=eval_llm
+            llm=eval_llm,
+            prompt_template=prompt_template
         )
 
     else:

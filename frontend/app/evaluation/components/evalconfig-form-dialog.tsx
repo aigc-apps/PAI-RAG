@@ -8,6 +8,8 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -26,6 +28,8 @@ import { useState, useEffect } from 'react';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { useRouter } from 'next/navigation';
 import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
+import { ResettableTextarea } from '@/app/apps/resetable_textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 interface EvalConfigFormDialogProps {
@@ -63,10 +67,34 @@ export function EvalConfigFormDialog({
       }
   );
 
+  const [llmJudgePrompt, setLlmJudgePrompt] = useState("");
+  const [openPrompt, setOpenPrompt] = useState(false);
+  const [defaultPrompt, setDefaultPrompt] = useState("");
+
+  // 从 API 加载默认提示词
+  useEffect(() => {
+    const loadDefaultPrompt = async () => {
+      try {
+        const response = await fetch('/api/eval-prompts');
+        if (response.ok) {
+          const data = await response.json();
+          const prompt = data.data?.llm_judge_prompt || "";
+          setDefaultPrompt(prompt);
+        }
+      } catch (error) {
+        console.error('Failed to load default eval prompt:', error);
+      }
+    };
+    
+    loadDefaultPrompt();
+  }, []); // 只在组件挂载时执行一次
+
   // 当 config 或 mode 变化时重置表单
   useEffect(() => {
     if (mode === 'edit' && config) {
       setLocalConfig({ ...config });
+      // 安全地读取提示词，如果不存在则使用默认值
+      setLlmJudgePrompt(config.llm_judge_prompt || defaultPrompt || "");
     } else {
       setLocalConfig({
         id: "",
@@ -76,10 +104,20 @@ export function EvalConfigFormDialog({
         case_sensitive: false,
         ignore_punctuation: false
       });
+      // 初始化提示词为默认值（使用从 API 加载的默认值）
+      setLlmJudgePrompt(defaultPrompt || "");
     }
-  }, [mode, config]);
+  }, [mode, config, defaultPrompt]);
   const handleSubmit = () => {
-    onSave(localConfig);
+    // 如果类型是 LLMJudge，确保包含 llm_judge_prompt
+    // 如果提示词为空字符串，传递 null，这样后端会使用默认值
+    const configToSave = {
+      ...localConfig,
+      ...(localConfig.type === "LLMJudge" && { 
+        llm_judge_prompt: llmJudgePrompt.trim() || null 
+      }),
+    };
+    onSave(configToSave);
   };
 
   const mode_str = mode === "new" ? "新建" : "修改";
@@ -169,35 +207,95 @@ export function EvalConfigFormDialog({
               )}
 
               {localConfig.type === "LLMJudge" && (
-                <div className="pt-3">
-                  <Label htmlFor="model_id" className="block text-sm mb-2">
-                    选择评估器模型
-                  </Label>
-                  <Select
-                    value={localConfig.model_id || ""}
-                    onValueChange={(value) => {
-                      setLocalConfig((prev) => ({
-                        ...prev,
-                        model_id: value,
-                      }));
-                    }}
-                  >
-                    <SelectTrigger id="model_id">
-                      <SelectValue placeholder="请选择评估模型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {llms.map((llm) => (
-                        <SelectItem key={llm.model_id} value={llm.model_id}>
-                          {llm.model_id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="pt-3 space-y-3">
+                  <div>
+                    <Label htmlFor="model_id" className="block text-sm mb-2">
+                      选择评估器模型
+                    </Label>
+                    <Select
+                      value={localConfig.model_id || ""}
+                      onValueChange={(value) => {
+                        setLocalConfig((prev) => ({
+                          ...prev,
+                          model_id: value,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger id="model_id">
+                        <SelectValue placeholder="请选择评估模型" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {llms.map((llm) => (
+                          <SelectItem key={llm.model_id} value={llm.model_id}>
+                            {llm.model_id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* 提示词设置按钮 */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setOpenPrompt(true)}
+                    >
+                      提示词设置 - 编辑提示词
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* 提示词编辑对话框 */}
+        {localConfig.type === "LLMJudge" && (
+          <Dialog open={openPrompt} onOpenChange={setOpenPrompt}>
+            <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>编辑 LLM 评判提示词</DialogTitle>
+                <DialogDescription>
+                  编辑 LLM 评判评估器使用的提示词模板。可以使用 {`{inputs}`}、{`{outputs}`}、{`{reference_outputs}`} 作为占位符。
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+                <Tabs defaultValue="prompt" className="flex-1 flex flex-col min-h-0">
+                  <TabsList>
+                    <TabsTrigger value="prompt">提示词</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="prompt" className="flex-1 overflow-hidden flex flex-col min-h-0">
+                    <div className="flex-1 overflow-auto">
+                      <ResettableTextarea
+                        value={llmJudgePrompt}
+                        onChange={(e) => setLlmJudgePrompt(e.target.value)}
+                        placeholder="请输入 LLM 评判提示词..."
+                        className="min-h-[400px] font-mono text-sm"
+                        onReset={() => setLlmJudgePrompt(defaultPrompt)}
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <DialogClose asChild>
+                  <Button variant="outline" onClick={() => {
+                    // 取消时恢复为配置中的值或默认值
+                    const prompt = localConfig.llm_judge_prompt || defaultPrompt;
+                    setLlmJudgePrompt(prompt);
+                  }}>取消</Button>
+                </DialogClose>
+                <Button type="button" onClick={() => {
+                  setOpenPrompt(false);
+                }}>
+                  保存更改
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import uuid
 from pydantic import field_serializer
 from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, Text
 from common.system_constants import DEFAULT_TENANT_ID
 from typing import Optional
 
@@ -13,6 +13,7 @@ class EvaluatorConfigCreate(SQLModel):
     model_provider_name: Optional[str] = Field(default="openai_like")
     case_sensitive: bool = Field(default=False)
     ignore_punctuation: bool = Field(default=False)
+    llm_judge_prompt: Optional[str] = Field(default=None)
 
 class EvaluatorConfigEntity(EvaluatorConfigCreate, table=True):
     __tablename__ = "pai_evaluator_config"
@@ -25,6 +26,9 @@ class EvaluatorConfigEntity(EvaluatorConfigCreate, table=True):
         description="Reference to the evaluation task",
         ondelete="CASCADE",
     )
+
+    # Override llm_judge_prompt to use Text column type for large text storage
+    llm_judge_prompt: Optional[str] = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),

@@ -21,6 +21,7 @@ class RunConfigCreate(SQLModel):
     enable_input_guardrail: Optional[bool] = Field(default=False)
     enable_output_guardrail: Optional[bool] = Field(default=False)
     guardrail_hint: Optional[str] = Field(default=None)
+    parallel_count: Optional[int] = Field(default=1, description="Number of parallel tasks for evaluation")
     prompts: Optional[dict] = Field(default={})
 
 

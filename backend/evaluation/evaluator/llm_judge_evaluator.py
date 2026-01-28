@@ -2,13 +2,13 @@
 from typing import Dict, Any, Optional
 from evaluation.evaluator.base import BaseEvaluator
 from llama_index.core.llms import LLM
-from evaluation.evaluator.prompts.correctness import CORRECTNESS_PROMPT
+from evaluation.evaluator.prompts.eval_prompts import LLM_JUDGE_PROMPT
 
-# 基于openevals的CORRECTNESS_PROMPT进行评估
+# 基于openevals的LLM_JUDGE_PROMPT进行评估
 class LLMJudgeEvaluator(BaseEvaluator):
     """
     基于大语言模型的评估器
-    让 LLM 扮演“裁判”角色，对预测结果打分或给出评语
+    让 LLM 扮演"裁判"角色，对预测结果打分或给出评语
     """
 
     def __init__(
@@ -26,7 +26,7 @@ class LLMJudgeEvaluator(BaseEvaluator):
         self.temperature = temperature
 
     def _default_prompt(self) -> str:
-        return CORRECTNESS_PROMPT
+        return LLM_JUDGE_PROMPT
 
     async def _call_llm(self, prompt: str) -> str:
         """调用 LLM，返回原始响应文本"""
@@ -80,11 +80,19 @@ class LLMJudgeEvaluator(BaseEvaluator):
 
 
     async def evaluate_async(self, input:str, prediction: str, reference: str, **kwargs) -> Dict[str, Any]:
-        prompt = self.prompt_template.format(
+        # Use safe formatting to handle JSON schema braces in the prompt
+        # First, replace double braces with a placeholder, then format, then restore
+        # Replace {{ and }} with placeholders
+        template = self.prompt_template.replace('{{', '___DOUBLE_BRACE_OPEN___').replace('}}', '___DOUBLE_BRACE_CLOSE___')
+        # Format with actual values
+        prompt = template.format(
             inputs=input,
             outputs=prediction,
             reference_outputs=reference,
         )
+        # Restore double braces
+        prompt = prompt.replace('___DOUBLE_BRACE_OPEN___', '{{').replace('___DOUBLE_BRACE_CLOSE___', '}}')
+
         llm_response = await self._call_llm(prompt)
         result = self._parse_response(llm_response)
         return result
