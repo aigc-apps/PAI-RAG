@@ -40,7 +40,7 @@ import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '../common/prompts';
+import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT, getPrompts } from '../common/prompts';
 
 // Add import for ResettableTextarea
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
@@ -115,8 +115,56 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const [actPrompt, setActPrompt] = useState('');
   const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
   const [summarizePrompt, setSummarizePrompt] = useState('');
+  const [defaultPrompts, setDefaultPrompts] = useState({
+    plan: PLAN_PROMPT,
+    act: ACT_PROMPT,
+    act_with_plan: ACT_WITH_PLAN_PROMPT,
+    summary: SUMMARY_PROMPT,
+  });
 
   const router = useRouter();
+
+  // Load default prompts from API (client-side)
+  useEffect(() => {
+    const loadDefaultPrompts = async () => {
+      try {
+        const prompts = await getPrompts();
+        if (prompts) {
+          const newDefaults = {
+            plan: prompts.plan_prompt || PLAN_PROMPT,
+            act: prompts.act_prompt || ACT_PROMPT,
+            act_with_plan: prompts.act_with_plan_prompt || ACT_WITH_PLAN_PROMPT,
+            summary: prompts.summary_prompt || SUMMARY_PROMPT,
+          };
+          setDefaultPrompts(newDefaults);
+
+          if (isCreate) {
+            const current = botConfig.prompts || {};
+            const hasAnyPrompt = Boolean(
+              (current.plan && current.plan.trim()) ||
+              (current.act && current.act.trim()) ||
+              (current.act_with_plan && current.act_with_plan.trim()) ||
+              (current.summary && current.summary.trim())
+            );
+            if (!hasAnyPrompt) {
+              onConfigChange({
+                prompts: {
+                  plan: newDefaults.plan,
+                  act: newDefaults.act,
+                  act_with_plan: newDefaults.act_with_plan,
+                  summary: newDefaults.summary,
+                },
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load default prompts:', error);
+      }
+    };
+
+    loadDefaultPrompts();
+  }, [isCreate, botConfig.prompts, onConfigChange]);
 
   // Sync selected names when botConfig changes
   useEffect(() => {
@@ -131,11 +179,11 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
     setSelectedMcpNames(mcpnames);
 
     // Initialize prompts from botConfig
-    setPlanPrompt(botConfig.prompts?.plan || PLAN_PROMPT);
-    setActPrompt(botConfig.prompts?.act || ACT_PROMPT);
-    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || ACT_WITH_PLAN_PROMPT);
-    setSummarizePrompt(botConfig.prompts?.summary || SUMMARY_PROMPT);
-  }, [botConfig, kbs, mcps]);
+    setPlanPrompt(botConfig.prompts?.plan || defaultPrompts.plan);
+    setActPrompt(botConfig.prompts?.act || defaultPrompts.act);
+    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || defaultPrompts.act_with_plan);
+    setSummarizePrompt(botConfig.prompts?.summary || defaultPrompts.summary);
+  }, [botConfig, kbs, mcps, defaultPrompts]);
 
   const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
     if (checked) {
@@ -283,27 +331,27 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                           <TabsContent value="plan" className="h-full flex flex-col">
                             <ResettableTextarea
                               value={planPrompt}
-                              onReset={() => setPlanPrompt(PLAN_PROMPT)}
+                              onReset={() => setPlanPrompt(defaultPrompts.plan)}
                               onChange={(e) => setPlanPrompt(e.target.value)}
-                              defaultValue={PLAN_PROMPT}
+                              defaultValue={defaultPrompts.plan}
                               placeholder="输入规划阶段的提示词..."
                             />
                           </TabsContent>
                           <TabsContent value="act_with_plan" className="h-full flex flex-col">
                             <ResettableTextarea
                               value={actWithPlanPrompt}
-                              onReset={() => setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT)}
+                              onReset={() => setActWithPlanPrompt(defaultPrompts.act_with_plan)}
                               onChange={(e) => setActWithPlanPrompt(e.target.value)}
-                              defaultValue={ACT_WITH_PLAN_PROMPT}
+                              defaultValue={defaultPrompts.act_with_plan}
                               placeholder="输入规划驱动行动阶段的提示词..."
                             />
                           </TabsContent>
                           <TabsContent value="summary" className="h-full flex flex-col">
                             <ResettableTextarea
                               value={summarizePrompt}
-                              onReset={() => setSummarizePrompt(SUMMARY_PROMPT)}
+                              onReset={() => setSummarizePrompt(defaultPrompts.summary)}
                               onChange={(e) => setSummarizePrompt(e.target.value)}
-                              defaultValue={SUMMARY_PROMPT}
+                              defaultValue={defaultPrompts.summary}
                               placeholder="输入总结阶段的提示词..."
                             />
                           </TabsContent>
@@ -314,9 +362,9 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                     <TabsContent value="act_group" className="h-full flex flex-col">
                       <ResettableTextarea
                         value={actPrompt}
-                        onReset={() => setActPrompt(ACT_PROMPT)}
+                        onReset={() => setActPrompt(defaultPrompts.act)}
                         onChange={(e) => setActPrompt(e.target.value)}
-                        defaultValue={ACT_PROMPT}
+                        defaultValue={defaultPrompts.act}
                         placeholder="输入行动阶段的提示词..."
                       />
                     </TabsContent>
@@ -327,10 +375,10 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               <DialogFooter className="gap-2 sm:gap-0">
                 <DialogClose asChild>
                   <Button variant="outline" onClick={() => {
-                    setActPrompt(botConfig.prompts?.act || ACT_PROMPT);
-                    setPlanPrompt(botConfig.prompts?.plan || PLAN_PROMPT);
-                    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || ACT_WITH_PLAN_PROMPT);
-                    setSummarizePrompt(botConfig.prompts?.summary || SUMMARY_PROMPT);
+                    setActPrompt(botConfig.prompts?.act || defaultPrompts.act);
+                    setPlanPrompt(botConfig.prompts?.plan || defaultPrompts.plan);
+                    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || defaultPrompts.act_with_plan);
+                    setSummarizePrompt(botConfig.prompts?.summary || defaultPrompts.summary);
                   }}>取消</Button>
                 </DialogClose>
                 <Button type="button" onClick={() => {
