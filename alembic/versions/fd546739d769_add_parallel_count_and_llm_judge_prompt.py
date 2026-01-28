@@ -1,7 +1,7 @@
 """add parallel_count to run_config and llm_judge_prompt to evaluator_config
 
 Revision ID: fd546739d769
-Revises: 1f0950a076a7
+Revises: 4fc61e385531
 Create Date: 2026-01-26 15:10:00.000000
 
 """
