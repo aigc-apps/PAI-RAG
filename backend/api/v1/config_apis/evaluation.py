@@ -148,7 +148,7 @@ async def upload_dataset_samples(
 
         # Batch create dataset samples
         dataset_entities = await evaluation_service.batch_create_dataset_samples(
-            dataset_id=dataset_id, file_results=file_results, tenant_id=tenant_id
+            dataset_id=dataset_id, samples=file_results, tenant_id=tenant_id
         )
 
         return success_response(data=dataset_entities, message="文件上传成功")
