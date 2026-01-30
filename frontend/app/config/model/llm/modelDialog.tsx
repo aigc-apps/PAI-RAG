@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { AlertCircleIcon } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 // 定义组件 props
 interface LLMModelDialogProps {
@@ -46,9 +47,10 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
   llmConfig,
   onSaveSuccess,
 }) => {
+  const { t } = useI18n();
   const [llm, setLlm] = useState<LlmConfig>(llmConfig);
   const [error, setError] = useState<string | null>(null);
-  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const { tenantFetch } = useTenantFetch();
 
   useEffect(() => {
@@ -67,7 +69,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
       !llm.base_url ||
       !llm.model_id
     ) {
-      setSaveErrorMsg('请必须填写完整的模型信息');
+      setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
     }
     const submit_url = isAdd ? `/api/config/llms` : `/api/config/llms/${llm.id}`;
@@ -82,14 +84,14 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
       });
 
       if (!res.ok) {
-        setSaveErrorMsg(`${updateMethod} 请求失败, 请检查填写信息`);
+        setSaveErrorMsg(t('config.model.requestFailedCheckInfo', { method: updateMethod }));
         return;
       }
       const jsondata = await res.json();
       onSaveSuccess(jsondata.data as LlmConfig); // 触发回调
       setIsOpen(false);
     } catch (err: any) {
-      setSaveErrorMsg(`${updateMethod} 请求失败`);
+      setSaveErrorMsg(t('config.model.requestFailed', { method: updateMethod }));
     }
   };
 
@@ -107,19 +109,19 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
       <DialogContent className="sm:max-w-[700px]">
         {error && <div className="text-red-500 mb-4">{error}</div>}
         <DialogHeader>
-          <DialogTitle>{isAdd ? '添加模型' : '编辑模型'}</DialogTitle>
-          <DialogDescription>填写模型配置信息后，点击保存。</DialogDescription>
+          <DialogTitle>{isAdd ? t('config.model.addModel') : t('config.model.editModel')}</DialogTitle>
+          <DialogDescription>{t('config.model.fillModelConfig')}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_id" className="text-right">
-              模型ID
+              {t('config.model.modelId')}
               <span className="text-destructive">*</span>
             </Label>
             <Input
               id="model_id"
-              placeholder="model_id"
+              placeholder={t('config.model.modelIdPlaceholder')}
               value={llm?.model_id ?? ''}
               onChange={(e) =>
                 setLlm((prev) => ({ ...prev, model_id: e.target.value }))
@@ -131,14 +133,14 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
         <div>
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="base_url" className="text-right">
-              Endpoint URL
+              {t('config.model.endpointUrl')}
               <span className="text-destructive">*</span>
             </Label>
             <div className="col-span-3">
               <input
                 id="base_url"
                 list="base_url_options"
-                placeholder="输入或选择模型base_url"
+                placeholder={t('config.model.baseUrlPlaceholder')}
                 value={llm?.base_url ?? ''}
                 onChange={(e) =>
                   setLlm((prev) => ({ ...prev, base_url: e.target.value }))
@@ -148,7 +150,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
               <datalist id="base_url_options">
                 <option value="https://api.openai.com/v1">OpenAI</option>
                 <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
-                  通义千问
+                  {t('config.model.qwenModel')}
                 </option>
                 {/* 添加更多预设选项 */}
               </datalist>
@@ -156,14 +158,14 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
           </div>
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="api_key" className="text-right">
-              API Key
+              {t('config.model.apiKey')}
               <span className="text-destructive">*</span>
             </Label>
             {isAdd ? (
               <Input
                 id="api_key"
                 type="password"
-                placeholder="api_key"
+                placeholder={t('config.model.apiKeyPlaceholder')}
                 value={llm?.api_key ?? ''}
                 onChange={(e) =>
                   setLlm((prev) => ({ ...prev, api_key: e.target.value }))
@@ -174,7 +176,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
               <Input
                 id="api_key"
                 type="password"
-                placeholder="api_key"
+                placeholder={t('config.model.apiKeyPlaceholder')}
                 value={llm?.api_key || '******'}
                 onChange={(e) =>
                   setLlm((prev) => ({ ...prev, api_key: e.target.value }))
@@ -187,12 +189,12 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model" className="text-right">
-              模型名称
+              {t('config.model.modelName')}
               <span className="text-destructive">*</span>
             </Label>
             <Input
               id="model"
-              placeholder="model"
+              placeholder={t('config.model.modelNamePlaceholder')}
               value={llm?.model ?? ''}
               onChange={(e) =>
                 setLlm((prev) => ({ ...prev, model: e.target.value }))
@@ -204,7 +206,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="vision_support" className="text-right">
-              多模态模型
+              {t('config.model.visionModel')}
             </Label>
             <Switch
               id="vision_support"
@@ -218,7 +220,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="enable_thinking" className="text-right">
-              思考模型
+              {t('config.model.thinkingModel')}
             </Label>
             <Switch
               id="enable_thinking"
@@ -237,7 +239,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
               <AlertTitle>{saveErrorMsg}</AlertTitle>
             </Alert>
           )}
-          <Button onClick={handleSubmit}>{isAdd ? '新增' : '保存'}</Button>
+          <Button onClick={handleSubmit}>{isAdd ? t('config.model.create') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -26,8 +26,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
-// 定义组件 props
+// Component props
 interface EmbeddingModelDialogProps {
   isAdd: boolean;
   isOpen: boolean;
@@ -36,7 +37,7 @@ interface EmbeddingModelDialogProps {
   onSaveSuccess: (emb: EmbConfig) => void;
 }
 
-// 模型数据类型
+// Model data type
 export interface EmbConfig {
   id: string;
   model_id: string;
@@ -59,8 +60,9 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
 }) => {
   const [emb, setEmb] = useState<EmbConfig>(embConfig);
   const [error, setError] = useState<string | null>(null);
-  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const { tenantFetch } = useTenantFetch();
+  const { t } = useI18n();
 
   useEffect(() => {
     setEmb(embConfig);
@@ -85,13 +87,13 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         !emb.model_name ||
         !emb.type)
     ) {
-      setSaveErrorMsg('请必须填写完整的模型信息');
+      setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
     } else if (
       !is_api_model &&
       (!emb.model_id || !emb.model_name || !emb.dimension || !emb.type)
     ) {
-      setSaveErrorMsg('请必须填写完整的模型信息');
+      setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
     }
     const submit_url = isAdd
@@ -108,18 +110,18 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       });
 
       if (!res.ok) {
-        setSaveErrorMsg(`${updateMethod} 请求失败, 请检查填写信息`);
+        setSaveErrorMsg(t('config.model.requestFailedCheckInfo', { method: updateMethod }));
         return;
       }
       const jsondata = await res.json();
-      onSaveSuccess(jsondata.data as EmbConfig); // 触发回调
+      onSaveSuccess(jsondata.data as EmbConfig);
       setIsOpen(false);
     } catch (err: unknown) {
-      setSaveErrorMsg(`${updateMethod} 请求失败`);
+      setSaveErrorMsg(t('config.model.requestFailed', { method: updateMethod }));
     }
   };
 
-  // 对话框关闭时重置表单
+  // Reset form when dialog closes
   const handleDialogClose = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
@@ -128,10 +130,10 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     }
   };
 
-  // 管理确认对话框的打开状态
+  // Manage confirmation dialog open state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // 临时存储用户选择的目标状态
+  // Temporarily store user's target state
   const [pendingState, setPendingState] = useState<boolean | null>(null);
 
   return (
@@ -139,19 +141,19 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       <DialogContent className="sm:max-w-[700px]">
         {error && <div className="text-red-500 mb-4">{error}</div>}
         <DialogHeader>
-          <DialogTitle>{isAdd ? '添加模型' : '编辑模型'}</DialogTitle>
-          <DialogDescription>填写模型配置信息后，点击保存。</DialogDescription>
+          <DialogTitle>{isAdd ? t('config.model.addModel') : t('config.model.editModel')}</DialogTitle>
+          <DialogDescription>{t('config.model.fillModelConfig')}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_id" className="text-right">
-              模型ID
+              {t('config.model.modelId')}
               <span className="text-destructive">*</span>
             </Label>
             <Input
               id="model_id"
-              placeholder="model_id"
+              placeholder={t('config.model.modelIdPlaceholder')}
               value={emb?.model_id ?? ''}
               onChange={(e) =>
                 setEmb((prev) => ({ ...prev, model_id: e.target.value }))
@@ -163,14 +165,14 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         {emb?.type === 'openai_like' && (
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="endpoint" className="text-right">
-              Endpoint URL
+              {t('config.model.endpointUrl')}
               <span className="text-destructive">*</span>
             </Label>
             <div className="col-span-3">
               <input
                 id="endpoint"
                 list="endpoint_options"
-                placeholder="输入或选择模型endpoint"
+                placeholder={t('config.model.endpointPlaceholder')}
                 value={emb?.endpoint ?? ''}
                 onChange={(e) =>
                   setEmb((prev) => ({ ...prev, endpoint: e.target.value }))
@@ -180,9 +182,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <datalist id="endpoint_options">
                 <option value="https://api.openai.com/v1">OpenAI</option>
                 <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
-                  通义千问
+                  {t('config.model.qwenModel')}
                 </option>
-                {/* 添加更多预设选项 */}
               </datalist>
             </div>
           </div>
@@ -190,14 +191,14 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         {emb?.type === 'openai_like' && (
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="api_key" className="text-right">
-              API Key
+              {t('config.model.apiKey')}
               <span className="text-destructive">*</span>
             </Label>
             {isAdd ? (
               <Input
                 id="api_key"
                 type="password"
-                placeholder="api_key"
+                placeholder={t('config.model.apiKeyPlaceholder')}
                 value={emb?.api_key ?? ''}
                 onChange={(e) =>
                   setEmb((prev) => ({ ...prev, api_key: e.target.value }))
@@ -208,7 +209,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <Input
                 id="api_key"
                 type="password"
-                placeholder="api_key"
+                placeholder={t('config.model.apiKeyPlaceholder')}
                 value={emb?.api_key || '******'}
                 onChange={(e) =>
                   setEmb((prev) => ({ ...prev, api_key: e.target.value }))
@@ -221,12 +222,12 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_name" className="text-right">
-              模型名称
+              {t('config.model.modelName')}
               <span className="text-destructive">*</span>
             </Label>
             <Input
               id="model_name"
-              placeholder="model_name"
+              placeholder={t('config.model.modelNamePlaceholder')}
               value={emb?.model_name ?? ''}
               onChange={(e) =>
                 setEmb((prev) => ({ ...prev, model_name: e.target.value }))
@@ -238,7 +239,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_type" className="text-right">
-              模型类型
+              {t('config.model.modelType')}
               <span className="text-destructive">*</span>
             </Label>
             <RadioGroup
@@ -248,11 +249,11 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             >
               <div className="flex items-center gap-3">
                 <RadioGroupItem value="local" />
-                <Label>本地 (Local Hosted)</Label>
+                <Label>{t('config.model.localHosted')}</Label>
               </div>
               <div className="flex items-center gap-3">
                 <RadioGroupItem value="openai_like" />
-                <Label>API (OpenAI Like)</Label>
+                <Label>{t('config.model.apiOpenaiLike')}</Label>
               </div>
             </RadioGroup>
           </div>
@@ -260,13 +261,13 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="dimension" className="text-right">
-              向量维度
+              {t('config.model.vectorDimension')}
             </Label>
             <div className="col-span-3">
               <Input
                 id="dimension"
                 type="number"
-                placeholder="向量维度"
+                placeholder={t('config.model.vectorDimensionPlaceholder')}
                 defaultValue={emb?.dimension}
                 onChange={(e) =>
                   setEmb({
@@ -281,12 +282,12 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="embed_batch_size" className="text-right">
-              向量Batch大小
+              {t('config.model.vectorBatchSize')}
             </Label>
             <Input
               id="embed_batch_size"
               type="number"
-              placeholder="向量Batch大小"
+              placeholder={t('config.model.vectorBatchSizePlaceholder')}
               defaultValue={emb?.embed_batch_size || 'null'}
               onChange={(e) =>
                 setEmb({
@@ -301,7 +302,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="embed_batch_size" className="text-right">
-              默认向量模型
+              {t('config.model.defaultVectorModel')}
             </Label>
             <Switch
               checked={emb.is_default}
@@ -319,15 +320,15 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>确认更改默认向量模型？</AlertDialogTitle>
+              <AlertDialogTitle>{t('config.model.confirmChangeDefaultModel')}</AlertDialogTitle>
               <AlertDialogDescription>
                 {pendingState
-                  ? '将此模型设为默认后，之前上传的附件都将被清空。'
-                  : '取消设为默认后，必须重新指定一个新的默认向量模型。'}
+                  ? t('config.model.setAsDefaultWarning')
+                  : t('config.model.unsetAsDefaultWarning')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
                   setEmb({
@@ -337,7 +338,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                   setIsDialogOpen(false);
                 }}
               >
-                确认更改
+                {t('config.model.confirmChange')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -350,7 +351,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <AlertTitle>{saveErrorMsg}</AlertTitle>
             </Alert>
           )}
-          <Button onClick={handleSubmit}>{isAdd ? '新增' : '保存'}</Button>
+          <Button onClick={handleSubmit}>{isAdd ? t('config.model.create') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

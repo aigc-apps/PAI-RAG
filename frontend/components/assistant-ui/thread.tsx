@@ -37,12 +37,15 @@ import { UserMessageAttachments } from '@/components/assistant-ui/my_attachment'
 import { KbModal, KbSelection } from '@/app/knowledgebases/kbmodal';
 import { useChatOptions } from '@/app/providers/chat';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 export const Thread: FC<{
   onToggleChange?: (options: string[]) => void;
   optionsVisible: boolean;
 }> = ({ onToggleChange, optionsVisible }) => {
-  // 使用useState来保存工具的选中状态
+  const { t } = useI18n();
+
+  // Use useState to save tool selection state
   const [activeTools, setActiveTools] = useState<string[]>([]);
   const [mcpConfigs, setMcpConfigs] = useState<McpEntry[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -68,14 +71,13 @@ export const Thread: FC<{
             tenantFetch(`/api/config/knowledgebases`),
           ]
         )
-        if (!mcpRes.ok) setMcpError('MCP加载失败');
+        if (!mcpRes.ok) setMcpError(t('chat.thread.mcpLoadFailed'));
         else {
           const data = await mcpRes.json();
 
-          // 确保 data.data.items 存在且是数组
           const items = data?.data?.items || [];
           const configs = items
-            .filter((cfg: any) => cfg != null) // 过滤掉 null 或 undefined
+            .filter((cfg: any) => cfg != null)
             .map(
               (cfg: any) =>
                 new McpEntry(
@@ -96,15 +98,15 @@ export const Thread: FC<{
           setMcpLoading(false);
         }
 
-        if (!kbRes.ok) setKbError('知识库加载失败');
+        if (!kbRes.ok) setKbError(t('chat.thread.kbLoadFailed'));
         else {
           const json_res = await kbRes.json();
           console.log('Load kb.', json_res);
 
-          // 确保 json_res.data.items 存在且是数组
+          // Ensure json_res.data.items exists and is an array
           const items = json_res?.data?.items || [];
           const configs = items
-            .filter((cfg: any) => cfg != null) // 过滤掉 null 或 undefined
+            .filter((cfg: any) => cfg != null)
             .map(
               (cfg: any) =>
                 new KbSelection(
@@ -203,20 +205,20 @@ export const Thread: FC<{
     setIsModalOpen(true);
   };
   const handleCancelMcpModal = () => {
-  // 恢复之前的状态
-  setActiveTools(tempActiveTools);
-  setIsModalOpen(false);
-};
+    // Restore previous state
+    setActiveTools(tempActiveTools);
+    setIsModalOpen(false);
+  };
   const handleOpenKbModal = () => {
     setTempActiveTools([...activeTools]);
     setIsKbModalOpen(true);
   };
 
   const handleCancelKbModal = () => {
-  // 恢复之前的状态
-  setActiveTools([...tempActiveTools]);
-  setIsKbModalOpen(false);
-};
+    // Restore previous state
+    setActiveTools([...tempActiveTools]);
+    setIsKbModalOpen(false);
+  };
 
   return (
     <>
@@ -241,7 +243,7 @@ export const Thread: FC<{
             <div className="min-h-2 flex-grow" />
           </ThreadPrimitive.If>
 
-          <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-2">
+          <div className="sticky bottom-6 mt-12 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-2">
             <ThreadScrollToBottom />
             <Composer
               value={activeTools}
@@ -250,7 +252,6 @@ export const Thread: FC<{
               onOpenMcpModal={handleOpenMcpModal}
               onOpenKbModal={handleOpenKbModal}
             />
-            {/* 传递回调 */}
           </div>
         </ThreadPrimitive.Viewport>
       </ThreadPrimitive.Root>
@@ -283,10 +284,11 @@ export const Thread: FC<{
 };
 
 const ThreadScrollToBottom: FC = () => {
+  const { t } = useI18n();
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
       <TooltipIconButton
-        tooltip="Scroll to bottom"
+        tooltip={t('chat.thread.scrollToBottom')}
         variant="outline"
         className="absolute -top-8 rounded-full disabled:invisible"
       >
@@ -297,11 +299,12 @@ const ThreadScrollToBottom: FC = () => {
 };
 
 const ThreadWelcome: FC = () => {
+  const { t } = useI18n();
   return (
     <ThreadPrimitive.Empty>
       <div className="flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
-          <p className="mt-4 font-medium">有什么我能帮您的吗？</p>
+          <p className="mt-4 font-medium">{t('chat.thread.welcomeMessage')}</p>
         </div>
         <ThreadWelcomeSuggestions />
       </div>
@@ -310,26 +313,27 @@ const ThreadWelcome: FC = () => {
 };
 
 const ThreadWelcomeSuggestions: FC = () => {
+  const { t } = useI18n();
   return (
     <div className="mt-3 flex w-full items-stretch justify-center gap-4 pb-8">
       <ThreadPrimitive.Suggestion
         className="hover:bg-muted/80 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
-        prompt="帮我规划下个月从杭州去上海旅游的一日游攻略和交通规划，两大一小，考虑天气情况。"
+        prompt={t('chat.thread.suggestion1')}
         method="replace"
         autoSend
       >
         <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
-          帮我规划下个月从杭州去上海旅游的一日游攻略和交通规划，两大一小，考虑天气情况。
+          {t('chat.thread.suggestion1')}
         </span>
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion
         className="hover:bg-muted/80 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
-        prompt="杭州有什么好玩的景点？"
+        prompt={t('chat.thread.suggestion2')}
         method="replace"
         autoSend
       >
         <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
-          杭州有什么好玩的景点？
+          {t('chat.thread.suggestion2')}
         </span>
       </ThreadPrimitive.Suggestion>
     </div>
@@ -351,12 +355,13 @@ const Composer: FC<ComposerProps> = ({
   onOpenMcpModal,
   onOpenKbModal,
 }) => {
+  const { t } = useI18n();
   return (
     <ComposerPrimitive.Root
       // className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
       className="focus-within:border-ring/20 flex w-full flex-col rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
     >
-      {/* 第一行：输入框 */}
+      {/* First row: input box */}
       <div className="flex items-center justify-between px-2 pb-1">
         <div className="w-full">
           <div className="flex gap-3 pt-2">
@@ -364,11 +369,11 @@ const Composer: FC<ComposerProps> = ({
             <ComposerPrimitive.Input
               rows={1}
               autoFocus
-              placeholder="输入您的问题..."
+              placeholder={t('chat.thread.inputQuestion')}
               className="flex-1 placeholder:text-muted-foreground max-h-40 resize-none border-none bg-transparent px-2 py-3 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
             />
           </div>
-          {/* 第二行：按钮组 + ComposerAction */}
+          {/* Second row: button group + ComposerAction */}
           {optionsVisible && (
             <div className="flex flex-row items-center px-2 pb-1">
                 <ComposerAddAttachment />
@@ -382,16 +387,16 @@ const Composer: FC<ComposerProps> = ({
                   <ToggleGroupItem
                     value="planning"
                     aria-label="Toggle deep planning"
-                    className="!rounded-full px-6 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
+                    className="!rounded-full px-4 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
                   >
-                    <Brain /> 深度思考
+                    <Brain /> {t('chat.thread.deepThinking')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="search"
                     aria-label="Toggle web search"
                     className="!rounded-full px-2 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
                   >
-                    <Search /> 搜索
+                    <Search /> {t('chat.thread.search')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="mcp"
@@ -411,7 +416,7 @@ const Composer: FC<ComposerProps> = ({
                       onOpenKbModal?.();
                     }}
                   >
-                    <LibraryBig /> 知识库
+                    <LibraryBig /> {t('chat.thread.knowledgeBase')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="chatdb"
@@ -422,7 +427,7 @@ const Composer: FC<ComposerProps> = ({
                   </ToggleGroupItem>
                 </ToggleGroup>
 
-              {/* 右侧按钮：ComposerAction */}
+              {/* Right button: ComposerAction */}
             </div>
           )}
         </div>
@@ -435,12 +440,13 @@ const Composer: FC<ComposerProps> = ({
 };
 
 const ComposerAction: FC = () => {
+  const { t } = useI18n();
   return (
     <>
       <ThreadPrimitive.If running={false}>
         <ComposerPrimitive.Send asChild>
           <TooltipIconButton
-            tooltip="发送"
+            tooltip={t('chat.thread.send')}
             variant="default"
             className="my-2.5 w-18 h-10 p-2 transition-opacity ease-in"
           >
@@ -451,7 +457,7 @@ const ComposerAction: FC = () => {
       <ThreadPrimitive.If running>
         <ComposerPrimitive.Cancel asChild>
           <TooltipIconButton
-            tooltip="取消"
+            tooltip={t('chat.thread.cancel')}
             variant="default"
             className="my-2.5 w-18 h-10 p-2 transition-opacity ease-in"
           >
@@ -478,6 +484,7 @@ const UserMessage: FC = () => {
 };
 
 const UserActionBar: FC = () => {
+  const { t } = useI18n();
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
@@ -485,7 +492,7 @@ const UserActionBar: FC = () => {
       className="flex flex-col items-end col-start-1 row-start-2 mr-3 mt-2.5"
     >
       <ActionBarPrimitive.Edit asChild>
-        <TooltipIconButton tooltip="Edit">
+        <TooltipIconButton tooltip={t('chat.thread.edit')}>
           <PencilIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Edit>
@@ -494,16 +501,17 @@ const UserActionBar: FC = () => {
 };
 
 const EditComposer: FC = () => {
+  const { t } = useI18n();
   return (
     <ComposerPrimitive.Root className="bg-muted my-4 flex w-full max-w-[var(--thread-max-width)] flex-col gap-2 rounded-xl">
       <ComposerPrimitive.Input className="text-foreground flex h-8 w-full resize-none bg-transparent p-2 pb-0 outline-none" />
 
       <div className="mx-2 mb-2 flex items-center justify-center gap-2 self-end">
         <ComposerPrimitive.Cancel asChild>
-          <Button variant="ghost">Cancel</Button>
+          <Button variant="ghost">{t('chat.thread.cancel')}</Button>
         </ComposerPrimitive.Cancel>
         <ComposerPrimitive.Send asChild>
-          <Button>Send</Button>
+          <Button>{t('chat.thread.send')}</Button>
         </ComposerPrimitive.Send>
       </div>
     </ComposerPrimitive.Root>
@@ -533,6 +541,7 @@ const AssistantMessage: FC = () => {
 };
 
 const AssistantActionBar: FC = () => {
+  const { t } = useI18n();
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
@@ -541,7 +550,7 @@ const AssistantActionBar: FC = () => {
       className="flex flex-row items-center text-muted-foreground gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
     >
       <ActionBarPrimitive.Copy asChild>
-        <TooltipIconButton tooltip="Copy">
+        <TooltipIconButton tooltip={t('chat.thread.copy')}>
           <MessagePrimitive.If copied>
             <CheckIcon />
           </MessagePrimitive.If>
@@ -551,7 +560,7 @@ const AssistantActionBar: FC = () => {
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
       <ActionBarPrimitive.Reload asChild>
-        <TooltipIconButton tooltip="Refresh">
+        <TooltipIconButton tooltip={t('chat.thread.refresh')}>
           <RefreshCwIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Reload>
@@ -563,6 +572,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
   className,
   ...rest
 }) => {
+  const { t } = useI18n();
   return (
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
@@ -573,7 +583,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
       {...rest}
     >
       <BranchPickerPrimitive.Previous asChild>
-        <TooltipIconButton tooltip="Previous">
+        <TooltipIconButton tooltip={t('chat.thread.previous')}>
           <ChevronLeftIcon />
         </TooltipIconButton>
       </BranchPickerPrimitive.Previous>
@@ -581,7 +591,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
         <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
       </span>
       <BranchPickerPrimitive.Next asChild>
-        <TooltipIconButton tooltip="Next">
+        <TooltipIconButton tooltip={t('chat.thread.next')}>
           <ChevronRightIcon />
         </TooltipIconButton>
       </BranchPickerPrimitive.Next>

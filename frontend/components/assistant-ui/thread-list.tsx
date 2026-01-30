@@ -1,5 +1,4 @@
 import type { FC } from 'react';
-// import React, { useState, useEffect } from "react";
 import {
   ThreadListItemPrimitive,
   ThreadListPrimitive,
@@ -8,7 +7,8 @@ import { ArchiveIcon, PlusIcon, TrashIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
-import { useRouter } from 'next/navigation'; // 注意是 next/navigation
+import { useRouter } from 'next/navigation';
+import { useI18n } from '@/app/providers/i18n';
 
 export const ThreadList: FC = () => {
   return (
@@ -20,6 +20,7 @@ export const ThreadList: FC = () => {
 };
 
 const ThreadListNew: FC = () => {
+  const { t } = useI18n();
   const router = useRouter();
   return (
     <ThreadListPrimitive.New asChild>
@@ -29,7 +30,7 @@ const ThreadListNew: FC = () => {
         onClick={() => {router.push('/')}}
       >
         <PlusIcon />
-        新建对话
+        {t('chat.threadList.newConversation')}
       </Button>
     </ThreadListPrimitive.New>
   );
@@ -53,20 +54,22 @@ const ThreadListItem: FC = () => {
 };
 
 const ThreadListItemTitle: FC = () => {
+  const { t } = useI18n();
   return (
     <p className="text-sm">
-      <ThreadListItemPrimitive.Title fallback="新会话" />
+      <ThreadListItemPrimitive.Title fallback={t('chat.threadList.newSession')} />
     </p>
   );
 };
 
 const ThreadListItemArchive: FC = () => {
+  const { t } = useI18n();
   return (
     <ThreadListItemPrimitive.Archive asChild>
       <TooltipIconButton
         className="hover:text-primary text-foreground ml-auto mr-3 size-4 p-0"
         variant="ghost"
-        tooltip="Archive thread"
+        tooltip={t('chat.threadList.archiveThread')}
       >
         <ArchiveIcon />
       </TooltipIconButton>
@@ -75,12 +78,13 @@ const ThreadListItemArchive: FC = () => {
 };
 
 const ThreadListItemDelete: FC = () => {
+  const { t } = useI18n();
   return (
     <ThreadListItemPrimitive.Delete asChild>
       <TooltipIconButton
         className="hover:text-primary text-foreground ml-auto mr-3 size-4 p-0"
         variant="ghost"
-        tooltip="Delete thread"
+        tooltip={t('chat.threadList.deleteThread')}
       >
         <TrashIcon />
       </TooltipIconButton>

@@ -31,8 +31,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { McpConfig } from './mcp';
 import { toast } from 'sonner';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 export default function McpConfigPage() {
+  const { t } = useI18n();
+
   const [isOpen, setIsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<McpConfig | null>(null);
@@ -65,7 +68,7 @@ export default function McpConfigPage() {
     try {
       setMcpLoading(true);
       const res = await tenantFetch(`/api/config/mcps`);
-      if (!res.ok) throw new Error('获取MCP配置失败');
+      if (!res.ok) throw new Error(t('config.loadError'));
       const data = await res.json();
       setMcpConfigs(data.data.items || []);
     } catch (err: any) {
@@ -123,18 +126,18 @@ export default function McpConfigPage() {
         body: JSON.stringify({ enabled: !enabled }),
       });
 
-      if (!res.ok) throw new Error('更新启用状态失败');
+      if (!res.ok) throw new Error(t('config.mcp.updateStatusFailed'));
 
-      // 直接更新本地状态，保持数据一致性
+      // Directly update local state to maintain data consistency
       setMcpConfigs((prev) =>
         prev.map((config) =>
           config.id === id ? { ...config, enabled: !enabled } : config
         )
       );
 
-      toast.success(`MCP 配置已${!enabled ? '启用' : '禁用'}`);
+      toast.success(t(!enabled ? 'config.mcp.mcpEnabled' : 'config.mcp.mcpDisabled'));
     } catch (err: any) {
-      toast.error(`更新失败: ${err.message}`);
+      toast.error(`${t('config.mcp.updateFailed')}: ${err.message}`);
     }
   };
 
@@ -142,7 +145,7 @@ export default function McpConfigPage() {
   try {
     setIsLoading(true);
     
-    // 直接使用表单数据，不包含ID
+    // Use form data directly, without ID
     const mcp_data = {
       name: addFormData.name,
       url: addFormData.url,
@@ -160,16 +163,16 @@ export default function McpConfigPage() {
 
     if (!res.ok) {
       const errorText = await res.text();
-      throw new Error(`添加 MCP 配置失败: ${res.status} ${errorText || res.statusText}`);
+      throw new Error(`${t('config.mcp.addError')}: ${res.status} ${errorText || res.statusText}`);
     }
 
-    // 成功后重新拉取列表，确保ID一致性
+    // After success, re-fetch list to ensure ID consistency
     await fetchConfigs();
-    toast.success(`MCP 配置已添加。`);
+    toast.success(t('config.mcp.addSuccess'));
 
     setIsOpen(false);
 
-    // 重置表单数据
+    // Reset form data
     setAddFormData({
       id: uuidv4(),
       name: '',
@@ -180,7 +183,7 @@ export default function McpConfigPage() {
       enabled: true,
     });
   } catch (err: any) {
-    const errorMessage = err.message || err.toString() || '添加失败，请重试';
+    const errorMessage = err.message || err.toString() || t('config.mcp.addFailed');
     toast.error(errorMessage);
   } finally {
     setIsLoading(false);
@@ -192,7 +195,7 @@ const updatedMCP = async () => {
     if (!editingConfig) return;
     setIsEditLoading(true);
     
-    // 构造干净的请求体
+    // Construct clean request body
     const updateData: any = {
       name: editingConfig.name,
       url: editingConfig.url,
@@ -200,7 +203,7 @@ const updatedMCP = async () => {
       enabled: editingConfig.enabled,
     };
 
-    // 只有当 auth_token 不为空时才发送
+    // Only send auth_token if it's not empty
     if (editingConfig.auth_token && editingConfig.auth_token.trim() !== '') {
       updateData.auth_token = editingConfig.auth_token;
       updateData.need_token = true;
@@ -216,17 +219,17 @@ const updatedMCP = async () => {
 
     if (!res.ok) {
       const errorText = await res.text();
-      throw new Error(`修改 MCP 配置失败: ${res.status} ${errorText || res.statusText}`);
+      throw new Error(`${t('config.mcp.updateError')}: ${res.status} ${errorText || res.statusText}`);
     }
     
-    // 成功后重新拉取列表
+    // After success, re-fetch list
     await fetchConfigs();
     
-    toast.success(`MCP 配置更新成功。`);
+    toast.success(t('config.mcp.updateSuccess'));
     setIsEditOpen(false);
   } catch (err: any) {
-    const errorMessage = err.message || err.toString() || '修改失败，请重试';
-    toast.error(`MCP 配置更新失败${errorMessage}`);
+    const errorMessage = err.message || err.toString() || t('config.mcp.updateFailed2');
+    toast.error(`${t('config.mcp.updateError')}${errorMessage}`);
   } finally {
     setIsEditLoading(false);
   }
@@ -241,16 +244,16 @@ const updatedMCP = async () => {
       });
 
       if (!res.ok) {
-        throw new Error('删除失败，请检查网络或配置');
+        throw new Error(t('config.mcp.deleteFailed'));
       }
       
-      toast.success(`MCP 配置删除成功。`);
+      toast.success(t('config.mcp.deleteSuccess'));
 
 
-      // 直接从本地状态中移除
+      // Remove directly from local state
       setMcpConfigs((prev) => prev.filter((config) => config.id !== id));
     } catch (err: any) {
-      toast.error(`MCP 配置删除失败${err.message}`);
+      toast.error(`${t('config.mcp.deleteError')}${err.message}`);
     }
   };
 
@@ -260,20 +263,20 @@ const updatedMCP = async () => {
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           {mcploading ? (
             <div className="py-12 text-center">
-              <p className="text-gray-500">加载中...</p>
+              <p className="text-gray-500">{t('config.mcp.loading')}</p>
             </div>
           ) : mcpconfigs.length === 0 ? (
-            <h3 className="text-lg font-medium text-gray-700 py-6">暂无 MCP</h3>
+            <h3 className="text-lg font-medium text-gray-700 py-6">{t('config.mcp.noMcp')}</h3>
           ) : (
             <div className="gap-6 p-4 w-full">
               <Table className="w-full table-fixed border bg-white rounded-md overflow-hidden">
                 <TableHeader className="bg-gray-100">
                   <TableRow>
-                    <TableHead className="w-1/10">MCP 名称</TableHead>
-                    <TableHead className="w-2/5">MCP 链接</TableHead>
-                    <TableHead className="w-1/10">MCP 类型</TableHead>
-                    <TableHead className="w-1/10">是否启用</TableHead>
-                    <TableHead className="w-1/5">操作</TableHead>
+                    <TableHead className="w-1/10">{t('config.mcp.mcpName')}</TableHead>
+                    <TableHead className="w-2/5">{t('config.mcp.mcpUrl')}</TableHead>
+                    <TableHead className="w-1/10">{t('config.mcp.mcpType')}</TableHead>
+                    <TableHead className="w-1/10">{t('config.mcp.isEnabled')}</TableHead>
+                    <TableHead className="w-1/5">{t('config.mcp.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -303,9 +306,9 @@ const updatedMCP = async () => {
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[425px]">
                             <DialogHeader>
-                              <DialogTitle>编辑MCP配置</DialogTitle>
+                              <DialogTitle>{t('config.mcp.editMcp')}</DialogTitle>
                               <DialogDescription>
-                                编辑MCP配置信息后，点击保存。
+                                {t('config.mcp.editDialogDesc')}
                               </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
@@ -314,7 +317,7 @@ const updatedMCP = async () => {
                                   htmlFor="edit_mcp_name"
                                   className="text-right"
                                 >
-                                  MCP 名称
+                                  {t('config.mcp.mcpNameLabel')}
                                 </Label>
                                 <Input
                                   id="edit_mcp_name"
@@ -328,7 +331,7 @@ const updatedMCP = async () => {
                                   htmlFor="edit_mcp_url"
                                   className="text-right"
                                 >
-                                  MCP 链接
+                                  {t('config.mcp.mcpUrlLabel')}
                                 </Label>
                                 <Input
                                   id="edit_mcp_url"
@@ -342,7 +345,7 @@ const updatedMCP = async () => {
                                   htmlFor="edit_mcp_type"
                                   className="text-right"
                                 >
-                                  MCP 类型
+                                  {t('config.mcp.mcpTypeLabel')}
                                 </Label>
                                 <Input
                                   id="edit_mcp_type"
@@ -356,7 +359,7 @@ const updatedMCP = async () => {
                                   htmlFor="edit_mcp_auth_token"
                                   className="text-right col-span-2"
                                 >
-                                  Bear Token
+                                  {t('config.mcp.bearerToken')}
                                 </Label>
                                 <Input
                                   id="edit_mcp_auth_token"
@@ -373,7 +376,7 @@ const updatedMCP = async () => {
                                   htmlFor="edit_mcp_enabled"
                                   className="text-right"
                                 >
-                                  是否启用
+                                  {t('config.mcp.isEnabled')}
                                 </Label>
                                 <Checkbox
                                   id="edit_mcp_enabled"
@@ -395,7 +398,7 @@ const updatedMCP = async () => {
                                 type="submit"
                                 disabled={isEditLoading}
                               >
-                                {isEditLoading ? '提交中...' : '修改'}
+                                {isEditLoading ? t('config.mcp.submitting') : t('config.mcp.editButton')}
                               </Button>
                             </DialogFooter>
                           </DialogContent>
@@ -415,24 +418,24 @@ const updatedMCP = async () => {
             </div>
           )}
           <SettingsIcon className="w-10 h-6 text-gray-400 mb-4" />
-          <p className="text-gray-500 mt-1">点击下方按钮添加新的 MCP</p>
+          <p className="text-gray-500 mt-1">{t('config.mcp.clickToAddNew')}</p>
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
               <Button className="mt-4 px-4 py-2 text-white rounded-lg transition-colors">
-                添加MCP
+                {t('config.mcp.addMcp')}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>添加MCP</DialogTitle>
+                <DialogTitle>{t('config.mcp.addMcp')}</DialogTitle>
                 <DialogDescription>
-                  填写MCP配置信息后，点击保存。
+                  {t('config.mcp.addDialogDesc')}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_name" className="text-right">
-                    MCP 名称
+                    {t('config.mcp.mcpNameLabel')}
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -445,7 +448,7 @@ const updatedMCP = async () => {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_url" className="text-right">
-                    MCP 链接
+                    {t('config.mcp.mcpUrlLabel')}
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -458,12 +461,12 @@ const updatedMCP = async () => {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_type" className="text-right">
-                    MCP 类型
+                    {t('config.mcp.mcpTypeLabel')}
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="mcp_type"
-                    placeholder="SSE / STDIO / HTTP"
+                    placeholder={t('config.mcp.mcpTypePlaceholder')}
                     value={addFormData.type}
                     onChange={handleInputChange}
                     className="col-span-3"
@@ -474,12 +477,12 @@ const updatedMCP = async () => {
                     htmlFor="mcp_auth_token"
                     className="text-right col-span-2"
                   >
-                    Bearer Token
+                    {t('config.mcp.bearerToken')}
                   </Label>
                   <Input
                     id="mcp_auth_token"
                     type="password"
-                    placeholder="Bearer Token (可选)"
+                    placeholder={t('config.mcp.bearerTokenPlaceholder')}
                     value={addFormData.auth_token}
                     onChange={handleInputChange}
                     className="col-span-5"
@@ -487,7 +490,7 @@ const updatedMCP = async () => {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="mcp_enabled" className="text-right">
-                    默认启用
+                    {t('config.mcp.defaultEnabled')}
                   </Label>
                   <Checkbox
                     id="mcp_enabled"
@@ -501,7 +504,7 @@ const updatedMCP = async () => {
               </div>
               <DialogFooter>
                 <Button onClick={addMCP} type="submit" disabled={isLoading}>
-                  {isLoading ? '提交中...' : '添加'}
+                  {isLoading ? t('config.mcp.submitting') : t('config.mcp.addButton')}
                 </Button>
               </DialogFooter>
             </DialogContent>

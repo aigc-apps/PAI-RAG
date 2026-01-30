@@ -1,4 +1,3 @@
-// components/vector-db-console/VectorDBConsole.tsx
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,12 +22,14 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 type DBType = "local" | "postgresql" | "milvus" | "elasticsearch" | "hologres" | "opensearch" | "tablestore";
 
 const cache = new Map();
 
 export default function VectorDBConsole() {
+  const { t } = useI18n();
   const [dbType, setDbType] = useState<DBType>("local");
   const [db, setDb] = useState<Record<string, any>>({});
 
@@ -44,7 +45,7 @@ export default function VectorDBConsole() {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        if (!res.ok) throw new Error('加载配置失败');
+        if (!res.ok) throw new Error(t('config.loadError'));
 
         const data = await res.json();
         setDbType(data.data.type);
@@ -72,7 +73,7 @@ export default function VectorDBConsole() {
           password: db.password === '******' ? '' :  db.password,
           sk: db.sk === '******' ? '' : db.sk
         };
-        // 如果是 milvus 类型且 database 字段缺失，设置默认值
+        // If it's milvus type and database field is missing, set default value
         if (dbType === 'milvus' && !config.database) {
           config.database = 'default';
         }
@@ -103,14 +104,13 @@ export default function VectorDBConsole() {
   const testConnection = async () => { 
       setConnectionTesting(true);
       try {
-        console.log("连接测试： ", db);
         const config: Record<string, any> = {
           ...db,
           type: dbType,
           password: db.password === '******' ? '' :  db.password,
           sk: db.sk === '******' ? '' : db.sk
         };
-        // 如果是 milvus 类型且 database 字段缺失，设置默认值
+        // If it's milvus type and database field is missing, set default value
         if (dbType === 'milvus' && !config.database) {
           config.database = 'default';
         }
@@ -154,31 +154,31 @@ export default function VectorDBConsole() {
       case "tablestore":
         return <TablestoreForm config={db as TablestoreConfig} onValueChange={setDb} />;
       default:
-        return <div>本地存储，无需额外配置。</div>;
+        return <div>{t('config.vectordb.localNoConfig')}</div>;
     }
   };
 
   return (
     <Card className="w-full max-w-3xl mx-auto">
       <CardHeader>
-        <CardTitle>向量数据库连接管理</CardTitle>
+        <CardTitle>{t('config.vectordb.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         {
             loading ? <Skeleton className="h-12 w-12 rounded-full" /> :
         <div className="space-y-6">
           <div className="space-y-2">
-            <Label>数据库类型</Label>
+            <Label>{t('config.vectordb.dbType')}</Label>
             <Select value={dbType} onValueChange={(v) => {
                 cache.set(dbType, db);
                 setDbType(v as DBType);
                 setDb(cache.get(v as DBType) || {});
             }}>
               <SelectTrigger>
-                <SelectValue placeholder="选择数据库类型" />
+                <SelectValue placeholder={t('config.vectordb.selectDbType')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="local">本地(Chroma)</SelectItem>
+                <SelectItem value="local">{t('config.vectordb.localChroma')}</SelectItem>
                 <SelectItem value="postgresql">PostgreSQL</SelectItem>
                 <SelectItem value="milvus">Milvus</SelectItem>
                 <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
@@ -198,15 +198,13 @@ export default function VectorDBConsole() {
                 {connectionTesting ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            测试中...
+                            {t('config.vectordb.testing')}
                           </>
                         ) : (
-                          <>
-                            测试连接
-                          </>
+                          <>{t('config.vectordb.testConnection')}</>
                         )}</Button>
                         
-            <Button onClick={saveConnection}>保存配置</Button>
+            <Button onClick={saveConnection}>{t('common.save')}</Button>
           </div>
         </div>
         }

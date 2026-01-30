@@ -7,11 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch'; // 确保你有 Switch 组件
+import { Switch } from '@/components/ui/switch';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
+
 const MASK_API_KEY = '******'
 
 export default function CodeSandboxConfig() {
+  const { t } = useI18n();
   const [isEnabled, setIsEnabled] = useState(false);
   const [configType, setConfigType] = useState('aliyun-fc'); // 目前仅支持 aliyun-fc
   const [aliyunId, setAliyunId] = useState('');
@@ -31,7 +34,7 @@ export default function CodeSandboxConfig() {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        if (!res.ok) throw new Error('加载配置失败');
+        if (!res.ok) throw new Error(t('config.codeSandbox.loadError'));
 
         const response = await res.json();
         const config = response?.data;
@@ -83,9 +86,9 @@ export default function CodeSandboxConfig() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error('保存失败，请检查网络或配置');
+      if (!res.ok) throw new Error(t('config.codeSandbox.saveFailed'));
 
-      toast.success('代码沙箱配置已成功保存。');
+      toast.success(t('config.codeSandbox.saveSuccess'));
       
       // 重新加载配置以更新状态
       const refreshRes = await tenantFetch(`/api/config/code_sandbox`, {
@@ -112,83 +115,83 @@ export default function CodeSandboxConfig() {
     <div id="codesandbox">
       <div className="transition-colors rounded-lg p-4 overflow-hidden duration-200">
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          <h2 className="text-xl font-medium text-gray-800">代码沙箱配置</h2>
+          <h2 className="text-xl font-medium text-gray-800">{t('config.codeSandbox.title')}</h2>
 
           <div className="grid gap-4 py-4 w-full max-w-2xl">
             {/* 启用开关 */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">启用沙箱</Label>
+              <Label className="text-right">{t('config.codeSandbox.enableSandbox')}</Label>
               <div className="col-span-3 flex items-center space-x-2">
                 <Switch
                   checked={isEnabled}
                   onCheckedChange={setIsEnabled}
                 />
                 <span className="text-sm text-gray-600">
-                  {isEnabled ? '已启用' : '已禁用'}
+                  {isEnabled ? t('config.codeSandbox.enabled') : t('config.codeSandbox.disabled')}
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">沙箱类型</Label>
+              <Label className="text-right">{t('config.codeSandbox.sandboxType')}</Label>
               <div className="col-span-3">
                 <Select value={configType} onValueChange={setConfigType} disabled>
                   <SelectTrigger>
-                    <SelectValue placeholder="请选择沙箱类型" />
+                    <SelectValue placeholder={t('config.codeSandbox.selectSandboxType')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="aliyun-fc">阿里云FC沙箱</SelectItem>
+                    <SelectItem value="aliyun-fc">{t('config.codeSandbox.aliyunFcSandbox')}</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-500 mt-1">当前仅支持阿里云FC沙箱</p>
+                <p className="text-xs text-gray-500 mt-1">{t('config.codeSandbox.currentlyOnlySupported')}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="aliyun_id" className="text-right">
-                阿里云 ID
+                {t('config.codeSandbox.aliyunId')}
               </Label>
               <div className="col-span-3">
                 <Input
                   id="aliyun_id"
                   value={aliyunId}
                   onChange={(e) => setAliyunId(e.target.value)}
-                  placeholder={'输入阿里云ID'}
+                  placeholder={t('config.codeSandbox.aliyunIdPlaceholder')}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="interpreter_id" className="text-right">
-                解释器 ID
+                {t('config.codeSandbox.interpreterId')}
               </Label>
               <div className="col-span-3">
                 <Input
                   id="interpreter_id"
                   value={interpreterId}
                   onChange={(e) => setInterpreterId(e.target.value)}
-                  placeholder={'输入code解释器 ID'}
+                  placeholder={t('config.codeSandbox.interpreterIdPlaceholder')}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="interpreter_name" className="text-right">
-                解释器名称
+                {t('config.codeSandbox.interpreterName')}
               </Label>
               <div className="col-span-3">
                 <Input
                   id="interpreter_name"
                   value={interpreterName}
                   onChange={(e) => setInterpreterName(e.target.value)}
-                  placeholder={'输入解释器名称（templateName）'}
+                  placeholder={t('config.codeSandbox.interpreterNamePlaceholder')}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="api_key" className="text-right">
-                API Key
+                {t('config.codeSandbox.apiKey')}
               </Label>
               <div className="col-span-3">
                 <Input
@@ -196,14 +199,14 @@ export default function CodeSandboxConfig() {
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={'输入API Key'}
+                  placeholder={t('config.codeSandbox.apiKeyPlaceholder')}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="timeout_default" className="text-right">
-                默认超时（秒）({timeoutDefault})
+                {t('config.codeSandbox.defaultTimeout')}({timeoutDefault})
               </Label>
               <div className="col-span-3">
                 <Slider
@@ -222,7 +225,7 @@ export default function CodeSandboxConfig() {
             disabled={isSaving}
             className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
           >
-            {isSaving ? '保存中...' : '保存沙箱配置'}
+            {isSaving ? t('common.saving') : t('config.codeSandbox.saveConfig')}
           </Button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 const TENANT_STORAGE_KEY = 'pai-rag-tenant-id';
 const TENANTS_STORAGE_KEY = 'pai-rag-tenants';
 const DEFAULT_TENANT_ID = '__default_tenant_id__';
-const DEFAULT_TENANT_NAME = '默认空间';
+const DEFAULT_TENANT_NAME = 'default workspace';
 
 interface Tenant {
   id: string;

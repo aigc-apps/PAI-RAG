@@ -12,7 +12,6 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { formatBeijingTime } from '../knowledgebases/utils/utils';
-
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,13 +23,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-
 import { Chatbot } from './chatbot_config';
 import { useRouter } from 'next/navigation';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 const ChatbotPage = () => {
-  const [chatbots, setChatbots] = useState(Array<Chatbot>); // 知识库列表
+  const { t } = useI18n();
+  const [chatbots, setChatbots] = useState(Array<Chatbot>);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 6;
@@ -43,7 +43,7 @@ const ChatbotPage = () => {
         const res = await tenantFetch(
           `/api/config/apps?page=${page}&size=${pageSize}`,
         );
-        if (!res.ok) throw new Error('获取应用列表失败');
+        if (!res.ok) throw new Error(t('apps.fetchError'));
         const json_data = await res.json();
         const data = json_data.data.items;
         setChatbots(data || []); // 更新状态
@@ -54,7 +54,7 @@ const ChatbotPage = () => {
     };
 
     fetchConfigs();
-  }, [page]);
+  }, [page, tenantFetch, t]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -70,7 +70,7 @@ const ChatbotPage = () => {
       });
 
       if (!res.ok) {
-        throw new Error('删除失败，请检查网络或配置');
+        throw new Error(t('apps.deleteError'));
       }
 
       // 显示成功提示（可选）
@@ -84,20 +84,19 @@ const ChatbotPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen px-6 py-0 space-y-2">
-      {/* 顶部标题栏 */}
+    <div className="flex flex-col h-screen px-6 space-y-2">
       <div className="flex justify-between items-center h-1/10">
-        <h1 className="text-xl font-medium">Chat应用</h1>
+        <h1 className="text-xl font-medium">{t('apps.title')}</h1>
         <Button
           className="px-4 py-2 bg-primary rounded-md text-sm font-medium hover:bg-primary/90 w-40"
           onClick={()=>{router.push('/apps/create')}}
         >
           <Plus className="w-6 h-6" />
-          新建应用
+          {t('apps.create')}
         </Button>
       </div>
       <div className="text-sm text-muted-foreground pb-2">
-        应用可以给基模型配置知识库、联网、MCP工具。
+        {t('apps.subtitle')}
       </div>
 
       {/* 卡片容器 */}
@@ -128,7 +127,7 @@ const ChatbotPage = () => {
                 <p className="text-xs text-muted-foreground line-clamp-1">
                   {bot.description
                     ? bot.description
-                    : '暂时还没有描述，可以去设置页面添加哦。'}
+                    : t('knowledgebase.noDescription')}
                 </p>
               </CardContent>
               <CardFooter className="px-3 pt-0 flex justify-between w-full py-0">
@@ -140,17 +139,17 @@ const ChatbotPage = () => {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>是否确认删除?</AlertDialogTitle>
+                      <AlertDialogTitle>{t('apps.deleteConfirmTitle')}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        请注意，删除Chat应用无法撤销。请仔细核对之后再确认。
+                        {t('apps.deleteConfirmMessage')}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>取消</AlertDialogCancel>
+                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() => deleteChatbot(bot.id)}
                       >
-                        删除
+                        {t('common.delete')}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

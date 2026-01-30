@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 export interface UserRole {
   id: string;
@@ -45,12 +46,13 @@ const newUserRole = {
 };
 
 export default function UserRolePage() {
+  const { t } = useI18n();
   const [roles, setRoles] = useState<Role[]>([]);
   const [editRole, setEditRole] = useState(newUserRole);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
-  const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(''); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(''); // 删除时的错误信息
+  const [modelloading, setModelLoading] = useState(true);
+  const [modelerror, setModelError] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -65,14 +67,14 @@ export default function UserRolePage() {
         const res = await tenantFetch(
           `/api/config/roles/user_roles?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error('获取角色列表失败');
+        if (!res.ok) throw new Error(t('config.role.fetchRoleListFailed'));
         const json_data = await res.json();
         const data = json_data.data.items;
         console.log('userRoles', data);
-        setUserRoles(data); // 合并
+        setUserRoles(data);
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || '加载失败');
+        setModelError(err || t('config.role.loadFailed'));
       } finally {
         setModelLoading(false);
       }
@@ -82,13 +84,13 @@ export default function UserRolePage() {
     const fetchRoles = async () => {
       try {
         const res = await tenantFetch(`/api/config/roles?page=${page}&size=1000`);
-        if (!res.ok) throw new Error('获取角色列表失败');
+        if (!res.ok) throw new Error(t('config.role.fetchRoleListFailed'));
         const json_data = await res.json();
         const data = json_data.data.items;
         console.log('roles:', data);
-        setRoles(data); // 合并
+        setRoles(data);
       } catch (err: any) {
-        setModelError(err || '加载失败');
+        setModelError(err || t('config.role.loadFailed'));
       } finally {
         setModelLoading(false);
       }
@@ -101,14 +103,14 @@ export default function UserRolePage() {
       const res = await tenantFetch(`/api/config/roles/user_roles/${role_id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('获取角色列表失败');
+      if (!res.ok) throw new Error(t('config.role.fetchRoleListFailed'));
       const json_data = await res.json();
       const data = json_data.data;
-      console.log('delete role success', data);
-      setUserRoles((prev) => prev.filter((role) => role.id !== role_id)); // 合并
+      console.log(t('config.role.deleteUserRoleSuccess'), data);
+      setUserRoles((prev) => prev.filter((role) => role.id !== role_id));
       setIsEditOpen(false);
     } catch (err: any) {
-      setModelError(err || '加载失败');
+      setModelError(err || t('config.role.loadFailed'));
     } finally {
       setModelLoading(false);
     }
@@ -119,17 +121,17 @@ export default function UserRolePage() {
       const res = await tenantFetch(`/api/config/roles/user_roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editRole), // 包装为数组
+        body: JSON.stringify(editRole),
       });
-      if (!res.ok) throw new Error('获取角色列表失败');
+      if (!res.ok) throw new Error(t('config.role.fetchRoleListFailed'));
       const json_data = await res.json();
       const data = json_data.data;
-      console.log('create role success', data);
-      setUserRoles([...userRoles, data]); // 合并
+      console.log(t('config.role.createUserRoleSuccess'), data);
+      setUserRoles([...userRoles, data]);
       setIsEditOpen(false);
       setModelError('');
     } catch (err: any) {
-      setModelError(err || '加载失败');
+      setModelError(err || t('config.role.loadFailed'));
     } finally {
       setModelLoading(false);
     }
@@ -143,22 +145,22 @@ export default function UserRolePage() {
   return (
     <div id="userrole">
       <div className="flex items-center gap-12">
-        <div className="font-medium text-md">用户角色关系表</div>
+        <div className="font-medium text-md">{t('config.role.userRoleRelationTable')}</div>
         <Popover open={isEditOpen} onOpenChange={setIsEditOpen}>
           <PopoverTrigger asChild>
-            <Button variant="default">添加用户角色</Button>
+            <Button variant="default">{t('config.role.addUserRole')}</Button>
           </PopoverTrigger>
           <PopoverContent className="w-80">
             <div className="grid gap-4">
               <div className="space-y-2">
-                <h4 className="leading-none font-medium">添加用户角色</h4>
+                <h4 className="leading-none font-medium">{t('config.role.addUserRole')}</h4>
               </div>
               <div className="grid gap-2">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="userid">用户ID</Label>
+                  <Label htmlFor="userid">{t('config.role.userId')}</Label>
                   <Input
                     id="userid"
-                    placeholder="输入用户ID"
+                    placeholder={t('config.role.userIdPlaceholder')}
                     value={editRole.user_id}
                     onChange={(e) => {
                       setEditRole({ ...editRole, user_id: e.target.value });
@@ -167,18 +169,18 @@ export default function UserRolePage() {
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="roledesc">角色名称</Label>
+                  <Label htmlFor="roledesc">{t('config.role.roleName')}</Label>
                   <Select
                     onValueChange={(value) =>
                       setEditRole({ ...editRole, role_id: value })
                     }
                   >
                     <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="选择角色名称" />
+                      <SelectValue placeholder={t('config.role.selectRoleName')} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectLabel>角色</SelectLabel>
+                        <SelectLabel>{t('config.role.roleLabel')}</SelectLabel>
                         {roles.map((role) => (
                           <SelectItem key={role.id} value={role.id}>
                             {role.name}
@@ -192,7 +194,7 @@ export default function UserRolePage() {
                   <p className="text-red-500 truncate">{modelerror}</p>
                 )}
                 <Button variant="secondary" onClick={handleAddRole}>
-                  保存
+                  {t('common.save')}
                 </Button>
               </div>
             </div>
@@ -203,8 +205,8 @@ export default function UserRolePage() {
         <Table className="w-full">
           <TableHeader className="w-full">
             <TableRow>
-              <TableHead className="w-1/5">角色名称</TableHead>
-              <TableHead className="w-3/5">用户ID</TableHead>
+              <TableHead className="w-1/5">{t('config.role.roleName')}</TableHead>
+              <TableHead className="w-3/5">{t('config.role.userId')}</TableHead>
               <TableHead className="text-right"></TableHead>
             </TableRow>
           </TableHeader>
@@ -236,7 +238,7 @@ export default function UserRolePage() {
         {userRoles.length == 0 && (
           <div>
             <h3 className="text-md font-medium text-gray-500 py-6 w-full text-center">
-              暂无用户角色，请点击上方按钮添加
+              {t('config.role.noUserRolesYet')}
             </h3>
           </div>
         )}

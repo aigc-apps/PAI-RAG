@@ -21,8 +21,8 @@ class ModelProvider(BaseModel):
 
 
 model_provider_map = {
-    "openai_like": ModelProvider(id="openai_like", name="OpenAILike", label="OpenAI兼容"),
-    "dashscope": ModelProvider(id="dashscope", name="Dashscope", label="通义千问"),
+    "openai_like": ModelProvider(id="openai_like", name="OpenAILike", label="OpenAI-Compatible"),
+    "dashscope": ModelProvider(id="dashscope", name="Dashscope", label="DashScope"),
 }
 
 

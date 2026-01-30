@@ -16,6 +16,7 @@ import { LLMModelDialog } from '@/app/config/model/llm/modelDialog';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 export interface LlmConfig {
   id: string;
@@ -43,7 +44,8 @@ const newllmconfig: LlmConfig = {
   enable_thinking: false, // 默认支持思考模式
 };
 export default function LlmConfigPage() {
-  const [editLlmConfig, setEditLlmConfig] = useState<LlmConfig>(newllmconfig); // 存储 LLM 配置
+  const { t } = useI18n();
+  const [editLlmConfig, setEditLlmConfig] = useState<LlmConfig>(newllmconfig);
   const [llmconfigs, setLlmConfigs] = useState<LlmConfig[]>([]); // 存储 LLM 配置
   const [modelloading, setModelLoading] = useState(true); // 加载状态
   const [modelerror, setModelError] = useState(''); // 错误信息
@@ -62,13 +64,13 @@ export default function LlmConfigPage() {
         const res = await tenantFetch(
           `/api/config/llms?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error('获取LLM模型列表失败');
+        if (!res.ok) throw new Error(t('config.model.fetchLlmListFailed'));
         const json_data = await res.json();
         const data = json_data.data.items;
         setLlmConfigs(data); // 合并
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || '加载失败');
+        setModelError(err || t('config.model.loadFailed'));
       } finally {
         setModelLoading(false);
       }
@@ -107,7 +109,7 @@ export default function LlmConfigPage() {
     });
 
     if (!res.ok) {
-      setErrorMsg('修改状态失败');
+      setErrorMsg(t('config.model.updateStatusFailed'));
       return;
     }
     setLlmConfigs((prev) =>
@@ -127,7 +129,7 @@ export default function LlmConfigPage() {
       });
 
       if (!res.ok) {
-        setErrorMsg(`${model_type}删除失败，请检查网络或配置`);
+        setErrorMsg(t('config.model.deleteModelFailed', { modelType: 'LLM' }));
         return;
       }
 
@@ -136,7 +138,7 @@ export default function LlmConfigPage() {
         setLlmConfigs((prev) => prev.filter((config) => config.id !== id));
       }
     } catch (err: any) {
-      setErrorMsg('删除失败，请检查网络或配置');
+      setErrorMsg(t('config.model.deleteFailed'));
     }
   };
 
@@ -149,7 +151,7 @@ export default function LlmConfigPage() {
             setEditLlmConfig(newllmconfig);
           }}
         >
-          添加LLM模型
+          {t('config.model.addLlmModel')}
         </Button>
         <LLMModelDialog
           isAdd={isCreateOpen ? true : false}
@@ -189,26 +191,35 @@ export default function LlmConfigPage() {
                         {llm.model}
                       </Badge>
                       <Badge
-                        className={
-                          llm.vision_support
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-green-100 text-green-800'
-                        }
+                        className='bg-yellow-100 text-yellow-800'
                       >
-                        {llm.vision_support ? '多模态模型' : '语言模型'}
+                        {t('config.model.languageModel')}
                       </Badge>
-                      <Badge
-                        className={
-                          llm.enable_thinking
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-green-100 text-green-800"
-                        }
-                      >
-                        {llm.enable_thinking ? "思考模型" : "语言模型"}
-                      </Badge>
-                      <Badge className="bg-gray-100 text-gray-800">
-                        {llm.enabled ? '已激活' : '未激活'}
-                      </Badge>
+                      {
+                        llm.vision_support && (
+                          <Badge className="bg-yellow-100 text-yellow-800">
+                            {t('config.model.visionModel')}
+                          </Badge>
+                        )
+                      }
+                      {
+                        llm.enable_thinking && (
+                          <Badge className="bg-yellow-100 text-yellow-800">
+                            {t('config.model.thinkingModel')}
+                          </Badge>
+                        )
+                      }
+                      {
+                        llm.enabled ? (
+                          <Badge className="bg-green-100 text-green-800">
+                            {t('config.model.activated')}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-800">
+                            {t('config.model.deactivated')}
+                          </Badge>
+                        )
+                      }
                       <Switch
                         checked={llm.enabled}
                         className="ml-auto rounded-full transition-color"
@@ -257,7 +268,7 @@ export default function LlmConfigPage() {
       ) : (
         <div className="flex justify-center items-center h-1/10 py-6">
           <h3 className="text-lg font-medium text-gray-700 py-6">
-            暂无模型，请点击上方按钮添加
+            {t('config.model.noModelsYet')}
           </h3>
         </div>
       )}

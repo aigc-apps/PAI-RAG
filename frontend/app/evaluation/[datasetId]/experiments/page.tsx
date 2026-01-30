@@ -3,6 +3,7 @@
 import React from 'react';
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n } from '@/app/providers/i18n';
 import {
   Table,
   TableBody,
@@ -43,13 +44,14 @@ export default function EvalExperimentsDetailsPage(
 ) {
   const { datasetId } = use(params);
   const router = useRouter();
+  const { t } = useI18n();
 
-  // 页面状态
+  // Page state
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [evalConfig, setEvalConfig] = useState<EvalConfig>();
 
-  // 🆕 使用自定义 Hook
+  // Use custom Hook
   const {
     experiments,
     totalPages,
@@ -57,17 +59,17 @@ export default function EvalExperimentsDetailsPage(
     deleteExperiment
   } = useExperiments({ datasetId, page, pageSize });
   const { tenantFetch } = useTenantFetch();
-  // 加载评估配置
+  // Load evaluation config
   useEffect(() => {
     const fetchEvalConfig = async () => {
       try {
         const response = await tenantFetch(`/api/config/evaluation/${datasetId}`);
-        if (!response.ok) throw new Error('获取评估配置失败');
+        if (!response.ok) throw new Error(t('evaluation.fetchEvalConfigFailed'));
         const data = await response.json();
         setEvalConfig(data.data);
       } catch (err: any) {
-        console.error('加载评估配置失败:', err);
-        toast.error('加载评估配置失败');
+        console.error('Failed to load evaluation config:', err);
+        toast.error(t('evaluation.loadEvalConfigFailed'));
       }
     };
 
@@ -79,10 +81,10 @@ export default function EvalExperimentsDetailsPage(
     setPage(newPage);
   };
 
-  // 格式化平均得分
+  // Format average score
   const formatScore = (score: number, status: string) => {
     if (status === "running" || status === "pending") {
-      return <span className="text-muted-foreground">进行中...</span>;
+      return <span className="text-muted-foreground">{t('evaluation.inProgress')}</span>;
     }
     if (status === "failed") {
       return <span className="text-red-500">- -</span>;
@@ -90,10 +92,10 @@ export default function EvalExperimentsDetailsPage(
     return score.toFixed(2);
   };
 
-  // 复制实验ID
+  // Copy experiment ID
   const copyExperimentId = (id: string) => {
     navigator.clipboard.writeText(id);
-    toast.success("复制成功");
+    toast.success(t('evaluation.copySuccess'));
   };
 
   return (
@@ -102,42 +104,42 @@ export default function EvalExperimentsDetailsPage(
         <CardHeader className="shrink-0 flex md:items-center md:justify-between">
           <div>
             <CardTitle className="text-lg font-medium flex items-center gap-2">
-              <BarChart2 className="h-5 w-5" /> 运行历史
+              <BarChart2 className="h-5 w-5" /> {t('evaluation.runHistory')}
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              查看运行历史及详情
+              {t('evaluation.viewRunHistoryDesc')}
             </p>
             <span className="flex text-sm text-muted-foreground">
-              新建实验请前往左侧 “<BookOpen className="h-3.5 w-3.5 inline-block mr-1 mt-1" />样本”页面选中数据并运行
+              {t('evaluation.newExperimentHint').replace('"样本"', `"${t('evaluation.samples')}"`).replace('"Samples"', `"${t('evaluation.samples')}"`)} <BookOpen className="h-3.5 w-3.5 inline-block mx-1" />
             </span>
           </div>
         </CardHeader>
-
+  
         <CardContent className="flex-1 min-h-0 overflow-y-auto p-0">
           <div className="rounded-md h-full min-h-0">
             <Table className='rounded-md border'>
               <TableHeader>
                 <TableRow className="transition-colors">
-                  <TableHead className="w-[180px]">实验ID</TableHead>
-                  <TableHead className="w-[180px]">实验名称</TableHead>
-                  <TableHead className="w-[100px]">样本数</TableHead>
+                  <TableHead className="w-[180px]">{t('evaluation.experimentId')}</TableHead>
+                  <TableHead className="w-[180px]">{t('evaluation.experimentName')}</TableHead>
+                  <TableHead className="w-[100px]">{t('evaluation.samplesCount')}</TableHead>
                   {/* <TableHead className="w-[100px]">运行配置</TableHead>
                   <TableHead className="w-[100px]">评估配置</TableHead> */}
-                  <TableHead className="w-[120px]">状态</TableHead>
-                  <TableHead className="w-[100px]">平均得分</TableHead>
-                  <TableHead className="w-[160px]">创建时间</TableHead>
-                  <TableHead className="w-[160px]">完成时间</TableHead>
-                  <TableHead className="w-[50px] text-right">操作</TableHead>
+                  <TableHead className="w-[120px]">{t('evaluation.status')}</TableHead>
+                  <TableHead className="w-[100px]">{t('evaluation.averageScore')}</TableHead>
+                  <TableHead className="w-[160px]">{t('evaluation.createdTime')}</TableHead>
+                  <TableHead className="w-[160px]">{t('evaluation.completedTime')}</TableHead>
+                  <TableHead className="w-[50px] text-right">{t('evaluation.operations')}</TableHead>
                 </TableRow>
               </TableHeader>
-
+  
               <TableBody>
                 {isLoading ? (
                   <TableRow>
                     <TableCell colSpan={9} className="h-32 text-center">
                       <div className="flex items-center justify-center space-x-4">
                           <Loader2 className="h-6 w-6 animate-spin" />
-                          <h4 className="font-medium">Loading Experiments</h4>
+                          <h4 className="font-medium">{t('evaluation.loadingExperiments')}</h4>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -146,7 +148,7 @@ export default function EvalExperimentsDetailsPage(
                     <TableCell colSpan={9} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <BarChart2 className="h-8 w-8" />
-                        <span>暂无实验记录，请前往样本页面下选中样本进行实验</span>
+                        <span>{t('evaluation.noExperiments')}</span>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -167,41 +169,41 @@ export default function EvalExperimentsDetailsPage(
                             size="icon"
                             className="h-6 w-6"
                             onClick={() => copyExperimentId(item.id)}
-                            title="复制实验ID"
+                            title={t('evaluation.copyExperimentId')}
                           >
                             <Copy className="h-3 w-3" />
                           </Button>
                         </div>
                       </TableCell>
-
+  
                       <TableCell>
                         <Badge variant="outline" className="font-mono bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
                           {item.name}
                         </Badge>
                       </TableCell>
-
+  
                       <TableCell>
                         <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
                           {item.samples_count}
                         </Badge>
                       </TableCell>
-
+  
                       {/* <TableCell>
                         <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
                           {item.run_config_id}
                         </Badge>
                       </TableCell>
-
+  
                       <TableCell>
                         <Badge className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
                           {item.evaluator_config_id}
                         </Badge>
                       </TableCell> */}
-
+  
                       <TableCell>
                         <StatusBadge status={item.status} />
                       </TableCell>
-
+  
                       <TableCell>
                         <div className={`font-medium text-lg ${item.status === 'success'
                           ? item.avg_score >= 0.8
@@ -214,20 +216,20 @@ export default function EvalExperimentsDetailsPage(
                           {formatScore(item.avg_score, item.status)}
                         </div>
                       </TableCell>
-
+  
                       <TableCell className="text-sm text-muted-foreground">
                         {formatBeijingTime(item.created_at)}
                       </TableCell>
-
+  
                       <TableCell className="text-sm text-muted-foreground">
                         {['success', 'failed'].includes(item.status) ? formatBeijingTime(item.updated_at) : "-"}
                       </TableCell>
-
+  
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">打开菜单</span>
+                              <span className="sr-only">{t('evaluation.openMenu')}</span>
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -236,14 +238,14 @@ export default function EvalExperimentsDetailsPage(
                               onClick={() => router.push(`/evaluation/${datasetId}/experiments/${item.id}`)}
                             >
                               <Eye className="mr-2 h-4 w-4" />
-                              <span>查看详情</span>
+                              <span>{t('evaluation.viewDetails')}</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-red-600 focus:bg-red-50 focus:text-red-700"
                               onClick={() => deleteExperiment(item.id)}
                             >
                               <Trash2Icon className="mr-2 h-4 w-4" />
-                              <span>删除</span>
+                              <span>{t('evaluation.delete')}</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

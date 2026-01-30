@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card'; // shadcn/ui 容器组件 [[1]]
 import { ScrollArea } from '@/components/ui/scroll-area'; // 滚动区域支持 [[9]]
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 export function JsonlViewer({ file_url }: { file_url: string }) {
+  const { t } = useI18n();
+  const { tenantFetch } = useTenantFetch();
   const [lines, setLines] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -11,9 +14,11 @@ export function JsonlViewer({ file_url }: { file_url: string }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { tenantFetch } = useTenantFetch();
         const response = await tenantFetch(file_url);
-        if (!response.ok) throw new Error('文件加载失败');
+        if (!response.ok) {
+          setError('fileLoadFailed');
+          return;
+        }
 
         const text = await response.text();
         const parsedLines = text
@@ -23,17 +28,22 @@ export function JsonlViewer({ file_url }: { file_url: string }) {
 
         setLines(parsedLines);
       } catch (err) {
-        setError(err instanceof Error ? err.message : '未知错误');
+        setError('unknownError');
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [file_url]);
+  }, [file_url, tenantFetch]);
 
-  if (loading) return <div>加载中...</div>;
-  if (error) return <div className="text-red-500">{error}</div>;
+  if (loading) return <div>{t('common.loading')}</div>;
+  if (error)
+    return (
+      <div className="text-red-500">
+        {error === 'fileLoadFailed' ? t('knowledgebase.loadError') : t('messages.unknownError')}
+      </div>
+    );
 
   return (
     <ScrollArea className="pr-4">

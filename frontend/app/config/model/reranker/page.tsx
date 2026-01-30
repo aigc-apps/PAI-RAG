@@ -15,6 +15,7 @@ import { RerankerModelDialog } from '@/app/config/model/reranker/modelDialog';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 interface RerankerConfig {
   id: string;
@@ -34,12 +35,13 @@ const newrerankerconfig: RerankerConfig = {
   type: 'OpenAICompatible',
 };
 export default function RerankerConfigPage() {
+  const { t } = useI18n();
   const [editRerankerConfig, setEditRerankerConfig] =
-    useState<RerankerConfig>(newrerankerconfig); // 存储 Reranker 配置
-  const [rerankerconfigs, setRerankerConfigs] = useState<RerankerConfig[]>([]); // 存储 Reranker 配置
-  const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(''); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(''); // 删除时的错误信息
+    useState<RerankerConfig>(newrerankerconfig);
+  const [rerankerconfigs, setRerankerConfigs] = useState<RerankerConfig[]>([]);
+  const [modelloading, setModelLoading] = useState(true);
+  const [modelerror, setModelError] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -55,9 +57,9 @@ export default function RerankerConfigPage() {
         const res = await tenantFetch(
           `/api/config/rerankers?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error('获取Reranker模型列表失败');
+        if (!res.ok) throw new Error(t('config.model.fetchRerankerListFailed'));
         const json_data = await res.json();
-        // 转换后端返回的类型值到前端格式
+        // Convert backend type values to frontend format
         const reverseTypeMapping: Record<string, string> = {
           'openai_like': 'OpenAICompatible',
           'dashscope': 'DashScope',
@@ -66,10 +68,10 @@ export default function RerankerConfigPage() {
           ...item,
           type: item.type ? (reverseTypeMapping[item.type] || item.type) : 'OpenAICompatible',
         }));
-        setRerankerConfigs(data); // 合并
+        setRerankerConfigs(data);
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || '加载失败');
+        setModelError(err || t('config.model.loadFailed'));
       } finally {
         setModelLoading(false);
       }
@@ -78,8 +80,8 @@ export default function RerankerConfigPage() {
   }, [page, rerankerconfigs.length]);
 
   const handleCreateSuccess = (llmConfig: RerankerConfig) => {
-    setRerankerConfigs((prev) => [...prev, llmConfig]); // 追加新 Reranker 配置
-    console.log('创建Reranker成功', llmConfig);
+    setRerankerConfigs((prev) => [...prev, llmConfig]);
+    console.log(t('config.model.createRerankerSuccess'), llmConfig);
     setEditRerankerConfig(newrerankerconfig);
   };
 
@@ -87,7 +89,7 @@ export default function RerankerConfigPage() {
     setRerankerConfigs((prev) =>
       prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
     );
-    console.log('编辑Reranker成功', llmConfig);
+    console.log(t('config.model.editRerankerSuccess'), llmConfig);
     setEditRerankerConfig(newrerankerconfig);
   };
 
@@ -108,16 +110,16 @@ export default function RerankerConfigPage() {
       });
 
       if (!res.ok) {
-        setErrorMsg(`${model_type}删除失败，请检查网络或配置`);
+        setErrorMsg(t('config.model.deleteModelFailed', { modelType: model_type }));
         return;
       }
 
-      // 删除成功后更新本地状态
+      // Delete success, update local state
       if (model_type === 'rerankers') {
         setRerankerConfigs((prev) => prev.filter((config) => config.id !== id));
       }
     } catch (err: any) {
-      setErrorMsg('删除失败，请检查网络或配置');
+      setErrorMsg(t('config.model.deleteFailed'));
     }
   };
 
@@ -130,14 +132,14 @@ export default function RerankerConfigPage() {
             setEditRerankerConfig(newrerankerconfig);
           }}
         >
-          添加Reranker模型
+          {t('config.model.addRerankerModel')}
         </Button>
         <RerankerModelDialog
           isAdd={isCreateOpen ? true : false}
           isOpen={isEditOpen || isCreateOpen}
           setIsOpen={(open: boolean) => {
             if (!open) {
-              setEditRerankerConfig(newrerankerconfig); // 关闭时清空编辑数据
+              setEditRerankerConfig(newrerankerconfig);
             }
             setIsEditOpen(open);
             setIsCreateOpen(open);
@@ -209,7 +211,7 @@ export default function RerankerConfigPage() {
       ) : (
         <div className="flex justify-center items-center h-1/10 py-6">
           <h3 className="text-lg font-medium text-gray-700 py-6">
-            暂无模型，请点击上方按钮添加
+            {t('config.model.noModelsYet')}
           </h3>
         </div>
       )}
