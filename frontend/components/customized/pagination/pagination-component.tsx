@@ -1,3 +1,4 @@
+import { useI18n } from '@/app/providers/i18n';
 import { buttonVariants } from '@/components/ui/button';
 
 import {
@@ -22,6 +23,8 @@ export function PaginationComponent({
   totalPages,
   onPageChange,
 }: PaginationProps) {
+  const { t } = useI18n();
+
   const renderPaginationItems = () => {
     const items = [];
     const maxVisiblePages = 5;
@@ -38,8 +41,8 @@ export function PaginationComponent({
                 className={cn(
                   '!shadow-none hover:!text-primary-foreground',
                   buttonVariants({
-                    variant: 'default',
-                    size: 'icon',
+                    size: 'sm',
+
                   }),
                 )}
               >
@@ -49,6 +52,7 @@ export function PaginationComponent({
               <PaginationLink
                 onClick={() => onPageChange(i)}
                 isActive={i === currentPage}
+                className="h-7"
               >
                 {i}
               </PaginationLink>
@@ -122,17 +126,18 @@ export function PaginationComponent({
         {/* 首页 */}
         <PaginationItem>
           <PaginationLink
+            className="w-10 h-7"
             onClick={() => onPageChange(1)}
             isActive={Boolean(currentPage === 1)}
           >
-            <span className="text-xs font-medium">首页</span>
+            <span className="text-xs font-medium">{t('common.firstPage')}</span>
           </PaginationLink>
         </PaginationItem>
 
         {/* 上一页 */}
         <PaginationItem>
           <PaginationPrevious
-            className="text-xs font-medium"
+            className="text-xs font-medium h-7"
             onClick={() => onPageChange(currentPage - 1)}
             isActive={currentPage === 1}
           />
@@ -146,7 +151,7 @@ export function PaginationComponent({
         {/* 下一页 */}
         <PaginationItem>
           <PaginationNext
-            className="text-xs font-medium"
+            className="text-xs font-medium h-7"
             onClick={() => onPageChange(currentPage + 1)}
             isActive={currentPage === totalPages}
           />
@@ -159,8 +164,9 @@ export function PaginationComponent({
           <PaginationLink
             onClick={() => onPageChange(totalPages)}
             isActive={currentPage === totalPages}
+            className="w-10 h-7"
           >
-            <span className="text-xs font-medium">末页</span>
+            <span className="text-xs font-medium">{t('common.lastPage')}</span>
           </PaginationLink>
         </PaginationItem>
       </PaginationContent>

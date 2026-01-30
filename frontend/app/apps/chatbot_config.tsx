@@ -3,8 +3,8 @@ import React, { useState, useEffect, FC } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { ChevronDownIcon, Terminal } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ChevronDownIcon } from 'lucide-react';
+import { useI18n } from '@/app/providers/i18n';
 
 import {
   Select,
@@ -44,6 +44,7 @@ import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT, getPromp
 
 // Add import for ResettableTextarea
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
+import { toast } from 'sonner';
 
 
 interface PromptConfig {
@@ -107,6 +108,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   isCreate = false,
   saveErrorMsg: externalErrorMsg,
 }) => {
+  const { t } = useI18n();
   const [openPrompt, setOpenPrompt] = useState(false);
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
@@ -226,17 +228,13 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
     try {
       await onSave();
     } catch (err: any) {
-      setSaveErrorMsg(err.message || '保存失败');
+      toast.error(err.message || t('messages.saveError'));
     }
   };
 
-  const displayErrorMsg = externalErrorMsg || saveErrorMsg;
 
   return (
-    <div className="grid gap-4 py-6 px-6">
-      <div className="text-xl font-medium">
-        {isCreate ? '新建应用' : '编辑应用'}
-      </div>
+    <div className="space-y-4 px-6 pt-3">
       <div className="space-y-2">
         <Label htmlFor="app-id">
           App ID <span className="text-destructive">*</span>
@@ -245,28 +243,28 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           id="appid"
           value={botConfig.app_id || ''}
           onChange={(e) => onConfigChange({ app_id: e.target.value })}
-          placeholder="请输入应用ID, 如chatbot"
+          placeholder={t('apps.appIdPlaceholder')}
           required
           disabled={!isCreate}
         />
         <p className="text-sm text-muted-foreground">
-          可输入大小写字母和数字,必须字母开头,3-64个字符。
+          {t('apps.appIdTip')}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">描述</Label>
+        <Label htmlFor="description">{t('apps.descriptionLabel')}</Label>
         <Textarea
           id="description"
           value={botConfig.description || ''}
           onChange={(e) => onConfigChange({ description: e.target.value })}
-          placeholder="应用描述（可选）"
+          placeholder={t('apps.descriptionPlaceholder')}
           rows={3}
         />
       </div>
       <div className="flex">
-        <Label htmlFor="basemodel" className="w-[90px]">
-          基模型选择 <span className="text-destructive">*</span>{' '}
+        <Label htmlFor="basemodel" className="w-[120px]">
+          {t('apps.baseModel')} <span className="text-destructive">*</span>{' '}
         </Label>
         <div className="px-6">
           {llms.length > 0 ? (
@@ -275,7 +273,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               onValueChange={(value) => onConfigChange({ model_id: value })}
             >
               <SelectTrigger>
-                <SelectValue placeholder="请选择基模型" />
+                <SelectValue placeholder={t('apps.selectModel')} />
               </SelectTrigger>
               <SelectContent>
                 {llms.map((llm) => (
@@ -287,14 +285,14 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             </Select>
           ) : (
             <div>
-              <p className="text-sm text-muted-foreground">尚未配置大模型</p>
+              <p className="text-sm text-muted-foreground">{t('apps.noModelConfigured')}</p>
               <Button
                 variant="outline"
                 onClick={() => {
                   router.push('/config/model/llm');
                 }}
               >
-                前往添加
+                {t('apps.addModel')}
               </Button>
             </div>
           )}
@@ -302,30 +300,30 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         <div className="px-2">
           <Dialog open={openPrompt} onOpenChange={setOpenPrompt}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="text-xs">编辑提示词</Button>
+              <Button variant="outline" className="text-xs">{t('apps.editPrompts')}</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col">
               <DialogHeader>
-                <DialogTitle>编辑提示词</DialogTitle>
+                <DialogTitle>{t('apps.editPrompts')}</DialogTitle>
                 <DialogDescription>
-                  自定义 AI Agent 在不同阶段的行为提示词
+                  {t('apps.editPromptDesc')}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="flex-1 overflow-hidden">
                 <Tabs defaultValue="plan_group" className="h-full flex flex-col">
                   <TabsList className="flex space-x-2">
-                    <TabsTrigger value="plan_group">规划提示词</TabsTrigger>
-                    <TabsTrigger value="act_group">行动提示词</TabsTrigger>
+                    <TabsTrigger value="plan_group">Plan & Execute</TabsTrigger>
+                    <TabsTrigger value="act_group">ReAct</TabsTrigger>
                   </TabsList>
 
-                  <div className="flex-1 overflow-hidden mt-4">
+                  <div className="flex-1 overflow-hidden">
                     <TabsContent value="plan_group" className="h-full flex flex-col">
                       <Tabs defaultValue="plan" className="h-full flex flex-col">
                         <TabsList className="grid grid-cols-3">
-                          <TabsTrigger value="plan">规划</TabsTrigger>
-                          <TabsTrigger value="act_with_plan">规划行动</TabsTrigger>
-                          <TabsTrigger value="summary">规划总结</TabsTrigger>
+                          <TabsTrigger value="plan">Plan</TabsTrigger>
+                          <TabsTrigger value="act_with_plan">Act</TabsTrigger>
+                          <TabsTrigger value="summary">Summary</TabsTrigger>
                         </TabsList>
                         <div className="flex-1 overflow-hidden mt-2">
                           <TabsContent value="plan" className="h-full flex flex-col">
@@ -334,7 +332,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                               onReset={() => setPlanPrompt(defaultPrompts.plan)}
                               onChange={(e) => setPlanPrompt(e.target.value)}
                               defaultValue={defaultPrompts.plan}
-                              placeholder="输入规划阶段的提示词..."
+                              placeholder={t('apps.planPlaceholder')}
                             />
                           </TabsContent>
                           <TabsContent value="act_with_plan" className="h-full flex flex-col">
@@ -343,7 +341,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                               onReset={() => setActWithPlanPrompt(defaultPrompts.act_with_plan)}
                               onChange={(e) => setActWithPlanPrompt(e.target.value)}
                               defaultValue={defaultPrompts.act_with_plan}
-                              placeholder="输入规划驱动行动阶段的提示词..."
+                              placeholder={t('apps.actWithPlanPlaceholder')}
                             />
                           </TabsContent>
                           <TabsContent value="summary" className="h-full flex flex-col">
@@ -352,7 +350,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                               onReset={() => setSummarizePrompt(defaultPrompts.summary)}
                               onChange={(e) => setSummarizePrompt(e.target.value)}
                               defaultValue={defaultPrompts.summary}
-                              placeholder="输入总结阶段的提示词..."
+                              placeholder={t('apps.summaryPlaceholder')}
                             />
                           </TabsContent>
                         </div>
@@ -365,7 +363,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                         onReset={() => setActPrompt(defaultPrompts.act)}
                         onChange={(e) => setActPrompt(e.target.value)}
                         defaultValue={defaultPrompts.act}
-                        placeholder="输入行动阶段的提示词..."
+                        placeholder={t('apps.actPlaceholder')}
                       />
                     </TabsContent>
                   </div>
@@ -379,7 +377,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                     setPlanPrompt(botConfig.prompts?.plan || defaultPrompts.plan);
                     setActWithPlanPrompt(botConfig.prompts?.act_with_plan || defaultPrompts.act_with_plan);
                     setSummarizePrompt(botConfig.prompts?.summary || defaultPrompts.summary);
-                  }}>取消</Button>
+                  }}>{t('common.cancel')}</Button>
                 </DialogClose>
                 <Button type="button" onClick={() => {
                   onConfigChange({
@@ -392,7 +390,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                   });
                   setOpenPrompt(false);
                 }}>
-                  保存更改
+                  {t('common.save')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -400,8 +398,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         </div>
       </div>
       <div className="flex gap-6">
-        <Label htmlFor="enable_search" className="w-[90px]">
-          启用联网搜索
+        <Label htmlFor="enable_search" className="w-[120px]">
+          {t('apps.enableSearch')}
         </Label>
         <Switch
           id="enable_search"
@@ -410,8 +408,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         />
       </div>
       <div className="flex gap-6">
-        <Label htmlFor="enable_chatdb" className="w-[90px]">
-          启用ChatDB
+        <Label htmlFor="enable_chatdb" className="w-[120px]">
+          {t('apps.enableChatDb')}
         </Label>
         <Switch
           id="enable_chatdb"
@@ -420,8 +418,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         />
       </div>
       <div className="flex gap-6">
-        <Label htmlFor="enable_agent" className="w-[90px]">
-          Agentic模式
+        <Label htmlFor="enable_agent" className="w-[120px]">
+          {t('apps.enableAgent')}
         </Label>
         <Switch
           id="enable_agent"
@@ -430,8 +428,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         />
       </div>
       <div className="flex gap-6">
-        <Label htmlFor="enable_faq" className="w-[90px]">
-          启用FAQ
+        <Label htmlFor="enable_faq" className="w-[120px]">
+          {t('apps.enableFaq')}
         </Label>
         <Switch
           id="enable_faq"
@@ -440,8 +438,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         />
       </div>
       <div className="flex">
-        <Label htmlFor="kb_selection" className="w-[90px]">
-          知识库选择
+        <Label htmlFor="kb_selection" className="w-[120px]">
+          {t('apps.knowledgebaseSelection')}
         </Label>
         <div className="pl-6 pr-6">
           {kbs.length > 0 ? (
@@ -451,11 +449,11 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                   variant="outline"
                   className="text-sm text-muted-foreground"
                 >
-                  已选{botConfig?.kb_ids?.length || 0}个，可多选 <ChevronDownIcon />
+                  {t('apps.selectedKbNum', { num: botConfig?.kb_ids?.length || 0 })} <ChevronDownIcon />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>知识库</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('apps.knowledgebaseSelection')}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {kbs.map((kb) => (
                   <DropdownMenuCheckboxItem
@@ -473,7 +471,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             </DropdownMenu>
           ) : (
             <div>
-              <p className="text-sm text-muted-foreground">尚未配置知识库</p>
+              <p className="text-sm text-muted-foreground">{t('apps.noKbConfigured')}</p>
             </div>
           )}
         </div>
@@ -488,8 +486,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         )}
       </div>
       <div className="flex">
-        <Label htmlFor="mcp_selection" className="w-[90px]">
-          MCP选择
+        <Label htmlFor="mcp_selection" className="w-[120px]">
+          {t('apps.mcpSelection')}
         </Label>
         <div className="pl-6 pr-6">
           {mcps.length > 0 ? (
@@ -499,7 +497,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
                   variant="outline"
                   className="text-sm text-muted-foreground"
                 >
-                  已选{botConfig.mcp_ids?.length || 0}个，可多选 <ChevronDownIcon />
+                  {t('apps.selectedMcpNum', { num: botConfig.mcp_ids?.length || 0 })}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
@@ -521,7 +519,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             </DropdownMenu>
           ) : (
             <div>
-              <p className="text-sm text-muted-foreground">尚未配置MCP</p>
+              <p className="text-sm text-muted-foreground">{t('apps.noMcpConfigured')}</p>
             </div>
           )}
         </div>
@@ -536,8 +534,8 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         )}
       </div>
       <div className="flex items-center">
-        <Label htmlFor="ai_guardrail" className="w-[90px]">
-          AI安全护栏
+        <Label htmlFor="ai_guardrail" className="w-[120px]">
+          {t('apps.guardrail')}
         </Label>
 
         <div className="flex gap-4 pl-6 text-sm items-center">
@@ -548,7 +546,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               onCheckedChange={(checked) => onConfigChange({ enable_input_guardrail: checked })}
             />
             <Label htmlFor="input_guardrail" className="w-[120px]">
-              输入护栏
+              {t('apps.inputGuardrail')}
             </Label>
           </div>
           <div className="space-y-2">
@@ -558,30 +556,25 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               onCheckedChange={(checked) => onConfigChange({ enable_output_guardrail: checked })}
             />
             <Label htmlFor="output_guardrail" className="w-[120px]">
-              输出护栏
+              {t('apps.outputGuardrail')}
             </Label>
           </div>
 
           <div className="space-y-1">
             <Input
               className="w-120"
-              value={botConfig.guardrail_hint || "作为人工智能助手，我无法回应包含不当或敏感信息的内容。"}
+              value={botConfig.guardrail_hint}     
+              placeholder={t('apps.guardrailHint')}
               onChange={(e) => onConfigChange({ guardrail_hint: e.target.value })}
             />
-            <Label htmlFor="guardrail_hint" className="w-[120px]">
-              默认护栏提示
+            <Label htmlFor="guardrail_hint" className="w-[200px]">
+              {t('apps.guardrailHintTip')}
             </Label>
           </div>
         </div>
       </div>
-      {displayErrorMsg && (
-        <Alert variant="destructive">
-          <Terminal />
-          <AlertTitle>{isCreate ? '创建应用失败' : '保存应用失败'}</AlertTitle>
-          <AlertDescription>{displayErrorMsg}</AlertDescription>
-        </Alert>
-      )}
-      <div className="pt-6 flex gap-6">
+
+      <div className="sticky bottom-0 z-10 -mx-6 px-6 pt-4 flex gap-6 justify-center items-center bg-background border-t">
         <Button
           variant="secondary"
           className="w-20"
@@ -589,15 +582,15 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             router.push('/apps');
           }}
         >
-          取消
+          {t('common.cancel')}
         </Button>
 
         <Button
-          className="w-20"
+          className="w-40"
           onClick={handleSave}
           disabled={saving}
         >
-          {saving ? '保存中...' : (isCreate ? '创建应用' : '保存应用')}
+          {saving ? t('common.saving') : (isCreate ? t('apps.createApp') : t('apps.saveApp'))}
         </Button>
       </div>
     </div>

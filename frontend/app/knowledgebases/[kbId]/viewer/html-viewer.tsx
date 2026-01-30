@@ -1,29 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useI18n } from '@/app/providers/i18n';
 export function HtmlViewer({ file_url }: { file_url: string }) {
+  const { t } = useI18n();
   const [htmlContent, setHtmlContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(file_url)
-      .then((response) => {
-        if (!response.ok) throw new Error('加载失败');
-        return response.text();
-      })
-      .then((text) => {
+    const fetchHtml = async () => {
+      try {
+        const response = await fetch(file_url);
+        if (!response.ok) {
+          setError('fileLoadFailed');
+          return;
+        }
+        const text = await response.text();
         setHtmlContent(text);
+      } catch (err) {
+        setError('unknownError');
+      } finally {
         setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+      }
+    };
+
+    fetchHtml();
   }, [file_url]);
 
-  if (loading) return <div>加载中...</div>;
-  if (error) return <div className="text-red-500">{error}</div>;
+  if (loading) return <div>{t('common.loading')}</div>;
+  if (error)
+    return (
+      <div className="text-red-500">
+        {error === 'fileLoadFailed' ? t('knowledgebase.loadError') : t('messages.unknownError')}
+      </div>
+    );
 
   return (
     <ScrollArea className="pr-4">

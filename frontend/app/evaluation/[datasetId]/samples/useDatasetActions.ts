@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { toast } from 'sonner';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 interface UseDatasetActionsProps {
   datasetId: string;
@@ -19,7 +20,9 @@ interface ExperimentData {
 export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
   const router = useRouter();
   const { tenantFetch } = useTenantFetch();
-  // 运行样本（单条或批量）
+  const { t } = useI18n();
+  
+  // Run samples (single or batch)
   const runSamples = async (data: ExperimentData) => {
     try {
       const res = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments`, {
@@ -28,37 +31,37 @@ export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
         body: JSON.stringify(data),
       });
 
-      if (!res.ok) throw new Error('实验创建失败');
+      if (!res.ok) throw new Error(t('evaluation.experimentCreateFailed'));
 
       const result = await res.json();
-      toast.success('实验创建成功');
+      toast.success(t('evaluation.experimentCreateSuccess'));
       router.push(`/evaluation/${datasetId}/experiments/${result.data.id}`);
       return result.data.id;
     } catch (error) {
-      console.error('实验创建失败:', error);
-      toast.error('实验创建失败');
+      console.error('Failed to create experiment:', error);
+      toast.error(t('evaluation.experimentCreateFailed'));
       throw error;
     }
   };
 
-  // 删除样本
+  // Delete sample
   const deleteSample = async (sampleId: string) => {
     try {
       const res = await tenantFetch(`/api/config/evaluation/${datasetId}/samples/${sampleId}`, {
         method: 'DELETE',
       });
 
-      if (!res.ok) throw new Error('删除失败');
-      toast.success('删除成功');
+      if (!res.ok) throw new Error(t('common.deleteFailed'));
+      toast.success(t('evaluation.deleteSuccess'));
       return true;
     } catch (error) {
-      console.error('删除失败:', error);
-      toast.error('删除失败');
+      console.error('Failed to delete:', error);
+      toast.error(t('common.deleteFailed'));
       return false;
     }
   };
 
-  // 上传文件
+  // Upload file
   const uploadFile = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -71,15 +74,15 @@ export function useDatasetActions({ datasetId }: UseDatasetActionsProps) {
 
       const result = await res.json();
       if (result.code === 200) {
-        toast.success('上传成功');
+        toast.success(t('evaluation.uploadSuccess'));
         return result.data;
       }
       else {
         throw new Error(result.message);
       }
     } catch (error: any) {
-      console.error('上传失败:', error.message);
-      toast.error(`上传失败: ${error.message}`);
+      console.error('Failed to upload:', error.message);
+      toast.error(t('evaluation.uploadFailedWithMsg', { msg: error.message }));
       throw error;
     }
   };

@@ -23,13 +23,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 import { SampleItem } from '@/app/evaluation/[datasetId]/types';
+import { useI18n } from '@/app/providers/i18n';
 
 interface SampleDetailDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     sample: SampleItem | null;
     mode: 'view' | 'edit';
-    onSave?: (updatedSample: SampleItem) => void; // 仅在 edit 模式需要
+    onSave?: (updatedSample: SampleItem) => void; // Only needed in edit mode
 }
 
 export function SampleDetailDialog({
@@ -39,11 +40,12 @@ export function SampleDetailDialog({
     mode,
     onSave,
 }: SampleDetailDialogProps) {
+    const { t } = useI18n();
     const [editedInput, setEditedInput] = useState("");
     const [editedOutput, setEditedOutput] = useState("");
     const [editedMetadata, setEditedMetadata] = useState<Record<string, any>>({});
 
-    // 在组件内，useState 下方添加：
+    // Initialize state when sample changes
     useEffect(() => {
         if (sample) {
             setEditedInput(sample.input || "");
@@ -73,25 +75,25 @@ export function SampleDetailDialog({
                     <DialogTitle className="flex items-center gap-2">
                         {mode === 'view' ? (
                             <>
-                                <Eye className="h-5 w-5 text-blue-500" /> 查看样本
+                                <Eye className="h-5 w-5 text-blue-500" /> {t('evaluation.viewSample')}
                             </>
                         ) : (
                             <>
-                                <Pencil className="h-5 w-5 text-green-500" /> 编辑样本
+                                <Pencil className="h-5 w-5 text-green-500" /> {t('evaluation.editSample')}
                             </>
                         )}
                     </DialogTitle>
                     <DialogDescription>
-                        样本ID: {sample.id}
+                        {t('evaluation.sampleIdLabel')}: {sample.id}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-                    {/* 问题 */}
+                    {/* Question */}
                     <div className="space-y-2">
                         <Label htmlFor="edit-input" className="flex items-center gap-1">
                             <MessageSquare className="h-4 w-4 text-blue-500" />
-                            问题
+                            {t('evaluation.questionLabel')}
                         </Label>
                         {mode === 'view' ? (
                             <div className="p-3 bg-muted rounded-md border">
@@ -102,17 +104,17 @@ export function SampleDetailDialog({
                                 id="edit-input"
                                 value={editedInput}
                                 onChange={(e) => setEditedInput(e.target.value)}
-                                placeholder="请输入问题"
+                                placeholder={t('evaluation.enterQuestion')}
                                 className="min-h-[80px]"
                             />
                         )}
                     </div>
 
-                    {/* 答案 */}
+                    {/* Answer */}
                     <div className="space-y-2">
                         <Label htmlFor="edit-output" className="flex items-center gap-1">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            答案
+                            {t('evaluation.answerLabel')}
                         </Label>
                         {mode === 'view' ? (
                             <div className="p-3 bg-green-50 rounded-md border border-green-200">
@@ -123,17 +125,17 @@ export function SampleDetailDialog({
                                 id="edit-output"
                                 value={editedOutput}
                                 onChange={(e) => setEditedOutput(e.target.value)}
-                                placeholder="请输入预期答案"
+                                placeholder={t('evaluation.enterExpectedAnswer')}
                                 className="min-h-[80px]"
                             />
                         )}
                     </div>
 
-                    {/* 动态 Metadata */}
+                    {/* Dynamic Metadata */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2">
                             <Tag className="h-4 w-4 text-purple-500" />
-                            <h3 className="text-sm font-medium">元数据</h3>
+                            <h3 className="text-sm font-medium">{t('evaluation.metadata')}</h3>
                             {mode === 'edit' && (
                                 <Button
                                     type="button"
@@ -142,36 +144,36 @@ export function SampleDetailDialog({
                                     onClick={() => {
                                         setEditedMetadata(prev => ({
                                             ...prev,
-                                            [`新字段${Object.keys(prev).length + 1}`]: ""
+                                            [`${t('evaluation.fieldName')}${Object.keys(prev).length + 1}`]: ""
                                         }));
                                     }}
                                     className="ml-auto"
                                 >
-                                    <Plus className="h-3 w-3 mr-1" /> 添加字段
+                                    <Plus className="h-3 w-3 mr-1" /> {t('evaluation.addField')}
                                 </Button>
                             )}
                         </div>
 
                         {mode === 'view' ? (
-                            // 查看模式
+                            // View mode
                             sample.eval_metadata && Object.keys(sample.eval_metadata).length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {Object.entries(sample.eval_metadata).map(([key, value]) => (
                                         <div key={key} className="p-3 bg-purple-50 rounded-md border border-purple-200">
                                             <div className="text-xs font-medium text-purple-600 mb-1">{key}</div>
                                             <div className="text-sm text-purple-800 break-words">
-                                                {value !== null && value !== undefined ? String(value) : '空值'}
+                                                {value !== null && value !== undefined ? String(value) : t('evaluation.emptyValue')}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
                                 <div className="p-3 bg-muted rounded-md border text-center text-muted-foreground">
-                                    无元数据
+                                    {t('evaluation.noMetadata')}
                                 </div>
                             )
                         ) : (
-                            // 编辑模式
+                            // Edit mode
                             editedMetadata && Object.keys(editedMetadata).length > 0 ? (
                                 <div className="space-y-3">
                                     {Object.entries(editedMetadata).map(([key, value]) => (
@@ -184,7 +186,7 @@ export function SampleDetailDialog({
                                                     newMetadata[e.target.value] = value;
                                                     setEditedMetadata(newMetadata);
                                                 }}
-                                                placeholder="字段名"
+                                                placeholder={t('evaluation.fieldName')}
                                                 className="w-1/3 text-sm"
                                             />
                                             <Input
@@ -194,7 +196,7 @@ export function SampleDetailDialog({
                                                     newMetadata[key] = e.target.value;
                                                     setEditedMetadata(newMetadata);
                                                 }}
-                                                placeholder="字段值"
+                                                placeholder={t('evaluation.fieldValue')}
                                                 className="flex-1 text-sm"
                                             />
                                             <Button
@@ -215,7 +217,7 @@ export function SampleDetailDialog({
                                 </div>
                             ) : (
                                 <div className="p-3 bg-muted/50 rounded-md border-dashed border text-center text-muted-foreground">
-                                    点击“添加字段”按钮添加元数据
+                                    {t('evaluation.clickAddFieldToAddMetadata')}
                                 </div>
                             )
                         )}
@@ -227,14 +229,14 @@ export function SampleDetailDialog({
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                     >
-                        关闭
+                        {t('evaluation.close')}
                     </Button>
                     {mode === 'edit' && (
                         <Button
                             onClick={handleSave}
                             className="bg-green-600 hover:bg-green-700 text-white"
                         >
-                            保存
+                            {t('common.save')}
                         </Button>
                     )}
                 </DialogFooter>

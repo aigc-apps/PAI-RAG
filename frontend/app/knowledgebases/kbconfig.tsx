@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '@/app/providers/i18n';
 import {
   ArrowLeft,
   SearchCode,
@@ -144,15 +145,17 @@ export const KbConfigCard: FC<KbConfigProps> = ({
   onSaveSuccess,
   onCancel,
 }) => {
+  const { t } = useI18n();
+
   const [kb, setKb] = useState<KbConfig>(kbConfig);
   const [indexType, setIndexType] = useState('vector');
   const [embeddingmodels, setEmbeddingModels] = useState<EmbeddingModel[]>([]);
   const [rerankermodels, setRerankerModels] = useState<RerankerModel[]>([]);
   const [visionModels, setVisionModels] = useState<VisionModel[]>([]);
-  const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(''); // 错误信息
+  const [modelloading, setModelLoading] = useState(true);
+  const [modelerror, setModelError] = useState('');
 
-  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存KB错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const [vectorDbType, setVectorDbType] = useState<string>('local');
   const { tenantFetch } = useTenantFetch();
   // 不支持全文检索和混合检索的向量数据库类型列表
@@ -245,7 +248,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           return prev;
         });
       } catch (err: any) {
-        setModelError(err || '加载失败');
+        setModelError(err || t('knowledgebase.loadModelError'));
       } finally {
         setModelLoading(false);
       }
@@ -268,7 +271,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
         body: JSON.stringify(kb), // 包装为数组
       });
 
-      if (!res.ok) throw new Error(`保存知识库失败: ${await res.text()}`);
+      if (!res.ok) throw new Error(`${t('knowledgebase.saveKbError')}: ${await res.text()}`);
       const jsondata = await res.json();
       setSaveErrorMsg('');
       onSaveSuccess(jsondata.data as KbConfig);
@@ -286,7 +289,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
         {/* 基本信息 */}
         <div className="flex gap-3 items-center">
           <Label htmlFor="name" className="w-[100px] text-xs">
-            知识库名称 <span className="text-destructive">*</span>
+            {t('knowledgebase.nameLabel')} <span className="text-destructive">*</span>
           </Label>
           <Input
             id="name"
@@ -295,14 +298,14 @@ export const KbConfigCard: FC<KbConfigProps> = ({
             onChange={(e) =>
               setKb((prev) => ({ ...prev, name: e.target.value }))
             }
-            placeholder="请输入知识库名称"
+            placeholder={t('knowledgebase.namePlaceholder')}
             required
           />
         </div>
 
-        <div className="flex gap-3 items-start pt-3">
+        <div className="flex gap-3 items-start">
           <Label htmlFor="description" className="w-[100px] text-xs pt-2">
-            知识库描述
+            {t('knowledgebase.descriptionLabel')}
           </Label>
           <Textarea
             id="description"
@@ -314,16 +317,16 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 description: e.target.value,
               }))
             }
-            placeholder="描述知识库内容（可选）"
+            placeholder={t('knowledgebase.descriptionPlaceholder')}
             rows={3}
           />
         </div>
 
         {/* 分段设置卡片 */}
-        <div className="flex gap-3 items-start pt-3">
+        <div className="flex gap-3 items-start">
           <div className="flex items-center gap-1 w-[100px] pt-2">
             <Label className="text-xs">
-              分段设置
+              {t('knowledgebase.chunkSettings')}
             </Label>
             <TooltipProvider>
               <Tooltip>
@@ -332,17 +335,17 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
                   <p className="text-xs">
-                    分段设置参数对以下文件类型无效：.csv, .xlsx, .xls, .jsonl
+                    {t('knowledgebase.chunkSettingsHint')}
                   </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
-          <Card className="flex-1">
-            <CardContent className="space-y-4 pt-6">
+          <Card className="pt-3">
+            <CardContent className="space-y-3">
             <div className="flex gap-3 items-center">
               <Label htmlFor="parserType" className="w-[100px] text-xs">
-                切片类型
+                {t('knowledgebase.parserType')}
                 <span className="text-destructive">*</span>
               </Label>
               <Select
@@ -389,26 +392,26 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 }}
               >
                 <SelectTrigger className="w-60 h-6 text-xs">
-                  <SelectValue placeholder="请选择切片类型" />
+                  <SelectValue placeholder={t('knowledgebase.selectParserType')} />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectGroup>
                     <SelectItem value="structure" className="text-xs h-5">
-                      结构化(structure)
+                      {t('knowledgebase.structure')}
                     </SelectItem>
                     <SelectItem value="token" className="text-xs h-5">
-                      按token
+                      {t('knowledgebase.token')}
                     </SelectItem>
                     <SelectItem value="table" className="text-xs h-5">
-                      表格(table)
+                      {t('knowledgebase.table')}
                     </SelectItem>
                     <SelectItem value="paragraph" className="text-xs h-5">
-                      段落(paragraph)
+                      {t('knowledgebase.paragraph')}
                     </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">选择文档切片方式</p>
+              <p className="text-xs text-muted-foreground">{t('knowledgebase.selectChunkMode')}</p>
             </div>
 
             {/* Table Config - 只在 parser_type === 'table' 时显示 */}
@@ -417,7 +420,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 <div className="flex gap-3 items-center">
                   <div className="flex gap-3 items-center flex-1">
                     <Label htmlFor="table-header-index-max" className="w-[100px] text-xs">
-                      最大表头行index
+                      {t('knowledgebase.maxHeaderIndex')}
                     </Label>
                     <Input
                       type="number"
@@ -441,7 +444,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   </div>
                   <div className="flex gap-3 items-center flex-1">
                     <Label htmlFor="table-format-json" className="w-[100px] text-xs">
-                      格式化为Json
+                      {t('knowledgebase.formatAsJson')}
                     </Label>
                     <Checkbox
                       id="table-format-json"
@@ -464,7 +467,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 <div className="flex gap-3 items-center">
                   <div className="flex gap-3 items-center flex-1">
                     <Label htmlFor="table-concat-rows" className="w-[100px] text-xs">
-                      合并行
+                      {t('knowledgebase.mergeRows')}
                     </Label>
                     <Checkbox
                       id="table-concat-rows"
@@ -485,7 +488,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   </div>
                   <div className="flex gap-3 items-center flex-1">
                     <Label htmlFor="table-row-joiner" className="w-[100px] text-xs">
-                      行分隔符
+                      {t('knowledgebase.rowJoiner')}
                     </Label>
                     <Input
                       type="text"
@@ -509,7 +512,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 </div>
                 <div className="flex gap-3 items-center">
                   <Label htmlFor="table-chunkSize" className="w-[100px] text-xs">
-                    切片大小
+                    {t('knowledgebase.chunkSize')}
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -534,17 +537,17 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     }}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">推荐值: 1000</p>
+                  <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
                 </div>
               </div>
             )}
 
-            {/* Paragraph Config - 只在 parser_type === 'paragraph' 时显示 */}
+            {/* Paragraph Config */}
             {kb.chunk_config.parser_type === 'paragraph' && (
               <div className="space-y-3">
                 <div className="flex gap-3 items-center">
                   <Label htmlFor="paragraph-separator" className="w-[100px] text-xs">
-                    分隔符
+                    {t('knowledgebase.separator')}
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -565,7 +568,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 </div>
                 <div className="flex gap-3 items-center">
                   <Label htmlFor="chunkSize" className="w-[100px] text-xs">
-                    切片大小
+                    {t('knowledgebase.chunkSize')}
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -577,7 +580,6 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     placeholder="1000"
                     onChange={(e) => {
                       const value = e.target.value;
-                      // 只允许数字和空字符串
                       if (value === '' || /^\d+$/.test(value)) {
                         setKb((prev) => ({
                           ...prev,
@@ -590,10 +592,11 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     }}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">推荐值: 1000</p>
-
-                  <Label htmlFor="chunkOverlap" className="w-[100px] ml-20 text-xs">
-                    切片重叠
+                  <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
+                </div>
+                <div className="flex gap-3 items-center">
+                  <Label htmlFor="chunkOverlap" className="w-[100px] text-xs">
+                    {t('knowledgebase.chunkOverlap')}
                     <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -605,7 +608,6 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     placeholder="50"
                     onChange={(e) => {
                       const value = e.target.value;
-                      // 只允许数字和空字符串
                       if (value === '' || /^\d+$/.test(value)) {
                         setKb((prev) => ({
                           ...prev,
@@ -617,16 +619,17 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       }
                     }}
                   />
-                  <p className="text-xs text-muted-foreground">推荐值: 50</p>
+                  <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
                 </div>
               </div>
             )}
 
-            {/* Default Config - 只在 parser_type 为 'structure' 或 'token' 时显示 */}
+            {/* Default Config - structure or token */}
             {(kb.chunk_config.parser_type === 'structure' || kb.chunk_config.parser_type === 'token') && (
+              <div className="space-y-3">
               <div className="flex gap-3 items-center">
                 <Label htmlFor="chunkSize" className="w-[100px] text-xs">
-                  切片大小
+                  {t('knowledgebase.chunkSize')}
                   <span className="text-destructive">*</span>
                 </Label>
                 <Input
@@ -638,7 +641,6 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   placeholder="1000"
                   onChange={(e) => {
                     const value = e.target.value;
-                    // 只允许数字和空字符串
                     if (value === '' || /^\d+$/.test(value)) {
                       setKb((prev) => ({
                         ...prev,
@@ -651,10 +653,11 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   }}
                   required
                 />
-                <p className="text-xs text-muted-foreground">推荐值: 1000</p>
-
-                <Label htmlFor="chunkOverlap" className="w-[100px] ml-20 text-xs">
-                  切片重叠
+                <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
+              </div>
+              <div className="flex gap-3 items-center">
+                <Label htmlFor="chunkOverlap" className="w-[100px] text-xs">
+                  {t('knowledgebase.chunkOverlap')}
                   <span className="text-destructive">*</span>
                 </Label>
                 <Input
@@ -666,7 +669,6 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   placeholder="50"
                   onChange={(e) => {
                     const value = e.target.value;
-                    // 只允许数字和空字符串
                     if (value === '' || /^\d+$/.test(value)) {
                       setKb((prev) => ({
                         ...prev,
@@ -678,13 +680,14 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     }
                   }}
                 />
-                <p className="text-xs text-muted-foreground">推荐值: 50</p>
+                <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
+              </div>
               </div>
             )}
 
             <div className="flex gap-3 items-center">
               <Label htmlFor="imageCaptionModel" className="w-[100px] text-xs">
-                图片理解模型
+                {t('knowledgebase.imageCaptionModelLabel')}
               </Label>
               <Select
                 value={kb.chunk_config.image_caption_model || 'DISABLED'}
@@ -701,12 +704,12 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 }}
               >
                 <SelectTrigger className="w-60 h-6 text-xs">
-                  <SelectValue placeholder="请选择图片理解模型（可选）" />
+                  <SelectValue placeholder={t('knowledgebase.selectImageModel')} />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectGroup>
                     <SelectItem value="DISABLED" className="text-xs h-5">
-                      不使用图片理解模型
+                      {t('knowledgebase.disableImageModel')}
                     </SelectItem>
                     {visionModels.map((model) => (
                       <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
@@ -716,12 +719,12 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">用于理解图片内容</p>
+              <p className="text-xs text-muted-foreground">{t('knowledgebase.imageModelHint')}</p>
             </div>
 
             <div className="flex gap-3 items-center">
               <Label htmlFor="embeddingModel" className="w-[100px] text-xs">
-                向量模型 <span className="text-destructive">*</span>
+                {t('knowledgebase.embeddingModelLabel')} <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={kb.embedding_model}
@@ -735,7 +738,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 }}
               >
                 <SelectTrigger className="w-60 h-6 text-xs">
-                  <SelectValue placeholder="请选择向量模型" />
+                  <SelectValue placeholder={t('knowledgebase.selectEmbeddingModel')} />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectGroup>
@@ -752,15 +755,15 @@ export const KbConfigCard: FC<KbConfigProps> = ({
           </Card>
         </div>
 
-        {/* 检索设置卡片 */}
-        <div className="flex gap-3 items-start pt-3">
-          <Label className="w-[100px] text-xs pt-2">
-            检索设置
+        {/* Retrieval settings */}
+        <div className="flex gap-3 items-start">
+          <Label className="w-[100px] text-xs">
+            {t('knowledgebase.retrievalSettings')}
           </Label>
-          <Card className="flex-1">
-            <CardContent className="space-y-4 pt-6">
+          <Card className="pt-3">
+            <CardContent className="space-y-3">
             <div className="flex gap-3 items-center">
-              <Label className="w-[100px] text-xs">检索策略</Label>
+              <Label className="w-[100px] text-xs">{t('knowledgebase.retrievalStrategy')}</Label>
               <ToggleGroup
                 type="single"
                 value={kb.retrieval_config.retrieval_mode}
@@ -779,30 +782,30 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               >
                 <ToggleGroupItem
                   value="vector"
-                  aria-label="向量检索"
-                  className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                  aria-label={t('knowledgebase.vectorSearch')}
+                  className="!rounded-full px-1.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-7"
                 >
                   <ScanSearch className="w-2 h-2 mr-0.5" />
-                  向量检索
+                  {t('knowledgebase.vectorSearch')}
                 </ToggleGroupItem>
                 {isFulltextSupported && (
                   <ToggleGroupItem
                     value="fulltext"
-                    aria-label="全文检索"
-                    className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    aria-label={t('knowledgebase.fulltextSearch')}
+                    className="!rounded-full px-6 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-7"
                   >
                     <TextSearch />
-                    全文检索
+                    {t('knowledgebase.fulltextSearch')}
                   </ToggleGroupItem>
                 )}
                 {isFulltextSupported && (
                   <ToggleGroupItem
                     value="hybrid"
-                    aria-label="混合检索"
-                    className="!rounded-full px-6 py-3 data-[state=on]:bg-black data-[state=on]:text-white"
+                    aria-label={t('knowledgebase.hybridSearch')}
+                    className="!rounded-full px-6 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-7"
                   >
                     <SearchCode />
-                    混合检索
+                    {t('knowledgebase.hybridSearch')}
                   </ToggleGroupItem>
                 )}
               </ToggleGroup>
@@ -810,7 +813,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               {indexType === 'hybrid' && (
                 <div className="ml-10 flex items-center">
                   <Label htmlFor="embeddingWeight" className="w-[100px] text-xs">
-                    向量检索权重
+                    {t('knowledgebase.vectorWeight')}
                   </Label>
                   <Slider
                     id="embeddingWeight"
@@ -858,12 +861,12 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 }}
               />
               <span className="font-medium text-xs ml-2"> {kb.retrieval_config.top_k} </span>
-              <p className="text-xs text-muted-foreground ml-4">检索返回的最相似结果数量</p>
+              <p className="text-xs text-muted-foreground ml-4">{t('knowledgebase.topKHint')}</p>
             </div>
 
             <div className="flex gap-3 items-center">
               <Label htmlFor="similarityThreshold" className="w-[100px] text-xs">
-                相似度阈值
+                {t('knowledgebase.similarityThreshold')}
               </Label>
               <Slider
                 className="w-60"
@@ -884,30 +887,32 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               <span className="font-medium text-xs ml-2">
                 {kb.retrieval_config.similarity_threshold?.toFixed(2) ?? '0.00'}
               </span>
-              <p className="text-xs text-muted-foreground ml-4">仅返回相似度大于等于该值的结果</p>
+              <p className="text-xs text-muted-foreground ml-4">{t('knowledgebase.similarityHint')}</p>
             </div>
 
-            <div className="flex gap-3 items-center">
-              <Label className="w-[100px] text-xs">开启重排序</Label>
-              <Checkbox
-                id="enable_reranker"
-                checked={kb.retrieval_config.enable_rerank ?? false}
-                onCheckedChange={(checked) => {
-                  setKb((prev) => ({
-                    ...prev,
-                    retrieval_config: {
-                      ...prev.retrieval_config,
-                      enable_rerank: Boolean(checked),
-                    },
-                  }));
-                }}
-                className="h-3.5 w-3.5"
-              />
+            <div className="gap-3 items-center">
+              <div className="flex gap-3">
+                <Label className="w-[100px] text-xs">{t('knowledgebase.enableRerank')}</Label>
+                <Checkbox
+                  id="enable_reranker"
+                  checked={kb.retrieval_config.enable_rerank ?? false}
+                  onCheckedChange={(checked) => {
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        enable_rerank: Boolean(checked),
+                      },
+                    }));
+                  }}
+                  className="h-3.5 w-3.5"
+                />
+              </div>
               {kb.retrieval_config.enable_rerank && (
-                <>
-                  <div className="flex ml-20 items-center">
+                <div className="space-y-3 pt-3">
+                  <div className="flex items-center">
                     <Label htmlFor="rerank_model" className="w-[100px] text-xs">
-                      重排序模型
+                      {t('knowledgebase.rerankModelLabel')}
                       <span className="text-destructive">*</span>
                     </Label>
                     <Select
@@ -925,7 +930,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       }}
                     >
                       <SelectTrigger className="h-6 text-xs w-60">
-                        <SelectValue placeholder="请选择重排序模型" />
+                        <SelectValue placeholder={t('knowledgebase.selectRerankModel')} />
                       </SelectTrigger>
                       <SelectContent className="text-xs">
                         <SelectGroup>
@@ -938,9 +943,9 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex ml-20 items-center">
+                  <div className="flex items-center">
                     <Label htmlFor="rerank_top_k" className="w-[100px] text-xs">
-                      Rerank-Top-K
+                      {t('knowledgebase.rerankTopK')}
                     </Label>
                     <Slider
                       className="w-60"
@@ -963,7 +968,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       {kb.retrieval_config.rerank_top_k ?? 5}
                     </span>
                   </div>
-                </>
+                </div>
               )}
             </div>
             </CardContent>
@@ -994,12 +999,12 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                 onClick={() => onCancel()}
               >
                 <SkipBack className="h-3 w-3" />
-                取消
+                {t('common.cancel')}
               </Button>
               <Button type="button" size="sm" className="w-32 text-xs h-7" onClick={handleSubmit}>
                 {' '}
                 <Save className="h-3 w-3" />
-                创建
+                {t('common.create')}
               </Button>
             </div>
           )}
@@ -1008,7 +1013,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
               <Button type="button" size="sm" className="w-32 text-xs h-7" onClick={handleSubmit}>
                 {' '}
                 <Save className="h-3 w-3" />
-                保存设置
+                {t('knowledgebase.saveSettings')}
               </Button>
             </div>
           )}

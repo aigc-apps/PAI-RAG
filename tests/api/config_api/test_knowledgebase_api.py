@@ -1,4 +1,4 @@
-"""Knowledge Base API Tests based on PAI-RAG API documentation.
+"""Knowledgebase API Tests based on PAI-RAG API documentation.
 Reference: https://help.aliyun.com/zh/pai/use-cases/rag-api-interface-for-v0-4-x
 """
 import os
@@ -12,10 +12,10 @@ from typing import Any
 
 
 class TestKnowledgeBaseAPI:
-    """Test cases for Knowledge Base CRUD operations."""
+    """Test cases for Knowledgebase CRUD operations."""
 
     def test_list_knowledgebases(self, client: Client):
-        """Test GET /v1/config/knowledgebases - List knowledge bases with pagination."""
+        """Test GET /v1/config/knowledgebases - List Knowledgebases with pagination."""
         response = client.get("/v1/config/knowledgebases?page=1&size=10")
         assert response.status_code == 200
         resp_json = response.json()
@@ -25,7 +25,7 @@ class TestKnowledgeBaseAPI:
         assert "total" in resp_json["data"]
 
     def test_create_knowledgebase(self, client: Client, test_embedding_model: Any):
-        """Test POST /v1/config/knowledgebases - Create a new knowledge base."""
+        """Test POST /v1/config/knowledgebases - Create a new Knowledgebase."""
         create_payload = {
             "name": "test_kb_api",
             "description": "这是一个API测试知识库",
@@ -58,14 +58,14 @@ class TestKnowledgeBaseAPI:
         assert kb_data["description"] == "这是一个API测试知识库"
         assert kb_data["embedding_model"] == "text-embedding-v3"
         
-        # Cleanup: Delete the created knowledge base
+        # Cleanup: Delete the created Knowledgebase
         delete_response = client.delete(f"/v1/config/knowledgebases/{kb_id}")
         assert delete_response.status_code == 200
         logger.info(f"Deleted knowledgebase test_kb_api successfully.")
 
     def test_get_knowledgebase_by_id(self, client: Client):
-        """Test GET /v1/config/knowledgebases/{kb_id} - Get knowledge base details."""
-        # First create a knowledge base
+        """Test GET /v1/config/knowledgebases/{kb_id} - Get Knowledgebase details."""
+        # First create a Knowledgebase
         create_payload = {
             "name": "test_kb_get",
             "description": "测试获取知识库详情",
@@ -79,7 +79,7 @@ class TestKnowledgeBaseAPI:
         kb_id = create_json["data"]["id"]
         
         try:
-            # Get the knowledge base
+            # Get the Knowledgebase
             get_response = client.get(f"/v1/config/knowledgebases/{kb_id}")
             assert get_response.status_code == 200
             resp_json = get_response.json()
@@ -92,8 +92,8 @@ class TestKnowledgeBaseAPI:
             logger.info(f"Deleted knowledgebase test_kb_get successfully.")
     
     def test_update_knowledgebase(self, client: Client):
-        """Test PUT /v1/config/knowledgebases/{kb_id} - Update knowledge base."""
-        # First create a knowledge base
+        """Test PUT /v1/config/knowledgebases/{kb_id} - Update Knowledgebase."""
+        # First create a Knowledgebase
         create_payload = {
             "name": "test_kb_update",
             "description": "原始描述",
@@ -107,7 +107,7 @@ class TestKnowledgeBaseAPI:
         kb_id = create_json["data"]["id"]
         
         try:
-            # Update the knowledge base
+            # Update the Knowledgebase
             update_payload = {
                 "name": "test_kb_update",
                 "description": "更新后的描述",
@@ -129,8 +129,8 @@ class TestKnowledgeBaseAPI:
             client.delete(f"/v1/config/knowledgebases/{kb_id}")
 
     def test_delete_knowledgebase(self, client: Client):
-        """Test DELETE /v1/config/knowledgebases/{kb_id} - Delete knowledge base."""
-        # First create a knowledge base
+        """Test DELETE /v1/config/knowledgebases/{kb_id} - Delete Knowledgebase."""
+        # First create a Knowledgebase
         create_payload = {
             "name": "test_kb_delete",
             "description": "测试删除知识库",
@@ -143,7 +143,7 @@ class TestKnowledgeBaseAPI:
         assert create_json.get("data") is not None, f"No data in response: {create_json}"
         kb_id = create_json["data"]["id"]
         
-        # Delete the knowledge base
+        # Delete the Knowledgebase
         delete_response = client.delete(f"/v1/config/knowledgebases/{kb_id}")
         assert delete_response.status_code == 200
         resp_json = delete_response.json()
@@ -154,7 +154,7 @@ class TestKnowledgeBaseAPI:
         assert get_response.status_code in [400, 404]
 
     def test_create_knowledgebase_duplicate_name(self, client: Client):
-        """Test creating knowledge base with duplicate name should fail."""
+        """Test creating Knowledgebase with duplicate name should fail."""
         create_payload = {
             "name": "test_kb_duplicate",
             "description": "测试重复名称知识库",
@@ -162,7 +162,7 @@ class TestKnowledgeBaseAPI:
             "embedding_provider_name": "openai_like",
         }
         
-        # Create first knowledge base
+        # Create first Knowledgebase
         response1 = client.post("/v1/config/knowledgebases", json=create_payload)
         assert response1.status_code == 200, f"First create failed: {response1.json()}"
         resp1_json = response1.json()
@@ -178,7 +178,7 @@ class TestKnowledgeBaseAPI:
             client.delete(f"/v1/config/knowledgebases/{kb_id}")
 
     def test_get_nonexistent_knowledgebase(self, client: Client):
-        """Test getting a non-existent knowledge base should return error."""
+        """Test getting a non-existent Knowledgebase should return error."""
         response = client.get("/v1/config/knowledgebases/nonexistent_kb_id")
         # API may return 400 or 404 for non-existent resources
         assert response.status_code in [400, 404]

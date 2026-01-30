@@ -85,6 +85,7 @@ import { PlusIcon, FilterIcon } from 'lucide-react';
 import * as Toast from '@radix-ui/react-toast';
 import { KbConfig, KbConfigCard, MetadataConfig } from '../kbconfig';
 import { formatFileSize, formatBeijingTime } from '../utils/utils';
+import { useI18n } from '@/app/providers/i18n';
 import { FileStatusFilter } from '@/components/customized/file-status-filter';
 import {
   Select,
@@ -173,8 +174,10 @@ interface MetadataCondition {
 export default function KnowledgeBaseDetailPage(
   { params } : { params: Promise<{ kbId: string }> }
 ) {
+  const { t } = useI18n();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [knowledgebase, setKnowledgeBase] = useState<KbConfig>(); // 知识库列表
+  const [knowledgebase, setKnowledgeBase] = useState<KbConfig>();
   const [kbfiles, setKbFiles] = useState(Array<KnowledgeBaseFile>); // 知识库列表
   const [page, setPage] = useState(1);
   const pageRef = useRef(page);
@@ -201,7 +204,7 @@ export default function KnowledgeBaseDetailPage(
   const [searchError, setSearchError] = useState<string | null>(null); // 搜索错误信息
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({}); // 展开的卡片索引
   const [logicalOperator, setLogicalOperator] = useState<string>('and');
-  const [loadingMsg, setLoadingMsg] = useState('获取知识库配置中...');
+  const [loadingMsg, setLoadingMsg] = useState(t('knowledgebase.loadingKbConfig'));
   const [metadataConditions, setMetadataConditions] = useState<
     MetadataCondition[]
   >([]);
@@ -371,7 +374,7 @@ export default function KnowledgeBaseDetailPage(
       // 检查响应中的 status_code 或 code 字段
       const statusCode = search_json.status_code || search_json.code;
       if (statusCode && statusCode !== 200) {
-        const errorMessage = search_json.message || search_json.error || '搜索失败';
+        const errorMessage = search_json.message || search_json.error || t('knowledgebase.searchFailed');
         setSearchError(`错误 ${statusCode}: ${errorMessage}`);
         setSearchRecords([]);
         setSearching(false);
@@ -391,7 +394,7 @@ export default function KnowledgeBaseDetailPage(
       setSearchRecords(records);
       setSearchError(null);
     } catch (err: any) {
-      const errorMessage = err.message || '搜索知识库失败';
+      const errorMessage = err.message || t('knowledgebase.searchKbFailed');
       setSearchError(errorMessage);
       setSearchRecords([]);
     } finally {
@@ -429,7 +432,7 @@ export default function KnowledgeBaseDetailPage(
 
     try {
       const files_res = await tenantFetch(url, { signal: controller.signal, });
-      if (!files_res.ok) throw new Error('获取知识库文件列表失败');
+      if (!files_res.ok) throw new Error(t('knowledgebase.fetchFilesFailed'));
 
       const file_json_data = await files_res.json();
       console.log('获取知识库文件reponse:', file_json_data);
@@ -467,7 +470,7 @@ export default function KnowledgeBaseDetailPage(
   const fetchMetadataConfigs = useCallback(async () => {
     try {
       const metaRes = await tenantFetch(`/api/config/knowledgebases/${kbId}/metadata`);
-      if (!metaRes.ok) throw new Error('获取知识库元数据失败');
+      if (!metaRes.ok) throw new Error(t('knowledgebase.fetchMetaFailed'));
       const metadata_json = await metaRes.json();
       const metadata_data = metadata_json.data.items as MetadataConfig[];
       console.log('metadata_data', metadata_data);
@@ -486,7 +489,7 @@ export default function KnowledgeBaseDetailPage(
 
   const fetchKbConfigs = useCallback(async () => {
     try {
-      setLoadingMsg('获取知识库配置中...');
+      setLoadingMsg(t('knowledgebase.loadingKbConfig'));
       const [kbRes, metaRes, rerankerRes, vectordbRes, visionRes] = await Promise.all([
         tenantFetch(`/api/config/knowledgebases/${kbId}`),
         tenantFetch(`/api/config/knowledgebases/${kbId}/metadata`),
@@ -497,8 +500,8 @@ export default function KnowledgeBaseDetailPage(
 
       if (!kbRes.ok) {
         const errorData = await kbRes.json();
-        setLoadingMsg(errorData.message || `获取知识库配置失败`);
-        throw new Error(errorData.message || `获取知识库配置失败`);
+        setLoadingMsg(errorData.message || t('knowledgebase.fetchKbConfigFailed'));
+        throw new Error(errorData.message || t('knowledgebase.fetchKbConfigFailed'));
       }
       const json_data = await kbRes.json();
       const kb_data = json_data.data;
@@ -566,7 +569,7 @@ export default function KnowledgeBaseDetailPage(
       }
 
       // 处理元数据
-      if (!metaRes.ok) throw new Error('获取知识库元数据失败');
+      if (!metaRes.ok) throw new Error(t('knowledgebase.fetchMetaFailed'));
       const metadata_json = await metaRes.json();
       const metadata_data = metadata_json.data.items as MetadataConfig[];
       const valueTypes = Object.fromEntries(
@@ -609,7 +612,7 @@ export default function KnowledgeBaseDetailPage(
   }
 
   const handleSaveSuccess = async (kb: KbConfig) => {
-    toast.success("知识库配置保存成功");
+    toast.success(t('knowledgebase.saveKbSuccess'));
     // 刷新知识库配置信息
     await fetchKbConfigs();
   };
@@ -658,10 +661,10 @@ export default function KnowledgeBaseDetailPage(
         });
       }
 
-      toast.success("检索设置已保存至知识库配置");
+      toast.success(t('knowledgebase.saveRetrievalSuccess'));
     } catch (err: any) {
       console.error('保存检索设置失败:', err);
-      toast.error(err.message || '保存检索设置失败');
+      toast.error(err.message || t('knowledgebase.saveRetrievalFailed'));
     }
   };
 
@@ -744,7 +747,7 @@ export default function KnowledgeBaseDetailPage(
         const errorData = await res.json();
         throw new Error(errorData.message || `重新解析失败`);
       }
-      toast.success("文件入队成功。");
+      toast.success(t('knowledgebase.fileEnqueued'));
       setReprocessChunkConfigDialogOpen(false);
       setPendingReprocessFileId(null);
       setReprocessChunkConfig(null);
@@ -766,7 +769,7 @@ export default function KnowledgeBaseDetailPage(
         },
       );
       if (!res.ok) throw new Error(`删除 ${file_id} 失败`);
-      toast.success("文件删除成功。");
+      toast.success(t('knowledgebase.fileDeleted'));
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -777,7 +780,7 @@ export default function KnowledgeBaseDetailPage(
 
   const handleBatchDeleteFiles = async () => {
     if (selectedFiles.size === 0) {
-      toast.error("请至少选择一个文件");
+      toast.error(t('knowledgebase.selectAtLeastOne'));
       setShowBatchDeleteDialog(false);
       return;
     }
@@ -803,10 +806,10 @@ export default function KnowledgeBaseDetailPage(
         throw new Error(errorData.message || `批量删除失败`);
       }
       const result = await res.json();
-      toast.success(result.message || `成功删除 ${selectedFiles.size} 个文件`);
+      toast.success(result.message || t('knowledgebase.batchDeleteSuccess', { count: selectedFiles.size }));
       setSelectedFiles(new Set()); // 清空选择
     } catch (error: any) {
-      toast.error(error.message || "批量删除失败");
+      toast.error(error.message || t('knowledgebase.batchDeleteFailed'));
     } finally {
       setDeleting(false);
       fetchKbFiles();
@@ -815,7 +818,7 @@ export default function KnowledgeBaseDetailPage(
 
   const handleBatchReprocessFiles = async () => {
     if (selectedFiles.size === 0) {
-      toast.error("请至少选择一个文件");
+      toast.error(t('knowledgebase.selectAtLeastOne'));
       setShowBatchReprocessDialog(false);
       return;
     }
@@ -906,13 +909,13 @@ export default function KnowledgeBaseDetailPage(
         throw new Error(errorData.message || `批量重新解析失败`);
       }
       const result = await res.json();
-      toast.success(result.message || `成功将 ${pendingReprocessFileIds.length} 个文件加入重新处理队列`);
+      toast.success(result.message || t('knowledgebase.batchReparseSuccess', { count: pendingReprocessFileIds.length }));
       setSelectedFiles(new Set()); // 清空选择
       setReprocessChunkConfigDialogOpen(false);
       setPendingReprocessFileIds([]);
       setReprocessChunkConfig(null);
     } catch (error: any) {
-      toast.error(error.message || "批量重新解析失败");
+      toast.error(error.message || t('knowledgebase.batchReparseFailed'));
     } finally {
       setReprocessing(false);
       fetchKbFiles();
@@ -948,7 +951,7 @@ export default function KnowledgeBaseDetailPage(
       const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${fileId}`,
       );
-      if (!res.ok) throw new Error('获取知识库文件失败');
+      if (!res.ok) throw new Error(t('knowledgebase.fetchFilesFailed'));
       const json_data = await res.json();
       const kb_file_data = json_data.data;
 
@@ -967,7 +970,7 @@ export default function KnowledgeBaseDetailPage(
 
       setPreviewFile(kb_file_data);
     } catch (err: any) {
-      setPreviewError(err?.message || '加载失败');
+      setPreviewError(err?.message || t('knowledgebase.loadError'));
     } finally {
       setPreviewLoading(false);
     }
@@ -989,7 +992,7 @@ export default function KnowledgeBaseDetailPage(
           }),
         },
       );
-      if (!res.ok) throw new Error('源链接保存失败');
+      if (!res.ok) throw new Error(t('knowledgebase.sourceLinkSaveFailed'));
 
       const fileObj = kbfiles.filter((file) => file.id === currentFileId)[0];
       if (fileObj) {
@@ -997,7 +1000,7 @@ export default function KnowledgeBaseDetailPage(
       }
       setFileSourceOpen(false);
       setCurrentFileId('');
-      toast.success("源链接保存成功");
+      toast.success(t('knowledgebase.sourceLinkSaveSuccess'));
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -1008,7 +1011,7 @@ export default function KnowledgeBaseDetailPage(
     const emptyKeys = Object.keys(editingMetadata).filter(
       (key) => editingMetadata[key] === '',
     );
-    if (emptyKeys.length > 1) throw new Error('有多于一个新建项。');
+    if (emptyKeys.length > 1) throw new Error(t('knowledgebase.multipleNewItemsError'));
     else if (emptyKeys.length === 0) return;
     else {
       if (metadataValueTypes[metadata_key] === "string") {
@@ -1055,7 +1058,7 @@ export default function KnowledgeBaseDetailPage(
   const handAddFileMetadata = () => {
     if (availableMetadataKeys.length === 0) {
       setMetadataEditError(
-        '没有可用的自定义的元数据配置，你可以先去知识库设置页面添加。',
+        t('knowledgebase.noCustomMetadata'),
       );
       return;
     }
@@ -1116,7 +1119,7 @@ export default function KnowledgeBaseDetailPage(
       setEditRoleFileId(file_id);
       const roleRes = await tenantFetch(`/api/config/roles?size=100`);
       if (!roleRes.ok) {
-        alert('查询角色失败');
+        toast.error(t('knowledgebase.fetchRoleFailed'));
         return;
       }
       const all_roles = (await roleRes.json()).data.items;
@@ -1127,7 +1130,7 @@ export default function KnowledgeBaseDetailPage(
         `/api/config/roles/permissions?name=${permission_name}&size=100`,
       );
       if (!res.ok) {
-        alert('查询文件permission失败');
+        toast.error(t('knowledgebase.fetchPermissionFailed'));
         return;
       }
 
@@ -1164,13 +1167,13 @@ export default function KnowledgeBaseDetailPage(
         },
       );
       if (!roleRes.ok) {
-        alert('更新文件角色失败');
+        toast.error(t('knowledgebase.updateRoleFailed'));
         return;
       }
       console.log('更新文件角色成功：', await roleRes.json());
       setRoleDialogOpen(false);
       setEditRoleFileId('');
-      toast.success("权限设置保存成功");
+      toast.success(t('knowledgebase.roleSaveSuccess'));
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -1179,7 +1182,7 @@ export default function KnowledgeBaseDetailPage(
   const handleFileUpload = async (files: FileList | null) => {
     console.log('##handleFileUpload', files);
     if (!files) {
-      alert('文件列表为空！');
+      toast.error(t('knowledgebase.fileListEmpty'));
       return;
     }
 
@@ -1192,7 +1195,7 @@ export default function KnowledgeBaseDetailPage(
     });
 
     if (validFiles.length === 0) {
-      alert("请选择有效的文件（如 PDF 或 Word，且小于 1GB）");
+      toast.error(t('knowledgebase.selectValidFiles'));
       return;
     }
 
@@ -1228,20 +1231,20 @@ export default function KnowledgeBaseDetailPage(
               const result = JSON.parse(xhr.responseText);
               resolve(result);
             } catch (e) {
-              reject(new Error('解析响应失败'));
+              reject(new Error(t('knowledgebase.parseResponseFailed')));
             }
           } else {
             try {
               const result = JSON.parse(xhr.responseText);
-              reject(new Error(result.message || '上传失败'));
+              reject(new Error(result.message || t('knowledgebase.uploadFailed')));
             } catch (e) {
-              reject(new Error('上传失败'));
+              reject(new Error(t('knowledgebase.uploadFailed')));
             }
           }
         };
 
         xhr.onerror = () => {
-          reject(new Error('网络错误'));
+          reject(new Error(t('knowledgebase.networkError')));
         };
 
         // 添加 auto_parse=false 参数，只上传不解析
@@ -1320,7 +1323,7 @@ export default function KnowledgeBaseDetailPage(
       }
       setUploadStep('uploaded');
       setUploadProgress(100);
-      toast.success("文件上传成功，请点击开始解析按钮启动解析任务。");
+      toast.success(t('knowledgebase.uploadSuccessToast'));
       
       // 清空文件选择框
       if (fileInputRef.current) {
@@ -1329,7 +1332,7 @@ export default function KnowledgeBaseDetailPage(
       fetchKbFiles();
     } catch (error: any) {
       console.error('上传失败:', error.message);
-      toast.error("上传失败: " + error.message);
+      toast.error(t('knowledgebase.uploadFailed') + ': ' + error.message);
       setUploadStep('idle');
       setUploadProgress(0);
       setUploading(false);
@@ -1379,7 +1382,7 @@ export default function KnowledgeBaseDetailPage(
 
   const handleStartParse = async () => {
     if (uploadedFiles.length === 0) {
-      toast.error("没有待解析的文件");
+      toast.error(t('knowledgebase.noFileToParse'));
       return;
     }
 
@@ -1418,7 +1421,7 @@ export default function KnowledgeBaseDetailPage(
       }
 
       console.log('解析任务提交成功:', result);
-      toast.success("解析任务已提交，请稍候刷新查看进度。");
+      toast.success(t('knowledgebase.parseSubmitSuccess'));
       
       // 重置状态
       setUploadedFiles([]);
@@ -1430,7 +1433,7 @@ export default function KnowledgeBaseDetailPage(
       fetchKbFiles();
     } catch (error: any) {
       console.error('提交解析任务失败:', error.message);
-      toast.error("提交解析任务失败: " + error.message);
+      toast.error(t('knowledgebase.parseSubmitFailed') + ': ' + error.message);
       setUploadStep('uploaded'); // 回到上传完成状态，可以重试
     }
   };
@@ -1478,7 +1481,7 @@ export default function KnowledgeBaseDetailPage(
 
   const validateMetadataValue = (value: any, valueType: string, name: string): { valid: boolean; error?: string; convertedValue?: any } => {
     if (value === '' || value === null || value === undefined) {
-      return { valid: false, error: `元数据 '${name}' 的值不能为空` };
+      return { valid: false, error: t('knowledgebase.metadataValueEmpty', { name }) };
     }
 
     if (valueType === 'string') {
@@ -1486,7 +1489,7 @@ export default function KnowledgeBaseDetailPage(
     } else if (valueType === 'number') {
       const numValue = typeof value === 'number' ? value : parseFloat(String(value));
       if (isNaN(numValue)) {
-        return { valid: false, error: `元数据 '${name}' 的值 '${value}' 不是有效的数字` };
+        return { valid: false, error: t('knowledgebase.metadataValueInvalidNumber', { name, value: String(value) }) };
       }
       return { valid: true, convertedValue: numValue };
     } else if (valueType === 'datetime') {
@@ -1505,13 +1508,13 @@ export default function KnowledgeBaseDetailPage(
           if (!isNaN(date.getTime())) {
             timestamp = date.getTime(); // 转换为秒级时间戳
           } else {
-            return { valid: false, error: `元数据 '${name}' 的值 '${value}' 不是有效的时间戳或日期` };
+            return { valid: false, error: t('knowledgebase.metadataValueInvalidDate', { name, value: String(value) }) };
           }
         }
       } else if (value instanceof Date) {
         timestamp = value.getTime(); // 转换为秒级时间戳
       } else {
-        return { valid: false, error: `元数据 '${name}' 的值类型不正确` };
+        return { valid: false, error: t('knowledgebase.metadataValueTypeError', { name }) };
       }
       return { valid: true, convertedValue: timestamp };
     }
@@ -1526,7 +1529,7 @@ export default function KnowledgeBaseDetailPage(
       (key) => editingMetadata[key] === '',
     );
     if (hasEmptyEntry) {
-      setMetadataEditError('无法保存空的元数据名称。');
+      setMetadataEditError(t('knowledgebase.metadataEmptyName'));
       return;
     }
 
@@ -1537,7 +1540,7 @@ export default function KnowledgeBaseDetailPage(
         const valueType = metadataValueTypes[name] || 'string';
         const validation = validateMetadataValue(editingMetadata[name], valueType, name);
         if (!validation.valid) {
-          setMetadataEditError(validation.error || '元数据值验证失败');
+          setMetadataEditError(validation.error || t('knowledgebase.metadataValidationFailed'));
           return;
         }
         metadata_entries.push({
@@ -1558,7 +1561,7 @@ export default function KnowledgeBaseDetailPage(
           },
         },
       );
-      if (!res.ok) throw Error('保存metadata失败');
+      if (!res.ok) throw Error(t('knowledgebase.metadataSaveFailed'));
       const file_result = (await res.json()).data as KnowledgeBaseFile;
       const updated_kbfiles = kbfiles;
       const target_file_index = updated_kbfiles.findIndex(
@@ -1572,10 +1575,10 @@ export default function KnowledgeBaseDetailPage(
       setIsEditingMetadata(false);
       setMetadataDialogOpen(false);
       setCurrentMetadataFileId('');
-      toast.success("元数据保存成功");
+      toast.success(t('knowledgebase.metadataSaveSuccess'));
     } catch (error: any) {
       console.log('保存metadata失败', error);
-      toast.error(error.message || '保存metadata失败');
+      toast.error(error.message || t('knowledgebase.metadataSaveFailed'));
     } finally {
       setMetadataEditError('');
     }
@@ -1583,12 +1586,12 @@ export default function KnowledgeBaseDetailPage(
 
   const handleAddMetadataConfig = async () => {
     if (!newMetadataName) {
-      setMetadataError('必须填入元数据名称。');
+      setMetadataError(t('knowledgebase.metadataRequired'));
       return;
     }
 
     if (metadataConfigs.some((config) => config.name === newMetadataName)) {
-      setMetadataError(`元数据名称 '${newMetadataName}' 已经存在。`);
+      setMetadataError(t('knowledgebase.metadataNameExists', { name: newMetadataName }));
       return;
     }
 
@@ -1612,7 +1615,7 @@ export default function KnowledgeBaseDetailPage(
       setNewMetadataValueType('string');
       setNewMetadataDesc('');
       setMetadataEditDialogOpen(false);
-      toast.success('添加元数据成功');
+      toast.success(t('knowledgebase.addMetadataSuccess'));
     } catch (err: any) {
       console.log('保存知识库失败', err.message);
       setMetadataError(err.message);
@@ -1629,10 +1632,10 @@ export default function KnowledgeBaseDetailPage(
 
       // 重新获取metadata列表以获取最新的count信息
       await fetchMetadataConfigs();
-      toast.success('删除元数据成功');
+      toast.success(t('knowledgebase.deleteMetadataSuccess'));
     } catch (err: any) {
       console.log('删除元数据失败。', err.message);
-      toast.error(err.message || '删除元数据失败');
+      toast.error(err.message || t('knowledgebase.deleteMetadataFailed'));
     }
   };
 
@@ -1648,12 +1651,12 @@ export default function KnowledgeBaseDetailPage(
   const handleUpdateMetadataConfig = async () => {
     if (!editingMetadataConfig) return;
     if (!newMetadataName) {
-      setMetadataError('必须填入元数据名称。');
+      setMetadataError(t('knowledgebase.metadataRequired'));
       return;
     }
 
     if (metadataConfigs.some((config) => config.name === newMetadataName && config.id !== editingMetadataConfig.id)) {
-      setMetadataError(`元数据名称 '${newMetadataName}' 已经存在。`);
+      setMetadataError(t('knowledgebase.metadataNameExists', { name: newMetadataName }));
       return;
     }
 
@@ -1677,7 +1680,7 @@ export default function KnowledgeBaseDetailPage(
       setMetadataError('');
       setNewMetadataValueType('string');
       setNewMetadataDesc('');
-      toast.success('更新元数据成功');
+      toast.success(t('knowledgebase.updateMetadataSuccess'));
     } catch (err: any) {
       console.log('更新元数据失败', err.message);
       setMetadataError(err.message);
@@ -1759,7 +1762,7 @@ export default function KnowledgeBaseDetailPage(
                   className="px-0"
                   onClick={() => router.push('/knowledgebases')}
                 >
-                  知识库
+                  {t('knowledgebase.title')}
                 </Button>
               </BreadcrumbLink>
             </BreadcrumbItem>
@@ -1784,13 +1787,13 @@ export default function KnowledgeBaseDetailPage(
         <Tabs defaultValue="details">
           <TabsList className="py-0 bg-muted rounded-lg flex-none">
             <TabsTrigger value="details" className="py-1 px-2">
-              <span className="text-xs">文件管理</span>
+              <span className="text-xs">{t('knowledgebase.fileManagement')}</span>
             </TabsTrigger>
             <TabsTrigger value="settings" className="py-1 px-2">
-              <span className="text-xs">知识库设置</span>
+              <span className="text-xs">{t('knowledgebase.kbSettings')}</span>
             </TabsTrigger>
             <TabsTrigger value="retrieval_test" className="py-1 px-2">
-              <span className="text-xs">检索测试</span>
+              <span className="text-xs">{t('knowledgebase.retrievalTest')}</span>
             </TabsTrigger>
           </TabsList>
           <TabsContent value="details" className="py-2">
@@ -1802,7 +1805,7 @@ export default function KnowledgeBaseDetailPage(
                     value={fileQuery}
                     onChange={(e)=>{setFileQuery(e.target.value)}}
                     type="search_files"
-                    placeholder="搜索..."
+                    placeholder={t('knowledgebase.searchPlaceholderShort')}
                     className="h-6 text-xs w-40"/>
 
                   {selectedFiles.size > 0 && (
@@ -1816,12 +1819,12 @@ export default function KnowledgeBaseDetailPage(
                         {reprocessing ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            处理中...
+                            {t('knowledgebase.processing')}
                           </>
                         ) : (
                           <>
                             <CirclePlayIcon className="mr-2 h-4 w-4" />
-                            批量重新解析 ({selectedFiles.size})
+                            {t('knowledgebase.batchReparse')} ({selectedFiles.size})
                           </>
                         )}
                       </Button>
@@ -1834,29 +1837,29 @@ export default function KnowledgeBaseDetailPage(
                         {deleting ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            删除中...
+                            {t('knowledgebase.deleting')}
                           </>
                         ) : (
                           <>
                             <Trash2Icon className="mr-2 h-4 w-4" />
-                            批量删除 ({selectedFiles.size})
+                            {t('knowledgebase.batchDelete')} ({selectedFiles.size})
                           </>
                         )}
                       </Button>
                       <AlertDialog open={showBatchReprocessDialog} onOpenChange={setShowBatchReprocessDialog}>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>确认批量重新解析？</AlertDialogTitle>
+                            <AlertDialogTitle>{t('knowledgebase.confirmBatchReparse')}</AlertDialogTitle>
                             <AlertDialogDescription>
-                              您即将重新解析 {selectedFiles.size} 个文件，这些文件将被重新处理并更新。请确认是否继续？
+                              {t('knowledgebase.confirmBatchReparseDesc', { count: selectedFiles.size })}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>取消</AlertDialogCancel>
+                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={handleBatchReprocessFiles}
                             >
-                              确认重新解析
+                              {t('knowledgebase.confirmReparse')}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -1864,18 +1867,18 @@ export default function KnowledgeBaseDetailPage(
                       <AlertDialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>确认批量删除？</AlertDialogTitle>
+                            <AlertDialogTitle>{t('knowledgebase.confirmBatchDelete')}</AlertDialogTitle>
                             <AlertDialogDescription>
-                              您即将删除 {selectedFiles.size} 个文件，此操作无法撤销。请仔细核对之后再确认。
+                              {t('knowledgebase.confirmBatchDeleteDesc', { count: selectedFiles.size })}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>取消</AlertDialogCancel>
+                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={handleBatchDeleteFiles}
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
-                              确认删除
+                              {t('knowledgebase.confirmDelete')}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -1935,17 +1938,17 @@ export default function KnowledgeBaseDetailPage(
                         disabled={uploading}
                         onClick={() => setUploadDialogOpen(true)}
                       >
-                        <Upload className="h-3 w-3" /> 上传文件
+                        <Upload className="h-3 w-3" /> {t('knowledgebase.uploadFile')}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>上传文件</DialogTitle>
+                        <DialogTitle>{t('knowledgebase.uploadFile')}</DialogTitle>
                         <DialogDescription>
-                          {uploadStep === 'idle' && '选择文件进行上传'}
-                          {uploadStep === 'uploading' && '正在上传文件...'}
-                          {uploadStep === 'uploaded' && '上传完成，点击开始解析按钮启动解析任务'}
-                          {uploadStep === 'parsing' && '正在提交解析任务...'}
+                          {uploadStep === 'idle' && t('knowledgebase.selectFileToUpload')}
+                          {uploadStep === 'uploading' && t('knowledgebase.uploadingFile')}
+                          {uploadStep === 'uploaded' && t('knowledgebase.uploadedClickParse')}
+                          {uploadStep === 'parsing' && t('knowledgebase.submittingParse')}
                         </DialogDescription>
                       </DialogHeader>
                       
@@ -1988,10 +1991,10 @@ export default function KnowledgeBaseDetailPage(
                           >
                             <Upload className={`h-12 w-12 mb-4 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
                             <p className="text-sm text-muted-foreground text-center">
-                              支持的文件类型：txt, md, pdf, docx, pptx, xlsx, xls, html, jsonl, jpg, jpeg, png
+                              {t('knowledgebase.supportedFileTypes')}
                             </p>
                             <p className={`text-xs mt-2 ${isDragging ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                              {isDragging ? '释放文件以上传' : '点击选择文件或拖拽文件到此处'}
+                              {isDragging ? t('knowledgebase.releaseToUpload') : t('knowledgebase.dropFileHere')}
                             </p>
                           </div>
                         </>
@@ -2001,7 +2004,7 @@ export default function KnowledgeBaseDetailPage(
                       {uploadStep === 'uploading' && (
                         <div className="flex flex-col items-center justify-center py-8 px-4">
                           <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
-                          <p className="text-sm text-muted-foreground mb-4">正在上传文件...</p>
+                          <p className="text-sm text-muted-foreground mb-4">{t('knowledgebase.uploadingFile')}</p>
                           <div className="w-full bg-muted rounded-full h-3">
                             <div 
                               className="bg-primary h-3 rounded-full transition-all duration-300"
@@ -2017,10 +2020,10 @@ export default function KnowledgeBaseDetailPage(
                         <div className="flex flex-col py-4 px-2">
                           <div className="flex items-center gap-2 mb-4">
                             <CheckCircle className="h-6 w-6 text-green-500" />
-                            <span className="text-sm font-medium">文件上传成功</span>
+                            <span className="text-sm font-medium">{t('knowledgebase.fileUploadSuccess')}</span>
                           </div>
                           <div className="border rounded-lg p-3 mb-4 max-h-40 overflow-y-auto">
-                            <p className="text-xs text-muted-foreground mb-2">已上传的文件：</p>
+                            <p className="text-xs text-muted-foreground mb-2">{t('knowledgebase.uploadedFilesList')}</p>
                             {uploadedFiles.map((file, index) => (
                               <div key={file.id} className="text-sm py-1 border-b last:border-b-0">
                                 {index + 1}. {file.file_name}
@@ -2031,11 +2034,11 @@ export default function KnowledgeBaseDetailPage(
                           {/* Chunk Config 配置 */}
                           {uploadChunkConfig && (
                             <div className="mb-4 border-t pt-4">
-                              <p className="text-sm font-medium mb-3">切片配置</p>
+                              <p className="text-sm font-medium mb-3">{t('knowledgebase.chunkConfig')}</p>
                               <div className="space-y-3">
                                 <div className="flex gap-3 items-center">
                                   <Label htmlFor="upload-parser-type" className="w-[80px] text-xs">
-                                    切片类型
+                                    {t('knowledgebase.parserType')}
                                   </Label>
                                   <Select
                                     value={uploadChunkConfig.parser_type || 'structure'}
@@ -2079,35 +2082,35 @@ export default function KnowledgeBaseDetailPage(
                                     }}
                                   >
                                     <SelectTrigger className="w-[200px] h-7 text-xs">
-                                      <SelectValue placeholder="请选择切片类型" />
+                                      <SelectValue placeholder={t('knowledgebase.selectParserType')} />
                                     </SelectTrigger>
                                     <SelectContent className="text-xs">
                                       <SelectGroup>
                                         <SelectItem value="structure" className="text-xs h-5">
-                                          结构化(structure)
+                                          {t('knowledgebase.structure')}
                                         </SelectItem>
                                         <SelectItem value="token" className="text-xs h-5">
-                                          按token
+                                          {t('knowledgebase.token')}
                                         </SelectItem>
                                         <SelectItem value="table" className="text-xs h-5">
-                                          表格(table)
+                                          {t('knowledgebase.table')}
                                         </SelectItem>
                                         <SelectItem value="paragraph" className="text-xs h-5">
-                                          段落(paragraph)
+                                          {t('knowledgebase.paragraph')}
                                         </SelectItem>
                                       </SelectGroup>
                                     </SelectContent>
                                   </Select>
                                 </div>
 
-                                {/* Table Config - 只在 parser_type === 'table' 时显示 */}
+                                {/* Table Config */}
                                 {uploadChunkConfig.parser_type === 'table' && (
                                   <div className="space-y-3">
                                     {/* 第一行：最大表头行index 和 格式化为Json */}
                                     <div className="flex gap-3 items-center">
                                       <div className="flex gap-3 items-center flex-1">
                                         <Label htmlFor="upload-header-index-max" className="w-[80px] text-xs">
-                                          最大表头行index
+                                          {t('knowledgebase.maxHeaderIndex')}
                                         </Label>
                                         <Input
                                           type="number"
@@ -2124,12 +2127,12 @@ export default function KnowledgeBaseDetailPage(
                                             } : null);
                                           }}
                                           min="0"
-                                          placeholder="留空表示不使用标题行"
+                                          placeholder={t('knowledgebase.emptyHeaderRow')}
                                         />
                                       </div>
                                       <div className="flex gap-3 items-center flex-1">
                                         <Label htmlFor="upload-format-json" className="w-[80px] text-xs">
-                                          格式化为Json
+                                          {t('knowledgebase.formatAsJson')}
                                         </Label>
                                         <Checkbox
                                           id="upload-format-json"
@@ -2150,7 +2153,7 @@ export default function KnowledgeBaseDetailPage(
                                     <div className="flex gap-3 items-center">
                                       <div className="flex gap-3 items-center flex-1">
                                         <Label htmlFor="upload-concat-rows" className="w-[80px] text-xs">
-                                          合并行
+                                          {t('knowledgebase.mergeRows')}
                                         </Label>
                                         <Checkbox
                                           id="upload-concat-rows"
@@ -2168,7 +2171,7 @@ export default function KnowledgeBaseDetailPage(
                                       </div>
                                       <div className="flex gap-3 items-center flex-1">
                                         <Label htmlFor="upload-row-joiner" className="w-[80px] text-xs">
-                                          行分隔符
+                                          {t('knowledgebase.rowJoiner')}
                                         </Label>
                                         <Input
                                           type="text"
@@ -2190,7 +2193,7 @@ export default function KnowledgeBaseDetailPage(
                                     {/* 第三行：切片大小 */}
                                     <div className="flex gap-3 items-center">
                                       <Label htmlFor="upload-table-chunk-size" className="w-[80px] text-xs">
-                                        切片大小
+                                        {t('knowledgebase.chunkSize')}
                                       </Label>
                                       <Input
                                         type="text"
@@ -2210,7 +2213,7 @@ export default function KnowledgeBaseDetailPage(
                                           }
                                         }}
                                       />
-                                      <p className="text-xs text-muted-foreground ml-2">推荐值: 1000</p>
+                                      <p className="text-xs text-muted-foreground ml-2">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
                                     </div>
                                   </div>
                                 )}
@@ -2220,7 +2223,7 @@ export default function KnowledgeBaseDetailPage(
                                   <div className="space-y-3">
                                     <div className="flex gap-3 items-center">
                                       <Label htmlFor="upload-separator" className="w-[80px] text-xs">
-                                        分隔符
+                                        {t('knowledgebase.separator')}
                                       </Label>
                                       <Input
                                         type="text"
@@ -2237,7 +2240,7 @@ export default function KnowledgeBaseDetailPage(
                                     </div>
                                     <div className="flex gap-3 items-center">
                                       <Label htmlFor="upload-chunk-size" className="w-[80px] text-xs">
-                                        切片大小
+                                        {t('knowledgebase.chunkSize')}
                                       </Label>
                                       <Input
                                         type="text"
@@ -2258,7 +2261,7 @@ export default function KnowledgeBaseDetailPage(
                                         }}
                                       />
                                       <Label htmlFor="upload-chunk-overlap" className="w-[80px] text-xs ml-2">
-                                        切片重叠
+                                        {t('knowledgebase.chunkOverlap')}
                                       </Label>
                                       <Input
                                         type="text"
@@ -2286,7 +2289,7 @@ export default function KnowledgeBaseDetailPage(
                                 {(uploadChunkConfig.parser_type === 'structure' || uploadChunkConfig.parser_type === 'token') && (
                                   <div className="flex gap-3 items-center">
                                     <Label htmlFor="upload-chunk-size" className="w-[80px] text-xs">
-                                      切片大小
+                                      {t('knowledgebase.chunkSize')}
                                     </Label>
                                     <Input
                                       type="text"
@@ -2307,7 +2310,7 @@ export default function KnowledgeBaseDetailPage(
                                       }}
                                     />
                                     <Label htmlFor="upload-chunk-overlap" className="w-[80px] text-xs ml-2">
-                                      切片重叠
+                                      {t('knowledgebase.chunkOverlap')}
                                     </Label>
                                     <Input
                                       type="text"
@@ -2347,12 +2350,12 @@ export default function KnowledgeBaseDetailPage(
                                     }}
                                   >
                                     <SelectTrigger className="w-[200px] h-7 text-xs">
-                                      <SelectValue placeholder="请选择图片理解模型" />
+                                      <SelectValue placeholder={t('knowledgebase.selectImageModel')} />
                                     </SelectTrigger>
                                     <SelectContent className="text-xs">
                                       <SelectGroup>
                                         <SelectItem value="DISABLED" className="text-xs h-5">
-                                          不使用图片理解模型
+                                          {t('knowledgebase.disableImageModel')}
                                         </SelectItem>
                                         {visionModels.map((model) => (
                                           <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
@@ -2372,7 +2375,7 @@ export default function KnowledgeBaseDetailPage(
                             className="w-full"
                           >
                             <CirclePlayIcon className="h-4 w-4 mr-2" />
-                            开始解析 ({uploadedFiles.length} 个文件)
+                            {t('knowledgebase.startParse')} ({uploadedFiles.length})
                           </Button>
                         </div>
                       )}
@@ -2381,7 +2384,7 @@ export default function KnowledgeBaseDetailPage(
                       {uploadStep === 'parsing' && (
                         <div className="flex flex-col items-center justify-center py-8 px-4">
                           <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
-                          <p className="text-sm text-muted-foreground">正在提交解析任务...</p>
+                          <p className="text-sm text-muted-foreground">{t('knowledgebase.submittingParse')}</p>
                         </div>
                       )}
 
@@ -2401,17 +2404,17 @@ export default function KnowledgeBaseDetailPage(
                     className="h-6 text-xs"
                     onClick={() => {
                       fetchKbFiles();
-                      toast.success("刷新成功");
+                      toast.success(t('knowledgebase.refreshSuccess'));
                     }}
                   > 
-                    <RefreshCcwIcon className="h-3 w-3"/> 刷新
+                    <RefreshCcwIcon className="h-3 w-3"/> {t('knowledgebase.refresh')}
                   </Button>
                   <Button
                     variant="outline"
                     className="h-6 text-xs"
                     onClick={() => setMetadataConfigDialogOpen(true)}
                   > 
-                    <Database className="h-3 w-3"/> 元数据
+                    <Database className="h-3 w-3"/> {t('knowledgebase.metadata')}
                   </Button>
                 </div>
               </div>
@@ -2427,19 +2430,19 @@ export default function KnowledgeBaseDetailPage(
                           </TableHead>
                           <TableHead>
                             <div className="flex gap-2 items-center max-w-[400px] text-xs text-muted-foreground">
-                               文件名
+                               {t('knowledgebase.fileName')}
                             </div>
                           </TableHead>
-                          <TableHead className="text-xs text-muted-foreground">文件大小</TableHead>
-                          <TableHead className="text-xs text-muted-foreground">更新时间</TableHead>
-                          <TableHead className="text-xs text-muted-foreground">切片类型</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.fileSize')}</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.updatedTime')}</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.parserTypeCol')}</TableHead>
                           <TableHead>
                             <FileStatusFilter 
                               value={statusFilter as 'all' | 'succeeded' | 'failed' | 'pending' | 'parsing' | 'persisting'}
                               onValueChange={setStatusFilter}
                             />
                           </TableHead>
-                          <TableHead className="text-xs text-muted-foreground">操作</TableHead>
+                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.actions')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -2457,7 +2460,7 @@ export default function KnowledgeBaseDetailPage(
                                 `/knowledgebases/${kbId}/files/${file.id}`,
                               );
                             }}
-                            title="点击查看切片"
+                            title={t('knowledgebase.clickToViewChunks')}
                           >
                             <TableCell className="py-1" onClick={(e) => e.stopPropagation()}>
                               <Checkbox
@@ -2492,10 +2495,10 @@ export default function KnowledgeBaseDetailPage(
                                   }}
                                 >
                                   <span className="h-2 w-2 rounded-full bg-blue-500 mr-1.5 inline-block"></span>
-                                  {file.chunk_config.parser_type === 'structure' ? '结构化' :
-                                   file.chunk_config.parser_type === 'token' ? '按token' :
-                                   file.chunk_config.parser_type === 'table' ? '表格' :
-                                   file.chunk_config.parser_type === 'paragraph' ? '段落' :
+                                  {file.chunk_config.parser_type === 'structure' ? t('knowledgebase.structureShort') :
+                                   file.chunk_config.parser_type === 'token' ? t('knowledgebase.tokenShort') :
+                                   file.chunk_config.parser_type === 'table' ? t('knowledgebase.tableShort') :
+                                   file.chunk_config.parser_type === 'paragraph' ? t('knowledgebase.paragraphShort') :
                                    file.chunk_config.parser_type}
                                 </Badge>
                               )}
@@ -2504,33 +2507,33 @@ export default function KnowledgeBaseDetailPage(
                               {file.status === 'pending' ? (
                                 <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
                                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                  等待解析
+                                  {t('knowledgebase.pendingParse')}
                                 </Badge>
                               ) : file.status === 'parsing' ? (
                                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
                                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                  解析中
+                                  {t('knowledgebase.parsing')}
                                 </Badge>
                               ) : file.status === 'persisting' ? (
                                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
                                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                  索引中
+                                  {t('knowledgebase.persisting')}
                                 </Badge>
                               ) : file.status === 'succeeded' ? (
                                 <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400">
                                   <CheckCircle className="mr-1 h-3 w-3" />
-                                  解析成功
+                                  {t('knowledgebase.parseSuccess')}
                                 </Badge>
                               ) : file.status === 'failed' ? (
                                 <HoverCard>
                                   <HoverCardTrigger asChild>
                                     <Badge variant="secondary" className="bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 cursor-pointer">
                                       <XCircle className="mr-1 h-3 w-3" />
-                                      解析失败
+                                      {t('knowledgebase.parseFailed')}
                                     </Badge>
                                   </HoverCardTrigger>
                                   <HoverCardContent className="w-80">
-                                    错误原因: {file.failed_reason}
+                                    {t('knowledgebase.errorReason')}: {file.failed_reason}
                                   </HoverCardContent>
                                 </HoverCard>
                               ) : (
@@ -2572,7 +2575,7 @@ export default function KnowledgeBaseDetailPage(
                                         loadPreviewContent(file.id);
                                       }}
                                     >
-                                      <span className="text-xs font-medium">查看文件</span>
+                                      <span className="text-xs font-medium">{t('knowledgebase.viewFile')}</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onSelect={(e) => {
@@ -2584,7 +2587,7 @@ export default function KnowledgeBaseDetailPage(
                                         checkFileRole(file.id);
                                       }}
                                     >
-                                      <span className="text-xs font-medium">权限设置</span>
+                                      <span className="text-xs font-medium">{t('knowledgebase.permissionSettings')}</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onSelect={(e) => {
@@ -2596,7 +2599,7 @@ export default function KnowledgeBaseDetailPage(
                                         handleOpenMetadata(file.id);
                                       }}
                                     >
-                                      <span className="text-xs font-medium">元数据</span>
+                                      <span className="text-xs font-medium">{t('knowledgebase.metadata')}</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onSelect={(e) => {
@@ -2610,7 +2613,7 @@ export default function KnowledgeBaseDetailPage(
                                         setFileSourceOpen(true);
                                       }}
                                     >
-                                      <span className="text-xs font-medium">源链接</span>
+                                      <span className="text-xs font-medium">{t('knowledgebase.sourceLink')}</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onSelect={(e) => {
@@ -2622,7 +2625,7 @@ export default function KnowledgeBaseDetailPage(
                                         handleReprocessFile(file.id);
                                       }}
                                     >
-                                      <span className="text-xs font-medium">重新解析</span> 
+                                      <span className="text-xs font-medium">{t('knowledgebase.reprocess')}</span> 
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -2636,7 +2639,7 @@ export default function KnowledgeBaseDetailPage(
                                       }}
                                       className="text-destructive focus:text-destructive"
                                     >
-                                      <span className="text-xs font-medium">删除</span> 
+                                      <span className="text-xs font-medium">{t('common.delete')}</span> 
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -2661,17 +2664,17 @@ export default function KnowledgeBaseDetailPage(
                   >
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle className="text-sm">设置源链接</DialogTitle>
+                        <DialogTitle className="text-sm">{t('knowledgebase.setSourceLink')}</DialogTitle>
                         <DialogDescription className="text-xs">
                           {kbfiles.find(f => f.id === currentFileId)?.file_name || ''}
                         </DialogDescription>
                       </DialogHeader>
                       <div className="flex flex-col gap-3 py-2">
                         <div className="flex flex-col gap-2">
-                          <Label className="text-xs">源链接</Label>
+                          <Label className="text-xs">{t('knowledgebase.sourceLink')}</Label>
                           <Input
                             type="text"
-                            placeholder="输入文件外部源链接，如语雀、飞书、钉钉文档等。"
+                            placeholder={t('knowledgebase.sourceLinkPlaceholder')}
                             value={fileSource || ''}
                             onChange={(e) => {
                               setFileSource(e.target.value);
@@ -2686,7 +2689,7 @@ export default function KnowledgeBaseDetailPage(
                           size="sm"
                           className="text-xs h-7"
                         >
-                          保存
+                          {t('common.save')}
                         </Button>
                         <Button
                           variant="outline"
@@ -2698,7 +2701,7 @@ export default function KnowledgeBaseDetailPage(
                             setFileSource('');
                           }}
                         >
-                          取消
+                          {t('common.cancel')}
                         </Button>
                       </div>
                     </DialogContent>
@@ -2720,9 +2723,9 @@ export default function KnowledgeBaseDetailPage(
                     <DialogContent className="sm:max-w-[750px] w-[600px] sm:w-[540px] max-h-[80vh] overflow-y-auto">
                       <DialogHeader>
                         {isEditingMetadata ? (
-                          <DialogTitle className="text-sm">编辑元数据</DialogTitle>
+                          <DialogTitle className="text-sm">{t('knowledgebase.editMetadata')}</DialogTitle>
                         ) : (
-                          <DialogTitle className="text-sm">查看元数据</DialogTitle>
+                          <DialogTitle className="text-sm">{t('knowledgebase.viewMetadata')}</DialogTitle>
                         )}
                         <DialogDescription className="text-xs">
                           {kbfiles.find(f => f.id === currentMetadataFileId)?.file_name || ''}
@@ -2732,19 +2735,19 @@ export default function KnowledgeBaseDetailPage(
                         <div className="text-xs">
                           {isEditingMetadata ? (
                             <Label htmlFor="sheet-custom-meta" className="text-xs pb-3">
-                              自定义
+                              Custom
                               <Button
                                 variant="secondary"
                                 className="w-16 h-5 text-xs"
                                 onClick={handAddFileMetadata}
                               >
                                 <PlusIcon className="h-3 w-3" />
-                                添加
+                                Add
                               </Button>
                             </Label>
                           ) : (
                             <Label htmlFor="sheet-custom-meta" className="text-xs">
-                              自定义
+                              Custom
                             </Label>
                           )}
                           {Object.keys(editingMetadata).filter(
@@ -2752,7 +2755,7 @@ export default function KnowledgeBaseDetailPage(
                               !default_metadata_keys.includes(key),
                           ).length === 0 && (
                             <p className="text-xs text-muted-foreground">
-                              当前没有配置自定义元数据，点击编辑添加。
+                              {t('knowledgebase.noCustomMetadataClickEdit')}
                             </p>
                           )}
                           {isEditingMetadata
@@ -2780,7 +2783,7 @@ export default function KnowledgeBaseDetailPage(
                                       defaultOpen={true}
                                     >
                                       <SelectTrigger className="w-[120px] h-6 min-h-6 text-xs data-[size=default]:h-6 data-[size=sm]:h-6">
-                                        <SelectValue placeholder="选择元数据" />
+                                        <SelectValue placeholder={t('knowledgebase.selectMetadata')} />
                                       </SelectTrigger>
                                       <SelectContent className="w-[88px] text-xs">
                                         <SelectGroup>
@@ -2890,7 +2893,7 @@ export default function KnowledgeBaseDetailPage(
                         </div>
                         <div className="text-xs">
                           <Label htmlFor="sheet-custom-meta" className="text-xs pb-2">
-                            内置元数据
+                            {t('knowledgebase.builtinMetadata')}
                           </Label>
                           {Object.keys(editingMetadata)
                             .filter((key) =>
@@ -2943,7 +2946,7 @@ export default function KnowledgeBaseDetailPage(
                               size="sm"
                               className="text-xs h-7"
                             >
-                              编辑
+                              Edit
                             </Button>
                           )}
                           <Button
@@ -2958,7 +2961,7 @@ export default function KnowledgeBaseDetailPage(
                               setMetadataEditError('');
                             }}
                           >
-                            关闭
+                            {t('common.close')}
                           </Button>
                         </div>
                       </div>
@@ -2979,7 +2982,7 @@ export default function KnowledgeBaseDetailPage(
                   >
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle className="text-sm">文档权限设置</DialogTitle>
+                        <DialogTitle className="text-sm">{t('knowledgebase.docPermission')}</DialogTitle>
                         <DialogDescription className="text-xs">
                           {kbfiles.find(f => f.id === editRoleFileId)?.file_name || ''}
                         </DialogDescription>
@@ -3067,7 +3070,7 @@ export default function KnowledgeBaseDetailPage(
                                       size="sm"
                                       className="h-6 w-6 text-xs text-muted-foreground"
                                       onClick={clearAllRoles}
-                                      title="清空所有角色"
+                                      title={t('knowledgebase.clearAllRoles')}
                                     >
                                       清空选择<XCircle className="h-3 w-3" />
                                     </Button>
@@ -3076,7 +3079,7 @@ export default function KnowledgeBaseDetailPage(
                               ) : (
                                 <div>
                                   <p className="text-xs text-muted-foreground">
-                                    尚未配置角色信息，前往`权限控制`设置。
+                                    {t('knowledgebase.noRoleConfig')}
                                   </p>
                                 </div>
                               )}
@@ -3096,7 +3099,7 @@ export default function KnowledgeBaseDetailPage(
                             setActiveRoleNames([]);
                           }}
                         >
-                          取消
+                          {t('common.cancel')}
                         </Button>
                         <Button 
                           onClick={saveFilePermission}
@@ -3119,7 +3122,7 @@ export default function KnowledgeBaseDetailPage(
                     <DialogContent className="flex flex-col h-[calc(100%-10rem)] !max-w-[calc(100%-20rem)]">
                       <DialogHeader className="flex-none h-1/10">
                         <DialogTitle>{previewFile?.file_name}</DialogTitle>
-                        <DialogDescription>文件预览</DialogDescription>
+                        <DialogDescription>{t('knowledgebase.filePreview')}</DialogDescription>
                       </DialogHeader>
                       {previewLoading ? (
                         <div className="flex items-center justify-center h-full">
@@ -3143,7 +3146,7 @@ export default function KnowledgeBaseDetailPage(
                               src={previewFile?.file_metadata?.file_url}
                               width="100%"
                               height="100%"
-                              title="图片预览"
+                              title={t('knowledgebase.imagePreview')}
                             ></img>
                           ) : previewFile?.file_extension === '.docx' ||
                             previewFile?.file_extension === '.xlsx' ||
@@ -3154,7 +3157,7 @@ export default function KnowledgeBaseDetailPage(
                               )}`}
                               width="100%"
                               height="100%"
-                              title="文件预览"
+                              title={t('knowledgebase.filePreview')}
                             />
                           ) : previewFile?.file_extension === '.mp4' ||
                             previewFile?.file_extension === '.avi' ||
@@ -3173,7 +3176,7 @@ export default function KnowledgeBaseDetailPage(
                                 objectFit: 'contain',
                               }}
                             >
-                              您的浏览器不支持视频播放
+                              {t('knowledgebase.videoNotSupported')}
                             </video>
                           ) : previewFile?.file_extension === '.md' ||
                             previewFile?.file_extension === '.txt' ? (
@@ -3184,12 +3187,12 @@ export default function KnowledgeBaseDetailPage(
                             <HtmlViewer file_url={previewFile?.file_metadata?.file_url || ''} />
                           ) : (
                             <div>
-                              暂不支持此格式文件的在线预览，请直接下载查看
+                              {t('knowledgebase.previewNotSupported')}
                               <a
                                 href={previewFile?.file_metadata?.file_url}
                                 className="text-blue-500 hover:underline ml-2"
                               >
-                                下载文件
+                                {t('knowledgebase.downloadFile')}
                               </a>
                             </div>
                           )}
@@ -3199,7 +3202,7 @@ export default function KnowledgeBaseDetailPage(
                   </Dialog>
                 
                 { kbfiles.length === 0 && (
-                  <p className="text-muted-foreground mx-auto text-xs py-15 text-center bg-gray-50 rounded-lg">暂无文件</p>
+                  <p className="text-muted-foreground mx-auto text-xs py-15 text-center bg-gray-50 rounded-lg">{t('knowledgebase.noFiles')}</p>
                 )}
                 <PaginationComponent
                   currentPage={page}
@@ -3228,7 +3231,7 @@ export default function KnowledgeBaseDetailPage(
                         <Input
                           type="text"
                           id="search_query"
-                          placeholder="请输入查询内容"
+                          placeholder={t('knowledgebase.queryPlaceholder')}
                           onChange={handleQueryInputChange}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
@@ -3247,7 +3250,7 @@ export default function KnowledgeBaseDetailPage(
                           <PopoverTrigger asChild>
                             <Button variant="outline" size="sm" className="text-xs h-7">
                               <FilterIcon className="h-3 w-3" />
-                              元数据
+                              {t('knowledgebase.metadata')}
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[450px]">
@@ -3259,7 +3262,7 @@ export default function KnowledgeBaseDetailPage(
                                 >
                                   <div className="flex items-center space-x-2">
                                     <p className="text-muted-foreground text-xs">
-                                      逻辑操作符
+                                      {t('knowledgebase.logicalOperator')}
                                     </p>
 
                                     <RadioGroupItem value="and" id="r1" />
@@ -3284,7 +3287,7 @@ export default function KnowledgeBaseDetailPage(
                                           }}
                                         >
                                           <SelectTrigger className="h-6 text-xs w-[120px]">
-                                            <SelectValue placeholder="名称" />
+                                            <SelectValue placeholder={t('knowledgebase.namePlaceholderShort')} />
                                           </SelectTrigger>
                                           <SelectContent className="text-xs">
                                             <SelectGroup>
@@ -3309,7 +3312,7 @@ export default function KnowledgeBaseDetailPage(
                                           }}
                                         >
                                           <SelectTrigger className="h-6 text-xs w-[80px]">
-                                            <SelectValue placeholder="规则" />
+                                            <SelectValue placeholder={t('knowledgebase.rulePlaceholderShort')} />
                                           </SelectTrigger>
                                           <SelectContent className="w-[80px] text-xs">
                                             <SelectGroup>
@@ -3372,7 +3375,7 @@ export default function KnowledgeBaseDetailPage(
                                   className="h-6 text-xs"
                                   size="sm"
                                 >
-                                  新增过滤规则
+                                  {t('knowledgebase.newFilterRule')}
                                 </Button>
                               </div>
                             </div>
@@ -3380,7 +3383,7 @@ export default function KnowledgeBaseDetailPage(
                         </Popover>
                         <Input
                           className="w-30 text-xs h-7"
-                          placeholder="输入user_id"
+                          placeholder={t('knowledgebase.userIdPlaceholder')}
                           value={user}
                           onChange={(e) => {
                             setUser(e.target.value);
@@ -3393,7 +3396,7 @@ export default function KnowledgeBaseDetailPage(
                           size="sm"
                         >
                           <SearchIcon className="h-3 w-3" />
-                          开始查询
+                          {t('knowledgebase.startQuery')}
                         </Button>
                       </div>
                     </div>
@@ -3404,7 +3407,7 @@ export default function KnowledgeBaseDetailPage(
                 <Card className={`flex-[0.8] overflow-y-auto text-xs min-h-0 p-2`}>
                   <CardHeader className="px-3 pt-2">
                     <div className="flex items-center justify-between h-6">
-                      <CardTitle className="text-sm">检索设置</CardTitle>
+                      <CardTitle className="text-sm">{t('knowledgebase.retrievalSettingsCard')}</CardTitle>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -3420,7 +3423,7 @@ export default function KnowledgeBaseDetailPage(
                       {/* 检索策略 */}
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2 items-center">
-                          <Label className="w-[80px] text-xs">检索策略</Label>
+                          <Label className="w-[80px] text-xs">{t('knowledgebase.retrievalStrategy')}</Label>
                           <ToggleGroup
                             type="single"
                             value={retrievalSetting.retrieval_mode || 'hybrid'}
@@ -3435,30 +3438,30 @@ export default function KnowledgeBaseDetailPage(
                           >
                             <ToggleGroupItem
                               value="vector"
-                              aria-label="向量检索"
+                              aria-label={t('knowledgebase.vectorSearch')}
                               className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-6"
                             >
                               <ScanSearch className="w-2 h-2" />
-                              向量检索
+                              {t('knowledgebase.vectorSearch')}
                             </ToggleGroupItem>
                             {isFulltextSupported && (
                               <ToggleGroupItem
                                 value="fulltext"
-                                aria-label="全文检索"
+                                aria-label={t('knowledgebase.fulltextSearch')}
                                 className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
                               >
                                 <TextSearch className="w-2 h-2 mr-0.5" />
-                                全文检索
+                                {t('knowledgebase.fulltextSearch')}
                               </ToggleGroupItem>
                             )}
                             {isFulltextSupported && (
                               <ToggleGroupItem
                                 value="hybrid"
-                                aria-label="混合检索"
+                                aria-label={t('knowledgebase.hybridSearch')}
                                 className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
                               >
                                 <SearchCode className="w-2 h-2 mr-0.5" />
-                                混合检索
+                                {t('knowledgebase.hybridSearch')}
                               </ToggleGroupItem>
                             )}
                           </ToggleGroup>
@@ -3469,7 +3472,7 @@ export default function KnowledgeBaseDetailPage(
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2 items-center">
                           <Label htmlFor="top_k" className="w-[80px] text-xs">
-                            Top-K
+                            Top K
                           </Label>
                           <Slider
                             className="w-40"
@@ -3491,7 +3494,7 @@ export default function KnowledgeBaseDetailPage(
                         </div>
                         <div className="flex gap-2 items-center">
                           <Label htmlFor="similarity_threshold" className="w-[80px] text-xs">
-                            相似度阈值
+                            {t('knowledgebase.similarityThreshold')}
                           </Label>
                           <Slider
                             className="w-40"
@@ -3514,7 +3517,7 @@ export default function KnowledgeBaseDetailPage(
                         {retrievalSetting.retrieval_mode === 'hybrid' && !retrievalSetting.enable_rerank && (
                           <div className="flex gap-2 items-center">
                             <Label htmlFor="vector_weight" className="w-[80px] text-xs">
-                              向量权重
+                              {t('knowledgebase.vectorWeight')}
                             </Label>
                             <Slider
                               id="vector_weight"
@@ -3537,7 +3540,7 @@ export default function KnowledgeBaseDetailPage(
                         )}
                         {retrievalSetting.retrieval_mode === 'hybrid' && !retrievalSetting.enable_rerank && (
                           <p className="text-xs text-muted-foreground ml-[88px]">
-                            向量权重仅在未开启重排序时生效
+                            {t('knowledgebase.vectorWeightTip')}
                           </p>
                         )}
                       </div>
@@ -3545,7 +3548,7 @@ export default function KnowledgeBaseDetailPage(
                       {/* 开启重排序 */}
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2 items-center">
-                          <Label className="w-[80px] text-xs">开启重排序</Label>
+                          <Label className="w-[80px] text-xs">{t('knowledgebase.enableRerank')}</Label>
                           <Checkbox
                             id="enable_rerank"
                             checked={retrievalSetting.enable_rerank ?? false}
@@ -3562,7 +3565,7 @@ export default function KnowledgeBaseDetailPage(
                           <>
                             <div className="flex items-center gap-2">
                               <Label htmlFor="rerank_model" className="w-[80px] text-xs">
-                                重排序模型
+                                {t('knowledgebase.rerankModelLabel')}
                               </Label>
                               <Select
                                 value={retrievalSetting.rerank_model || ''}
@@ -3575,7 +3578,7 @@ export default function KnowledgeBaseDetailPage(
                                 }}
                               >
                                 <SelectTrigger className="w-40 h-6 text-xs">
-                                  <SelectValue placeholder="请选择重排序模型" />
+                                  <SelectValue placeholder={t('knowledgebase.selectRerankModel')} />
                                 </SelectTrigger>
                                 <SelectContent className="text-xs">
                                   <SelectGroup>
@@ -3624,9 +3627,9 @@ export default function KnowledgeBaseDetailPage(
                           size="sm"
                         >
                           <Save className="w-3 h-3 mr-1" />
-                          应用到知识库设置
+                          {t('knowledgebase.applyToKbSettings')}
                         </Button>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1"><InfoIcon className="w-4 h-4" />保存后会更改知识库检索配置</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1"><InfoIcon className="w-4 h-4" />{t('knowledgebase.saveChangesRetrievalHint')}</div>
                       </div>
                     </CardContent>
                   )}
@@ -3649,7 +3652,7 @@ export default function KnowledgeBaseDetailPage(
                   <div className="p-6">
                     <Alert variant="destructive">
                       <AlertCircleIcon className="h-4 w-4" />
-                      <AlertTitle className="text-sm">检索失败</AlertTitle>
+                      <AlertTitle className="text-sm">{t('knowledgebase.retrievalFailed')}</AlertTitle>
                       <AlertDescription className="text-xs mt-2">
                         {searchError}
                       </AlertDescription>
@@ -3658,8 +3661,8 @@ export default function KnowledgeBaseDetailPage(
                 )}
                 {!searching && !searchError && searchrecords.length === 0 && (
                   <div className="text-center py-6 text-gray-500">
-                    <h2 className="text-sm">没有找到相关的切片</h2>
-                    <p className="mt-2 text-xs">尝试调整搜索条件</p>
+                    <h2 className="text-sm">{t('knowledgebase.noRelatedChunks')}</h2>
+                    <p className="mt-2 text-xs">{t('knowledgebase.tryAdjustSearch')}</p>
                   </div>
                 )}
                 {!searching && (
@@ -3684,7 +3687,7 @@ export default function KnowledgeBaseDetailPage(
                                   {i + 1}
                                 </Badge>
                                 <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
-                                  分数: {chunk.score.toFixed(4)}
+                                  {t('knowledgebase.score')}: {chunk.score.toFixed(4)}
                                 </Badge>
                                 <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
                                   {chunk.title}
@@ -3721,7 +3724,7 @@ export default function KnowledgeBaseDetailPage(
                                     overlayRender={() => {
                                       return (
                                         <div className="absolute left-0 bottom-0 p-3 w-full min-h-30 text-xs text-slate-300 z-50 bg-black/50">
-                                          <div>图片描述：{meta.desc}</div>
+                                          <div>{t('knowledgebase.imageDesc')}：{meta.desc}</div>
                                         </div>
                                       );
                                     }}
@@ -3741,7 +3744,7 @@ export default function KnowledgeBaseDetailPage(
                       );
                     })}
                     { searchrecords.length > 0 && (
-                      <p className="text-xs text-center text-muted-foreground pt-4 pb-4"> 没有更多内容了 </p>
+                      <p className="text-xs text-center text-muted-foreground pt-4 pb-4"> {t('knowledgebase.noMoreContent')} </p>
                     )}
 
                   </div>
@@ -3756,9 +3759,9 @@ export default function KnowledgeBaseDetailPage(
       <Dialog open={metadataConfigDialogOpen} onOpenChange={setMetadataConfigDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="text-sm">元数据配置</DialogTitle>
+            <DialogTitle className="text-sm">{t('knowledgebase.metadataConfig')}</DialogTitle>
             <DialogDescription className="text-xs">
-              管理知识库的元数据配置
+              {t('knowledgebase.metadataConfigDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 py-2">
@@ -3775,12 +3778,12 @@ export default function KnowledgeBaseDetailPage(
                 setMetadataEditDialogOpen(true);
               }}
             >
-              <PlusIcon className="h-3 w-3 mr-1" /> 添加元数据
+              <PlusIcon className="h-3 w-3 mr-1" /> {t('knowledgebase.addMetadata')}
             </Button>
             <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
               {metadataConfigs.length === 0 ? (
                 <div className="text-center py-4 text-xs text-muted-foreground">
-                  暂无元数据配置
+                  {t('knowledgebase.noMetadataConfig')}
                 </div>
               ) : (
                 metadataConfigs.map((metadata) => (
@@ -3839,15 +3842,15 @@ export default function KnowledgeBaseDetailPage(
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {editingMetadataConfig ? '编辑元数据' : '添加元数据'}
+              {editingMetadataConfig ? t('knowledgebase.editMetadata') : t('knowledgebase.addMetadata')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              请设定一个元数据名称（英文和数字），如city, category，用于在知识库内检索。
+              {t('knowledgebase.metadataNameHint')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 py-2">
             <div className="grid gap-2">
-              <Label htmlFor="metadata_key" className="text-xs">元数据名称</Label>
+              <Label htmlFor="metadata_key" className="text-xs">{t('knowledgebase.metadataName')}</Label>
               <Input
                 id="metadata_key"
                 className="h-6 text-xs"
@@ -3864,11 +3867,11 @@ export default function KnowledgeBaseDetailPage(
                 onValueChange={(value) => setNewMetadataValueType(value)}
               >
                 <SelectTrigger className="w-[180px] h-6 text-xs">
-                  <SelectValue placeholder="选择值类型" />
+                  <SelectValue placeholder={t('knowledgebase.selectValueType')} />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectGroup>
-                    <SelectLabel className="text-xs">值类型</SelectLabel>
+                    <SelectLabel className="text-xs">{t('knowledgebase.valueType')}</SelectLabel>
                     <SelectItem value="string" className="text-xs h-5">
                       String
                     </SelectItem>
@@ -3883,11 +3886,11 @@ export default function KnowledgeBaseDetailPage(
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="metadata_desc" className="text-xs">元数据描述</Label>
+              <Label htmlFor="metadata_desc" className="text-xs">{t('knowledgebase.metadataDesc')}</Label>
               <Input
                 id="metadata_desc"
                 className="h-6 text-xs"
-                placeholder="输入元数据相关描述。"
+                placeholder={t('knowledgebase.metadataDescPlaceholder')}
                 value={newMetadataDesc}
                 onChange={(e) => setNewMetadataDesc(e.target.value)}
               />
@@ -3896,7 +3899,7 @@ export default function KnowledgeBaseDetailPage(
           {metadataError ? (
             <Alert variant="destructive" className="text-xs py-2">
               <AlertCircleIcon className="h-3 w-3" />
-              <AlertTitle className="text-xs">操作失败</AlertTitle>
+              <AlertTitle className="text-xs">{t('knowledgebase.operationFailed')}</AlertTitle>
               <AlertDescription className="text-xs">
                 <p>{metadataError}</p>
               </AlertDescription>
@@ -3916,7 +3919,7 @@ export default function KnowledgeBaseDetailPage(
                 setMetadataError('');
               }}
             >
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               type="button"
@@ -3945,7 +3948,7 @@ export default function KnowledgeBaseDetailPage(
       }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-sm">切片配置</DialogTitle>
+            <DialogTitle className="text-sm">{t('knowledgebase.chunkConfig')}</DialogTitle>
             <DialogDescription className="text-xs">
               {viewingChunkConfig?.file_name}
             </DialogDescription>
@@ -3954,12 +3957,12 @@ export default function KnowledgeBaseDetailPage(
             <div className="space-y-4">
               {/* 基本信息 */}
               <div className="space-y-2">
-                <Label className="text-xs font-semibold">切片类型</Label>
+                <Label className="text-xs font-semibold">{t('knowledgebase.parserType')}</Label>
                 <div className="text-xs text-muted-foreground">
-                  {viewingChunkConfig.chunk_config.parser_type === 'structure' ? '结构化' :
-                   viewingChunkConfig.chunk_config.parser_type === 'token' ? '按token' :
-                   viewingChunkConfig.chunk_config.parser_type === 'table' ? '表格' :
-                   viewingChunkConfig.chunk_config.parser_type === 'paragraph' ? '段落' :
+                  {viewingChunkConfig.chunk_config.parser_type === 'structure' ? t('knowledgebase.structureShort') :
+                   viewingChunkConfig.chunk_config.parser_type === 'token' ? t('knowledgebase.tokenShort') :
+                   viewingChunkConfig.chunk_config.parser_type === 'table' ? t('knowledgebase.tableShort') :
+                   viewingChunkConfig.chunk_config.parser_type === 'paragraph' ? t('knowledgebase.paragraphShort') :
                    viewingChunkConfig.chunk_config.parser_type}
                 </div>
               </div>
@@ -3967,13 +3970,13 @@ export default function KnowledgeBaseDetailPage(
               {/* 图片理解配置 */}
               {(viewingChunkConfig.chunk_config.image_caption_model || viewingChunkConfig.chunk_config.image_caption_provider_name) && (
                 <div className="space-y-2">
-                  <Label className="text-xs font-semibold">图片理解配置</Label>
+                  <Label className="text-xs font-semibold">{t('knowledgebase.imageCaptionConfig')}</Label>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     {viewingChunkConfig.chunk_config.image_caption_model && (
-                      <div>模型: {viewingChunkConfig.chunk_config.image_caption_model}</div>
+                      <div>{t('knowledgebase.modelLabel')}: {viewingChunkConfig.chunk_config.image_caption_model}</div>
                     )}
                     {viewingChunkConfig.chunk_config.image_caption_provider_name && (
-                      <div>服务商: {viewingChunkConfig.chunk_config.image_caption_provider_name}</div>
+                      <div>{t('knowledgebase.providerLabel')}: {viewingChunkConfig.chunk_config.image_caption_provider_name}</div>
                     )}
                   </div>
                 </div>
@@ -3982,14 +3985,14 @@ export default function KnowledgeBaseDetailPage(
               {/* 表格配置 */}
               {viewingChunkConfig.chunk_config.parser_type === 'table' && viewingChunkConfig.chunk_config.table_config && (
                 <div className="space-y-2">
-                  <Label className="text-xs font-semibold">表格配置</Label>
+                  <Label className="text-xs font-semibold">{t('knowledgebase.tableConfigLabel')}</Label>
                   <div className="space-y-1 text-xs text-muted-foreground">
-                    <div>最大表头行索引: {viewingChunkConfig.chunk_config.table_config.header_index_max ?? '未设置'}</div>
-                    <div>格式化为JSON: {viewingChunkConfig.chunk_config.table_config.format_sheet_data_to_json ? '是' : '否'}</div>
-                    <div>合并行: {viewingChunkConfig.chunk_config.table_config.concat_rows ? '是' : '否'}</div>
-                    <div>行分隔符: {viewingChunkConfig.chunk_config.table_config.row_joiner ? `"${viewingChunkConfig.chunk_config.table_config.row_joiner}"` : '未设置'}</div>
+                    <div>{t('knowledgebase.maxHeaderIndex')}: {viewingChunkConfig.chunk_config.table_config.header_index_max ?? t('knowledgebase.notSet')}</div>
+                    <div>{t('knowledgebase.formatAsJson')}: {viewingChunkConfig.chunk_config.table_config.format_sheet_data_to_json ? t('common.yes') : t('common.no')}</div>
+                    <div>{t('knowledgebase.mergeRows')}: {viewingChunkConfig.chunk_config.table_config.concat_rows ? t('common.yes') : t('common.no')}</div>
+                    <div>{t('knowledgebase.rowJoiner')}: {viewingChunkConfig.chunk_config.table_config.row_joiner ? `"${viewingChunkConfig.chunk_config.table_config.row_joiner}"` : t('knowledgebase.notSet')}</div>
                     {viewingChunkConfig.chunk_config.table_config.sheet_column_filters && (
-                      <div>列过滤器: {Array.isArray(viewingChunkConfig.chunk_config.table_config.sheet_column_filters) 
+                      <div>{t('knowledgebase.columnFilters')}: {Array.isArray(viewingChunkConfig.chunk_config.table_config.sheet_column_filters) 
                         ? viewingChunkConfig.chunk_config.table_config.sheet_column_filters.join(', ')
                         : viewingChunkConfig.chunk_config.table_config.sheet_column_filters}</div>
                     )}
@@ -4000,11 +4003,11 @@ export default function KnowledgeBaseDetailPage(
               {/* 段落配置 */}
               {viewingChunkConfig.chunk_config.parser_type === 'paragraph' && (
                 <div className="space-y-2">
-                  <Label className="text-xs font-semibold">段落配置</Label>
+                  <Label className="text-xs font-semibold">{t('knowledgebase.paragraphConfigLabel')}</Label>
                   <div className="space-y-1 text-xs text-muted-foreground">
-                    <div>分隔符: {viewingChunkConfig.chunk_config.separator ? `"${viewingChunkConfig.chunk_config.separator}"` : '未设置'}</div>
-                    <div>切片大小: {viewingChunkConfig.chunk_config.chunk_size ?? '未设置'}</div>
-                    <div>切片重叠: {viewingChunkConfig.chunk_config.chunk_overlap ?? '未设置'}</div>
+                    <div>{t('knowledgebase.separator')}: {viewingChunkConfig.chunk_config.separator ? `"${viewingChunkConfig.chunk_config.separator}"` : t('knowledgebase.notSet')}</div>
+                    <div>{t('knowledgebase.chunkSize')}: {viewingChunkConfig.chunk_config.chunk_size ?? t('knowledgebase.notSet')}</div>
+                    <div>{t('knowledgebase.chunkOverlap')}: {viewingChunkConfig.chunk_config.chunk_overlap ?? t('knowledgebase.notSet')}</div>
                   </div>
                 </div>
               )}
@@ -4012,18 +4015,18 @@ export default function KnowledgeBaseDetailPage(
               {/* 其他类型配置（structure/token） */}
               {(viewingChunkConfig.chunk_config.parser_type === 'structure' || viewingChunkConfig.chunk_config.parser_type === 'token') && (
                 <div className="space-y-2">
-                  <Label className="text-xs font-semibold">切片配置</Label>
+                  <Label className="text-xs font-semibold">{t('knowledgebase.chunkConfig')}</Label>
                   <div className="space-y-1 text-xs text-muted-foreground">
-                    <div>分隔符: {viewingChunkConfig.chunk_config.separator ? `"${viewingChunkConfig.chunk_config.separator}"` : '未设置'}</div>
-                    <div>切片大小: {viewingChunkConfig.chunk_config.chunk_size ?? '未设置'}</div>
-                    <div>切片重叠: {viewingChunkConfig.chunk_config.chunk_overlap ?? '未设置'}</div>
+                    <div>{t('knowledgebase.separator')}: {viewingChunkConfig.chunk_config.separator ? `"${viewingChunkConfig.chunk_config.separator}"` : t('knowledgebase.notSet')}</div>
+                    <div>{t('knowledgebase.chunkSize')}: {viewingChunkConfig.chunk_config.chunk_size ?? t('knowledgebase.notSet')}</div>
+                    <div>{t('knowledgebase.chunkOverlap')}: {viewingChunkConfig.chunk_config.chunk_overlap ?? t('knowledgebase.notSet')}</div>
                   </div>
                 </div>
               )}
 
               {/* 原始 JSON（可选，用于调试） */}
               <div className="space-y-2 border-t pt-2">
-                <Label className="text-xs font-semibold">完整配置（JSON）</Label>
+                <Label className="text-xs font-semibold">{t('knowledgebase.fullConfigJson')}</Label>
                 <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">
                   {JSON.stringify(viewingChunkConfig.chunk_config, null, 2)}
                 </pre>
@@ -4040,7 +4043,7 @@ export default function KnowledgeBaseDetailPage(
                 setViewingChunkConfig(null);
               }}
             >
-              关闭
+              {t('common.close')}
             </Button>
           </div>
         </DialogContent>
@@ -4058,18 +4061,16 @@ export default function KnowledgeBaseDetailPage(
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {isBatchReprocess ? `批量重新解析 - 设置切片配置` : `重新解析 - 设置切片配置`}
+              Reprocess files
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {isBatchReprocess 
-                ? `为 ${pendingReprocessFileIds.length} 个文件设置切片配置`
-                : `为文件设置切片配置，配置将在重新解析时应用`}
+              Set chunk config
             </DialogDescription>
           </DialogHeader>
 
           {/* 待处理文件列表 */}
           <div className="border rounded-lg p-3 mb-2 max-h-32 overflow-y-auto bg-muted/30">
-            <p className="text-xs text-muted-foreground mb-2 font-medium">待处理的文件：</p>
+            <p className="text-xs text-muted-foreground mb-2 font-medium">{t('knowledgebase.pendingFilesLabel')}</p>
             {isBatchReprocess ? (
               <div className="space-y-1">
                 {pendingReprocessFileIds.map((fileId, index) => {
@@ -4093,7 +4094,7 @@ export default function KnowledgeBaseDetailPage(
               {/* 切片类型 */}
               <div className="flex gap-3 items-center flex-wrap">
                 <Label htmlFor="reprocess-parserType" className="w-[120px] text-xs shrink-0">
-                  切片类型
+                  {t('knowledgebase.parserType')}
                   <span className="text-destructive">*</span>
                 </Label>
                 <Select
@@ -4138,26 +4139,26 @@ export default function KnowledgeBaseDetailPage(
                   }}
                 >
                   <SelectTrigger className="w-[200px] h-6 text-xs">
-                    <SelectValue placeholder="请选择切片类型" />
+                    <SelectValue placeholder={t('knowledgebase.selectParserType')} />
                   </SelectTrigger>
                   <SelectContent className="text-xs">
                     <SelectGroup>
                       <SelectItem value="structure" className="text-xs h-5">
-                        结构化(structure)
+                        {t('knowledgebase.structure')}
                       </SelectItem>
                       <SelectItem value="token" className="text-xs h-5">
-                        按token
+                        {t('knowledgebase.token')}
                       </SelectItem>
                       <SelectItem value="table" className="text-xs h-5">
-                        表格(table)
+                        {t('knowledgebase.table')}
                       </SelectItem>
                       <SelectItem value="paragraph" className="text-xs h-5">
-                        段落(paragraph)
+                        {t('knowledgebase.paragraph')}
                       </SelectItem>
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground shrink-0">选择文档切片方式</p>
+                <p className="text-xs text-muted-foreground shrink-0">{t('knowledgebase.selectChunkMode')}</p>
               </div>
 
               {/* Table Config - 只在 parser_type === 'table' 时显示 */}
@@ -4166,7 +4167,7 @@ export default function KnowledgeBaseDetailPage(
                   <div className="flex gap-3 items-center flex-wrap">
                     <div className="flex gap-3 items-center min-w-[280px]">
                       <Label htmlFor="reprocess-table-header-index-max" className="w-[120px] text-xs shrink-0">
-                        最大表头行index
+                        {t('knowledgebase.maxHeaderIndex')}
                       </Label>
                       <Input
                         type="number"
@@ -4190,7 +4191,7 @@ export default function KnowledgeBaseDetailPage(
                     </div>
                     <div className="flex gap-3 items-center min-w-[200px]">
                       <Label htmlFor="reprocess-table-format-json" className="w-[120px] text-xs shrink-0">
-                        格式化为Json
+                        {t('knowledgebase.formatAsJson')}
                       </Label>
                       <Checkbox
                         id="reprocess-table-format-json"
@@ -4213,7 +4214,7 @@ export default function KnowledgeBaseDetailPage(
                   <div className="flex gap-3 items-center flex-wrap">
                     <div className="flex gap-3 items-center min-w-[200px]">
                       <Label htmlFor="reprocess-table-concat-rows" className="w-[120px] text-xs shrink-0">
-                        合并行
+                        {t('knowledgebase.mergeRows')}
                       </Label>
                       <Checkbox
                         id="reprocess-table-concat-rows"
@@ -4234,7 +4235,7 @@ export default function KnowledgeBaseDetailPage(
                     </div>
                     <div className="flex gap-3 items-center min-w-[280px]">
                       <Label htmlFor="reprocess-table-row-joiner" className="w-[120px] text-xs shrink-0">
-                        行分隔符
+                        {t('knowledgebase.rowJoiner')}
                       </Label>
                       <Input
                         type="text"
@@ -4259,7 +4260,7 @@ export default function KnowledgeBaseDetailPage(
                   <div className="flex gap-3 items-center flex-wrap">
                     <div className="flex gap-3 items-center min-w-[320px]">
                       <Label htmlFor="reprocess-table-chunkSize" className="w-[120px] text-xs shrink-0">
-                        切片大小
+                        {t('knowledgebase.chunkSize')}
                         <span className="text-destructive">*</span>
                       </Label>
                       <Input
@@ -4284,7 +4285,7 @@ export default function KnowledgeBaseDetailPage(
                         }}
                         required
                       />
-                      <p className="text-xs text-muted-foreground shrink-0">推荐值: 1000</p>
+                      <p className="text-xs text-muted-foreground shrink-0">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
                     </div>
                   </div>
                 </div>
@@ -4295,7 +4296,7 @@ export default function KnowledgeBaseDetailPage(
                 <div className="space-y-3">
                   <div className="flex gap-3 items-center flex-wrap">
                     <Label htmlFor="reprocess-paragraph-separator" className="w-[120px] text-xs shrink-0">
-                      分隔符
+                      {t('knowledgebase.separator')}
                       <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -4317,7 +4318,7 @@ export default function KnowledgeBaseDetailPage(
                   <div className="flex gap-3 items-center flex-wrap">
                     <div className="flex gap-3 items-center min-w-[320px]">
                       <Label htmlFor="reprocess-chunkSize" className="w-[120px] text-xs shrink-0">
-                        切片大小
+                        {t('knowledgebase.chunkSize')}
                         <span className="text-destructive">*</span>
                       </Label>
                       <Input
@@ -4342,11 +4343,11 @@ export default function KnowledgeBaseDetailPage(
                         }}
                         required
                       />
-                      <p className="text-xs text-muted-foreground shrink-0">推荐值: 1000</p>
+                      <p className="text-xs text-muted-foreground shrink-0">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
                     </div>
                     <div className="flex gap-3 items-center min-w-[320px]">
                       <Label htmlFor="reprocess-chunkOverlap" className="w-[120px] text-xs shrink-0">
-                        切片重叠
+                        {t('knowledgebase.chunkOverlap')}
                         <span className="text-destructive">*</span>
                       </Label>
                       <Input
@@ -4370,7 +4371,7 @@ export default function KnowledgeBaseDetailPage(
                           }
                         }}
                       />
-                      <p className="text-xs text-muted-foreground shrink-0">推荐值: 50</p>
+                      <p className="text-xs text-muted-foreground shrink-0">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
                     </div>
                   </div>
                 </div>
@@ -4381,7 +4382,7 @@ export default function KnowledgeBaseDetailPage(
                 <div className="flex gap-3 items-center flex-wrap">
                   <div className="flex gap-3 items-center min-w-[320px]">
                     <Label htmlFor="reprocess-chunkSize-default" className="w-[120px] text-xs shrink-0">
-                      切片大小
+                      {t('knowledgebase.chunkSize')}
                       <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -4406,11 +4407,11 @@ export default function KnowledgeBaseDetailPage(
                       }}
                       required
                     />
-                    <p className="text-xs text-muted-foreground shrink-0">推荐值: 1000</p>
+                    <p className="text-xs text-muted-foreground shrink-0">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
                   </div>
                   <div className="flex gap-3 items-center min-w-[320px]">
                     <Label htmlFor="reprocess-chunkOverlap-default" className="w-[120px] text-xs shrink-0">
-                      切片重叠
+                      {t('knowledgebase.chunkOverlap')}
                       <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -4434,7 +4435,7 @@ export default function KnowledgeBaseDetailPage(
                         }
                       }}
                     />
-                    <p className="text-xs text-muted-foreground shrink-0">推荐值: 50</p>
+                    <p className="text-xs text-muted-foreground shrink-0">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
                   </div>
                 </div>
               )}
@@ -4442,7 +4443,7 @@ export default function KnowledgeBaseDetailPage(
               {/* 图片理解模型 */}
               <div className="flex gap-3 items-center flex-wrap">
                 <Label htmlFor="reprocess-image-caption-model" className="w-[120px] text-xs shrink-0">
-                  图片理解模型
+                  {t('knowledgebase.imageCaptionModelLabel')}
                 </Label>
                 <Select
                   value={reprocessChunkConfig.image_caption_model || 'DISABLED'}
@@ -4459,12 +4460,12 @@ export default function KnowledgeBaseDetailPage(
                   }}
                 >
                   <SelectTrigger className="w-[200px] h-6 text-xs">
-                    <SelectValue placeholder="请选择图片理解模型" />
+                    <SelectValue placeholder={t('knowledgebase.selectImageModel')} />
                   </SelectTrigger>
                   <SelectContent className="text-xs">
                     <SelectGroup>
                       <SelectItem value="DISABLED" className="text-xs h-5">
-                        不使用图片理解模型
+                        {t('knowledgebase.disableImageModel')}
                       </SelectItem>
                       {visionModels.map((model) => (
                         <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
@@ -4474,7 +4475,7 @@ export default function KnowledgeBaseDetailPage(
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground shrink-0">用于理解图片内容</p>
+                <p className="text-xs text-muted-foreground shrink-0">{t('knowledgebase.imageModelHint')}</p>
               </div>
             </div>
           )}
@@ -4490,7 +4491,7 @@ export default function KnowledgeBaseDetailPage(
                 setPendingReprocessFileIds([]);
               }}
             >
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               variant="default"
@@ -4505,7 +4506,7 @@ export default function KnowledgeBaseDetailPage(
               }}
               disabled={reprocessing}
             >
-              {reprocessing ? '处理中...' : '确认重新解析'}
+              {reprocessing ? t('knowledgebase.processing') : t('knowledgebase.confirmReparse')}
             </Button>
           </div>
         </DialogContent>

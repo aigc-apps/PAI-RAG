@@ -21,8 +21,9 @@ import {
 } from '@/components/ui/select';
 import { AlertCircleIcon } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
-// 定义组件 props
+// Component props
 interface RerankerModelDialogProps {
   isAdd: boolean;
   isOpen: boolean;
@@ -49,8 +50,9 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 }) => {
   const [reranker, setReranker] = useState<RerankerConfig>(rerankerConfig);
   const [error, setError] = useState<string | null>(null);
-  const [saveErrorMsg, setSaveErrorMsg] = useState(''); // 保存错误信息
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const { tenantFetch } = useTenantFetch();
+  const { t } = useI18n();
   
   useEffect(() => {
     setReranker(rerankerConfig);
@@ -69,7 +71,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       !reranker.model_name ||
       !reranker.base_url
     ) {
-      setSaveErrorMsg('请必须填写完整的模型信息');
+      setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
     }
     const submit_url = isAdd
@@ -78,7 +80,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
     const updateMethod = isAdd ? 'POST' : 'PUT';
     if (reranker.api_key === '******') reranker.api_key = '';
     
-    // 转换前端类型值到后端期望的格式
+    // Convert frontend type values to backend format
     const typeMapping: Record<string, string> = {
       'OpenAICompatible': 'openai_like',
       'DashScope': 'dashscope',
@@ -97,11 +99,11 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       });
 
       if (!res.ok) {
-        setSaveErrorMsg(`${updateMethod} 请求失败, 请检查填写信息`);
+        setSaveErrorMsg(t('config.model.requestFailedCheckInfo', { method: updateMethod }));
         return;
       }
       const jsondata = await res.json();
-      // 转换后端返回的类型值到前端格式
+      // Convert backend type values to frontend format
       const reverseTypeMapping: Record<string, string> = {
         'openai_like': 'OpenAICompatible',
         'dashscope': 'DashScope',
@@ -110,14 +112,14 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         ...jsondata.data,
         type: jsondata.data.type ? (reverseTypeMapping[jsondata.data.type] || jsondata.data.type) : 'OpenAICompatible',
       };
-      onSaveSuccess(responseData as RerankerConfig); // 触发回调
+      onSaveSuccess(responseData as RerankerConfig);
       setIsOpen(false);
     } catch (err: any) {
-      setSaveErrorMsg(`${updateMethod} 请求失败`);
+      setSaveErrorMsg(t('config.model.requestFailed', { method: updateMethod }));
     }
   };
 
-  // 对话框关闭时重置表单
+  // Reset form when dialog closes
   const handleDialogClose = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
@@ -131,14 +133,14 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       <DialogContent className="sm:max-w-[700px]">
         {error && <div className="text-red-500 mb-4">{error}</div>}
         <DialogHeader>
-          <DialogTitle>{isAdd ? '添加模型' : '编辑模型'}</DialogTitle>
-          <DialogDescription>填写模型配置信息后，点击保存。</DialogDescription>
+          <DialogTitle>{isAdd ? t('config.model.addModel') : t('config.model.editModel')}</DialogTitle>
+          <DialogDescription>{t('config.model.fillModelConfig')}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="type" className="text-right">
-              模型类型
+              {t('config.model.modelType')}
             </Label>
             <div className="col-span-3">
               <Select
@@ -148,11 +150,11 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="选择模型类型" />
+                  <SelectValue placeholder={t('config.model.selectModelType')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="OpenAICompatible">OpenAI Like</SelectItem>
-                  <SelectItem value="DashScope">通义千问</SelectItem>
+                  <SelectItem value="OpenAICompatible">{t('config.model.openaiLike')}</SelectItem>
+                  <SelectItem value="DashScope">{t('config.model.qwenModel')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -161,12 +163,12 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_id" className="text-right">
-              模型ID
+              {t('config.model.modelId')}
               <span className="text-destructive">*</span>
             </Label>
             <Input
               id="model_id"
-              placeholder="model_id"
+              placeholder={t('config.model.modelIdPlaceholder')}
               value={reranker?.model_id ?? ''}
               onChange={(e) =>
                 setReranker((prev) => ({ ...prev, model_id: e.target.value }))
@@ -178,12 +180,12 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         <div className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="model_name" className="text-right">
-              模型名称
+              {t('config.model.modelName')}
               <span className="text-destructive">*</span>
             </Label>
             <Input
               id="model_name"
-              placeholder="model_name"
+              placeholder={t('config.model.modelNamePlaceholder')}
               value={reranker?.model_name ?? ''}
               onChange={(e) =>
                 setReranker((prev) => ({ ...prev, model_name: e.target.value }))
@@ -195,14 +197,14 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
         <div>
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="base_url" className="text-right">
-              Base URL
+              {t('config.model.baseUrl')}
               <span className="text-destructive">*</span>
             </Label>
             <div className="col-span-3">
               <input
                 id="base_url"
                 list="base_url_options"
-                placeholder="输入或选择模型base_url"
+                placeholder={t('config.model.baseUrlPlaceholder')}
                 value={reranker?.base_url ?? ''}
                 onChange={(e) =>
                   setReranker((prev) => ({ ...prev, base_url: e.target.value }))
@@ -213,14 +215,14 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
           </div>
           <div className="grid grid-cols-4 items-center gap-4 py-2">
             <Label htmlFor="api_key" className="text-right">
-              API Key
+              {t('config.model.apiKey')}
               <span className="text-destructive">*</span>
             </Label>
             {isAdd ? (
               <Input
                 id="api_key"
                 type="password"
-                placeholder="api_key"
+                placeholder={t('config.model.apiKeyPlaceholder')}
                 value={reranker?.api_key ?? ''}
                 onChange={(e) =>
                   setReranker((prev) => ({ ...prev, api_key: e.target.value }))
@@ -231,7 +233,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
               <Input
                 id="api_key"
                 type="password"
-                placeholder="api_key"
+                placeholder={t('config.model.apiKeyPlaceholder')}
                 value={reranker?.api_key || '******'}
                 onChange={(e) =>
                   setReranker((prev) => ({ ...prev, api_key: e.target.value }))
@@ -249,7 +251,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
               <AlertTitle>{saveErrorMsg}</AlertTitle>
             </Alert>
           )}
-          <Button onClick={handleSubmit}>{isAdd ? '新增' : '保存'}</Button>
+          <Button onClick={handleSubmit}>{isAdd ? t('config.model.create') : t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

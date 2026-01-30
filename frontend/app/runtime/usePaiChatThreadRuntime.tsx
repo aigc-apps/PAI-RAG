@@ -405,7 +405,7 @@ function createDatabaseAdapter(tenantFetch: (input: RequestInfo | URL, init?: Re
     async list() {
       try {
         const res = await tenantFetch(`/api/threads`);
-        if (!res.ok) throw new Error('获取配置失败');
+        if (!res.ok) throw new Error('Get config failed.');
         const response = await res.json();
         return {
           threads: response.data.map((t: any) => ({
@@ -477,11 +477,11 @@ function createDatabaseAdapter(tenantFetch: (input: RequestInfo | URL, init?: Re
           },
         });
         if (!res.ok) {
-          throw new Error('删除失败，请检查网络或配置');
+          throw new Error('Delete failed. Please check your network or configuration.');
         }
       } catch (err: any) {
         // 显示错误提示
-        throw new Error('删除失败，请检查网络或配置');
+        throw new Error('Delete failed. Please check your network or configuration.');
       }
     },
     async generateTitle(remoteId, messages) {
@@ -494,14 +494,14 @@ function createDatabaseAdapter(tenantFetch: (input: RequestInfo | URL, init?: Re
           body: JSON.stringify(messages), 
         });
         if (!res.ok) {
-          throw new Error('生成标题失败，请检查网络或配置');
+          throw new Error('Generate title failed. Please check your network or configuration.');
         }
         const data = await res.json();
         return AssistantStream.fromByteStream(toByteStream(data.data.title) as ReadableStream<Uint8Array<ArrayBuffer>>, new PlainTextDecoder());
 
       } catch (err: any) {
         // 显示错误提示
-        throw new Error('生成标题失败，请检查网络或配置');
+        throw new Error('Generate title failed. Please check your network or configuration.');
       }
     },
   };
@@ -525,7 +525,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
         try {
           const res = await tenantFetch(`/api/threads/${remoteId}/messages`);
 
-          if (!res.ok) throw new Error('获取配置失败');
+          if (!res.ok) throw new Error('Get config failed.');
           const result = await res.json();
           const messages = result.data;
           if (messages.length === 0) {

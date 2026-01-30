@@ -40,6 +40,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { set } from 'date-fns';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 export interface Role {
   id: string;
@@ -53,11 +54,12 @@ const newRole = {
 };
 
 export default function RolePage() {
-  const [editRole, setEditRole] = useState(newRole); // 存储 Embedding 配置
-  const [roles, setRoles] = useState<Role[]>([]); // 存储 Embedding 配置
-  const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(''); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(''); // 删除时的错误信息
+  const { t } = useI18n();
+  const [editRole, setEditRole] = useState(newRole);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [modelloading, setModelLoading] = useState(true);
+  const [modelerror, setModelError] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -72,13 +74,13 @@ export default function RolePage() {
         const res = await tenantFetch(
           `/api/config/roles?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error('获取角色列表失败');
+        if (!res.ok) throw new Error(t('config.role.fetchRoleListFailed'));
         const json_data = await res.json();
         const data = json_data.data.items;
-        setRoles(data); // 合并
+        setRoles(data);
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || '加载失败');
+        setModelError(err || t('config.role.loadFailed'));
       } finally {
         setModelLoading(false);
       }
@@ -91,14 +93,14 @@ export default function RolePage() {
       const res = await tenantFetch(`/api/config/roles/${role_id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('获取角色列表失败');
+      if (!res.ok) throw new Error(t('config.role.fetchRoleListFailed'));
       const json_data = await res.json();
       const data = json_data.data;
-      console.log('delete role success', data);
-      setRoles((prev) => prev.filter((role) => role.id !== role_id)); // 合并
+      console.log(t('config.role.deleteRoleSuccess'), data);
+      setRoles((prev) => prev.filter((role) => role.id !== role_id));
       setIsEditOpen(false);
     } catch (err: any) {
-      setModelError(err || '加载失败');
+      setModelError(err || t('config.role.loadFailed'));
     } finally {
       setModelLoading(false);
     }
@@ -109,17 +111,17 @@ export default function RolePage() {
       const res = await tenantFetch(`/api/config/roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editRole), // 包装为数组
+        body: JSON.stringify(editRole),
       });
-      if (!res.ok) throw new Error('获取角色列表失败');
+      if (!res.ok) throw new Error(t('config.role.fetchRoleListFailed'));
       const json_data = await res.json();
       const data = json_data.data;
-      console.log('create role success', data);
-      setRoles([...roles, data]); // 合并
+      console.log(t('config.role.createRoleSuccess'), data);
+      setRoles([...roles, data]);
       setIsEditOpen(false);
       setModelError('');
     } catch (err: any) {
-      setModelError(err || '加载失败');
+      setModelError(err || t('config.role.loadFailed'));
     } finally {
       setModelLoading(false);
     }
@@ -133,22 +135,22 @@ export default function RolePage() {
   return (
     <div id="role">
       <div className="flex items-center gap-12">
-        <div className="font-medium text-md">角色配置表</div>
+        <div className="font-medium text-md">{t('config.role.roleConfigTable')}</div>
         <Popover open={isEditOpen} onOpenChange={setIsEditOpen}>
           <PopoverTrigger asChild>
-            <Button variant="default">添加角色</Button>
+            <Button variant="default">{t('config.role.addRole')}</Button>
           </PopoverTrigger>
           <PopoverContent className="w-120">
             <div className="grid gap-4">
               <div className="space-y-2">
-                <h4 className="leading-none font-medium">创建角色</h4>
+                <h4 className="leading-none font-medium">{t('config.role.createRole')}</h4>
               </div>
               <div className="grid gap-2">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="rolename">角色名称</Label>
+                  <Label htmlFor="rolename">{t('config.role.roleName')}</Label>
                   <Input
                     id="rolename"
-                    placeholder="输入名称"
+                    placeholder={t('config.role.roleNamePlaceholder')}
                     value={editRole.name}
                     onChange={(e) => {
                       setEditRole({ ...editRole, name: e.target.value });
@@ -157,10 +159,10 @@ export default function RolePage() {
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="roledesc">角色描述</Label>
+                  <Label htmlFor="roledesc">{t('config.role.roleDescription')}</Label>
                   <Textarea
                     id="roledesc"
-                    placeholder="输入描述"
+                    placeholder={t('config.role.roleDescPlaceholder')}
                     value={editRole.description}
                     onChange={(e) => {
                       setEditRole({ ...editRole, description: e.target.value });
@@ -172,7 +174,7 @@ export default function RolePage() {
                   <p className="text-red-500 truncate">{modelerror}</p>
                 )}
                 <Button variant="secondary" onClick={handleAddRole}>
-                  保存
+                  {t('common.save')}
                 </Button>
               </div>
             </div>
@@ -183,8 +185,8 @@ export default function RolePage() {
         <Table className="w-full">
           <TableHeader className="w-full">
             <TableRow>
-              <TableHead className="w-1/5">角色名称</TableHead>
-              <TableHead className="w-3/5">角色描述</TableHead>
+              <TableHead className="w-1/5">{t('config.role.roleName')}</TableHead>
+              <TableHead className="w-3/5">{t('config.role.roleDescription')}</TableHead>
               <TableHead className="text-right"></TableHead>
             </TableRow>
           </TableHeader>
@@ -211,7 +213,7 @@ export default function RolePage() {
         {roles.length == 0 && (
           <div>
             <h3 className="text-md font-medium text-gray-500 py-6 w-full text-center">
-              暂无角色，请点击上方按钮添加
+              {t('config.role.noRolesYet')}
             </h3>
           </div>
         )}

@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import { formatBeijingTime } from '@/app/knowledgebases/utils/utils';
 import { Badge } from '@/components/ui/badge';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 // 评估数据类型定义
 interface Dataset {
@@ -40,6 +41,7 @@ interface Dataset {
 
 
 const EvaluationPage = () => {
+  const { t } = useI18n();
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [datasets, setDatasets] = useState(Array<Dataset>);
@@ -60,14 +62,14 @@ const EvaluationPage = () => {
         const res = await tenantFetch(
           `/api/config/evaluation?page=${page}&size=${pageSize}`,
         );
-        if (!res.ok) throw new Error('获取评估任务列表失败');
+        if (!res.ok) throw new Error(t('evaluation.fetchError'));
         const json_data = await res.json();
         console.log("evaluation json_data", json_data)
         const data = json_data.data.items;
         setDatasets(data);
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setEvaluationError(err || '加载失败');
+        setEvaluationError(err || t('evaluation.loadError'));
       } finally {
         setIsLoading(false);
       }
@@ -84,7 +86,7 @@ const EvaluationPage = () => {
   const createNewEvalDataset = async () => {
     const data = {
       name: datasetName,
-      description: datasetDesc || "默认评估任务描述",
+      description: datasetDesc || t('evaluation.defaultEvalDesc'),
       type: "custom"
     };
 
@@ -98,7 +100,7 @@ const EvaluationPage = () => {
         },
       );
       if (!res.ok) {
-        alert('创建失败');
+        alert(t('evaluation.createFailed'));
         return;
       }
       const upload_result = await res.json();
@@ -122,7 +124,7 @@ const EvaluationPage = () => {
       });
 
       if (!res.ok) {
-        throw new Error('删除失败，请检查网络或配置');
+        throw new Error(t('evaluation.deleteError'));
       }
       setDatasets((prev) => prev.filter((config) => config.id !== eval_id));
     } catch (err: any) { console.log('删除评估任务出错: ', err); }
@@ -136,29 +138,29 @@ const EvaluationPage = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-xl font-medium bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                数据集 & 评估
+                {t('evaluation.datasetAndEval')}
               </h1>
               <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
-                评估数据集可以帮助你了解应用（AI助手）在不同数据集上的表现，从而选择最适合你需求的AI助手。
+                {t('evaluation.datasetDescription')}
               </p>
             </div>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5">
-                  <Plus className="mr-2 h-4 w-4" /> 新建数据集
+                  <Plus className="mr-2 h-4 w-4" /> {t('evaluation.createDataset')}
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                  <DialogTitle>新建评估任务</DialogTitle>
+                  <DialogTitle>{t('evaluation.newEvalTask')}</DialogTitle>
                   <DialogDescription>
-                    填写相关信息并上传数据集成功后，点击保存。
+                    {t('evaluation.evalTaskDescription')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="dataset_name" className="text-right">
-                      数据集名称
+                      {t('evaluation.datasetName')}
                     </Label>
                     <Input
                       id="dataset_name"
@@ -168,7 +170,7 @@ const EvaluationPage = () => {
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="dataset_desc" className="text-right">
-                      数据集描述
+                      {t('evaluation.datasetDesc')}
                     </Label>
                     <Input
                       id="dataset_desc"
@@ -182,7 +184,7 @@ const EvaluationPage = () => {
                     variant="outline"
                     onClick={() => setIsCreateOpen(false)}
                   >
-                    取消
+                    {t('common.cancel')}
                   </Button>
                   <Button
                     onClick={createNewEvalDataset}
@@ -190,7 +192,7 @@ const EvaluationPage = () => {
                     disabled={isCreateLoading}
                     className="bg-primary hover:bg-primary/90"
                   >
-                    {isCreateLoading ? '提交中...' : '新建'}
+                    {isCreateLoading ? t('evaluation.submitting') : t('evaluation.submit')}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -204,20 +206,20 @@ const EvaluationPage = () => {
         <div className="p-6 border-b">
           <h2 className="text-lg font-medium flex items-center gap-2">
             <Database className="h-5 w-5" />
-            数据集列表
+            {t('evaluation.datasetList')}
           </h2>
         </div>
         <div className="overflow-auto h-full">
           <Table className=' border-b'>
             <TableHeader>
               <TableRow className="hover:bg-muted/30 transition-colors">
-                <TableHead className="w-[200px] pl-8">数据集</TableHead>
-                <TableHead>类型</TableHead>
-                <TableHead>描述</TableHead>
-                <TableHead>样本数</TableHead>
-                <TableHead>实验数</TableHead>
-                <TableHead>创建时间</TableHead>
-                <TableHead className="text-right pr-6">操作</TableHead>
+                <TableHead className="w-[200px] pl-8">{t('evaluation.dataset')}</TableHead>
+                <TableHead>{t('evaluation.type')}</TableHead>
+                <TableHead>{t('evaluation.description')}</TableHead>
+                <TableHead>{t('evaluation.sampleCount')}</TableHead>
+                <TableHead>{t('evaluation.experimentCount')}</TableHead>
+                <TableHead>{t('evaluation.createTime')}</TableHead>
+                <TableHead className="text-right pr-6">{t('evaluation.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,14 +228,14 @@ const EvaluationPage = () => {
                   <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Database className="h-8 w-8 text-muted-foreground/50" />
-                      <span>暂无数据集</span>
+                      <span>{t('evaluation.noDataset')}</span>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setIsCreateOpen(true)}
                         className="mt-2"
                       >
-                        <Plus className="mr-1 h-3 w-3" /> 创建第一个数据集
+                        <Plus className="mr-1 h-3 w-3" /> {t('evaluation.createFirstDataset')}
                       </Button>
                     </div>
                   </TableCell>
@@ -260,11 +262,11 @@ const EvaluationPage = () => {
                         variant={dataset.name === "GAIA" ? "default" : "secondary"}
                         className={dataset.name === "GAIA" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}
                       >
-                        {dataset.name === "GAIA" ? "内置" : "自定义"}
+                        {dataset.name === "GAIA" ? t('evaluation.builtin') : t('evaluation.custom')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-md">
-                      {dataset.description || '暂时还没有描述，可以去设置页面添加哦。'}
+                      {dataset.description || t('knowledgebase.noDescription')}
                     </TableCell>
                     <TableCell className="font-medium">{dataset.dataset_count}</TableCell>
                     <TableCell className="font-medium">{dataset.experiments_count}</TableCell>

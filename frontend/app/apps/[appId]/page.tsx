@@ -20,35 +20,38 @@ import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
+import { useI18n } from '@/app/providers/i18n';
 
-// Default chatbot config
-const default_chat_config: Chatbot = {
-  id: '',
-  app_id: '',
-  description: '',
-  enable_search: false,
-  mcp_ids: [],
-  kb_ids: [],
-  model_id: "",
-  updated_at: "",
-  enable_agent: false,
-  enable_chatdb: false,
-  enable_faq: false,
-  faq_config: null,
-  enable_input_guardrail: false,
-  enable_output_guardrail: false,
-  guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
-  prompts: {
-    plan: PLAN_PROMPT,
-    act: ACT_PROMPT,
-    act_with_plan: ACT_WITH_PLAN_PROMPT,
-    summary: SUMMARY_PROMPT,
-  }
-};
 
 export default function ViewChatApp(
     { params } : { params: Promise<{ appId: string }> }
 ) {
+    const { t } = useI18n();
+
+    // Default chatbot config
+    const default_chat_config: Chatbot = {
+        id: '',
+        app_id: '',
+        description: '',
+        enable_search: false,
+        mcp_ids: [],
+        kb_ids: [],
+        model_id: "",
+        updated_at: "",
+        enable_agent: false,
+        enable_chatdb: false,
+        enable_faq: false,
+        faq_config: null,
+        enable_input_guardrail: false,
+        enable_output_guardrail: false,
+        guardrail_hint: t('apps.guardrailHint'),
+        prompts: {
+        plan: PLAN_PROMPT,
+        act: ACT_PROMPT,
+        act_with_plan: ACT_WITH_PLAN_PROMPT,
+        summary: SUMMARY_PROMPT,
+        }
+    };
     const { appId } = use(params);
     const router = useRouter();
     const { tenantFetch } = useTenantFetch();
@@ -96,7 +99,7 @@ export default function ViewChatApp(
             }
         } catch (error: any) {
             console.error('获取配置失败:', error);
-            toast.error('获取配置失败');
+            toast.error(t('apps.fetchConfigError'));
         } finally {
             setLoading(false);
         }
@@ -120,7 +123,7 @@ export default function ViewChatApp(
 
             if (!res.ok) {
                 const errorText = await res.text();
-                throw new Error(`保存失败: ${errorText}`);
+                throw new Error(`${t('apps.saveFailed')}: ${errorText}`);
             }
 
             const data = await res.json();
@@ -128,12 +131,12 @@ export default function ViewChatApp(
                 setBotConfig(data.data);
             }
             if (shouldToast) {
-                toast.success('保存成功');
+                toast.success(t('messages.saveSuccess'));
             }
             return true;
         } catch (error: any) {
             console.error('保存失败:', error);
-            toast.error(error.message || '保存失败');
+            toast.error(error.message || t('apps.saveFailed'));
             return false;
         } finally {
             setSaving(false);
@@ -147,11 +150,11 @@ export default function ViewChatApp(
 
     // Navigate back after save
     if (loading) {
-        return <div className="flex items-center justify-center h-screen">加载中...</div>;
+        return <div className="flex items-center justify-center h-screen">{t('common.loading')}</div>;
     }
 
     return (
-        <div className="flex flex-col h-screen pt-0 space-y-0">
+        <div className="flex flex-col h-full min-h-0 space-y-0">
             <div className="absolute top-2 left-12 py-0 flex items-center z-10">
                 <Breadcrumb>
                     <BreadcrumbList>
@@ -162,13 +165,13 @@ export default function ViewChatApp(
                                     className="px-0"
                                     onClick={() => router.push('/apps')}
                                 >
-                                    应用
+                                    {t('sidebar.apps')}
                                 </Button>
                             </BreadcrumbLink>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />
                         <BreadcrumbItem>
-                            <BreadcrumbPage>{botConfig?.app_id || '应用编辑'}</BreadcrumbPage>
+                            <BreadcrumbPage>{botConfig?.app_id || t('apps.edit')}</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
@@ -183,14 +186,14 @@ export default function ViewChatApp(
                     )}
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-2 py-6">
-                <Tabs defaultValue="settings" className="h-full flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto px-2">
+                <Tabs defaultValue="settings" className="h-full min-h-0 flex flex-col">
                     <TabsList className="py-0 bg-muted rounded-lg flex-none">
                         <TabsTrigger value="settings" className="py-1 px-2">
-                            <span className="text-xs">应用设置</span>
+                            <span className="text-xs">{t('apps.title')}</span>
                         </TabsTrigger>
                         <TabsTrigger value="faq" className="py-1 px-2">
-                            <span className="text-xs">FAQ管理</span>
+                            <span className="text-xs">FAQ</span>
                         </TabsTrigger>
                     </TabsList>
                     <TabsContent value="settings" className="py-2">

@@ -49,9 +49,11 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useTenant } from '@/app/providers/tenant';
+import { useI18n } from '@/app/providers/i18n';
 
 export function AppSidebar() {
   const { tenantId, tenantName, tenants, setTenant, addTenant, removeTenant } = useTenant();
+  const { t } = useI18n();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newTenantId, setNewTenantId] = useState('');
   const [newTenantName, setNewTenantName] = useState('');
@@ -92,7 +94,7 @@ export function AppSidebar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">选择工作空间</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">{t('workspace.select')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {tenants.map((tenant) => (
                 <DropdownMenuItem
@@ -119,7 +121,7 @@ export function AppSidebar() {
                 onClick={() => setIsCreateDialogOpen(true)}
               >
                 <Plus className="h-3 w-3 mr-2" />
-                <span className="text-xs">新建工作空间</span>
+                <span className="text-xs">{t('workspace.create')}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -129,24 +131,24 @@ export function AppSidebar() {
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>新建工作空间</DialogTitle>
-              <DialogDescription>创建一个新的工作空间来隔离数据</DialogDescription>
+              <DialogTitle>{t('workspace.createTitle')}</DialogTitle>
+              <DialogDescription>{t('workspace.createDescription')}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="tenant-id">工作空间 ID</Label>
+                <Label htmlFor="tenant-id">{t('workspace.idLabel')}</Label>
                 <Input
                   id="tenant-id"
-                  placeholder="请输入工作空间 ID（英文字母、数字、下划线）"
+                  placeholder={t('workspace.idPlaceholder')}
                   value={newTenantId}
                   onChange={(e) => setNewTenantId(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tenant-name">工作空间名称</Label>
+                <Label htmlFor="tenant-name">{t('workspace.nameLabel')}</Label>
                 <Input
                   id="tenant-name"
-                  placeholder="请输入工作空间名称"
+                  placeholder={t('workspace.namePlaceholder')}
                   value={newTenantName}
                   onChange={(e) => setNewTenantName(e.target.value)}
                 />
@@ -154,10 +156,10 @@ export function AppSidebar() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                取消
+                {t('common.cancel')}
               </Button>
               <Button onClick={handleCreateTenant} disabled={!newTenantId.trim() || !newTenantName.trim()}>
-                创建
+                {t('common.create')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -168,24 +170,24 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/knowledgebases"><BookIcon /> 知识库</Link>
+                <Link href="/knowledgebases"><BookIcon /> {t('sidebar.knowledgebase')}</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/apps"><AppWindowIcon /> 应用</Link>
+                <Link href="/apps"><AppWindowIcon /> {t('sidebar.apps')}</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/evaluation"><Scale /> 评估</Link>
+                <Link href="/evaluation"><Scale /> {t('sidebar.evaluation')}</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton>
                     <MessageCircle />
-                    <span>对话</span>
+                    <span>{t('sidebar.conversation')}</span>
                     <ChevronDown className="ml-auto" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
@@ -205,37 +207,37 @@ export function AppSidebar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton>
-                  <Settings /> Settings
+                  <Settings /> {t('sidebar.settings')}
                   <ChevronUp className="ml-auto" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-50">
                 <DropdownMenuItem asChild>
-                  <Link href="/config/model"><Bot /> 模型</Link>
+                  <Link href="/config/model"><Bot /> {t('sidebar.model')}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/vectordb"><Database /> 向量数据库 </Link>
+                  <Link href="/config/vectordb"><Database /> {t('sidebar.vectordb')} </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/mcp"><PlugZap /> MCP</Link>
+                  <Link href="/config/mcp"><PlugZap /> {t('sidebar.mcp')}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/search"><Search /> 搜索</Link>
+                  <Link href="/config/search"><Search /> {t('sidebar.search')}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/code_sandbox"><Code /> Code沙箱</Link>
+                  <Link href="/config/code_sandbox"><Code /> {t('sidebar.codeSandbox')}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/chatdb"><LassoSelectIcon /> ChatDB </Link>
+                  <Link href="/config/chatdb"><LassoSelectIcon /> {t('sidebar.chatdb')} </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/tracing"><SquareActivity /> 链路追踪</Link>
+                  <Link href="/config/tracing"><SquareActivity /> {t('sidebar.tracing')}</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/role"><GlobeLock /> 权限控制 </Link>
+                  <Link href="/config/role"><GlobeLock /> {t('sidebar.role')} </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/guardrail"><ShieldCheck /> 安全护栏 </Link>
+                  <Link href="/config/guardrail"><ShieldCheck /> {t('sidebar.guardrail')} </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

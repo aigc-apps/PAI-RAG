@@ -26,11 +26,12 @@ import { useState, useEffect } from 'react';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { useRouter } from 'next/navigation';
 import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
+import { useI18n } from '@/app/providers/i18n';
 
 
 interface EvalConfigFormDialogProps {
   mode: 'new' | 'edit';
-  config?: EvaluatorConfig; // edit 时传入
+  config?: EvaluatorConfig; // When editing, pass in config
   llms: LlmConfig[];
   datasetId: string;
   isOpen: boolean;
@@ -50,6 +51,7 @@ export function EvalConfigFormDialog({
   isSaving,
 }: EvalConfigFormDialogProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [localConfig, setLocalConfig] = useState<EvaluatorConfig>(
     mode === 'edit' && config
       ? { ...config }
@@ -63,7 +65,7 @@ export function EvalConfigFormDialog({
       }
   );
 
-  // 当 config 或 mode 变化时重置表单
+  // Reset form when config or mode changes
   useEffect(() => {
     if (mode === 'edit' && config) {
       setLocalConfig({ ...config });
@@ -82,38 +84,40 @@ export function EvalConfigFormDialog({
     onSave(localConfig);
   };
 
-  const mode_str = mode === "new" ? "新建" : "修改";
+  const mode_str = mode === "new" ? t('evaluation.new') : t('evaluation.modify');
+  const titleKey = mode === "new" ? 'evaluation.newEvaluatorConfig' : 'evaluation.editEvaluatorConfig';
+  const descKey = mode === "new" ? 'evaluation.newEvaluatorConfigDesc' : 'evaluation.editEvaluatorConfigDesc';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{mode_str}评估器配置</DialogTitle>
-          <DialogDescription>{mode_str}一个评估器配置后，点击保存。</DialogDescription>
+          <DialogTitle>{t(titleKey)}</DialogTitle>
+          <DialogDescription>{t(descKey)}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6 py-4">
-          {/* 名称 */}
+          {/* Name */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <Label htmlFor="setting_name">配置名称</Label>
+            <Label htmlFor="setting_name">{t('evaluation.configName')}</Label>
             <Input
               id="setting_name"
               value={localConfig.name}
               onChange={(e) =>
                 setLocalConfig((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder="请输入配置名称, 如config_v1"
+              placeholder={t('evaluation.configNamePlaceholder')}
               required
             />
           </div>
 
           
 
-          {/* 评估器选择 */}
+          {/* Evaluator selection */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4 border-t  pt-3">
-            <Label htmlFor="enable_agent">评估器选择</Label>
+            <Label htmlFor="enable_agent">{t('evaluation.evaluatorSelection')}</Label>
             <div className="space-y-4 w-full">
-              {/* 评估器类型选择 */}
+              {/* Evaluator type selection */}
               <Select
                 value={localConfig.type || ""}
                 onValueChange={(value) => {
@@ -124,20 +128,20 @@ export function EvalConfigFormDialog({
                 }}
               >
                 <SelectTrigger id="evaluator_name">
-                  <SelectValue placeholder="选择评估器" />
+                  <SelectValue placeholder={t('evaluation.selectEvaluator')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ExactMatch">精确匹配</SelectItem>
-                  <SelectItem value="LLMJudge">LLM 评判</SelectItem>
+                  <SelectItem value="ExactMatch">{t('evaluation.exactMatch')}</SelectItem>
+                  <SelectItem value="LLMJudge">{t('evaluation.llmJudge')}</SelectItem>
                 </SelectContent>
               </Select>
 
-              {/* 动态配置区域 */}
+              {/* Dynamic configuration area */}
               {localConfig.type === "ExactMatch" && (
                 <div className="space-y-3 pt-3">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="case_sensitive" className="text-sm">
-                      区分大小写
+                      {t('evaluation.caseSensitive')}
                     </Label>
                     <Switch
                       id="case_sensitive"
@@ -152,7 +156,7 @@ export function EvalConfigFormDialog({
                   </div>
                   <div className="flex items-center justify-between">
                     <Label htmlFor="ignore_punctuation" className="text-sm">
-                      忽略标点符号
+                      {t('evaluation.ignorePunctuation')}
                     </Label>
                     <Switch
                       id="ignore_punctuation"
@@ -171,7 +175,7 @@ export function EvalConfigFormDialog({
               {localConfig.type === "LLMJudge" && (
                 <div className="pt-3">
                   <Label htmlFor="model_id" className="block text-sm mb-2">
-                    选择评估器模型
+                    {t('evaluation.selectEvaluatorModel')}
                   </Label>
                   <Select
                     value={localConfig.model_id || ""}
@@ -183,7 +187,7 @@ export function EvalConfigFormDialog({
                     }}
                   >
                     <SelectTrigger id="model_id">
-                      <SelectValue placeholder="请选择评估模型" />
+                      <SelectValue placeholder={t('evaluation.selectEvalModel')} />
                     </SelectTrigger>
                     <SelectContent>
                       {llms.map((llm) => (
@@ -201,13 +205,13 @@ export function EvalConfigFormDialog({
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSaving}>
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                提交中...
+                {t('evaluation.submitting')}
               </>
             ) : (
               mode_str

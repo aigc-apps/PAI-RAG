@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Slider } from "@/components/ui/slider"
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 const ENDPOINT_LIST = [
   "iqs.cn-zhangjiakou.aliyuncs.com",
@@ -24,19 +25,20 @@ const ENDPOINT_LIST = [
 const MASK_API_KEY = '******'
 
 export default function SearchConfig() {
-  const [aliyunHasKey, setAliyunHasKey] = useState(false); // AccessKey ID
-  const [tavilyHasKey, setTavilyHasKey] = useState(false); // AccessKey ID
+  const { t } = useI18n();
+  const [aliyunHasKey, setAliyunHasKey] = useState(false);
+  const [tavilyHasKey, setTavilyHasKey] = useState(false);
 
-  const [aliyunAK, setAliyunAK] = useState(''); // AccessKey ID
-  const [aliyunSK, setAliyunSK] = useState(''); // AccessKey Secret
+  const [aliyunAK, setAliyunAK] = useState('');
+  const [aliyunSK, setAliyunSK] = useState('');
   const [endpoint, setEndpoint] = useState('')
-  const [isSaving, setIsSaving] = useState(false); // 加载状态
-  const [searchCount, setSearchCount] = useState(10); // 每次搜索返回的结果数
-  const [tavilyApiKey, setTavilyApiKey] = useState(''); // Tavily API Key
-  const [searchEngineType, setSearchEngineType] = useState('aliyun'); // 搜索引擎类型
+  const [isSaving, setIsSaving] = useState(false);
+  const [searchCount, setSearchCount] = useState(10);
+  const [tavilyApiKey, setTavilyApiKey] = useState('');
+  const [searchEngineType, setSearchEngineType] = useState('aliyun');
   const { tenantFetch } = useTenantFetch();
 
-  // 初始化加载配置
+  // Initialize and load configuration
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -45,7 +47,7 @@ export default function SearchConfig() {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        if (!res.ok) throw new Error('加载配置失败');
+        if (!res.ok) throw new Error(t('config.loadError'));
 
         const data = (await res.json()).data[0];
         setAliyunHasKey(!data.is_aliyun_empty);
@@ -63,7 +65,7 @@ export default function SearchConfig() {
 
     fetchConfig();
   }, []);
-  // 保存配置
+  // Save configuration
   const handleSave = async () => {
     try {
       setIsSaving(true);
@@ -86,9 +88,9 @@ export default function SearchConfig() {
         }),
       });
 
-      if (!res.ok) throw new Error('保存失败，请检查网络或配置');
+      if (!res.ok) throw new Error(t('config.search.saveFailed'));
 
-      toast.success('搜索配置已成功保存。');
+      toast.success(t('config.search.saveSuccess'));
     } catch (err: any) {
       toast.warning(err.message);
     } finally {
@@ -104,11 +106,11 @@ export default function SearchConfig() {
         }
       >
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          <h2 className="text-xl font-medium text-gray-800">搜索配置</h2>
+          <h2 className="text-xl font-medium text-gray-800">{t('config.search.title')}</h2>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="endpoint" className="text-right">
-                选择搜索引擎：
+                {t('config.search.selectSearchEngine')}
               </Label>
                <div className="col-span-3 flex items-center">
                 <Select
@@ -118,19 +120,19 @@ export default function SearchConfig() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="请选择搜索引擎" />
+                    <SelectValue placeholder={t('config.search.selectSearchEnginePlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                       <SelectItem key='aliyun' value='aliyun'>
-                        阿里云通用搜索
+                        {t('config.search.aliyunUniversalSearch')}
                       </SelectItem>
                       <SelectItem key='tavily' value='tavily'>
-                        Tavily 搜索
+                        {t('config.search.tavilySearch')}
                       </SelectItem>
                   </SelectContent>
                 </Select>
 
-                <a href={searchEngineType=== 'aliyun' ? "https://help.aliyun.com/document_detail/2870227.html" : "https://www.tavily.com/"} target="_blank" className="ml-4 text-sm text-blue-600 hover:underline">开通指南 </a>
+                <a href={searchEngineType=== 'aliyun' ? "https://help.aliyun.com/document_detail/2870227.html" : "https://www.tavily.com/"} target="_blank" className="ml-4 text-sm text-blue-600 hover:underline">{t('config.search.activationGuide')} </a>
               </div>
 
             </div>
@@ -138,7 +140,7 @@ export default function SearchConfig() {
               <div className="gap-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="endpoint" className="text-right">
-                  通用搜索Endpoint
+                  {t('config.search.universalSearchEndpoint')}
                 </Label>
                 <div className="col-span-3 flex items-center">
                   <Select
@@ -148,7 +150,7 @@ export default function SearchConfig() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="请选择地域" />
+                      <SelectValue placeholder={t('config.search.selectRegionPlaceholder')} />
                     </SelectTrigger>
                     <SelectContent>
                       {ENDPOINT_LIST.map((endpoint) => (
@@ -162,30 +164,30 @@ export default function SearchConfig() {
               </div>
               <div className="grid grid-cols-4 items-center gap-4 pt-4">
                 <Label htmlFor="aliyun_ak" className="text-right">
-                  AccessKey ID
+                  {t('config.search.accessKeyId')}
                 </Label>
                 <div className="col-span-3 flex items-center">
                   <Input
                     id="aliyun_ak"
                     defaultValue={aliyunHasKey ? '******' : ''}
-                    type="password" // 动态切换类型
+                    type="password"
                     onChange={(e) => setAliyunAK(e.target.value)}
-                    placeholder="输入 AccessKey ID"
+                    placeholder={t('config.search.accessKeyIdPlaceholder')}
                     className="col-span-3"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4 pt-4">
                 <Label htmlFor="aliyun_sk" className="text-right">
-                  AccessKey Secret
+                  {t('config.search.accessKeySecret')}
                 </Label>
                 <div className="col-span-3 flex items-center">
                   <Input
                     id="aliyun_sk"
                     defaultValue={aliyunHasKey ? '******' : ''}
-                    type="password" // 动态切换类型
+                    type="password"
                     onChange={(e) => setAliyunSK(e.target.value)}
-                    placeholder="输入 AccessKey Secret"
+                    placeholder={t('config.search.accessKeySecretPlaceholder')}
                     className="col-span-3"
                   />
                 </div>
@@ -195,15 +197,15 @@ export default function SearchConfig() {
            { searchEngineType === 'tavily' && (
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="tavily_key" className="text-right">
-                Tavily API Key
+                {t('config.search.tavilyApiKey')}
                 </Label>
                 <div className="col-span-3 flex items-center">
                   <Input
                     id="tavily_key"
                     defaultValue={tavilyHasKey ? '******' : ''}
-                    type="password" // 动态切换类型
+                    type="password"
                     onChange={(e) => setTavilyApiKey(e.target.value)}
-                    placeholder="输入 Tavily API Key"
+                    placeholder={t('config.search.tavilyApiKeyPlaceholder')}
                     className="col-span-3"
                   />
                 </div>
@@ -212,7 +214,7 @@ export default function SearchConfig() {
            )}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="search_count" className="text-right">
-              搜索结果条数({searchCount})
+              {t('config.search.searchResultCount', { count: searchCount })}
               </Label>
               <div className="col-span-3 flex items-center">
                 <Slider defaultValue={[10]} max={20} min={1} step={1} onValueChange={(value: number[]) => setSearchCount(value[0])} />
@@ -226,7 +228,7 @@ export default function SearchConfig() {
             disabled={isSaving}
             className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
           >
-            {isSaving ? '保存中...' : '保存搜索配置'}
+            {isSaving ? t('config.search.saving') : t('config.search.saveSearchConfig')}
           </Button>
         </div>
       </div>

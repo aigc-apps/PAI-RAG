@@ -2,6 +2,7 @@
 import React from 'react';
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n } from '@/app/providers/i18n';
 import {
     Table,
     TableBody,
@@ -47,6 +48,8 @@ const default_evaluator_config = {
 export default function EvaluatorConfigsPage(
     { params }: { params: Promise<{ datasetId: string }> }
 ) {
+    const { t } = useI18n();
+  
     const { datasetId } = use(params);
     const router = useRouter();
     const [page, setPage] = useState(1);
@@ -54,7 +57,7 @@ export default function EvaluatorConfigsPage(
     const [evaluatorConfigs, setEvaluatorConfigs] = useState<EvaluatorConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const pageSize = 10;
-    // 用于跟踪选中的行
+    // Track selected rows
     const [totalItems, setTotalItems] = useState(0);
     const [dataseterror, setDatasetError] = useState('');
     const [llms, setLlms] = useState<LlmConfig[]>([]);
@@ -78,7 +81,7 @@ export default function EvaluatorConfigsPage(
                 const evalData = eval_data.data;
                 console.log('evalData:', evalData);
 
-                if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
+                if (!datasetRes.ok) throw new Error(t('evaluation.fetchEvalTasksFailed'));
                 const json_data = await datasetRes.json();
                 console.log("evaluation dataset json_data", json_data)
                 const data = json_data.data.items;
@@ -92,7 +95,7 @@ export default function EvaluatorConfigsPage(
                 setLlms([...llmData]);
 
             } catch (err: any) {
-                setDatasetError(err || '加载数据集失败');
+                setDatasetError(err || t('evaluation.loadDatasetFailed'));
             } finally {
                 setIsLoading(false);
             }
@@ -119,12 +122,12 @@ export default function EvaluatorConfigsPage(
                     },
                 );
                 if (!res.ok) {
-                    alert('创建失败');
+                    alert(t('evaluation.createFailed'));
                     return;
                 }
                 const result = await res.json();
-                console.log('创建成功:', result);
-                setEvaluatorConfigs((prev) => [...prev, result.data]); // 追加新配置
+                console.log(t('evaluation.createSuccess'), result);
+                setEvaluatorConfigs((prev) => [...prev, result.data]); // Append new config
             } else {
                 const res = await tenantFetch(
                     `/api/config/evaluation/${datasetId}/evalconfigs/${data.id}`,
@@ -135,17 +138,17 @@ export default function EvaluatorConfigsPage(
                     },
                 );
                 if (!res.ok) {
-                    alert('更新失败');
+                    alert(t('evaluation.updateFailed'));
                     return;
                 }
                 const result = await res.json();
                 setEvaluatorConfigs((prev) =>
                     prev.map((config) => (config.id === result.data.id ? result.data : config)),
                 );
-                console.log('更新成功:', result.data);
+                console.log(t('evaluation.updateSuccess'), result.data);
             }
         } catch (error) {
-            console.error('创建失败:', error);
+            console.error(t('evaluation.createFailed'), error);
         } finally {
             setIsCreateLoading(false);
             setIsNewSettingsOpen(false);
@@ -163,11 +166,11 @@ export default function EvaluatorConfigsPage(
             });
 
             if (!res.ok) {
-                throw new Error('删除失败，请检查网络或配置');
+                throw new Error(t('evaluation.deleteFailed'));
             }
             setEvaluatorConfigs((prev) => prev.filter((config) => config.id !== config_id));
         }
-        catch (err: any) { console.log('删除实验设置任务出错: ', err); }
+        catch (err: any) { console.log(t('evaluation.deleteTaskError'), err); }
     }
 
 
@@ -178,10 +181,10 @@ export default function EvaluatorConfigsPage(
                 <CardHeader className="shrink-0 flex md:items-center md:justify-between">
                     <div>
                         <CardTitle className="text-lg font-medium flex items-center gap-2">
-                            <BarChart2 className="h-5 w-5" /> 评估器设置
+                            <BarChart2 className="h-5 w-5" /> {t('evaluation.evaluatorSettings')}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground mt-1">
-                            进行评估实验的评分标准、评估器等配置
+                            {t('evaluation.evaluatorSettingsDesc')}
                         </p>
                     </div>
 
@@ -201,7 +204,7 @@ export default function EvaluatorConfigsPage(
                             <Dialog open={isNewSettingsOpen} onOpenChange={setIsNewSettingsOpen}>
                                 <DialogTrigger asChild>
                                     <Button onClick={() => setIsEditSetting(false)}>
-                                        <Settings className="mr-2 h-4 w-4" /> 新建配置
+                                        <Settings className="mr-2 h-4 w-4" /> {t('evaluation.newEvaluator')}
                                     </Button>
                                 </DialogTrigger>
                             </Dialog>
@@ -213,12 +216,12 @@ export default function EvaluatorConfigsPage(
                         <Table className='rounded-md border'>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className='border-r border-r-border'>名称</TableHead>
+                                    <TableHead className='border-r border-r-border'>{t('evaluation.name')}</TableHead>
 
-                                    {/* 评估设置列 */}
-                                    <TableHead className='border-r border-r-border'>评估器类型</TableHead>
-                                    <TableHead className='border-r border-r-border'>评估设置</TableHead>
-                                    <TableHead className="text-center">操作</TableHead>
+                                    {/* Evaluation settings column */}
+                                    <TableHead className='border-r border-r-border'>{t('evaluation.evaluatorType')}</TableHead>
+                                    <TableHead className='border-r border-r-border'>{t('evaluation.evaluationSettings')}</TableHead>
+                                    <TableHead className="text-center">{t('evaluation.operations')}</TableHead>
                                 </TableRow>
                             </TableHeader>
 
@@ -228,14 +231,14 @@ export default function EvaluatorConfigsPage(
                                         <TableCell colSpan={9} className="h-32 text-center">
                                             <div className="flex items-center justify-center space-x-4">
                                                 <Loader2 className="h-6 w-6 animate-spin" />
-                                                <h4 className="font-medium">Loading Configs</h4>
+                                                <h4 className="font-medium">{t('evaluation.loadingConfigs')}</h4>
                                             </div>
                                         </TableCell>
                                     </TableRow>
                                 ) : evaluatorConfigs.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={9} className="h-24 text-center">
-                                            暂无数据
+                                            {t('evaluation.noData')}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
@@ -252,7 +255,7 @@ export default function EvaluatorConfigsPage(
                                                 <div className="space-y-1">
                                                     <div className="font-medium text-sm">
                                                         <Badge variant={config.type === "ExactMatch" ? "secondary" : "outline"}>
-                                                            {config.type === "ExactMatch" ? "精确匹配" : "LLM 评判"}
+                                                            {config.type === "ExactMatch" ? t('evaluation.exactMatch') : t('evaluation.llmJudge')}
                                                         </Badge>
                                                     </div>
                                                 </div>
@@ -262,13 +265,13 @@ export default function EvaluatorConfigsPage(
                                                 <div className="space-y-1">
                                                     {config.type === "ExactMatch" && (
                                                         <div className="text-xs text-muted-foreground space-y-0.5">
-                                                            <div>区分大小写: {config.case_sensitive ? "是" : "否"}</div>
-                                                            <div>忽略标点: {config.ignore_punctuation ? "是" : "否"}</div>
+                                                            <div>{t('evaluation.caseSensitive')}: {config.case_sensitive ? t('common.yes') : t('common.no')}</div>
+                                                            <div>{t('evaluation.ignorePunctuation')}: {config.ignore_punctuation ? t('common.yes') : t('common.no')}</div>
                                                         </div>
                                                     )}
                                                     {config.type === "LLMJudge" && (
                                                         <div className="text-xs text-muted-foreground">
-                                                            模型: {config.model_id || "未指定"}
+                                                            {t('evaluation.model')}: {config.model_id || t('evaluation.notSpecified')}
                                                         </div>
                                                     )}
                                                 </div>
