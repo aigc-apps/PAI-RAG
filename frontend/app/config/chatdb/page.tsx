@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { useRouter } from 'next/navigation';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 
 interface ChatDbConfig {
@@ -22,6 +23,7 @@ interface ChatDbConfig {
 }
 
 export default function ChatdbConfig() {
+  const { t } = useI18n();
   const [dbConfig, setDbConfig] = useState<ChatDbConfig>({
     dialect: "mysql",
     host: "",
@@ -58,7 +60,7 @@ export default function ChatdbConfig() {
           setLlms(llmResponse.data.items);
         }
         else {
-          toast.error("加载大模型列表失败: " + llmResponse.message);
+          toast.error(t('config.chatdb.loadLlmFailed') + ': ' + llmResponse.message);
         }
 
         const dbResponse = await dbRes.json()
@@ -73,11 +75,11 @@ export default function ChatdbConfig() {
           }
         }
         else {
-          toast.error("获取ChatDB信息失败: " + dbResponse.message);
+          toast.error(t('config.chatdb.fetchChatdbFailed') + ': ' + dbResponse.message);
         }
 
       } catch (err: any) {
-        toast.error("配置加载失败,请检查网络或重试")
+        toast.error(t('config.chatdb.configLoadFailed'))
       } finally {
         setIsLoading(false);
       }
@@ -88,27 +90,27 @@ export default function ChatdbConfig() {
 
   const checkConfig = () => {
     if (!dbConfig.host) {
-      toast.warning("主机地址必须填入。")
+      toast.warning(t('config.chatdb.hostRequired'))
       return;
     }
       if (!dbConfig.port) {
-      toast.warning("端口号必须填入。")
+      toast.warning(t('config.chatdb.portRequired'))
       return;
     }
     if (!dbConfig.username) {
-      toast.warning("用户名必须填入。")
+      toast.warning(t('config.chatdb.usernameRequired'))
       return;
     }
     if (!dbConfig.password) {
-      toast.warning("密码必须填入。")
+      toast.warning(t('config.chatdb.passwordRequired'))
       return;
     }
     if (!dbConfig.db_name) {
-      toast.warning("数据库名称必须填入。");
+      toast.warning(t('config.chatdb.dbNameRequired'));
       return;
     }
     if (dbConfig.dialect !== 'mysql' && dbConfig.dialect != "postgresql") {
-      toast.warning("数据库只支持mysql或者postgresql.");
+      toast.warning(t('config.chatdb.dialectSupported'));
       return;
     }
   }
@@ -134,10 +136,10 @@ export default function ChatdbConfig() {
         toast.error(response.message);
       }
       else {
-        toast.success("连接成功！")
+        toast.success(t('config.chatdb.connectSuccess'))
       }
     } catch (err: any) {
-      toast.error(`连接失败: ${err.message}`);
+      toast.error(`${t('config.chatdb.connectFailed')}: ${err.message}`);
     } finally {
       setIsConnecting(false);
     }
@@ -167,10 +169,10 @@ export default function ChatdbConfig() {
         toast.error(response.message);
       }
       else {
-        toast.success("Chatdb配置已成功保存。")
+        toast.success(t('config.chatdb.saveSuccess'))
       }
     } catch (err: any) {
-      toast.error(`保存失败: ${err.message}`);
+      toast.error(`${t('config.chatdb.saveFailed')}: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -179,10 +181,10 @@ export default function ChatdbConfig() {
   return (
     <div id="chatdb">
         <div className="py-6 px-6">
-          <h2 className="text-xl font-medium text-gray-800">ChatDB配置</h2>
+          <h2 className="text-xl font-medium text-gray-800">{t('config.chatdb.title')}</h2>
             <div className="flex py-6 px-4">
               <Label htmlFor="basemodel" className="w-[90px]">
-                基模型选择 <span className="text-destructive">*</span>{' '}
+                {t('config.chatdb.baseModel')} <span className="text-destructive">*</span>{' '}
               </Label>
               <div className="px-6">
                 {llms.length > 0 ? (
@@ -196,7 +198,7 @@ export default function ChatdbConfig() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="请选择基模型" />
+                      <SelectValue placeholder={t('config.chatdb.selectBaseModel')} />
                     </SelectTrigger>
                     <SelectContent>
                       {llms.map((llm) => (
@@ -208,14 +210,14 @@ export default function ChatdbConfig() {
                   </Select>
                 ) : (
                   <div>
-                    <p className="text-sm text-muted-foreground">尚未配置大模型</p>
+                    <p className="text-sm text-muted-foreground">{t('config.chatdb.noModelConfigured')}</p>
                     <Button
                       variant="outline"
                       onClick={() => {
                         router.push('/config/model/llm');
                       }}
                     >
-                      前往添加
+                      {t('config.chatdb.goToAdd')}
                     </Button>
                   </div>
                 )}
@@ -223,7 +225,7 @@ export default function ChatdbConfig() {
             </div>
             <div className="flex py-3 px-4">
               <Label htmlFor="basemodel" className="w-[90px]">
-                数据库类型 <span className="text-destructive">*</span>{' '}
+                {t('config.chatdb.dbType')} <span className="text-destructive">*</span>{' '}
               </Label>
               <div className="px-6">
                   <Select
@@ -236,7 +238,7 @@ export default function ChatdbConfig() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="请选择数据库类型" />
+                      <SelectValue placeholder={t('config.chatdb.selectDbType')} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem key="mysql" value="mysql">
@@ -251,19 +253,19 @@ export default function ChatdbConfig() {
             </div>
             <div className="flex px-4 py-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="host">主机地址</Label>
+                <Label htmlFor="host">{t('config.chatdb.host')}</Label>
                 <Input id="host" value={dbConfig.host || ''} onChange={(e) => {
                   setDbConfig({...dbConfig, host: e.target.value});
                 }} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="port">端口</Label>
+                <Label htmlFor="port">{t('config.chatdb.port')}</Label>
                 <Input id="port" type="number" value={dbConfig.port} onChange={(e) => {
                   setDbConfig({...dbConfig, port: parseInt(e.target.value)});
                 }} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="database">数据库名</Label>
+                <Label htmlFor="database">{t('config.chatdb.database')}</Label>
                 <Input id="database"  value={dbConfig.db_name} onChange={(e) => {
                   setDbConfig({...dbConfig, db_name: e.target.value});
                 }} />
@@ -271,13 +273,13 @@ export default function ChatdbConfig() {
             </div>
             <div className="flex px-4 py-6 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="user">用户名</Label>
+                <Label htmlFor="user">{t('config.chatdb.username')}</Label>
                 <Input id="user" type="string" value={dbConfig.username || ''} onChange={(e) => {
                   setDbConfig({...dbConfig, username: e.target.value});
                   }} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">密码</Label>
+                <Label htmlFor="password">{t('config.chatdb.password')}</Label>
                 <Input id="password" type="password" value={dbConfig.password  || ''} onChange={(e) => {
                   setDbConfig({...dbConfig, password: e.target.value});
                   }} />
@@ -289,7 +291,7 @@ export default function ChatdbConfig() {
                 disabled={isSaving}
                 className="mt-4 text-white rounded-lg transition-colors"
               >
-                {isSaving ? '保存中...' : '保存ChatDB配置'}
+                {isSaving ? t('config.chatdb.saving') : t('config.chatdb.saveChatdbConfig')}
               </Button>
               <Button
                 variant="secondary"
@@ -297,7 +299,7 @@ export default function ChatdbConfig() {
                 disabled={isConnecting}
                 className="mt-4 rounded-lg transition-colors"
               >
-                {isConnecting ? '连接中...' : '连接测试'}
+                {isConnecting ? t('config.chatdb.connecting') : t('config.chatdb.testConnection')}
               </Button>
             </div>
           </div>

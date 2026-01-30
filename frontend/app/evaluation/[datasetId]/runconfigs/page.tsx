@@ -2,6 +2,7 @@
 import React from 'react';
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n } from '@/app/providers/i18n';
 import {
     Table,
     TableBody,
@@ -34,31 +35,32 @@ import { RunConfig } from '@/app/evaluation/[datasetId]/types';
 import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 
-const default_eval_run_config = {
-    id: "",
-    name: "",
-    model_id: "",
-    mcp_ids: [],
-    kb_ids: [],
-    enable_search: false,
-    enable_vision: false,
-    enable_agent: false,
-    enable_input_guardrail: false,
-    enable_output_guardrail: false,
-    guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
-    prompts: {
-        plan: PLAN_PROMPT,
-        act: ACT_PROMPT,
-        act_with_plan: ACT_WITH_PLAN_PROMPT,
-        summary: SUMMARY_PROMPT,
-    },
-};
-
 
 
 export default function RunConfigsPage(
     { params }: { params: Promise<{ datasetId: string }> }
 ) {
+    const { t } = useI18n();
+    const default_eval_run_config = {
+        id: "",
+        name: "",
+        model_id: "",
+        mcp_ids: [],
+        kb_ids: [],
+        enable_search: false,
+        enable_vision: false,
+        enable_agent: false,
+        enable_input_guardrail: false,
+        enable_output_guardrail: false,
+        guardrail_hint: t('apps.guardrailHint'),
+        prompts: {
+            plan: PLAN_PROMPT,
+            act: ACT_PROMPT,
+            act_with_plan: ACT_WITH_PLAN_PROMPT,
+            summary: SUMMARY_PROMPT,
+        },
+    };
+    
     const { datasetId } = use(params);
     const router = useRouter();
     const [page, setPage] = useState(1);
@@ -66,7 +68,6 @@ export default function RunConfigsPage(
     const [evalRunConfigs, setRunConfigs] = useState<RunConfig[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const pageSize = 10;
-    // 用于跟踪选中的行
     const [totalItems, setTotalItems] = useState(0);
     const [dataseterror, setDatasetError] = useState('');
     const [llms, setLlms] = useState<LlmConfig[]>([]);
@@ -95,7 +96,7 @@ export default function RunConfigsPage(
                 const evalData = eval_data.data;
                 console.log('evalData:', evalData);
 
-                if (!datasetRes.ok) throw new Error('获取评估任务列表失败');
+                if (!datasetRes.ok) throw new Error(t('evaluation.fetchEvalTaskListFailed'));
                 const json_data = await datasetRes.json();
                 console.log("evaluation dataset json_data", json_data)
                 const data = json_data.data.items;
@@ -118,13 +119,13 @@ export default function RunConfigsPage(
                 setKbs([...kbData]);
 
             } catch (err: any) {
-                setDatasetError(err || '加载数据集失败');
+                setDatasetError(err || t('evaluation.loadDatasetFailed'));
             } finally {
                 setIsLoading(false);
             }
         };
         fetchConfigs();
-    }, [page]);
+    }, [page, datasetId, t, tenantFetch]);
 
     const handlePageChange = (newPage: number) => {
         if (newPage < 1 || newPage > totalPages) return;
@@ -145,12 +146,12 @@ export default function RunConfigsPage(
                     },
                 );
                 if (!res.ok) {
-                    alert('创建失败');
+                    alert(t('evaluation.createFailed'));
                     return;
                 }
                 const result = await res.json();
-                console.log('创建成功:', result);
-                setRunConfigs((prev) => [...prev, result.data]); // 追加新配置
+                console.log(t('evaluation.createSuccess'), result);
+                setRunConfigs((prev) => [...prev, result.data]); // Append new config
             } else {
                 const res = await tenantFetch(
                     `/api/config/evaluation/${datasetId}/runconfigs/${data.id}`,
@@ -161,17 +162,17 @@ export default function RunConfigsPage(
                     },
                 );
                 if (!res.ok) {
-                    alert('更新失败');
+                    alert(t('evaluation.updateFailed'));
                     return;
                 }
                 const result = await res.json();
                 setRunConfigs((prev) =>
                     prev.map((config) => (config.id === result.data.id ? result.data : config)),
                 );
-                console.log('更新成功:', result.data);
+                console.log(t('evaluation.updateSuccess'), result.data);
             }
         } catch (error) {
-            console.error('创建失败:', error);
+            console.error('Create/Update failed:', error);
         } finally {
             setIsCreateLoading(false);
             setIsNewSettingsOpen(false);
@@ -230,7 +231,7 @@ export default function RunConfigsPage(
         const hint = config.guardrail_hint;
 
         if (!hasInput && !hasOutput && !hint) {
-            return <span className="text-muted-foreground">未启用</span>;
+            return <span className="text-muted-foreground">{t('evaluation.notEnabled')}</span>;
         }
 
         return (
@@ -238,22 +239,22 @@ export default function RunConfigsPage(
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-auto p-1">
-                            <span className="text-xs text-blue-600">详情</span>
+                            <span className="text-xs text-blue-600">{t('evaluation.details')}</span>
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-sm p-3">
                         <div className="space-y-1 text-sm">
                             <div>
-                                <strong>输入护栏：</strong>
-                                {hasInput ? "✅ 启用" : "❌ 未启用"}
+                                <strong>{t('evaluation.inputGuardrail')}</strong>
+                                {hasInput ? t('evaluation.enabled') : t('evaluation.disabled')}
                             </div>
                             <div>
-                                <strong>输出护栏：</strong>
-                                {hasOutput ? "✅ 启用" : "❌ 未启用"}
+                                <strong>{t('evaluation.outputGuardrail')}</strong>
+                                {hasOutput ? t('evaluation.enabled') : t('evaluation.disabled')}
                             </div>
                             {hint && (
                                 <div>
-                                    <strong>提示语：</strong>
+                                    <strong>{t('evaluation.hint')}</strong>
                                     <div className="mt-1 text-xs bg-muted p-2 rounded break-all text-black">
                                         {hint}
                                     </div>
@@ -277,11 +278,11 @@ export default function RunConfigsPage(
             });
 
             if (!res.ok) {
-                throw new Error('删除失败，请检查网络或配置');
+                throw new Error(t('evaluation.deleteFailed'));
             }
             setRunConfigs((prev) => prev.filter((config) => config.id !== config_id));
         }
-        catch (err: any) { console.log('删除实验设置任务出错: ', err); }
+        catch (err: any) { console.log(t('evaluation.deleteRunConfigError'), err); }
     }
 
 
@@ -292,10 +293,10 @@ export default function RunConfigsPage(
                 <CardHeader className="shrink-0 flex md:items-center md:justify-between">
                     <div>
                         <CardTitle className="text-lg font-medium flex items-center gap-2">
-                            <Settings2 className="h-5 w-5" /> 运行设置
+                            <Settings2 className="h-5 w-5" /> {t('evaluation.runSettings')}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground mt-1">
-                            应用运行时参数、模型、插件等设置
+                            {t('evaluation.runSettingsDesc')}
                         </p>
                     </div>
 
@@ -317,7 +318,7 @@ export default function RunConfigsPage(
                             <Dialog open={isNewSettingsOpen} onOpenChange={setIsNewSettingsOpen}>
                                 <DialogTrigger asChild>
                                     <Button onClick={() => setIsEditSetting(false)}>
-                                        <Settings className="mr-2 h-4 w-4" /> 新建配置
+                                        <Settings className="mr-2 h-4 w-4" /> {t('evaluation.newRun')}
                                     </Button>
                                 </DialogTrigger>
                             </Dialog>
@@ -329,14 +330,14 @@ export default function RunConfigsPage(
                         <Table className='rounded-md border'>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className='border-r border-r-border'>名称</TableHead>
-                                    <TableHead>基模型</TableHead>
-                                    <TableHead>MCP</TableHead>
-                                    <TableHead>知识库</TableHead>
-                                    <TableHead className="text-center">联网搜索</TableHead>
-                                    <TableHead className="text-center">Agentic</TableHead>
-                                    <TableHead className="text-center border-r border-r-border">护栏状态</TableHead>
-                                    <TableHead className="text-center">操作</TableHead>
+                                    <TableHead className='border-r border-r-border'>{t('evaluation.name')}</TableHead>
+                                    <TableHead>{t('evaluation.baseModel')}</TableHead>
+                                    <TableHead>{t('evaluation.mcp')}</TableHead>
+                                    <TableHead>{t('knowledgebase.title')}</TableHead>
+                                    <TableHead className="text-center">{t('evaluation.webSearch')}</TableHead>
+                                    <TableHead className="text-center">{t('evaluation.agentic')}</TableHead>
+                                    <TableHead className="text-center border-r border-r-border">{t('evaluation.guardrailStatus')}</TableHead>
+                                    <TableHead className="text-center">{t('common.operations')}</TableHead>
                                 </TableRow>
                             </TableHeader>
 
@@ -346,14 +347,14 @@ export default function RunConfigsPage(
                                         <TableCell colSpan={9} className="h-32 text-center">
                                             <div className="flex items-center justify-center space-x-4">
                                                 <Loader2 className="h-6 w-6 animate-spin" />
-                                                <h4 className="font-medium">Loading Configs</h4>
+                                                <h4 className="font-medium">{t('evaluation.loadingConfigs')}</h4>
                                             </div>
                                         </TableCell>
                                     </TableRow>
                                 ) : evalRunConfigs.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={9} className="h-24 text-center">
-                                            暂无数据
+                                            {t('common.noData')}
                                         </TableCell>
                                     </TableRow>
                                 ) : (

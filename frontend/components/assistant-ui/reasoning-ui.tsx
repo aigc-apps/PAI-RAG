@@ -1,27 +1,29 @@
 import { useEffect, useState, useRef } from "react";
 import type { ReasoningContentPartComponent } from "@assistant-ui/react";
+import { useI18n } from '@/app/providers/i18n';
 
 export const CollapsibleReasoning: ReasoningContentPartComponent = ({
   text,
   status,
 }) => {
+  const { t } = useI18n();
   const displayText = text || "";
   const isThinking = status.type === "running";
   const isComplete = status.type === "complete";
 
   const [isOpen, setIsOpen] = useState(isThinking);
-  const hasAutoCollapsedRef = useRef(false); // 标记是否已经执行过自动收起
+  const hasAutoCollapsedRef = useRef(false); // Mark whether auto-collapse has been executed
 
   useEffect(() => {
     if (isThinking) {
       setIsOpen(true);
       hasAutoCollapsedRef.current = false; 
     } else if (isComplete && !hasAutoCollapsedRef.current) {
-      // 仅在第一次 complete 时触发延迟收起
+      // Only trigger delayed collapse on first complete
       hasAutoCollapsedRef.current = true;
       const timer = setTimeout(() => {
         setIsOpen(false);
-      }, 1000); // 延迟 1 秒收起
+      }, 1000); // Delay 1 second before collapsing
 
       return () => clearTimeout(timer);
     }
@@ -37,9 +39,9 @@ export const CollapsibleReasoning: ReasoningContentPartComponent = ({
     <div className={containerClassName}>
       {isThinking && (
         <div className="whitespace-pre-wrap">
-          <div className="text-gray-500 mb-2">💡 深度思考中</div>
+          <div className="text-gray-500 mb-2">💡 {t('chat.reasoning.deepThinking')}</div>
           {displayText}
-          {displayText === "" && <span className="text-gray-400">（生成中...）</span>}
+          {displayText === "" && <span className="text-gray-400">{t('chat.reasoning.generating')}</span>}
         </div>
       )}
 
@@ -49,7 +51,7 @@ export const CollapsibleReasoning: ReasoningContentPartComponent = ({
             onClick={() => setIsOpen((prev) => !prev)}
             className="text-gray-600 hover:text-gray-900 flex items-center gap-1 w-full text-left"
           >
-            💡 已完成思考 {isOpen ? "（点击收起）" : "（点击展开）"}
+            💡 {t('chat.reasoning.thinkingComplete')} {isOpen ? t('chat.reasoning.clickToCollapse') : t('chat.reasoning.clickToExpand')}
           </button>
           {isOpen && <div className="whitespace-pre-wrap mt-2">{displayText}</div>}
         </>

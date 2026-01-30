@@ -1,5 +1,6 @@
 'use client';
 
+import { useI18n } from '@/app/providers/i18n';
 import {
   Card,
   CardContent,
@@ -95,20 +96,22 @@ import { SampleItem } from '@/app/evaluation/[datasetId]/types';
 import { useTenantFetch } from "@/hooks/use-tenant-fetch";
 
 const STATUS_OPTIONS = [
-  { value: "running", label: "运行中" },
-  { value: "success", label: "成功" },
-  { value: "failed", label: "失败" },
-  { value: "pending", label: "等待中" },
+  { value: "running", label: "statusRunning" },
+  { value: "success", label: "statusSuccess" },
+  { value: "failed", label: "statusFailed" },
+  { value: "pending", label: "statusPending" },
 ] as const;
 
 type StatusType = (typeof STATUS_OPTIONS)[number]["value"];
 
 export default function ExperimentDetailPage({ params }: { params: Promise<{ datasetId: string, expId: string }> }) {
+  const { t } = useI18n();
+
   const { datasetId, expId } = use(params);
   const router = useRouter();
 
   // ========================
-  // 状态管理
+  // State Management
   // ========================
 
   const [evalConfig, setEvalConfig] = useState<EvalConfig>();
@@ -116,20 +119,20 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   const [runConfig, setRunConfig] = useState<RunConfig>();
   const [evaluatorConfig, setEvaluatorConfig] = useState<EvaluatorConfig>();
 
-  // 数据状态
+  // Data state
   const [expItems, setExpItems] = useState<ExperimentSampleDetails[]>([]);
-  const [allExpItemsForStats, setAllExpItemsForStats] = useState<ExperimentSampleDetails[]>([]); // 用于统计的所有数据
+  const [allExpItemsForStats, setAllExpItemsForStats] = useState<ExperimentSampleDetails[]>([]); // For statistics
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
 
-  // 筛选与分页
+  // Filter and pagination
   const [statusFilter, setStatusFilter] = useState<StatusType | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // 查看样本对话框
+  // View sample dialog
   const [isSampleDialogOpen, setIsSampleDialogOpen] = useState(false);
   const [selectedSample, setSelectedSample] = useState<SampleItem | null>(null);
   const { tenantFetch } = useTenantFetch();
@@ -140,51 +143,51 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
             headers: { "Content-Type": "application/json" },
         });
 
-        if (!response.ok) throw new Error("获取数据失败");
+        if (!response.ok) throw new Error(t('evaluation.fetchSampleFailed'));
 
         const data = await response.json();
 
         setSelectedSample(data.data);
         setIsSampleDialogOpen(true);
     } catch (error) {
-        toast.error('获取数据失败');
+        toast.error(t('evaluation.fetchSampleFailed'));
     }
   };
 
-  // 当筛选条件变化时，重置到第一页
+  // Reset to first page when filter changes
   useEffect(() => {
     setPage(1);
   }, [statusFilter]);
 
   // ========================
-  // 数据获取与轮询
+  // Data Fetching and Polling
   // ========================
 
-  // 获取所有实验样本数据（用于统计，不分页，不筛选状态）
+  // Fetch all experiment sample data (for statistics, no pagination, no status filter)
   const fetchAllExperimentSamplesForStats = useCallback(async () => {
     try {
-      // 使用最大size值获取所有数据用于统计
+      // Use max size to get all data for statistics
       const params = new URLSearchParams({
         page: '1',
-        size: '1000', // 后端限制最大1000，如果超过需要分页获取
+        size: '1000', // Backend limit is 1000, need pagination if exceeded
       });
 
       const response = await tenantFetch(
         `/api/config/evaluation/${datasetId}/experiments/${expId}/samples?${params.toString()}`
       );
       
-      if (!response.ok) throw new Error('获取评估实验样本失败');
+      if (!response.ok) throw new Error(t('evaluation.fetchExperimentSamplesFailed'));
       const data = await response.json();
       
-      // 如果总数超过1000，需要分页获取所有数据
+      // If total exceeds 1000, need to paginate to get all data
       if (data.data.total > 1000) {
         const allItems: ExperimentSampleDetails[] = [];
         const totalPages = Math.ceil(data.data.total / 1000);
         
-        // 获取第一页数据
+        // Get first page data
         allItems.push(...data.data.items);
         
-        // 获取剩余页数据
+        // Get remaining pages
         for (let p = 2; p <= totalPages; p++) {
           const pageParams = new URLSearchParams({
             page: p.toString(),
@@ -204,15 +207,15 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         setAllExpItemsForStats(data.data.items);
       }
     } catch (err: any) {
-      console.error("fetchAllExperimentSamplesForStats 错误:", err);
-      // 统计失败不影响主流程，只记录错误
+      console.error("fetchAllExperimentSamplesForStats error:", err);
+      // Statistics failure doesn't affect main flow, only log error
     }
   }, [datasetId, expId, tenantFetch]);
 
-  // 获取实验样本数据（支持筛选和分页）
+  // Fetch experiment samples (with filter and pagination)
   const fetchExperimentSamples = useCallback(async () => {
     try {
-      // 构建查询参数
+      // Build query parameters
       const params = new URLSearchParams({
         page: page.toString(),
         size: pageSize.toString(),
@@ -225,19 +228,19 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         `/api/config/evaluation/${datasetId}/experiments/${expId}/samples?${params.toString()}`
       );
       
-      if (!response.ok) throw new Error('获取评估实验样本失败');
+      if (!response.ok) throw new Error(t('evaluation.fetchExperimentSamplesFailed'));
       const data = await response.json();
       
       setExpItems(data.data.items);
       setTotalPages(data.data.pages);
       setTotalItems(data.data.total);
     } catch (err: any) {
-      console.error("fetchExperimentSamples 错误:", err);
-      toast.error("加载实验样本失败");
+      console.error("fetchExperimentSamples error:", err);
+      toast.error(t('evaluation.loadExperimentSamplesFailed'));
     }
   }, [datasetId, expId, page, pageSize, statusFilter, tenantFetch]);
 
-  // 获取实验元数据（配置信息等）
+  // Fetch experiment metadata (config info, etc.)
   const fetchExperimentDetails = useCallback(async () => {
     try {
       const [evalRes, expDataRes] = await Promise.all([
@@ -245,17 +248,17 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${expId}`),
       ]);
 
-      // 获取评估配置
-      if (!evalRes.ok) throw new Error('获取评估配置失败');
+      // Fetch evaluation config
+      if (!evalRes.ok) throw new Error(t('evaluation.fetchEvalConfigFailed'));
       const eval_data = await evalRes.json();
       setEvalConfig(eval_data.data);
 
-      // 获取实验信息
-      if (!expDataRes.ok) throw new Error('获取实验信息失败');
+      // Fetch experiment info
+      if (!expDataRes.ok) throw new Error(t('evaluation.fetchExperimentInfoFailed'));
       const exp_data = await expDataRes.json();
       setExperiment(exp_data.data);
 
-      // 获取运行配置
+      // Fetch run config
       if (exp_data.data?.run_config_id) {
         const runConfigRes = await tenantFetch(`/api/config/evaluation/${datasetId}/runconfigs/${exp_data.data.run_config_id}`);
         if (runConfigRes.ok) {
@@ -272,13 +275,13 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         }
       }
     } catch (err: any) {
-      console.error("fetchExperimentDetails 错误:", err);
-      toast.error(err.message || "加载实验详情失败");
+      console.error("fetchExperimentDetails error:", err);
+      toast.error(err.message || t('evaluation.loadExperimentDetailsFailed'));
     }
   }, [datasetId, expId, tenantFetch]);
 
   // ========================
-  // 重新评估单条样本
+  // Re-evaluate single sample
   // ========================
   const updateEvaluation = async (id: string) => {
     try {
@@ -292,71 +295,71 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
       );
 
       if (response.ok) {
-        toast.success("重新评估已启动！");
+        toast.success(t('evaluation.reEvaluateStarted'));
       } else {
         const data = await response.json();
-        toast.error("重新评估启动失败: " + data.message);
+        toast.error(t('evaluation.reEvaluateStartFailed') + ": " + data.message);
       }
     } catch (error: any) {
       console.error("Re-evaluate failed:", error);
-      toast.error("重新评估失败: " + error.message);
+      toast.error(t('evaluation.reEvaluateFailed') + ": " + error.message);
     }
   };
 
   // ========================
-  // 轮询优化（使用 useEffect + clearTimeout）
+  // Polling optimization (using useEffect + clearTimeout)
   // ========================
 
   useEffect(() => {
     let pollTimeout: NodeJS.Timeout | null = null;
 
     const startPolling = () => {
-      // 检查是否有未完成项（使用全量数据检查）
+      // Check if there are unfinished items (using full data)
       const hasUnfinished = allExpItemsForStats.some(
         item => item.status !== 'success' && item.status !== 'failed'
       );
 
       if (hasUnfinished && experiment?.status !== 'success' && experiment?.status !== 'failed') {
-        console.log('🔄 存在未完成实验，3秒后重新拉取...');
+        console.log('🔄 Unfinished experiments exist, refreshing in 3 seconds...');
         pollTimeout = setTimeout(() => {
           fetchExperimentSamples();
           fetchExperimentDetails();
-          fetchAllExperimentSamplesForStats(); // 同时更新统计数据
+          fetchAllExperimentSamplesForStats(); // Also update stats
         }, 3000);
       } else {
-        console.log('✅ 所有实验已完成，停止轮询。');
+        console.log('✅ All experiments completed, polling stopped.');
       }
     };
 
-    // 组件挂载或数据更新时启动轮询
+    // Start polling on mount or data update
     startPolling();
 
-    // 清理函数：组件卸载或依赖变化时清除定时器
+    // Cleanup: clear timer on unmount or dependency change
     return () => {
       if (pollTimeout) {
         clearTimeout(pollTimeout);
-        console.log('🧹 轮询定时器已清理');
+        console.log('🧹 Polling timer cleared');
       }
     };
   }, [allExpItemsForStats, experiment?.status, fetchExperimentSamples, fetchExperimentDetails, fetchAllExperimentSamplesForStats]);
 
-  // 首次加载元数据
+  // Load metadata on first mount
   useEffect(() => {
     fetchExperimentDetails();
   }, [fetchExperimentDetails]);
 
-  // 加载样本数据（page/filter 变化时重新加载）
+  // Load sample data (reload when page/filter changes)
   useEffect(() => {
     fetchExperimentSamples();
   }, [fetchExperimentSamples]);
 
-  // 加载所有样本数据用于统计（仅在实验ID变化时加载）
+  // Load all sample data for statistics (only when experiment ID changes)
   useEffect(() => {
     fetchAllExperimentSamplesForStats();
   }, [fetchAllExperimentSamplesForStats]);
 
   // ========================
-  // 交互函数
+  // Interaction Functions
   // ========================
 
   const toggleRow = (id: string) => {
@@ -371,7 +374,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   };
 
   // ========================
-  // UI渲染
+  // UI Rendering
   // ========================
 
   if (!experiment) {
@@ -381,9 +384,9 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
           <CardContent className="p-6 justify-center">
             <div className="flex items-center space-x-2">
               <Loader2 className="h-8 w-8 animate-spin" />
-              <h2 className="text-xl font-medium">Loading Experiment</h2>
+              <h2 className="text-xl font-medium">{t('evaluation.loadingExperiment')}</h2>
             </div>
-            <p className="text-gray-500 mt-2">Please wait while we load the experiment data.</p>
+            <p className="text-gray-500 mt-2">{t('evaluation.loadingExperimentDesc')}</p>
           </CardContent>
         </Card>
       </div>
@@ -392,14 +395,14 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
 
   return (
     <div className="flex flex-col h-screen px-6 py-4 space-y-6">
-      {/* 面包屑 */}
+      {/* Breadcrumb */}
       <div className="flex-none mb-2 flex items-center gap-2">
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
                 <Button variant="link" className="px-0" onClick={() => router.push('/evaluation')}>
-                  评估
+                  {t('evaluation.title')}
                 </Button>
               </BreadcrumbLink>
             </BreadcrumbItem>
@@ -413,7 +416,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>实验：{experiment.name}</BreadcrumbPage>
+              <BreadcrumbPage>{t('evaluation.experimentColon')} {experiment.name}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -427,21 +430,21 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
       />
 
       <div className="flex-1 overflow-y-auto px-2">
-        {/* 实验概览卡片 */}
+        {/* Experiment Overview Card */}
         <Card className="mb-4">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <CardTitle className="text-xl">实验: {experiment.name}</CardTitle>
+              <CardTitle className="text-xl">{t('evaluation.experimentColon')} {experiment.name}</CardTitle>
             </div>
           </CardHeader>
 
-          {/* 图表区域 */}
+          {/* Charts Area */}
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pb-2">
-              {/* 得分分布 */}
+              {/* Score Distribution */}
               <div className="flex flex-col bg-card rounded-lg border p-3 hover:shadow-sm transition-shadow h-[220px]">
                 <h3 className="font-semibold mb-2 flex items-center gap-1.5 text-sm">
-                  <BarChart2 className="h-3.5 w-3.5" /> 得分分布
+                  <BarChart2 className="h-3.5 w-3.5" /> {t('evaluation.scoreDistribution')}
                 </h3>
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
@@ -451,16 +454,16 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                       <YAxis tick={{ fontSize: 14 }} width={40} />
                       <Tooltip contentStyle={{ fontSize: '14px', padding: '4px 8px' }} />
                       <Legend wrapperStyle={{ fontSize: '14px' }} height={25} />
-                      <Bar dataKey="count" fill="#8884d8" name="样本数" />
+                      <Bar dataKey="count" fill="#8884d8" name={t('evaluation.samplesCount')} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* 状态分布 */}
+              {/* Status Distribution */}
               <div className="flex flex-col bg-card rounded-lg border p-3 hover:shadow-sm transition-shadow h-[220px]">
                 <h3 className="font-semibold mb-2 flex items-center gap-1.5 text-sm">
-                  <PieChartIcon className="h-3.5 w-3.5" /> 状态分布
+                  <PieChartIcon className="h-3.5 w-3.5" /> {t('evaluation.statusDistribution')}
                 </h3>
                 <div className="flex-1 min-h-0">
                   <ResponsiveContainer width="100%" height="100%">
@@ -487,11 +490,11 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                 </div>
               </div>
 
-              {/* 执行耗时 */}
+              {/* Execution Time */}
               {hasTimingData(allExpItemsForStats) && (
                 <div className="flex flex-col bg-card rounded-lg border p-3 hover:shadow-sm transition-shadow h-[220px]">
                   <h3 className="font-semibold mb-2 flex items-center gap-1.5 text-sm">
-                    <Clock className="h-3.5 w-3.5" /> 执行耗时
+                    <Clock className="h-3.5 w-3.5" /> {t('evaluation.executionTime')}
                   </h3>
                   <div className="flex-1 flex flex-col justify-center min-h-0">
                     <div className="grid grid-cols-1 gap-2 flex-1">
@@ -500,7 +503,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                           <div className="p-0.5 bg-blue-100 dark:bg-blue-900/40 rounded">
                             <BarChart2 className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                           </div>
-                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300">平均</span>
+                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300">{t('evaluation.average')}</span>
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-blue-600 dark:text-blue-400 tabular-nums">
@@ -514,7 +517,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                           <div className="p-0.5 bg-green-100 dark:bg-green-900/40 rounded">
                             <TrendingDown className="h-3 w-3 text-green-600 dark:text-green-400" />
                           </div>
-                          <span className="text-xs font-medium text-green-700 dark:text-green-300">最短</span>
+                          <span className="text-xs font-medium text-green-700 dark:text-green-300">{t('evaluation.shortest')}</span>
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-green-600 dark:text-green-400 tabular-nums">
@@ -528,7 +531,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                           <div className="p-0.5 bg-red-100 dark:bg-red-900/40 rounded">
                             <TrendingUp className="h-3 w-3 text-red-600 dark:text-red-400" />
                           </div>
-                          <span className="text-xs font-medium text-red-700 dark:text-red-300">最长</span>
+                          <span className="text-xs font-medium text-red-700 dark:text-red-300">{t('evaluation.longest')}</span>
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-medium text-red-600 dark:text-red-400 tabular-nums">
@@ -543,7 +546,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
               )}
             </div>
 
-            {/* 基础信息 */}
+            {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-2">
               <div className="flex flex-wrap items-center gap-6 text-sm md:col-span-2">
                 <div className="flex items-center gap-1">
@@ -551,15 +554,15 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                   <span className="font-mono text-xs">{experiment.id}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-gray-500 font-medium">状态:</span>
+                  <span className="text-gray-500 font-medium">{t('evaluation.status')}:</span>
                   <StatusBadge status={experiment.status} />
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-gray-500 font-medium">样本数:</span>
+                  <span className="text-gray-500 font-medium">{t('evaluation.samplesCount')}:</span>
                   <span className="font-semibold">{experiment.samples_count}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-gray-500 font-medium">平均得分:</span>
+                  <span className="text-gray-500 font-medium">{t('evaluation.averageScore')}:</span>
                   <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs py-0.5 px-2">
                     {getAverageScore(allExpItemsForStats)}
                   </Badge>
@@ -573,11 +576,11 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                 >
                   {isDetailExpanded ? (
                     <>
-                      <ChevronUp className="h-4 w-4" /> 收起详情
+                      <ChevronUp className="h-4 w-4" /> {t('evaluation.collapseDetails')}
                     </>
                   ) : (
                     <>
-                      <ChevronDown className="h-4 w-4" /> 展开详情
+                      <ChevronDown className="h-4 w-4" /> {t('evaluation.expandDetails')}
                     </>
                   )}
                 </Button>
@@ -585,18 +588,18 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
             </div>
           </CardContent>
 
-          {/* 详细配置（可折叠） */}
+          {/* Detailed Config (Collapsible) */}
           {isDetailExpanded && (
             <CardContent className="border-t pt-4">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 space-x-16">
-                {/* 应用设置 */}
+                {/* App Settings */}
                 <div>
                   <h3 className="font-semibold mb-3 flex items-center gap-1.5 text-sm">
-                    <Settings2 className="h-4 w-4" /> 应用设置
+                    <Settings2 className="h-4 w-4" /> {t('evaluation.appSettings')}
                   </h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500">基模型</span>
+                      <span className="text-gray-500">{t('evaluation.baseModel')}</span>
                       <span className="font-medium">{runConfig?.model_id || "—"}</span>
                     </div>
                     <div className="flex items-center justify-between">

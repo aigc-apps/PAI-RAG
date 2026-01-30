@@ -8,33 +8,37 @@ import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
+import { useI18n } from '@/app/providers/i18n';
+import { useInitializeI18n } from '@/lib/init-i18n';
 
-// Default chatbot config for creating new app
-const default_chat_config: Chatbot = {
-  id: '',
-  app_id: '',
-  description: '',
-  enable_search: false,
-  mcp_ids: [],
-  kb_ids: [],
-  model_id: "",
-  updated_at: "",
-  enable_agent: false,
-  enable_chatdb: false,
-  enable_faq: false,
-  faq_config: null,
-  enable_input_guardrail: false,
-  enable_output_guardrail: false,
-  guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
-  prompts: {
-    plan: PLAN_PROMPT,
-    act: ACT_PROMPT,
-    act_with_plan: ACT_WITH_PLAN_PROMPT,
-    summary: SUMMARY_PROMPT,
-  }
-};
+
 
 export default function CreateChatApp() {
+    const { t } = useI18n();
+// Default chatbot config for creating new app
+const default_chat_config: Chatbot = {
+    id: '',
+    app_id: '',
+    description: '',
+    enable_search: false,
+    mcp_ids: [],
+    kb_ids: [],
+    model_id: "",
+    updated_at: "",
+    enable_agent: false,
+    enable_chatdb: false,
+    enable_faq: false,
+    faq_config: null,
+    enable_input_guardrail: false,
+    enable_output_guardrail: false,
+    guardrail_hint: t('apps.guardrailHint'),
+    prompts: {
+      plan: PLAN_PROMPT,
+      act: ACT_PROMPT,
+      act_with_plan: ACT_WITH_PLAN_PROMPT,
+      summary: SUMMARY_PROMPT,
+    }
+  };
     const router = useRouter();
     const { tenantFetch } = useTenantFetch();
     
@@ -68,7 +72,7 @@ export default function CreateChatApp() {
                 setKbs(kbData);
             } catch (error: any) {
                 console.error('获取配置失败:', error);
-                toast.error('获取配置失败');
+                toast.error(t('apps.fetchConfigError'));
             } finally {
                 setLoading(false);
             }
@@ -96,12 +100,12 @@ export default function CreateChatApp() {
                 throw new Error(`创建失败: ${errorText}`);
             }
 
-            toast.success('创建成功');
+            toast.success(t('apps.createSuccess'));
             router.push('/apps');
             return true;
         } catch (error: any) {
             console.error('创建失败:', error);
-            toast.error(error.message || '创建失败');
+            toast.error(error.message || t('apps.createFailedToast'));
             return false;
         } finally {
             setSaving(false);
@@ -109,7 +113,7 @@ export default function CreateChatApp() {
     }, [botConfig, tenantFetch, router]);
 
     if (loading) {
-        return <div className="flex items-center justify-center h-screen">加载中...</div>;
+        return <div className="flex items-center justify-center h-screen">{t('common.loading')}</div>;
     }
 
     return (

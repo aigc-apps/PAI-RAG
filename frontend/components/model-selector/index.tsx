@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import Link from 'next/link';
+import { useI18n } from '@/app/providers/i18n';
 
 interface ModelConfigurationParams {
   id: string;
@@ -37,6 +38,7 @@ export default function ModelSelector({
   selectedModel,
   onModelChange,
 }: ModelSelectorProps) {
+  const { t } = useI18n();
   const [currentModel, setCurrentModel] = useState(selectedModel.model_id);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,7 @@ export default function ModelSelector({
   const [modelGroups, setModelGroups] = useState<ModelGroup[]>([]);
   const { tenantFetch } = useTenantFetch();
 
-  // 获取模型数据
+  // Fetch model data
   useEffect(() => {
     const fetchModels = async () => {
       setLoading(true);
@@ -54,15 +56,15 @@ export default function ModelSelector({
           tenantFetch(`/api/config/llms/groups`),
           tenantFetch(`/api/config/apps`),
         ]);
-        if (!llmRes.ok) throw new Error('模型数据加载失败');
+        if (!llmRes.ok) throw new Error(t('common.loadModelFailed'));
         const data = await llmRes.json();
         console.log('model data: ', data);
 
-        if (!appRes.ok) throw new Error('模型数据加载失败');
+        if (!appRes.ok) throw new Error(t('common.loadModelFailed'));
         const chatbotData = (await appRes.json()).data.items;
         const chatbotGroup = {
           id: 'chatbot',
-          label: '对话应用',
+          label: t('common.chatApplication'),
           models: chatbotData.map((item: any) => {
             return {
               id: item.id,
@@ -74,7 +76,7 @@ export default function ModelSelector({
         const modelGroups = [chatbotGroup, ...data.data.groups];
         setModelGroups(modelGroups);
 
-        // 查找当前选中的模型是否存在
+        // Find if the currently selected model exists
         let foundModel: ModelConfigurationParams | null = null;
         let foundGroup: ModelGroup | null = null;
         if (selectedModel.model_id) {
@@ -89,11 +91,11 @@ export default function ModelSelector({
         }
 
         if (foundModel && foundGroup) {
-          // 找到了保存的模型，使用它
+          // Found the saved model, use it
           setCurrentModel(foundModel.model_id);
           onModelChange(foundModel.id, foundGroup.id, foundModel.model_id);
         } else {
-          // 没有选中的模型或保存的模型不存在，选择第一个可用的模型
+          // No selected model or saved model doesn't exist, select the first available model
           let found = false;
           for (const group of modelGroups) {
             if (group.models.length > 0) {
@@ -105,11 +107,11 @@ export default function ModelSelector({
             }
           }
           if (!found) {
-            setError('没有可用的模型');
+            setError(t('common.noAvailableModel'));
           }
         }
       } catch (err) {
-        setError('无法加载模型列表，请检查网络或服务状态');
+        setError(t('common.loadModelFailed'));
         console.error(err);
       } finally {
         setLoading(false);
@@ -121,10 +123,10 @@ export default function ModelSelector({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className="absolute top-2 left-12 max-w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 text-sm focus:ring-1 focus:ring-ring">
+      <PopoverTrigger className="absolute top-4 left-12 max-w-[250px] bg-transparent shadow-none focus:outline-none cursor-pointer hover:bg-gray-100 rounded transition-colors border-none text-gray-600 text-sm focus:ring-1 focus:ring-ring">
         <div className="flex items-center truncate gap-2">
           <span className="text-md font-medium items-center">
-            {currentModel || '请选择模型'}
+            {currentModel || t('common.selectModel')}
           </span>
           <ChevronsUpDown className="size-4 opacity-50 ml-auto" />
         </div>
@@ -134,7 +136,7 @@ export default function ModelSelector({
           <CommandList>
             {loading ? (
               <div className="p-4 text-center text-sm text-gray-500">
-                加载中...
+                {t('common.loading')}
               </div>
             ) : error ? (
               <div className="p-4 text-center text-sm">
@@ -145,7 +147,7 @@ export default function ModelSelector({
                   onClick={() => setOpen(false)}
                 >
                   <Plus className="h-3 w-3" />
-                  去添加模型
+                  {t('common.goAddModel')}
                 </Link>
               </div>
             ) : (

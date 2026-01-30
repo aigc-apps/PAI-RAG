@@ -21,6 +21,7 @@ import { EmbeddingModelDialog, EmbConfig } from '@/app/config/model/embedding/mo
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 const newembconfig: EmbConfig = {
   id: '',
@@ -35,11 +36,13 @@ const newembconfig: EmbConfig = {
   is_default: false,
 };
 export default function EmbConfigPage() {
-  const [editEmbConfig, setEditEmbConfig] = useState<EmbConfig>(newembconfig); // 存储 Embedding 配置
-  const [embconfigs, setEmbConfigs] = useState<EmbConfig[]>([]); // 存储 Embedding 配置
-  const [modelloading, setModelLoading] = useState(true); // 加载状态
-  const [modelerror, setModelError] = useState(''); // 错误信息
-  const [errorMsg, setErrorMsg] = useState(''); // 删除时的错误信息
+  const { t } = useI18n();
+
+  const [editEmbConfig, setEditEmbConfig] = useState<EmbConfig>(newembconfig);
+  const [embconfigs, setEmbConfigs] = useState<EmbConfig[]>([]);
+  const [modelloading, setModelLoading] = useState(true);
+  const [modelerror, setModelError] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -55,13 +58,13 @@ export default function EmbConfigPage() {
         const res = await tenantFetch(
           `/api/config/embeddings?page=${page}&size=${modelSizePerPage}`,
         );
-        if (!res.ok) throw new Error('获取Embedding模型列表失败');
+        if (!res.ok) throw new Error(t('config.model.fetchModelListFailed'));
         const json_data = await res.json();
         const data = json_data.data.items;
-        setEmbConfigs(data); // 合并
+        setEmbConfigs(data);
         setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || '加载失败');
+        setModelError(err || t('config.model.loadFailed'));
       } finally {
         setModelLoading(false);
       }
@@ -70,8 +73,8 @@ export default function EmbConfigPage() {
   }, [page, embconfigs.length, isEditOpen]);
 
   const handleCreateSuccess = (llmConfig: EmbConfig) => {
-    setEmbConfigs((prev) => [...prev, llmConfig]); // 追加新 Embedding 配置
-    console.log('创建Embedding成功', llmConfig);
+    setEmbConfigs((prev) => [...prev, llmConfig]);
+    console.log(t('config.model.createModelSuccess'), llmConfig);
     setEditEmbConfig(newembconfig);
   };
 
@@ -79,7 +82,7 @@ export default function EmbConfigPage() {
     setEmbConfigs((prev) =>
       prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
     );
-    console.log('编辑Embedding成功', llmConfig);
+    console.log(t('config.model.editModelSuccess'), llmConfig);
     setEditEmbConfig(newembconfig);
   };
 
@@ -101,16 +104,16 @@ export default function EmbConfigPage() {
       });
 
       if (!res.ok) {
-        setErrorMsg(`${model_type}删除失败，请检查网络或配置`);
+        setErrorMsg(t('config.model.deleteModelFailed', { modelType: model_type }));
         return;
       }
 
-      // 删除成功后更新本地状态
+      // Delete success, update local state
       if (model_type === 'embeddings') {
         setEmbConfigs((prev) => prev.filter((config) => config.id !== id));
       }
     } catch (err: any) {
-      setErrorMsg('删除失败，请检查网络或配置');
+      setErrorMsg(t('config.model.deleteFailed'));
     }
   };
 
@@ -123,14 +126,14 @@ export default function EmbConfigPage() {
             setEditEmbConfig(newembconfig);
           }}
         >
-          添加Embedding模型
+          {t('config.model.addEmbeddingModel')}
         </Button>
         <EmbeddingModelDialog
           isAdd={isCreateOpen ? true : false}
           isOpen={isEditOpen || isCreateOpen}
           setIsOpen={(open: boolean) => {
             if (!open) {
-              setEditEmbConfig(newembconfig); // 关闭时清空编辑数据
+              setEditEmbConfig(newembconfig);
             }
             setIsEditOpen(open);
             setIsCreateOpen(open);
@@ -157,14 +160,11 @@ export default function EmbConfigPage() {
                   <CardTitle className="text-sm font-medium">
                     <div className="flex items-center gap-3 flex-wrap">
                       {emb.is_default && (
-                        <Badge className="bg-red-100 text-red-800">默认</Badge>
+                        <Badge className="bg-red-100 text-red-800">{t('config.model.default')}</Badge>
                       )}
                       <Badge className="bg-yellow-100 text-yellow-800">
                         {emb.model_name}
                       </Badge>
-                      {/* <Badge className="bg-yellow-100 text-yellow-800">
-                        {String(emb.dimension)}
-                      </Badge> */}
                       <Badge className="bg-blue-100 text-blue-800">
                         {emb.type}
                       </Badge>
@@ -179,13 +179,13 @@ export default function EmbConfigPage() {
                           {emb.is_ready ? (
                             <span className="inline-flex items-center">
                               {' '}
-                              可用{' '}
+                              {t('config.model.available')}{' '}
                               <CheckCircle className="h-3 w-3 text-green-500" />{' '}
                             </span>
                           ) : (
                             <span className="inline-flex items-center">
                               {' '}
-                              下载中{' '}
+                              {t('config.model.downloading')}{' '}
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             </span>
                           )}
@@ -194,7 +194,7 @@ export default function EmbConfigPage() {
                         <Badge className="bg-green-100 text-green-800">
                           <span className="inline-flex items-center">
                             {' '}
-                            可用{' '}
+                            {t('config.model.available')}{' '}
                             <CheckCircle className="h-3 w-3 text-green-500" />{' '}
                           </span>
                         </Badge>
@@ -242,7 +242,7 @@ export default function EmbConfigPage() {
       ) : (
         <div className="flex justify-center items-center h-1/10 py-6">
           <h3 className="text-lg font-medium text-gray-700 py-6">
-            暂无模型，请点击上方按钮添加
+            {t('config.model.noModelsYet')}
           </h3>
         </div>
       )}

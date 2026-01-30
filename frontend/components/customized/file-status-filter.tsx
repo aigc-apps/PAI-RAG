@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FilterIcon, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/app/providers/i18n';
+
 
 export type FileStatus = 'all' | 'succeeded' | 'failed' | 'pending' | 'parsing' | 'persisting';
 
@@ -19,18 +21,19 @@ interface FileStatusFilterProps {
   className?: string;
 }
 
-const statusOptions: Array<{ value: FileStatus; label: string; color: string }> = [
-  { value: 'all', label: '全部', color: '' },
-  { value: 'succeeded', label: '成功', color: 'text-green-500' },
-  { value: 'failed', label: '失败', color: 'text-red-500' },
-  { value: 'pending', label: '等待中', color: 'text-yellow-500' },
-  { value: 'parsing', label: '解析中', color: 'text-blue-500' },
-  { value: 'persisting', label: '索引中', color: 'text-blue-500' },
-];
-
 export function FileStatusFilter({ value, onValueChange, className }: FileStatusFilterProps) {
+  const { t } = useI18n();
+  const statusOptions: Array<{ value: FileStatus; label: string; color: string }> = [
+    { value: 'all', label: t('knowledgebase.statusAll'), color: '' },
+    { value: 'succeeded', label: t('knowledgebase.parseSuccess'), color: 'text-green-500' },
+    { value: 'failed', label: t('knowledgebase.parseFailed'), color: 'text-red-500' },
+    { value: 'pending', label: t('knowledgebase.pendingParse'), color: 'text-yellow-500' },
+    { value: 'parsing', label: t('knowledgebase.parsing'), color: 'text-blue-500' },
+    { value: 'persisting', label: t('knowledgebase.persisting'), color: 'text-blue-500' },
+  ];
   const selectedOption = statusOptions.find(opt => opt.value === value) || statusOptions[0];
 
+  
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

@@ -11,11 +11,13 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
 import { KbConfig, MetadataConfig, KbConfigCard } from '../kbconfig';
 import { useRouter } from 'next/navigation';
+import { useI18n } from '@/app/providers/i18n';
 
 export default function KnowledgeBaseCreatePage() {
+  const { t } = useI18n();
+
   const kbConfig: KbConfig = {
     id: '',
     name: '',
@@ -68,13 +70,13 @@ export default function KnowledgeBaseCreatePage() {
                       className="px-0"
                       onClick={() => router.push('/knowledgebases')}
                     >
-                      知识库
+                      {t('knowledgebase.title')}
                     </Button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>新建知识库</BreadcrumbPage>
+                  <BreadcrumbPage>{t('knowledgebase.createPageTitle')}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -87,7 +89,7 @@ export default function KnowledgeBaseCreatePage() {
             >
               <ArrowLeft />
             </Button>
-            <h1 className="text-xl font-medium">新建知识库</h1>
+            <h1 className="text-xl font-medium">{t('knowledgebase.createPageTitle')}</h1>
           </div>
         </div>
       </div>

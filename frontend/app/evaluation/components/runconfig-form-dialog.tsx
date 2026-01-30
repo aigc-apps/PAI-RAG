@@ -42,11 +42,12 @@ import { RunConfig } from '@/app/evaluation/[datasetId]/types';
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
 import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
 import { set } from "date-fns";
+import { useI18n } from '@/app/providers/i18n';
 
 
 interface RunConfigFormDialogProps {
   mode: 'new' | 'edit';
-  config?: RunConfig; // edit 时传入
+  config?: RunConfig; // When editing, pass in config
   llms: LlmConfig[];
   mcps: McpConfig[];
   kbs: KbConfig[];
@@ -70,6 +71,7 @@ export function RunConfigFormDialog({
   isSaving,
 }: RunConfigFormDialogProps) {
   const router = useRouter();
+  const { t } = useI18n();
   const [localConfig, setLocalConfig] = useState<RunConfig>(
     mode === 'edit' && config
       ? { ...config }
@@ -84,7 +86,7 @@ export function RunConfigFormDialog({
         enable_agent: false,
         enable_input_guardrail: false,
         enable_output_guardrail: false,
-        guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+        guardrail_hint: t('apps.guardrailHint'),
         prompts: {
           plan: PLAN_PROMPT,
           act: ACT_PROMPT,
@@ -107,7 +109,7 @@ export function RunConfigFormDialog({
   const [summarizePrompt, setSummarizePrompt] = useState('');
   const [openPrompt, setOpenPrompt] = useState(false);
 
-  // 当 config 或 mode 变化时重置表单
+  // Reset form when config or mode changes
   useEffect(() => {
     if (mode === 'edit' && config) {
       setLocalConfig({ ...config });
@@ -133,7 +135,7 @@ export function RunConfigFormDialog({
         enable_agent: false,
         enable_input_guardrail: false,
         enable_output_guardrail: false,
-        guardrail_hint: "作为人工智能助手，我无法回应包含不当或敏感信息的内容。",
+        guardrail_hint: t('apps.guardrailHint'),
         prompts: {
           plan: PLAN_PROMPT,
           act: ACT_PROMPT,
@@ -184,35 +186,37 @@ export function RunConfigFormDialog({
     onSave(localConfig);
   };
 
-  const mode_str = mode === "new" ? "新建" : "修改";
+  const mode_str = mode === "new" ? t('common.create') : t('common.edit');
+  const titleKey = mode === "new" ? 'evaluation.newRunConfig' : 'evaluation.editRunConfig';
+  const descKey = mode === "new" ? 'evaluation.newRunConfigDesc' : 'evaluation.editRunConfigDesc';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{mode_str}运行配置</DialogTitle>
-          <DialogDescription>{mode_str}一个运行配置后，点击保存。</DialogDescription>
+          <DialogTitle>{t(titleKey)}</DialogTitle>
+          <DialogDescription>{t(descKey)}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6 py-4">
-          {/* 名称 */}
+          {/* Name */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <Label htmlFor="setting_name">配置名称</Label>
+            <Label htmlFor="setting_name">{t('evaluation.configName')}</Label>
             <Input
               id="setting_name"
               value={localConfig.name}
               onChange={(e) =>
                 setLocalConfig((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder="请输入配置名称, 如config_v1"
+              placeholder={t('evaluation.configNamePlaceholder')}
               required
             />
           </div>
 
-          {/* 基模型选择 */}
+          {/* Base model selection */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <Label htmlFor="basemodel" className="flex items-center">
-              基模型选择 <span className="text-destructive ml-1">*</span>
+              {t('evaluation.baseModelSelection')} <span className="text-destructive ml-1">*</span>
             </Label>
             <div>
               {llms.length > 0 ? (
@@ -226,7 +230,7 @@ export function RunConfigFormDialog({
                   }
                 >
                   <SelectTrigger id="basemodel">
-                    <SelectValue placeholder="请选择基模型" />
+                    <SelectValue placeholder={t('evaluation.selectBaseModel')} />
                   </SelectTrigger>
                   <SelectContent>
                     {llms.map((llm) => (
@@ -238,52 +242,52 @@ export function RunConfigFormDialog({
                 </Select>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <p className="text-sm text-muted-foreground">尚未配置大模型</p>
+                  <p className="text-sm text-muted-foreground">{t('evaluation.noLlmConfigured')}</p>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => router.push('/config/model/llm')}
                   >
-                    前往添加
+                    {t('evaluation.goToAdd')}
                   </Button>
                 </div>
               )}
             </div>
           </div>
-          {/* 提示词设置 */}
+          {/* Prompt settings */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <Label className="flex items-center">
-              提示词设置
+              {t('evaluation.promptSettings')}
             </Label>
             <div className="px-2">
               <Dialog open={openPrompt} onOpenChange={setOpenPrompt}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="text-xs">编辑提示词</Button>
+                  <Button variant="outline" className="text-xs">{t('evaluation.editPrompts')}</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col">
                   <DialogHeader>
-                    <DialogTitle>编辑提示词</DialogTitle>
+                    <DialogTitle>{t('evaluation.editPrompts')}</DialogTitle>
                     <DialogDescription>
-                      自定义 AI Agent 在不同阶段的行为提示词
+                      {t('evaluation.customizeAgentPrompts')}
                     </DialogDescription>
                   </DialogHeader>
 
                   <div className="flex-1 overflow-hidden">
-                    {/* 外层 Tabs：分 Plan、Act 两大块 */}
+                    {/* Outer Tabs: Plan and Act blocks */}
                     <Tabs defaultValue="plan_group" className="h-full flex flex-col">
                       <TabsList className="flex space-x-2">
-                        <TabsTrigger value="plan_group">规划提示词</TabsTrigger>
-                        <TabsTrigger value="act_group">行动提示词</TabsTrigger>
+                        <TabsTrigger value="plan_group">{t('evaluation.planningPrompts')}</TabsTrigger>
+                        <TabsTrigger value="act_group">{t('evaluation.actionPrompts')}</TabsTrigger>
                       </TabsList>
 
                       <div className="flex-1 overflow-hidden mt-4">
-                        {/* Plan 块内容：内部再分 3 个子 Tab */}
+                        {/* Plan block content: 3 sub-tabs inside */}
                         <TabsContent value="plan_group" className="h-full flex flex-col">
                           <Tabs defaultValue="plan" className="h-full flex flex-col">
                             <TabsList className="grid grid-cols-3">
-                              <TabsTrigger value="plan">规划</TabsTrigger>
-                              <TabsTrigger value="act_with_plan">规划行动</TabsTrigger>
-                              <TabsTrigger value="summary">规划总结</TabsTrigger>
+                              <TabsTrigger value="plan">{t('evaluation.planning')}</TabsTrigger>
+                              <TabsTrigger value="act_with_plan">{t('evaluation.planningAction')}</TabsTrigger>
+                              <TabsTrigger value="summary">{t('evaluation.planningSummary')}</TabsTrigger>
                             </TabsList>
                             <div className="flex-1 overflow-hidden mt-2">
                               <TabsContent value="plan" className="h-full flex flex-col">
@@ -292,7 +296,7 @@ export function RunConfigFormDialog({
                                   onReset={() => setPlanPrompt(PLAN_PROMPT)}
                                   onChange={(e) => setPlanPrompt(e.target.value)}
                                   defaultValue={PLAN_PROMPT}
-                                  placeholder="输入规划阶段的提示词..."
+                                  placeholder={t('evaluation.planningPromptPlaceholder')}
                                 />
                               </TabsContent>
                               <TabsContent value="act_with_plan" className="h-full flex flex-col">
@@ -301,7 +305,7 @@ export function RunConfigFormDialog({
                                   onReset={() => setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT)}
                                   onChange={(e) => setActWithPlanPrompt(e.target.value)}
                                   defaultValue={ACT_WITH_PLAN_PROMPT}
-                                  placeholder="输入规划驱动行动阶段的提示词..."
+                                  placeholder={t('evaluation.planActionPromptPlaceholder')}
                                 />
                               </TabsContent>
                               <TabsContent value="summary" className="h-full flex flex-col">
@@ -310,21 +314,21 @@ export function RunConfigFormDialog({
                                   onReset={() => setSummarizePrompt(SUMMARY_PROMPT)}
                                   onChange={(e) => setSummarizePrompt(e.target.value)}
                                   defaultValue={SUMMARY_PROMPT}
-                                  placeholder="输入总结阶段的提示词..."
+                                  placeholder={t('evaluation.summaryPromptPlaceholder')}
                                 />
                               </TabsContent>
                             </div>
                           </Tabs>
                         </TabsContent>
 
-                        {/* Act 块内容：单独一个 Textarea */}
+                        {/* Act block content: single Textarea */}
                         <TabsContent value="act_group" className="h-full flex flex-col">
                           <ResettableTextarea
                             value={actPrompt}
                             onReset={() => setActPrompt(ACT_PROMPT)}
                             onChange={(e) => setActPrompt(e.target.value)}
                             defaultValue={ACT_PROMPT}
-                            placeholder="输入行动阶段的提示词..."
+                            placeholder={t('evaluation.actionPromptPlaceholder')}
                           />
                         </TabsContent>
                       </div>
@@ -338,7 +342,7 @@ export function RunConfigFormDialog({
                         setPlanPrompt(localConfig.prompts.plan);
                         setActWithPlanPrompt(localConfig.prompts.act_with_plan);
                         setSummarizePrompt(localConfig.prompts.summary);
-                      }}>取消</Button>
+                      }}>{t('common.cancel')}</Button>
                     </DialogClose>
                     <Button type="button" onClick={() => {
                       setLocalConfig((prev) => ({
@@ -352,16 +356,16 @@ export function RunConfigFormDialog({
                       }));
                       setOpenPrompt(false);
                     }}>
-                      保存更改
+                      {t('evaluation.saveChanges')}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
           </div>
-          {/* 启用联网搜索 */}
+          {/* Enable web search */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <Label htmlFor="enable_search">启用联网搜索</Label>
+            <Label htmlFor="enable_search">{t('evaluation.enableWebSearch')}</Label>
             <Switch
               id="enable_search"
               className="justify-self-start"
@@ -375,9 +379,9 @@ export function RunConfigFormDialog({
             />
           </div>
 
-          {/* Agentic模式 */}
+          {/* Agentic mode */}
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <Label htmlFor="enable_agent">Agentic模式</Label>
+            <Label htmlFor="enable_agent">{t('evaluation.agenticMode')}</Label>
             <Switch
               id="enable_agent"
               className="justify-self-start"
@@ -391,9 +395,9 @@ export function RunConfigFormDialog({
             />
           </div>
 
-          {/* 知识库选择 */}
+          {/* Knowledge base selection */}
           <div className="grid grid-cols-[120px_1fr] items-start gap-4">
-            <Label htmlFor="kb_selection">知识库选择</Label>
+            <Label htmlFor="kb_selection">{t('evaluation.kbSelection')}</Label>
             <div className="space-y-2">
               {kbs.length > 0 ? (
                 <DropdownMenu modal={true}>
@@ -402,11 +406,11 @@ export function RunConfigFormDialog({
                       variant="outline"
                       className="text-sm text-muted-foreground"
                     >
-                      已选{localConfig?.kb_ids.length || 0}个，可多选 <ChevronDownIcon />
+                      {t('evaluation.selectedCount', { count: localConfig?.kb_ids.length || 0 })} <ChevronDownIcon />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-56">
-                    <DropdownMenuLabel>知识库</DropdownMenuLabel>
+                    <DropdownMenuLabel>{t('evaluation.knowledgebase')}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {kbs.map((kb) => (
                       <DropdownMenuCheckboxItem
@@ -423,7 +427,7 @@ export function RunConfigFormDialog({
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <p className="text-sm text-muted-foreground">尚未配置知识库</p>
+                <p className="text-sm text-muted-foreground">{t('evaluation.noKbConfigured')}</p>
               )}
 
               {selectedKbNames.length > 0 && (
@@ -438,9 +442,9 @@ export function RunConfigFormDialog({
             </div>
           </div>
 
-          {/* MCP选择 */}
+          {/* MCP selection */}
           <div className="grid grid-cols-[120px_1fr] items-start gap-4">
-            <Label htmlFor="mcp_selection">MCP选择</Label>
+            <Label htmlFor="mcp_selection">{t('evaluation.mcpSelection')}</Label>
             <div className="space-y-2">
               {mcps.length > 0 ? (
                 <DropdownMenu modal={true}>
@@ -449,7 +453,7 @@ export function RunConfigFormDialog({
                       variant="outline"
                       className="text-sm text-muted-foreground"
                     >
-                      已选{localConfig.mcp_ids.length}个，可多选 <ChevronDownIcon />
+                      {t('evaluation.selectedCount', { count: localConfig.mcp_ids.length })} <ChevronDownIcon />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-56">
@@ -470,7 +474,7 @@ export function RunConfigFormDialog({
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <p className="text-sm text-muted-foreground">尚未配置MCP</p>
+                <p className="text-sm text-muted-foreground">{t('evaluation.noMcpConfigured')}</p>
               )}
 
               {selectedMcpNames.length > 0 && (
@@ -485,11 +489,11 @@ export function RunConfigFormDialog({
             </div>
           </div>
 
-          {/* AI安全护栏 */}
+          {/* AI Guardrail */}
           <div className="grid grid-cols-[120px_1fr] items-start gap-4">
-            <Label>AI安全护栏</Label>
+            <Label>{t('evaluation.aiGuardrail')}</Label>
             <div className="space-y-4">
-              {/* 输入/输出护栏 */}
+              {/* Input/output guardrail */}
               <div className="grid grid-cols-2 gap-6">
                 <div className="flex items-center gap-2">
                   <Switch
@@ -503,7 +507,7 @@ export function RunConfigFormDialog({
                     }}
                   />
                   <Label htmlFor="enable_input_check" className="text-sm">
-                    输入护栏
+                    {t('evaluation.inputGuardrailLabel')}
                   </Label>
                 </div>
                 <div className="flex items-center gap-2">
@@ -518,16 +522,16 @@ export function RunConfigFormDialog({
                     }}
                   />
                   <Label htmlFor="enable_output_check" className="text-sm">
-                    输出护栏
+                    {t('evaluation.outputGuardrailLabel')}
                   </Label>
                 </div>
               </div>
 
-              {/* 默认护栏提示 */}
+              {/* Default guardrail hint */}
               <div className="space-y-1">
                 <Input
                   id="guardrail_hint"
-                  placeholder="作为人工智能助手，我无法回应包含不当或敏感信息的内容。"
+                  placeholder={t('apps.guardrailHint')}
                   className="w-full"
                   value={localConfig.guardrail_hint || ""}
                   onChange={(e) => {
@@ -538,7 +542,7 @@ export function RunConfigFormDialog({
                   }}
                 />
                 <Label htmlFor="guardrail_hint" className="text-xs text-muted-foreground">
-                  默认护栏提示
+                  {t('apps.guardrailHintTip')}
                 </Label>
               </div>
             </div>
@@ -548,7 +552,7 @@ export function RunConfigFormDialog({
         <DialogFooter className="gap-2 sm:gap-0">
           <DialogClose asChild>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
           </DialogClose>
 
@@ -557,7 +561,7 @@ export function RunConfigFormDialog({
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                提交中...
+                {t('common.saving')}
               </>
             ) : (
               mode_str

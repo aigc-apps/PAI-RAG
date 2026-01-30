@@ -2,6 +2,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit, Plus, Trash2Icon } from 'lucide-react';
+import { useI18n } from '@/app/providers/i18n';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Breadcrumb,
@@ -41,19 +42,19 @@ interface KnowledgeBase {
   name: string;
   description: string;
   chunk_config: {
-    parser_type: string; // 切片类型
-    separator: string; // 切片标识符
-    chunk_size: string; // 切片大小
-    chunk_overlap: string; // 切片重叠大小
+    parser_type: string; // Chunking type
+    separator: string; // Chunking separator
+    chunk_size: string; // Chunk size
+    chunk_overlap: string; // Chunk overlap size
   };
-  embedding_model: string; //向量模型名称
+  embedding_model: string; // Embedding model name
   retrieval_config: {
-    retrieval_mode: string; // 索引类型：vector, fulltext, hybrid
-    top_k: number; // Top-K 值
-    similarity_threshold: string; // 相似度分数阈值
+    retrieval_mode: string; // Index type: vector, fulltext, hybrid
+    top_k: number; // Top-K value
+    similarity_threshold: string; // Similarity score threshold
     enable_rerank: boolean;
-    rerank_model: string; // rerank模型名称
-    vector_weight?: string; // 向量检索权重（仅 hybrid 时使用）
+    rerank_model: string; // Rerank model name
+    vector_weight?: string; // Vector retrieval weight (for hybrid only)
   };
 }
 
@@ -88,7 +89,7 @@ interface KbFileChunk {
   updated_at: string;
 }
 
-// 状态映射
+// Status mapping
 const statusMap: Record<string, string> = {
   succeeded: 'bg-blue-100 text-blue-800',
   failed: 'bg-green-100 text-green-800',
@@ -102,18 +103,20 @@ const activeMap: Record<string, string> = {
 export default function KnowledgeBaseFileChunksPage(  
   { params } : { params: Promise<{ kbId: string, fileId: string }> }
 ) {
+  const { t } = useI18n();
+
   const {kbId, fileId} = use(params);
-  const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // 知识库详情
-  const [knowledgebaseloading, setKnowledgeBaseLoading] = useState(true); // 知识库加载状态
-  const [knowledgebaseerror, setKnowledgeBaseError] = useState(''); // 知识库错误信息
+  const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // Knowledgebase details
+  const [knowledgebaseloading, setKnowledgeBaseLoading] = useState(true); // Knowledgebase loading state
+  const [knowledgebaseerror, setKnowledgeBaseError] = useState(''); // Knowledgebase error message
 
-  const [kbfile, setKbFile] = useState<KnowledgeBaseFile>(); // 文件详情
-  const [kbfileloading, setKbFileLoading] = useState(true); // 文件加载状态
-  const [kbfileerror, setKbFileError] = useState(''); // 文件错误信息
+  const [kbfile, setKbFile] = useState<KnowledgeBaseFile>(); // File details
+  const [kbfileloading, setKbFileLoading] = useState(true); // File loading state
+  const [kbfileerror, setKbFileError] = useState(''); // File error message
 
-  const [kbfilechunks, setKbFileChunks] = useState(Array<KbFileChunk>); // 文件切片列表详情
-  const [kbfilechunksloading, setKbFileChunksLoading] = useState(true); // 文件加载状态
-  const [kbfilechunkserror, setKbFilChunksError] = useState(''); // 文件错误信息
+  const [kbfilechunks, setKbFileChunks] = useState(Array<KbFileChunk>); // File chunks list details
+  const [kbfilechunksloading, setKbFileChunksLoading] = useState(true); // File loading state
+  const [kbfilechunkserror, setKbFilChunksError] = useState(''); // File error message
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -135,14 +138,14 @@ export default function KnowledgeBaseFileChunksPage(
         const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}`,
         );
-        if (!res.ok) throw new Error('获取知识库列表失败');
+        if (!res.ok) throw new Error(t('knowledgebase.fetchKbFailed'));
         const json_data = await res.json();
         const kb_data = json_data.data;
 
-        setKnowledgeBase(kb_data); // 更新状态
-        console.log('知识库详情数据:', kb_data);
+        setKnowledgeBase(kb_data);
+        console.log(t('knowledgebase.kbDetails'), kb_data);
       } catch (err: any) {
-        setKnowledgeBaseError(err || '加载失败');
+        setKnowledgeBaseError(err || t('knowledgebase.loadError'));
       } finally {
         setKnowledgeBaseLoading(false);
       }
@@ -152,14 +155,14 @@ export default function KnowledgeBaseFileChunksPage(
         const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}/files/${fileId}`,
         );
-        if (!res.ok) throw new Error('获取知识库文件失败');
+        if (!res.ok) throw new Error(t('knowledgebase.fetchKbFileFailed'));
         const json_data = await res.json();
         const kb_file_data = json_data.data;
 
-        setKbFile(kb_file_data); // 更新状态
-        console.log('知识库文件详情数据:', kb_file_data);
+        setKbFile(kb_file_data);
+        console.log(t('knowledgebase.kbFileDetails'), kb_file_data);
       } catch (err: any) {
-        setKbFileError(err || '加载失败');
+        setKbFileError(err || t('knowledgebase.loadError'));
       } finally {
         setKbFileLoading(false);
       }
@@ -170,14 +173,14 @@ export default function KnowledgeBaseFileChunksPage(
         const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
-        if (!res.ok) throw new Error('获取知识库文件切片列表失败');
+        if (!res.ok) throw new Error(t('knowledgebase.fetchChunksFailed'));
         const json_data = await res.json();
         const kb_file_chunks_data = json_data.data.items;
         setTotalPages(json_data.data.pages);
-        setKbFileChunks(kb_file_chunks_data || []); // 更新状态
-        console.log('知识库文件切片列表详情数据:', kb_file_chunks_data);
+        setKbFileChunks(kb_file_chunks_data || []);
+        console.log(t('knowledgebase.chunksDetails'), kb_file_chunks_data);
       } catch (err: any) {
-        setKbFilChunksError(err || '加载失败');
+        setKbFilChunksError(err || t('knowledgebase.loadError'));
       } finally {
         setKbFileChunksLoading(false);
       }
@@ -187,7 +190,7 @@ export default function KnowledgeBaseFileChunksPage(
     fetchKbFileChunks();
   }, [page, fileId, kbId]);
   if (!knowledgebase || !kbfile) {
-    return <div className="p-6">加载中...</div>;
+    return <div className="p-6">{t('common.loading')}</div>;
   }
 
   const handlePageChange = (newPage: number) => {
@@ -202,10 +205,10 @@ export default function KnowledgeBaseFileChunksPage(
     const res = await tenantFetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(chunk), // 包装为数组
+      body: JSON.stringify(chunk),
     });
 
-    if (!res.ok) throw new Error(`修改 ${chunk.id} 配置失败`);
+    if (!res.ok) throw new Error(t('knowledgebase.modifyConfigFailed', { id: chunk.id }));
     setKbFileChunks((prev) =>
       prev.map((c) => (c.id === chunk.id ? { ...c, active: chunk.active } : c)),
     );
@@ -218,7 +221,7 @@ export default function KnowledgeBaseFileChunksPage(
   };
 
   const handleDeleteClick = async (chunk: KbFileChunk) => {
-    if (!confirm('确定要删除这个切片吗？此操作不可恢复。')) {
+    if (!confirm(t('knowledgebase.confirmDeleteChunk'))) {
       return;
     }
 
@@ -230,17 +233,17 @@ export default function KnowledgeBaseFileChunksPage(
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || '删除切片失败');
+        throw new Error(errorData.message || t('knowledgebase.deleteChunkFailed'));
       }
 
-      // 从本地状态中移除
+      // Remove from local state
       setKbFileChunks((prev) => prev.filter((c) => c.id !== chunk.id));
 
-      // 如果当前页没有数据了，返回上一页
+      // If current page has no data, go back to previous page
       if (kbfilechunks.length === 1 && page > 1) {
         setPage(page - 1);
       } else {
-        // 刷新切片列表
+        // Refresh chunks list
         const res = await tenantFetch(
           `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
         );
@@ -251,8 +254,8 @@ export default function KnowledgeBaseFileChunksPage(
         }
       }
     } catch (err: any) {
-      console.error('删除切片失败:', err);
-      alert(err.message || '删除切片失败');
+      console.error(t('knowledgebase.deleteChunkFailed'), err);
+      alert(err.message || t('knowledgebase.deleteChunkFailed'));
     }
   };
 
@@ -268,9 +271,9 @@ export default function KnowledgeBaseFileChunksPage(
         body: JSON.stringify(selectedChunk),
       });
 
-      if (!response.ok) throw new Error('更新失败');
+      if (!response.ok) throw new Error(t('knowledgebase.updateFailed'));
 
-      // 更新本地状态
+      // Update local state
       setKbFileChunks((prev) =>
         prev.map((c) =>
           c.id === selectedChunk.id ? { ...c, text: selectedChunk.text } : c,
@@ -278,14 +281,14 @@ export default function KnowledgeBaseFileChunksPage(
       );
       setIsEditOpen(false);
     } catch (err) {
-      console.error('编辑失败:', err);
-      // 可添加错误提示（如 toast）
+      console.error(t('knowledgebase.editFailed'), err);
+      // Optional: add error notification (e.g., toast)
     }
   };
 
   const handleAddChunk = async () => {
     if (!newChunkText.trim()) {
-      alert('请输入切片文本');
+      alert(t('knowledgebase.inputChunkText'));
       return;
     }
 
@@ -303,14 +306,14 @@ export default function KnowledgeBaseFileChunksPage(
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || '添加切片失败');
+        throw new Error(errorData.message || t('knowledgebase.addChunkFailed'));
       }
 
-      // 重置状态
+      // Reset state
       setNewChunkText('');
       setIsAddOpen(false);
 
-      // 刷新切片列表
+      // Refresh chunks list
       const res = await tenantFetch(
         `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
       );
@@ -320,8 +323,8 @@ export default function KnowledgeBaseFileChunksPage(
         setTotalPages(json_data.data.pages);
       }
     } catch (err: any) {
-      console.error('添加切片失败:', err);
-      alert(err.message || '添加切片失败');
+      console.error(t('knowledgebase.addChunkFailed'), err);
+      alert(err.message || t('knowledgebase.addChunkFailed'));
     } finally {
       setIsAdding(false);
     }
@@ -332,7 +335,7 @@ export default function KnowledgeBaseFileChunksPage(
       <div className="flex-none">
         <div className="p-2 space-y-2">
           <div className="flex items-center gap-2">
-            {/* 面包屑导航 */}
+            {/* Breadcrumb navigation */}
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
@@ -342,7 +345,7 @@ export default function KnowledgeBaseFileChunksPage(
                       className="px-0"
                       onClick={() => router.push('/knowledgebases')}
                     >
-                      知识库
+                      {t('knowledgebase.title')}
                     </Button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
@@ -380,7 +383,7 @@ export default function KnowledgeBaseFileChunksPage(
               >
                 <ArrowLeft />
               </Button>
-              <h1 className="text-xl font-medium pl-2">文件切片列表</h1>
+              <h1 className="text-xl font-medium pl-2">{t('knowledgebase.fileChunksList')}</h1>
             </div>
             <Button
               variant="default"
@@ -388,25 +391,25 @@ export default function KnowledgeBaseFileChunksPage(
               onClick={() => setIsAddOpen(true)}
             >
               <Plus className="w-4 h-4 mr-1" />
-              新建切片
+              {t('knowledgebase.newChunk')}
             </Button>
           </div>
         </div>
       </div>
-      {/* 可滚动内容区域 */}
+      {/* Scrollable content area */}
       <div className="overflow-y-auto h-4/5">
         <div className="flex border-dashed border-gray-200 rounded-xl p-0">
           {kbfilechunksloading ? (
             <div className="py-12 text-center">
-              <p className="text-gray-500">加载中...</p>
+              <p className="text-gray-500">{t('common.loading')}</p>
             </div>
           ) : kbfilechunkserror ? (
             <div className="py-12 text-center text-red-500">
-              <p>切片列表加载失败</p>
+              <p>{t('knowledgebase.chunksLoadFailed')}</p>
             </div>
           ) : kbfilechunks.length === 0 ? (
             <div className="py-12 text-center text-red-500">
-              <h3 className="text-lg font-medium text-gray-700 py-6">暂无切片</h3>
+              <h3 className="text-lg font-medium text-gray-700 py-6">{t('knowledgebase.noChunks')}</h3>
             </div>
           ) : (
             <div className="gap-1 px-3 py-0 w-full">
@@ -417,7 +420,7 @@ export default function KnowledgeBaseFileChunksPage(
                       <CardTitle className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
                           <Badge className={activeMap[String(chunk.active)]}>
-                            {chunk.active ? '已启用' : '未启用'}
+                            {chunk.active ? t('knowledgebase.enabled') : t('knowledgebase.disabled')}
                           </Badge>
                           {chunk.chunk_metadata?.token_count !== undefined && (
                             <Badge variant="outline" className="text-xs">
@@ -453,7 +456,7 @@ export default function KnowledgeBaseFileChunksPage(
                           overlayRender={() => {
                             return (
                               <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
-                                <div>图片描述：{meta.desc}</div>
+                                <div>{t('knowledgebase.imageDesc')}：{meta.desc}</div>
                               </div>
                             );
                           }}
@@ -464,7 +467,7 @@ export default function KnowledgeBaseFileChunksPage(
                         </PhotoProvider>
                       ))}
                     </CardFooter>
-                    {/* 悬浮显示的删除按钮 */}
+                    {/* Hover delete button */}
                     <Button
                       variant="destructive"
                       size="icon"
@@ -490,23 +493,23 @@ export default function KnowledgeBaseFileChunksPage(
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>编辑切片内容</DialogTitle>
-            <DialogDescription>修改文本并保存</DialogDescription>
+            <DialogTitle>{t('knowledgebase.editChunk')}</DialogTitle>
+            <DialogDescription>{t('knowledgebase.editAndSave')}</DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label className="block mb-2 text-sm font-medium">文本内容</Label>
+            <Label className="block mb-2 text-sm font-medium">{t('knowledgebase.textContent')}</Label>
             <Textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               className="w-full h-40"
-              placeholder="请输入新内容"
+              placeholder={t('knowledgebase.enterNewContent')}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
-            <Button onClick={handleSaveEdit}>保存</Button>
+            <Button onClick={handleSaveEdit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -514,16 +517,16 @@ export default function KnowledgeBaseFileChunksPage(
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>新建切片</DialogTitle>
-            <DialogDescription>输入切片文本内容</DialogDescription>
+            <DialogTitle>{t('knowledgebase.newChunk')}</DialogTitle>
+            <DialogDescription>{t('knowledgebase.enterChunkContent')}</DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label className="block mb-2 text-sm font-medium">切片文本</Label>
+            <Label className="block mb-2 text-sm font-medium">{t('knowledgebase.chunkText')}</Label>
             <Textarea
               value={newChunkText}
               onChange={(e) => setNewChunkText(e.target.value)}
               className="w-full h-40"
-              placeholder="请输入切片文本内容"
+              placeholder={t('knowledgebase.enterChunkText')}
             />
           </div>
           <DialogFooter>
@@ -535,10 +538,10 @@ export default function KnowledgeBaseFileChunksPage(
               }}
               disabled={isAdding}
             >
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleAddChunk} disabled={isAdding || !newChunkText.trim()}>
-              {isAdding ? '保存中...' : '保存'}
+              {isAdding ? t('common.saving') : t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

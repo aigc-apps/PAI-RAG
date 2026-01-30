@@ -3,6 +3,7 @@
 import React, { FC, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useI18n } from '@/app/providers/i18n';
 
 
 export interface ElasticConfig {
@@ -20,7 +21,8 @@ export const ElasticsearchForm: FC<ElasticConfigProps> = ({
   config,
   onValueChange
 }) => {
-  // 确保 user 字段有默认值
+  const { t } = useI18n();
+  // Ensure user field has default value
   const getConfigWithDefaults = (cfg: Partial<ElasticConfig>): ElasticConfig => ({
     endpoint: cfg.endpoint || '',
     user: cfg.user || 'elastic',
@@ -30,7 +32,7 @@ export const ElasticsearchForm: FC<ElasticConfigProps> = ({
   const [db, setDb] = useState<ElasticConfig>(getConfigWithDefaults(config));
   const [isInitialized, setIsInitialized] = useState(false);
   
-  // 初始化时，如果 user 字段不存在，确保默认值被传递到父组件
+  // On initialization, if user field does not exist, ensure default value is passed to parent component
   useEffect(() => {
     if (!isInitialized) {
       const configWithDefaults = getConfigWithDefaults(config);
@@ -41,7 +43,7 @@ export const ElasticsearchForm: FC<ElasticConfigProps> = ({
     }
   }, [isInitialized, config.user]);
   
-  // 同步外部 config 变化到内部 state（但不触发 onValueChange 以避免循环）
+  // Sync external config changes to internal state (but don't trigger onValueChange to avoid loop)
   useEffect(() => {
     const updatedConfig = getConfigWithDefaults(config);
     setDb(updatedConfig);
@@ -50,7 +52,7 @@ export const ElasticsearchForm: FC<ElasticConfigProps> = ({
   return (
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="endpoint">Elasticsearch服务地址, 如http://xxx.com:9200</Label>
+          <Label htmlFor="endpoint">{t('config.vectordb.elasticsearchEndpoint')}</Label>
           <Input id="endpoint" value={db.endpoint || ''} onChange={(e) => {
             const newConfig = { ...db, endpoint: e.target.value };
             setDb(newConfig);
@@ -58,7 +60,7 @@ export const ElasticsearchForm: FC<ElasticConfigProps> = ({
           }} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="user">用户名</Label>
+          <Label htmlFor="user">{t('config.vectordb.username')}</Label>
           <Input id="user" type="string" value={db.user || "elastic"} onChange={(e) => {
             const newConfig = { ...db, user: e.target.value };
             setDb(newConfig);
@@ -66,7 +68,7 @@ export const ElasticsearchForm: FC<ElasticConfigProps> = ({
           }} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">密码</Label>
+          <Label htmlFor="password">{t('config.vectordb.password')}</Label>
           <Input id="password" type="password" value={db.password || ''} onChange={(e) => {
             const newConfig = { ...db, password: e.target.value };
             setDb(newConfig);

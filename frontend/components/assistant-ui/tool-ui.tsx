@@ -30,6 +30,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from "remark-gfm";
 import { MarkdownRenderer } from '@/components/customized/markdown/markdown';
 import { jsonrepair } from 'jsonrepair';
+import { useI18n } from '@/app/providers/i18n';
 
 // Helper function to safely parse JSON with error handling
 const safeParseJSON = <T = any>(jsonString: string, fallback?: T): T => {
@@ -100,6 +101,7 @@ type SearchWebResult = {
 export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'tavily-websearch',
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
     console.log('TavilySearchTool 参数:', args);
     console.log('TavilySearchTool 状态:', status);
 
@@ -110,7 +112,7 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <GlobeIcon className="size-4" /> 正在搜索网页中: {args.query}{' '}
+            <GlobeIcon className="size-4" /> {t('chat.tools.searchingWeb')}: {args.query}{' '}
           </Button>
         </div>
       );
@@ -119,7 +121,7 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500">
             <GlobeIcon className="h-4 w-4" />
-            <span>未能获取搜索结果. {result || ''}</span>
+            <span>{t('chat.tools.searchFailed')}. {result || ''}</span>
           </div>
         );
       }
@@ -140,13 +142,13 @@ export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
                 className="flex items-center justify-start h-7 w-full text-gray-600 text-xs gap-2 px-4 "
               >
                 {' '}
-                <GlobeIcon className="size-4" /> 完成网页搜索: {args.query}{' '}
+                <GlobeIcon className="size-4" /> {t('chat.tools.webSearchComplete')}: {args.query}{' '}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
               <SheetHeader>
                 <SheetTitle>
-                  网页搜索结果 · {search_result?.result.length}
+                  {t('chat.tools.webSearchResults')} · {search_result?.result.length}
                 </SheetTitle>
                 <SheetDescription>{args.query}</SheetDescription>
               </SheetHeader>
@@ -209,6 +211,7 @@ type ChatDbResult = {
 export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
   toolName: 'chat-db',
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
     console.log('ChatDbTool 参数:', args);
     console.log('ChatDbTool 状态:', status);
     console.log('ChatDbTool 是否出错:', isError);
@@ -221,7 +224,7 @@ export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <GlobeIcon className="size-4" /> 正在查询数据库: {args.query}{' '}
+            <GlobeIcon className="size-4" /> {t('chat.tools.queryingDb')}: {args.query}{' '}
           </Button>
         </div>
       );
@@ -230,7 +233,7 @@ export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500">
             <GlobeIcon className="h-4 w-4" />
-            <span>未能获取数据库结果。{result || ''}</span>
+            <span>{t('chat.tools.dbSearchFailed')}{result || ''}</span>
           </div>
         );
       }
@@ -251,19 +254,27 @@ export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
                 className="flex items-center justify-start h-7 w-full text-gray-600 text-xs gap-2 px-4 "
               >
                 {' '}
-                <GlobeIcon className="size-4" /> 完成数据库查询: {args.query}{' '}
+                <GlobeIcon className="size-4" /> {t('chat.tools.dbQueryComplete')}: {args.query}{' '}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
               <SheetHeader>
                 <SheetTitle>
-                  查询结果
+                  {t('chat.tools.queryResults')}
                 </SheetTitle>
                 <SheetDescription>Query: {args.query}</SheetDescription>
               </SheetHeader>
               <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
                 <div className="pl-6 pr-2">
-                <MarkdownRenderer content={`数据结果\n\n${db_result.result}\n\nSQL:\n\n\`\`\`sql\n${db_result.sql}\n\`\`\``} />
+                <MarkdownRenderer content={`${t('chat.tools.dataResult')}
+
+${db_result.result}
+
+SQL:
+
+\`\`\`sql
+${db_result.sql}
+\`\`\``} />
 
                 </div>
               </div>
@@ -280,6 +291,7 @@ export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
 export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'planning-tool',
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
 
     if (status.type === 'running') {
       return (
@@ -288,7 +300,7 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <ListTodoIcon className="size-4" /> 正在制定执行计划
+            <ListTodoIcon className="size-4" /> {t('chat.tools.makingPlan')}
           </Button>
         </div>
       );
@@ -297,7 +309,7 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500 mb-1">
             <ListTodoIcon className="h-4 w-4" />
-            <span>制定计划失败 {result || ''}</span>
+            <span>{t('chat.tools.planFailed')} {result || ''}</span>
           </div>
         );
       }
@@ -310,7 +322,7 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500 mb-1">
             <ListTodoIcon className="h-4 w-4" />
-            <span>解析计划结果失败</span>
+            <span>{t('chat.tools.parsePlanFailed')}</span>
           </div>
         );
       }
@@ -323,13 +335,13 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
                 className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
               >
                 {' '}
-                <ListTodoIcon className="size-4" /> 执行计划完成
+                <ListTodoIcon className="size-4" /> {t('chat.tools.planComplete')}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
               <SheetHeader>
                 <SheetTitle>
-                  执行计划 - 共{plan_result?.steps.length}步 
+                  {t('chat.tools.executionPlan')} - {t('common.total')}{plan_result?.steps.length}{t('chat.tools.steps')} 
                 </SheetTitle>
                 <SheetDescription>{args.query}</SheetDescription>
               </SheetHeader>
@@ -361,6 +373,7 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
 export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'aliyun-websearch',
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
     console.log('SearchWebToolUI 参数:', args);
     console.log('SearchWebToolUI 状态:', status);
 
@@ -371,7 +384,7 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <GlobeIcon className="size-4" /> 正在搜索网页中: {args.query}{' '}
+            <GlobeIcon className="size-4" /> {t('chat.tools.searchingWeb')}: {args.query}{' '}
           </Button>
         </div>
       );
@@ -380,7 +393,7 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-400">
             <GlobeIcon className="h-4 w-4" />
-            <span>未能获取搜索结果 {result || ''}</span>
+            <span>{t('chat.tools.searchFailed')} {result || ''}</span>
           </div>
         );
       }
@@ -400,13 +413,13 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
                 className="h-7 flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
               >
                 {' '}
-                <GlobeIcon className="size-4" /> 完成网页搜索: {args.query}{' '}
+                <GlobeIcon className="size-4" /> {t('chat.tools.webSearchComplete')}: {args.query}{' '}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
               <SheetHeader>
                 <SheetTitle>
-                  网页搜索结果 · {search_result?.result.length}
+                  {t('chat.tools.webSearchResults')} · {search_result?.result.length}
                 </SheetTitle>
                 <SheetDescription>{args.query}</SheetDescription>
               </SheetHeader>
@@ -465,6 +478,7 @@ export type ReadFileToolArgs = {
 export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
   toolName: 'read-file',
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
     if (status.type === 'running') {
       return (
         <div className="h-7 bg-muted/50  cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
@@ -472,7 +486,7 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <PaperclipIcon className="size-4" /> 正在进行文件读取: {args.file_id}
+            <PaperclipIcon className="size-4" /> {t('chat.tools.readingFile')}: {args.file_id}
           </Button>
         </div>
       );
@@ -499,17 +513,17 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
                 variant="ghost"
                 className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
               >
-                <PaperclipIcon className="size-4" /> 完成文件读取: {args.file_name}
+                <PaperclipIcon className="size-4" /> {t('chat.tools.fileReadComplete')}: {args.file_name}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
               <SheetHeader>
-                <SheetTitle>文件读取结果</SheetTitle>
-                <SheetDescription>文件名：{args.file_name}</SheetDescription>
+                <SheetTitle>{t('chat.tools.fileReadResults')}</SheetTitle>
+                <SheetDescription>{t('chat.tools.fileName')}:{args.file_name}</SheetDescription>
               </SheetHeader>
               <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
                 <div className="border-t border-dashed px-4 pt-2">
-                  <p className="font-semibold">文件读取结果:</p>
+                  <p className="font-semibold">{t('chat.tools.fileReadResult')}:</p>
                   <JsonCodeBlock
                     jsonString={
                       typeof parsedResult === 'string'
@@ -539,6 +553,7 @@ export const SearchFileToollUI = makeAssistantToolUI<
 >({
   toolName: 'search-file',
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
     console.log('SearchFileToollUI 参数:', args);
 
     if (status.type === 'running') {
@@ -548,7 +563,7 @@ export const SearchFileToollUI = makeAssistantToolUI<
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <FileSearch className="size-4" /> 正在进行文件搜索: {args.query_str}
+            <FileSearch className="size-4" /> {t('chat.tools.searchingFile')}: {args.query_str}
           </Button>
         </div>
       );
@@ -573,17 +588,17 @@ export const SearchFileToollUI = makeAssistantToolUI<
                 variant="ghost"
                 className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
               >
-                <FileSearch className="size-4" /> 完成文件搜索: {args.query_str}
+                <FileSearch className="size-4" /> {t('chat.tools.fileSearchComplete')}: {args.query_str}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
               <SheetHeader>
-                <SheetTitle>文件搜索结果</SheetTitle>
-                <SheetDescription>搜索问题：{args.query_str}</SheetDescription>
+                <SheetTitle>{t('chat.tools.fileSearchResults')}</SheetTitle>
+                <SheetDescription>{t('chat.tools.searchQuery')}:{args.query_str}</SheetDescription>
               </SheetHeader>
               <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
                 <div className="border-t border-dashed px-4 pt-2">
-                  <p className="font-semibold">文件搜索结果:</p>
+                  <p className="font-semibold">{t('chat.tools.fileSearchResult')}:</p>
                   <JsonCodeBlock
                     jsonString={
                       typeof parsedResult === 'string'
@@ -628,6 +643,7 @@ type SearchKbResult = {
 export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
   toolName: "search-knowledgebase",
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
     console.log("SearchKbToolUI 参数:", args);
     console.log("SearchKbToolUI 状态:", status);
 
@@ -638,7 +654,7 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
             variant="ghost"
             className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
           >
-            <BookCheckIcon className="size-4" /> 正在搜索知识库中: {args.query}{" "}
+            <BookCheckIcon className="size-4" /> {t('chat.tools.searchingKb')}: {args.query}{" "}
           </Button>
         </div>
       );
@@ -647,7 +663,7 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
         return (
           <div className="flex items-center gap-2 text-sm font-medium text-red-500">
             <GlobeIcon className="h-4 w-4" />
-            <span>未能获取搜索结果 {result || ''}</span>
+            <span>{t('chat.tools.searchFailed')} {result || ''}</span>
           </div>
         );
       }
@@ -667,12 +683,12 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
                 className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
               >
                 {" "}
-                <BookCheckIcon className="size-4" /> 完成知识库搜索: {args.query}{" "}
+                <BookCheckIcon className="size-4" /> {t('chat.tools.kbSearchComplete')}: {args.query}{" "}
               </Button>
             </SheetTrigger>
             <SheetContent side="right">
               <SheetHeader>
-                <SheetTitle>知识库搜索结果</SheetTitle>
+                <SheetTitle>{t('chat.tools.kbSearchResults')}</SheetTitle>
                 <SheetDescription>{args.query}</SheetDescription>
               </SheetHeader>
               <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto max-h-[calc(100vh-120px)]">
@@ -695,7 +711,7 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
                           </Badge>
                         </AccordionTrigger>
                         <AccordionContent>
-                          <a href={item.url} className='text-blue-600 hover:underline'>document link</a>
+                          <a href={item.url} className='text-blue-600 hover:underline'>{t('chat.tools.documentLink')}</a>
                           <div>{item.content}</div>
                           
                           {item?.images.map((meta, index) => (
@@ -705,7 +721,7 @@ export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
                               overlayRender={({}) => {
                                 return (
                                   <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
-                                    <div>图片描述：{meta.desc}</div>
+                                    <div>{t('chat.tools.imageDesc')}:{meta.desc}</div>
                                   </div>
                                 );
                               }}
@@ -738,39 +754,40 @@ export type PythonInterpreterArgs = {
 export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs, string>({
   toolName: 'PythonInterpreter',
   render: ({ args, status, result, isError }) => {
+    const { t } = useI18n();
     const [isOpen, setIsOpen] = useState(false);
     const [savedCode, setSavedCode] = useState('');
-    const [codeGenerated, setCodeGenerated] = useState(false); // 标记代码是否已生成完成
+    const [codeGenerated, setCodeGenerated] = useState(false); // Mark whether code generation is complete
 
-    // 当状态从 running 变为 complete 时，先展开显示结果，3秒后自动收起
+    // When status changes from running to complete, first expand to show results, then auto-collapse after 3 seconds
     useEffect(() => {
       if (status.type === 'complete') {
-        setIsOpen(true); // complete 时先展开显示结果
-        // 3秒后自动收起
+        setIsOpen(true); // Expand when complete to show results
+        // Auto-collapse after 3 seconds
         const timer = setTimeout(() => {
           setIsOpen(false);
         }, 3000);
         return () => clearTimeout(timer);
       } else if (status.type === 'running') {
-        // running 时立即展开，不等待代码
+        // Expand immediately when running, don't wait for code
         setIsOpen(true);
-        // 重置代码生成状态
+        // Reset code generation status
         setCodeGenerated(false);
       }
     }, [status.type]);
 
-    // 提取代码，并保存最后一次有效的代码值（使用 useMemo 优化性能）
+    // Extract code and save the last valid code value (using useMemo for performance optimization)
     const extractCode = React.useMemo(() => {
       if (!args) return '';
       
-      // 检查是否是空对象
+      // Check if it's an empty object
       if (typeof args === 'object' && Object.keys(args).length === 0) {
         return '';
       }
       
       if (typeof args === 'object' && 'code' in args) {
         const code = typeof args.code === 'string' ? args.code : String(args.code || '');
-        // 只有当代码不为空时才返回
+        // Only return when code is not empty
         if (code && code.trim()) {
           return code;
         }
@@ -784,12 +801,12 @@ export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs
               return code;
             }
           }
-          // 如果不是 JSON 格式，可能是直接的代码字符串
+          // If not JSON format, might be direct code string
           if (argsString.trim() && argsString !== '{}') {
             return argsString;
           }
         } catch {
-          // 如果解析失败，可能是直接的代码字符串
+          // If parsing fails, might be direct code string
           if (argsString.trim() && argsString !== '{}') {
             return argsString;
           }
@@ -798,27 +815,27 @@ export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs
       return '';
     }, [args]);
 
-    // 更新保存的代码（只在有有效代码时更新）
+    // Update saved code (only update when there's valid code)
     useEffect(() => {
       if (extractCode && extractCode.trim()) {
         setSavedCode(extractCode);
       }
     }, [extractCode]);
 
-    // 使用保存的代码或当前代码（优先使用当前代码，如果为空则使用保存的代码）
+    // Use saved code or current code (prefer current code, use saved code if empty)
     const codeToShow = extractCode && extractCode.trim() ? extractCode : savedCode;
 
-    // 检测代码是否生成完成（代码稳定不再变化）
+    // Detect if code generation is complete (code is stable and no longer changing)
     useEffect(() => {
       if (status.type === 'running' && codeToShow && codeToShow.trim()) {
-        // 延迟1.5秒后认为代码已生成完成（代码在这段时间内没有变化）
-        // 每次代码变化时，定时器会重置，只有代码稳定1.5秒后才认为生成完成
+        // After 1.5 seconds delay, consider code generation complete (code hasn't changed during this time)
+        // Timer resets with each code change, only considered complete after code is stable for 1.5 seconds
         const timer = setTimeout(() => {
           setCodeGenerated(true);
         }, 1500);
         return () => clearTimeout(timer);
       } else {
-        // 如果代码为空或状态不是running，重置状态
+        // If code is empty or status is not running, reset status
         setCodeGenerated(false);
       }
     }, [codeToShow, status.type]);
@@ -833,27 +850,27 @@ export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs
                   variant="ghost"
                   className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
                 >
-                  <Code2 className="size-4" /> 正在调用工具: PythonInterpreter
+                  <Code2 className="size-4" /> {t('chat.tools.callingTool')}: PythonInterpreter
                 </Button>
               </CollapsibleTrigger>
             </div>
             <CollapsibleContent className="mt-2">
               <div className="rounded-md border border-border bg-background p-2 space-y-3">
                 <div>
-                  <p className="text-xs font-semibold mb-2 text-muted-foreground">生成执行代码:</p>
+                  <p className="text-xs font-semibold mb-2 text-muted-foreground">{t('chat.tools.generatingCode')}:</p>
                   {codeToShow && codeToShow.trim() ? (
                     <PythonCodeBlock code={codeToShow} />
                   ) : (
                     <div className="bg-muted/30 rounded p-3 text-sm text-muted-foreground italic">
-                      代码加载中...
+                      {t('chat.tools.codeLoading')}
                     </div>
                   )}
                 </div>
-                {/* 如果代码已生成完成，显示运行中提示 */}
+                {/* Show running prompt if code generation is complete */}
                 {codeToShow && codeToShow.trim() && codeGenerated && (
                   <div className="bg-muted/50 rounded p-3 text-xs font-semibold text-muted-foreground flex items-center gap-2">
                     <span>⚙️</span>
-                    <span>代码运行中...</span>
+                    <span>{t('chat.tools.codeRunning')}</span>
                   </div>
                 )}
               </div>
@@ -875,25 +892,25 @@ export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs
                   variant="ghost"
                   className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
                 >
-                  <Code2 className="size-4" /> 完成工具调用: PythonInterpreter
+                  <Code2 className="size-4" /> {t('chat.tools.toolCallComplete')}: PythonInterpreter
                 </Button>
               </CollapsibleTrigger>
             </div>
             <CollapsibleContent className="mt-2">
               <div className="rounded-md border border-border bg-background p-2 space-y-3">
                 <div>
-                  <p className="text-xs font-semibold mb-2 text-muted-foreground">生成执行代码:</p>
+                  <p className="text-xs font-semibold mb-2 text-muted-foreground">{t('chat.tools.generatingCode')}:</p>
                   {codeToShow && codeToShow.trim() ? (
                     <PythonCodeBlock code={codeToShow} />
                   ) : (
                     <div className="bg-muted/30 rounded p-3 text-sm text-muted-foreground italic">
-                      代码未提供
+                      {t('chat.tools.codeNotProvided')}
                     </div>
                   )}
                 </div>
                 {parsedResult !== undefined && (
                   <div className="border-t border-dashed pt-3">
-                    <p className="text-xs font-semibold mb-2 text-muted-foreground">执行结果:</p>
+                    <p className="text-xs font-semibold mb-2 text-muted-foreground">{t('chat.tools.executionResult')}:</p>
                     <div className="bg-muted/30 rounded p-2 text-sm whitespace-pre-wrap break-words">
                       {typeof parsedResult === 'string' ? parsedResult : JSON.stringify(parsedResult, null, 2)}
                     </div>
@@ -901,7 +918,7 @@ export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs
                 )}
                 {isError && (
                   <div className="border-t border-dashed pt-3">
-                    <p className="text-xs font-semibold mb-2 text-red-500">错误:</p>
+                    <p className="text-xs font-semibold mb-2 text-red-500">{t('chat.tools.error')}:</p>
                     <div className="bg-red-50 dark:bg-red-950/20 rounded p-2 text-sm text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">
                       {typeof parsedResult === 'string' ? parsedResult : JSON.stringify(parsedResult, null, 2)}
                     </div>

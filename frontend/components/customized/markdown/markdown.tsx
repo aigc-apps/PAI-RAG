@@ -82,12 +82,12 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
                     {copied ? (
                       <>
                         <Check className="h-3 w-3 mr-1" />
-                        已复制
+                        copied
                       </>
                     ) : (
                       <>
                         <Copy className="h-3 w-3 mr-1" />
-                        复制
+                        copy
                       </>
                     )}
                   </Button>

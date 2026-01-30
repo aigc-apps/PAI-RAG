@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { KnowledgeBase } from '@/app/knowledgebases/page';
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
+import { useI18n } from '@/app/providers/i18n';
 
 export class KbSelection implements KnowledgeBase {
   id: string;
@@ -43,6 +44,8 @@ export const KbModal: FC<KbModalProps> = ({
   isLoading,
   error,
 }) => {
+  const { t } = useI18n();
+
   const [configs, setConfigs] = useState<KbSelection[]>([]);
 
   useEffect(() => {
@@ -71,11 +74,11 @@ export const KbModal: FC<KbModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>知识库配置</DialogTitle>
+          <DialogTitle>{t('knowledgebase.kbConfig')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {isLoading ? (
-            <p>加载中...</p>
+            <p>{t('common.loading')}</p>
           ) : error ? (
             <p className="text-red-500">{error}</p>
           ) : (
@@ -86,13 +89,13 @@ export const KbModal: FC<KbModalProps> = ({
                   variant={cfg.active ? 'default' : 'outline'}
                   onClick={() => toggleActive(cfg.id)}
                 >
-                  {cfg.active ? '激活' : '激活'}
+                  {t('knowledgebase.activate')}
                 </Button>
               </div>
             ))
           )}
         </div>
-        <Button onClick={handleSave}>保存</Button>
+        <Button onClick={handleSave}>{t('common.save')}</Button>
       </DialogContent>
     </Dialog>
   );

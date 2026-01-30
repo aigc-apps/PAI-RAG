@@ -96,7 +96,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     } catch (error: any) {
       // 返回失败状态
       console.log('error', error);
-      toast.error(error.message || '上传失败，请稍后重试');
+      toast.error(error.message || 'Upload failed.');
       yield {
         id: fid,
         type: attachmentType,
@@ -106,7 +106,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
         status: {
           type: 'incomplete',
           reason: 'error',
-          error: new Error('上传失败，请稍后重试'),
+          error: new Error('Upload failed.'),
         },
       } as PendingAttachment;
       return;

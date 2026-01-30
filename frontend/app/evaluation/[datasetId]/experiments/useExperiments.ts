@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { ExperimentItem } from '@/app/evaluation/[datasetId]/types';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 
 interface UseExperimentsProps {
@@ -20,56 +21,58 @@ export function useExperiments({ datasetId, page, pageSize }: UseExperimentsProp
   const [isLoading, setIsLoading] = useState(true);
   const isRefreshing = useRef(false);
   const { tenantFetch } = useTenantFetch();
+  const { t } = useI18n();
+  
   const fetchExperiments = useCallback(async () => {
     if (isRefreshing.current) {
-      console.log("实验列表正在刷新中...");
+      console.log(t('evaluation.refreshingExperimentList'));
       return;
     }
 
-    console.log("正在刷新实验列表...");
+    console.log(t('evaluation.fetchingExperimentList'));
     isRefreshing.current = true;
 
     try {
       const url = `/api/config/evaluation/${datasetId}/experiments?page=${page}&size=${pageSize}`;
       const response = await tenantFetch(url);
 
-      if (!response.ok) throw new Error('获取实验列表失败');
+      if (!response.ok) throw new Error(t('evaluation.fetchExperimentListFailed'));
 
       const data = await response.json();
       setExperiments(data.data.items || []);
       setTotalPages(data.data.pages);
 
-      // 检查是否有未完成的实验
+      // Check if there are any unfinished experiments
       const hasUnfinished = data.data.items.some(
         (item: ExperimentItem) => !['success', 'failed'].includes(item.status)
       );
 
       if (hasUnfinished) {
-        console.log('存在未完成的实验，3秒后自动刷新...');
+        console.log(t('evaluation.hasUnfinishedExperiments'));
         setTimeout(() => {
           isRefreshing.current = false;
           fetchExperiments();
         }, 3000);
       } else {
-        console.log('所有实验已完成。');
+        console.log(t('evaluation.allExperimentsCompleted'));
         isRefreshing.current = false;
       }
     } catch (err: any) {
-      console.error('获取实验列表失败:', err);
-      toast.error(err.message || '加载实验列表失败');
+      console.error('Failed to fetch experiment list:', err);
+      toast.error(err.message || t('evaluation.loadExperimentListFailed'));
       isRefreshing.current = false;
     } finally {
       setIsLoading(false);
     }
-  }, [datasetId, page, pageSize]);
+  }, [datasetId, page, pageSize, t, tenantFetch]);
 
-  // 首次加载 + 页码变化时刷新
+  // First load + refresh when page changes
   useEffect(() => {
     setIsLoading(true);
     fetchExperiments();
   }, [fetchExperiments]);
 
-  // 删除实验
+  // Delete experiment
   const deleteExperiment = async (id: string) => {
     try {
       const response = await tenantFetch(`/api/config/evaluation/${datasetId}/experiments/${id}`, {
@@ -77,13 +80,13 @@ export function useExperiments({ datasetId, page, pageSize }: UseExperimentsProp
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!response.ok) throw new Error('删除失败');
+      if (!response.ok) throw new Error(t('evaluation.deleteExperimentFailed'));
 
       setExperiments(prev => prev.filter(exp => exp.id !== id));
-      toast.success('实验删除成功');
+      toast.success(t('evaluation.experimentDeletedSuccess'));
     } catch (err: any) {
-      console.error('删除实验失败:', err);
-      toast.error('删除实验失败');
+      console.error('Failed to delete experiment:', err);
+      toast.error(t('evaluation.deleteExperimentFailed'));
     }
   };
 

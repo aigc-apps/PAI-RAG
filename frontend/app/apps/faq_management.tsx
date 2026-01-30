@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '@/app/providers/i18n';
 import {
   Table,
   TableBody,
@@ -69,6 +70,7 @@ interface FAQManagementProps {
 }
 
 export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, onConfigChange, onSave, saving = false }) => {
+  const { t } = useI18n();
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -134,10 +136,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       onConfigChange({ enable_faq: checked });
       const success = await onSave({ enable_faq: checked });
       if (success) {
-        toast.success(checked ? '已启用FAQ回复' : '已关闭FAQ回复');
+        toast.success(checked ? t('apps.faqEnabledToast') : t('apps.faqDisabledToast'));
       }
     } catch (error: any) {
-      toast.error(error.message || '更新失败');
+      toast.error(error.message || t('apps.saveFailed'));
     }
   };
 
@@ -214,7 +216,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
   const handleSave = async () => {
     if (!formData.question.trim() || !formData.answer.trim()) {
-      toast.error('请填写问题和答案');
+      toast.error(t('apps.faqFillQuestionAnswer'));
       return;
     }
 
@@ -230,9 +232,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
         body: JSON.stringify(formData),
       });
 
-      if (!res.ok) throw new Error('保存失败');
+      if (!res.ok) throw new Error(t('apps.saveFailed'));
       
-      toast.success(editingFaq ? '更新成功' : '创建成功');
+      toast.success(editingFaq ? t('messages.saveSuccess') : t('apps.createSuccess'));
       handleCloseDialog();
       // 如果是新增，跳转到第一页；如果是更新，保持在当前页
       if (!editingFaq) {
@@ -248,21 +250,21 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
         fetchFAQs();
       }
     } catch (error: any) {
-      toast.error(error.message || '保存失败');
+      toast.error(error.message || t('apps.saveFailed'));
     }
   };
 
   const handleDelete = async (faqId: string) => {
-    if (!confirm('确定要删除这条FAQ吗？')) return;
+    if (!confirm(t('apps.faqConfirmDeleteOne'))) return;
 
     try {
       const res = await tenantFetch(`/api/config/apps/${appId}/faqs/${faqId}`, {
         method: 'DELETE',
       });
 
-      if (!res.ok) throw new Error('删除失败');
+      if (!res.ok) throw new Error(t('apps.deleteError'));
       
-      toast.success('删除成功');
+      toast.success(t('messages.deleteSuccess'));
       
       // 从选中项中移除
       setSelectedItems(prev => {
@@ -278,7 +280,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
         fetchFAQs();
       }
     } catch (error: any) {
-      toast.error(error.message || '删除失败');
+      toast.error(error.message || t('apps.deleteError'));
     }
   };
 
@@ -317,11 +319,11 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
   const handleBatchDelete = async () => {
     if (selectedItems.size === 0) {
-      toast.error('请先选择要删除的FAQ');
+      toast.error(t('apps.faqSelectToDelete'));
       return;
     }
 
-    if (!confirm(`确定要删除选中的 ${selectedItems.size} 条FAQ吗？`)) return;
+    if (!confirm(t('apps.faqConfirmDeleteSelected', { count: String(selectedItems.size) }))) return;
 
     try {
       const deletePromises = Array.from(selectedItems).map(faqId =>
@@ -335,9 +337,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       const successCount = selectedItems.size - failedCount;
 
       if (failedCount > 0) {
-        toast.error(`删除失败 ${failedCount} 条，成功 ${successCount} 条`);
+        toast.error(t('apps.faqBatchDeletePartial', { failed: String(failedCount), success: String(successCount) }));
       } else {
-        toast.success(`成功删除 ${successCount} 条FAQ`);
+        toast.success(t('apps.faqBatchDeleteSuccess', { count: String(successCount) }));
       }
 
       // 清空选中项
@@ -346,7 +348,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       // 刷新列表
       fetchFAQs();
     } catch (error: any) {
-      toast.error(error.message || '批量删除失败');
+      toast.error(error.message || t('apps.faqBatchDeleteFailed'));
     }
   };
 
@@ -354,7 +356,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
   const handleUploadFiles = async () => {
     if (uploadFiles.length === 0) {
-      toast.error('请选择要上传的文件');
+      toast.error(t('apps.faqSelectFileToUpload'));
       return;
     }
 
@@ -365,7 +367,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     );
 
     if (validFiles.length === 0) {
-      toast.error('请选择有效的Excel文件（.xlsx 或 .xls）');
+      toast.error(t('apps.faqSelectValidExcel'));
       return;
     }
 
@@ -392,7 +394,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || '上传失败');
+        throw new Error(errorData.message || t('apps.faqUploadFailed'));
       }
 
       const data = await res.json();
@@ -410,7 +412,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       );
 
       toast.success(
-        `成功上传 ${successCount}/${validFiles.length} 个文件，共提取 ${totalChunks} 个片段`
+        t('apps.faqUploadSuccess', { success: String(successCount), total: String(validFiles.length), chunks: String(totalChunks) })
       );
 
       // 关闭对话框并重置状态
@@ -425,7 +427,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       // 刷新FAQ列表
       fetchFAQs();
     } catch (error: any) {
-      toast.error(error.message || '上传失败');
+      toast.error(error.message || t('apps.faqUploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -450,10 +452,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       
       if (success) {
         setIsConfigDialogOpen(false);
-        toast.success('配置保存成功');
+        toast.success(t('apps.faqConfigSaveSuccess'));
       }
     } catch (error: any) {
-      toast.error(error.message || '保存配置失败');
+      toast.error(error.message || t('apps.faqConfigSaveFailed'));
     }
   };
 
@@ -464,7 +466,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       <div className="flex justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Label htmlFor="enable_faq_switch">开启FAQ回复</Label>
+            <Label htmlFor="enable_faq_switch">{t('apps.faqEnableReply')}</Label>
             <Switch
               id="enable_faq_switch"
               checked={isFAQActive}
@@ -472,7 +474,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             />
           </div>
           <span className="text-xs text-muted-foreground">
-            {isFAQActive ? '如需关闭FAQ功能，请点击关闭FAQ' : '如需使用FAQ功能，请点击开启FAQ'}
+            {isFAQActive ? t('apps.faqTip') : t('apps.faqTipOn')}
           </span>
         </div>
         {isFAQActive && (
@@ -483,15 +485,15 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
               onClick={() => setIsConfigDialogOpen(true)}
             >
               <Settings className="w-4 h-4 mr-2" />
-              配置
+              {t('common.settings')}
             </Button>
             <Button onClick={() => handleOpenDialog()} size="sm">
               <Plus className="w-4 h-4 mr-2" />
-              新增FAQ
+              {t('apps.faqAddNew')}
             </Button>
             <Button onClick={() => setIsUploadDialogOpen(true)} size="sm" variant="outline">
               <Upload className="w-4 h-4 mr-2" />
-              上传文件
+              {t('apps.faqUpload')}
             </Button>
             {selectedItems.size > 0 && (
               <Button 
@@ -500,7 +502,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                 variant="destructive"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                删除选中 ({selectedItems.size})
+                {t('apps.faqDeleteSelected', { count: String(selectedItems.size) })}
               </Button>
             )}
           </div>
@@ -510,15 +512,15 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       {isFAQActive && (
         <>
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">加载中...</div>
+            <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
           ) : faqs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              暂无FAQ，点击"新增FAQ"添加
+              {t('apps.faqEmpty')}
             </div>
           ) : (
             <>
               <div className="mb-4 text-sm text-muted-foreground">
-                共 {totalItems} 条FAQ，第 {page} / {totalPages} 页
+                {t('apps.faqPaginationInfo', { total: String(totalItems), page: String(page), pages: String(totalPages) })}
               </div>
               <Table>
                 <TableHeader>
@@ -527,12 +529,12 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                       <Checkbox
                         checked={isAllSelected}
                         onCheckedChange={handleSelectAll}
-                        aria-label="全选"
+                        aria-label={t('apps.faqSelectAll')}
                       />
                     </TableHead>
-                    <TableHead className="w-[200px]">问题</TableHead>
-                    <TableHead>答案</TableHead>
-                    <TableHead className="w-[120px]">操作</TableHead>
+                    <TableHead className="w-[200px]">{t('apps.faqQuestion')}</TableHead>
+                    <TableHead>{t('apps.faqAnswer')}</TableHead>
+                    <TableHead className="w-[120px]">{t('apps.faqOperation')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -542,7 +544,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                         <Checkbox
                           checked={faq.id ? selectedItems.has(faq.id) : false}
                           onCheckedChange={() => faq.id && handleSelectItem(faq.id)}
-                          aria-label={`选择 ${faq.question}`}
+                          aria-label={`${t('apps.faqSelectAll')} ${faq.question}`}
                         />
                       </TableCell>
                       <TableCell className="font-medium">{faq.question}</TableCell>
@@ -573,7 +575,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm text-muted-foreground">
-                      显示第 {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, totalItems)} 条，共 {totalItems} 条
+                      {t('apps.faqShowingRange', { start: String(((page - 1) * pageSize) + 1), end: String(Math.min(page * pageSize, totalItems)), total: String(totalItems) })}
                     </div>
                   </div>
                   <div className="flex justify-center">
@@ -593,42 +595,42 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{editingFaq ? '编辑FAQ' : '新增FAQ'}</DialogTitle>
+            <DialogTitle>{editingFaq ? t('apps.faqEdit') : t('apps.faqAddNew')}</DialogTitle>
             <DialogDescription>
-              填写问题和答案，创建FAQ条目
+              {t('apps.faqFormDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="question">问题 *</Label>
+              <Label htmlFor="question">{t('apps.faqQuestion')} *</Label>
               <Input
                 id="question"
                 value={formData.question}
                 onChange={(e) =>
                   setFormData({ ...formData, question: e.target.value })
                 }
-                placeholder="请输入问题"
+                placeholder={t('apps.faqQuestionPlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="answer">答案 *</Label>
+              <Label htmlFor="answer">{t('apps.faqAnswer')} *</Label>
               <Textarea
                 id="answer"
                 value={formData.answer}
                 onChange={(e) =>
                   setFormData({ ...formData, answer: e.target.value })
                 }
-                placeholder="请输入答案"
+                placeholder={t('apps.faqAnswerPlaceholder')}
                 rows={6}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={handleCloseDialog}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSave}>
-              {editingFaq ? '更新' : '创建'}
+              {editingFaq ? t('common.update') : t('common.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -638,27 +640,27 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       <Dialog open={isConfigDialogOpen} onOpenChange={setIsConfigDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>FAQ回复设置</DialogTitle>
+            <DialogTitle>{t('apps.faqReplySettings')}</DialogTitle>
             <DialogDescription>
-              配置FAQ检索和回复的相关参数
+              {t('apps.faqConfigDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
             {!faqConfigData ? (
-              <div className="text-center py-4 text-muted-foreground">加载配置中...</div>
+              <div className="text-center py-4 text-muted-foreground">{t('apps.faqLoadingConfig')}</div>
             ) : (
               <>
                 {/* 分数阈值 */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="score_threshold">分数阈值</Label>
+                    <Label htmlFor="score_threshold">{t('apps.faqScoreThreshold')}</Label>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">设置FAQ匹配的相似度阈值，值越高匹配越精准</p>
+                          <p className="text-xs">{t('apps.faqScoreThresholdHint')}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -675,9 +677,9 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                       className="w-full"
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>0 · 容易匹配</span>
+                      <span>{t('apps.faqScoreEasyMatch')}</span>
                       <span className="font-medium">{(faqConfigData?.score_threshold ?? DEFAULT_SCORE_THRESHOLD).toFixed(2)}</span>
-                      <span>1 · 精准匹配</span>
+                      <span>{t('apps.faqScorePreciseMatch')}</span>
                     </div>
                   </div>
                 </div>
@@ -685,14 +687,14 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                 {/* Embedding模型 */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="embedding_model">Embedding 模型</Label>
+                    <Label htmlFor="embedding_model">{t('apps.faqEmbeddingModel')}</Label>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p className="text-xs">选择用于FAQ向量化的Embedding模型</p>
+                          <p className="text-xs">{t('apps.faqEmbeddingModelHint')}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -704,7 +706,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="请选择Embedding模型" />
+                      <SelectValue placeholder={t('apps.faqSelectEmbeddingModel')} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
@@ -720,11 +722,11 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
                 {/* 问题是否参与检索/回答 */}
                 <div className="space-y-3">
-                  <Label>问题参与设置</Label>
+                  <Label>{t('apps.faqQuestionParticipation')}</Label>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="question_in_retrieval" className="text-sm font-normal">
-                        问题参与检索
+                        {t('apps.faqQuestionInRetrieval')}
                       </Label>
                       <TooltipProvider>
                         <Tooltip>
@@ -732,7 +734,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="text-xs">是否使用问题内容进行向量检索</p>
+                            <p className="text-xs">{t('apps.faqQuestionInRetrievalHint')}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -748,7 +750,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="question_in_response" className="text-sm font-normal">
-                        问题参与回答
+                        {t('apps.faqQuestionInResponse')}
                       </Label>
                       <TooltipProvider>
                         <Tooltip>
@@ -756,7 +758,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="text-xs">是否在回答中包含问题内容</p>
+                            <p className="text-xs">{t('apps.faqQuestionInResponseHint')}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -773,11 +775,11 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
                 {/* 答案是否参与检索/回答 */}
                 <div className="space-y-3">
-                  <Label>答案参与设置</Label>
+                  <Label>{t('apps.faqAnswerParticipation')}</Label>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="answer_in_retrieval" className="text-sm font-normal">
-                        答案参与检索
+                        {t('apps.faqAnswerInRetrieval')}
                       </Label>
                       <TooltipProvider>
                         <Tooltip>
@@ -785,7 +787,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="text-xs">是否使用答案内容进行向量检索</p>
+                            <p className="text-xs">{t('apps.faqAnswerInRetrievalHint')}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -801,7 +803,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="answer_in_response" className="text-sm font-normal">
-                        答案参与回答
+                        {t('apps.faqAnswerInResponse')}
                       </Label>
                       <TooltipProvider>
                         <Tooltip>
@@ -809,7 +811,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="text-xs">是否在回答中包含答案内容</p>
+                            <p className="text-xs">{t('apps.faqAnswerInResponseHint')}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -826,11 +828,11 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
                 {/* 直接返回设置 */}
                 <div className="space-y-3">
-                  <Label>返回设置</Label>
+                  <Label>{t('apps.faqReturnSettings')}</Label>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="return_direct" className="text-sm font-normal">
-                        直接返回结果
+                        {t('apps.faqReturnDirect')}
                       </Label>
                       <TooltipProvider>
                         <Tooltip>
@@ -838,7 +840,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p className="text-xs">开启后，FAQ工具将直接返回搜索结果，不经过LLM加工处理</p>
+                            <p className="text-xs">{t('apps.faqReturnDirectHint')}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -857,10 +859,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsConfigDialogOpen(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleSaveConfig}>
-              保存
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -870,15 +872,15 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>上传文件</DialogTitle>
+            <DialogTitle>{t('apps.faqUpload')}</DialogTitle>
             <DialogDescription>
-              选择文件进行上传
+              {t('apps.faqSelectFileToUploadDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* 文件选择 */}
             <div className="space-y-2">
-              <Label htmlFor="file-upload">选择文件</Label>
+              <Label htmlFor="file-upload">{t('apps.faqSelectFile')}</Label>
               <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                 <input
                   id="file-upload"
@@ -896,12 +898,12 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                   className="cursor-pointer flex flex-col items-center gap-2"
                 >
                   <Upload className="w-8 h-8 text-muted-foreground" />
-                  <span className="text-sm font-medium">点击选择文件</span>
-                  <span className="text-xs text-muted-foreground">支持的文件类型: xlsx, xls</span>
+                  <span className="text-sm font-medium">{t('apps.faqClickToSelectFile')}</span>
+                  <span className="text-xs text-muted-foreground">{t('apps.faqSupportedFileTypes')}</span>
                 </label>
                 {uploadFiles.length > 0 && (
                   <div className="mt-4 space-y-2 text-left">
-                    <div className="text-xs text-muted-foreground mb-2">已选择 {uploadFiles.length} 个文件:</div>
+                    <div className="text-xs text-muted-foreground mb-2">{t('apps.faqFilesSelectedCount', { count: String(uploadFiles.length) })}</div>
                     {uploadFiles.map((file, index) => (
                       <div key={index} className="text-sm text-foreground bg-muted/50 rounded px-2 py-1">
                         {file.name}
@@ -914,12 +916,12 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
             {/* 配置项 */}
             <div className="space-y-4 border-t pt-4">
-              <Label>文件解析配置</Label>
+              <Label>{t('apps.faqFileParseConfig')}</Label>
               
               {/* 标题行下标 */}
               <div className="space-y-2">
                 <Label htmlFor="header_index_max" className="text-sm">
-                  标题行下标
+                  {t('apps.faqHeaderRowIndex')}
                 </Label>
                 <Input
                   id="header_index_max"
@@ -932,17 +934,17 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                       header_index_max: e.target.value === '' ? null : parseInt(e.target.value) || 0,
                     })
                   }
-                  placeholder="留空表示不使用标题行，默认: 0"
+                  placeholder={t('apps.faqHeaderRowPlaceholder')}
                 />
                 <p className="text-xs text-muted-foreground">
-                  留空表示不使用任何行作为标题行，列将使用数字索引（0, 1, 2...）
+                  {t('apps.faqHeaderRowHint')}
                 </p>
               </div>
 
               {/* 问题列 */}
               <div className="space-y-2">
                 <Label htmlFor="question_column_index" className="text-sm">
-                  问题列
+                  {t('apps.faqQuestionColumn')}
                 </Label>
                 <Input
                   id="question_column_index"
@@ -955,14 +957,14 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                       question_column_index: parseInt(e.target.value) || 0,
                     })
                   }
-                  placeholder="默认: 0"
+                  placeholder={t('apps.faqDefaultZero')}
                 />
               </div>
 
               {/* 答案列 */}
               <div className="space-y-2">
                 <Label htmlFor="answer_column_index" className="text-sm">
-                  答案列
+                  {t('apps.faqAnswerColumn')}
                 </Label>
                 <Input
                   id="answer_column_index"
@@ -975,7 +977,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                       answer_column_index: parseInt(e.target.value) || 1,
                     })
                   }
-                  placeholder="默认: 1"
+                  placeholder={t('apps.faqDefaultOne')}
                 />
               </div>
             </div>
@@ -993,13 +995,13 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                 });
               }}
             >
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={handleUploadFiles}
               disabled={uploadFiles.length === 0 || uploading}
             >
-              {uploading ? '上传中...' : '上传'}
+              {uploading ? t('apps.faqUploading') : t('common.upload')}
             </Button>
           </DialogFooter>
         </DialogContent>

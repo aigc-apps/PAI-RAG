@@ -102,10 +102,10 @@ def test_reranker_model(client: Client):
 
 @pytest.fixture(scope="session")
 def test_knowledgebase(client: Client, test_embedding_model: Any, test_reranker_model: Any):
-    """Create a test knowledge base and cleanup after test."""
+    """Create a test knowledgebase and cleanup after test."""
     create_payload = {
         "name": "test_kb_for_retrieval",
-        "description": "Fixture knowledge base for testing retrieval",
+        "description": "Fixture knowledgebase for testing retrieval",
         "embedding_model": test_embedding_model["model_id"],
         "embedding_provider_name": test_embedding_model["provider_name"],
         "chunk_config": {
@@ -132,10 +132,10 @@ def test_knowledgebase(client: Client, test_embedding_model: Any, test_reranker_
 
 @pytest.fixture(scope="session")
 def test_knowledgebase_for_file(client: Client, test_embedding_model: Any, test_reranker_model: Any):
-    """Create a test knowledge base and cleanup after test."""
+    """Create a test knowledgebase and cleanup after test."""
     create_payload = {
         "name": "test_kb_for_file",
-        "description": "Fixture knowledge base for testing file",
+        "description": "Fixture knowledgebase for testing file",
         "embedding_model": test_embedding_model["model_id"],
         "embedding_provider_name": test_embedding_model["provider_name"],
         "chunk_config": {

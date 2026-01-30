@@ -27,6 +27,7 @@ import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button
 import { DialogContent as DialogPrimitiveContent } from '@radix-ui/react-dialog';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { useI18n } from '@/app/providers/i18n';
 
 // Check if content type is video
 const isVideoContentType = (contentType?: string): boolean => {
@@ -228,6 +229,7 @@ const ImagePreview: FC<AttachmentPreviewProps> = ({ src }) => {
 };
 
 const VideoPreview: FC<AttachmentPreviewProps> = ({ src }) => {
+  const { t } = useI18n();
   return (
     <video
       src={src}
@@ -241,7 +243,7 @@ const VideoPreview: FC<AttachmentPreviewProps> = ({ src }) => {
         overflow: 'clip',
       }}
     >
-      您的浏览器不支持视频播放
+      {t('chat.attachment.videoNotSupported')}
     </video>
   );
 };
@@ -267,6 +269,7 @@ const TextPreview: FC<TextPreviewProps> = ({ content }) => {
 };
 
 const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
+  const { t } = useI18n();
   const localImageSrc = useAttachmentSrc();
   const localVideoSrc = useVideoSrc();
   const isVideo = useIsVideo();
@@ -319,13 +322,13 @@ const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
   const getTitle = () => {
     switch (previewType) {
     case 'video':
-      return '视频附件预览';
+      return t('chat.attachment.preview');
     case 'image':
-      return '图片附件预览';
+      return t('chat.attachment.preview');
     case 'text':
-      return '文本文件预览';
+      return t('chat.attachment.preview');
     default:
-      return '附件预览';
+      return t('chat.attachment.preview');
     }
   };
 
@@ -339,7 +342,7 @@ const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
       </DialogTrigger>
       <AttachmentDialogContent>
         <DialogTitle>{getTitle()}</DialogTitle>
-        <DialogDescription>文件名: {fileName}</DialogDescription>
+        <DialogDescription>{t('chat.attachment.fileName')}: {fileName}</DialogDescription>
         {loading ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -392,6 +395,7 @@ const AttachmentThumb: FC = () => {
 };
 
 const AttachmentUI: FC = () => {
+  const { t } = useI18n();
   const canRemove = useAttachment((a) => a.source !== 'message');
   const uploadStatus = useAttachment((a) => a.status);
   const isFromMessage = useIsFromMessage();
@@ -399,22 +403,22 @@ const AttachmentUI: FC = () => {
     const type = a.type;
     switch (type) {
     case 'image':
-      return 'Image';
+      return t('chat.attachment.image');
     case 'document':
-      return 'Document';
+      return t('chat.attachment.document');
     case 'file':
       // Check if it's a video file
       if (isVideoContentType(a.contentType)) {
-        return 'Video';
+        return t('chat.attachment.video');
       }
-      return 'File';
+      return t('chat.attachment.file');
     default:
       const _exhaustiveCheck: never = type;
       throw new Error(`Unknown attachment type: ${_exhaustiveCheck}`);
     }
   });
   
-  // 安全访问属性
+  // Safe property access
   const progress =
     'progress' in (uploadStatus ?? {})
       ? (uploadStatus as { progress: number }).progress
@@ -436,21 +440,21 @@ const AttachmentUI: FC = () => {
                 <div className="flex felx-row items-center gap-2 py-1">
                   {isError ? (
                     <>
-                      {/* 上传失败状态 */}
+                      {/* Upload failed status */}
                       <XCircle className="h-3 w-3 text-red-500" />
-                      <span className="text-red-500 text-xs">上传失败</span>
+                      <span className="text-red-500 text-xs">{t('chat.attachment.uploadFailed')}</span>
                     </>
                   ) : isUploading ? (
                     <>
-                      {/* 上传中状态 */}
+                      {/* Uploading status */}
                       <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
-                      <span className="text-yellow-500 text-xs">上传中</span>
+                      <span className="text-yellow-500 text-xs">{t('chat.attachment.uploading')}</span>
                     </>
                   ) : (
                     <>
-                      {/* 上传完成状态 */}
+                      {/* Upload complete status */}
                       <CheckCircle className="h-3 w-3 text-green-500" />
-                      <span className="text-green-500 text-xs">已上传</span>
+                      <span className="text-green-500 text-xs">{t('chat.attachment.uploaded')}</span>
                     </>
                   ) }
                 </div>
@@ -500,15 +504,16 @@ export const ComposerAttachments: FC = () => {
 };
 
 export const ComposerAddAttachment: FC = () => {
+  const { t } = useI18n();
   return (
     <ComposerPrimitive.AddAttachment asChild>
       <TooltipIconButton
         className="my-2.5 w-24 h-8 p-2 transition-opacity ease-in"
-        tooltip="上传附件"
+        tooltip={t('chat.attachment.uploadAttachment')}
         variant="ghost"
       >
         <PaperclipIcon />
-        上传附件
+        {t('chat.attachment.uploadAttachment')}
       </TooltipIconButton>
     </ComposerPrimitive.AddAttachment>
   );

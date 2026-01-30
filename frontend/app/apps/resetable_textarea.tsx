@@ -48,7 +48,7 @@ export const ResettableTextarea = React.forwardRef<
         onClick={onReset}
         title="重置为默认提示词"
       >
-         重置
+         reset
       </Button>
     </div>
   )

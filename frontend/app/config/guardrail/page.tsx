@@ -7,65 +7,82 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
-
-const REGION_NAMES = [
-  "上海（公网）",
-  "上海（内网）",
-  "北京（公网）",
-  "北京（内网）",
-  "杭州（公网）",
-  "杭州（内网）",
-  "深圳（公网）",
-  "深圳（内网）",
-  "成都（公网）",
-  "新加坡（公网）",
-  "新加坡（内网）",
-]
-
-const REGION_ID_MAP = new Map(
-  [
-    ["上海（公网）", "cn-shanghai"],
-    ["上海（内网）", "cn-shanghai"],
-    ["北京（公网）", "cn-beijing"],
-    ["北京（内网）", "cn-beijing"],
-    ["杭州（公网）", "cn-hangzhou"],
-    ["杭州（内网）", "cn-hangzhou"],
-    ["深圳（公网）", "cn-shenzhen"],
-    ["深圳（内网）", "cn-shenzhen"],
-    ["成都（公网）", "cn-chengdu"],
-    ["新加坡（公网）", "ap-southeast-1"],
-    ["新加坡（内网）", "ap-southeast-1"],
-  ]
-)
-
-const REGION_ENDPOINT_MAP = new Map(
-  [
-    ["上海（公网）", "green-cip.cn-shanghai.aliyuncs.com"],
-    ["上海（内网）", "green-cip-vpc.cn-shanghai.aliyuncs.com"],
-    ["北京（公网）", "green-cip.cn-beijing.aliyuncs.com"],
-    ["北京（内网）", "green-cip-vpc.cn-beijing.aliyuncs.com"],
-    ["杭州（公网）", "green-cip.cn-hangzhou.aliyuncs.com"],
-    ["杭州（内网）", "green-cip-vpc.cn-hangzhou.aliyuncs.com"],
-    ["深圳（公网）", "green-cip.cn-shenzhen.aliyuncs.com"],
-    ["深圳（内网）", "green-cip-vpc.cn-shenzhen.aliyuncs.com"],
-    ["成都（公网）", "green-cip.cn-chengdu.aliyuncs.com"],
-    ["新加坡（公网）", "green-cip.ap-southeast-1.aliyuncs.com"],
-    ["新加坡（内网）", "green-cip-vpc.ap-southeast-1.aliyuncs.com"],
-  ]
-)
-
+import { useI18n } from '@/app/providers/i18n';
 
 export default function GuardrailConfig() {
-  const [aliyunHasKey, setAliyunHasKey] = useState(false); // AccessKey ID
+  const { t, language } = useI18n();
+
+  // Dynamic region names based on language
+  const getRegionName = (region: string, network: string) => {
+    const regionKey = region.toLowerCase().replace('-', '') as 'shanghai' | 'beijing' | 'hangzhou' | 'shenzhen' | 'chengdu' | 'singapore';
+    const regionMap: Record<string, string> = {
+      'shanghai': t('config.guardrail.regionShanghai'),
+      'beijing': t('config.guardrail.regionBeijing'),
+      'hangzhou': t('config.guardrail.regionHangzhou'),
+      'shenzhen': t('config.guardrail.regionShenzhen'),
+      'chengdu': t('config.guardrail.regionChengdu'),
+      'singapore': t('config.guardrail.regionSingapore'),
+    };
+    const networkText = network === 'public' ? t('config.guardrail.publicNetwork') : t('config.guardrail.privateNetwork');
+    return `${regionMap[regionKey]}（${networkText}）`;
+  };
+
+  const REGION_NAMES = [
+    getRegionName('shanghai', 'public'),
+    getRegionName('shanghai', 'private'),
+    getRegionName('beijing', 'public'),
+    getRegionName('beijing', 'private'),
+    getRegionName('hangzhou', 'public'),
+    getRegionName('hangzhou', 'private'),
+    getRegionName('shenzhen', 'public'),
+    getRegionName('shenzhen', 'private'),
+    getRegionName('chengdu', 'public'),
+    getRegionName('singapore', 'public'),
+    getRegionName('singapore', 'private'),
+  ];
+
+  const REGION_ID_MAP = new Map(
+    [
+      [getRegionName('shanghai', 'public'), "cn-shanghai"],
+      [getRegionName('shanghai', 'private'), "cn-shanghai"],
+      [getRegionName('beijing', 'public'), "cn-beijing"],
+      [getRegionName('beijing', 'private'), "cn-beijing"],
+      [getRegionName('hangzhou', 'public'), "cn-hangzhou"],
+      [getRegionName('hangzhou', 'private'), "cn-hangzhou"],
+      [getRegionName('shenzhen', 'public'), "cn-shenzhen"],
+      [getRegionName('shenzhen', 'private'), "cn-shenzhen"],
+      [getRegionName('chengdu', 'public'), "cn-chengdu"],
+      [getRegionName('singapore', 'public'), "ap-southeast-1"],
+      [getRegionName('singapore', 'private'), "ap-southeast-1"],
+    ]
+  );
+
+  const REGION_ENDPOINT_MAP = new Map(
+    [
+      [getRegionName('shanghai', 'public'), "green-cip.cn-shanghai.aliyuncs.com"],
+      [getRegionName('shanghai', 'private'), "green-cip-vpc.cn-shanghai.aliyuncs.com"],
+      [getRegionName('beijing', 'public'), "green-cip.cn-beijing.aliyuncs.com"],
+      [getRegionName('beijing', 'private'), "green-cip-vpc.cn-beijing.aliyuncs.com"],
+      [getRegionName('hangzhou', 'public'), "green-cip.cn-hangzhou.aliyuncs.com"],
+      [getRegionName('hangzhou', 'private'), "green-cip-vpc.cn-hangzhou.aliyuncs.com"],
+      [getRegionName('shenzhen', 'public'), "green-cip.cn-shenzhen.aliyuncs.com"],
+      [getRegionName('shenzhen', 'private'), "green-cip-vpc.cn-shenzhen.aliyuncs.com"],
+      [getRegionName('chengdu', 'public'), "green-cip.cn-chengdu.aliyuncs.com"],
+      [getRegionName('singapore', 'public'), "green-cip.ap-southeast-1.aliyuncs.com"],
+      [getRegionName('singapore', 'private'), "green-cip-vpc.ap-southeast-1.aliyuncs.com"],
+    ]
+  );
+  const [aliyunHasKey, setAliyunHasKey] = useState(false);
   const [aliyunAK, setAliyunAK] = useState(''); // AccessKey ID
   const [aliyunSK, setAliyunSK] = useState(''); // AccessKey Secret
   const [regionName, setRegionName] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // 加载状态
-  const [isSaving, setIsSaving] = useState(false); // 加载状态
-  const [error, setError] = useState(''); // 错误提示
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const { tenantFetch } = useTenantFetch();
-  // 初始化加载配置
+  
+  // Initialize and load configuration
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -77,26 +94,33 @@ export default function GuardrailConfig() {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        if (!res.ok) throw new Error('加载配置失败');
+        if (!res.ok) throw new Error(t('config.guardrail.loadError'));
 
         const data = (await res.json()).data;
         setAliyunHasKey(data.length > 0);
         setAliyunAK(data[0]?.encrypted_access_key_id || '');
         setAliyunSK(data[0]?.encrypted_access_key_secret || '');
-        setRegionName(data[0]?.region_name || '杭州（公网）');
+        const savedRegionName = data[0]?.region_name || '';
+        // Set default based on language if no saved value
+        if (savedRegionName) {
+          setRegionName(savedRegionName);
+        } else {
+          setRegionName(getRegionName('hangzhou', 'public'));
+        }
       } catch (err: any) {
-        toast.error("配置加载失败,请检查网络或重试")
+        toast.error(t('config.guardrail.configLoadFailed'));
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchConfig();
-  }, []);
-  // 保存配置
+  }, [language]); // Re-fetch when language changes to update region names
+  
+  // Save configuration
   const handleSave = async () => {
     if (!aliyunAK || !aliyunSK) {
-      toast.warning("AK/SK必须填入。")
+      toast.warning(t('config.guardrail.akSkRequired'));
       return;
     }
     try {
@@ -119,13 +143,13 @@ export default function GuardrailConfig() {
       });
 
       if (!res.ok) {
-        toast.error("AI护栏配置保存失败。");
-        throw new Error("保存失败。")
+        toast.error(t('config.guardrail.saveFailedToast'));
+        throw new Error(t('config.guardrail.saveFailed'));
       }
 
-      toast.success("AK/AI护栏配置已成功保存。")
+      toast.success(t('config.guardrail.saveSuccess'));
     } catch (err: any) {
-      toast.success(`保存失败: ${err.message}`);
+      toast.error(`${t('config.guardrail.saveFailed')}: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -140,13 +164,13 @@ export default function GuardrailConfig() {
       >
         <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           <div className="flex gap-6 items-center">
-            <h2 className="text-xl font-medium text-gray-800">阿里云AI安全护栏配置</h2> 
-            <Button variant="outline" className="h-6" asChild><a href="https://www.aliyun.com/product/content-moderation/guardrail">开通地址</a></Button>
+            <h2 className="text-xl font-medium text-gray-800">{t('config.guardrail.aliyunGuardrailTitle')}</h2> 
+            <Button variant="outline" className="h-6" asChild><a href="https://www.aliyun.com/product/content-moderation/guardrail">{t('config.guardrail.openUrl')}</a></Button>
           </div>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="region" className="text-right">
-                选择服务地域
+                {t('config.guardrail.selectRegion')}
               </Label>
               <div className="col-span-3 flex items-center">
                 <Select
@@ -156,7 +180,7 @@ export default function GuardrailConfig() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="请选择地域" />
+                    <SelectValue placeholder={t('config.guardrail.selectRegionPlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     {REGION_NAMES.map((region_name) => (
@@ -170,30 +194,30 @@ export default function GuardrailConfig() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="aliyun_ak" className="text-right">
-                AccessKey ID
+                {t('config.guardrail.accessKeyId')}
               </Label>
               <div className="col-span-3 flex items-center">
                 <Input
                   id="aliyun_ak"
                   defaultValue={aliyunHasKey ? '******' : ''}
-                  type="password" // 动态切换类型
+                  type="password"
                   onChange={(e) => setAliyunAK(e.target.value)}
-                  placeholder="输入 AccessKey ID"
+                  placeholder={t('config.guardrail.accessKeyIdPlaceholder')}
                   className="col-span-3"
                 />
               </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="aliyun_sk" className="text-right">
-                AccessKey Secret
+                {t('config.guardrail.accessKeySecret')}
               </Label>
               <div className="col-span-3 flex items-center">
                 <Input
                   id="aliyun_sk"
                   defaultValue={aliyunHasKey ? '******' : ''}
-                  type="password" // 动态切换类型
+                  type="password"
                   onChange={(e) => setAliyunSK(e.target.value)}
-                  placeholder="输入 AccessKey Secret"
+                  placeholder={t('config.guardrail.accessKeySecretPlaceholder')}
                   className="col-span-3"
                 />
               </div>
@@ -204,7 +228,7 @@ export default function GuardrailConfig() {
             disabled={isSaving}
             className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
           >
-            {isSaving ? '保存中...' : '保存AI护栏配置'}
+            {isSaving ? t('common.saving') : t('config.guardrail.saveConfig')}
           </Button>
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>
