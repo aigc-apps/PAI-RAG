@@ -1,6 +1,8 @@
 import traceback
 from typing import List, Optional
 from db.models.knowledgebase.file_task import KbFileTaskEntity
+from llama_index.core.schema import BaseNode
+import asyncio
 from tqdm import tqdm
 from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.knowledgebase import KbEntity, ChunkConfig, TableParserConfig
@@ -41,6 +43,8 @@ def convert_file_if_needed(file_item: FileItem):
         file_item.file = convert_ppt_to_pptx(file_item.file)
     elif file_item.file_extension == ".doc":
         file_item.file = convert_doc_to_docx(file_item.file)
+
+MAX_CONCURRENT_PERSIST_TASK_COUNT = 10
 
 class KbFileClient:
 
@@ -96,7 +100,7 @@ class KbFileClient:
             tenant_id=tenant_id,
         )
         embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model, tenant_id=tenant_id, provider_name=knowledgebase.embedding_provider_name)
-        dimension = len(embed_model.get_text_embedding("0"))
+        dimension = len(await embed_model.aget_text_embedding("0"))
         vector_store = await create_vector_store_from_db(kb_id=kb_id, dimension=dimension, tenant_id=tenant_id)
         await vector_store.adelete_nodes(node_ids=node_ids)
         logger.info(f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully.")
@@ -226,8 +230,17 @@ class KbFileClient:
             logger.info(f"Starting to insert {len(nodes)} into knowledgebase {kb_id}.")
             embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model, tenant_id=tenant_id, provider_name=knowledgebase.embedding_provider_name)
 
-            dimension = len(embed_model.get_text_embedding("0"))
+            dimension = len(await embed_model.aget_text_embedding("0"))
             vector_store = await create_vector_store_from_db(kb_id=kb_id, dimension=dimension, tenant_id=tenant_id)
+            persist_semaphore = asyncio.Semaphore(MAX_CONCURRENT_PERSIST_TASK_COUNT)
+            async def _persist_nodes_async(nodes: List[BaseNode], pbar: tqdm):
+                logger.info(f"Trying to persist {len(nodes)} nodes to vector store.")
+                async with persist_semaphore:
+                    logger.info(f"Persisting {len(nodes)} nodes to vector store.")
+                    await vector_store.async_add(nodes)
+                    logger.info(f"Persisted {len(nodes)} nodes to vector store.")
+                    pbar.update(len(nodes))
+
             try:
                 if old_chunk_ids:
                     try:
@@ -238,10 +251,19 @@ class KbFileClient:
                         pass
 
                 embed_batch_size = embed_model.embed_batch_size
-                for i in tqdm(range(0, len(nodes), embed_batch_size), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}"):
+                if embed_batch_size <= 0:
+                    embed_batch_size = 10
+
+                persist_tasks = []
+                persist_progress_bar = tqdm(total=len(nodes), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}")
+                n_batches = (len(nodes) - 1) // embed_batch_size + 1
+
+                for i in range(0, len(nodes), embed_batch_size):
                     batch_nodes = nodes[i:i + embed_batch_size]
                     texts_to_embed = get_node_texts_for_embedding(batch_nodes)
                     embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
+                    # 在 for 循环里，append 之后加一行，例如：
+                    persist_progress_bar.set_postfix_str(f"embedded {(i // embed_batch_size) + 1}/{n_batches} batches")
                     for j in range(len(batch_nodes)):
                         batch_nodes[j].embedding = embeddings[j]
                     if await should_cancel_file_task(
@@ -251,10 +273,18 @@ class KbFileClient:
                         file_version=file_task.file_version,
                         tenant_id=tenant_id,
                     ):
-                        # 在返回前清理连接，避免连接泄漏
+                        for t in persist_tasks:
+                            t.cancel()
+                        if persist_tasks:
+                            await asyncio.gather(*persist_tasks, return_exceptions=True)
                         await cleanup_vector_store_async(vector_store)
                         return
-                    await vector_store.async_add(batch_nodes)
+                    # create_task 立即把协程挂到 event loop，embedding 下一批时 persist 已在后台跑
+                    persist_tasks.append(asyncio.create_task(_persist_nodes_async(batch_nodes, persist_progress_bar)))
+
+                if persist_tasks:
+                    await asyncio.gather(*persist_tasks, return_exceptions=True)
+                persist_progress_bar.close()
             finally:
                 # 确保无论成功还是失败都清理连接，避免连接泄漏
                 await cleanup_vector_store_async(vector_store)

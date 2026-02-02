@@ -9,8 +9,6 @@ import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
 import { useI18n } from '@/app/providers/i18n';
-import { useInitializeI18n } from '@/lib/init-i18n';
-
 
 
 export default function CreateChatApp() {
