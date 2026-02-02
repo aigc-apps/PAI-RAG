@@ -43,7 +43,7 @@ def create_search_tools(websearch_config: WebSearchConfigEntity) -> List[Functio
 
     async def aget_search_result(query: str) -> str:
         if search_client is None:
-            raise ValueError("搜索尚未配置.")
+            raise ValueError("Search not configured.")
 
         res = await search_client.aquery(query)
         return json.dumps(res, ensure_ascii=False)

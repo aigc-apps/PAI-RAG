@@ -239,18 +239,18 @@ class KnowledgebaseService:
             return knowledgebase
         except ValueError as e:
             logger.error(f"ValueError when creating Knowledgebase: {e}")
-            raise ValueError(f"知识库创建失败: {e}") from e
+            raise ValueError(f"ValueError when creating Knowledgebase: {e}") from e
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating Knowledgebase: {e.orig}")
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"知识库名称 '{kb_data.name}' 已经存在。"
+                    f"Knowledgebase name '{kb_data.name}' already exists."
                 ) from e
             elif "Duplicate entry" in str(e.orig):
-                raise ValueError(f"知识库名称 '{kb_data.name}' 已经存在。") from e
+                raise ValueError(f"Knowledgebase name '{kb_data.name}' already exists.") from e
             else:
-                raise ValueError(f"知识库创建失败: {e.orig}") from e
+                raise ValueError(f"Knowledgebase creation failed: {e.orig}") from e
 
     async def update_knowledgebase(
         self, kb_id: str, update_data: KnowledgebaseCreate, tenant_id: str
@@ -278,7 +278,7 @@ class KnowledgebaseService:
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
         if not knowledgebase:
-            raise ValueError(f"知识库 '{kb_id}' 不存在。")
+            raise ValueError(f"Knowledgebase '{kb_id}' does not exist.")
 
         cache_name_key = kb_name_key(tenant_id, knowledgebase.name)
         try:
@@ -322,12 +322,12 @@ class KnowledgebaseService:
             logger.error(f"IntegrityError when creating Knowledgebase: {e.orig}")
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"知识库名称 '{update_data.name}' 已经存在。"
+                    f"Knowledgebase name '{update_data.name}' already exists."
                 ) from e
             elif "Duplicate entry" in str(e.orig):
-                raise ValueError(f"知识库名称 '{update_data.name}' 已经存在。") from e
+                raise ValueError(f"Knowledgebase name '{update_data.name}' already exists.") from e
             else:
-                raise ValueError(f"知识库创建失败: {e.orig}") from e
+                raise ValueError(f"Knowledgebase creation failed: {e.orig}") from e
         return knowledgebase
 
     async def delete_knowledgebase(self, kb_id: str, tenant_id: str) -> None:
@@ -346,7 +346,7 @@ class KnowledgebaseService:
         result = await self.session.exec(select(KbEntity).where(KbEntity.id == kb_id, KbEntity.tenant_id == tenant_id))
         knowledgebase = result.first()
         if not knowledgebase:
-            raise ValueError(f"知识库 '{kb_id}' 不存在。")
+            raise ValueError(f"Knowledgebase '{kb_id}' does not exist.")
 
         # Delete both ID-based and name-based cache entries
         cache_key = kb_key(tenant_id, kb_id)

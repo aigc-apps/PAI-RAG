@@ -156,7 +156,7 @@ class RagService:
         # Validate embedding_model
         logger.info(f"Validating knowledgebase models: {kb_data}")
         if not kb_data.embedding_model:
-            raise ValueError("需要提供嵌入模型才能创建知识库。")
+            raise ValueError("Cannot create knowledgebase without embedding model.")
 
         embedding_service = await self._get_embedding_service()
         embedding_model = await embedding_service.get_embedding_model_by_provider_model_id(
@@ -166,7 +166,7 @@ class RagService:
         )
         if not embedding_model:
             raise ValueError(
-                f"嵌入模型 '{kb_data.embedding_model}' 不存在。"
+                f"Embedding model '{kb_data.embedding_model}' does not exist."
             )
 
         # Validate rerank_model if rerank is enabled
@@ -174,7 +174,7 @@ class RagService:
             retrieval_config = kb_data.retrieval_config
             if retrieval_config.enable_rerank:
                 if not retrieval_config.rerank_model:
-                    raise ValueError("启用重排序时，必须指定重排序模型。")
+                    raise ValueError("Cannot enable reranking without rerank model.")
                 reranker_service = await self._get_reranker_service()
                 reranker_model = await reranker_service.get_reranker_model_by_provider_model_id(
                     provider_name=retrieval_config.rerank_provider_name,
@@ -183,7 +183,7 @@ class RagService:
                 )
                 if not reranker_model:
                     raise ValueError(
-                        f"重排序模型 '{retrieval_config.rerank_model}' 不存在。"
+                        f"Rerank model '{retrieval_config.rerank_model}' does not exist."
                     )
 
         # Validate image_caption_model if specified
@@ -196,11 +196,11 @@ class RagService:
             )
             if not llm_model:
                 raise ValueError(
-                    f"图片描述模型 '{kb_data.chunk_config.image_caption_model}' 不存在。"
+                    f"Image caption model '{kb_data.chunk_config.image_caption_model}' does not exist."
                 )
             if not llm_model.vision_support:
                 raise ValueError(
-                    f"图片描述模型 '{kb_data.chunk_config.image_caption_model}' 不支持视觉功能。"
+                    f"Image caption model '{kb_data.chunk_config.image_caption_model}' does not support vision functionality."
                 )
 
     async def create_knowledgebase(
@@ -291,7 +291,7 @@ class RagService:
         kb_service = await self._get_kb_service()
         knowledgebase = await kb_service.get_knowledgebase(kb_id, tenant_id=tenant_id)
         if not knowledgebase:
-            raise ValueError(f"知识库 '{kb_id}' 不存在。")
+            raise ValueError(f"Knowledgebase '{kb_id}' does not exist.")
 
         # Delete related files directly (no need to query first)
         file_service = await self._get_file_service()
@@ -473,7 +473,7 @@ class RagService:
         """
         file_entity = await self.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
-            raise ValueError(f"文件 '{file_id}' 不存在。")
+            raise ValueError(f"File '{file_id}' does not exist.")
 
         chunk_metadata = chunk_metadata or file_entity.file_metadata
 
@@ -574,7 +574,7 @@ class RagService:
         # Get current metadata to compare changes
         metadata_entity = await metadata_service.get_metadata(kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id)
         if not metadata_entity:
-            raise ValueError(f"元数据 '{metadata_id}' 不存在。")
+            raise ValueError(f"Metadata '{metadata_id}' does not exist.")
 
         old_name = metadata_entity.name
         old_value_type = metadata_entity.value_type
@@ -598,7 +598,7 @@ class RagService:
             # If name changed, update all related files' file_metadata key names
             if old_name != new_name:
                 logger.info(
-                    f"更新文件的 file_metadata 中的键名: {old_name} -> {new_name}."
+                    f"Updating file's file_metadata key name: {old_name} -> {new_name}."
                 )
                 for file_entity in file_list:
                     if old_name in file_entity.file_metadata:
@@ -610,7 +610,7 @@ class RagService:
                             )
                             if not is_valid:
                                 logger.warning(
-                                    f"文件 {file_entity.id} 的元数据值 '{value}' 无法转换为新类型 '{new_value_type}'，跳过更新"
+                                    f"File {file_entity.id} metadata value '{value}' cannot be converted to new type '{new_value_type}', update skipped"
                                 )
                                 continue
                             value = converted_value
@@ -624,7 +624,7 @@ class RagService:
             # If value_type changed, validate and convert all related files' values
             if old_value_type != new_value_type:
                 logger.info(
-                    f"更新文件的 file_metadata 中的值类型: {old_value_type} -> {new_value_type}."
+                    f"Updating file's file_metadata value type: {old_value_type} -> {new_value_type}."
                 )
                 for file_entity in file_list:
                     if new_name in file_entity.file_metadata:
@@ -637,7 +637,7 @@ class RagService:
                             self.session.add(file_entity)
                         else:
                             logger.warning(
-                                f"文件 {file_entity.id} 的元数据值 '{value}' 无法转换为新类型 '{new_value_type}'，跳过更新"
+                                f"File {file_entity.id} metadata value '{value}' cannot be converted to new type '{new_value_type}', update skipped"
                             )
 
         # Flush to ensure changes are staged
@@ -664,7 +664,7 @@ class RagService:
         metadata_service = await self._get_metadata_service()
         metadata_entity = await metadata_service.get_metadata(kb_id=kb_id, metadata_id=metadata_id, tenant_id=tenant_id)
         if not metadata_entity:
-            raise ValueError(f"元数据 '{metadata_id}' 不存在。")
+            raise ValueError(f"Metadata '{metadata_id}' does not exist.")
 
         # Delete related file metadata relations
         file_metadata_relation_service = await self._get_file_metadata_relation_service()
@@ -723,10 +723,10 @@ class RagService:
         # Validate file exists
         file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
-            raise ValueError(f"文件 '{file_id}' 不存在。")
+            raise ValueError(f"File '{file_id}' does not exist.")
 
         if file_entity.kb_id != kb_id:
-            raise ValueError(f"文件 '{file_id}' 不属于知识库 '{kb_id}'。")
+            raise ValueError(f"File '{file_id}' does not belong to knowledgebase '{kb_id}'.")
 
         # Delete all existing FileMetadataEntity relations for this file
         await file_metadata_relation_service.delete_file_metadata_relations_by_file_id(
@@ -761,11 +761,11 @@ class RagService:
                     )
                 else:
                     logger.warning(
-                        f"元数据值 '{metadata_value}' 无法转换为类型 '{metadata_entity.value_type}'，跳过"
+                        f"Metadata value '{metadata_value}' cannot be converted to type '{metadata_entity.value_type}', update skipped"
                     )
             else:
                 logger.warning(
-                    f"元数据 '{metadata_name}' 不存在。"
+                    f"Metadata '{metadata_name}' does not exist."
                 )
         # Update file entity's file_metadata JSON
         file_entity.file_metadata = file_metadata

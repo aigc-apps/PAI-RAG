@@ -141,4 +141,4 @@ class CodesandboxService:
             logger.error(
                 f"IntegrityError when creating/updating CodeSandbox config: {e.orig}"
             )
-            raise ValueError(f"配置创建/更新失败: {e}") from e
+            raise ValueError(f"CodeSandbox config creation/update failed: {e}") from e

@@ -73,7 +73,7 @@ async def aget_multimodal_analysis_from_db(
     except Exception as e:
         logger.error(f"VLM 解析失败: {str(e)}")
         return json.dumps({
-            "error": f"VLM 解析失败: {str(e)}"
+            "error": f"VLM analysis failed: {str(e)}"
         }, ensure_ascii=False)
 
 async def aget_multimodal_analysis(

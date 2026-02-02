@@ -235,10 +235,10 @@ class EmbeddingService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"模型ID '{embedding_data.model_id}' 或模型名称 '{embedding_data.model_name}' 已经存在。"
+                    f"Model ID '{embedding_data.model_id}' or model name '{embedding_data.model_name}' already exists."
                 ) from e
             else:
-                raise ValueError(f"模型创建失败: {e}") from e
+                raise ValueError(f"Embedding creation failed: {e}") from e
 
     async def update_embedding(
         self, emb_id: str, update_data: EmbeddingModelCreate, tenant_id: str
@@ -260,7 +260,7 @@ class EmbeddingService:
         result = await self.session.exec(select(EmbeddingModelEntity).where(EmbeddingModelEntity.id == emb_id, EmbeddingModelEntity.tenant_id == tenant_id))
         embedding = result.first()
         if not embedding:
-            raise ValueError(f"Embedding '{emb_id}' 不存在。")
+            raise ValueError(f"Embedding '{emb_id}' does not exist.")
 
         logger.info(f"Updating Embedding {emb_id} with data: {update_data}")
 

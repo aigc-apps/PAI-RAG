@@ -11,6 +11,7 @@ import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@
 import { useI18n } from '@/app/providers/i18n';
 
 
+
 export default function CreateChatApp() {
     const { t } = useI18n();
 // Default chatbot config for creating new app

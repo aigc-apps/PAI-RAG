@@ -87,7 +87,7 @@ class ChatappService:
 
             kb_create = KnowledgebaseCreate(
                 name=kb_name,
-                description="faq知识库",
+                description="faq knowledgebase",
                 embedding_model=embedding_model,
                 retrieval_config=retrieval_config,
                 chunk_config=chunk_config,
@@ -191,7 +191,7 @@ class ChatappService:
         # Check if app_id already exists
         existing_chatbot = await self.get_chatapp_by_app_id(app_id=app_data.app_id, tenant_id=tenant_id)
         if existing_chatbot:
-            raise ValueError(f"应用ID '{app_data.app_id}' 已经存在，无法创建。")
+            raise ValueError(f"ChatApp ID '{app_data.app_id}' already exists.")
 
         chatbot = ChatBotEntity.model_validate(app_data, update={"tenant_id": tenant_id})
         self.session.add(chatbot)
@@ -237,10 +237,10 @@ class ChatappService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"应用ID '{app_data.app_id}' 已经存在。"
+                    f"ChatApp ID '{app_data.app_id}' already exists."
                 ) from e
             else:
-                raise ValueError(f"应用创建失败: {e}") from e
+                raise ValueError(f"ChatApp creation failed: {e}") from e
 
     async def update_chatapp(
         self, id: str, update_data: ChatBotCreate, tenant_id: str
@@ -262,7 +262,7 @@ class ChatappService:
         """
         chatbot = await self.get_chatapp(id=id, tenant_id=tenant_id)
         if not chatbot:
-            raise ValueError(f"应用 '{id}' 不存在。")
+            raise ValueError(f"ChatApp '{id}' does not exist.")
 
         logger.info(f"Updating ChatApp {id} with data: {update_data}")
 
@@ -270,7 +270,7 @@ class ChatappService:
         if update_data.app_id is not None and update_data.app_id != chatbot.app_id:
             existing_chatbot = await self.get_chatapp_by_app_id(app_id=update_data.app_id, tenant_id=tenant_id)
             if existing_chatbot and existing_chatbot.id != id:
-                raise ValueError(f"应用ID '{update_data.app_id}' 已经存在，无法更新。")
+                raise ValueError(f"Application ID '{update_data.app_id}' already exists, update failed.")
 
         faq_config_service = FAQConfigService(self.session)
         if update_data.faq_config:
@@ -357,7 +357,7 @@ class ChatappService:
         """
         chatbot = await self.get_chatapp(id=id, tenant_id=tenant_id)
         if not chatbot:
-            raise ValueError(f"应用 '{id}' 不存在。")
+            raise ValueError(f"ChatApp '{id}' does not exist.")
 
         # Delete FAQ knowledgebase if exists
         if chatbot.faq_config:

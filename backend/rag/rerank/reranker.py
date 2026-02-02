@@ -89,11 +89,11 @@ class OpenAICompatibleReranker:
             requests.exceptions.RequestException: 网络请求相关异常
             RuntimeError: API返回错误时
         """
-        # 参数验证
+        # Parameter validation
         if not query:
-            raise ValueError("查询内容不能为空")
+            raise ValueError("Query content cannot be empty")
         if not documents:
-            raise ValueError("文档列表不能为空")
+            raise ValueError("Document list cannot be empty")
 
         model = model or self.model
 
@@ -133,20 +133,20 @@ class OpenAICompatibleReranker:
                 response.raise_for_status()
                 response_data = await response.json()
 
-                # 解析响应并返回排序好的结果
+                # Parse response and return sorted results
                 if "results" not in response_data:
-                    raise RuntimeError("响应格式错误: 未找到results字段")
+                    raise RuntimeError("Response format error: results field not found")
 
                 raw_results = response_data["results"]
                 if not isinstance(raw_results, list):
-                    raise RuntimeError("响应格式错误: results应该是列表")
+                    raise RuntimeError("Response format error: results should be a list")
 
                 # 解析并构建结构化结果
                 rerank_results = []
                 for item in raw_results:
                     index = item.get("index")
                     if index is None:
-                        raise RuntimeError("响应格式错误: 结果中缺少index字段")
+                        raise RuntimeError("Response format error: index field missing in result")
 
                     score = item.get("relevance_score", 0.0)
                     if score < similarity_threshold:
@@ -183,9 +183,9 @@ class OpenAICompatibleReranker:
 
                 return rerank_results
         except aiohttp.ClientError as e:
-            raise RuntimeError(f"API请求失败: {str(e)}") from e
+            raise RuntimeError(f"API request failed: {str(e)}") from e
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"响应解析失败: {str(e)}") from e
+            raise RuntimeError(f"Response parsing failed: {str(e)}") from e
 
     @reranker_wrapper
     async def vector_store_rerank(
@@ -213,11 +213,11 @@ class OpenAICompatibleReranker:
             requests.exceptions.RequestException: 网络请求相关异常
             RuntimeError: API返回错误时
         """
-        # 参数验证
+        # Parameter validation
         if not query:
-            raise ValueError("查询内容不能为空")
+            raise ValueError("Query content cannot be empty")
         if not vector_result:
-            raise ValueError("VectorStoreQueryResult列表不能为空")
+            raise ValueError("VectorStoreQueryResult list cannot be empty")
 
         if not vector_result.nodes or len(vector_result.nodes) <= 1:
             return vector_result

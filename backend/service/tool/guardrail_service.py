@@ -138,4 +138,4 @@ class GuardrailService:
             logger.error(
                 f"IntegrityError when creating/updating Guardrail config: {e.orig}"
             )
-            raise ValueError(f"配置创建/更新失败: {e}") from e
+            raise ValueError(f"Fail to update guardrail config: {e}") from e

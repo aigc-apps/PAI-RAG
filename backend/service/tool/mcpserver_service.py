@@ -149,9 +149,9 @@ class McpserverService:
             logger.error(f"IntegrityError when creating MCP Server: {e.orig}")
 
             if "UniqueViolationError" in str(e.orig):
-                raise ValueError(f"MCP名称 '{mcp_data.name}' 已经存在。") from e
+                raise ValueError(f"MCP name '{mcp_data.name}' already exists.") from e
             else:
-                raise ValueError(f"MCP创建失败: {e}") from e
+                raise ValueError(f"MCP creation failed: {e}") from e
 
     async def update_mcpserver(
         self, mcp_id: str, update_data: McpServerCreate, tenant_id: str
@@ -173,7 +173,7 @@ class McpserverService:
         result = await self.session.exec(select(McpServerEntity).where(McpServerEntity.id == mcp_id, McpServerEntity.tenant_id == tenant_id))
         mcp = result.first()
         if not mcp:
-            raise ValueError(f"MCP '{mcp_id}' 不存在。")
+            raise ValueError(f"MCP '{mcp_id}' does not exist.")
 
         logger.info(f"Updating MCP Server {mcp_id} with data: {update_data}")
 
@@ -215,7 +215,7 @@ class McpserverService:
         result = await self.session.exec(select(McpServerEntity).where(McpServerEntity.id == mcp_id, McpServerEntity.tenant_id == tenant_id))
         mcp = result.first()
         if not mcp:
-            raise ValueError(f"MCP '{mcp_id}' 不存在。")
+            raise ValueError(f"MCP '{mcp_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(mcp)

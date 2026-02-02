@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
 from loguru import logger
+from common.i18n import i18n
 
 
 def format_validation_errors(errors: List[Dict[str, Any]]) -> str:
@@ -95,7 +96,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         else:
             error_message = format_validation_errors(exc_errors)
     else:
-        error_message = "请求参数错误"
+        error_message = i18n.t("api.error.validation")
 
     # 返回格式化的错误响应
     return JSONResponse(

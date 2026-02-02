@@ -127,4 +127,4 @@ class ChatdbService:
             logger.error(
                 f"IntegrityError when creating/updating ChatDB config: {e.orig}"
             )
-            raise ValueError(f"配置创建/更新失败: {e}") from e
+            raise ValueError(f"Fail to update chatdb config: {e}") from e

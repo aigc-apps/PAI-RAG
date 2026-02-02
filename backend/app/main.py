@@ -81,6 +81,7 @@ def create_app():
     from fastapi.exceptions import RequestValidationError
     import api.v1.mcp_server_middleware as mcp_middleware
     from app.log_middleware import CustomLoggingMiddleware
+    from app.i18n_middleware import I18nMiddleware
     from fastapi.middleware.cors import CORSMiddleware
     from api.request_validate_exception import validation_exception_handler
     from extensions.trace.base import setup_propagator
@@ -100,6 +101,8 @@ def create_app():
         allow_headers=["*"],
         allow_credentials=False,
     )
+    # Add I18n middleware to handle Accept-Language header
+    app.add_middleware(I18nMiddleware)
     app.add_middleware(CustomLoggingMiddleware)
     setup_propagator(app)
     app.add_exception_handler(ApiException, api_exception_handler)

@@ -123,7 +123,7 @@ class VectordbService:
             logger.error(
                 f"IntegrityError when creating/updating VectorDB config: {e.orig}"
             )
-            raise ValueError(f"配置创建/更新失败: {e}") from e
+            raise ValueError(f"Vector db config update failed: {e}") from e
 
     async def prepare_test_config(
         self, test_config: VectorDbConfig, tenant_id: str

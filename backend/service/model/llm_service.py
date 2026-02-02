@@ -161,7 +161,7 @@ class LlmService:
         if llm_data.provider_name is None:
             llm_data.provider_name = llm_url_to_model_provider_id_map.get(llm_data.base_url, "openai_like")
         if llm_data.provider_name not in model_provider_map:
-            raise ValueError(f"LLM创建失败: 'provider_name {llm_data.provider_name} not supported'.")
+            raise ValueError(f"LLM creation failed: 'provider_name {llm_data.provider_name} not supported'.")
 
         llm_data.source = llm_data.provider_name
 
@@ -185,10 +185,10 @@ class LlmService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"模型ID '{llm_data.model_id}' 已经存在。"
+                    f"Model ID '{llm_data.model_id}' already exists."
                 ) from e
             else:
-                raise ValueError(f"模型创建失败: {e}") from e
+                raise ValueError(f"LLM creation failed: {e}") from e
 
     async def update_llm(
         self, llm_id: str, update_data: LlmModelCreate, tenant_id: str
@@ -210,7 +210,7 @@ class LlmService:
         result = await self.session.exec(select(LlmModelEntity).where(LlmModelEntity.id == llm_id, LlmModelEntity.tenant_id == tenant_id))
         llm = result.first()
         if not llm:
-            raise ValueError(f"LLM '{llm_id}' 不存在。")
+            raise ValueError(f"LLM '{llm_id}' does not exist.")
 
         logger.info(f"Updating LLM {llm_id} with data: {update_data}")
 
@@ -260,7 +260,7 @@ class LlmService:
         result = await self.session.exec(select(LlmModelEntity).where(LlmModelEntity.id == llm_id, LlmModelEntity.tenant_id == tenant_id))
         llm = result.first()
         if not llm:
-            raise ValueError(f"LLM '{llm_id}' 不存在。")
+            raise ValueError(f"LLM '{llm_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(llm)
