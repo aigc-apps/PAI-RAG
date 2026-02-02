@@ -169,7 +169,7 @@ class ChunkService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating Chunk: {e.orig}")
-            raise ValueError(f"切片创建失败: {e}") from e
+            raise ValueError(f"Chunk creation failed: {e}") from e
 
     async def update_chunk(
         self,
@@ -197,11 +197,11 @@ class ChunkService:
         result = await self.session.exec(select(KbChunkEntity).where(KbChunkEntity.id == chunk_id, KbChunkEntity.tenant_id == tenant_id))
         chunk = result.first()
         if not chunk:
-            raise ValueError(f"切片 '{chunk_id}' 不存在。")
+            raise ValueError(f"Chunk '{chunk_id}' does not exist.")
 
         if chunk.kb_id != kb_id or chunk.file_id != file_id:
             raise ValueError(
-                f"切片 '{chunk_id}' 不属于知识库 '{kb_id}' 或文件 '{file_id}'。"
+                f"Chunk '{chunk_id}' does not belong to knowledge base '{kb_id}' or file '{file_id}'."
             )
 
         logger.info(f"Updating Chunk {chunk_id} with fields: {new_chunk.model_dump()}")
@@ -243,11 +243,11 @@ class ChunkService:
         result = await self.session.exec(select(KbChunkEntity).where(KbChunkEntity.id == chunk_id, KbChunkEntity.tenant_id == tenant_id))
         chunk = result.first()
         if not chunk:
-            raise ValueError(f"切片 '{chunk_id}' 不存在。")
+            raise ValueError(f"Chunk '{chunk_id}' does not exist.")
 
         if chunk.kb_id != kb_id or chunk.file_id != file_id:
             raise ValueError(
-                f"切片 '{chunk_id}' 不属于知识库 '{kb_id}' 或文件 '{file_id}'。"
+                f"Chunk '{chunk_id}' does not belong to knowledge base '{kb_id}' or file '{file_id}'."
             )
 
         # Delete from database (staged, not committed)

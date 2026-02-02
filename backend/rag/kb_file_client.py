@@ -162,7 +162,7 @@ class KbFileClient:
                 )
                 await update_file_status_async(file_id=file_item.id, status=FileStatus.parsing, task_id=task_id, is_attachment=is_attachment, tenant_id=tenant_id)
             except Exception as ex:
-                logger.error(f"处理文件失败：{traceback.format_exc()}")
+                logger.error(f"Fail to process file: {traceback.format_exc()}")
                 await update_file_status_async(file_id=file_id, status=FileStatus.failed, task_id=task_id, failed_reason=str(ex), is_attachment=is_attachment, tenant_id=tenant_id)
 
 

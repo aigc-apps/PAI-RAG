@@ -122,7 +122,7 @@ async def chat(
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
         return await generate_reponse(
-            chunk_gen=error_chunk_gen(message=f"请求失败: {ve}"),
+            chunk_gen=error_chunk_gen(message=f"Request failed: {ve}"),
             model=chat_request.model,
             stream=chat_request.stream,
             session=session,
@@ -130,7 +130,7 @@ async def chat(
     except Exception as ex:
         logger.exception(f"Error in /api/chat: {traceback.format_exc()}")
         return await generate_reponse(
-            chunk_gen=error_chunk_gen(message=f"未知错误: {ex}"),
+            chunk_gen=error_chunk_gen(message=f"Unknown error: {ex}"),
             model=chat_request.model,
             stream=chat_request.stream,
             session=session,

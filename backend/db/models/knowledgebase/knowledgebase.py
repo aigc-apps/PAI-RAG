@@ -69,17 +69,17 @@ class KnowledgebaseCreate(SQLModel):
         if not v:
             return ChunkConfig()
         if v.chunk_size <= v.chunk_overlap:
-            raise ValueError(f"切片大小`{v.chunk_size}`必须大于切片重叠`{v.chunk_overlap}`.")
+            raise ValueError(f"Chunk size `{v.chunk_size}` must be greater than chunk overlap `{v.chunk_overlap}`.")
         return v
 
     @field_validator("name")
     def validate_name(cls, v):
         if not v:
-            raise ValueError("知识库名称不能为空。")
+            raise ValueError("Knowledge base name cannot be empty.")
         if len(v) > 100:
-            raise ValueError("知识库名称不能超过 100 个字符。")
+            raise ValueError("Knowledge base name cannot exceed 100 characters.")
         if not re.fullmatch(r"[\w-]+", v):
-            raise ValueError("知识库名称只能包含字母、数字和下划线。")
+            raise ValueError("Knowledge base name can only contain letters, numbers, hyphens, and underscores.")
         return v
 
 # table entity

@@ -13,6 +13,7 @@ from service.injection import get_llm_service, get_tenant_id
 from api.api_exception import ApiException
 from loguru import logger
 from common.llm.models import llm_url_to_model_provider_id_map, model_provider_map
+from common.i18n import i18n
 
 ### LLM Configuration API ###
 llm_router = APIRouter()
@@ -62,13 +63,13 @@ async def create_llm(
     try:
         llm_entity = await llm_service.create_llm(llm_data=llm_data, tenant_id=tenant_id)
 
-        return success_response(data=llm_entity, message="LLM创建成功。")
+        return success_response(data=llm_entity, message=i18n.t("api.llm.create_success"))
     except ValueError as e:
         logger.error(f"Failed to create llm: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"LLM创建失败: '{e}'.")
+        raise ApiException(code=400, message=i18n.t("api.llm.create_failed", error=str(e)))
     except Exception as e:
         logger.error(f"Failed to create llm: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"LLM创建失败: '{e}'.")
+        raise ApiException(code=500, message=i18n.t("api.llm.create_failed", error=str(e)))
 
 
 
@@ -108,10 +109,10 @@ async def get_llm_groups(
                 }
             grouped_results[provider_label]["models"].append(llm)
 
-        return success_response(data={"groups": list(grouped_results.values())}, message="获取LLM模型组成功")
+        return success_response(data={"groups": list(grouped_results.values())}, message=i18n.t("api.llm.groups_success"))
     except Exception as e:
         logger.error(f"Failed to get llm groups: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"获取LLM模型组失败: '{e}'.")
+        raise ApiException(code=500, message=i18n.t("api.llm.groups_failed", error=str(e)))
 
 
 @llm_router.get("/providers")
@@ -124,10 +125,10 @@ async def get_llm_providers(
     """Get distinct provider names for LLMs."""
     try:
         providers = await llm_service.get_provider_names(tenant_id=tenant_id, vision_support=vision_support)
-        return success_response(data=providers, message="获取LLM服务商列表成功")
+        return success_response(data=providers, message=i18n.t("api.llm.providers_success"))
     except Exception as e:
         logger.error(f"Failed to get LLM providers: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"获取LLM服务商列表失败: {str(e)}")
+        raise ApiException(code=400, message=i18n.t("api.llm.providers_failed", error=str(e)))
 
 
 @llm_router.get("")
@@ -143,13 +144,13 @@ async def get_llms(
     logger.info(f"Getting LLMs with page: {page}, size: {size}, vision_support: {vision_support}.")
     try:
         llm_entities = await llm_service.list_llms(tenant_id=tenant_id, page=page, size=size, vision_support=vision_support, provider_name=provider_name)
-        return success_response(data=llm_entities, message="获取LLM模型列表成功")
+        return success_response(data=llm_entities, message=i18n.t("api.llm.list_success"))
     except ApiException as e:
         logger.warning(f"Failed to get llms: {e}")
         raise e
     except Exception as e:
         logger.error(f"Failed to get llms: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"获取LLM模型列表失败: '{e}'.")
+        raise ApiException(code=500, message=i18n.t("api.llm.list_failed", error=str(e)))
 
 
 @llm_router.get("/{llm_id}", response_model=ResponseModel[LlmModelRead])
@@ -168,13 +169,13 @@ async def read_llm(
         llm_entity.provider_name = llm_entity.provider_name or llm_url_to_model_provider_id_map.get(llm_entity.base_url, "openai_like")
         if not llm_entity:
             raise ApiException.not_found(llm_id, "LLM")
-        return success_response(data=llm_entity, message="获取LLM模型成功")
+        return success_response(data=llm_entity, message=i18n.t("api.llm.query_success"))
     except ApiException as e:
         logger.warning(f"Failed to get llm: {e}")
         raise e
     except Exception as e:
         logger.error(f"Failed to get llm: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"获取LLM模型失败: '{e}'.")
+        raise ApiException(code=500, message=i18n.t("api.llm.query_failed", error=str(e)))
 
 
 @llm_router.put("/{llm_id}", response_model=ResponseModel[LlmModelRead])
@@ -190,10 +191,10 @@ async def update_llm(
         if update_llm.provider_name is None:
             update_llm.provider_name = llm_url_to_model_provider_id_map.get(update_llm.base_url, "openai_like")
         llm_entity = await llm_service.update_llm(llm_id=llm_id, update_data=update_llm, tenant_id=tenant_id)
-        return success_response(data=llm_entity, message="LLM更新成功。")
+        return success_response(data=llm_entity, message=i18n.t("api.llm.update_success"))
     except Exception as e:
         logger.error(f"Failed to update llm: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"LLM更新失败: '{e}'.")
+        raise ApiException(code=500, message=i18n.t("api.llm.update_failed", error=str(e)))
 
 
 @llm_router.delete("/{llm_id}")
@@ -206,7 +207,7 @@ async def delete_llm(
     logger.info(f"Deleting LLM: {llm_id}.")
     try:
         await llm_service.delete_llm(llm_id=llm_id, tenant_id=tenant_id)
-        return success_response(message="LLM删除成功。")
+        return success_response(message=i18n.t("api.llm.delete_success"))
     except Exception as e:
         logger.error(f"Failed to delete llm: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"LLM删除失败: '{e}'.")
+        raise ApiException(code=500, message=i18n.t("api.llm.delete_failed", error=str(e)))

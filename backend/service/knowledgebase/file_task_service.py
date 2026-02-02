@@ -157,10 +157,10 @@ class FileTaskService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"文件任务 (file_id: {task_data.file_id}, file_part: {task_data.file_part}) 已存在。"
+                    f"File task (file_id: {task_data.file_id}, file_part: {task_data.file_part}) already exists."
                 ) from e
             else:
-                raise ValueError(f"文件任务创建失败: {e}") from e
+                raise ValueError(f"File task creation failed: {e}") from e
 
     async def update_file_task(
         self,
@@ -189,13 +189,13 @@ class FileTaskService:
         result = await self.session.exec(select(KbFileTaskEntity).where(KbFileTaskEntity.id == task_id, KbFileTaskEntity.tenant_id == tenant_id))
         task_entity = result.first()
         if not task_entity:
-            raise ValueError(f"文件任务 '{task_id}' 不存在。")
+            raise ValueError(f"File task '{task_id}' does not exist.")
 
         if task_entity.kb_id != kb_id:
-            raise ValueError(f"文件任务 '{task_id}' 不属于知识库 '{kb_id}'。")
+            raise ValueError(f"File task '{task_id}' does not belong to knowledge base '{kb_id}'.")
 
         if task_entity.file_id != file_id:
-            raise ValueError(f"文件任务 '{task_id}' 不属于文件 '{file_id}'。")
+            raise ValueError(f"File task '{task_id}' does not belong to file '{file_id}'.")
 
         logger.info(f"Updating FileTask {task_id} with fields: {update_fields}")
 
@@ -234,13 +234,13 @@ class FileTaskService:
         result = await self.session.exec(select(KbFileTaskEntity).where(KbFileTaskEntity.id == task_id, KbFileTaskEntity.tenant_id == tenant_id))
         task_entity = result.first()
         if not task_entity:
-            raise ValueError(f"文件任务 '{task_id}' 不存在。")
+            raise ValueError(f"File task '{task_id}' does not exist.")
 
         if task_entity.kb_id != kb_id:
-            raise ValueError(f"文件任务 '{task_id}' 不属于知识库 '{kb_id}'。")
+            raise ValueError(f"File task '{task_id}' does not belong to knowledge base '{kb_id}'.")
 
         if task_entity.file_id != file_id:
-            raise ValueError(f"文件任务 '{task_id}' 不属于文件 '{file_id}'。")
+            raise ValueError(f"File task '{task_id}' does not belong to file '{file_id}'.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(task_entity)

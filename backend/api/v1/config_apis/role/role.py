@@ -31,13 +31,13 @@ async def create_role(
 ):
     try:
         role = await role_service.create_role(role=role, tenant_id=tenant_id)
-        return success_response(data=role, message="添加角色成功。")
+        return success_response(data=role, message="Create role success.")
     except ValueError as e:
         logger.error(f"Failed to create role: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to create role: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"创建角色失败: '{e}'.")
+        raise ApiException(code=400, message=f"Create role failed: '{e}'.")
 
 
 
@@ -56,16 +56,16 @@ async def list_roles(
             role = await role_service.get_role_by_name(name)
             if not role:
                 raise ApiException(
-                    code=404, message=f"查询角色失败: '{name}'不存在。"
+                    code=404, message=f"Get role failed: '{name}' does not exist."
                 )
-            return success_response(data=role, message="查询角色成功。")
+            return success_response(data=role, message="Get role successful.")
         else:
             # List all roles with pagination
             roles = await role_service.list_roles(page=page, size=size, tenant_id=tenant_id)
-            return success_response(data=roles, message="查询角色列表成功")
+            return success_response(data=roles, message="List role successful")
     except Exception as e:
         logger.error(f"Failed to list roles: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询角色失败: '{e}'.")
+        raise ApiException(code=400, message=f"List roles failed: '{e}'.")
 
 
 @role_router.delete("/{role_id}")
@@ -77,14 +77,14 @@ async def delete_role(
 ):
     try:
         await role_service.delete_role(role_id=role_id, tenant_id=tenant_id)
-        logger.info(f"角色 {role_id} 已删除.")
-        return success_response(message=f"角色{role_id}删除成功。")
+        logger.info(f"Role {role_id} deleted successfully.")
+        return success_response(message=f"Role {role_id} deletion successful.")
     except ValueError as e:
         logger.error(f"Failed to delete role: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to delete role: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"删除角色失败: '{e}'.")
+        raise ApiException(code=400, message=f"Delete role failed: '{e}'.")
 
 
 # 用户-角色 API
@@ -97,13 +97,13 @@ async def create_user_role(
 ):
     try:
         user_role = await role_service.create_user_role(user_role=user_role, tenant_id=tenant_id)
-        return success_response(data=user_role, message="添加用户角色成功。")
+        return success_response(data=user_role, message="Create user role successful.")
     except ValueError as e:
         logger.error(f"Failed to create user role: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to create user role: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"创建用户角色失败: '{e}'.")
+        raise ApiException(code=400, message=f"Create user role failed: '{e}'.")
 
 
 
@@ -118,10 +118,10 @@ async def list_user_roles(
 ):
     try:
         user_roles = await role_service.list_user_roles(page=page, size=size, user_id=user_id, tenant_id=tenant_id)
-        return success_response(data=user_roles, message="查询用户角色列表成功")
+        return success_response(data=user_roles, message="List user roles successful")
     except Exception as e:
         logger.error(f"Failed to list user roles: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询用户角色列表失败: '{e}'.")
+        raise ApiException(code=400, message=f"List user roles failed: '{e}'.")
 
 
 @role_router.delete("/user_roles/{user_role_id}")
@@ -133,14 +133,14 @@ async def delete_user_role(
 ):
     try:
         await role_service.delete_user_role(user_role_id=user_role_id, tenant_id=tenant_id)
-        logger.info(f"用户角色 {user_role_id} 已删除.")
-        return success_response(message=f"用户角色{user_role_id}删除成功。")
+        logger.info(f"User role {user_role_id} deleted successfully.")
+        return success_response(message=f"User role {user_role_id} deletion successful.")
     except ValueError as e:
         logger.error(f"Failed to delete user role: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to delete user role: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"删除用户角色失败: '{e}'.")
+        raise ApiException(code=400, message=f"Delete user role failed: '{e}'.")
 
 
 
@@ -156,7 +156,7 @@ async def create_permission(
         permission = await role_service.create_permission(permission, tenant_id=tenant_id)
         await session.commit()
         await session.refresh(permission)
-        return success_response(data=permission, message="添加权限成功。")
+        return success_response(data=permission, message="Create permission successful.")
     except ValueError as e:
         logger.error(f"Failed to create permission: {str(e)}")
         await session.rollback()
@@ -164,7 +164,7 @@ async def create_permission(
     except Exception as e:
         logger.error(f"Failed to create permission: {traceback.format_exc()}")
         await session.rollback()
-        raise ApiException(code=400, message=f"创建权限失败: '{e}'.")
+        raise ApiException(code=400, message=f"Create permission failed: '{e}'.")
 
 
 
@@ -179,10 +179,10 @@ async def list_permissions(
 ):
     try:
         permissions = await role_service.list_permissions(page=page, size=size, name=name, tenant_id=tenant_id)
-        return success_response(data=permissions, message="查询权限成功")
+        return success_response(data=permissions, message="List permissions successful")
     except Exception as e:
         logger.error(f"Failed to list permissions: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询权限失败: '{e}'.")
+        raise ApiException(code=400, message=f"List permissions failed: '{e}'.")
 
 
 
@@ -203,13 +203,13 @@ async def set_file_permission(
         new_permissions = await role_service.set_file_permissions(
             file_id, update_request.role_ids, tenant_id=tenant_id
         )
-        return success_response(data=new_permissions, message="更新权限成功")
+        return success_response(data=new_permissions, message="Update permissions successful")
     except ValueError as e:
-        logger.error(f"设置文件权限失败: {str(e)}")
+        logger.error(f"Set file permissions failed: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as ex:
-        logger.error(f"设置文件权限失败: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"设置文件权限失败: {ex}")
+        logger.error(f"Set file permissions failed: {traceback.format_exc()}")
+        raise ApiException(code=400, message=f"Set file permissions failed: {ex}")
 
 
 
@@ -222,11 +222,11 @@ async def delete_permission(
 ):
     try:
         await role_service.delete_permission(permission_id, tenant_id=tenant_id)
-        logger.info(f"权限 {permission_id} 已删除.")
-        return success_response(message=f"权限 {permission_id} 删除成功。")
+        logger.info(f"Permission {permission_id} deleted successfully.")
+        return success_response(message=f"Permission {permission_id} deletion successful.")
     except ValueError as e:
         logger.error(f"Failed to delete permission: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to delete permission: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"删除权限失败: '{e}'.")
+        raise ApiException(code=400, message=f"Delete permission failed: '{e}'.")

@@ -58,7 +58,7 @@ async def add_search_config(
         )
 
         return success_response(
-            data=websearch_config_read, message="更新搜索配置成功。"
+            data=websearch_config_read, message="Update websearch config success."
         )
     except ValueError as e:
         logger.error(f"Validation error when adding search config: {str(e)}")
@@ -66,7 +66,7 @@ async def add_search_config(
     except Exception as e:
         logger.error(f"Failed to add search config: {str(e)}")
         raise ApiException(
-            code=500, message=f"更新搜索配置失败: {str(e)}"
+            code=500, message=f"Fail to update websearch config: {str(e)}"
         )
 
 
@@ -104,7 +104,7 @@ async def list_search_config(
                         is_tavily_empty=True,
                     )
                 ],
-                message="查询检索配置成功",
+                message="List websearch config success.",
             )
 
         # Convert to read models
@@ -121,10 +121,10 @@ async def list_search_config(
             websearch_configs.append(websearch_config_read)
 
         return success_response(
-            data=websearch_configs, message="查询检索配置成功"
+            data=websearch_configs, message="List websearch config success."
         )
     except Exception as e:
         logger.error(f"Failed to list search config: {str(e)}")
         raise ApiException(
-            code=500, message=f"查询检索配置失败: {str(e)}"
+            code=500, message=f"List websearch config failed: {str(e)}"
         )

@@ -217,10 +217,10 @@ class FileService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"文件 '{file_data.file_name}' 在知识库中已存在。"
+                    f"File '{file_data.file_name}' already exists in knowledge base."
                 ) from e
             else:
-                raise ValueError(f"文件创建失败: {e}") from e
+                raise ValueError(f"File creation failed: {e}") from e
 
     async def update_file(
         self, file_id: str, kb_id: str, new_entity: KbFileEntity, tenant_id: str
@@ -247,7 +247,7 @@ class FileService:
         ))
         file_entity = result.first()
         if not file_entity:
-            raise ValueError(f"文件 '{file_id}' 不存在。")
+            raise ValueError(f"File '{file_id}' does not exist.")
 
         file_entity.file_metadata = new_entity.file_metadata
         file_entity.file_source = new_entity.file_source
@@ -293,10 +293,10 @@ class FileService:
         ))
         file_entity = result.first()
         if not file_entity:
-            raise ValueError(f"文件 '{file_id}' 不存在。")
+            raise ValueError(f"File '{file_id}' does not exist.")
 
         if file_entity.kb_id != kb_id:
-            raise ValueError(f"文件 '{file_id}' 不属于知识库 '{kb_id}'。")
+            raise ValueError(f"File '{file_id}' does not belong to knowledge base '{kb_id}'.")
 
         # Delete from database (staged, not committed)
         # CASCADE will handle related chunks

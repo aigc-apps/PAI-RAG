@@ -35,10 +35,10 @@ def check_and_handle_return_direct(
     logger.info(f"[{agent_name}] Tool {tool_name} has return_direct=True, returning tool result directly.")
 
     if tool_error:
-        return TextChunk(delta=f"工具调用失败: {tool_error}")
+        return TextChunk(delta="Tool call failed: {tool_error}")
 
     if not tool_content:
-        return TextChunk(delta="工具调用成功，但未返回内容。")
+        return TextChunk(delta="Tool call successful, but no content returned.")
 
     try:
         result_data = json.loads(tool_content)

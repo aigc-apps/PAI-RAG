@@ -2,25 +2,26 @@
 
 import { useTenant } from '@/app/providers/tenant';
 import { createTenantFetch, getTenantHeaders, mergeWithTenantHeaders } from '@/lib/tenant-fetch';
+import { i18n } from '@/lib/i18n';
 import { useCallback, useMemo, useRef } from 'react';
 
 /**
- * 自定义 Hook：返回带有工作空间 ID 的 fetch 函数和辅助方法
+ * Custom Hook: Returns fetch function and helper methods with workspace ID and locale headers
  * 
- * tenantFetch 会自动等待 hydration 完成后再发送请求，确保使用正确的 tenantId
+ * tenantFetch will automatically wait for hydration to complete before sending requests, ensuring correct tenantId and locale
  * 
  * @example
  * ```tsx
  * function MyComponent() {
  *   const { tenantFetch, tenantHeaders, tenantId, isHydrated } = useTenantFetch();
  * 
- *   // 使用 tenantFetch 发送请求（自动带上 X-TENANT-ID，会等待 hydration）
+ *   // Use tenantFetch to send request (automatically includes X-TENANT-ID and Accept-Language, waits for hydration)
  *   const fetchData = async () => {
  *     const res = await tenantFetch('/api/data');
  *     return res.json();
  *   };
  * 
- *   // 或者使用 tenantHeaders 添加到现有请求
+ *   // Or use tenantHeaders to add to existing request
  *   const fetchWithHeaders = async () => {
  *     const res = await fetch('/api/data', {
  *       headers: {
@@ -36,35 +37,36 @@ import { useCallback, useMemo, useRef } from 'react';
 export function useTenantFetch() {
   const { tenantId, isHydrated } = useTenant();
   
-  // 使用 ref 存储最新的 tenantId 和 isHydrated 状态
-  const stateRef = useRef({ tenantId, isHydrated });
-  stateRef.current = { tenantId, isHydrated };
+  // Use ref to store latest tenantId, isHydrated, and locale state
+  const stateRef = useRef({ tenantId, isHydrated, locale: i18n.getLanguage() });
+  stateRef.current = { tenantId, isHydrated, locale: i18n.getLanguage() };
 
-  // 创建带工作空间 ID 的 fetch 函数，会等待 hydration 完成
+  // Create fetch function with workspace ID and locale, waits for hydration to complete
   const tenantFetch = useMemo(() => {
     return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      // 等待 hydration 完成
+      // Wait for hydration to complete
       while (!stateRef.current.isHydrated) {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
       
-      // 使用最新的 tenantId
+      // Use latest tenantId and locale
       const headers = new Headers(init?.headers);
       headers.set('X-TENANT-ID', stateRef.current.tenantId);
+      headers.set('Accept-Language', stateRef.current.locale);
       
       return fetch(input, {
         ...init,
         headers,
       });
     };
-  }, []); // 不依赖 tenantId，通过 ref 获取最新值
+  }, []); // No dependency on tenantId or locale, get latest value through ref
 
-  // 获取工作空间 headers
+  // Get workspace and locale headers
   const tenantHeaders = useMemo(() => {
     return getTenantHeaders(tenantId);
   }, [tenantId]);
 
-  // 合并 headers 的辅助函数
+  // Helper function to merge headers
   const withTenantHeaders = useCallback((existingHeaders?: HeadersInit) => {
     return mergeWithTenantHeaders(tenantId, existingHeaders);
   }, [tenantId]);

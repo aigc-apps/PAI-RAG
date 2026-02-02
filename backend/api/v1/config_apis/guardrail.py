@@ -29,10 +29,10 @@ async def add_guardrail_config(
     logger.info(f"Adding guardrail config: {new_guardrail_config}.")
     try:
         guardrail_entity = await guardrail_service.create_or_update_guardrail_config(config_data=new_guardrail_config, tenant_id=tenant_id)
-        return success_response(data=guardrail_entity, message="添加安全护栏配置成功.")
+        return success_response(data=guardrail_entity, message="Add guardrail config success.")
     except Exception as e:
         logger.error(f"Failed to add guardrail config: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"添加安全护栏配置失败: '{e}'.")
+        raise ApiException(code=500, message=f"Add guardrail config failed: '{e}'.")
 
 
 @guardrail_router.get("", response_model=ResponseModel[List[GuardrailConfigRead]])
@@ -44,7 +44,7 @@ async def list_guardrail_configs(
     logger.info("Listing guardrail configs.")
     try:
         guardrail_entities = await guardrail_service.get_all_guardrail_configs(tenant_id=tenant_id)
-        return success_response(data=guardrail_entities, message="查询护栏配置成功。")
+        return success_response(data=guardrail_entities, message="List guardrail configs success.")
     except Exception as e:
         logger.error(f"Failed to list guardrail configs: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"查询护栏配置失败: '{e}'.")
+        raise ApiException(code=500, message=f"List guardrail configs failed: '{e}'.")

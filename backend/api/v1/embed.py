@@ -81,7 +81,7 @@ async def aembed(
         )
     except ValueError as ve:
         logger.warning(f"Embedding failed due to value error: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"Embedding失败: {ve}")
+        raise ApiException(code=400, message=f"Embedding failed: {ve}")
     except Exception as ex:
         logger.error(f"Embedding failed: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"Embedding失败: {ex}")
+        raise ApiException(code=500, message=f"Embedding failed: {ex}")

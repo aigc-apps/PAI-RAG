@@ -196,10 +196,10 @@ class RerankerService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"模型ID '{reranker_data.model_id}' 或模型名称 '{reranker_data.model_name}' 已经存在。"
+                    f"Model ID '{reranker_data.model_id}' or model name '{reranker_data.model_name}' already exists."
                 ) from e
             else:
-                raise ValueError(f"模型创建失败: {e}") from e
+                raise ValueError(f"Fail to create reranker: {e}") from e
 
     async def update_reranker(
         self, reranker_id: str, update_data: RerankerModelCreate, tenant_id: str
@@ -221,7 +221,7 @@ class RerankerService:
         result = await self.session.exec(select(RerankerModelEntity).where(RerankerModelEntity.id == reranker_id, RerankerModelEntity.tenant_id == tenant_id))
         reranker = result.first()
         if not reranker:
-            raise ValueError(f"Reranker '{reranker_id}' 不存在。")
+            raise ValueError(f"Reranker '{reranker_id}' does not exist.")
 
         logger.info(f"Updating Reranker {reranker_id} with data: {update_data}")
 
@@ -266,7 +266,7 @@ class RerankerService:
         result = await self.session.exec(select(RerankerModelEntity).where(RerankerModelEntity.id == reranker_id, RerankerModelEntity.tenant_id == tenant_id))
         reranker = result.first()
         if not reranker:
-            raise ValueError(f"Reranker '{reranker_id}' 不存在。")
+            raise ValueError(f"Reranker '{reranker_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(reranker)

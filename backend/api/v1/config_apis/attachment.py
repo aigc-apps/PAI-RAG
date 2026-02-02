@@ -25,6 +25,7 @@ from tools.utils.attachments import is_multimodal_file_type, get_file_mime_type
 from utils.upload_file_utils import upload_form_files_async
 from pairag.file.store.file_store_helper import file_store
 from loguru import logger
+from common.i18n import i18n
 
 attachments_router = APIRouter()
 
@@ -110,7 +111,7 @@ async def get_attachment_urls(
 
     except Exception as e:
         logger.error(f"Failed to get attachment URLs: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"获取附件URL失败: {e}")
+        raise ApiException(code=500, message=i18n.t("api.attachment.get_url_failed", error=str(e)))
 
 
 MAX_CHECK_ATTEMPTS = 100
@@ -136,7 +137,7 @@ async def create_attachment_file(
             logger.info(f"Creating default_attachments knowledgebase for tenant {tenant_id}")
             kb_create = KnowledgebaseCreate(
                 name=ATTACHMENT_KNOWLEDGEBASE_NAME,
-                description="附件知识库",
+                description=i18n.t("api.attachment.kb_description"),
                 embedding_model=default_embedding_config.model_id,
             )
             knowledgebase = await knowledgebase_service.create_knowledgebase(kb_data=kb_create, tenant_id=tenant_id)
@@ -154,7 +155,7 @@ async def create_attachment_file(
 
                 knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(ATTACHMENT_KNOWLEDGEBASE_NAME, tenant_id=tenant_id)
                 if not knowledgebase:
-                    raise ApiException(code=500, message="无法创建或获取附件知识库: 并发创建冲突")
+                    raise ApiException(code=500, message=i18n.t("api.attachment.create_kb_failed"))
                 logger.info(f"Retrieved existing default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
             except Exception:
                 await session.rollback()
@@ -187,13 +188,13 @@ async def create_attachment_file(
 
         if is_multimodal_file_type(file_entity.file_extension):
             logger.info(f"File {file_entity.id} is a multimodal file, skipping background processing...")
-            return success_response(data=file_entity, message=f"文件{file_item.file_name}上传成功")
+            return success_response(data=file_entity, message=i18n.t("api.attachment.upload_success", filename=file_item.file_name))
         else:
             background_worker.enqueue_attachments_file_tasks.delay(file_entity.id, file_entity.file_version, file_entity.file_extension, is_attachment=True, tenant_id=tenant_id)
             logger.info(f"Enqueued file {file_entity.id} for background processing...")
     except Exception as e:
         logger.error(f"Failed to save file {file_id} to database: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"文件{file_id}上传失败: {e}")
+        raise ApiException(code=400, message=i18n.t("api.attachment.upload_failed", id=file_id, error=str(e)))
 
     await session.commit()
     attempt = 0
@@ -207,14 +208,14 @@ async def create_attachment_file(
         await session.commit()
         if file_entity.status == FileStatus.succeeded:
             logger.info(f"File {file_item.file_name} processing completed successfully")
-            return success_response(data=file_entity, message=f"文件{file_item.file_name}上传成功")
+            return success_response(data=file_entity, message=i18n.t("api.attachment.upload_success", filename=file_item.file_name))
         elif file_entity.status == FileStatus.failed:
             logger.error(f"File {file_item.file_name} processing failed: {file_entity.failed_reason}.")
-            raise ApiException(code=500, message=f"上传失败, 错误信息: {file_entity.failed_reason}")
+            raise ApiException(code=500, message=i18n.t("api.attachment.processing_failed", reason=file_entity.failed_reason))
 
     # Cancel task when timeouts
     file_entity.status = FileStatus.cancelled
-    file_entity.failed_reason = f"文件{file_item.file_name}上传超时。"
+    file_entity.failed_reason = i18n.t("api.attachment.timeout_reason", filename=file_item.file_name)
     try:
         if knowledgebase:
             await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity, tenant_id=tenant_id)
@@ -223,4 +224,4 @@ async def create_attachment_file(
         logger.error(f"Failed to save file {file_item.file_name} to database: {traceback.format_exc()}")
         await session.rollback()
 
-    raise ApiException(code=400, message=f"文件{file_id}上传超时。")
+    raise ApiException(code=400, message=i18n.t("api.attachment.upload_timeout", id=file_id))

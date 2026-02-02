@@ -14,6 +14,7 @@ from api.api_exception import ApiException
 from service.model.embedding_service import EmbeddingService
 from service.injection import get_embedding_service, get_tenant_id
 from loguru import logger
+from common.i18n import i18n
 
 embedding_router = APIRouter()
 
@@ -32,13 +33,13 @@ async def create_embedding(
         if embedding.type == EmbeddingType.LOCAL:
             import app.worker as background_worker
             background_worker.download_model.delay(id=embedding.id, model_name=embedding.model_name)
-        return success_response(data=embedding, message="创建embedding模型成功。")
+        return success_response(data=embedding, message=i18n.t("api.embedding.create_success"))
     except ValueError as e:
         logger.error(f"Failed to create embedding: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to create embedding: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"创建embedding模型失败: '{e}'.")
+        raise ApiException(code=400, message=i18n.t("api.embedding.create_failed", error=str(e)))
 
 
 @embedding_router.get("/providers")
@@ -50,10 +51,10 @@ async def get_embedding_providers(
     """Get distinct provider names for embeddings."""
     try:
         providers = await embedding_service.get_provider_names(tenant_id=tenant_id)
-        return success_response(data=providers, message="获取embedding服务商列表成功")
+        return success_response(data=providers, message=i18n.t("api.embedding.providers_success"))
     except Exception as e:
         logger.error(f"Failed to get embedding providers: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"获取embedding服务商列表失败: {str(e)}")
+        raise ApiException(code=400, message=i18n.t("api.embedding.providers_failed", error=str(e)))
 
 
 @embedding_router.get("")
@@ -71,18 +72,18 @@ async def get_embeddings(
             embedding_models = await embedding_service.list_embeddings(tenant_id=tenant_id, page=page, size=size, provider_name=provider_name)
             return success_response(
                 data=embedding_models,
-                message="查询embedding模型列表成功"
+                message=i18n.t("api.embedding.list_success")
             )
         else:
             embedding_model = await embedding_service.get_embedding_by_model_name(model_name=model_name, tenant_id=tenant_id)
             if not embedding_model:
                 raise ApiException(
-                    code=404, message=f"查询embedding模型失败: 模型'{model_name}'不存在。"
+                    code=404, message=i18n.t("api.embedding.query_failed", model=model_name)
                 )
-            return success_response(data=embedding_model, message="查询embedding模型成功。")
+            return success_response(data=embedding_model, message=i18n.t("api.embedding.query_success"))
     except Exception as e:
         logger.error(f"Failed to get embeddings: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询embedding模型失败: {str(e)}")
+        raise ApiException(code=400, message=i18n.t("api.embedding.list_failed", error=str(e)))
 
 
 @embedding_router.put("/{emb_id}", response_model=ResponseModel[EmbeddingModelRead])
@@ -97,13 +98,13 @@ async def update_embedding(
         embedding_model = await embedding_service.update_embedding(emb_id=emb_id, update_data=update_data, tenant_id=tenant_id)
         await session.refresh(embedding_model)
         logger.info(f"Embedding {emb_id} updated to {embedding_model}.")
-        return success_response(data=embedding_model, message="Embedding模型更新成功。")
+        return success_response(data=embedding_model, message=i18n.t("api.embedding.update_success"))
     except ValueError as e:
         logger.error(f"Failed to update embedding: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to update embedding: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"Embedding模型更新失败: '{e}'.")
+        raise ApiException(code=400, message=i18n.t("api.embedding.update_failed", error=str(e)))
 
 
 @embedding_router.delete("/{emb_id}")
@@ -116,10 +117,10 @@ async def delete_embedding(
     try:
         await embedding_service.delete_embedding(emb_id=emb_id, tenant_id=tenant_id)
         logger.info(f"Embedding {emb_id} deleted.")
-        return success_response(message=f"Embedding模型{emb_id}删除成功。")
+        return success_response(message=i18n.t("api.embedding.delete_success", id=emb_id))
     except ValueError as e:
         logger.error(f"Failed to delete embedding: {str(e)}")
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.error(f"Failed to delete embedding: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"删除embedding失败: '{e}'.")
+        raise ApiException(code=400, message=i18n.t("api.embedding.delete_failed", error=str(e)))

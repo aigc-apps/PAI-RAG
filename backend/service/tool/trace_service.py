@@ -136,4 +136,4 @@ class TraceService:
             logger.error(
                 f"IntegrityError when creating/updating Trace config: {e.orig}"
             )
-            raise ValueError(f"配置创建/更新失败: {e}") from e
+            raise ValueError(f"Trace config creation/update failed: {e}") from e

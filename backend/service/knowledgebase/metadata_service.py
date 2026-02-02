@@ -170,7 +170,7 @@ class MetadataService:
         """
 
         if metadata_create.name in DEFAULT_METADATA_KEYS:
-            raise ValueError(f"元数据名称 '{metadata_create.name}' 是系统保留名称，不能创建。")
+            raise ValueError(f"Metadata name '{metadata_create.name}' is a system reserved name and cannot be created.")
 
         metadata_entity = KbMetadataEntity.model_validate(
             metadata_create, update={"kb_id": kb_id, "tenant_id": tenant_id}
@@ -193,14 +193,14 @@ class MetadataService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"元数据名称 '{metadata_create.name}' 在知识库中已存在。"
+                    f"Metadata name '{metadata_create.name}' already exists in knowledge base."
                 ) from e
             elif "Duplicate entry" in str(e.orig):
                 raise ValueError(
-                    f"元数据名称 '{metadata_create.name}' 在知识库中已存在。"
+                    f"Metadata name '{metadata_create.name}' already exists in knowledge base."
                 ) from e
             else:
-                raise ValueError(f"元数据创建失败: {e}") from e
+                raise ValueError(f"Metadata creation failed: {e}") from e
 
     async def update_metadata(
         self,
@@ -228,7 +228,7 @@ class MetadataService:
         """
         metadata_entity = await self.get_metadata(kb_id, metadata_id, tenant_id)
         if not metadata_entity:
-            raise ValueError(f"元数据 '{metadata_id}' 不存在。")
+            raise ValueError(f"Metadata '{metadata_id}' does not exist.")
 
         try:
             # Update metadata_entity
@@ -251,14 +251,14 @@ class MetadataService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"元数据名称 '{update_data.name}' 在知识库中已存在。"
+                    f"Metadata name '{update_data.name}' already exists in knowledge base."
                 ) from e
             elif "Duplicate entry" in str(e.orig):
                 raise ValueError(
-                    f"元数据名称 '{update_data.name}' 在知识库中已存在。"
+                    f"Metadata name '{update_data.name}' already exists in knowledge base."
                 ) from e
             else:
-                raise ValueError(f"元数据更新失败: {e}") from e
+                raise ValueError(f"Metadata update failed: {e}") from e
 
     async def delete_metadata(self, kb_id: str, metadata_id: str, tenant_id: str) -> None:
         """
@@ -277,7 +277,7 @@ class MetadataService:
         """
         metadata_entity = await self.get_metadata(kb_id, metadata_id, tenant_id)
         if not metadata_entity:
-            raise ValueError(f"元数据 '{metadata_id}' 不存在。")
+            raise ValueError(f"Metadata '{metadata_id}' does not exist.")
 
         # Delete Metadata entity only
         await self.session.delete(metadata_entity)

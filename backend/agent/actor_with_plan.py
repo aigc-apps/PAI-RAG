@@ -128,12 +128,12 @@ class ActorWithPlan(BaseAgent):
                                         logger.error(f"Call tool failed: {traceback.format_exc()}")
                                         inner_exception = retry_err.last_attempt.exception()
                                         tool_content = None
-                                        tool_error = f"工具调用失败: {inner_exception}"
+                                        tool_error = f"Tool call failed: {inner_exception}"
                                         message_content = tool_error
                                     except Exception as ex:
                                         logger.error(f"Call tool failed: {traceback.format_exc()}")
                                         tool_content = None
-                                        tool_error = f"工具调用失败: {ex}"
+                                        tool_error = f"Tool call failed: {ex}"
                                         message_content = tool_error
 
                                     #logger.info(f"Get tool result {tool_result}.")
@@ -175,7 +175,7 @@ class ActorWithPlan(BaseAgent):
                             break
 
                     if action_step > self.max_steps:
-                        yield TextChunk(delta="任务失败: 超出最大迭代次数，任务已结束。")
+                        yield TextChunk(delta="Exceeded maximum iteration count, task ended.")
                 finally:
                     # 确保清理函数只调用一次
                     if not self._cleanup_called and self._cleanup_func:

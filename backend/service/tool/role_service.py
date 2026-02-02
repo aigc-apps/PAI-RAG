@@ -131,9 +131,9 @@ class RoleService:
             logger.error(f"IntegrityError when creating Role: {e.orig}")
 
             if "UniqueViolationError" in str(e.orig):
-                raise ValueError(f"角色名称 '{role.name}' 已经存在。") from e
+                raise ValueError(f"Role name '{role.name}' already exists.") from e
             else:
-                raise ValueError(f"角色创建失败: {e}") from e
+                raise ValueError(f"Role creation failed: {e}") from e
 
     async def delete_role(self, role_id: str, tenant_id: str) -> None:
         """
@@ -149,7 +149,7 @@ class RoleService:
         result = await self.session.exec(select(RoleEntity).where(RoleEntity.id == role_id, RoleEntity.tenant_id == tenant_id))
         role = result.first()
         if not role:
-            raise ValueError(f"角色 '{role_id}' 不存在。")
+            raise ValueError(f"Role '{role_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(role)
@@ -253,10 +253,10 @@ class RoleService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"用户角色 '{user_role.user_id} - {user_role.role_id}' 已经存在。"
+                    f"User role '{user_role.user_id} - {user_role.role_id}' already exists."
                 ) from e
             else:
-                raise ValueError(f"用户角色创建失败: {e}") from e
+                raise ValueError(f"User role creation failed: {e}") from e
 
     async def delete_user_role(self, user_role_id: str, tenant_id: str) -> None:
         """
@@ -272,7 +272,7 @@ class RoleService:
         result = await self.session.exec(select(UserRoleEntity).where(UserRoleEntity.id == user_role_id, UserRoleEntity.tenant_id == tenant_id))
         user_role = result.first()
         if not user_role:
-            raise ValueError(f"用户角色 '{user_role_id}' 不存在。")
+            raise ValueError(f"User role '{user_role_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(user_role)
@@ -382,10 +382,10 @@ class RoleService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"权限名称 '{permission.name}' 与角色 '{permission.role_id}' 的组合已经存在。"
+                    f"Permission name '{permission.name}' with role '{permission.role_id}' combination already exists."
                 ) from e
             else:
-                raise ValueError(f"权限创建失败: {e}") from e
+                raise ValueError(f"Permission creation failed: {e}") from e
 
     async def delete_permission(self, permission_id: str, tenant_id: str) -> None:
         """
@@ -401,7 +401,7 @@ class RoleService:
         result = await self.session.exec(select(PermissionEntity).where(PermissionEntity.id == permission_id, PermissionEntity.tenant_id == tenant_id))
         permission = result.first()
         if not permission:
-            raise ValueError(f"权限 '{permission_id}' 不存在。")
+            raise ValueError(f"Permission '{permission_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(permission)
@@ -471,4 +471,4 @@ class RoleService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when setting file permissions: {e.orig}")
-            raise ValueError(f"设置文件权限失败: {e}") from e
+            raise ValueError(f"Failed to set file permissions: {e}") from e

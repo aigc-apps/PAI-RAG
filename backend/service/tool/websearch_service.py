@@ -150,7 +150,7 @@ class WebsearchService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating/updating WebSearch config: {e.orig}")
-            raise ValueError(f"配置创建/更新失败: {e}") from e
+            raise ValueError(f"Websearch config creation/update failed: {e}") from e
 
     async def delete_websearch_config(self, config_id: str, tenant_id: str) -> None:
         """
@@ -166,7 +166,7 @@ class WebsearchService:
         result = await self.session.exec(select(WebSearchConfigEntity).where(WebSearchConfigEntity.id == config_id, WebSearchConfigEntity.tenant_id == tenant_id))
         config = result.first()
         if not config:
-            raise ValueError(f"WebSearch配置 '{config_id}' 不存在。")
+            raise ValueError(f"WebSearch config '{config_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(config)

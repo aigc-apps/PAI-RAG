@@ -1,17 +1,24 @@
 /**
- * 创建带有 X-TENANT-ID header 的 fetch wrapper
- * 用于在页面组件中发送带工作空间 ID 的请求
+ * Create fetch wrapper with X-TENANT-ID and Accept-Language headers
+ * Used for sending requests with workspace ID and locale in page components
  */
 
+import { i18n, Language } from './i18n';
+
 /**
- * 创建带有工作空间 ID header 的 fetch 函数
- * @param tenantId 工作空间 ID
- * @returns 包装后的 fetch 函数
+ * Create fetch function with workspace ID and locale headers
+ * @param tenantId Workspace ID
+ * @param locale Optional locale override (defaults to current i18n language)
+ * @returns Wrapped fetch function
  */
-export function createTenantFetch(tenantId: string) {
+export function createTenantFetch(tenantId: string, locale?: Language) {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const headers = new Headers(init?.headers);
     headers.set('X-TENANT-ID', tenantId);
+    
+    // Add Accept-Language header with current locale
+    const currentLocale = locale || i18n.getLanguage();
+    headers.set('Accept-Language', currentLocale);
     
     return fetch(input, {
       ...init,
@@ -21,27 +28,32 @@ export function createTenantFetch(tenantId: string) {
 }
 
 /**
- * 获取 tenant header 对象，用于添加到现有 headers
- * @param tenantId 工作空间 ID  
- * @returns header 对象
+ * Get tenant and locale headers object for adding to existing headers
+ * @param tenantId Workspace ID
+ * @param locale Optional locale override (defaults to current i18n language)
+ * @returns Header object
  */
-export function getTenantHeaders(tenantId: string): Record<string, string> {
+export function getTenantHeaders(tenantId: string, locale?: Language): Record<string, string> {
+  const currentLocale = locale || i18n.getLanguage();
   return {
     'X-TENANT-ID': tenantId,
+    'Accept-Language': currentLocale,
   };
 }
 
 /**
- * 合并现有 headers 和 tenant header
- * @param tenantId 工作空间 ID
- * @param existingHeaders 现有的 headers
- * @returns 合并后的 headers 对象
+ * Merge existing headers with tenant and locale headers
+ * @param tenantId Workspace ID
+ * @param existingHeaders Existing headers
+ * @param locale Optional locale override (defaults to current i18n language)
+ * @returns Merged headers object
  */
 export function mergeWithTenantHeaders(
   tenantId: string, 
-  existingHeaders?: HeadersInit
+  existingHeaders?: HeadersInit,
+  locale?: Language
 ): Record<string, string> {
-  const tenantHeaders = getTenantHeaders(tenantId);
+  const tenantHeaders = getTenantHeaders(tenantId, locale);
   
   if (!existingHeaders) {
     return tenantHeaders;

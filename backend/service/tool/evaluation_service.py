@@ -72,7 +72,7 @@ class EvaluationService:
             # Create GAIA dataset
             gaia_dataset_data = DatasetCreate(
                 name="GAIA",
-                description="GAIA评估",
+                description="GAIA Evaluation",
                 type="built-in"
             )
 
@@ -121,7 +121,7 @@ class EvaluationService:
                 result = await self.session.exec(statement)
                 default_dataset = result.first()
                 if not default_dataset:
-                    raise ValueError(f"默认评估数据集创建失败: {e}") from e
+                    raise ValueError(f"Default evaluation dataset creation failed: {e}") from e
             except Exception as e:
                 logger.error(f"Error creating default GAIA dataset: {e}")
                 await self.session.rollback()
@@ -251,10 +251,10 @@ class EvaluationService:
 
             if "UniqueViolationError" in str(e.orig):
                 raise ValueError(
-                    f"数据集名称 '{dataset_data.name}' 已经存在。"
+                    f"Dataset name '{dataset_data.name}' already exists."
                 ) from e
             else:
-                raise ValueError(f"数据集创建失败: {e}") from e
+                raise ValueError(f"Dataset creation failed: {e}") from e
 
     async def update_dataset(
         self, dataset_id: str, update_data: DatasetCreate, tenant_id: str
@@ -276,7 +276,7 @@ class EvaluationService:
         result = await self.session.exec(select(DatasetEntity).where(DatasetEntity.id == dataset_id, DatasetEntity.tenant_id == tenant_id))
         dataset = result.first()
         if not dataset:
-            raise ValueError(f"数据集 '{dataset_id}' 不存在。")
+            raise ValueError(f"Dataset '{dataset_id}' does not exist.")
 
         logger.info(f"Updating Dataset {dataset_id} with data: {update_data}")
 
@@ -312,7 +312,7 @@ class EvaluationService:
         result = await self.session.exec(select(DatasetEntity).where(DatasetEntity.id == dataset_id, DatasetEntity.tenant_id == tenant_id))
         dataset = result.first()
         if not dataset:
-            raise ValueError(f"数据集 '{dataset_id}' 不存在。")
+            raise ValueError(f"Dataset '{dataset_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         # CASCADE will handle related entities
@@ -431,7 +431,7 @@ class EvaluationService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating DatasetSample: {e.orig}")
-            raise ValueError(f"数据样本创建失败: {e}") from e
+            raise ValueError(f"Dataset sample creation failed: {e}") from e
 
     async def update_dataset_sample(
         self,
@@ -460,7 +460,7 @@ class EvaluationService:
         result = await self.session.exec(select(DatasetSampleEntity).where(DatasetSampleEntity.id == sample_id, DatasetSampleEntity.tenant_id == tenant_id))
         sample = result.first()
         if not sample:
-            raise ValueError(f"数据样本 '{sample_id}' 不存在。")
+            raise ValueError(f"Dataset sample '{sample_id}' does not exist.")
 
         logger.info(f"Updating DatasetSample {sample_id}")
 
@@ -495,7 +495,7 @@ class EvaluationService:
         result = await self.session.exec(select(DatasetSampleEntity).where(DatasetSampleEntity.id == sample_id, DatasetSampleEntity.tenant_id == tenant_id))
         sample = result.first()
         if not sample:
-            raise ValueError(f"数据样本 '{sample_id}' 不存在。")
+            raise ValueError(f"Dataset sample '{sample_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(sample)
@@ -571,7 +571,7 @@ class EvaluationService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when batch creating DatasetSamples: {e.orig}")
-            raise ValueError(f"批量创建数据样本失败: {e}") from e
+            raise ValueError(f"Batch creation of dataset samples failed: {e}") from e
 
     # ========== Experiment Operations ==========
 
@@ -658,7 +658,7 @@ class EvaluationService:
             ValueError: If sample_ids are invalid
         """
         if not experiment_data.sample_ids or len(experiment_data.sample_ids) == 0:
-            raise ValueError("没有选择任何数据集样本。")
+            raise ValueError("No dataset samples selected.")
 
         # Validate sample_ids exist and belong to dataset_id
         dataset_sample_results = await self.session.exec(
@@ -670,13 +670,13 @@ class EvaluationService:
         dataset_sample_entities = list(dataset_sample_results.all())
 
         if len(dataset_sample_entities) == 0:
-            raise ValueError(f"没有找到数据集 {dataset_id} 的数据样本。")
+            raise ValueError(f"No dataset samples found for dataset {dataset_id}.")
 
         if len(dataset_sample_entities) != len(experiment_data.sample_ids):
             missing_ids = set(experiment_data.sample_ids) - {
                 d.id for d in dataset_sample_entities
             }
-            raise ValueError(f"以下样本ID不存在: {missing_ids}")
+            raise ValueError(f"The following sample IDs do not exist: {missing_ids}")
 
         # Create experiment entity
         experiment_entity = ExperimentEntity(
@@ -719,7 +719,7 @@ class EvaluationService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating Experiment: {e.orig}")
-            raise ValueError(f"实验创建失败: {e}") from e
+            raise ValueError(f"Experiment creation failed: {e}") from e
 
     async def delete_experiment(self, experiment_id: str, tenant_id: str) -> None:
         """
@@ -736,7 +736,7 @@ class EvaluationService:
         result = await self.session.exec(select(ExperimentEntity).where(ExperimentEntity.id == experiment_id, ExperimentEntity.tenant_id == tenant_id))
         experiment = result.first()
         if not experiment:
-            raise ValueError(f"实验 '{experiment_id}' 不存在。")
+            raise ValueError(f"Experiment '{experiment_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         # CASCADE will handle related experiment samples
@@ -937,7 +937,7 @@ class EvaluationService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating RunConfig: {e.orig}")
-            raise ValueError(f"运行配置创建失败: {e}") from e
+            raise ValueError(f"Run configuration creation failed: {e}") from e
 
     async def update_run_config(
         self, config_id: str, update_data: RunConfigCreate, tenant_id: str
@@ -959,7 +959,7 @@ class EvaluationService:
         result = await self.session.exec(select(RunConfigEntity).where(RunConfigEntity.id == config_id, RunConfigEntity.tenant_id == tenant_id))
         run_config = result.first()
         if not run_config:
-            raise ValueError(f"运行配置 '{config_id}' 不存在。")
+            raise ValueError(f"Run configuration '{config_id}' does not exist.")
 
         logger.info(f"Updating RunConfig {config_id} with data: {update_data}")
 
@@ -1010,7 +1010,7 @@ class EvaluationService:
         result = await self.session.exec(select(RunConfigEntity).where(RunConfigEntity.id == config_id, RunConfigEntity.tenant_id == tenant_id))
         run_config = result.first()
         if not run_config:
-            raise ValueError(f"运行配置 '{config_id}' 不存在。")
+            raise ValueError(f"Run configuration '{config_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(run_config)
@@ -1125,7 +1125,7 @@ class EvaluationService:
 
         except IntegrityError as e:
             logger.error(f"IntegrityError when creating EvaluatorConfig: {e.orig}")
-            raise ValueError(f"评估器配置创建失败: {e}") from e
+            raise ValueError(f"Evaluator configuration creation failed: {e}") from e
 
     async def update_evaluator_config(
         self, config_id: str, update_data: EvaluatorConfigCreate, tenant_id: str
@@ -1147,7 +1147,7 @@ class EvaluationService:
         result = await self.session.exec(select(EvaluatorConfigEntity).where(EvaluatorConfigEntity.id == config_id, EvaluatorConfigEntity.tenant_id == tenant_id))
         eval_config = result.first()
         if not eval_config:
-            raise ValueError(f"评估器配置 '{config_id}' 不存在。")
+            raise ValueError(f"Evaluator configuration '{config_id}' does not exist.")
 
         logger.info(f"Updating EvaluatorConfig {config_id} with data: {update_data}")
 
@@ -1188,7 +1188,7 @@ class EvaluationService:
         result = await self.session.exec(select(EvaluatorConfigEntity).where(EvaluatorConfigEntity.id == config_id, EvaluatorConfigEntity.tenant_id == tenant_id))
         eval_config = result.first()
         if not eval_config:
-            raise ValueError(f"评估器配置 '{config_id}' 不存在。")
+            raise ValueError(f"Evaluator configuration '{config_id}' does not exist.")
 
         # Delete from database (staged, not committed)
         await self.session.delete(eval_config)

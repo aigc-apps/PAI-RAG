@@ -26,7 +26,7 @@ async def aget_faq_result(
         tenant_id=tenant_id
     )
     if not chatbot:
-        raise ValueError(f"应用 '{chatapp_id}' 不存在。")
+        raise ValueError(f"Chat app '{chatapp_id}' does not exist.")
 
     # Convert dict to FAQConfigCreate object
     kb_id = None
@@ -40,7 +40,7 @@ async def aget_faq_result(
     kb = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
 
     if not kb:
-        raise ValueError(f"FAQ知识库 '{kb_id}' 不存在。")
+        raise ValueError(f"FAQ knowledgebase '{kb_id}' does not exist.")
 
 
     records = await rag_service.aquery(
@@ -69,9 +69,9 @@ async def aget_faq_result(
         content_parts = []
         if not return_direct:
             if question_in_response and question:
-                content_parts.append(f"问题：{question}")
+                content_parts.append(f"Question: {question}")
             if answer_in_response and answer:
-                content_parts.append(f"答案：{answer}")
+                content_parts.append(f"Answer: {answer}")
 
             if content_parts:
                 record_dict['content'] = '\n'.join(content_parts)

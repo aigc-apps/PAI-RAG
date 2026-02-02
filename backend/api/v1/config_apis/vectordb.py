@@ -61,7 +61,7 @@ async def add_vector_db_config(
         await _cleanup_cached_vector_stores()
 
         return success_response(
-            data=existing_vector_config, message="更新向量数据库成功"
+            data=existing_vector_config, message="Update vector database success."
         )
     except ValueError as e:
         logger.error(f"Failed to add vector db config: {str(e)}")
@@ -70,7 +70,7 @@ async def add_vector_db_config(
     except Exception as e:
         logger.error(f"Failed to add vector db config: {traceback.format_exc()}")
         await session.rollback()
-        raise ApiException(code=500, message=f"更新向量数据库失败: {e}")
+        raise ApiException(code=500, message=f"Update vector database failed: {e}")
 
 
 @vectordb_router.get("", response_model=ResponseModel[VectorDbConfig])
@@ -81,10 +81,10 @@ async def get_vector_config(
 ):
     try:
         vector_config = await vectordb_service.get_vectordb_config(tenant_id=tenant_id)
-        return success_response(data=vector_config, message="查询向量数据库成功")
+        return success_response(data=vector_config, message="Get vector database success.")
     except Exception as e:
         logger.error(f"Failed to get vector config: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"查询向量数据库失败: {e}")
+        raise ApiException(code=500, message=f"Get vector database failed: {e}")
 
 
 @vectordb_router.post("/connection_test", response_model=ResponseModel[dict])
@@ -129,10 +129,10 @@ async def connection_test(
         results = await vector_store.aquery(vector_query)
         assert len(results.nodes) >= 1, "Query vector store failed."
 
-        return success_response(data={}, message="测试成功。")
+        return success_response(data={}, message="Connection test success.")
     except Exception as e:
-        logger.error(f"测试向量库连接失败: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"测试向量库连接失败: {e}")
+        logger.error(f"Connection test failed. \nException:{traceback.format_exc()}")
+        raise ApiException(code=400, message=f"Connection test failed: {e}")
     finally:
         # 确保无论成功还是失败都清理连接，避免连接泄漏
         if vector_store is not None:

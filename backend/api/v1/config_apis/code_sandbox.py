@@ -14,6 +14,7 @@ from service.injection import get_codesandbox_service, get_tenant_id
 from api.api_exception import ApiException
 from common.encrypt_utils import decrypt_key
 from loguru import logger
+from common.i18n import i18n
 
 
 code_sandbox_router = APIRouter()
@@ -28,7 +29,7 @@ async def add_code_sandbox_config(
 ):
     if new_code_sandbox_config.type.lower() not in ["aliyun-fc"]:
         logger.error(f"不支持的code sandbox类型{new_code_sandbox_config.type}，仅支持aliyun-fc")
-        raise ApiException(code=400, message=f"不支持的code sandbox类型{new_code_sandbox_config.type}，仅支持aliyun-fc")
+        raise ApiException(code=400, message=i18n.t("api.code_sandbox.unsupported_type", type=new_code_sandbox_config.type))
 
 
 
@@ -38,11 +39,11 @@ async def add_code_sandbox_config(
         )
         await session.commit()
         await session.refresh(code_sandbox_config)
-        return success_response(data=code_sandbox_config, message="添加代码沙盒配置成功。")
+        return success_response(data=code_sandbox_config, message=i18n.t("api.code_sandbox.add_success"))
     except ValueError as e:
         logger.error(f"Failed to add code sandbox config: {str(e)}")
         await session.rollback()
-        raise ApiException(code=400, message=f"添加代码沙盒配置失败: {e}")
+        raise ApiException(code=400, message=i18n.t("api.code_sandbox.add_failed", error=str(e)))
     except Exception as e:
         logger.error(f"Failed to add code sandbox config: {traceback.format_exc()}")
         await session.rollback()
@@ -59,7 +60,7 @@ async def list_code_sandbox_config(
         config = await codesandbox_service.get_codesandbox_config_or_create(tenant_id=tenant_id)
         if not config:
             logger.warning("No code sandbox config found.")
-            return success_response(data=CodeSandboxConfigRead(), message="查询代码沙盒配置成功。")
+            return success_response(data=CodeSandboxConfigRead(), message=i18n.t("api.code_sandbox.query_success"))
         code_sandbox_config_read = CodeSandboxConfigRead(
             type=config.type,
             aliyun_id=config.aliyun_id,
@@ -70,7 +71,7 @@ async def list_code_sandbox_config(
             api_key=decrypt_key(config.encrypted_api_key) if config.encrypted_api_key else None,
             id=config.id,
         )
-        return success_response(data=code_sandbox_config_read, message="查询代码沙盒配置成功。")
+        return success_response(data=code_sandbox_config_read, message=i18n.t("api.code_sandbox.query_success"))
     except Exception as e:
         logger.error(f"Failed to list code sandbox config: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"查询代码沙盒配置失败: {str(e)}")
+        raise ApiException(code=400, message=i18n.t("api.code_sandbox.query_failed", error=str(e)))

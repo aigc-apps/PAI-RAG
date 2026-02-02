@@ -278,7 +278,7 @@ class FAQItemService:
             return faq_item
         except Exception as e:
             logger.error(f"Error creating FAQ Item: {e}")
-            raise ValueError(f"创建FAQ条目失败: {e}") from e
+            raise ValueError(f"Creating FAQ item failed: {e}") from e
 
     async def update_faq_item(
         self, id: str, update_data: FAQItemCreate, tenant_id: str, rag_service: Optional[RagService] = None
@@ -300,7 +300,7 @@ class FAQItemService:
         """
         faq_item = await self.get_faq_item(id=id, tenant_id=tenant_id)
         if not faq_item:
-            raise ValueError(f"FAQ条目 '{id}' 不存在。")
+            raise ValueError(f"FAQ item '{id}' does not exist.")
 
         logger.info(f"Updating FAQ Item {id} with data: {update_data}")
 
@@ -345,7 +345,7 @@ class FAQItemService:
         """
         faq_item = await self.get_faq_item(id=id, tenant_id=tenant_id)
         if not faq_item:
-            raise ValueError(f"FAQ条目 '{id}' 不存在。")
+            raise ValueError(f"FAQ item '{id}' does not exist.")
 
         # Delete from knowledgebase first
         await self.delete_faq_from_knowledgebase(faq_item, tenant_id, rag_service)

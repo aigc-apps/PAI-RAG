@@ -13,7 +13,7 @@ def convert_xls_to_xlsx(input_file: BinaryIO):
         df = pd.read_excel(input_file, sheet_name=0, engine='xlrd')
         df.to_excel(output_file, engine='openpyxl', index=False)
         output_file.seek(0)
-        logger.info("✅ 转换成功: xls to xlsx")
+        logger.info("Successfully converted to xlsx")
         return output_file
     except Exception as e:
         logger.error(f"❌ Excel file conversion failed: {traceback.format_exc()}")

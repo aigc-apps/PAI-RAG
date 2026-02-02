@@ -2,6 +2,7 @@ from typing import Generic, TypeVar, Optional
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
+from common.i18n import i18n
 
 
 T = TypeVar("T")
@@ -31,6 +32,8 @@ def to_dict(obj):
         return obj
 
 
-def success_response(code=200, data=None, message="操作成功"):
+def success_response(code=200, data=None, message=None):
+    if message is None:
+        message = i18n.t("api.success.operation")
     content = {"code": code, "message": message, "data": to_dict(data)}
     return JSONResponse(status_code=code, content=jsonable_encoder(content))

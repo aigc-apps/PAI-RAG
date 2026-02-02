@@ -207,7 +207,7 @@ class PaiEvaluationClient:
         lines = content.decode('utf-8').splitlines()
 
         if not lines:
-            raise ValueError("上传文件为空，请重新上传。")
+            raise ValueError("Uploaded file is empty, please upload again.")
 
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
@@ -223,7 +223,7 @@ class PaiEvaluationClient:
                 logger.warning(f"Warning: Line {line_num} is not valid JSON, skipped. Error: {e}")
 
         if not results:
-            raise ValueError("文件解析失败, 请检查schema。")
+            raise ValueError("File parsing failed, please check schema.")
         return results
 
     async def evaluate_one_sample(self, experiment_id: str, exp_run_id: str, trace_id: str = "", tenant_id: str = None):

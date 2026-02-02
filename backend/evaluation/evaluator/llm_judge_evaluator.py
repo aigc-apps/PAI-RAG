@@ -37,10 +37,10 @@ class LLMJudgeEvaluator(BaseEvaluator):
                 content += r.delta
             return content
         except Exception as e:
-            raise RuntimeError(f"LLM 调用失败: {str(e)}")
+            raise RuntimeError(f"LLM call failed: {str(e)}")
 
     def _parse_response(self, response_text: str) -> Dict[str, Any]:
-        """解析 LLM 返回的 JSON"""
+        """Parse JSON returned by LLM"""
         import json
         import re
         try:
@@ -48,13 +48,13 @@ class LLMJudgeEvaluator(BaseEvaluator):
             match = re.search(pattern, response_text)
 
             if not match:
-                raise ValueError("未找到 JSON 对象")
+                raise ValueError("JSON object not found")
 
             json_str = match.group(0)
             result = json.loads(json_str)
 
             if not all(key in result for key in ["score", "reason", "correctness_issues"]):
-                raise ValueError("JSON 缺少必要字段")
+                raise ValueError("JSON missing required fields")
 
             return {
                 "score": result.get("score", 0.0),
@@ -65,14 +65,14 @@ class LLMJudgeEvaluator(BaseEvaluator):
         except json.JSONDecodeError as e:
             return {
                     "score": 0.0,
-                    "reason": f"JSON 解析失败: {str(e)}\n原始文本: {response_text[:200]}...",
+                    "reason": f"JSON parsing failed: {str(e)}\nOriginal text: {response_text[:200]}...",
                     "evaluator": self.name,
                     "error": str(e),
                 }
         except Exception as e:
             return {
                     "score": 0.0,
-                    "reason": f"提取失败: {str(e)}",
+                    "reason": f"Extraction failed: {str(e)}",
                     "evaluator": self.name,
                     "error": str(e),
                 }

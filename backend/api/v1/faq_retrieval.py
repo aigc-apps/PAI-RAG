@@ -23,7 +23,7 @@ faq_retrieval_router = APIRouter()
 
 class FAQRetrievalRequest(BaseModel):
     chatapp_id: str  # chatbot.id
-    query: str  # 查询内容
+    query: str  # query content
     user_id: Optional[str] = None
     retrieval_setting: Optional[RetrievalSetting] = None
     metadata_condition: Optional[MetadataFilteringCondition] = None
@@ -47,12 +47,12 @@ async def faq_retrieval(
             tenant_id=tenant_id
         )
         if not chatbot:
-            raise ApiException(code=404, message=f"应用 '{retrieval_request.chatapp_id}' 不存在。")
+            raise ApiException(code=404, message=f"Application '{retrieval_request.chatapp_id}' does not exist.")
 
         # Get FAQ config to get similarity_threshold
         faq_config = chatbot.faq_config
         if not faq_config:
-            raise ApiException(code=404, message=f"FAQ配置 '{retrieval_request.chatapp_id}' 不存在。")
+            raise ApiException(code=404, message=f"FAQ configuration '{retrieval_request.chatapp_id}' does not exist.")
 
 
         kb_id = faq_config.kb_id
@@ -60,7 +60,7 @@ async def faq_retrieval(
         kb = await knowledgebase_service.get_knowledgebase(kb_id, tenant_id=tenant_id)
 
         if not kb:
-            raise ApiException(code=404, message=f"FAQ知识库 '{kb_id}' 不存在。")
+            raise ApiException(code=404, message=f"FAQ knowledge base '{kb_id}' does not exist.")
 
         # Set default retrieval_setting if not provided, or merge with defaults
         default_similarity_threshold = faq_config.similarity_threshold if faq_config else DEFAULT_FAQ_SIMILARITY_THRESHOLD
@@ -111,14 +111,14 @@ async def faq_retrieval(
                 metadata=node.metadata,
             ))
 
-        # 使用统一的响应格式
+        # Use unified response format
         retrieval_response = NewRetrievalResponse(records=records)
-        return success_response(data=retrieval_response, message="FAQ检索成功")
+        return success_response(data=retrieval_response, message="FAQ retrieval succeeded.")
     except ApiException:
         raise
     except ValueError as e:
         logger.error(f"Failed to retrieve FAQ: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"FAQ检索失败: {e}")
+        raise ApiException(code=400, message=f"FAQ retrieval failed: {e}")
     except Exception as e:
         logger.error(f"Failed to retrieve FAQ: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"FAQ检索失败: {e}")
+        raise ApiException(code=500, message=f"FAQ retrieval failed: {e}")

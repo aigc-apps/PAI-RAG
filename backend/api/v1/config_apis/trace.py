@@ -23,7 +23,7 @@ async def set_trace_config(
 ):
     try:
         trace_config = await trace_service.create_or_update_trace_config(new_trace_config=new_trace_config, tenant_id=tenant_id)
-        return success_response(data=trace_config, message="更新追踪配置成功。")
+        return success_response(data=trace_config, message="Update trace config success.")
     except Exception as e:
         logger.error(f"Failed to create or update trace config: {str(e)}")
         raise ApiException(code=500, message=f"Failed to create or update trace config: {str(e)}")
@@ -39,8 +39,8 @@ async def get_trace_config(
         trace_config = await trace_service.get_trace_config(tenant_id=tenant_id)
         if not trace_config:
             logger.warning("No trace config found.")
-            return success_response(data=TraceModel(), message="获取追踪配置成功。")
-        return success_response(data=trace_config, message="获取追踪配置成功。")
+            return success_response(data=TraceModel(), message="Get trace config success.")
+        return success_response(data=trace_config, message="Get trace config success.")
     except Exception as e:
         logger.error(f"Failed to get trace config: {str(e)}")
         raise ApiException(code=500, message=f"Failed to get trace config: {str(e)}")
