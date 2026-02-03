@@ -107,6 +107,7 @@ class PaiLlm():
         async def gen():
             tool_calls: List[ChoiceDeltaToolCall] = []
             is_reasoning = True
+            has_reasoning_content = False
 
             if not tools:
                 kwargs.pop("tool_choice", None) # pop choice if tools not given
@@ -133,7 +134,6 @@ class PaiLlm():
                         if chunk.usage:
                             yield TextChunk(usage=chunk.usage)
                         continue
-
                     if chunk.choices[0].delta.tool_calls:
                         tool_calls = update_tool_calls(tool_calls, chunk.choices[0].delta.tool_calls)
 
@@ -144,9 +144,12 @@ class PaiLlm():
                     delta = chunk.choices[0].delta.content or ""
                     if self.enable_thinking:
                         reasoning_delta = ""
-                        if hasattr(chunk.choices[0].delta, "reasoning_content"):
+                        if hasattr(chunk.choices[0].delta, "reasoning_content") and chunk.choices[0].delta.reasoning_content:
+                            has_reasoning_content = True
                             reasoning_delta = chunk.choices[0].delta.reasoning_content or ""
                         else:
+                            if has_reasoning_content:
+                                is_reasoning = False
                             if is_reasoning and delta:
                                 end_pos = delta.find(THINK_END_TAG)
                                 if end_pos != -1:
@@ -155,6 +158,8 @@ class PaiLlm():
                                     is_reasoning = False
                                 else:
                                     reasoning_delta = delta.replace(THINK_START_TAG, "")
+                                    delta = ""
+
                         if delta or tool_calls:
                             yield TextChunk(
                                 delta=delta,

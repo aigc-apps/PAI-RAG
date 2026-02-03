@@ -4,9 +4,8 @@ import os
 import openai
 from fastapi import APIRouter, Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db.models.llm import LlmModelCreate, LlmModelRead, LlmModelEntity
+from db.models.llm import LlmModelCreate, LlmModelRead
 from db.db_context import get_db_session
-from common.encrypt_utils import encrypt_key
 from common.chat.response_model import success_response, ResponseModel
 from service.model.llm_service import LlmService
 from service.injection import get_llm_service, get_tenant_id
@@ -20,7 +19,7 @@ llm_router = APIRouter()
 
 
 
-def try_get_initial_model_from_env():
+def try_get_initial_model_from_env() -> LlmModelCreate:
     endpoint = os.environ.get("PAIRAG_RAG__LLM__endpoint", "").rstrip("/")
     if not endpoint:
         return None
@@ -36,9 +35,9 @@ def try_get_initial_model_from_env():
         models = client.models.list()
         if len(models.data) > 0:
             logger.info(f"Loaded default llm model {models.data[0].id}")
-            return LlmModelEntity.model_validate({
+            return LlmModelCreate.model_validate({
                 "base_url": endpoint,
-                "encrypted_api_key": encrypt_key(token),
+                "api_key": token,
                 "model": models.data[0].id,
                 "provider_name": "openai_like",
                 "model_name": models.data[0].id,
@@ -88,7 +87,7 @@ async def get_llm_groups(
             default_model = try_get_initial_model_from_env()
 
             if default_model:
-                await llm_service.create_llm(default_model=default_model, tenant_id=tenant_id)
+                await llm_service.create_llm(llm_data=default_model, tenant_id=tenant_id)
                 llm_entities = [default_model]
 
         grouped_results = {}

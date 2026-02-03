@@ -86,12 +86,12 @@ class Actor(BaseAgent):
                             logger.error(f"Call tool failed: {traceback.format_exc()}")
                             inner_exception = retry_err.last_attempt.exception()
                             tool_content = None
-                            tool_error = f"工具调用失败: {inner_exception}"
+                            tool_error = f"Tool call failed: {inner_exception}"
                             message_content = tool_error
                         except Exception as ex:
                             logger.error(f"Call tool failed: {traceback.format_exc()}")
                             tool_content = None
-                            tool_error = f"工具调用失败: {ex}"
+                            tool_error = f"Tool call failed: {ex}"
                             message_content = tool_error
 
                         #logger.info(f"Get tool result {tool_result}.")
@@ -194,12 +194,12 @@ class Actor(BaseAgent):
                                 logger.error(f"Call tool failed: {traceback.format_exc()}")
                                 inner_exception = retry_err.last_attempt.exception()
                                 tool_content = None
-                                tool_error = f"工具调用失败: {inner_exception}"
+                                tool_error = f"Tool call failed: {inner_exception}"
                                 message_content = tool_error
                             except Exception as ex:
                                 logger.error(f"Call tool failed: {traceback.format_exc()}")
                                 tool_content = None
-                                tool_error = f"工具调用失败: {ex}"
+                                tool_error = f"Tool call failed: {ex}"
                                 message_content = tool_error
 
                             #logger.info(f"Get tool result {tool_result}.")

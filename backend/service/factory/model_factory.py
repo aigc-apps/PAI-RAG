@@ -21,9 +21,10 @@ llm_cache = LruCache(max_size=20)
 reranker_cache = LruCache(max_size=10)
 
 
+def llm_cache_key(config: LlmModelEntity) -> str:
+    return f"llm_{config.base_url}_{config.encrypted_api_key}_{config.model}_{config.enable_thinking}_{config.vision_support}"
+
 def create_llm(config: LlmModelEntity) -> PaiLlm:
-    def llm_cache_key(config: LlmModelEntity) -> str:
-        return f"llm_{config.base_url}_{config.encrypted_api_key}_{config.model}"
 
     llm_key = llm_cache_key(config)
     llm = llm_cache.get(llm_key)
@@ -65,7 +66,7 @@ def create_openailike_llm(config: LlmModelEntity) -> OpenAILike:
 def create_embedding_model(config: EmbeddingModelEntity) -> BaseEmbedding:
     def _embed_cache_key(config: EmbeddingModelEntity) -> str:
         if config.type == EmbeddingType.OPENAI_LIKE:
-            return f"openailike_{config.endpoint}_{config.encrypted_api_key}_{config.model_name}"
+            return f"openailike_{config.endpoint}_{config.encrypted_api_key}_{config.model_name}_{config.dimension}_{config.embed_batch_size}"
         elif config.type == EmbeddingType.LOCAL:
             return f"local_{config.model_name}"
         else:
@@ -110,7 +111,7 @@ def create_embedding_model(config: EmbeddingModelEntity) -> BaseEmbedding:
 
 def create_reranker_model(config: RerankerModelEntity) -> Union[DashscopeReranker, OpenAICompatibleReranker]:
     def reranker_cache_key(config: RerankerModelEntity) -> str:
-        return f"reranker_{config.base_url}_{config.encrypted_api_key}_{config.model_name}"
+        return f"reranker_{config.base_url}_{config.encrypted_api_key}_{config.model_name}_{config.type}"
 
     reranker_key = reranker_cache_key(config)
     reranker = reranker_cache.get(reranker_key)
