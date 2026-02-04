@@ -19,6 +19,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -46,7 +53,7 @@ export default function McpConfigPage() {
     id: '',
     name: '',
     url: '',
-    type: '',
+    type: 'streamable_http',
     auth_token: '',
     need_token: false,
     enabled: true,
@@ -347,12 +354,26 @@ const updatedMCP = async () => {
                                 >
                                   {t('config.mcp.mcpTypeLabel')}
                                 </Label>
-                                <Input
-                                  id="edit_mcp_type"
-                                  value={editingConfig?.type || ''}
-                                  onChange={handleEditInputChange}
-                                  className="col-span-3"
-                                />
+                                <Select
+                                  value={editingConfig?.type || 'streamable_http'}
+                                  onValueChange={(value) =>
+                                    setEditingConfig((prev) =>
+                                      prev ? { ...prev, type: value } : prev
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className="col-span-3">
+                                    <SelectValue placeholder={t('config.mcp.mcpTypePlaceholder')} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="streamable_http">
+                                      <span suppressHydrationWarning>{t('config.mcp.streamableHttp')}</span>
+                                    </SelectItem>
+                                    <SelectItem value="sse">
+                                      <span suppressHydrationWarning>{t('config.mcp.sse')}</span>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <div className="grid grid-cols-7 items-center gap-4">
                                 <Label
@@ -464,13 +485,24 @@ const updatedMCP = async () => {
                     {t('config.mcp.mcpTypeLabel')}
                     <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    id="mcp_type"
-                    placeholder={t('config.mcp.mcpTypePlaceholder')}
+                  <Select
                     value={addFormData.type}
-                    onChange={handleInputChange}
-                    className="col-span-3"
-                  />
+                    onValueChange={(value) =>
+                      setAddFormData((prev) => ({ ...prev, type: value }))
+                    }
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder={t('config.mcp.mcpTypePlaceholder')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="streamable_http">
+                        <span suppressHydrationWarning>{t('config.mcp.streamableHttp')}</span>
+                      </SelectItem>
+                      <SelectItem value="sse">
+                        <span suppressHydrationWarning>{t('config.mcp.sse')}</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-7 items-center gap-4">
                   <Label

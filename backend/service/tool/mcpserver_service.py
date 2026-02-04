@@ -5,7 +5,6 @@ from sqlmodel import select, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
-from datetime import datetime, timezone
 from db.models.mcp import McpServerCreate, McpServerEntity
 from common.encrypt_utils import encrypt_key
 from common.chat.response_model import PagedResult
@@ -191,7 +190,6 @@ class McpserverService:
         if update_data.need_token is not None:
             mcp.need_token = update_data.need_token
 
-        mcp.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.session.add(mcp)
 
         # Flush to ensure changes are staged
