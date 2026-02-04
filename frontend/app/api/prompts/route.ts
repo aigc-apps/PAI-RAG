@@ -21,10 +21,7 @@ export async function GET() {
 
     return NextResponse.json({
       data: {
-        plan_prompt: prompts.plan_prompt || '',
-        act_prompt: prompts.act_prompt || '',
-        act_with_plan_prompt: prompts.act_with_plan_prompt || '',
-        summary_prompt: prompts.summary_prompt || '',
+        react_prompt: prompts.react_prompt  || '',
       },
     });
   } catch (error: any) {

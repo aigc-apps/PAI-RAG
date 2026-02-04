@@ -29,16 +29,6 @@ export const Assistant = () => {
   ) => {
     updateModel(model_id);
 
-    // 如果选择的是模型（不是 chatapp），重置所有配置值为默认值
-    // 这样可以避免使用之前 chatapp 保存的配置值
-    if (source !== 'chatbot') {
-      updateEnablePlanning(false);
-      updateEnableSearch(false);
-      updateEnableChatdb(false);
-      updateMcpIds([]);
-      updateKbIds([]);
-    }
-
     setoptionsVisible(source !== 'chatbot');
     console.log(source);
   };

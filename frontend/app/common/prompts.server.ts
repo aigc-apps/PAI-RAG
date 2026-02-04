@@ -5,20 +5,14 @@ import yaml from 'js-yaml';
 
 // Cache for prompts loaded from YAML
 let _promptsCache: {
-  plan_prompt: string;
-  act_prompt: string;
-  act_with_plan_prompt: string;
-  summary_prompt: string;
+  react_prompt: string;
 } | null = null;
 
 /**
  * Load prompts from YAML file (server-side only, synchronous)
  */
 export function loadPromptsFromFile(): {
-  plan_prompt: string;
-  act_prompt: string;
-  act_with_plan_prompt: string;
-  summary_prompt: string;
+  react_prompt: string;
 } {
   if (_promptsCache) {
     return _promptsCache;
@@ -37,7 +31,7 @@ export function loadPromptsFromFile(): {
       throw new Error(`Prompts file is empty or invalid: ${promptsFile}`);
     }
 
-    const requiredKeys = ['plan_prompt', 'act_prompt', 'act_with_plan_prompt', 'summary_prompt'];
+    const requiredKeys = ['react_prompt'];
     const missingKeys = requiredKeys.filter(
       (key) => !prompts[key] || typeof prompts[key] !== 'string'
     );
@@ -49,10 +43,7 @@ export function loadPromptsFromFile(): {
     }
 
     _promptsCache = {
-      plan_prompt: prompts.plan_prompt,
-      act_prompt: prompts.act_prompt,
-      act_with_plan_prompt: prompts.act_with_plan_prompt,
-      summary_prompt: prompts.summary_prompt,
+      react_prompt: prompts.react_prompt,
     };
 
     return _promptsCache;

@@ -1,6 +1,8 @@
 
 from typing import Annotated
 from llama_index.core.tools.function_tool import FunctionTool
+import json
+
 from loguru import logger
 
 
@@ -16,7 +18,7 @@ Break the request into 3–5 atomic, executable steps for worker agents. Each st
 Return ONLY a valid JSON object with a "steps" array. Use the same language as the user query. Do not include explanations, markdown, or extra text.
 """
 
-async def aget_plan_tool():
+def get_plan_tool():
     async def plan_func(
         steps: Annotated[
             list[str],
@@ -24,9 +26,9 @@ async def aget_plan_tool():
         ] = "",
     ):
         logger.info(
-            f"Plan: {steps}"
+            f"Generated plan: {steps}"
         )
-        return steps
+        return json.dumps({"steps": steps})
 
     plan_tool = FunctionTool.from_defaults(
         async_fn=plan_func,
@@ -36,25 +38,3 @@ async def aget_plan_tool():
     )
 
     return plan_tool
-
-
-RESPONSE_TOOL_DESCRIPTION = """
-Used in stage when no additional tools are needed/available.
-Generate final response to the user directly based on the context and information you have.
-"""
-
-async def aget_respond_tool():
-    async def response_func():
-        logger.info(
-            "Plan completed. Generating response..."
-        )
-        return
-
-    response_tool = FunctionTool.from_defaults(
-        async_fn=response_func,
-        name="respond-tool",
-        description=RESPONSE_TOOL_DESCRIPTION,
-        return_direct=False,
-    )
-
-    return response_tool

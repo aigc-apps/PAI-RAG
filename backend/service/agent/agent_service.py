@@ -1,22 +1,23 @@
+from agent.context import RunContext
 from common.chat.models import ChatAgentRequest
 from service.factory.model_factory import create_llm
 from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from tools.knowledgebase.faq_tool import aget_faq_tool
 from service.factory.tools import create_search_tools, create_chatdb_tools, create_codesandbox_tools
 from service.factory.mcp_factory import create_mcp_tools_async
-from tools.search.visit_webpage import aget_visit_webpage_tool
 from tools.attachments.file_reader import aget_file_reader
 from tools.attachments.multimodal_parser import aget_multimodal_parser_tool
 import os
+import traceback
 from tools.code.code_sandbox_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
 from llama_index.core.tools.function_tool import FunctionTool
 from sqlmodel.ext.asyncio.session import AsyncSession
-from agent.base import BaseAgent
-from agent.planner import PlanAgentPromptSet, Planner
+from agent.react_agent import ReactAgent
+from agent.prompts import REACT_PROMPT
 from loguru import logger
-from typing import List, Callable, Awaitable, Dict, Optional
+from typing import List, Callable, Awaitable, Dict, Optional, AsyncIterator
 from common.chat.models import MetadataFilteringCondition
-
+from contextlib import asynccontextmanager
 
 def append_text(user_message: Dict, text: str):
     assert "content" in user_message, "Message必须包含content字段"
@@ -55,16 +56,18 @@ class AgentService:
         self._get_rag_service = rag_service_getter
         self._get_file_service = file_service_getter
 
-    async def create_agent(self, chat_request: ChatAgentRequest, tenant_id: str) -> BaseAgent:
+    @asynccontextmanager
+    async def create_agent(self, chat_request: ChatAgentRequest, tenant_id: str) -> AsyncIterator[ReactAgent]:
+        sandbox_cleanup = None
         try:
             llm_service = await self._get_llm_service()
             llm_model = await llm_service.get_llm_by_model_id(chat_request.model, tenant_id=tenant_id)
 
-            prompt_set = PlanAgentPromptSet()
             chatapp_id = None
 
             if llm_model:
                 llm = create_llm(llm_model)
+                system_prompt = REACT_PROMPT
             else:
                 chatapp_service = await self._get_chatapp_service()
                 chatapp = await chatapp_service.get_chatapp_by_app_id(chat_request.model, tenant_id=tenant_id)
@@ -90,13 +93,9 @@ class AgentService:
 
                 llm = create_llm(llm_model)
 
-                if chatapp.prompts:
-                    prompt_set.plan_prompt = chatapp.prompts.get("plan", prompt_set.plan_prompt)
-                    prompt_set.act_prompt = chatapp.prompts.get("act", prompt_set.act_prompt)
-                    prompt_set.act_with_plan_prompt = chatapp.prompts.get("act_with_plan", prompt_set.act_with_plan_prompt)
-                    prompt_set.summary_prompt = chatapp.prompts.get("summary", prompt_set.summary_prompt)
+                system_prompt = chatapp.prompts.get("react", REACT_PROMPT)
 
-            tools, cleanup_tools_func = await self.aget_tools(
+            tools, sandbox_cleanup = await self.aget_tools(
                 messages=chat_request.messages,
                 enable_search=chat_request.enable_search,
                 enable_chatdb=chat_request.enable_chatdb,
@@ -110,19 +109,24 @@ class AgentService:
                 tenant_id=tenant_id,
             )
 
-            runner = Planner(
+            run_context = RunContext()
+            system_prompt = system_prompt.format(context_str=run_context.to_string())
+            agent = ReactAgent(
                 llm=llm,
-                prompt_set=prompt_set,
+                system_prompt=system_prompt,
                 tools=tools,
-                name="Planner",
-                cleanup_func=cleanup_tools_func,
             )
 
-            return runner
+            yield agent
         except Exception as ex:
-            logger.exception(f"Error in build_agent: {ex}")
+            logger.exception(f"Error in build_agent: {traceback.format_exc()}")
             raise ex
-
+        finally:
+            try:
+                if sandbox_cleanup:
+                    await sandbox_cleanup()
+            except Exception:
+                logger.exception(f"Error in agent cleanup: {traceback.format_exc()}")
 
     async def aget_tools(
         self,
@@ -163,9 +167,6 @@ class AgentService:
 
             search_tools = create_search_tools(websearch_config=websearch_config)
             tools.extend(search_tools)
-            # Add visit webpage tool
-            visit_webpage_tool = await aget_visit_webpage_tool()
-            tools.append(visit_webpage_tool)
 
         if len(mcp_ids) > 0:
             mcpserver_service = await self._get_mcpserver_service()

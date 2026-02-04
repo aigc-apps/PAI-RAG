@@ -1,9 +1,6 @@
 // Load prompts based on environment
 let prompts: {
-  plan_prompt: string;
-  act_prompt: string;
-  act_with_plan_prompt: string;
-  summary_prompt: string;
+  react_prompt: string;
 } | null = null;
 
 // Only load prompts on server-side
@@ -22,10 +19,7 @@ if (typeof window === 'undefined') {
 // Export prompts
 // On server-side: loaded from YAML file (or null if failed)
 // On client-side: empty strings (components should use getPrompts() or fetch from API)
-export const PLAN_PROMPT = prompts?.plan_prompt || '';
-export const ACT_PROMPT = prompts?.act_prompt || '';
-export const ACT_WITH_PLAN_PROMPT = prompts?.act_with_plan_prompt || '';
-export const SUMMARY_PROMPT = prompts?.summary_prompt || '';
+export const REACT_PROMPT = prompts?.react_prompt || '';
 
 // Export function to get prompts (for async usage, e.g., in client components)
 export async function getPrompts() {

@@ -47,6 +47,7 @@ export const translations: I18nConfig = {
       goAddModel: '去添加模型',
       chatApplication: '对话应用',
       operations: '操作',
+      noData: '暂无数据',
     },
 
     // User
@@ -1239,6 +1240,7 @@ export const translations: I18nConfig = {
       goAddModel: 'Add model',
       chatApplication: 'Chat Apps',
       operations: 'Operations',
+      noData: 'No data',
     },
 
 

@@ -4,7 +4,7 @@ from llama_index.core.llms.utils import parse_partial_json
 from loguru import logger
 
 
-def parse_tool_arguments(json_str: str, agent_name: str = "") -> Dict:
+def parse_tool_arguments(json_str: str) -> Dict:
     """
     解析工具参数 JSON 字符串，尝试多种方法处理格式不正确的 JSON。
 
@@ -48,8 +48,5 @@ def parse_tool_arguments(json_str: str, agent_name: str = "") -> Dict:
         else:
             raise ValueError("No valid JSON braces found")
     except Exception:
-        if agent_name:
-            logger.warning(f"[{agent_name}] Invalid JSON args: {json_str[:200]}")
-        else:
-            logger.warning(f"Invalid JSON args: {json_str[:200]}")
+        logger.warning(f"Invalid JSON args: {json_str[:200]}")
         return {}

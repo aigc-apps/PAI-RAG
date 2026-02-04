@@ -40,7 +40,7 @@ import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT, getPrompts } from '../common/prompts';
+import { REACT_PROMPT, getPrompts } from '../common/prompts';
 
 // Add import for ResettableTextarea
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
@@ -48,10 +48,7 @@ import { toast } from 'sonner';
 
 
 interface PromptConfig {
-  plan: string;
-  act: string;
-  act_with_plan: string;
-  summary: string;
+  react: string;
 }
 
 interface FAQConfig {
@@ -113,15 +110,9 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
-  const [planPrompt, setPlanPrompt] = useState('');
-  const [actPrompt, setActPrompt] = useState('');
-  const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
-  const [summarizePrompt, setSummarizePrompt] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [defaultPrompts, setDefaultPrompts] = useState({
-    plan: PLAN_PROMPT,
-    act: ACT_PROMPT,
-    act_with_plan: ACT_WITH_PLAN_PROMPT,
-    summary: SUMMARY_PROMPT,
+    react: REACT_PROMPT,
   });
 
   const router = useRouter();
@@ -133,28 +124,19 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
         const prompts = await getPrompts();
         if (prompts) {
           const newDefaults = {
-            plan: prompts.plan_prompt || PLAN_PROMPT,
-            act: prompts.act_prompt || ACT_PROMPT,
-            act_with_plan: prompts.act_with_plan_prompt || ACT_WITH_PLAN_PROMPT,
-            summary: prompts.summary_prompt || SUMMARY_PROMPT,
+            react: prompts.react_prompt || REACT_PROMPT,
           };
           setDefaultPrompts(newDefaults);
 
           if (isCreate) {
             const current = botConfig.prompts || {};
             const hasAnyPrompt = Boolean(
-              (current.plan && current.plan.trim()) ||
-              (current.act && current.act.trim()) ||
-              (current.act_with_plan && current.act_with_plan.trim()) ||
-              (current.summary && current.summary.trim())
+              (current.react && current.react.trim())
             );
             if (!hasAnyPrompt) {
               onConfigChange({
                 prompts: {
-                  plan: newDefaults.plan,
-                  act: newDefaults.act,
-                  act_with_plan: newDefaults.act_with_plan,
-                  summary: newDefaults.summary,
+                  react: newDefaults.react,
                 },
               });
             }
@@ -181,10 +163,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
     setSelectedMcpNames(mcpnames);
 
     // Initialize prompts from botConfig
-    setPlanPrompt(botConfig.prompts?.plan || defaultPrompts.plan);
-    setActPrompt(botConfig.prompts?.act || defaultPrompts.act);
-    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || defaultPrompts.act_with_plan);
-    setSummarizePrompt(botConfig.prompts?.summary || defaultPrompts.summary);
+    setSystemPrompt(botConfig.prompts?.react || defaultPrompts.react);
   }, [botConfig, kbs, mcps, defaultPrompts]);
 
   const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
@@ -311,81 +290,26 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               </DialogHeader>
 
               <div className="flex-1 overflow-hidden">
-                <Tabs defaultValue="plan_group" className="h-full flex flex-col">
-                  <TabsList className="flex space-x-2">
-                    <TabsTrigger value="plan_group">Plan & Execute</TabsTrigger>
-                    <TabsTrigger value="act_group">ReAct</TabsTrigger>
-                  </TabsList>
-
                   <div className="flex-1 overflow-hidden">
-                    <TabsContent value="plan_group" className="h-full flex flex-col">
-                      <Tabs defaultValue="plan" className="h-full flex flex-col">
-                        <TabsList className="grid grid-cols-3">
-                          <TabsTrigger value="plan">Plan</TabsTrigger>
-                          <TabsTrigger value="act_with_plan">Act</TabsTrigger>
-                          <TabsTrigger value="summary">Summary</TabsTrigger>
-                        </TabsList>
-                        <div className="flex-1 overflow-hidden mt-2">
-                          <TabsContent value="plan" className="h-full flex flex-col">
-                            <ResettableTextarea
-                              value={planPrompt}
-                              onReset={() => setPlanPrompt(defaultPrompts.plan)}
-                              onChange={(e) => setPlanPrompt(e.target.value)}
-                              defaultValue={defaultPrompts.plan}
-                              placeholder={t('apps.planPlaceholder')}
-                            />
-                          </TabsContent>
-                          <TabsContent value="act_with_plan" className="h-full flex flex-col">
-                            <ResettableTextarea
-                              value={actWithPlanPrompt}
-                              onReset={() => setActWithPlanPrompt(defaultPrompts.act_with_plan)}
-                              onChange={(e) => setActWithPlanPrompt(e.target.value)}
-                              defaultValue={defaultPrompts.act_with_plan}
-                              placeholder={t('apps.actWithPlanPlaceholder')}
-                            />
-                          </TabsContent>
-                          <TabsContent value="summary" className="h-full flex flex-col">
-                            <ResettableTextarea
-                              value={summarizePrompt}
-                              onReset={() => setSummarizePrompt(defaultPrompts.summary)}
-                              onChange={(e) => setSummarizePrompt(e.target.value)}
-                              defaultValue={defaultPrompts.summary}
-                              placeholder={t('apps.summaryPlaceholder')}
-                            />
-                          </TabsContent>
-                        </div>
-                      </Tabs>
-                    </TabsContent>
-
-                    <TabsContent value="act_group" className="h-full flex flex-col">
                       <ResettableTextarea
-                        value={actPrompt}
-                        onReset={() => setActPrompt(defaultPrompts.act)}
-                        onChange={(e) => setActPrompt(e.target.value)}
-                        defaultValue={defaultPrompts.act}
-                        placeholder={t('apps.actPlaceholder')}
+                        value={systemPrompt}
+                        onReset={() => setSystemPrompt(defaultPrompts.react)}
+                        onChange={(e) => setSystemPrompt(e.target.value)}
+                        defaultValue={defaultPrompts.react}
                       />
-                    </TabsContent>
                   </div>
-                </Tabs>
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">
                 <DialogClose asChild>
                   <Button variant="outline" onClick={() => {
-                    setActPrompt(botConfig.prompts?.act || defaultPrompts.act);
-                    setPlanPrompt(botConfig.prompts?.plan || defaultPrompts.plan);
-                    setActWithPlanPrompt(botConfig.prompts?.act_with_plan || defaultPrompts.act_with_plan);
-                    setSummarizePrompt(botConfig.prompts?.summary || defaultPrompts.summary);
+                    setSystemPrompt(botConfig.prompts?.react || defaultPrompts.react);
                   }}>{t('common.cancel')}</Button>
                 </DialogClose>
                 <Button type="button" onClick={() => {
                   onConfigChange({
                     prompts: {
-                      plan: planPrompt,
-                      act: actPrompt,
-                      act_with_plan: actWithPlanPrompt,
-                      summary: summarizePrompt,
+                      react: systemPrompt,
                     }
                   });
                   setOpenPrompt(false);
@@ -415,16 +339,6 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
           id="enable_chatdb"
           checked={botConfig.enable_chatdb || false}
           onCheckedChange={(checked) => onConfigChange({ enable_chatdb: checked })}
-        />
-      </div>
-      <div className="flex gap-6">
-        <Label htmlFor="enable_agent" className="w-[120px]">
-          {t('apps.enableAgent')}
-        </Label>
-        <Switch
-          id="enable_agent"
-          checked={botConfig.enable_agent || false}
-          onCheckedChange={(checked) => onConfigChange({ enable_agent: checked })}
         />
       </div>
       <div className="flex gap-6">

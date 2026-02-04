@@ -123,10 +123,10 @@ class PaiLlm():
                     max_tokens=self.max_tokens,
                     tools=tools or None,
                     stream_options={"include_usage": True},
-                    extra_body={"chat_template_kwargs":{"enable_thinking": self.enable_thinking}},
+                    extra_body={"chat_template_kwargs":{"enable_thinking": self.enable_thinking}, "enable_thinking": self.enable_thinking},
                     **kwargs,
                 )
-
+                logger.info(f"Calling model {self.model}, enable_thinking: {self.enable_thinking}, temperature: {self.temperature}")
                 async for chunk in response_gen:
                     chunk = cast(ChatCompletionChunk, chunk)
 
@@ -146,11 +146,11 @@ class PaiLlm():
                         reasoning_delta = ""
                         if hasattr(chunk.choices[0].delta, "reasoning_content") and chunk.choices[0].delta.reasoning_content:
                             has_reasoning_content = True
-                            reasoning_delta = chunk.choices[0].delta.reasoning_content or ""
-                        else:
+                            reasoning_delta = chunk.choices[0].delta.reasoning_content
+                        elif delta:
                             if has_reasoning_content:
                                 is_reasoning = False
-                            if is_reasoning and delta:
+                            if is_reasoning:
                                 end_pos = delta.find(THINK_END_TAG)
                                 if end_pos != -1:
                                     reasoning_delta = delta[:end_pos]
