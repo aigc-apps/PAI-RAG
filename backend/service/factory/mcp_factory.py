@@ -5,6 +5,7 @@ from tools.utils.mcp_client import BasicMCPClient
 from llama_index.tools.mcp.base import McpToolSpec
 from llama_index.core.tools.function_tool import FunctionTool
 from utils.lru_cache import LruCache
+import traceback
 from loguru import logger
 
 
@@ -21,7 +22,12 @@ async def create_mcp_tools_async(config: McpServerEntity) -> List[FunctionTool]:
     if auth_token:
         mcp_headers = {"Authorization": "Bearer " + auth_token}
 
-    mcp = BasicMCPClient(name=config.name, command_or_url=config.url, headers=mcp_headers)
+    mcp = BasicMCPClient(
+        name=config.name,
+        command_or_url=config.url,
+        headers=mcp_headers,
+        connection_type=config.type if hasattr(config, 'type') and config.type else "streamable_http"
+    )
     mcp_tool_spec = McpToolSpec(client=mcp)
     mcp_tools = []
     try:
@@ -33,9 +39,9 @@ async def create_mcp_tools_async(config: McpServerEntity) -> List[FunctionTool]:
             # 若因为碰撞报错，则建议用户修改server name 或者不用某个tool
             tool.metadata.name = f"{config.name}-{tool.metadata.name}"
             mcp_tools.append(tool)
-    except Exception as e:
+    except Exception:
         # it happens when mcp server is not reachable. just log it without throwing
-        logger.error(f"Failed to create mcp tools for {config.name}: {e}")
+        logger.error(f"Failed to create mcp tools for {config.name}: {traceback.format_exc()}")
 
     if mcp_tools:
         mcp_cache.put(mcp_key, mcp_tools)
