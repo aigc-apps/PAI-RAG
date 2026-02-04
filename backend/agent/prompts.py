@@ -31,7 +31,7 @@ def _load_prompts():
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        required_keys = ['plan_prompt', 'act_prompt', 'act_with_plan_prompt', 'summary_prompt']
+        required_keys = ['react_prompt']
         missing_keys = [key for key in required_keys if key not in prompts_data or not prompts_data[key]]
 
         if missing_keys:
@@ -40,10 +40,7 @@ def _load_prompts():
             raise ValueError(error_msg)
 
         _PROMPTS_CACHE = {
-            'plan_prompt': prompts_data['plan_prompt'],
-            'act_prompt': prompts_data['act_prompt'],
-            'act_with_plan_prompt': prompts_data['act_with_plan_prompt'],
-            'summary_prompt': prompts_data['summary_prompt'],
+            "react_prompt": prompts_data['react_prompt'],
         }
 
         logger.info(f"Loaded prompts from {prompts_file}")
@@ -60,7 +57,4 @@ def _load_prompts():
 # Load prompts on module import
 _prompts = _load_prompts()
 
-PLAN_PROMPT = _prompts['plan_prompt']
-ACT_PROMPT = _prompts['act_prompt']
-ACT_WITH_PLAN_PROMPT = _prompts['act_with_plan_prompt']
-SUMMARY_PROMPT = _prompts['summary_prompt']
+REACT_PROMPT = _prompts['react_prompt']

@@ -12,7 +12,6 @@ def check_and_handle_return_direct(
     tool_name: str,
     tool_content: Optional[str],
     tool_error: Optional[str],
-    agent_name: str = "agent",
 ) -> Optional[TextChunk]:
     """
     Check if a tool has return_direct=True and format the result accordingly.
@@ -32,7 +31,7 @@ def check_and_handle_return_direct(
     if not return_direct:
         return None
 
-    logger.info(f"[{agent_name}] Tool {tool_name} has return_direct=True, returning tool result directly.")
+    logger.info(f"Tool {tool_name} has return_direct=True, returning tool result directly.")
 
     if tool_error:
         return TextChunk(delta="Tool call failed: {tool_error}")

@@ -47,6 +47,7 @@ export const translations: I18nConfig = {
       goAddModel: '去添加模型',
       chatApplication: '对话应用',
       operations: '操作',
+      noData: '暂无数据',
     },
 
     // User
@@ -304,6 +305,7 @@ export const translations: I18nConfig = {
       namePlaceholderShort: '名称',
       rulePlaceholderShort: '规则',
       userIdPlaceholder: '输入user_id',
+      newFilterRule: '新建过滤规则',
       sourceLinkSaveFailed: '源链接保存失败',
       multipleNewItemsError: '有多于一个新建项。',
       pendingFilesLabel: '待处理的文件：',
@@ -1239,6 +1241,7 @@ export const translations: I18nConfig = {
       goAddModel: 'Add model',
       chatApplication: 'Chat Apps',
       operations: 'Operations',
+      noData: 'No data',
     },
 
 
@@ -1421,6 +1424,7 @@ export const translations: I18nConfig = {
       imagePreview: 'Image preview',
       noFiles: 'No files',
       retrievalSettingsCard: 'Retrieval settings',
+      newFilterRule: 'Add Filter Rule',
       saveChangesRetrieval: 'Saving will update knowledgebase retrieval config',
       retrievalFailed: 'Retrieval failed',
       noRelatedChunks: 'No related chunks found',

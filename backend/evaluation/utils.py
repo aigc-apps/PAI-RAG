@@ -5,9 +5,12 @@ from typing import Dict, AsyncGenerator
 
 
 def parse_function_call(json_line:dict, observation:str):
-    actions = json_line.get("actions", [])[0] if json_line else {}
-    actions["observation"] = observation
-    return actions
+    result = {}
+    if json_line and json_line.get("actions"):
+        result = json_line["actions"][0]
+
+    result["observation"] = observation
+    return result
 
 async def parse_sse_events(response: aiohttp.ClientResponse) -> AsyncGenerator[Dict, None]:
     """解析SSE格式的事件流"""

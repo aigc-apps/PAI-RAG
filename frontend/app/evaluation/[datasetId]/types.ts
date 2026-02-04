@@ -31,10 +31,7 @@ export interface RunConfig {
     enable_output_guardrail?: boolean;
     guardrail_hint?: string;
     prompts: {
-      plan: string;
-      act: string;
-      act_with_plan: string;
-      summary: string;
+      react: string;
     };
 }
 

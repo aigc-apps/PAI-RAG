@@ -154,6 +154,7 @@ export const Thread: FC<{
   const handleToolUpdate = (
     value: string[]
   ) => {
+    console.log("UPDATE OPTIONS: ", value);
     updateEnableSearch(value.includes('search'));
     updateEnablePlanning(value.includes('planning'));
     updateEnableChatdb(value.includes('chatdb'));
@@ -167,16 +168,18 @@ export const Thread: FC<{
     updateKbIds(new_kb_ids);
 
     const hasKb = activeTools.includes('kb');
+    let newActiveTools = [...activeTools];
     if (!hasKb && new_kb_ids.length > 0) {
-        setActiveTools([...activeTools, 'kb']);
+        newActiveTools = [...activeTools, 'kb'];
     }
     else if (hasKb && new_kb_ids.length === 0) {
-      setActiveTools(activeTools.filter(v => v !== 'kb'))
+      newActiveTools = activeTools.filter(v => v !== 'kb');
     }
 
     // 6. 更新本地状态
+    setActiveTools(newActiveTools);
     // 7. 同步到父组件
-    onToggleChange?.(activeTools);
+    onToggleChange?.(newActiveTools);
   };
 
   const handleMcpUpdate = (
@@ -186,16 +189,18 @@ export const Thread: FC<{
     updateMcpIds(new_mcp_ids);
 
     const hasMcp = activeTools.includes('mcp');
+    let newActiveTools = [...activeTools];
     if (!hasMcp && new_mcp_ids.length > 0) {
-        setActiveTools([...activeTools, 'mcp']);
+        newActiveTools = [...activeTools, 'mcp'];
     }
     else if (hasMcp && new_mcp_ids.length === 0) {
-      setActiveTools(activeTools.filter(v => v !== 'mcp'))
+      newActiveTools = activeTools.filter(v => v !== 'mcp');
     }
 
     // 6. 更新本地状态
+    setActiveTools(newActiveTools);
     // 7. 同步到父组件
-    onToggleChange?.(activeTools);
+    onToggleChange?.(newActiveTools);
   };
 
   const [tempActiveTools, setTempActiveTools] = useState<string[]>([]);
@@ -384,13 +389,6 @@ const Composer: FC<ComposerProps> = ({
                   value={value} // 同步 Thread 的 activeTools
                   onValueChange={onValueChange}
                 >
-                  <ToggleGroupItem
-                    value="planning"
-                    aria-label="Toggle deep planning"
-                    className="!rounded-full px-4 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
-                  >
-                    <Brain /> {t('chat.thread.deepThinking')}
-                  </ToggleGroupItem>
                   <ToggleGroupItem
                     value="search"
                     aria-label="Toggle web search"

@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { McpConfig } from '@/app/config/mcp/mcp';
 import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
-import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
+import { REACT_PROMPT } from '@/app/common/prompts';
 import { useI18n } from '@/app/providers/i18n';
 
 
@@ -46,10 +46,7 @@ export default function ViewChatApp(
         enable_output_guardrail: false,
         guardrail_hint: t('apps.guardrailHint'),
         prompts: {
-        plan: PLAN_PROMPT,
-        act: ACT_PROMPT,
-        act_with_plan: ACT_WITH_PLAN_PROMPT,
-        summary: SUMMARY_PROMPT,
+        react: REACT_PROMPT,
         }
     };
     const { appId } = use(params);

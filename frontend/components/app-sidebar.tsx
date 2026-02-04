@@ -94,7 +94,7 @@ export function AppSidebar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">{t('workspace.select')}</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs text-muted-foreground"><span suppressHydrationWarning>{t('workspace.select')}</span></DropdownMenuLabel>
               <DropdownMenuSeparator />
               {tenants.map((tenant) => (
                 <DropdownMenuItem
@@ -121,7 +121,7 @@ export function AppSidebar() {
                 onClick={() => setIsCreateDialogOpen(true)}
               >
                 <Plus className="h-3 w-3 mr-2" />
-                <span className="text-xs">{t('workspace.create')}</span>
+                <span className="text-xs" suppressHydrationWarning>{t('workspace.create')}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -131,12 +131,12 @@ export function AppSidebar() {
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>{t('workspace.createTitle')}</DialogTitle>
-              <DialogDescription>{t('workspace.createDescription')}</DialogDescription>
+              <DialogTitle suppressHydrationWarning>{t('workspace.createTitle')}</DialogTitle>
+              <DialogDescription suppressHydrationWarning>{t('workspace.createDescription')}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="tenant-id">{t('workspace.idLabel')}</Label>
+                <Label htmlFor="tenant-id" suppressHydrationWarning>{t('workspace.idLabel')}</Label>
                 <Input
                   id="tenant-id"
                   placeholder={t('workspace.idPlaceholder')}
@@ -145,7 +145,7 @@ export function AppSidebar() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tenant-name">{t('workspace.nameLabel')}</Label>
+                <Label htmlFor="tenant-name" suppressHydrationWarning>{t('workspace.nameLabel')}</Label>
                 <Input
                   id="tenant-name"
                   placeholder={t('workspace.namePlaceholder')}
@@ -156,10 +156,10 @@ export function AppSidebar() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                {t('common.cancel')}
+                <span suppressHydrationWarning>{t('common.cancel')}</span>
               </Button>
               <Button onClick={handleCreateTenant} disabled={!newTenantId.trim() || !newTenantName.trim()}>
-                {t('common.create')}
+                <span suppressHydrationWarning>{t('common.create')}</span>
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -170,24 +170,24 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/knowledgebases"><BookIcon /> {t('sidebar.knowledgebase')}</Link>
+                <Link href="/knowledgebases"><BookIcon /> <span suppressHydrationWarning>{t('sidebar.knowledgebase')}</span></Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/apps"><AppWindowIcon /> {t('sidebar.apps')}</Link>
+                <Link href="/apps"><AppWindowIcon /> <span suppressHydrationWarning>{t('sidebar.apps')}</span></Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/evaluation"><Scale /> {t('sidebar.evaluation')}</Link>
+                <Link href="/evaluation"><Scale /> <span suppressHydrationWarning>{t('sidebar.evaluation')}</span></Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton>
                     <MessageCircle />
-                    <span>{t('sidebar.conversation')}</span>
+                    <span suppressHydrationWarning>{t('sidebar.conversation')}</span>
                     <ChevronDown className="ml-auto" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
@@ -207,37 +207,37 @@ export function AppSidebar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton>
-                  <Settings /> {t('sidebar.settings')}
+                  <Settings /> <span suppressHydrationWarning>{t('sidebar.settings')}</span>
                   <ChevronUp className="ml-auto" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-50">
                 <DropdownMenuItem asChild>
-                  <Link href="/config/model"><Bot /> {t('sidebar.model')}</Link>
+                  <Link href="/config/model"><Bot /> <span suppressHydrationWarning>{t('sidebar.model')}</span></Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/vectordb"><Database /> {t('sidebar.vectordb')} </Link>
+                  <Link href="/config/vectordb"><Database /> <span suppressHydrationWarning>{t('sidebar.vectordb')}</span> </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/mcp"><PlugZap /> {t('sidebar.mcp')}</Link>
+                  <Link href="/config/mcp"><PlugZap /> <span suppressHydrationWarning>{t('sidebar.mcp')}</span></Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/search"><Search /> {t('sidebar.search')}</Link>
+                  <Link href="/config/search"><Search /> <span suppressHydrationWarning>{t('sidebar.search')}</span></Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/code_sandbox"><Code /> {t('sidebar.codeSandbox')}</Link>
+                  <Link href="/config/code_sandbox"><Code /> <span suppressHydrationWarning>{t('sidebar.codeSandbox')}</span></Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/chatdb"><LassoSelectIcon /> {t('sidebar.chatdb')} </Link>
+                  <Link href="/config/chatdb"><LassoSelectIcon /> <span suppressHydrationWarning>{t('sidebar.chatdb')}</span> </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/tracing"><SquareActivity /> {t('sidebar.tracing')}</Link>
+                  <Link href="/config/tracing"><SquareActivity /> <span suppressHydrationWarning>{t('sidebar.tracing')}</span></Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/role"><GlobeLock /> {t('sidebar.role')} </Link>
+                  <Link href="/config/role"><GlobeLock /> <span suppressHydrationWarning>{t('sidebar.role')}</span> </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/config/guardrail"><ShieldCheck /> {t('sidebar.guardrail')} </Link>
+                  <Link href="/config/guardrail"><ShieldCheck /> <span suppressHydrationWarning>{t('sidebar.guardrail')}</span> </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

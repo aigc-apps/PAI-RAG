@@ -611,14 +611,6 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                       )}
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Agentic</span>
-                      {runConfig?.enable_agent ? (
-                        <CheckCircle className="text-green-500 h-3.5 w-3.5" />
-                      ) : (
-                        <CircleXIcon className="text-red-500 h-3.5 w-3.5" />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between">
                       <span className="text-gray-500 text-xs">MCP</span>
                       <div className="mt-1">
                         {Array.isArray(runConfig?.mcp_ids) && runConfig?.mcp_ids.length > 0 ? (

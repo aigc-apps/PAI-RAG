@@ -40,8 +40,7 @@ import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { useRouter } from 'next/navigation';
 import { RunConfig } from '@/app/evaluation/[datasetId]/types';
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
-import { PLAN_PROMPT, ACT_PROMPT, ACT_WITH_PLAN_PROMPT, SUMMARY_PROMPT } from '@/app/common/prompts';
-import { set } from "date-fns";
+import { getPrompts } from '@/app/common/prompts';
 import { useI18n } from '@/app/providers/i18n';
 
 
@@ -72,6 +71,7 @@ export function RunConfigFormDialog({
 }: RunConfigFormDialogProps) {
   const router = useRouter();
   const { t } = useI18n();
+  const [defaultReactPrompt, setDefaultReactPrompt] = useState('');
   const [localConfig, setLocalConfig] = useState<RunConfig>(
     mode === 'edit' && config
       ? { ...config }
@@ -88,10 +88,7 @@ export function RunConfigFormDialog({
         enable_output_guardrail: false,
         guardrail_hint: t('apps.guardrailHint'),
         prompts: {
-          plan: PLAN_PROMPT,
-          act: ACT_PROMPT,
-          act_with_plan: ACT_WITH_PLAN_PROMPT,
-          summary: SUMMARY_PROMPT,
+          react: ''
         },
       }
   );
@@ -103,11 +100,34 @@ export function RunConfigFormDialog({
     mcps.filter(mcp => localConfig.mcp_ids.includes(mcp.id)).map(mcp => mcp.name)
   );
 
-  const [planPrompt, setPlanPrompt] = useState('');
-  const [actPrompt, setActPrompt] = useState('');
-  const [actWithPlanPrompt, setActWithPlanPrompt] = useState('');
-  const [summarizePrompt, setSummarizePrompt] = useState('');
+  const [reactPrompt, setReactPrompt] = useState('');
   const [openPrompt, setOpenPrompt] = useState(false);
+
+  // Load default prompt from API on mount
+  useEffect(() => {
+    const loadDefaultPrompt = async () => {
+      try {
+        const prompts = await getPrompts();
+        const defaultPrompt = prompts.react_prompt || '';
+        console.log('Loaded default react prompt:', defaultPrompt);
+        setDefaultReactPrompt(defaultPrompt);
+        
+        // Initialize localConfig with default prompt if in 'new' mode
+        if (mode === 'new') {
+          setLocalConfig(prev => ({
+            ...prev,
+            prompts: {
+              react: defaultPrompt
+            }
+          }));
+          setReactPrompt(defaultPrompt);
+        }
+      } catch (error) {
+        console.error('Failed to load default prompt:', error);
+      }
+    };
+    loadDefaultPrompt();
+  }, [mode]);
 
   // Reset form when config or mode changes
   useEffect(() => {
@@ -119,12 +139,10 @@ export function RunConfigFormDialog({
       setSelectedMcpNames(
         mcps.filter(mcp => config.mcp_ids.includes(mcp.id)).map(mcp => mcp.name)
       );
-      setPlanPrompt(config.prompts.plan);
-      setActPrompt(config.prompts.act);
-      setActWithPlanPrompt(config.prompts.act_with_plan);
-      setSummarizePrompt(config.prompts.summary);
-    } else {
-      setLocalConfig({
+      const prompt = config.prompts?.react || defaultReactPrompt;
+      setReactPrompt(prompt);
+    } else if (defaultReactPrompt) {
+      const newConfig = {
         id: "",
         name: "",
         model_id: "",
@@ -137,16 +155,25 @@ export function RunConfigFormDialog({
         enable_output_guardrail: false,
         guardrail_hint: t('apps.guardrailHint'),
         prompts: {
-          plan: PLAN_PROMPT,
-          act: ACT_PROMPT,
-          act_with_plan: ACT_WITH_PLAN_PROMPT,
-          summary: SUMMARY_PROMPT,
+          react: defaultReactPrompt,
         },
-      });
+      };
+      setLocalConfig(newConfig);
       setSelectedKbNames([]);
       setSelectedMcpNames([]);
+      console.log("Setting react prompt (new mode):", defaultReactPrompt);
+      setReactPrompt(defaultReactPrompt);
     }
-  }, [mode, config, kbs, mcps]);
+  }, [mode, config, kbs, mcps, defaultReactPrompt]);
+
+  // Sync reactPrompt when the prompt dialog opens
+  useEffect(() => {
+    if (openPrompt) {
+      const currentPrompt = localConfig.prompts?.react || defaultReactPrompt;
+      console.log("Syncing react prompt on dialog open:", currentPrompt);
+      setReactPrompt(currentPrompt);
+    }
+  }, [openPrompt, localConfig.prompts, defaultReactPrompt]);
 
   const handleKbSelect = (kb_id: string, kb_name: string, checked: boolean) => {
     setLocalConfig(prev => {
@@ -272,86 +299,27 @@ export function RunConfigFormDialog({
                     </DialogDescription>
                   </DialogHeader>
 
-                  <div className="flex-1 overflow-hidden">
                     {/* Outer Tabs: Plan and Act blocks */}
-                    <Tabs defaultValue="plan_group" className="h-full flex flex-col">
-                      <TabsList className="flex space-x-2">
-                        <TabsTrigger value="plan_group">{t('evaluation.planningPrompts')}</TabsTrigger>
-                        <TabsTrigger value="act_group">{t('evaluation.actionPrompts')}</TabsTrigger>
-                      </TabsList>
-
-                      <div className="flex-1 overflow-hidden mt-4">
-                        {/* Plan block content: 3 sub-tabs inside */}
-                        <TabsContent value="plan_group" className="h-full flex flex-col">
-                          <Tabs defaultValue="plan" className="h-full flex flex-col">
-                            <TabsList className="grid grid-cols-3">
-                              <TabsTrigger value="plan">{t('evaluation.planning')}</TabsTrigger>
-                              <TabsTrigger value="act_with_plan">{t('evaluation.planningAction')}</TabsTrigger>
-                              <TabsTrigger value="summary">{t('evaluation.planningSummary')}</TabsTrigger>
-                            </TabsList>
-                            <div className="flex-1 overflow-hidden mt-2">
-                              <TabsContent value="plan" className="h-full flex flex-col">
-                                <ResettableTextarea
-                                  value={planPrompt}
-                                  onReset={() => setPlanPrompt(PLAN_PROMPT)}
-                                  onChange={(e) => setPlanPrompt(e.target.value)}
-                                  defaultValue={PLAN_PROMPT}
-                                  placeholder={t('evaluation.planningPromptPlaceholder')}
-                                />
-                              </TabsContent>
-                              <TabsContent value="act_with_plan" className="h-full flex flex-col">
-                                <ResettableTextarea
-                                  value={actWithPlanPrompt}
-                                  onReset={() => setActWithPlanPrompt(ACT_WITH_PLAN_PROMPT)}
-                                  onChange={(e) => setActWithPlanPrompt(e.target.value)}
-                                  defaultValue={ACT_WITH_PLAN_PROMPT}
-                                  placeholder={t('evaluation.planActionPromptPlaceholder')}
-                                />
-                              </TabsContent>
-                              <TabsContent value="summary" className="h-full flex flex-col">
-                                <ResettableTextarea
-                                  value={summarizePrompt}
-                                  onReset={() => setSummarizePrompt(SUMMARY_PROMPT)}
-                                  onChange={(e) => setSummarizePrompt(e.target.value)}
-                                  defaultValue={SUMMARY_PROMPT}
-                                  placeholder={t('evaluation.summaryPromptPlaceholder')}
-                                />
-                              </TabsContent>
-                            </div>
-                          </Tabs>
-                        </TabsContent>
-
-                        {/* Act block content: single Textarea */}
-                        <TabsContent value="act_group" className="h-full flex flex-col">
-                          <ResettableTextarea
-                            value={actPrompt}
-                            onReset={() => setActPrompt(ACT_PROMPT)}
-                            onChange={(e) => setActPrompt(e.target.value)}
-                            defaultValue={ACT_PROMPT}
-                            placeholder={t('evaluation.actionPromptPlaceholder')}
-                          />
-                        </TabsContent>
-                      </div>
-                    </Tabs>
+                  <div className="flex-1 overflow-hidden">
+                      <ResettableTextarea
+                        value={reactPrompt}
+                        onReset={() => setReactPrompt(defaultReactPrompt)}
+                        onChange={(e) => setReactPrompt(e.target.value)}
+                        defaultValue={defaultReactPrompt}
+                      />
                   </div>
 
                   <DialogFooter className="gap-2 sm:gap-0">
                     <DialogClose asChild>
                       <Button variant="outline" onClick={() => {
-                        setActPrompt(localConfig.prompts.act);
-                        setPlanPrompt(localConfig.prompts.plan);
-                        setActWithPlanPrompt(localConfig.prompts.act_with_plan);
-                        setSummarizePrompt(localConfig.prompts.summary);
+                        setReactPrompt(localConfig.prompts.react);
                       }}>{t('common.cancel')}</Button>
                     </DialogClose>
                     <Button type="button" onClick={() => {
                       setLocalConfig((prev) => ({
                         ...prev,
                         prompts: {
-                          plan: planPrompt,
-                          act: actPrompt,
-                          act_with_plan: actWithPlanPrompt,
-                          summary: summarizePrompt,
+                          react: reactPrompt,
                         }
                       }));
                       setOpenPrompt(false);
@@ -374,22 +342,6 @@ export function RunConfigFormDialog({
                 setLocalConfig((prev) => ({
                   ...prev,
                   enable_search: checked,
-                }));
-              }}
-            />
-          </div>
-
-          {/* Agentic mode */}
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <Label htmlFor="enable_agent">{t('evaluation.agenticMode')}</Label>
-            <Switch
-              id="enable_agent"
-              className="justify-self-start"
-              checked={localConfig.enable_agent}
-              onCheckedChange={(checked) => {
-                setLocalConfig((prev) => ({
-                  ...prev,
-                  enable_agent: checked,
                 }));
               }}
             />

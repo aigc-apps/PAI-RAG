@@ -51,7 +51,7 @@ export default function EvalExpDetailsPage(
     }, [datasetId, t]);
 
     if (!evaluation) {
-        return <div className="p-6">{t('evaluation.loading')}</div>;
+        return <div className="p-6" suppressHydrationWarning>{t('evaluation.loading')}</div>;
     }
 
     return (
@@ -68,7 +68,7 @@ export default function EvalExpDetailsPage(
                                         className="px-0"
                                         onClick={() => router.push('/evaluation')}
                                     >
-                                        {t('sidebar.evaluation')}
+                                        <span suppressHydrationWarning>{t('sidebar.evaluation')}</span>
                                     </Button>
                                 </BreadcrumbLink>
                             </BreadcrumbItem>
@@ -81,7 +81,7 @@ export default function EvalExpDetailsPage(
                 </div>
                 <div className="flex justify-between items-center">
                     <div>
-                        <h1 className="text-xl font-medium">{t('evaluation.overview')}: {evaluation.name}</h1>
+                        <h1 className="text-xl font-medium"><span suppressHydrationWarning>{t('evaluation.overview')}</span>: {evaluation.name}</h1>
                         <div className="text-sm text-muted-foreground mt-1">
                             {evaluation.description}
                         </div>
@@ -96,28 +96,28 @@ export default function EvalExpDetailsPage(
                             value="datasets"
                             className="px-4"
                         >
-                            <BookOpen className="h-3.5 w-3.5" /> {t('evaluation.samples')}
+                            <BookOpen className="h-3.5 w-3.5" /> <span suppressHydrationWarning>{t('evaluation.samples')}</span>
                         </TabsTrigger>
                         <TabsTrigger
                             key="experiments"
                             value="experiments"
                             className="px-4"
                         >
-                            <FlaskConical className="h-3.5 w-3.5" />{t('evaluation.runHistory')}
+                            <FlaskConical className="h-3.5 w-3.5" /><span suppressHydrationWarning>{t('evaluation.runHistory')}</span>
                         </TabsTrigger>
                         <TabsTrigger
                             key="runconfigs"
                             value="runconfigs"
                             className="px-4"
                         >
-                            <Settings className="h-3.5 w-3.5" />{t('evaluation.runSettings')}
+                            <Settings className="h-3.5 w-3.5" /><span suppressHydrationWarning>{t('evaluation.runSettings')}</span>
                         </TabsTrigger>
                         <TabsTrigger
                             key="evalconfigs"
                             value="evalconfigs"
                             className="px-4"
                         >
-                            <Settings className="h-3.5 w-3.5" />{t('evaluation.evaluatorSettings')}
+                            <Settings className="h-3.5 w-3.5" /><span suppressHydrationWarning>{t('evaluation.evaluatorSettings')}</span>
                         </TabsTrigger>
                     </TabsList>
                     <div className="flex-1 min-h-0 overflow-hidden">

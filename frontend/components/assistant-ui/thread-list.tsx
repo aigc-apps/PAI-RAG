@@ -30,7 +30,7 @@ const ThreadListNew: FC = () => {
         onClick={() => {router.push('/')}}
       >
         <PlusIcon />
-        {t('chat.threadList.newConversation')}
+        <span suppressHydrationWarning>{t('chat.threadList.newConversation')}</span>
       </Button>
     </ThreadListPrimitive.New>
   );
@@ -56,7 +56,7 @@ const ThreadListItem: FC = () => {
 const ThreadListItemTitle: FC = () => {
   const { t } = useI18n();
   return (
-    <p className="text-sm">
+    <p className="text-sm" suppressHydrationWarning>
       <ThreadListItemPrimitive.Title fallback={t('chat.threadList.newSession')} />
     </p>
   );
