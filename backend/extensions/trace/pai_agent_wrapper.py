@@ -1,16 +1,12 @@
 from functools import wraps
 import json
 import os
-import time
 from typing import cast, Awaitable
 from common.llm.models import ChatResponseGenerator, ReasoningChunk, TextChunk
-from opentelemetry.context import attach, detach
-from opentelemetry.trace import set_span_in_context
 from opentelemetry.trace.status import Status, StatusCode
 from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
 from extensions.trace import context as trace_context
 from extensions.trace.utils import pydantic_to_dict
-
 from loguru import logger
 from extensions.trace.tracer import get_tracer
 
@@ -69,34 +65,30 @@ def pai_agent_wrapper(func):
         except Exception as e:
             logger.warning(f"Failed to extract request text: {e}")
 
-        span = get_tracer().start_span(f"invoke_agent {self.__class__.__name__.lower()}")
-        span.set_attribute(GEN_AI_OPERATION_NAME, "invoke_agent")
-        span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
+        async def wrapped_generator():
+            with get_tracer().start_as_current_span(f"invoke_agent {self.__class__.__name__.lower()}") as span:
+                span.set_attribute(GEN_AI_OPERATION_NAME, "invoke_agent")
+                span.set_attribute(INPUT_MESSAGES, json.dumps(pydantic_to_dict(messages), ensure_ascii=False))
 
-        span.set_attribute(INPUT_VALUE, request_text)
-        span.set_attribute(GEN_AI_SPAN_KIND, OpenInferenceSpanKindValues.CHAIN.value)
-        for k, v in trace_context.get_context_vars():
-            if v:
-                span.set_attribute(k, v)
+                span.set_attribute(INPUT_VALUE, request_text)
+                span.set_attribute(GEN_AI_SPAN_KIND, OpenInferenceSpanKindValues.CHAIN.value)
+                for k, v in trace_context.get_context_vars():
+                    if v:
+                        span.set_attribute(k, v)
 
-        ctx = set_span_in_context(span)
-        token = attach(ctx)
-
-        try:
-            response_gen = await func(self, *args, **kwargs)
-            response_gen = cast(ChatResponseGenerator, response_gen)
-            async def wrapped_generator():
                 final_output = ""
                 final_reasoning_content = ""
-                first_token_time = None
+
                 try:
+                    response_gen = await func(self, *args, **kwargs)
+                    response_gen = cast(ChatResponseGenerator, response_gen)
+
                     async for response in response_gen:
                         if isinstance(response, ReasoningChunk):
                             final_reasoning_content += response.reasoning_delta
                         elif isinstance(response, TextChunk):
                             final_output += response.delta
 
-                        first_token_time = first_token_time or time.time_ns()
                         yield response
 
                     span.set_status(STATUS_OK)
@@ -108,18 +100,8 @@ def pai_agent_wrapper(func):
                     span.set_attribute(OUTPUT_VALUE, final_output)
                     if final_reasoning_content:
                         span.set_attribute(REASONING_CONTENT, final_reasoning_content)
-                    span.end(end_time=first_token_time or time.time_ns())
+        return wrapped_generator()
 
-            return wrapped_generator()
-
-        except Exception as e:
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, str(e)))
-            span.end()
-            raise
-
-        finally:
-            detach(token)
 
     return wrapper
 
