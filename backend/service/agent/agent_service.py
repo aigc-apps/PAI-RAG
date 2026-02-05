@@ -68,6 +68,8 @@ class AgentService:
             if llm_model:
                 llm = create_llm(llm_model)
                 system_prompt = REACT_PROMPT
+                if chat_request.prompts:
+                    system_prompt = chat_request.prompts.get("react", REACT_PROMPT)
             else:
                 chatapp_service = await self._get_chatapp_service()
                 chatapp = await chatapp_service.get_chatapp_by_app_id(chat_request.model, tenant_id=tenant_id)
