@@ -27,7 +27,7 @@ def create_search_tools(websearch_config: WebSearchConfigEntity) -> List[Functio
 
     searcher_type = websearch_config.type
     if searcher_type == "tavily":
-        search_tool = TavilySearchTool(
+        search_client = TavilySearchTool(
             api_key=decrypt_key(websearch_config.encrypted_tavily_api_key),
             search_count=websearch_config.search_count,
         )
