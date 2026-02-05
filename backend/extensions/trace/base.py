@@ -18,7 +18,6 @@ from opentelemetry.sdk.trace.export import (
     SimpleSpanProcessor,
 )
 from opentelemetry.trace import Span
-from opentelemetry.context import attach, detach
 from openinference.instrumentation.openai import OpenAIInstrumentor
 from openinference.semconv.trace import SpanAttributes, MessageAttributes, MessageContentAttributes
 
@@ -130,16 +129,12 @@ def use_current_span(span: Span):
         @wraps(func)
         async def wrapper(*args, **kwargs) -> AsyncGenerator:
             if span and span.is_recording():
-                ctx = trace.set_span_in_context(span)
                 trace_id = format(span.get_span_context().trace_id, '032x')
-                token = attach(ctx)
-                try:
+                with trace.use_span(span, end_on_exit=False):
                     async for item in func(*args, **kwargs):
                         if hasattr(item, 'trace_id'):
                             item.trace_id = trace_id
                         yield item
-                finally:
-                    detach(token)
             else:
                 async for item in func(*args, **kwargs):
                     yield item
