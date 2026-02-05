@@ -13,7 +13,7 @@ from common.llm.llm_model import PaiLlm, ChatResponseGenerator
 from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.json_utils import parse_tool_arguments
-from agent.tool_utils import check_and_handle_return_direct
+from agent.tool_utils import check_and_handle_return_direct, smart_truncate_v2
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
@@ -50,7 +50,7 @@ async def execute_single_tool_call(
 
     try:
         tool_result = await call_tool_with_retry(async_fn, function_args)
-        tool_content = tool_result.content
+        tool_content = smart_truncate_v2(tool_result.content)
         tool_error = None
         message_content = tool_content
     except RetryError as retry_err:

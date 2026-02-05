@@ -110,7 +110,7 @@ class AliyunSearchTool:
                     host_logo = item.get("hostLogo")
                 results.append(
                     SearchResult(
-                        content=text[:800],
+                        content=text[:1000],
                         url=item.get("link"),
                         title=item.get("title") or item.get("htmlTitle"),
                         hostname=item.get("hostname"),

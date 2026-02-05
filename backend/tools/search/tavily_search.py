@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import asyncio
-
+import traceback
+from loguru import logger
 # https://docs.tavily.com/documentation/api-reference/endpoint/search#response-results-favicon
 
 try:
@@ -13,7 +14,7 @@ except ImportError as _import_error:
 
 
 DEFAULT_MAX_SEARCH_RESULT = 10
-
+DEFAULT_MAX_SEARCH_CONTENT_LENGTH=1000
 
 @dataclass
 class TavilySearchTool:
@@ -43,9 +44,25 @@ class TavilySearchTool:
             The search results.
         """
         # Tavily search API requires "Max query length is 400 characters".
-        truncated_query = query[0:400]
-        results = await self.client.search(truncated_query, max_results=self.search_count, search_depth='basic', topic='general', time_range=None, include_favicon=True)  # type: ignore[reportUnknownMemberType]
-        return {"result": results['results']}  # type: ignore[reportUnknownMemberType]
+        try:
+            truncated_query = query[:400]
+            results = await self.client.search(
+                truncated_query,
+                max_results=self.search_count,
+                search_depth='basic',
+                topic='general',
+                time_range=None,
+                include_favicon=True
+            )
+
+            search_list = results['results']
+            for item in search_list:
+                item['content'] = item['content'][:DEFAULT_MAX_SEARCH_CONTENT_LENGTH]
+        except Exception as ex:
+            logger.error(f"Error occurred during Tavily search: {traceback.format_exc()}")
+            return {"result": f"Error occurred during Tavily search: {ex}"}
+
+        return {"result": search_list}  # type: ignore[reportUnknownMemberType]
 
 if __name__ == "__main__":
     search_tool = TavilySearchTool(api_key="your-api-key")
