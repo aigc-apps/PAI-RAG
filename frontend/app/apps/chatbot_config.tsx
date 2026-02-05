@@ -301,21 +301,28 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">
-                <DialogClose asChild>
-                  <Button variant="outline" onClick={() => {
-                    setSystemPrompt(botConfig.prompts?.react || defaultPrompts.react);
-                  }}>{t('common.cancel')}</Button>
-                </DialogClose>
-                <Button type="button" onClick={() => {
-                  onConfigChange({
-                    prompts: {
-                      react: systemPrompt,
-                    }
-                  });
-                  setOpenPrompt(false);
-                }}>
-                  {t('common.save')}
-                </Button>
+                <div className="flex items-center justify-between w-full">
+                  <p className="text-sm text-muted-foreground" suppressHydrationWarning>
+                    {t('apps.promptSaveReminder')}
+                  </p>
+                  <div className="flex gap-2">
+                    <DialogClose asChild>
+                      <Button variant="outline" onClick={() => {
+                        setSystemPrompt(botConfig.prompts?.react || defaultPrompts.react);
+                      }}>{t('common.cancel')}</Button>
+                    </DialogClose>
+                    <Button type="button" onClick={async () => {
+                      onConfigChange({
+                        prompts: {
+                          react: systemPrompt,
+                        }
+                      });
+                      setOpenPrompt(false);
+                    }}>
+                      {t('common.save')}
+                    </Button>
+                  </div>
+                </div>
               </DialogFooter>
             </DialogContent>
           </Dialog>

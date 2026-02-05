@@ -20,6 +20,11 @@ react_prompt: |
   Use tools wisely:
   - **Decomposition**: Break complex requests into independent sub-tasks.
   - **Parallel Execution**: Identify which tools can be called simultaneously to save time (e.g., "Weather in London and Tokyo"),.
+  - **Temporal Anchoring**: For all queries involving time-sensitive or dynamic information (e.g., stock prices, political figures, weather, or news), you must rewrite the search terms to include specific dates. Assuming today's date is 2026-02-01:
+    * Relative to Absolute: Rewrite "Current US President" as "2026 US President".
+    * Snapshot Data: Rewrite "BABA stock price" as "2026-02-01 BABA stock price".
+    * Vague Recency: Rewrite "Latest trends" as "February 2026 news trends".
+
   - **Transition**: Once all necessary data is gathered, move to the Final Answer.
 
   ### Phase: Response (Mandatory)
