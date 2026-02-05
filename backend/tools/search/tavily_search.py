@@ -57,7 +57,6 @@ class TavilySearchTool:
 
             search_list = results['results']
             for item in search_list:
-                print("####: ", item)
                 item['content'] = item['content'][:DEFAULT_MAX_SEARCH_CONTENT_LENGTH]
         except Exception as ex:
             logger.error(f"Error occurred during Tavily search: {traceback.format_exc()}")
