@@ -8,6 +8,7 @@ from common.llm.models import TextChunk
 from loguru import logger
 
 TRUNCATE_DECAY_FACTOR = 0.8
+TRUNCATE_DECAY_FACTOR = 0.8
 
 def check_and_handle_return_direct(
     tool_obj: FunctionTool,
@@ -116,7 +117,7 @@ def truncate_json_proportionally(data, cut_size):
 
     return data
 
-def smart_truncate_v2(output: str, max_length: int = 10000) -> str:
+def smart_truncate_v2(output: str, max_length: int = 15000) -> str:
     """
     按照结构折叠和截断输出字符串
     """
