@@ -109,8 +109,26 @@ class PaiLlm():
             is_reasoning = True
             has_reasoning_content = False
 
-            if not tools:
+            # If the context is very long, remove tools to avoid hallucination.
+            total_message_length = 0
+            for msg in messages:
+                msg_content = msg.get("content", "")
+                if msg_content:
+                    if isinstance(msg_content, list):
+                        for item in msg_content:
+                            if item.get("type") == "text":
+                                total_message_length += len(item.get("text" or ""))
+                    elif isinstance(msg_content, str):
+                        total_message_length += len(msg_content)
+
+            tools_to_use = tools
+            if total_message_length >= 40000 and tools_to_use:
+                logger.warning(f"Removing {len(tools_to_use)} tool definitions to avoid hallucination.")
+                tools_to_use = None
+
+            if not tools_to_use:
                 kwargs.pop("tool_choice", None) # pop choice if tools not given
+
 
             # in case we get duplicate tool call ids, like gemini tool_id is {index}_{tool_name}
             tool_tag = uuid.uuid4().hex[:6]
@@ -121,7 +139,7 @@ class PaiLlm():
                     stream=True,
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
-                    tools=tools or None,
+                    tools=tools_to_use or None,
                     stream_options={"include_usage": True},
                     extra_body={"chat_template_kwargs":{"enable_thinking": self.enable_thinking}, "enable_thinking": self.enable_thinking},
                     **kwargs,
