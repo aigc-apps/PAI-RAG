@@ -8,7 +8,6 @@ from common.llm.models import TextChunk
 from loguru import logger
 
 TRUNCATE_DECAY_FACTOR = 0.8
-TRUNCATE_DECAY_FACTOR = 0.8
 
 def check_and_handle_return_direct(
     tool_obj: FunctionTool,
