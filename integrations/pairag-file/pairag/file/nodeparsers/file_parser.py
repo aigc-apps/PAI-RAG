@@ -60,16 +60,16 @@ DEFAULT_EXCLUDED_METADATA_KEYS = [
 ]
 
 
-
 class TableParserConfig(BaseModel):
     """Configuration for table parser (CSV/Excel). Only used when parser_type == 'table'."""
-    concat_rows: Optional[bool] = Field(default=False, description="Whether to concatenate all rows into one document")
-    row_joiner: Optional[str] = Field(default="\n", description="Separator to use for joining each row")
+    concat_rows: bool = Field(default=False, description="Whether to concatenate all rows into one document")
+    row_joiner: str = Field(default="\n", description="Separator to use for joining each row")
     header_index_max: Optional[int] = Field(default=0, description="Maximum row index to use as header")
-    format_sheet_data_to_json: Optional[bool] = Field(default=False, description="Whether to format sheet data as JSON")
+    format_sheet_data_to_json: bool = Field(default=False, description="Whether to format sheet data as JSON")
     sheet_column_filters: Optional[List[str]] = Field(default=None, description="List of column names to filter")
-    question_column_index: Optional[int] = Field(default=0, description="Column index for question (used for FAQ parser)")
-    answer_column_index: Optional[int] = Field(default=1, description="Column index for answer (used for FAQ parser)")
+    question_column_index: Optional[int] = Field(default=0, description="Index of question column")
+    answer_column_index: Optional[int] = Field(default=1, description="Index of answer column")
+
 
 
 class ChunkConfig(BaseModel):
@@ -77,7 +77,9 @@ class ChunkConfig(BaseModel):
     chunk_overlap: int = Field(default=DEFAULT_CHUNK_OVERLAP)
     parser_type: str = Field(default=DEFAULT_PARSER_TYPE)
     separator: str = Field(default=DEFAULT_PARAGRAPH_SEPARATOR)
-    table_config: Optional[TableParserConfig] = Field(default=TableParserConfig(), description="Table parser configuration (only used when parser_type == 'table')")
+    image_caption_model: Optional[str] = Field(default=None)
+    image_caption_provider_name: str = Field(default="openai_like")
+    table_config: Optional[TableParserConfig] = Field(default_factory=TableParserConfig, description="Table parser configuration (only used when parser_type == 'table')")
 
 
 class ReaderConfig(BaseModel):

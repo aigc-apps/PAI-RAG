@@ -31,7 +31,8 @@ from service.knowledgebase.rag_service import RagService
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.knowledgebase.file_service import FileService
 from service.model.embedding_service import EmbeddingService
-from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig, ChunkConfig, TableParserConfig
+from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig
+from pairag.file.nodeparsers.file_parser import ChunkConfig, TableParserConfig
 from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME, DEFAULT_FAQ_SIMILARITY_THRESHOLD
 from common.knowledgebase.types import VectorIndexRetrievalType, FileStatus
 from rag.file_item_utils import to_file_entity

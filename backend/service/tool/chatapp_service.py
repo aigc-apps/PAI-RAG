@@ -8,7 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from loguru import logger
 
 from db.models.chatbot import ChatBotCreate, ChatBotEntity
-from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig, ChunkConfig, TableParserConfig, KbEntity
+from db.models.knowledgebase.knowledgebase import KnowledgebaseCreate, RetrievalConfig, KbEntity
+from pairag.file.nodeparsers.file_parser import ChunkConfig, TableParserConfig
+
 from common.chat.response_model import PagedResult
 from common.knowledgebase.constants import FAQ_KNOWLEDGEBASE_NAME, DEFAULT_FAQ_SIMILARITY_THRESHOLD
 from common.knowledgebase.types import VectorIndexRetrievalType
