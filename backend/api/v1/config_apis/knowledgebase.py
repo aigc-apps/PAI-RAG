@@ -14,8 +14,8 @@ from db.models.knowledgebase.file import KbFileEntity
 from db.models.knowledgebase.knowledgebase import (
     KbEntity,
     KnowledgebaseCreate,
-    ChunkConfig,
 )
+from pairag.file.nodeparsers.file_parser import ChunkConfig
 from db.db_context import get_db_session
 from pairag.file.store.file_store_helper import file_store
 from common.chat.response_model import ResponseModel, success_response

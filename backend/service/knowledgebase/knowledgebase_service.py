@@ -11,9 +11,9 @@ from loguru import logger
 from db.models.knowledgebase.knowledgebase import (
     KnowledgebaseCreate,
     KbEntity,
-    ChunkConfig,
     RetrievalConfig,
 )
+from pairag.file.nodeparsers.file_parser import ChunkConfig
 from db.models.knowledgebase.file import KbFileEntity
 from common.chat.response_model import PagedResult
 from service.cache.redis_cache import cache_manager, kb_key, kb_name_key

@@ -5,7 +5,8 @@ from llama_index.core.schema import BaseNode
 import asyncio
 from tqdm import tqdm
 from db.models.knowledgebase.file import KbFileEntity
-from db.models.knowledgebase.knowledgebase import KbEntity, ChunkConfig, TableParserConfig
+from db.models.knowledgebase.knowledgebase import KbEntity
+from pairag.file.nodeparsers.file_parser import ChunkConfig, TableParserConfig
 from common.knowledgebase.types import (
     ChunkStatus,
     FileStatus,
