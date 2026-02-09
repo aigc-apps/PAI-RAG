@@ -1,6 +1,7 @@
 """Utility functions for handling tool calls and results."""
 
 import json
+import math
 from typing import Optional
 from llama_index.core.tools.function_tool import FunctionTool
 from common.llm.models import TextChunk
@@ -61,72 +62,85 @@ def check_and_handle_return_direct(
 
 
 
-def smart_truncate_v2(output: str, max_total_len: int = 10000) -> str:
+
+
+def truncate_json_proportionally(data, cut_size):
     """
-    自适应渐进式截断：
-    1. 尽量保留列表中的所有项。
-    2. 越靠后的项，其内部字符串被截断得越严重。
+    Truncates strings over 300 characters in a JSON-like object
+    proportionally based on their length.
     """
-    if not output or len(output) <= max_total_len:
+    threshold = 300
+    candidates = [] # Stores (parent_container, key_or_index, length)
+    total_len = 0
+
+    # --- Pass 1: Recursive search to find candidates and total length ---
+    def find_candidates(obj):
+        nonlocal total_len
+
+        # If it's a dictionary, iterate through keys and values
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if isinstance(value, str) and len(value) > threshold:
+                    candidates.append((obj, key, len(value)))
+                    total_len += len(value)
+                else:
+                    find_candidates(value)
+
+        # If it's a list, iterate through indices and values
+        elif isinstance(obj, list):
+            for i, value in enumerate(obj):
+                if isinstance(value, str) and len(value) > threshold:
+                    candidates.append((obj, i, len(value)))
+                    total_len += len(value)
+                else:
+                    find_candidates(value)
+
+    find_candidates(data)
+
+    # If no strings meet the criteria, return early
+    if not candidates or total_len == 0:
+        return data
+
+    # --- Pass 2: Calculate weights and truncate ---
+    for parent, key, original_len in candidates:
+        # Calculate weight: cut_size * (string_len / total_len)
+        # Using math.ceil as requested
+        reduction = math.ceil(cut_size * (original_len / total_len))
+
+        # Calculate the new length
+        new_len = max(0, original_len - reduction)
+
+        # Update the string in the actual container
+        # parent[key] accesses the dict key or list index directly
+        parent[key] = parent[key][:new_len]
+
+    return data
+
+def smart_truncate_v2(output: str, max_length: int = 10000) -> str:
+    """
+    按照结构折叠和截断输出字符串
+    """
+    if not output or len(output) <= max_length:
         return output
 
     try:
+        # 1. 尝试解析 JSON
         data = json.loads(output)
-        # 开始递归处理
-        # base_str_limit: 第一个元素允许的字符串长度
-        # decay_factor: 每一项比前一项缩减的比例
-        processed_data = _progressive_truncate_recursive(
-            data,
-            base_str_limit=2000,
-            decay_factor=1,
-        )
+    except Exception:
+        # 解析失败，直接按长度截断
+        return output[:max_length]
 
-        final_json = json.dumps(processed_data, ensure_ascii=False, indent=2)
 
-        # 最后的保险：如果还是超长，进行硬截断
-        if len(final_json) > max_total_len:
-            return final_json[:max_total_len] + "\n... [Hard Truncated]"
-        return final_json
+    length_gap =  len(output) - max_length
+    result_obj = truncate_json_proportionally(data, length_gap)
 
-    except (json.JSONDecodeError, TypeError):
-        return output[:max_total_len] + "... [Truncated]"
+    # 最终转换为字符串返回
+    try:
+        return json.dumps(result_obj, ensure_ascii=False)
+    except Exception:
+        return str(result_obj)
 
-def _progressive_truncate_recursive(obj, base_str_limit, decay_factor):
-    """
-    递归函数
-    :param item_index: 当前元素在所属列表中的索引（如果不在列表中则为0）
-    """
-    # 计算当前深度/位置下的字符串长度限制
-    # 随着 index 增加，限制呈指数级下降，最小保留 100 字符
-    current_str_limit = max(100, int(base_str_limit * decay_factor))
 
-    # 1. 处理字典
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            obj[k] = _progressive_truncate_recursive(v, base_str_limit, decay_factor)
-            decay_factor *= TRUNCATE_DECAY_FACTOR
-        return obj
-
-    # 2. 处理列表
-    elif isinstance(obj, list):
-        new_list = []
-        for i, item in enumerate(obj):
-            # 对列表里的每个 item，递归调用，并传入它自己的索引 i
-            decay_factor *= TRUNCATE_DECAY_FACTOR
-            new_list.append(_progressive_truncate_recursive(item, base_str_limit, decay_factor))
-        return new_list
-
-    # 3. 处理字符串
-    elif isinstance(obj, str):
-        if len(obj) <= current_str_limit:
-            return obj
-        else:
-            return obj[:current_str_limit] + f"...[Truncated. Total:{len(obj)} chars]"
-
-    # 4. 其他类型
-    return obj
-
-# --- 测试演示 ---
 if __name__ == "__main__":
     # 模拟一个有 20 个搜索结果的工具输出
     mock_results = {
@@ -141,7 +155,7 @@ if __name__ == "__main__":
     print(f"原始 JSON 长度: {len(raw_json)}")
 
     # 执行渐进式截断
-    truncated_json = smart_truncate_v2(raw_json, max_total_len=10000)
+    truncated_json = smart_truncate_v2(raw_json, max_length=10000)
 
     print(f"截断后 JSON 长度: {len(truncated_json)}")
 
