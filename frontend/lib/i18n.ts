@@ -34,7 +34,7 @@ export interface I18nConfig {
 
 class I18n {
   private static instance: I18n;
-  private currentLanguage: Language = 'en';
+  private currentLanguage: Language = 'zh';
   private translations: I18nConfig = { zh: {}, en: {} };
   private listeners: Set<() => void> = new Set();
 

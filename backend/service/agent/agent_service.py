@@ -95,7 +95,9 @@ class AgentService:
 
                 llm = create_llm(llm_model)
 
-                system_prompt = chatapp.prompts.get("react", REACT_PROMPT)
+                system_prompt = REACT_PROMPT
+                if chatapp.prompts:
+                    system_prompt = chatapp.prompts.get("react", REACT_PROMPT)
 
             tools, sandbox_cleanup = await self.aget_tools(
                 messages=chat_request.messages,
