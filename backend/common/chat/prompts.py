@@ -106,7 +106,7 @@ Generate a concise, 3-5 word title followed by an appropriate emoji to summarize
    - The title must accurately reflect the main topic.
    - Accuracy and clarity are prioritized over creative flair.
 3. **Format**:
-   - Length: 3 to 5 words + 1 emoji.
+   - Length: 1 emoji + 3 to 5 words .
    - Do NOT use quotation marks inside the title string.
    - Do NOT use special Markdown formatting.
 4. **Strict Output Control**:
