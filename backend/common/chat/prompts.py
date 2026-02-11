@@ -95,29 +95,33 @@ SYNTHESIZE_PROMPT = """
 """
 
 DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE = """
-### Task:
-生成一个简洁的、3-5个词的标题，并附带一个表情符号来总结聊天历史。
+### Task
+Generate a concise, 3-5 word title followed by an appropriate emoji to summarize the provided chat history.
 
-### Guidelines:
-- 标题应清楚地代表对话的主要主题或内容。
-- 使用能增强话题理解的表情符号，但避免使用引号或特殊格式。
-- 标题应以聊天的主要语言书写；如果是多语言聊天，默认使用英语。
-- 准确性优先于过度创意；保持清晰和简单。
-- 整个回复必须仅由JSON对象组成，不包含任何介绍性或总结性文字。
-- 输出必须是单一的原始JSON对象，不包含任何Markdown代码块或其他封装文本。
-- 确保没有对话文本、肯定句或解释在原始JSON输出之前或之后，否则将直接导致解析失败。
+### Guidelines
+1. **Language Adaptation**:
+   - Detect the primary language of the conversation. The title must be in that same language.
+   - If the conversation is multilingual or the primary language is ambiguous, default to **English**.
+2. **Content**:
+   - The title must accurately reflect the main topic.
+   - Accuracy and clarity are prioritized over creative flair.
+3. **Format**:
+   - Length: 1 emoji + 3 to 5 words .
+   - Do NOT use quotation marks inside the title string.
+   - Do NOT use special Markdown formatting.
+4. **Strict Output Control**:
+   - The response must consist **ONLY** of a single raw JSON object.
+   - **NO** Markdown code blocks (e.g., do not wrap in ```json).
+   - **NO** introductory text, explanations, or filler words.
+   - Any text outside the JSON object will cause a system failure.
 
-### Output:
-JSON format: {{ "title": "你总结的标题" }}
+### Output Format
+{{"title": "[emoji] + Title String"}}
 
-### 示例:
-- {{ "title": "📉 股市趋势" }},
-- {{ "title": "🍪 完美巧克力曲奇配方" }},
-- {{ "title": "🎵 音乐流媒体的演变" }},
-- {{ "title": "远程工作生产力技巧" }},
-- {{ "title": "人工智能在医疗保健中的应用" }},
-- {{ "title": "🎮 视频游戏开发洞察" }}
+### Examples
+- {{"title": "📉 Stock Market Trends"}}
+- {{"title": "🎵 Evolution of Music Streaming"}}
 
-### 聊天历史:
+### Chat History
 {chat_history}
 """
