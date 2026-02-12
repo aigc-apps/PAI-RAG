@@ -1,6 +1,6 @@
 services:
   api:
-    image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:2.0.0-20260128
+    image: mybigpai-public-registry.cn-beijing.cr.aliyuncs.com/mybigpai/pairag:2.0.0-20260212
     ports:
       - "8680:8680"
     restart: always
