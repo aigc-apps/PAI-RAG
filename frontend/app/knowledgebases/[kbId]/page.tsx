@@ -2336,7 +2336,7 @@ export default function KnowledgeBaseDetailPage(
                                 {/* 图片理解模型 */}
                                 <div className="flex gap-3 items-center">
                                   <Label htmlFor="upload-image-caption-model" className="w-[80px] text-xs">
-                                    图片理解模型
+                                    {t('knowledgebase.imageCaptionModelLabel')}
                                   </Label>
                                   <Select
                                     value={uploadChunkConfig.image_caption_model || 'DISABLED'}
