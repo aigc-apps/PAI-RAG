@@ -38,7 +38,7 @@ def update_tool_calls(
         # new tool_call (i.e., multiple tools in this turn) and
         # accumulate that new tool_call with future delta chunks
         t = tool_calls[-1]
-        if t.index != tc_delta.index:
+        if t.index != tc_delta.index or (tc_delta.id and t.id != tc_delta.id):
             # the start of a new tool call, so append to our running tool_calls list
             tool_calls.append(tc_delta)
         else:
@@ -148,12 +148,15 @@ class PaiLlm():
                 async for chunk in response_gen:
                     chunk = cast(ChatCompletionChunk, chunk)
 
-                    if not chunk.choices:
+                    if not chunk.choices or not chunk.choices[0].delta:
                         if chunk.usage:
                             yield TextChunk(usage=chunk.usage)
                         continue
+
+
                     if chunk.choices[0].delta.tool_calls:
                         tool_calls = update_tool_calls(tool_calls, chunk.choices[0].delta.tool_calls)
+                        print("tool_calls: ", tool_calls)
 
                     for tool_call in tool_calls:
                         if not tool_call.id.startswith(tool_tag):
