@@ -120,8 +120,7 @@ class ChatFlow:
         potential_intents = [ChatToolType.CHAT_LLM]
 
         tool_switches = {
-            ChatToolType.CHAT_KNOWLEDGEBASE: chat_request.chat_knowledgebase
-            or chat_request.index_name,
+            ChatToolType.CHAT_KNOWLEDGEBASE: chat_request.chat_knowledgebase,
             ChatToolType.SEARCH_WEB: chat_request.search_web,
             ChatToolType.CHAT_DB: chat_request.chat_db,
             ChatToolType.CHAT_NEWS: chat_request.chat_news,
