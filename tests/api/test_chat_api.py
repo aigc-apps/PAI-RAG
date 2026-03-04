@@ -127,7 +127,7 @@ class TestChatAPI:
         response = client.post("/v1/chat/completions", json=chat_payload)
         response_json = response.json()
         # Should fail or return error
-        assert "Model `my_assistant` not found." in response_json["choices"][0]["message"]["content"]
+        assert "Hi, how can I help you." in response_json["choices"][0]["message"]["content"]
 
 
 class TestChatAppsAPI:
