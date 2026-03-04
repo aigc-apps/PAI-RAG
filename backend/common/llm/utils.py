@@ -76,6 +76,9 @@ async def convert_gen_to_stream_chat_completions(
     guardrail_hint: str | None = None,
     checker: GuardrailChecker | None = None,
     session: AsyncSession = None,
+    user_id: str = None,
+    session_id: str = None,
+    user_message: dict = None,
 ):
     logger.info(f"convert_gen_to_stream_chat_completions: model={model}, enable_output_check={enable_output_check}, guardrail_hint={guardrail_hint}")
     if enable_output_check and not checker:
@@ -91,6 +94,7 @@ async def convert_gen_to_stream_chat_completions(
     check_tasks = []
     output_check_result = TextCheckResult()
     fail_fast = False
+    final_content = ""  # 累积完整的助手回复内容
 
     try:
         async for chunk in response_generator:
@@ -110,6 +114,7 @@ async def convert_gen_to_stream_chat_completions(
                 citations, citation_details = extract_citations(chunk)
 
             current_content += chunk.delta
+            final_content += chunk.delta
             if enable_output_check and checker and len(current_content) >= CHECK_OUTPUT_CHUNK_SIZE:
                 check_tasks.append(asyncio.create_task(checker.acheck_output(text=current_content, current_result=output_check_result)))
                 current_content = current_content[-CHECK_OUTPUT_CHUNK_OVERLAP:]
@@ -150,6 +155,23 @@ async def convert_gen_to_stream_chat_completions(
             await session.close()
             logger.info("convert_gen_to_stream_chat_completions: session closed.")
 
+        # 保存会话历史
+        if final_content and user_id and session_id and user_message:
+            try:
+                from service.cache.session_history_manager import session_history_manager
+                assistant_message = {
+                    "role": "assistant",
+                    "content": final_content,
+                }
+                await session_history_manager.save_messages(
+                    user_id=user_id,
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_message=assistant_message,
+                )
+                logger.info(f"Session history saved in stream mode for user={user_id}, session={session_id}")
+            except Exception as e:
+                logger.error(f"Failed to save session history in stream mode: {e}", exc_info=True)
 
     if not fail_fast and len(current_content) > CHECK_OUTPUT_CHUNK_OVERLAP and enable_output_check and checker:
         check_tasks.append(asyncio.create_task(checker.acheck_output(text=current_content, current_result=output_check_result)))
@@ -208,6 +230,9 @@ async def convert_gen_to_chat_completions(
     enable_output_check: bool = False,
     guardrail_hint: str | None = None,
     checker: GuardrailChecker | None = None,
+    user_id: str = None,
+    session_id: str = None,
+    user_message: dict = None,
 ):
     chat_id = get_request_id() or uuid.uuid4().hex
 
@@ -271,5 +296,23 @@ async def convert_gen_to_chat_completions(
             citation_details=citation_details,
             usage=total_usage
         )
+
+    # 保存会话历史
+    if content and user_id and session_id and user_message:
+        try:
+            from service.cache.session_history_manager import session_history_manager
+            assistant_message = {
+                "role": "assistant",
+                "content": content,
+            }
+            await session_history_manager.save_messages(
+                user_id=user_id,
+                session_id=session_id,
+                user_message=user_message,
+                assistant_message=assistant_message,
+            )
+            logger.info(f"Session history saved in non-stream mode for user={user_id}, session={session_id}")
+        except Exception as e:
+            logger.error(f"Failed to save session history in non-stream mode: {e}", exc_info=True)
 
     return message.model_dump(mode="json")

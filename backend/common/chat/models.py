@@ -101,6 +101,7 @@ class ChatAgentRequest(BaseModel):
     enable_chatdb: Optional[bool] = False
     max_steps: Optional[int] = None
     user_id: Optional[str] = None
+    session_id: Optional[str] = None  # 会话ID，用于会话历史管理
     enable_input_guardrail: Optional[bool] = False
     enable_output_guardrail: Optional[bool] = False
     guardrail_hint: Optional[str] = DEFAULT_GUARDRAIL_ADVICE
