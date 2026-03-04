@@ -84,6 +84,12 @@ async def chat(
     agent_service: AgentService = Depends(get_agent_service),
 ):
     logger.info(f"Chat agent body: {chat_request}.")
+    if not chat_request.messages:
+        return await generate_reponse(
+            chunk_gen=error_chunk_gen(message="Hi, how can I help you."),
+            model=chat_request.model,
+            stream=chat_request.stream,
+        )
 
     # 如果 messages 只有一条消息且 user_id和sesion_id 存在，尝试从 Redis 恢复历史上下文
     if chat_request.session_id and chat_request.user_id and len(chat_request.messages) == 1:
