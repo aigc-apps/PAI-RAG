@@ -8,6 +8,7 @@ from service.factory.mcp_factory import create_mcp_tools_async
 from tools.attachments.file_reader import aget_file_reader
 from tools.attachments.multimodal_parser import aget_multimodal_parser_tool
 import os
+import json
 import traceback
 from tools.code.code_sandbox_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
 from llama_index.core.tools.function_tool import FunctionTool
@@ -18,6 +19,13 @@ from loguru import logger
 from typing import List, Callable, Awaitable, Dict, Optional, AsyncIterator
 from common.chat.models import MetadataFilteringCondition
 from contextlib import asynccontextmanager
+
+# Skill system imports
+from skills.loader import (
+    ParsedSkill, SkillMetadata, build_skills_prompt_section,
+)
+from tools.generic.factory import get_tools_required_by_skills
+from db.models.skill import SkillEntity
 
 def append_text(user_message: Dict, text: str):
     assert "content" in user_message, "Message必须包含content字段"
@@ -44,6 +52,7 @@ class AgentService:
         rag_service_getter: Callable[[], Awaitable],
         file_service_getter: Callable[[], Awaitable],
         faq_config_service_getter: Callable[[], Awaitable],
+        skill_service_getter: Callable[[], Awaitable] = None,
     ):
         self.session = session
         self._get_llm_service = llm_service_getter
@@ -55,6 +64,7 @@ class AgentService:
         self._get_mcpserver_service = mcpserver_service_getter
         self._get_rag_service = rag_service_getter
         self._get_file_service = file_service_getter
+        self._get_skill_service = skill_service_getter
 
     @asynccontextmanager
     async def create_agent(self, chat_request: ChatAgentRequest, tenant_id: str) -> AsyncIterator[ReactAgent]:
@@ -113,8 +123,34 @@ class AgentService:
                 tenant_id=tenant_id,
             )
 
+            # --- Skill Integration ---
+            skills_instructions = ""
+            try:
+                enabled_skills = await self._load_enabled_skills(tenant_id)
+                if enabled_skills:
+                    # Build prompt injection block
+                    skills_instructions = build_skills_prompt_section(enabled_skills)
+
+                    # Collect all required generic tool names from skills
+                    all_skill_tool_names = []
+                    for s in enabled_skills:
+                        all_skill_tool_names.extend(s.metadata.tools)
+
+                    if all_skill_tool_names:
+                        # Add generic tools that skills need (deduplicated, skip already-added)
+                        existing_tool_names = {t.metadata.name for t in tools}
+                        generic_tools = get_tools_required_by_skills(all_skill_tool_names)
+                        new_tools = [t for t in generic_tools if t.metadata.name not in existing_tool_names]
+                        tools.extend(new_tools)
+                        logger.info(f"Added {len(new_tools)} generic tools for {len(enabled_skills)} skills.")
+            except Exception as e:
+                logger.warning(f"Failed to load skills: {e}")
+
             run_context = RunContext()
-            system_prompt = system_prompt.format(context_str=run_context.to_string())
+            system_prompt = system_prompt.format(
+                context_str=run_context.to_string(),
+                skills_instructions=skills_instructions,
+            )
             agent = ReactAgent(
                 llm=llm,
                 system_prompt=system_prompt,
@@ -284,3 +320,49 @@ class AgentService:
             append_text(user_message, reply_text)
 
         return attachment_tools, cleanup_code_sandbox
+
+    async def _load_enabled_skills(self, tenant_id: str) -> List[ParsedSkill]:
+        """Load all enabled skills for the given tenant and convert to ParsedSkill objects.
+
+        Retrieves skill entities from the database and transforms them into
+        ParsedSkill instances that can be injected into the system prompt.
+        """
+        if not self._get_skill_service:
+            return []
+
+        skill_service = await self._get_skill_service()
+        skill_entities: List[SkillEntity] = await skill_service.get_enabled_skills(tenant_id=tenant_id)
+
+        if not skill_entities:
+            return []
+
+        parsed_skills = []
+        for entity in skill_entities:
+            try:
+                # Rebuild ParsedSkill from DB entity
+                tools_list = json.loads(entity.required_tools) if entity.required_tools else []
+                env_list = json.loads(entity.required_env) if entity.required_env else []
+                prereqs = json.loads(entity.prerequisites) if entity.prerequisites else []
+                extra = json.loads(entity.metadata_json) if entity.metadata_json else {}
+
+                metadata = SkillMetadata(
+                    name=entity.name,
+                    description=entity.description or "",
+                    tools=tools_list,
+                    env=env_list,
+                    prerequisites=prereqs,
+                    skill_type=entity.skill_type,
+                    extra=extra,
+                )
+
+                parsed = ParsedSkill(
+                    metadata=metadata,
+                    content=entity.content or "",
+                    source_path=entity.folder_path or "",
+                )
+                parsed_skills.append(parsed)
+            except Exception as e:
+                logger.warning(f"Failed to parse skill entity '{entity.name}': {e}")
+
+        logger.info(f"Loaded {len(parsed_skills)} enabled skills for tenant {tenant_id}.")
+        return parsed_skills

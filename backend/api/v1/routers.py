@@ -18,6 +18,7 @@ def add_config_router(app: FastAPI):
 
     from api.v1.config_apis.code_sandbox import code_sandbox_router
     from api.v1.config_apis.chatdb import chatdb_router
+    from api.v1.config_apis.skill import skill_router
 
     from api.v1.fileview import fileview_router
 
@@ -37,6 +38,7 @@ def add_config_router(app: FastAPI):
 
     app.include_router(code_sandbox_router, prefix="/v1/config/code_sandbox")
     app.include_router(chatdb_router, prefix="/v1/config/chatdb")
+    app.include_router(skill_router, prefix="/v1/config/skills")
     app.include_router(fileview_router, prefix="/v1/fileview")
 
 

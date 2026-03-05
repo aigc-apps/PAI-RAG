@@ -44,3 +44,5 @@ react_prompt: |
   {context_str}
 
   ---
+
+  {skills_instructions}

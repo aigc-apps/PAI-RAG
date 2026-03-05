@@ -1,5 +1,5 @@
 'use client';
-import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck, Code, Users, Plus, Check, X } from 'lucide-react';
+import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck, Code, Users, Plus, Check, X, Sparkles } from 'lucide-react';
 import React, { useState } from 'react';
 import {
   Sidebar,
@@ -181,6 +181,11 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link href="/evaluation"><Scale /> <span suppressHydrationWarning>{t('sidebar.evaluation')}</span></Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <Link href="/config/skills"><Sparkles /> <span suppressHydrationWarning>{t('sidebar.skills')}</span></Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

@@ -33,6 +33,7 @@ from service.thread.thread_service import ThreadService
 from service.thread.message_service import MessageService
 from service.agent.agent_service import AgentService
 from service.model.bailian_model_service import BailianModelService
+from service.tool.skill_service import SkillService
 
 from fastapi import Header, HTTPException
 from typing import Optional
@@ -648,6 +649,9 @@ async def get_agent_service(
     async def faq_config_service_getter():
         return await get_faq_config_service(session)
 
+    async def skill_service_getter():
+        return await get_skill_service(session)
+
     return AgentService(
         session=session,
         llm_service_getter=llm_service_getter,
@@ -659,6 +663,7 @@ async def get_agent_service(
         rag_service_getter=rag_service_getter,
         file_service_getter=file_service_getter,
         faq_config_service_getter=faq_config_service_getter,
+        skill_service_getter=skill_service_getter,
     )
 
 
@@ -685,3 +690,18 @@ async def get_message_service(
         ```
     """
     return MessageService(session)
+
+
+async def get_skill_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> SkillService:
+    """
+    FastAPI dependency injection function for SkillService.
+
+    Args:
+        session: Database session (injected via Depends)
+
+    Returns:
+        SkillService instance with the injected session
+    """
+    return SkillService(session)
