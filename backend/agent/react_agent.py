@@ -150,8 +150,33 @@ class ReactAgent:
                 ]
 
                 if not valid_tool_calls:
-                    logger.info("No valid function tool calls. ReAct loop complete.")
-                    break
+                    # Log invalid tool calls for debugging
+                    logger.warning(f"No valid function tool calls. Invalid tools: {tool_calls}")
+
+                    # Add assistant message with invalid tool calls to maintain conversation state
+                    if tool_calls:
+                        invalid_tc = tool_calls[0]
+                        messages.append({
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [invalid_tc]
+                        })
+
+                        # Add error messages for invalid tool calls
+                        error_msg = f"Error: Tool '{invalid_tc.function.name}' is not available. Available tools: {list(self.tool_fn_map.keys())}"
+                        messages.append({
+                            "role": "tool",
+                            "content": error_msg,
+                            "tool_call_id": invalid_tc.id
+                        })
+
+                        # Continue the loop to let LLM correct itself
+                        logger.info("Continuing ReAct loop to allow LLM to correct invalid tool calls.")
+                        continue
+                    else:
+                        # No tool calls at all but also no content - this shouldn't happen
+                        logger.info("No valid function tool calls and no content. ReAct loop complete.")
+                        break
 
                 # Yield tool calls before execution
                 for tool_call in valid_tool_calls:
