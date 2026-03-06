@@ -30,6 +30,10 @@ def update_tool_calls(
         return tool_calls
 
     tc_delta = tool_calls_delta[0]
+    for tc_delta_to_append in tool_calls_delta[1:]:
+        if tc_delta_to_append.index == tc_delta.index:
+            tc_delta.function.arguments += tc_delta_to_append.function.arguments or ""
+            tc_delta.function.name += tc_delta_to_append.function.name or ""
 
     if len(tool_calls) == 0:
         tool_calls.append(tc_delta)
@@ -38,7 +42,7 @@ def update_tool_calls(
         # new tool_call (i.e., multiple tools in this turn) and
         # accumulate that new tool_call with future delta chunks
         t = tool_calls[-1]
-        if t.index != tc_delta.index or (tc_delta.id and t.id != tc_delta.id):
+        if t.index != tc_delta.index:
             # the start of a new tool call, so append to our running tool_calls list
             tool_calls.append(tc_delta)
         else:
@@ -156,7 +160,6 @@ class PaiLlm():
 
                     if chunk.choices[0].delta.tool_calls:
                         tool_calls = update_tool_calls(tool_calls, chunk.choices[0].delta.tool_calls)
-                        print("tool_calls: ", tool_calls)
 
                     for tool_call in tool_calls:
                         if not tool_call.id.startswith(tool_tag):
