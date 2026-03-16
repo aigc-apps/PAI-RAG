@@ -17,7 +17,7 @@ from celery import Celery
 import os
 import asyncio
 from typing import List
-from db.redis_conn import REDIS_URL
+from db.redis_conn import REDIS_URL, REDIS_CLUSTER_MODE, REDIS_CLUSTER_NODES
 from utils.format_logging import format_logging
 from loguru import logger
 
@@ -26,11 +26,34 @@ logger.info("Worker starting up...")
 
 DEFAULT_BROKER = REDIS_URL
 
+# Log the Redis configuration for debugging
+logger.info(f"Redis Cluster Mode: {REDIS_CLUSTER_MODE}")
+logger.info(f"Redis URL scheme: {REDIS_URL.split('://')[0] if '://' in REDIS_URL else 'unknown'}")
+
+# For Redis Cluster, disable result backend as it has compatibility issues with kombu
+# Tasks in this worker are fire-and-forget, so result backend is not needed
+result_backend = None if REDIS_CLUSTER_MODE else (os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER)
+
 app = Celery(
     "PAIRAG_WORKER",
     broker=os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER,
-    backend=os.environ.get("PAIRAG_BROKER") or DEFAULT_BROKER,
+    backend=result_backend,
 )
+
+# Configure Celery for Redis Cluster if needed
+if REDIS_CLUSTER_MODE:
+    cluster_config = {
+        'task_ignore_result': True,
+    }
+    # Add startup nodes for cluster discovery
+    if REDIS_CLUSTER_NODES and len(REDIS_CLUSTER_NODES) > 0:
+        cluster_config['broker_transport_options'] = {
+            'startup_nodes': [
+                {'host': host, 'port': port}
+                for host, port in REDIS_CLUSTER_NODES
+            ],
+        }
+    app.conf.update(**cluster_config)
 
 async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachment: bool = False, tenant_id: str = None) -> None:
     from rag.kb_file_client import kb_file_client
