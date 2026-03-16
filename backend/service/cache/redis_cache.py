@@ -65,10 +65,11 @@ class RedisClusterCache(BaseCache):
             )
         return self._client
 
-    def _build_key(self, key: str) -> str:
+    def _build_key(self, key: str, namespace: str = None) -> str:
         """Build the full key with namespace prefix."""
-        if self.namespace:
-            return f"{self.namespace}:{key}"
+        ns = namespace if namespace is not None else self.namespace
+        if ns:
+            return f"{ns}:{key}"
         return key
 
     async def _get(self, key: str, **kwargs) -> Any:
@@ -85,7 +86,8 @@ class RedisClusterCache(BaseCache):
         ttl = ttl or self.ttl
         serialized = self.serializer.dumps(value)
         if ttl:
-            await client.setex(full_key, ttl, serialized)
+            # Redis SETEX requires integer TTL
+            await client.setex(full_key, int(ttl), serialized)
         else:
             await client.set(full_key, serialized)
         return True

@@ -71,7 +71,6 @@ def _load_redis_config() -> RedisConfig:
     port_str = os.getenv("REDIS_PORT", "6379")
     port = int(port_str) if port_str else 6379
     password = os.getenv("REDIS_PASSWORD", "")
-    username = os.getenv("REDIS_USER", "")
     db_str = os.getenv("REDIS_DB")
     db = int(db_str) if db_str else 0
     ssl = os.getenv("REDIS_SSL", "false").lower() == "true"
@@ -88,7 +87,6 @@ def _load_redis_config() -> RedisConfig:
         host=host,
         port=port,
         password=password,
-        username=username,
         db=db,
         ssl=ssl,
         cluster_mode=cluster_mode,
@@ -133,15 +131,19 @@ def compose_cluster_url(
     """
     Compose Redis Cluster URL for Celery.
 
-    Celery supports Redis Cluster via: redis+cluster://[username:password@]host:port[,host2:port2,...]
+    Celery/kombu requires a single host:port in the URL.
+    Additional nodes should be passed via broker_transport_options.
     Note: Redis Cluster does not support DB selection (always uses DB 0)
 
-    Returns URL format: redis[s]+cluster://[username:password@]host1:port1,host2:port2,...
+    Returns URL format: redis[s]+cluster://[username:password@]host:port
     """
     scheme = "rediss+cluster" if ssl else "redis+cluster"
 
-    # Build hosts string
-    hosts_str = ",".join(f"{host}:{port}" for host, port in nodes)
+    # Use only the first node in the URL (kombu can't parse multiple hosts in URL)
+    if nodes:
+        host, port = nodes[0]
+    else:
+        host, port = "localhost", 6379
 
     # Handle authentication
     if username and password:
@@ -151,8 +153,7 @@ def compose_cluster_url(
     else:
         auth = ""
 
-    # Note: Redis Cluster URL doesn't include path (no DB selection)
-    return f"{scheme}://{auth}{hosts_str}"
+    return f"{scheme}://{auth}{host}:{port}"
 
 
 def get_redis_url(config: RedisConfig) -> str:
@@ -182,7 +183,6 @@ REDIS_CONFIG = _load_redis_config()
 REDIS_HOST = REDIS_CONFIG.host
 REDIS_PORT = REDIS_CONFIG.port
 REDIS_PASSWORD = REDIS_CONFIG.password
-REDIS_USER = REDIS_CONFIG.username
 REDIS_DB = REDIS_CONFIG.db
 REDIS_SSL = REDIS_CONFIG.ssl
 REDIS_CLUSTER_MODE = REDIS_CONFIG.cluster_mode
