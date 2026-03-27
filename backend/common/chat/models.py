@@ -52,6 +52,7 @@ class DocRecord(BaseModel):
     score: float  # 结果与查询的相关性分数，范围：0~1
     title: str  # 文档标题
     metadata: Dict  # 包含数据源中文档的元数据属性及其值
+    url: Optional[str] = None  # 文档的URL
 
 
 class NewRetrievalResponse(BaseModel):

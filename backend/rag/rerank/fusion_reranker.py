@@ -46,10 +46,12 @@ def weight_rerank(
         f"and {len(dense_result.nodes)} dense nodes"
          f"weight_reranker: Merging with weights vector_weight={vector_weight}"
     )
-    ids=list(text_result.ids)
-    nodes=list(text_result.nodes)
-    scores=[score * text_weight for score in text_result.similarities]
-    id_index_map = {id: i for i, id in enumerate(text_result.ids)}
+    ids=list(text_result.ids or [])
+    nodes=list(text_result.nodes or [])
+    scores = []
+    if text_result.similarities:
+        scores = [score * text_weight for score in text_result.similarities]
+    id_index_map = {id_: i for i, id_ in enumerate(ids)}
 
 
     # 合并dense score

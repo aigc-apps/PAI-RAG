@@ -5,6 +5,7 @@ dotenv.load_dotenv()
 
 from loguru import logger
 from sqlmodel import SQLModel
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -77,15 +78,29 @@ def get_async_db_angine():
 
         return async_engine
     else:
-        local_db_url = os.getenv("SQLITE_URL", "sqlite+aiosqlite:///./tmp/sqlite/local.db")
-        logger.warning(
-            f"Created db engine with sqlite {local_db_url}."
-        )
+        db_url = os.getenv("SQLITE_URL", "sqlite+aiosqlite:///./tmp/sqlite/local.db")
+        logger.info(f"Creating SQLite engine: {db_url}")
+
         async_engine = create_async_engine(
-            local_db_url,
-            echo=False,  # 输出执行的 SQL 语句
-            connect_args={"check_same_thread": False},  # SQLite 特有参数
+            db_url,
+            echo=False,
+            connect_args={
+                "check_same_thread": False,
+                "timeout": 60,
+            },
+            pool_pre_ping=True,
         )
+
+        @event.listens_for(async_engine.sync_engine, "connect")
+        def _set_pragma(dbapi_conn, _):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=60000")
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA cache_size=-64000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
+            logger.info("SQLite PRAGMA applied: WAL, busy_timeout=60s")
 
         return async_engine
 
