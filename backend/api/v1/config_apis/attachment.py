@@ -128,6 +128,7 @@ async def create_attachment_file(
     tenant_id: str = Depends(get_tenant_id),
 ):
     knowledgebase = None
+    kb_id = None
     try:
         knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(ATTACHMENT_KNOWLEDGEBASE_NAME, tenant_id=tenant_id)
         default_embedding_config = await embedding_service.get_default_embedding(tenant_id=tenant_id)
@@ -141,36 +142,37 @@ async def create_attachment_file(
                 embedding_model=default_embedding_config.model_id,
             )
             knowledgebase = await knowledgebase_service.create_knowledgebase(kb_data=kb_create, tenant_id=tenant_id)
+            kb_id = knowledgebase.id
             try:
                 await session.commit() # commit for background worker to use the knowledgebase id
                 await session.refresh(knowledgebase)  # refresh to ensure knowledgebase is persisted
                 # Write cache after successful commit to ensure consistency
                 await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
-                logger.info(f"Created default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+                logger.info(f"Created default_attachments knowledgebase {kb_id} for tenant {tenant_id}")
             except IntegrityError:
                 # Handle race condition: another request may have created the knowledgebase concurrently
                 await session.rollback()
-                if knowledgebase:
-                    await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_create.name)
+                await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, kb_create.name)
 
                 knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(ATTACHMENT_KNOWLEDGEBASE_NAME, tenant_id=tenant_id)
                 if not knowledgebase:
                     raise ApiException(code=500, message=i18n.t("api.attachment.create_kb_failed"))
-                logger.info(f"Retrieved existing default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+                kb_id = knowledgebase.id
+                logger.info(f"Retrieved existing default_attachments knowledgebase {kb_id} for tenant {tenant_id}")
             except Exception:
                 await session.rollback()
-                if knowledgebase:
-                    await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_create.name)
+                await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, kb_create.name)
                 raise
         else:
-            logger.info(f"Found existing default_attachments knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+            kb_id = knowledgebase.id
+            logger.info(f"Found existing default_attachments knowledgebase {kb_id} for tenant {tenant_id}")
 
         import app.worker as background_worker
 
-        file_items = await upload_form_files_async(kb_id=knowledgebase.id, files=[file], tenant_id=tenant_id)
+        file_items = await upload_form_files_async(kb_id=kb_id, files=[file], tenant_id=tenant_id)
 
         file_item = file_items[0]
-        file_entity = await file_service.get_file(kb_id=knowledgebase.id, file_id=file_id, tenant_id=tenant_id)
+        file_entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
 
         if not file_entity:
             file_entity = to_file_entity(file_item=file_item)
@@ -181,7 +183,7 @@ async def create_attachment_file(
             file_entity.file_size = file_item.file_size
             file_entity.file_version = file_version
             file_entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity, tenant_id=tenant_id)
+            await file_service.update_file(file_id=file_entity.id, kb_id=kb_id, new_entity=file_entity, tenant_id=tenant_id)
 
         session.add(file_entity)
         await session.commit()
@@ -218,7 +220,7 @@ async def create_attachment_file(
     file_entity.failed_reason = i18n.t("api.attachment.timeout_reason", filename=file_item.file_name)
     try:
         if knowledgebase:
-            await file_service.update_file(file_id=file_entity.id, kb_id=knowledgebase.id, new_entity=file_entity, tenant_id=tenant_id)
+            await file_service.update_file(file_id=file_entity.id, kb_id=kb_id, new_entity=file_entity, tenant_id=tenant_id)
             await session.commit()
     except Exception:
         logger.error(f"Failed to save file {file_item.file_name} to database: {traceback.format_exc()}")

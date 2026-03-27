@@ -42,22 +42,24 @@ async def create_knowledgebase(
     knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
     knowledgebase = None
+    kb_id = None
     try:
         knowledgebase = await rag_service.create_knowledgebase(kb_data=kb_data, tenant_id=tenant_id)
+        kb_id = knowledgebase.id
         await session.commit()
         await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
         return success_response(data=knowledgebase, message=i18n.t("api.knowledgebase.create_success"))
     except ValueError as e:
         logger.error(f"Failed to create knowledge base.\nValueError:{e}")
         await session.rollback()
-        if knowledgebase:
-            await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_data.name)
+        if kb_id:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, kb_data.name)
         raise ApiException(code=400, message=str(e))
     except Exception as e:
         logger.exception(f"Failed to create knowledge base.\nException:{traceback.format_exc()}")
         await session.rollback()
-        if knowledgebase:
-            await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_data.name)
+        if kb_id:
+            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, kb_data.name)
         raise ApiException(code=400, message=i18n.t("api.knowledgebase.create_failed", error=str(e)))
 
 @knowledgebase_router.get("")
@@ -120,32 +122,55 @@ async def update_knowledgebase(
 ):
     knowledgebase = None
     old_kb_name = None
+    new_kb_name = None  # ← 新增：提前保存名称
+
     try:
+        # ===== 1. commit 前取出旧名称 =====
         old_kb = await knowledgebase_service.get_knowledgebase(kb_id, tenant_id)
         if old_kb:
-            old_kb_name = old_kb.name
+            old_kb_name = str(old_kb.name)  # ← 立即取出，转为纯字符串
 
-        knowledgebase = await rag_service.update_knowledgebase(kb_id=kb_id, update_data=update_data, tenant_id=tenant_id)
+        # ===== 2. 更新 =====
+        knowledgebase = await rag_service.update_knowledgebase(
+            kb_id=kb_id, update_data=update_data, tenant_id=tenant_id
+        )
+
+        # ===== 3. commit 前取出新名称 =====
+        new_kb_name = str(knowledgebase.name)  # ← commit 前取出！
+
+        # ===== 4. commit（之后 ORM 属性全部 expired）=====
         await session.commit()
+
+        # ===== 5. commit 后只用纯字符串，不碰 ORM 属性 =====
         await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
-        return success_response(data=knowledgebase, message=i18n.t("api.knowledgebase.update_success"))
+
+        return success_response(
+            data=knowledgebase,
+            message=i18n.t("api.knowledgebase.update_success"),
+        )
+
     except ValueError as e:
         logger.error(f"Failed to update knowledge base.\nValueError:{e}")
         await session.rollback()
-        if knowledgebase:
-            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, knowledgebase.name)
-        elif old_kb_name:
-            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, old_kb_name)
+        # ===== 6. rollback 后也只用纯字符串 =====
+        kb_name = new_kb_name or old_kb_name
+        if kb_name:
+            await knowledgebase_service.delete_cache_on_rollback(
+                kb_id, tenant_id, kb_name  # ← 用字符串，不用 .name
+            )
         raise ApiException(code=400, message=str(e))
+
     except Exception as e:
         logger.error(f"Failed to update knowledge base.\nException:{traceback.format_exc()}")
         await session.rollback()
-        if knowledgebase:
-            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, knowledgebase.name)
-        elif old_kb_name:
-            await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, old_kb_name)
-        raise ApiException(code=400, message=i18n.t("api.knowledgebase.update_failed", error=str(e)))
-
+        kb_name = new_kb_name or old_kb_name
+        if kb_name:
+            await knowledgebase_service.delete_cache_on_rollback(
+                kb_id, tenant_id, kb_name  # ← 用字符串，不用 .name
+            )
+        raise ApiException(code=400, message=i18n.t(
+            "api.knowledgebase.update_failed", error=str(e)
+        ))
 
 @knowledgebase_router.delete("/{kb_id}")
 async def delete_knowledgebase(

@@ -199,6 +199,7 @@ async def upload_faq_files(
         kb_name = f"{app_id}_{FAQ_KNOWLEDGEBASE_NAME}"
         knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
         default_embedding_config = await embedding_service.get_default_embedding(tenant_id=tenant_id)
+        kb_id = None
 
         if not knowledgebase:
             logger.info(f"Creating FAQ knowledgebase {kb_name} for tenant {tenant_id}")
@@ -230,26 +231,27 @@ async def upload_faq_files(
                 retrieval_config=retrieval_config,
             )
             knowledgebase = await knowledgebase_service.create_knowledgebase(kb_data=kb_create, tenant_id=tenant_id)
+            kb_id = knowledgebase.id
             try:
                 await session.commit()
                 await session.refresh(knowledgebase)
                 await knowledgebase_service.write_cache_after_commit(knowledgebase, tenant_id)
-                logger.info(f"Created FAQ knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+                logger.info(f"Created FAQ knowledgebase {kb_id} for tenant {tenant_id}")
             except IntegrityError:
                 await session.rollback()
-                if knowledgebase:
-                    await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_create.name)
+                await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, kb_create.name)
                 knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
                 if not knowledgebase:
                     raise ApiException(code=500, message=i18n.t("api.faq.kb_create_failed"))
-                logger.info(f"Retrieved existing FAQ knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+                kb_id = knowledgebase.id
+                logger.info(f"Retrieved existing FAQ knowledgebase {kb_id} for tenant {tenant_id}")
             except Exception:
                 await session.rollback()
-                if knowledgebase:
-                    await knowledgebase_service.delete_cache_on_rollback(knowledgebase.id, tenant_id, kb_create.name)
+                await knowledgebase_service.delete_cache_on_rollback(kb_id, tenant_id, kb_create.name)
                 raise
         else:
-            logger.info(f"Found existing FAQ knowledgebase {knowledgebase.id} for tenant {tenant_id}")
+            kb_id = knowledgebase.id
+            logger.info(f"Found existing FAQ knowledgebase {kb_id} for tenant {tenant_id}")
 
 
 

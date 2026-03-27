@@ -43,6 +43,7 @@ async def retrieval(
                 content=node.content,
                 score=node.score,
                 title=node.title,
+                url=node.url,
                 metadata=node.metadata,
             ))
         # 使用统一的响应格式

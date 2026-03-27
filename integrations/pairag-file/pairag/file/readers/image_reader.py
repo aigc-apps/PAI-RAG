@@ -35,7 +35,7 @@ class ImageReader(BaseReader):
         docs = []
         if not self.image_caption_tool:
             logger.warning(
-                "Will not parse image files when image store is not configured."
+                "Will not parse image files when image caption model is not configured."
             )
             return docs
         try:
