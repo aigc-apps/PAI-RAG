@@ -22,7 +22,7 @@ reranker_cache = LruCache(max_size=10)
 
 
 def llm_cache_key(config: LlmModelEntity) -> str:
-    return f"llm_{config.base_url}_{config.encrypted_api_key}_{config.model}_{config.enable_thinking}_{config.vision_support}"
+    return f"llm_{config.base_url}_{config.encrypted_api_key}_{config.model}_{config.enable_thinking}_{config.vision_support}_{config.temperature}_{config.context_window}"
 
 def create_llm(config: LlmModelEntity) -> PaiLlm:
     llm_key = llm_cache_key(config)
