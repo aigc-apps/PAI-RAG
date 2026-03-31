@@ -9,7 +9,7 @@ import './globals.css';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 import { LanguageSwitcher } from '@/components/language-switcher';
-import { MyChatRuntimeProvider } from './runtime/usePaiChatThreadRuntime';
+import { MyChatRuntimeProvider, TokenUsageProvider } from './runtime/usePaiChatThreadRuntime';
 import { ChatProvider } from './providers/chat';
 import { TenantProvider } from './providers/tenant';
 import { I18nProvider } from './providers/i18n';
@@ -47,23 +47,25 @@ export default function RootLayout({
         <I18nProvider>
           <TenantProvider>
             <ChatProvider>
-              <MyChatRuntimeProvider>
-                <SidebarProvider>
-                  <AppSidebar />
-                  <SidebarInset>
-                    <div className="h-screen w-full overflow-hidden flex flex-col">
-                      <header className="flex items-center justify-between shrink-0 w-full px-2 pt-3 pb-1">
-                        <SidebarTrigger className="w-10" />
-                        <LanguageSwitcher />
-                      </header>
-                      <div className="w-full flex-1 min-h-0 pt-0">
-                        {children}
-                        <Toaster duration={3000} position="top-right" />
+              <TokenUsageProvider>
+                <MyChatRuntimeProvider>
+                  <SidebarProvider>
+                    <AppSidebar />
+                    <SidebarInset>
+                      <div className="h-screen w-full overflow-hidden flex flex-col">
+                        <header className="flex items-center justify-between shrink-0 w-full px-2 pt-3 pb-1">
+                          <SidebarTrigger className="w-10" />
+                          <LanguageSwitcher />
+                        </header>
+                        <div className="w-full flex-1 min-h-0 pt-0">
+                          {children}
+                          <Toaster duration={3000} position="top-right" />
+                        </div>
                       </div>
-                    </div>
-                  </SidebarInset>
-                </SidebarProvider>
-              </MyChatRuntimeProvider>
+                    </SidebarInset>
+                  </SidebarProvider>
+                </MyChatRuntimeProvider>
+              </TokenUsageProvider>
             </ChatProvider>
           </TenantProvider>
         </I18nProvider>

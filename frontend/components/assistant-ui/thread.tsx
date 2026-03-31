@@ -4,9 +4,10 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useMessage,
 } from '@assistant-ui/react';
 import type { FC } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -19,7 +20,6 @@ import {
   DatabaseIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { CollapsibleReasoning } from "@/components/assistant-ui/reasoning-ui";
@@ -38,6 +38,9 @@ import { KbModal, KbSelection } from '@/app/knowledgebases/kbmodal';
 import { useChatOptions } from '@/app/providers/chat';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
+import { useTokenUsage } from '@/app/runtime/usePaiChatThreadRuntime';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
 export const Thread: FC<{
   onToggleChange?: (options: string[]) => void;
@@ -540,12 +543,21 @@ const AssistantMessage: FC = () => {
 
 const AssistantActionBar: FC = () => {
   const { t } = useI18n();
+  const { getUsage, version } = useTokenUsage();
+  const message = useMessage();
+  const messageId = message.id;
+  const isRunning = message.status?.type === 'running';
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const usage = useMemo(() => messageId ? getUsage(messageId) : undefined, [messageId, getUsage, version]);
+  
+  // Only hide toolbar when THIS message is being generated
+  if (isRunning) {
+    return null;
+  }
+
   return (
     <ActionBarPrimitive.Root
-      hideWhenRunning
-      autohide="not-last"
-      autohideFloat="single-branch"
-      className="flex flex-row items-center text-muted-foreground gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
+      className="flex flex-row items-center text-muted-foreground gap-1 col-start-3 row-start-2 -ml-1"
     >
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip={t('chat.thread.copy')}>
@@ -562,6 +574,26 @@ const AssistantActionBar: FC = () => {
           <RefreshCwIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Reload>
+      {/* Token usage badge - rightmost position */}
+      {usage && usage.total_tokens > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="secondary" className="ml-1 text-xs font-normal cursor-default">
+              {usage.total_tokens} tokens
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            <div className="flex flex-col gap-1">
+              <div>Prompt: {usage.prompt_tokens}</div>
+              <div>Generation: {usage.completion_tokens}</div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <Badge variant="outline" className="ml-1 text-xs font-normal cursor-default text-muted-foreground">
+          - tokens
+        </Badge>
+      )}
     </ActionBarPrimitive.Root>
   );
 };
