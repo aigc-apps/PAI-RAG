@@ -38,6 +38,7 @@ interface LlmConfig {
   enabled: boolean;
   vision_support: boolean;
   enable_thinking: boolean; // 是否支持思考模式
+  temperature: number; // 温度参数，控制生成文本的随机性
 }
 
 export const LLMModelDialog: FC<LLMModelDialogProps> = ({
@@ -229,6 +230,34 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                 setLlm((prev) => ({ ...prev, enable_thinking: checked }))
               }
             />
+          </div>
+        </div>
+        <div className="grid gap-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="temperature" className="text-right">
+              {t('config.model.temperature')}
+            </Label>
+            <div className="col-span-3">
+              <Input
+                id="temperature"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="0.1"
+                value={llm?.temperature ?? 0.1}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setLlm((prev) => ({
+                    ...prev,
+                    temperature: isNaN(val) || val < 0 ? 0.1 : val,
+                  }));
+                }}
+                className="w-[80px]"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('config.model.temperatureHint')}
+              </p>
+            </div>
           </div>
         </div>
 

@@ -29,6 +29,7 @@ export interface LlmConfig {
   enabled: boolean;
   vision_support: boolean;
   enable_thinking: boolean; // 是否支持思考模式
+  temperature: number; // 温度参数
 }
 
 const newllmconfig: LlmConfig = {
@@ -42,6 +43,7 @@ const newllmconfig: LlmConfig = {
   max_context: 0,
   enabled: true,
   enable_thinking: false, // 默认支持思考模式
+  temperature: 0.1, // 默认温度 0.1
 };
 export default function LlmConfigPage() {
   const { t } = useI18n();
