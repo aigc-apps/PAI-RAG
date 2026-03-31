@@ -21,12 +21,69 @@ import {
   unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
   type unstable_RemoteThreadListAdapter,
 } from '@assistant-ui/react';
-import { ReactNode, useMemo } from 'react'; // ✅ 添加这一行以导入 ReactNode
+import { ReactNode, useMemo, createContext, useContext, useState, useCallback } from 'react';
 import { useChatOptions } from '../providers/chat';
 import { UploadAttachmentAdapter } from '../attachments/upload_attachment_adapter';
 import { v4 as uuidv4 } from 'uuid';
 import { AssistantStream, PlainTextDecoder } from "assistant-stream";
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+
+// Token usage context for tracking message token counts
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
+export interface MessageTokenUsage {
+  messageId: string;
+  usage: TokenUsage;
+}
+
+interface TokenUsageContextType {
+  usageMap: Map<string, TokenUsage>;
+  setUsage: (messageId: string, usage: TokenUsage) => void;
+  getUsage: (messageId: string) => TokenUsage | undefined;
+  version: number; // Used to trigger re-renders when usage changes
+}
+
+const TokenUsageContext = createContext<TokenUsageContextType | null>(null);
+
+export const useTokenUsage = () => {
+  const context = useContext(TokenUsageContext);
+  if (!context) {
+    return { usageMap: new Map(), setUsage: () => {}, getUsage: () => undefined, version: 0 };
+  }
+  return context;
+};
+
+export const TokenUsageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [usageMap] = useState(() => new Map<string, TokenUsage>());
+  const [version, setVersion] = useState(0);
+
+  const setUsage = useCallback((messageId: string, usage: TokenUsage) => {
+    usageMap.set(messageId, usage);
+    setVersion(v => v + 1); // Trigger re-render for all consumers
+  }, [usageMap]);
+
+  const getUsage = useCallback((messageId: string) => {
+    return usageMap.get(messageId);
+  }, [usageMap]);
+
+  // Include version in context value to ensure consumers re-render when usage changes
+  const contextValue = useMemo(() => ({
+    usageMap,
+    setUsage,
+    getUsage,
+    version,
+  }), [usageMap, setUsage, getUsage, version]);
+
+  return (
+    <TokenUsageContext.Provider value={contextValue}>
+      {children}
+    </TokenUsageContext.Provider>
+  );
+};
 
 interface Props {
   children?: ReactNode;
@@ -72,6 +129,10 @@ export type EdgeModelAdapterOptions = {
    * Callback function to be called when an error is encountered.
    */
   onError?: (error: Error) => void;
+  /**
+   * Callback function to be called when token usage is received.
+   */
+  onUsage?: (messageId: string, usage: TokenUsage) => void;
 
   credentials?: RequestCredentials;
 
@@ -163,6 +224,7 @@ export class MyModelAdapter implements ChatModelAdapter {
     let reasoning_content = "";
     // let toolCalls: { [key: string]: any } = {};
     let buffer = '';
+    let lastUsage: TokenUsage | null = null;  // Track token usage from chunks
 
     const currentToolCallMap: {
       [key: string]: {
@@ -192,6 +254,15 @@ export class MyModelAdapter implements ChatModelAdapter {
           const chunk = JSON.parse(line.slice(5));
           // 处理单条数据
           const delta = chunk.choices[0]?.delta;
+
+          // Capture token usage from chunk (usually in the last chunk)
+          if (chunk.usage) {
+            lastUsage = {
+              prompt_tokens: chunk.usage.prompt_tokens || 0,
+              completion_tokens: chunk.usage.completion_tokens || 0,
+              total_tokens: chunk.usage.total_tokens || 0,
+            };
+          }
 
           if (delta.reasoning_completed) {
             // 思考完成，清空 reasoning_content
@@ -395,7 +466,13 @@ export class MyModelAdapter implements ChatModelAdapter {
       }
     }
 
-    this.options.onFinish?.(unstable_getMessage());
+    // Call onUsage callback with the captured token usage and message ID
+    const finalMessage = unstable_getMessage();
+    if (lastUsage && this.options.onUsage && finalMessage?.id) {
+      this.options.onUsage(finalMessage.id, lastUsage);
+    }
+
+    this.options.onFinish?.(finalMessage);
   }
 }
 
@@ -515,6 +592,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
   const threadListItem = useThreadListItem();
   const remoteId = threadListItem.remoteId;
   const { tenantFetch } = useTenantFetch();
+  const { setUsage, getUsage } = useTokenUsage();
 
   // Create thread-specific history adapter
   const history = useMemo<ThreadHistoryAdapter>(
@@ -540,6 +618,18 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
               msgParentIdMap.set(parentId, messages[i].local_id);
             } 
             parentId = messages[i].id;
+            
+            // Load token_usage from API response for assistant messages
+            if (messages[i].role === 'assistant' && messages[i].token_usage) {
+              const tokenUsage = messages[i].token_usage;
+              if (tokenUsage && typeof tokenUsage === 'object') {
+                setUsage(messages[i].id, {
+                  prompt_tokens: tokenUsage.prompt_tokens || 0,
+                  completion_tokens: tokenUsage.completion_tokens || 0,
+                  total_tokens: tokenUsage.total_tokens || 0,
+                });
+              }
+            }
           }
           console.log("load messages", messages, msgParentIdMap);
 
@@ -586,6 +676,16 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
           else {
             msgParentIdMap.set(pid, msgId);
           }
+
+          // Get token_usage from context for assistant messages
+          let tokenUsage = null;
+          if (message.message.role === 'assistant') {
+            const usage = getUsage(message.message.id);
+            if (usage && usage.total_tokens > 0) {
+              tokenUsage = usage;
+            }
+          }
+
           const response = await tenantFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -595,6 +695,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
               attachments: message.message.attachments,
               content: message.message.content,
               local_id: msgId,
+              token_usage: tokenUsage,
             }),
           });
 
@@ -607,7 +708,7 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
         }
       },
     }),
-    [remoteId, tenantFetch],
+    [remoteId, tenantFetch, setUsage, getUsage],
   );
   const adapters = useMemo(() => ({ history }), [history]);
   return (
@@ -617,9 +718,15 @@ export const StableProvider: React.ComponentType<{ children?: React.ReactNode }>
   );
 };
 
-export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
+// Extended options type with onUsage callback
+export type PaiChatRuntimeOptions = EdgeRuntimeOptions & {
+  onUsage?: (messageId: string, usage: TokenUsage) => void;
+};
+
+export const usePaiChatThreadRuntime = (options: PaiChatRuntimeOptions) => {
+  const { onUsage, ...edgeOptions } = options;
   const { localRuntimeOptions, otherOptions } =
-    splitLocalRuntimeOptions(options);
+    splitLocalRuntimeOptions(edgeOptions);
 
   // load chat options
   const { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id } = useChatOptions();
@@ -631,7 +738,7 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
       return useLocalThreadRuntime(
-        new MyModelAdapter({...otherOptions, tenantFetch, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id }}),
+        new MyModelAdapter({...otherOptions, tenantFetch, onUsage, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id }}),
         localRuntimeOptions,
       );
     },
@@ -647,12 +754,14 @@ export const usePaiChatThreadRuntime = (options: EdgeRuntimeOptions) => {
 
 export function MyChatRuntimeProvider({ children }: { children: ReactNode }) {
   const { tenantFetch } = useTenantFetch();
+  const { setUsage } = useTokenUsage();
   
   const runtime = usePaiChatThreadRuntime({
     api: `/api/chat/completions`,
     adapters: {
       attachments: useMemo(() => new UploadAttachmentAdapter(tenantFetch), [tenantFetch]),
     },
+    onUsage: setUsage,
   });
   
   return (

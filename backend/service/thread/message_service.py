@@ -127,6 +127,9 @@ class MessageService:
                 existing_message.attachments = message_data.attachments
                 existing_message.content = message_data.content
                 existing_message.role = message_data.role
+                # Update token_usage if provided
+                if message_data.token_usage:
+                    existing_message.token_usage = message_data.token_usage
                 message_entity = existing_message
             else:
                 # Create new message

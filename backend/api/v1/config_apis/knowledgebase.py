@@ -358,14 +358,18 @@ async def upload_files(
             if parsed_chunk_config:
                 file_entity.chunk_config = parsed_chunk_config
 
-            if auto_parse:
-                import app.worker as background_worker
-                background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
-                logger.info(f"Queued {file_entity.id} job successfully.")
-
             session.add(file_entity)
 
+        # Commit first to ensure file records exist in DB before queueing tasks
+        # This prevents race condition where Celery workers can't find uncommitted records
         await session.commit()
+
+        # Queue background tasks after commit to avoid SQLite race condition
+        if auto_parse:
+            import app.worker as background_worker
+            for file_entity in new_file_entities:
+                background_worker.enqueue_file_tasks.delay(file_entity.id, file_entity.file_version, is_attachment=False, tenant_id=tenant_id)
+                logger.info(f"Queued {file_entity.id} job successfully.")
 
 
         for file_entity in new_file_entities:

@@ -126,9 +126,9 @@ class ReactAgent:
 
                     if isinstance(chunk, ReasoningChunk):
                         yield chunk
-                    elif chunk.delta:
+                    else:
                         step_content += chunk.delta
-                        yield TextChunk(delta=chunk.delta)
+                        yield TextChunk(delta=chunk.delta, usage=chunk.usage)
 
                 # If LLM generated text response, add it to messages
                 if step_content:

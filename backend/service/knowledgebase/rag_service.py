@@ -810,6 +810,7 @@ class RagService:
             # TODO: Add file source
             file_url = file_source_map.get(node.metadata.get("doc_id"), None)
             file_path = node.metadata.get("file_path")
+            node.metadata["file_source"] = file_url
             if not file_url and file_path:
                 if file_path in seen_file_urls:
                     file_url = seen_file_urls[file_path]

@@ -13,6 +13,7 @@ class MessageCreate(SQLModel):
     role: str = Field(default=None)
     content: List[dict] = Field(default=[], sa_column=Column("content", JSON))
     attachments: List[dict] = Field(default=[], sa_column=Column("attachments", JSON))
+    token_usage: Optional[dict] = Field(default=None, sa_column=Column("token_usage", JSON))
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         sa_column=Column(DateTime),
@@ -21,6 +22,7 @@ class MessageCreate(SQLModel):
 
 class MessageRead(MessageCreate):
     id: str = Field(default=None, primary_key=True)
+    token_usage: Optional[dict] = Field(default=None)
 
 
 class MessageEntity(SQLModel, table=True):
@@ -36,6 +38,7 @@ class MessageEntity(SQLModel, table=True):
     role: str = Field(default=None)  # e.g., "user", "assistant", "system"
     content: List[dict] = Field(default=[], sa_column=Column("content", JSON))
     attachments: List[dict] = Field(default=[], sa_column=Column("attachments", JSON))
+    token_usage: Optional[dict] = Field(default=None, sa_column=Column("token_usage", JSON))
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
