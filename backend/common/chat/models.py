@@ -41,10 +41,13 @@ class Condition(BaseModel):
 class MetadataFilteringCondition(BaseModel):
     """
     Metadata Filtering Condition.
+    Supports nested structure via condition_groups for complex queries like:
+    (category = 'COMMON' OR category = 'PC') AND language = 'en-US'
     """
 
     logical_operator: Optional[Literal["and", "or"]] = "and"
     conditions: Optional[list[Condition]] = Field(default=None, deprecated=True)
+    condition_groups: Optional[list["MetadataFilteringCondition"]] = None
 
 
 class DocRecord(BaseModel):
