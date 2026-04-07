@@ -23,6 +23,10 @@ def _build_metadata_condition_(
         (condition.value is None or condition.value == "")):
         return None
 
+    if condition.comparison_operator in ["in", "not in"] and not isinstance(condition.value, (list, tuple)):
+        logger.warning(f"Operator '{condition.comparison_operator}' requires a list value, got {type(condition.value)}")
+        return None
+
     match condition.comparison_operator:
         case "contains":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}%")
@@ -63,6 +67,17 @@ def _build_metadata_condition_(
                 KbFileEntity.file_metadata[condition.name].as_string().isnot(None),
                 KbFileEntity.file_metadata[condition.name].as_string() != ''
             )
+        case "in":
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().in_(
+                [str(v) for v in condition.value]
+            )
+        case "not in":
+            condition_filter = or_(
+                KbFileEntity.file_metadata[condition.name].as_string().is_(None),
+                ~KbFileEntity.file_metadata[condition.name].as_string().in_(
+                    [str(v) for v in condition.value]
+                )
+            )
         case "before" | "<":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Double) < condition.value
         case "after" | ">":
@@ -78,6 +93,42 @@ def _build_metadata_condition_(
     return condition_filter
 
 
+def _build_metadata_filter_recursive(
+    metadata_filter: MetadataFilteringCondition,
+    max_depth: int = 5,
+    _current_depth: int = 0,
+):
+    """递归构建嵌套的metadata filter条件"""
+    if _current_depth >= max_depth:
+        raise ValueError(f"Metadata filter nesting depth exceeds maximum of {max_depth}")
+
+    parts = []
+
+    # 处理叶子条件
+    if metadata_filter.conditions:
+        for condition in metadata_filter.conditions:
+            condition_filter = _build_metadata_condition_(condition)
+            if condition_filter is not None:
+                parts.append(condition_filter)
+
+    # 递归处理嵌套的condition_groups
+    if metadata_filter.condition_groups:
+        for group in metadata_filter.condition_groups:
+            group_filter = _build_metadata_filter_recursive(group, max_depth, _current_depth + 1)
+            if group_filter is not None:
+                parts.append(group_filter)
+
+    if not parts:
+        return None
+
+    if len(parts) == 1:
+        return parts[0]
+
+    if metadata_filter.logical_operator and metadata_filter.logical_operator.lower() == "or":
+        return or_(*parts)
+    return and_(*parts)
+
+
 # 返回可以搜索的文档id list
 # 当metadata_filter为空时，返回所有文档id，返回空列表
 # 当metadata_filter不为空时，返回符合条件的文档id list
@@ -88,24 +139,19 @@ async def query_file_ids_with_metadata_filter(
     metadata_filter: MetadataFilteringCondition,
     user_id: str = None,
 ) -> list[str]:
-    if (metadata_filter is None or not metadata_filter.conditions) and not user_id:
+    has_no_filter = metadata_filter is None or (
+        not metadata_filter.conditions and not metadata_filter.condition_groups
+    )
+    if has_no_filter and not user_id:
         return []
 
     # 为了简化实现复杂度，把metadata设定在file这一层
     # TODO: possible limitations: IN clause长度过长导致执行速度慢/超出限制？
-    filters = []
-    if metadata_filter is not None and metadata_filter.conditions is not None:
-        for condition in metadata_filter.conditions:
-            condition_filter = _build_metadata_condition_(condition)
-            if condition_filter is not None:
-                filters.append(condition_filter)
-
     sub_clauses = [KbFileEntity.active, KbFileEntity.kb_id == kb_id]
-    if len(filters) > 0:
-        if metadata_filter.logical_operator.lower() == "and":
-            sub_clauses.append(and_(*filters))
-        else:
-            sub_clauses.append(or_(*filters))
+    if metadata_filter is not None:
+        combined_filter = _build_metadata_filter_recursive(metadata_filter)
+        if combined_filter is not None:
+            sub_clauses.append(combined_filter)
 
     # 文档没有指定权限，可公开访问
     has_role_binding = exists().where(PermissionEntity.name == KbFileEntity.id)
@@ -125,7 +171,7 @@ async def query_file_ids_with_metadata_filter(
 
     file_ids = [entity.id for entity in file_entities]
     if not file_ids:
-        logger.warning(f"No files found with the given metadata filter. filters: {filters}, sub_clauses: {sub_clauses}")
+        logger.warning(f"No files found with the given metadata filter. sub_clauses: {sub_clauses}")
         raise EmptyFilesException("No files found with the given metadata filter.")
 
     return file_ids

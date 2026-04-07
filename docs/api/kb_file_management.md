@@ -292,6 +292,23 @@ curl -X POST \
   "retrieval_setting": {
     "score_threshold": 0.2,
     "top_k": 3
+  },
+  "metadata_condition": {
+    "logical_operator": "and",
+    "condition_groups": [
+      {
+        "logical_operator": "or",
+        "conditions": [
+          {"name": "category", "comparison_operator": "is", "value": "COMMON"},
+          {"name": "category", "comparison_operator": "is", "value": "PC"}
+        ]
+      },
+      {
+        "conditions": [
+          {"name": "language", "comparison_operator": "is", "value": "en-US"}
+        ]
+      }
+    ]
   }
 }
 ```
@@ -302,6 +319,200 @@ curl -X POST \
 | `query`            | string   | 是   | 用户查询语句 |
 | `retrieval_setting.score_threshold` | number | 否 | 相似度阈值（默认 0.2） |
 | `retrieval_setting.top_k`           | integer | 否 | 返回最多前 K 个结果（默认 3） |
+| `metadata_condition` | object | 否 | 元数据筛选条件，用于过滤检索范围（详见下方说明） |
+
+#### Metadata Condition 元数据筛选条件
+
+通过 `metadata_condition` 可以对知识库文件的元数据进行筛选，仅检索符合条件的文件。支持嵌套的逻辑组合，可构造复杂的筛选表达式。
+
+##### 结构说明
+
+`metadata_condition` 采用树形结构，由 `conditions`（叶子条件）和 `condition_groups`（条件组）两部分组成：
+
+- **`conditions`**：叶子条件列表，每个元素是一个具体的比较条件（如 `department = 'it'`）。同一层级的 `conditions` 通过 `logical_operator` 组合。
+- **`condition_groups`**：嵌套的条件组列表，每个元素本身也是一个完整的 `MetadataCondition` 对象（包含自己的 `logical_operator`、`conditions`、`condition_groups`），从而实现任意深度的逻辑嵌套。
+
+两者的关系可以用以下结构示意：
+
+```
+MetadataCondition (logical_operator: "and")
+├── conditions:        [条件A, 条件B]          ← 叶子条件
+└── condition_groups:  [子条件组1, 子条件组2]   ← 嵌套条件组（递归结构）
+        ├── 子条件组1 (logical_operator: "or")
+        │   └── conditions: [条件C, 条件D]
+        └── 子条件组2 (logical_operator: "and")
+            └── conditions: [条件E]
+
+最终逻辑：条件A AND 条件B AND (条件C OR 条件D) AND 条件E
+```
+
+| 字段名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `logical_operator` | string | 否 | 逻辑运算符，可选 `"and"` 或 `"or"`，默认 `"and"` |
+| `conditions` | array | 否 | 叶子条件列表，每个元素为一个 `Condition` 对象 |
+| `condition_groups` | array | 否 | 嵌套的条件组列表，每个元素为一个 `MetadataCondition` 对象，支持递归嵌套（最大深度 5 层） |
+
+> `conditions` 和 `condition_groups` 至少需要提供一个，也可以同时使用。同一层级内的所有条件通过 `logical_operator` 进行组合。
+
+##### 何时使用 `conditions` vs `condition_groups`
+
+| 场景 | 推荐写法 | 说明 |
+|------|----------|------|
+| 简单筛选：`A AND B` | 仅用 `conditions` | 所有条件在同一层级，无需嵌套 |
+| 需要混合逻辑：`A AND (B OR C)` | `conditions` + `condition_groups` | 顶层 AND 放 `conditions`，OR 子表达式放 `condition_groups` |
+| 纯嵌套逻辑：`(A OR B) AND (C OR D)` | 仅用 `condition_groups` | 每个 OR 组作为独立的 `condition_groups` 元素 |
+| 多层嵌套：`(A AND (B OR C)) OR D` | `condition_groups` 递归嵌套 | 外层 OR 包含两个子组，其中一个子组内部再嵌套 |
+
+##### Condition 对象
+
+| 字段名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| `name` | string | 是 | 元数据字段名（如 `"department"`、`"category"`） |
+| `comparison_operator` | string | 是 | 比较运算符（见下表） |
+| `value` | string / number / null | 否 | 比较值。`empty` 和 `not empty` 运算符无需提供 |
+
+##### 支持的比较运算符
+
+| 运算符 | 适用类型 | 说明 |
+|--------|----------|------|
+| `contains` | 字符串 | 包含指定子串 |
+| `not contains` | 字符串 | 不包含指定子串 |
+| `start with` | 字符串 | 以指定前缀开头 |
+| `end with` | 字符串 | 以指定后缀结尾 |
+| `is` / `=` | 字符串/数值 | 等于 |
+| `is not` / `≠` | 字符串/数值 | 不等于 |
+| `empty` | 任意 | 字段为空 |
+| `not empty` | 任意 | 字段不为空 |
+| `in` | 字符串列表 | 值在给定列表中（如 `["A", "B", "C"]`） |
+| `not in` | 字符串列表 | 值不在给定列表中 |
+| `>` / `after` | 数值/时间 | 大于 |
+| `<` / `before` | 数值/时间 | 小于 |
+| `≥` / `>=` | 数值 | 大于等于 |
+| `≤` / `<=` | 数值 | 小于等于 |
+
+##### 示例
+
+**简单筛选**：筛选 department 为 "it" 的文件
+
+```json
+{
+  "metadata_condition": {
+    "conditions": [
+      {"name": "department", "comparison_operator": "is", "value": "it"}
+    ]
+  }
+}
+```
+
+**嵌套筛选**：`(category = 'COMMON' OR category = 'PC') AND language = 'en-US'`
+
+```json
+{
+  "metadata_condition": {
+    "logical_operator": "and",
+    "condition_groups": [
+      {
+        "logical_operator": "or",
+        "conditions": [
+          {"name": "category", "comparison_operator": "is", "value": "COMMON"},
+          {"name": "category", "comparison_operator": "is", "value": "PC"}
+        ]
+      },
+      {
+        "conditions": [
+          {"name": "language", "comparison_operator": "is", "value": "en-US"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+**混合筛选**：`status = 'active' AND (category = 'A' OR category = 'B')`
+
+同时使用 `conditions` 和 `condition_groups`，顶层条件通过 AND 组合。
+
+```json
+{
+  "metadata_condition": {
+    "logical_operator": "and",
+    "conditions": [
+      {"name": "status", "comparison_operator": "is", "value": "active"}
+    ],
+    "condition_groups": [
+      {
+        "logical_operator": "or",
+        "conditions": [
+          {"name": "category", "comparison_operator": "is", "value": "A"},
+          {"name": "category", "comparison_operator": "is", "value": "B"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+**纯条件组筛选**：`(category = 'COMMON' OR category = 'PC') AND (priority > 5 OR priority = 0)`
+
+当所有子表达式都需要独立的逻辑运算符时，可以仅使用 `condition_groups`，不使用 `conditions`。
+
+```json
+{
+  "metadata_condition": {
+    "logical_operator": "and",
+    "condition_groups": [
+      {
+        "logical_operator": "or",
+        "conditions": [
+          {"name": "category", "comparison_operator": "is", "value": "COMMON"},
+          {"name": "category", "comparison_operator": "is", "value": "PC"}
+        ]
+      },
+      {
+        "logical_operator": "or",
+        "conditions": [
+          {"name": "priority", "comparison_operator": ">", "value": 5},
+          {"name": "priority", "comparison_operator": "=", "value": 0}
+        ]
+      }
+    ]
+  }
+}
+```
+
+**多层嵌套筛选**：`((a = '1' AND b > 10) OR c = 'x') AND d = 'y'`
+
+`condition_groups` 支持递归嵌套，最多 5 层深度。
+
+```json
+{
+  "metadata_condition": {
+    "logical_operator": "and",
+    "conditions": [
+      {"name": "d", "comparison_operator": "is", "value": "y"}
+    ],
+    "condition_groups": [
+      {
+        "logical_operator": "or",
+        "condition_groups": [
+          {
+            "logical_operator": "and",
+            "conditions": [
+              {"name": "a", "comparison_operator": "=", "value": 1},
+              {"name": "b", "comparison_operator": ">", "value": 10}
+            ]
+          },
+          {
+            "conditions": [
+              {"name": "c", "comparison_operator": "is", "value": "x"}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 #### 示例请求
 
@@ -315,6 +526,11 @@ curl -X POST \
     "retrieval_setting": {
       "score_threshold": 0.2,
       "top_k": 3
+    },
+    "metadata_condition": {
+      "conditions": [
+        {"name": "department", "comparison_operator": "is", "value": "it"}
+      ]
     }
   }'
 ```

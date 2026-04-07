@@ -22,6 +22,9 @@ SupportedComparisonOperator = Literal[
     "<",
     "≥",
     "≤",
+    # for list
+    "in",
+    "not in",
     # for time
     "before",
     "after",
@@ -37,14 +40,26 @@ class Condition(BaseModel):
     comparison_operator: SupportedComparisonOperator
     value: str | Sequence[str] | None | int | float = None
 
+    @model_validator(mode="after")
+    def validate_in_operator_value(self):
+        if self.comparison_operator in ("in", "not in"):
+            if not isinstance(self.value, (list, tuple)):
+                raise ValueError(
+                    f"Operator '{self.comparison_operator}' requires a list value, got {type(self.value).__name__}"
+                )
+        return self
+
 
 class MetadataFilteringCondition(BaseModel):
     """
     Metadata Filtering Condition.
+    Supports nested structure via condition_groups for complex queries like:
+    (category = 'COMMON' OR category = 'PC') AND language = 'en-US'
     """
 
     logical_operator: Optional[Literal["and", "or"]] = "and"
     conditions: Optional[list[Condition]] = Field(default=None, deprecated=True)
+    condition_groups: Optional[list["MetadataFilteringCondition"]] = None
 
 
 class DocRecord(BaseModel):

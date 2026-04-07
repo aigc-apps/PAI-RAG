@@ -107,13 +107,23 @@ Agentic RAG Chat UI 是一个基于检索增强生成（RAG）技术的智能对
 
 ### 6. 检索测试
 
-测试chunk检索。在输入框输入检索文字。（可选）点击元数据，选择逻辑操作符，点击新增过滤规则，选择自定义元数据名称，选择规则，在输入框填写具体值。（可选）输入user_id。
+测试chunk检索。在输入框输入检索文字。（可选）点击元数据，配置过滤条件。（可选）输入user_id。
 
 点击开始查询，得到查询chunk。
 
 ![](images/chat/kb_retriever.jpg)
 
 ![](images/chat/kb_retriever_2.jpg)
+
+#### 元数据筛选与条件组
+
+UI 支持通过嵌套条件组（condition_groups）构建复杂的元数据筛选逻辑：
+
+- 选择逻辑操作符（AND/OR），点击"新建过滤规则"添加叶子条件
+- 点击"新建条件组"可添加嵌套的子条件组，每个子条件组拥有独立的逻辑操作符
+- 条件组支持多层嵌套（最大 5 层），适用于混合 AND/OR 的复杂场景（如 `(A OR B) AND C`）
+
+更多 API 调用说明和示例详见 [检索 API - Metadata Condition](api/kb_file_management.md#metadata-condition-元数据筛选条件)。
 
 ### 7. 删除知识库
 
