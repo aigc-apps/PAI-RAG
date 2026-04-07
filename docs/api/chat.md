@@ -96,7 +96,7 @@ curl -X POST http://api.example.com/v1/chat/completions \
 | `stream` | `boolean` | ✗ | `true` | **目前默认为 **`true`（本 API 目前仅支持流式响应） |
 | `mcp_ids` | `string[]` | ✗ | `[]` | MCP 工具ID（如 `["4ec7d057aaa64d06b8abe1270da867d4"]`） |
 | `kb_ids` | `string[]` | ✗ | `[]` | 知识库 ID 列表（如 `["8edf245bfb8abedadvb472c7"]`） |
-| `metadata_condition` | `object` | ✗ | `null` | 元数据筛选条件，用于过滤知识库检索范围。结构说明及示例详见 [检索 API - Metadata Condition](kb_file_management.md#metadata-condition-元数据筛选条件) |
+| `metadata_condition` | `object` | ✗ | `null` | 元数据筛选条件，用于过滤知识库检索范围。支持通过 `conditions`（叶子条件）和 `condition_groups`（嵌套条件组）构建复杂筛选逻辑，最大嵌套深度 5 层。结构说明及示例详见 [检索 API - Metadata Condition](kb_file_management.md#metadata-condition-元数据筛选条件) |
 | `enable_search` | `boolean` | ✗ | `false` | 是否启用网络搜索 |
 | `enable_agent` | `boolean` | ✗ | `false` | 是否启用多步骤推理（Agentic模式） |
 | `max_steps` | `integer` | ✗ | `15` | Agentic模式 多步骤推理最大执行步骤（防无限循环） |

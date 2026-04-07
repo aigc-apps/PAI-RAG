@@ -115,6 +115,40 @@ Agentic RAG Chat UI 是一个基于检索增强生成（RAG）技术的智能对
 
 ![](images/chat/kb_retriever_2.jpg)
 
+#### 元数据筛选与条件组（condition_groups）
+
+元数据筛选支持通过 `condition_groups` 构建嵌套的逻辑表达式，适用于需要混合 AND/OR 的复杂场景。
+
+**简单筛选**：UI 中直接添加过滤规则即可（对应 `conditions` 字段），所有规则通过选择的逻辑操作符（AND/OR）组合。
+
+**嵌套筛选（condition_groups）**：当需要混合不同的逻辑运算符时（如 `(A OR B) AND C`），可通过 API 使用 `condition_groups` 实现。每个条件组可以拥有独立的逻辑运算符，并支持递归嵌套（最大深度 5 层）。
+
+示例：`(category = 'COMMON' OR category = 'PC') AND language = 'en-US'`
+
+```json
+{
+  "metadata_condition": {
+    "logical_operator": "and",
+    "condition_groups": [
+      {
+        "logical_operator": "or",
+        "conditions": [
+          {"name": "category", "comparison_operator": "is", "value": "COMMON"},
+          {"name": "category", "comparison_operator": "is", "value": "PC"}
+        ]
+      },
+      {
+        "conditions": [
+          {"name": "language", "comparison_operator": "is", "value": "en-US"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+> 更多详细说明和示例请参考 [检索 API - Metadata Condition](api/kb_file_management.md#metadata-condition-元数据筛选条件)
+
 ### 7. 删除知识库
 
 点击知识库左下角"垃圾桶"图标，删除知识库  
