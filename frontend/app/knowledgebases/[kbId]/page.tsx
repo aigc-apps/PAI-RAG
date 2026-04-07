@@ -165,11 +165,12 @@ interface SearchRecord {
   };
 }
 
-interface MetadataCondition {
-  name: string;
-  comparison_operator: string;
-  value: string | number;
-}
+import {
+  ConditionGroup,
+  ConditionGroupEditor,
+  createEmptyConditionGroup,
+  conditionGroupToPayload,
+} from './condition-group-editor';
 
 export default function KnowledgeBaseDetailPage(
   { params } : { params: Promise<{ kbId: string }> }
@@ -203,11 +204,8 @@ export default function KnowledgeBaseDetailPage(
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null); // 搜索错误信息
   const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({}); // 展开的卡片索引
-  const [logicalOperator, setLogicalOperator] = useState<string>('and');
   const [loadingMsg, setLoadingMsg] = useState(t('knowledgebase.loadingKbConfig'));
-  const [metadataConditions, setMetadataConditions] = useState<
-    MetadataCondition[]
-  >([]);
+  const [conditionGroup, setConditionGroup] = useState<ConditionGroup>(createEmptyConditionGroup());
   const [fileSource, setFileSource] = useState('');
   const [fileSourceOpen, setFileSourceOpen] = useState(false);
   const [currentFileId, setCurrentFileId] = useState<string>('');
@@ -308,24 +306,6 @@ export default function KnowledgeBaseDetailPage(
   
   const isFulltextSupported = !VECTOR_DB_TYPES_WITHOUT_FULLTEXT.includes(vectorDbType);
 
-  const default_comparator = [
-    'contains',
-    'not contains',
-    'start with',
-    'end with',
-    'is',
-    'is not',
-    'empty',
-    'not empty',
-    '=',
-    '≠',
-    '>',
-    '<',
-    '≥',
-    '≤',
-    'before',
-    'after',
-  ];
   const default_metadata_keys = [
     'file_name',
     'file_path',
@@ -361,10 +341,7 @@ export default function KnowledgeBaseDetailPage(
           user_id: user,
           knowledge_id: kbId,
           retrieval_setting: retrievalSetting,
-          metadata_condition: {
-            conditions: metadataConditions,
-            logical_operator: logicalOperator,
-          },
+          metadata_condition: conditionGroupToPayload(conditionGroup),
         }),
       });
 
@@ -1687,68 +1664,6 @@ export default function KnowledgeBaseDetailPage(
     }
   };
 
-  const addCondition = () => {
-    const newCondition = {
-      name: '',
-      comparison_operator: '',
-      value: '',
-    };
-    setMetadataConditions([...metadataConditions, newCondition]);
-  };
-
-  const deleteCondition = (i: number) => {
-    const newConditionArray = metadataConditions.filter((v, idx) => idx !== i);
-    setMetadataConditions(newConditionArray);
-  };
-
-  const setConditionName = (i: number, name: string) => {
-    const newConditions = metadataConditions.map((condition, idx) => {
-      if (idx === i) {
-        if (metadataValueTypes[name] === 'datetime') {
-          return {
-            name: name,
-            value: new Date().getTime(),
-            comparison_operator: condition.comparison_operator,
-          };
-        }
-        return {
-          name: name,
-          value: condition.value,
-          comparison_operator: condition.comparison_operator,
-        };
-      }
-      return condition;
-    });
-    setMetadataConditions(newConditions);
-  };
-
-  const setConditionValue = (i: number, value: string | number) => {
-    const newConditions = metadataConditions.map((condition, idx) => {
-      if (idx === i) {
-        return {
-          name: condition.name,
-          value: value,
-          comparison_operator: condition.comparison_operator,
-        };
-      }
-      return condition;
-    });
-    setMetadataConditions(newConditions);
-  };
-
-  const setConditionOp = (i: number, op: string) => {
-    const newConditions = metadataConditions.map((condition, idx) => {
-      if (idx === i) {
-        return {
-          name: condition.name,
-          value: condition.value,
-          comparison_operator: op,
-        };
-      }
-      return condition;
-    });
-    setMetadataConditions(newConditions);
-  };
 
   return (
     <div className="flex flex-col h-screen pt-0 space-y-0">
@@ -3253,132 +3168,14 @@ export default function KnowledgeBaseDetailPage(
                               {t('knowledgebase.metadata')}
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[450px]">
-                            <div className="grid gap-3">
-                              <div className="space-y-2">
-                                <RadioGroup
-                                  value={logicalOperator}
-                                  onValueChange={(value) => setLogicalOperator(value)}
-                                >
-                                  <div className="flex items-center space-x-2">
-                                    <p className="text-muted-foreground text-xs">
-                                      {t('knowledgebase.logicalOperator')}
-                                    </p>
-
-                                    <RadioGroupItem value="and" id="r1" />
-                                    <Label htmlFor="r1" className="text-xs">AND</Label>
-                                    <RadioGroupItem value="or" id="r2" />
-                                    <Label htmlFor="r2" className="text-xs">OR</Label>
-                                  </div>
-                                </RadioGroup>
-                              </div>
-                              <div className="grid gap-2">
-                                <div className="space-y-2">
-                                  {metadataConditions.map((condition, i) => (
-                                    <div
-                                      className="flex items-center space-x-2"
-                                      key={i}
-                                    >
-                                      <div>
-                                        <Select
-                                          value={condition.name}
-                                          onValueChange={(value) => {
-                                            setConditionName(i, value);
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-6 text-xs w-[120px]">
-                                            <SelectValue placeholder={t('knowledgebase.namePlaceholderShort')} />
-                                          </SelectTrigger>
-                                          <SelectContent className="text-xs">
-                                            <SelectGroup>
-                                              {metadataConfigs.map((metadata) => (
-                                                <SelectItem
-                                                  key={metadata.name}
-                                                  value={metadata.name}
-                                                  className="text-xs h-5"
-                                                >
-                                                  {metadata.name}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectGroup>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div>
-                                        <Select
-                                          value={condition.comparison_operator}
-                                          onValueChange={(value) => {
-                                            setConditionOp(i, value);
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-6 text-xs w-[80px]">
-                                            <SelectValue placeholder={t('knowledgebase.rulePlaceholderShort')} />
-                                          </SelectTrigger>
-                                          <SelectContent className="w-[80px] text-xs">
-                                            <SelectGroup>
-                                              {default_comparator.map((op) => (
-                                                <SelectItem key={op} value={op} className="text-xs h-5">
-                                                  {op}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectGroup>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div>
-                                        {metadataValueTypes[condition.name] ===
-                                        'datetime' ? (
-                                            <DatetimeInput
-                                              value={
-                                                (() => {
-                                                  const val = typeof condition.value === 'number'
-                                                    ? condition.value
-                                                    : parseFloat(condition.value);
-                                                  // 将秒级时间戳转换为毫秒级（DatetimeInput 期望毫秒级）
-                                                  return isNaN(val) ? new Date().getTime() : val;
-                                                })()
-                                              }
-                                              width="sm"
-                                              onValueChange={(value) => {
-                                                // 将毫秒级时间戳转换为秒级（后端存储秒级）
-                                                setConditionValue(i, value);
-                                              }}
-                                            />
-                                          ) : (
-                                            <Input
-                                              className="w-32 h-6 text-xs"
-                                              value={condition.value.toString()}
-                                              onChange={(e) =>
-                                                setConditionValue(i, e.target.value)
-                                              }
-                                            />
-                                          )}
-                                      </div>
-                                      <div>
-                                        <Button
-                                          variant="outline"
-                                          onClick={() => {
-                                            deleteCondition(i);
-                                          }}
-                                          className="w-6 h-6 p-0"
-                                          size="sm"
-                                        >
-                                          <Trash2Icon className="w-3 h-3" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <Button
-                                  variant="secondary"
-                                  onClick={addCondition}
-                                  className="h-6 text-xs"
-                                  size="sm"
-                                >
-                                  {t('knowledgebase.newFilterRule')}
-                                </Button>
-                              </div>
-                            </div>
+                          <PopoverContent className="w-[500px] max-h-[400px] overflow-y-auto">
+                            <ConditionGroupEditor
+                              group={conditionGroup}
+                              onChange={setConditionGroup}
+                              metadataConfigs={metadataConfigs}
+                              metadataValueTypes={metadataValueTypes}
+                              t={t}
+                            />
                           </PopoverContent>
                         </Popover>
                         <Input
