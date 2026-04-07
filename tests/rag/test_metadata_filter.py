@@ -245,6 +245,30 @@ class TestBuildMetadataCondition:
         result = _build_metadata_condition_(cond)
         assert result is not None
 
+    def test_in_operator(self):
+        cond = Condition(name="category", comparison_operator="in", value=["A", "B", "C"])
+        result = _build_metadata_condition_(cond)
+        assert result is not None
+        compiled = str(result.compile(compile_kwargs={"literal_binds": True}))
+        assert "IN" in compiled
+
+    def test_not_in_operator(self):
+        cond = Condition(name="category", comparison_operator="not in", value=["X", "Y"])
+        result = _build_metadata_condition_(cond)
+        assert result is not None
+
+    def test_in_operator_non_list_raises_validation_error(self):
+        """in operator with non-list value should be rejected at model level."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="requires a list"):
+            Condition(name="category", comparison_operator="in", value="single_value")
+
+    def test_not_in_operator_non_list_raises_validation_error(self):
+        """not in operator with non-list value should be rejected at model level."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="requires a list"):
+            Condition(name="category", comparison_operator="not in", value="single_value")
+
 
 # ───────────────────────────────────────────────────
 # _build_metadata_filter_recursive tests

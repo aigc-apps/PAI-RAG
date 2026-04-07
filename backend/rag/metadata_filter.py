@@ -23,6 +23,10 @@ def _build_metadata_condition_(
         (condition.value is None or condition.value == "")):
         return None
 
+    if condition.comparison_operator in ["in", "not in"] and not isinstance(condition.value, (list, tuple)):
+        logger.warning(f"Operator '{condition.comparison_operator}' requires a list value, got {type(condition.value)}")
+        return None
+
     match condition.comparison_operator:
         case "contains":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().like(f"%{condition.value}%")
@@ -62,6 +66,17 @@ def _build_metadata_condition_(
             condition_filter = and_(
                 KbFileEntity.file_metadata[condition.name].as_string().isnot(None),
                 KbFileEntity.file_metadata[condition.name].as_string() != ''
+            )
+        case "in":
+            condition_filter = KbFileEntity.file_metadata[condition.name].as_string().in_(
+                [str(v) for v in condition.value]
+            )
+        case "not in":
+            condition_filter = or_(
+                KbFileEntity.file_metadata[condition.name].as_string().is_(None),
+                ~KbFileEntity.file_metadata[condition.name].as_string().in_(
+                    [str(v) for v in condition.value]
+                )
             )
         case "before" | "<":
             condition_filter = KbFileEntity.file_metadata[condition.name].as_string().cast(Double) < condition.value

@@ -41,7 +41,9 @@ const MAX_DEPTH = 4;
 const DEFAULT_COMPARATORS = [
   'contains', 'not contains', 'start with', 'end with',
   'is', 'is not', 'empty', 'not empty',
-  '=', '≠', '>', '<', '≥', '≤', 'before', 'after',
+  '=', '≠', '>', '<', '≥', '≤',
+  'in', 'not in',
+  'before', 'after',
 ];
 
 interface ConditionGroupEditorProps {
@@ -180,7 +182,14 @@ export function ConditionGroupEditor({
                 </SelectGroup>
               </SelectContent>
             </Select>
-            {metadataValueTypes[condition.name] === 'datetime' ? (
+            {condition.comparison_operator === 'in' || condition.comparison_operator === 'not in' ? (
+              <Input
+                className="w-32 h-6 text-xs"
+                placeholder={t('knowledgebase.inValuePlaceholder')}
+                value={condition.value.toString()}
+                onChange={(e) => setConditionField(i, 'value', e.target.value)}
+              />
+            ) : metadataValueTypes[condition.name] === 'datetime' ? (
               <DatetimeInput
                 value={(() => {
                   const val = typeof condition.value === 'number'
@@ -252,7 +261,14 @@ export function conditionGroupToPayload(group: ConditionGroup): object | null {
 
   if (!hasConditions && !hasSubGroups) return null;
 
-  const validConditions = group.conditions.filter((c) => c.name && c.comparison_operator);
+  const validConditions = group.conditions
+    .filter((c) => c.name && c.comparison_operator)
+    .map((c) => {
+      if ((c.comparison_operator === 'in' || c.comparison_operator === 'not in') && typeof c.value === 'string') {
+        return { ...c, value: c.value.split(',').map((v) => v.trim()).filter(Boolean) };
+      }
+      return c;
+    });
 
   // If only leaf conditions, no nesting needed - use flat conditions
   if (!hasSubGroups) {
