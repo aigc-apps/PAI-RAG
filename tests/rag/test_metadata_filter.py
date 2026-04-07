@@ -2,15 +2,6 @@
 import sys
 import os
 import json
-from unittest.mock import MagicMock
-
-# Mock chromadb and its submodules before any backend imports to avoid sqlite3 version issue
-_chromadb_mock = MagicMock()
-for mod in [
-    "chromadb", "chromadb.api", "chromadb.api.models",
-    "chromadb.api.models.Collection", "chromadb.config",
-]:
-    sys.modules[mod] = _chromadb_mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../backend"))
 
