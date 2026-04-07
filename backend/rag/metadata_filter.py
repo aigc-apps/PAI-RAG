@@ -80,8 +80,13 @@ def _build_metadata_condition_(
 
 def _build_metadata_filter_recursive(
     metadata_filter: MetadataFilteringCondition,
+    max_depth: int = 5,
+    _current_depth: int = 0,
 ):
     """递归构建嵌套的metadata filter条件"""
+    if _current_depth >= max_depth:
+        raise ValueError(f"Metadata filter nesting depth exceeds maximum of {max_depth}")
+
     parts = []
 
     # 处理叶子条件
@@ -94,7 +99,7 @@ def _build_metadata_filter_recursive(
     # 递归处理嵌套的condition_groups
     if metadata_filter.condition_groups:
         for group in metadata_filter.condition_groups:
-            group_filter = _build_metadata_filter_recursive(group)
+            group_filter = _build_metadata_filter_recursive(group, max_depth, _current_depth + 1)
             if group_filter is not None:
                 parts.append(group_filter)
 
@@ -119,7 +124,10 @@ async def query_file_ids_with_metadata_filter(
     metadata_filter: MetadataFilteringCondition,
     user_id: str = None,
 ) -> list[str]:
-    if (metadata_filter is None or (not metadata_filter.conditions and not metadata_filter.condition_groups)) and not user_id:
+    has_no_filter = metadata_filter is None or (
+        not metadata_filter.conditions and not metadata_filter.condition_groups
+    )
+    if has_no_filter and not user_id:
         return []
 
     # 为了简化实现复杂度，把metadata设定在file这一层

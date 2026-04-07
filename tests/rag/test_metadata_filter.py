@@ -408,3 +408,48 @@ class TestBuildMetadataFilterRecursive:
         assert result is not None
         # Should be just the single condition, empty group skipped
         assert not isinstance(result, BooleanClauseList)
+
+    def test_only_condition_groups_no_conditions_not_empty(self):
+        """Filter with only condition_groups (no conditions) should NOT be treated as empty."""
+        mf = MetadataFilteringCondition(
+            logical_operator="and",
+            condition_groups=[
+                MetadataFilteringCondition(
+                    conditions=[
+                        Condition(name="a", comparison_operator="is", value="1"),
+                    ],
+                ),
+            ],
+        )
+        result = _build_metadata_filter_recursive(mf)
+        assert result is not None
+
+    def test_exceeds_max_depth_raises_error(self):
+        """Nesting beyond max_depth should raise ValueError."""
+        # Build a chain of 6 levels deep (exceeds default max_depth=5)
+        inner = MetadataFilteringCondition(
+            conditions=[
+                Condition(name="a", comparison_operator="is", value="1"),
+            ],
+        )
+        for _ in range(5):
+            inner = MetadataFilteringCondition(
+                condition_groups=[inner],
+            )
+        with pytest.raises(ValueError, match="nesting depth exceeds maximum"):
+            _build_metadata_filter_recursive(inner)
+
+    def test_at_max_depth_succeeds(self):
+        """Nesting exactly at max_depth boundary should succeed."""
+        # Build 5 levels (depth 0..4), which is within default max_depth=5
+        inner = MetadataFilteringCondition(
+            conditions=[
+                Condition(name="a", comparison_operator="is", value="1"),
+            ],
+        )
+        for _ in range(4):
+            inner = MetadataFilteringCondition(
+                condition_groups=[inner],
+            )
+        result = _build_metadata_filter_recursive(inner)
+        assert result is not None
