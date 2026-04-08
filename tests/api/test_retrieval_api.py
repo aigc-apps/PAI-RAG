@@ -2,12 +2,10 @@
 Reference: https://help.aliyun.com/zh/pai/use-cases/rag-api-interface-for-v0-4-x
 """
 import os
-from typing import Generator
+from typing import Generator, Any
 from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
-from conftest import client, test_knowledgebase
-from typing import Any
 
 class TestRetrievalAPI:
     """Test cases for Retrieval API."""

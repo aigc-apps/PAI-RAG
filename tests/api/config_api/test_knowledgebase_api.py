@@ -2,13 +2,11 @@
 Reference: https://help.aliyun.com/zh/pai/use-cases/rag-api-interface-for-v0-4-x
 """
 import os
-from typing import Generator
+from typing import Generator, Any
 from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
 from loguru import logger
-from conftest import test_embedding_model, client
-from typing import Any
 
 
 class TestKnowledgeBaseAPI:

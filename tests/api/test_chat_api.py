@@ -6,7 +6,6 @@ from typing import Generator, Any
 from fastapi.testclient import TestClient
 import pytest
 from httpx import Client
-from conftest import client, test_llm_model, test_embedding_model, test_reranker_model
 import json
 from loguru import logger
 
