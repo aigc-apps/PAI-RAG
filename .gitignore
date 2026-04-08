@@ -241,3 +241,5 @@ config.json
 *.rdb
 
 debug/
+.claude/
+.agent/

@@ -3,6 +3,23 @@ name = "pairag"
 version = "2.0.0"
 requires-python = ">=3.11,<3.13"
 
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.",
+  "if TYPE_CHECKING:"
+]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+  "backend/**/migrations/*",
+  "backend/**/__main__.py",
+  "backend/app/*",
+  "backend/common/llm/openai/*",
+  "backend/service/injection.py"
+]
+
 [tool.poetry]
 name = "pairag"
 version = "2.0.0"
