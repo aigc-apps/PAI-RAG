@@ -591,9 +591,10 @@ async def _batch_reprocess_files(
         session.add(file_entity)
         reprocessed_count += 1
 
-    # 为每个文件入队处理任务
+    # 先提交所有文件状态更新，再入队处理任务
+    await session.commit()
+
     for file_entity in file_entities:
-        await session.commit()
         await session.refresh(file_entity)
         background_worker.enqueue_file_tasks.delay(
             file_entity.id,
