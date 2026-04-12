@@ -63,3 +63,7 @@ class BaseFileStore(ABC):
         :return: 文件URL
         """
         pass
+
+    async def cleanup(self):
+        """关闭底层连接资源。子类可覆盖。"""
+        pass

@@ -14,6 +14,7 @@ if os.name != "nt":
     context._force_start_method("spawn")
 
 from celery import Celery
+from celery.signals import worker_shutdown
 import os
 import asyncio
 from typing import List
@@ -54,6 +55,14 @@ if REDIS_CLUSTER_MODE:
             ],
         }
     app.conf.update(**cluster_config)
+
+@worker_shutdown.connect
+def on_worker_shutdown(**kwargs):
+    from pairag.file.store.file_store_helper import file_store
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(file_store.cleanup())
+    logger.info("[WORKER] File store cleaned up.")
+
 
 async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachment: bool = False, tenant_id: str = None) -> None:
     from rag.kb_file_client import kb_file_client
