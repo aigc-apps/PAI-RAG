@@ -1,16 +1,17 @@
 from io import BytesIO
 import os
-import oss2
-from alibabacloud_credentials import providers
-from oss2.credentials import EnvironmentVariableCredentialsProvider, CredentialsProvider
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Optional, List
 from pairag.file.store.base import BaseFileStore, FileUploadResult
 from loguru import logger
-from oss2.models import BucketCors, CorsRule
 import traceback
-import asyncio
+import alibabacloud_oss_v2 as oss
+from alibabacloud_oss_v2.credentials import EnvironmentVariableCredentialsProvider, CredentialsProvider
+import alibabacloud_oss_v2.aio as oss_aio
+from datetime import datetime, timedelta, timezone
+from pairag.file.utils.oss_utils import get_region_from_endpoint
 
 DEFAULT_OSS_PREFIX = "pairag_knowledgebases"
+DEFAULT_SIGN_EXPIRE_HOURS = 72
 
 
 class OssFileStore(BaseFileStore):
@@ -22,50 +23,84 @@ class OssFileStore(BaseFileStore):
         credentials_provider: Optional[CredentialsProvider] = None,
     ):
         super().__init__()
+        self.bucket = bucket
+        self.is_internal = "-internal" in endpoint.lower()
+        self.endpoint = endpoint
+        self.region = get_region_from_endpoint(endpoint)
+        self.public_endpoint = endpoint.replace("-internal", "").replace("-Internal", "") if self.is_internal else endpoint
+        self.prefix_path = prefix_path
+
         if credentials_provider is None:
             if os.getenv('OSS_ACCESS_KEY_ID') and os.getenv('OSS_ACCESS_KEY_SECRET'):
                 credentials_provider = EnvironmentVariableCredentialsProvider()
             else:
                 # 获取EAS ram role
-                credentials_provider = providers.DefaultCredentialsProvider()
+                from alibabacloud_credentials import providers as credential_providers
+                credentials_provider = credential_providers.DefaultCredentialsProvider()
 
-        auth = oss2.ProviderAuth(credentials_provider)
-        self.bucket = oss2.Bucket(auth=auth, endpoint=endpoint, bucket_name=bucket)
-        self.endpoint = endpoint
-        # 判断是否为内网地址，如果是则生成对应的公网地址用于签名 URL
-        self.is_internal = "-internal" in endpoint.lower()
-        self.public_endpoint = endpoint.replace("-internal", "").replace("-Internal", "") if self.is_internal else endpoint
-        rule = CorsRule(
+        cfg = oss.config.load_default()
+        cfg.region = self.region
+        cfg.endpoint = endpoint
+        cfg.credentials_provider = credentials_provider
+
+        self.async_client = oss_aio.AsyncClient(cfg)
+        self.client = oss.Client(cfg)
+
+        cors_rule = oss.CORSRule(
             allowed_origins=["*"],
             allowed_methods=["GET", "HEAD", "POST", "PUT", "DELETE"],
             allowed_headers=["*"],
             max_age_seconds=1000,
         )
-        self.prefix_path = prefix_path
         try:
-            self.bucket.put_bucket_cors(BucketCors([rule]))
+            self.client.put_bucket_cors(
+                oss.PutBucketCorsRequest(
+                    bucket=self.bucket,
+                    cors_configuration=oss.CORSConfiguration(
+                        cors_rules=[cors_rule]
+                    )
+                )
+            )
         except Exception as ex:
             logger.warning(f"Failed to set CORS for bucket {bucket}. error: {ex}")
-            pass
+
+    def _get_sign_expire_time(self) -> datetime:
+        return datetime.now(timezone.utc) + timedelta(hours=DEFAULT_SIGN_EXPIRE_HOURS)
 
     def get_url(self, file_path: str, tenant_id: str) -> Optional[str]:
         try:
             oss_file_key = os.path.join(self.prefix_path, file_path)
-            oss_url = self.bucket.sign_url("GET", oss_file_key, 3600)
-            # 如果是内网地址，替换为公网地址以便外部访问
+            presign_result = self.client.presign(
+                request=oss.GetObjectRequest(
+                    bucket=self.bucket,
+                    key=oss_file_key
+                ),
+                expiration=self._get_sign_expire_time()
+            )
+            oss_url = presign_result.url
+
             if self.is_internal:
                 oss_url = oss_url.replace(self.endpoint, self.public_endpoint)
-            logger.info(f"Get url {oss_url} for file {file_path}.")
+            logger.info(f"Get url for file {file_path}.")
             return oss_url
         except Exception as e:
             logger.error(f"Failed to get url for file {file_path}. error: {traceback.format_exc()}")
             raise
-    
+
     def write(self, file: BinaryIO, file_name: str, file_path: str, tenant_id: str) -> FileUploadResult:
         try:
             oss_file_key = os.path.join(self.prefix_path, file_path)
-            self.bucket.put_object(key=oss_file_key, data=file.read())
-            logger.info(f"Saved oss file {file_name} to {oss_file_key}.")
+            file.seek(0)
+            file_data = file.read()
+            result = self.client.put_object(
+                oss.PutObjectRequest(
+                    bucket=self.bucket,
+                    key=oss_file_key,
+                    body=file_data
+                )
+            )
+            logger.info(f"Saved oss file {file_name} to {oss_file_key}. status_code: {result.status_code}")
+
             return FileUploadResult(
                 file_name=file_name,
                 file_path=file_path,
@@ -77,8 +112,14 @@ class OssFileStore(BaseFileStore):
     def read(self, file_path: str, tenant_id: str) -> Optional[BinaryIO]:
         oss_file_key = os.path.join(self.prefix_path, file_path)
         try:
-            object_result = self.bucket.get_object(key=oss_file_key)
-            return BytesIO(object_result.read())
+            result = self.client.get_object(
+                oss.GetObjectRequest(
+                    bucket=self.bucket,
+                    key=oss_file_key
+                )
+            )
+            logger.info(f"Read oss file {file_path} from {oss_file_key}. status_code: {result.status_code}")
+            return BytesIO(result.body.content)
         except Exception as e:
             logger.error(f"Failed to read file {file_path}. error: {traceback.format_exc()}")
             raise
@@ -86,23 +127,42 @@ class OssFileStore(BaseFileStore):
     async def get_url_async(self, file_path: str, tenant_id: str) -> Optional[str]:
         try:
             oss_file_key = os.path.join(self.prefix_path, file_path)
-            sign_url_task = asyncio.to_thread(self.bucket.sign_url, method="GET", key=oss_file_key, expires=72 * 3600)
-            oss_url = await sign_url_task
-            # 如果是内网地址，替换为公网地址以便外部访问
+            op_input = oss.OperationInput(
+                op_name="GetObject",
+                method="GET",
+                bucket=self.bucket,
+                key=oss_file_key,
+                headers={},
+                parameters={},
+                op_metadata={
+                    "expiration_time": self._get_sign_expire_time()
+                }
+            )
+            op_output = await self.async_client.invoke_operation(op_input, auth_method="query")
+            assert op_output.status_code == 200, f"Failed to presign file {oss_file_key}. status_code: {op_output.status_code}"
+            oss_url = op_output.http_response.request.url
+
             if self.is_internal:
                 oss_url = oss_url.replace(self.endpoint, self.public_endpoint)
-            logger.info(f"Get url {oss_url} for file {file_path}.")
+            logger.info(f"Get url for file {oss_file_key}.")
             return oss_url
         except Exception as e:
-            logger.error(f"Failed to get url for file {file_path}. error: {traceback.format_exc()}")
+            logger.error(f"Failed to get url for file {oss_file_key}. error: {traceback.format_exc()}")
             raise
 
     async def write_async(self, file: BinaryIO, file_name: str, file_path: str, tenant_id: str) -> FileUploadResult:
         oss_file_key = os.path.join(self.prefix_path, file_path)
         try:
-            write_task = asyncio.to_thread(self.bucket.put_object, key=oss_file_key, data=file.read())
-            await write_task
-            logger.info(f"Saved oss file {file_path} to {oss_file_key}.")
+            file.seek(0)
+            file_data = file.read()
+            result = await self.async_client.put_object(
+                oss.PutObjectRequest(
+                    bucket=self.bucket,
+                    key=oss_file_key,
+                    body=file_data
+                )
+            )
+            logger.info(f"Saved oss file {file_path} to {oss_file_key}. status_code: {result.status_code}")
 
             return FileUploadResult(
                 file_name=file_name,
@@ -115,9 +175,49 @@ class OssFileStore(BaseFileStore):
     async def read_async(self, file_path: str, tenant_id: str) -> Optional[BinaryIO]:
         oss_file_key = os.path.join(self.prefix_path, file_path)
         try:
-            read_task = asyncio.to_thread(self.bucket.get_object, key=oss_file_key)
-            object_result = await read_task
-            return BytesIO(object_result.read())
+            result = await self.async_client.get_object(
+                oss.GetObjectRequest(
+                    bucket=self.bucket,
+                    key=oss_file_key
+                )
+            )
+            status_code = result.status_code
+            logger.info(f"Read oss file {file_path} from {oss_file_key}. status_code: {status_code}")
+            return BytesIO(result.body.content)
         except Exception as e:
             logger.error(f"Failed to read file {file_path}. error: {traceback.format_exc()}")
             raise
+
+    async def list_objects_async(
+        self,
+        prefix: str,
+        tenant_id: Optional[str] = None,
+    ) -> List[oss.ObjectProperties]:
+        try:
+            continuation_token = None
+            page_index = 0
+            while True:
+                page_index += 1
+                result = await self.async_client.list_objects_v2(
+                    oss.ListObjectsV2Request(
+                        bucket=self.bucket,
+                        max_keys=1000,
+                        prefix=prefix,
+                        continuation_token=continuation_token,
+                    )
+                )
+
+                files = result.contents or []
+                logger.info(f"List objects for prefix {prefix}. page {page_index}. file count: {len(files)}, next_continuation_token: {result.next_continuation_token}")
+                yield files
+
+                if result.next_continuation_token:
+                    continuation_token = result.next_continuation_token
+                else:
+                    break
+        except Exception as e:
+            logger.error(f"Failed to list objects for prefix {prefix}. error: {traceback.format_exc()}")
+            raise
+
+    async def cleanup(self):
+        await self.async_client.close()

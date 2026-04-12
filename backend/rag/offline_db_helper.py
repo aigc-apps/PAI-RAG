@@ -180,7 +180,7 @@ async def should_cancel_file_task(
         logger.warning(f"File task for file {file_id} part {file_part} not found, cancel the task.")
         return True
 
-    if file_task.status in FileStatus.cancelled:
+    if file_task.status == FileStatus.cancelled:
         logger.warning(f"File task for file {file_id} part {file_part} is cancelled, cancel the task.")
         return True
 
@@ -295,7 +295,7 @@ async def update_file_status_async(
             session.add(task)
             logger.info(f"[FileHelper] Updated file task {task_id} status to {status}.")
 
-            if status != FileStatus.failed or status != FileStatus.cancelled:
+            if status != FileStatus.failed and status != FileStatus.cancelled:
                 # 构造 COUNT 查询
                 count_statement = select(func.count()).select_from(KbFileTaskEntity).where(
                     KbFileTaskEntity.file_id == file_id,
@@ -305,13 +305,13 @@ async def update_file_status_async(
                     KbFileTaskEntity.tenant_id == tenant_id,
                 )
 
-            # 执行并获取标量结果
-            status_count = (await session.exec(count_statement)).one()
-            if status_count > 0:
-                logger.info(f"[FileHelper] There are still {status_count} file tasks not reaching status {status}, skip updating file {file_id} status to {status}.")
-                await session.commit()
-                await session.flush()
-                return
+                # 执行并获取标量结果
+                status_count = (await session.exec(count_statement)).one()
+                if status_count > 0:
+                    logger.info(f"[FileHelper] There are still {status_count} file tasks not reaching status {status}, skip updating file {file_id} status to {status}.")
+                    await session.commit()
+                    await session.flush()
+                    return
 
     file.status = status
     file.failed_reason = failed_reason
@@ -503,6 +503,7 @@ async def save_file_task_async(
     except Exception as e:
         logger.error(f"Error saving file task entity {task_entity}: {e}")
         await session.rollback()
+        raise
 
 
 @with_async_db_session

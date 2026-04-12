@@ -14,6 +14,7 @@ if os.name != "nt":
     context._force_start_method("spawn")
 
 from celery import Celery
+from celery.signals import worker_shutdown
 import os
 import asyncio
 from typing import List
@@ -54,6 +55,14 @@ if REDIS_CLUSTER_MODE:
             ],
         }
     app.conf.update(**cluster_config)
+
+@worker_shutdown.connect
+def on_worker_shutdown(**kwargs):
+    from pairag.file.store.file_store_helper import file_store
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(file_store.cleanup())
+    logger.info("[WORKER] File store cleaned up.")
+
 
 async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachment: bool = False, tenant_id: str = None) -> None:
     from rag.kb_file_client import kb_file_client
@@ -105,7 +114,8 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachmen
             logger.info(f"[WORKER] Enqueued file {file_id} part {current_task.file_part} with task {current_task.id} successfully.")
 
         chunk_ids_to_delete = await clear_useless_file_resources_async(file_id=file_id, kb_id=file_entity.kb_id, part_count=part_count, tenant_id=tenant_id)
-        await kb_file_client.adelete_chunks_from_vectordb(kb_id=file_entity.kb_id, node_ids=chunk_ids_to_delete, tenant_id=tenant_id)
+        if chunk_ids_to_delete:
+            await kb_file_client.adelete_chunks_from_vectordb(kb_id=file_entity.kb_id, node_ids=chunk_ids_to_delete, tenant_id=tenant_id)
         if num_tasks == 0:
             await update_file_status_async(file_id=file_id, status=FileStatus.succeeded, tenant_id=tenant_id)
             logger.info("No tasks enqueued. Mark file as completed.")

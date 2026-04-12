@@ -7,12 +7,33 @@ from urllib.parse import urlparse
 from PIL.PngImagePlugin import PngImageFile
 from PIL import Image
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from loguru import logger
 
 MARKDOWN_IMAGE_PATTERN = r'!\[([^\]]*)\]\(([^)]+)\)'
 
 IMAGE_MAX_PIXELS = 512 * 512
 UNSUPPORTED_FORMATS = {"WMF", "EMF", "WMZ", "EMZ", "SVG", "EPS"}
+
+IMAGE_DOWNLOAD_TIMEOUT = 30  # seconds
+IMAGE_DOWNLOAD_RETRIES = 3
+
+_image_session = None
+
+def _get_image_session() -> requests.Session:
+    global _image_session
+    if _image_session is None:
+        _image_session = requests.Session()
+        retry_strategy = Retry(
+            total=IMAGE_DOWNLOAD_RETRIES,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        _image_session.mount("http://", adapter)
+        _image_session.mount("https://", adapter)
+    return _image_session
 
 
 def is_remote_url(url_or_path: str | Path) -> bool:
@@ -24,8 +45,9 @@ def is_remote_url(url_or_path: str | Path) -> bool:
 def get_image_from_url(image_url: str) -> BytesIO:
     if is_remote_url(image_url):
         try:
-            response = requests.get(image_url)
-            response.raise_for_status()  # 检查请求是否成功
+            session = _get_image_session()
+            response = session.get(image_url, timeout=IMAGE_DOWNLOAD_TIMEOUT)
+            response.raise_for_status()
 
             image_file = BytesIO(response.content)
             image_file = compress_image_if_needed(image_file)

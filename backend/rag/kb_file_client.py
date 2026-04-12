@@ -103,8 +103,11 @@ class KbFileClient:
         embed_model:BaseEmbedding = await get_embedding_from_db(model_id=knowledgebase.embedding_model, tenant_id=tenant_id, provider_name=knowledgebase.embedding_provider_name)
         dimension = len(await embed_model.aget_text_embedding("0"))
         vector_store = await create_vector_store_from_db(kb_id=kb_id, dimension=dimension, tenant_id=tenant_id)
-        await vector_store.adelete_nodes(node_ids=node_ids)
-        logger.info(f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully.")
+        try:
+            await vector_store.adelete_nodes(node_ids=node_ids)
+            logger.info(f"Deleted {len(node_ids)} chunks from {kb_id} vector db successfully.")
+        finally:
+            await cleanup_vector_store_async(vector_store)
 
 
     # process file item, status -> processing
@@ -169,7 +172,7 @@ class KbFileClient:
             except Exception as ex:
                 logger.error(f"Fail to process file: {traceback.format_exc()}")
                 await update_file_status_async(file_id=file_id, status=FileStatus.failed, task_id=task_id, failed_reason=str(ex), is_attachment=is_attachment, tenant_id=tenant_id)
-
+                return
 
             if await should_cancel_file_task(
                 file_id=file_id,
@@ -284,7 +287,11 @@ class KbFileClient:
                     persist_tasks.append(asyncio.create_task(_persist_nodes_async(batch_nodes, persist_progress_bar)))
 
                 if persist_tasks:
-                    await asyncio.gather(*persist_tasks, return_exceptions=True)
+                    results = await asyncio.gather(*persist_tasks, return_exceptions=True)
+                    persist_errors = [r for r in results if isinstance(r, Exception)]
+                    if persist_errors:
+                        logger.error(f"Failed to persist {len(persist_errors)} batches to vector store: {persist_errors}")
+                        raise persist_errors[0]
                 persist_progress_bar.close()
             finally:
                 # 确保无论成功还是失败都清理连接，避免连接泄漏
@@ -298,9 +305,11 @@ class KbFileClient:
                 f"Finished adding file {file_item.file_name} to knowledgebase {kb_id}."
             )
         except Exception as e:
-            await update_file_status_async(
-                file_id=file_item.id, task_id=task_id, status=FileStatus.failed, is_attachment=is_attachment, failed_reason=str(e), tenant_id=tenant_id,
-            )
+            error_file_id = file_item.id if 'file_item' in dir() else (file_id if 'file_id' in dir() else None)
+            if error_file_id:
+                await update_file_status_async(
+                    file_id=error_file_id, task_id=task_id, status=FileStatus.failed, is_attachment=is_attachment, failed_reason=str(e), tenant_id=tenant_id,
+                )
             logger.error(f"Error processing file: {traceback.format_exc()}")
             raise
 
