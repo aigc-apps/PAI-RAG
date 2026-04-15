@@ -89,6 +89,9 @@ async def aget_knowledgebase_tool(
                 "仅当用户明确要求按特定属性筛选时使用，不要自行猜测过滤条件。",
             ] = None,
         ):
+            # LLM tool calls produce raw dicts; convert to Pydantic model
+            if metadata_condition is not None and isinstance(metadata_condition, dict):
+                metadata_condition = MetadataFilteringCondition(**metadata_condition)
             return await aquery_knowledgebase_func(
                 query=query,
                 metadata_condition=metadata_condition,
