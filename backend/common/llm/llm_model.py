@@ -18,55 +18,49 @@ def update_tool_calls(
     Use the tool_calls_delta objects received from openai stream chunks
     to update the running tool_calls object.
 
+    Handles parallel tool calls by matching on the ``index`` field.
+    Each distinct index represents a separate tool call.
+
     Args:
-        tool_calls (List[ChoiceDeltaToolCall]): the list of tool calls
-        tool_calls_delta (ChoiceDeltaToolCall): the delta to update tool_calls
+        tool_calls: the accumulated list of tool calls so far.
+        tool_calls_delta: new delta(s) from the current chunk.
 
     Returns:
-        List[ChoiceDeltaToolCall]: the updated tool calls
+        The updated tool calls list.
     """
-    # openai provides chunks consisting of tool_call deltas one tool at a time
     if tool_calls_delta is None or len(tool_calls_delta) == 0:
         return tool_calls
 
-    tc_delta = tool_calls_delta[0]
-    for tc_delta_to_append in tool_calls_delta[1:]:
-        if tc_delta_to_append.index == tc_delta.index:
-            tc_delta.function.arguments += tc_delta_to_append.function.arguments or ""
-            tc_delta.function.name += tc_delta_to_append.function.name or ""
+    for tc_delta in tool_calls_delta:
+        # Find existing tool_call with the same index
+        existing = None
+        for tc in tool_calls:
+            if tc.index == tc_delta.index:
+                existing = tc
+                break
 
-    if len(tool_calls) == 0:
-        tool_calls.append(tc_delta)
-    else:
-        # we need to either update latest tool_call or start a
-        # new tool_call (i.e., multiple tools in this turn) and
-        # accumulate that new tool_call with future delta chunks
-        t = tool_calls[-1]
-        if t.index != tc_delta.index:
-            # the start of a new tool call, so append to our running tool_calls list
+        if existing is None:
+            # First chunk for this index — start a new tool call entry
             tool_calls.append(tc_delta)
         else:
-            # not the start of a new tool call, so update last item of tool_calls
-
-            # validations to get passed by mypy
-            assert t.function is not None
+            # Continuation of an existing tool call — accumulate deltas
+            assert existing.function is not None
             assert tc_delta.function is not None
 
-            # Initialize fields if they're None
-            # OpenAI(or Compatible)'s streaming API can return partial tool call
-            # information across multiple chunks where some fields may be None in
-            # initial chunks and populated in subsequent ones
-            if t.function.arguments is None:
-                t.function.arguments = ""
-            if t.function.name is None:
-                t.function.name = ""
-            if t.id is None:
-                t.id = ""
+            if existing.function.arguments is None:
+                existing.function.arguments = ""
+            if existing.function.name is None:
+                existing.function.name = ""
+            if existing.id is None:
+                existing.id = ""
 
-            # Update with delta values
-            t.function.arguments += tc_delta.function.arguments or ""
-            t.function.name += tc_delta.function.name or ""
-            t.id += tc_delta.id or ""
+            existing.function.arguments += tc_delta.function.arguments or ""
+            existing.function.name += tc_delta.function.name or ""
+            # Only set id from delta if existing id is still empty;
+            # avoids concatenating the same id across repeated chunks.
+            if tc_delta.id and not existing.id:
+                existing.id = tc_delta.id
+
     return tool_calls
 
 
