@@ -45,7 +45,6 @@ async def aget_faq_result(
 
     records = await rag_service.aquery(
         query=query,
-        user_id=user_id,
         kb_id=kb.id,
         tenant_id=tenant_id,
     )
