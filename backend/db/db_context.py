@@ -100,7 +100,7 @@ def get_async_db_angine():
             cursor.execute("PRAGMA cache_size=-64000")
             cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.close()
-            logger.info("SQLite PRAGMA applied: WAL, busy_timeout=60s")
+            # logger.debug("SQLite PRAGMA applied: WAL, busy_timeout=60s")
 
         return async_engine
 

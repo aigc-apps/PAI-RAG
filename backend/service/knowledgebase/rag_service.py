@@ -970,6 +970,12 @@ class RagService:
                 top_k=retrieval_setting.top_k or DEFAULT_SIMILARITY_TOP_K,
                 rerank_top_k=retrieval_setting.rerank_top_k or DEFAULT_RERANK_SIMILARITY_TOP_K,
             )
+            final_count = len(reranked_result.nodes) if reranked_result else 0
+            if final_count < text_nodes_count + dense_nodes_count:
+                logger.info(
+                    f"After filtering (similarity_threshold={similarity_threshold}, rerank={retrieval_setting.enable_rerank}): "
+                    f"{text_nodes_count + dense_nodes_count} -> {final_count} nodes for query '{query}'."
+                )
             return reranked_result
         except Exception as e:
             logger.error(f"Failed to rerank: {e}")

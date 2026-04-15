@@ -24,6 +24,14 @@ async def aget_knowledgebase_result(
     return json.dumps({"result": records_dict}, ensure_ascii=False)
 
 
+_OPERATORS_BY_TYPE = {
+    "string": ["is", "is not", "contains", "not contains", "start with", "end with", "empty", "not empty"],
+    "number": ["=", "≠", ">", "<", "≥", "≤"],
+    "list": ["in", "not in"],
+    "time": ["before", "after"],
+}
+
+
 def _build_metadata_description(schema: List[dict]) -> str:
     """Build the metadata schema section for tool description."""
     lines = ["\n该知识库支持按以下元数据字段过滤搜索范围（通过 metadata_condition 参数）："]
@@ -32,7 +40,8 @@ def _build_metadata_description(schema: List[dict]) -> str:
         vtype = field.get("value_type", "string")
         desc = field.get("description", "")
         samples = field.get("sample_values", [])
-        line = f"- {name} ({vtype})"
+        operators = _OPERATORS_BY_TYPE.get(vtype, _OPERATORS_BY_TYPE["string"])
+        line = f"- {name} ({vtype}), 支持操作符: {', '.join(operators)}"
         if desc:
             line += f": {desc}"
         if samples:
@@ -85,13 +94,16 @@ async def aget_knowledgebase_tool(
             metadata_condition: Annotated[
                 Optional[MetadataFilteringCondition],
                 "可选的元数据过滤条件，用于按文件属性筛选搜索范围。"
-                "格式: {logical_operator: 'and', conditions: [{name: '字段名', comparison_operator: 'is', value: '值'}]}。"
-                "仅当用户明确要求按特定属性筛选时使用，不要自行猜测过滤条件。",
+                "仅当用户明确要求按特定属性筛选时使用，不要自行猜测过滤条件。"
+                '示例: {"logical_operator": "and", "conditions": [{"name": "category", "comparison_operator": "is", "value": "武侠"}]}',
             ] = None,
         ):
-            # LLM tool calls produce raw dicts; convert to Pydantic model
-            if metadata_condition is not None and isinstance(metadata_condition, dict):
-                metadata_condition = MetadataFilteringCondition(**metadata_condition)
+            # LLM tool calls may produce raw dicts or JSON strings; convert to Pydantic model
+            if metadata_condition is not None and not isinstance(metadata_condition, MetadataFilteringCondition):
+                if isinstance(metadata_condition, str):
+                    metadata_condition = MetadataFilteringCondition(**json.loads(metadata_condition))
+                elif isinstance(metadata_condition, dict):
+                    metadata_condition = MetadataFilteringCondition(**metadata_condition)
             return await aquery_knowledgebase_func(
                 query=query,
                 metadata_condition=metadata_condition,

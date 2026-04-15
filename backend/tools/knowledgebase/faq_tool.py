@@ -37,20 +37,17 @@ async def aget_faq_result(
         except Exception as e:
             logger.warning(f"Failed to validate FAQ config for chatbot {chatapp_id}: {e}")
 
-    kb = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
-
-    if not kb:
-        raise ValueError(f"FAQ knowledgebase '{kb_id}' does not exist.")
-
+    if not kb_id:
+        raise ValueError(f"FAQ knowledgebase not configured for chatapp '{chatapp_id}'.")
 
     records = await rag_service.aquery(
         query=query,
-        kb_id=kb.id,
+        kb_id=kb_id,
         tenant_id=tenant_id,
     )
 
     logger.info(
-        f"Retrieved {len(records)} FAQ results for query '{query}' from knowledgebase {kb.id}."
+        f"Retrieved {len(records)} FAQ results for query '{query}' from knowledgebase {kb_id}."
     )
 
     question_in_response = faq_config.enable_question_in_response if faq_config else True
