@@ -74,6 +74,7 @@ export interface Chatbot {
   kb_ids: string[];
   model_id: string;
   updated_at: string;
+  enable_auto_metadata_filter?: boolean;
   enable_input_guardrail: boolean;
   enable_output_guardrail: boolean;
   guardrail_hint: string;
@@ -405,6 +406,16 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
             ))}
           </div>
         )}
+      </div>
+      <div className="flex gap-6">
+        <Label htmlFor="enable_auto_metadata_filter" className="w-[120px]">
+          {t('apps.enableAutoMetadataFilter')}
+        </Label>
+        <Switch
+          id="enable_auto_metadata_filter"
+          checked={botConfig.enable_auto_metadata_filter || false}
+          onCheckedChange={(checked) => onConfigChange({ enable_auto_metadata_filter: checked })}
+        />
       </div>
       <div className="flex">
         <Label htmlFor="mcp_selection" className="w-[120px]">
