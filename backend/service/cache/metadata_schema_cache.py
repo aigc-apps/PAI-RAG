@@ -33,12 +33,21 @@ class MetadataSchemaCache:
         1. Try Redis cache first.
         2. On cache miss, query DB → build schema → write back to Redis.
         3. Return the schema list, or None if the KB has no metadata.
-        """
-        cache = cache_manager.get_cache()
-        key = kb_metadata_schema_key(tenant_id, kb_id)
 
+        Gracefully degrades to None on any cache/DB failure so that the
+        caller (knowledgebase tool) can still work without metadata filtering.
+        """
         # 1. Try cache
-        raw = await cache.get(key)
+        try:
+            cache = cache_manager.get_cache()
+            key = kb_metadata_schema_key(tenant_id, kb_id)
+            raw = await cache.get(key)
+        except Exception:
+            logger.opt(exception=True).warning(
+                f"Redis unavailable when reading metadata schema for KB {kb_id}, skipping."
+            )
+            raw = None
+
         if raw is not None:
             try:
                 schema = json.loads(raw) if isinstance(raw, str) else raw
@@ -59,9 +68,15 @@ class MetadataSchemaCache:
         if not schema:
             return None
 
-        # 3. Write back to cache
-        value = json.dumps(schema, ensure_ascii=False)
-        await cache.set(key, value, ttl=_SCHEMA_TTL)
+        # 3. Write back to cache (best-effort)
+        try:
+            value = json.dumps(schema, ensure_ascii=False)
+            await cache.set(key, value, ttl=_SCHEMA_TTL)
+        except Exception:
+            logger.opt(exception=True).warning(
+                f"Failed to write metadata schema cache for KB {kb_id}, continuing without cache."
+            )
+
         return schema
 
     async def clear_cache_by_tenant(self, tenant_id: str) -> int:
