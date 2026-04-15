@@ -243,3 +243,4 @@ config.json
 debug/
 .claude/
 .agent/
+graphify-out/

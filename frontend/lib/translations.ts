@@ -90,6 +90,7 @@ export const translations: I18nConfig = {
       tracing: '链路追踪',
       role: '权限控制',
       guardrail: '安全护栏',
+      cache: '缓存管理',
     },
 
     // Workspace
@@ -1135,6 +1136,15 @@ export const translations: I18nConfig = {
         saveFailed: '保存失败，请检查网络或配置',
         loadError: '加载失败',
       },
+      cache: {
+        title: '缓存管理',
+        metadataSchemaTitle: 'Metadata Schema 缓存',
+        metadataSchemaDescription: '知识库元数据字段信息缓存，用于 Agent 自动生成元数据过滤条件。清空后，系统将在下一个刷新周期自动从数据库重建缓存。',
+        clearCache: '清空缓存',
+        clearing: '清空中...',
+        clearSuccess: '缓存已清空，系统将自动重建。',
+        clearFailed: '清空缓存失败',
+      },
       mcp: {
         title: 'MCP配置',
         loading: '加载中...',
@@ -1292,6 +1302,7 @@ export const translations: I18nConfig = {
       tracing: 'Tracing',
       role: 'Access Control',
       guardrail: 'Guardrail',
+      cache: 'Cache',
     },
 
     // Workspace
@@ -2336,6 +2347,15 @@ export const translations: I18nConfig = {
         saveSuccess: 'Code sandbox configuration saved successfully.',
         saveFailed: 'Save failed, please check network or configuration',
         loadError: 'Load failed',
+      },
+      cache: {
+        title: 'Cache Management',
+        metadataSchemaTitle: 'Metadata Schema Cache',
+        metadataSchemaDescription: 'Cached metadata field information for knowledge bases, used by Agent to auto-generate metadata filter conditions. After clearing, the system will automatically rebuild the cache in the next refresh cycle.',
+        clearCache: 'Clear Cache',
+        clearing: 'Clearing...',
+        clearSuccess: 'Cache cleared. The system will rebuild automatically.',
+        clearFailed: 'Failed to clear cache',
       },
       mcp: {
         title: 'MCP Configuration',

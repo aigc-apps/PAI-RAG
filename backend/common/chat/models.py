@@ -61,6 +61,25 @@ class MetadataFilteringCondition(BaseModel):
     conditions: Optional[list[Condition]] = Field(default=None, deprecated=True)
     condition_groups: Optional[list["MetadataFilteringCondition"]] = None
 
+    @staticmethod
+    def merge(
+        base: Optional["MetadataFilteringCondition"],
+        override: Optional["MetadataFilteringCondition"],
+    ) -> Optional["MetadataFilteringCondition"]:
+        """Merge two MetadataFilteringCondition with AND logic.
+
+        base: user-provided hard constraint (always applied)
+        override: agent-generated supplementary filter
+        """
+        if not base:
+            return override
+        if not override:
+            return base
+        return MetadataFilteringCondition(
+            logical_operator="and",
+            condition_groups=[base, override],
+        )
+
 
 class DocRecord(BaseModel):
     content: str  # 包含知识库中数据源的文本块
@@ -122,6 +141,7 @@ class ChatAgentRequest(BaseModel):
     enable_output_guardrail: Optional[bool] = False
     guardrail_hint: Optional[str] = DEFAULT_GUARDRAIL_ADVICE
     metadata_condition: Optional[MetadataFilteringCondition] = None
+    enable_auto_metadata_filter: Optional[bool] = False
 
     # llm args
     temperature: Optional[float] = None

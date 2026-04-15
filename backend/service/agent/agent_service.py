@@ -88,6 +88,7 @@ class AgentService:
                 chat_request.enable_input_guardrail = chatapp.enable_input_guardrail
                 chat_request.enable_output_guardrail = chatapp.enable_output_guardrail
                 chat_request.guardrail_hint = chatapp.guardrail_hint
+                chat_request.enable_auto_metadata_filter = chatapp.enable_auto_metadata_filter
 
                 llm_model = await llm_service.get_llm_by_model_id(chatapp.model_id, tenant_id=tenant_id)
                 if not llm_model:
@@ -110,6 +111,7 @@ class AgentService:
                 user_id=chat_request.user_id,
                 chatapp_id=chatapp_id,
                 metadata_condition=chat_request.metadata_condition,
+                enable_auto_metadata_filter=chat_request.enable_auto_metadata_filter,
                 tenant_id=tenant_id,
             )
 
@@ -140,6 +142,7 @@ class AgentService:
         enable_faq: bool = False,
         user_id: str = None,
         metadata_condition: Optional[MetadataFilteringCondition] = None,
+        enable_auto_metadata_filter: bool = False,
         mcp_ids: List[str] = [],
         kb_ids: List[str] = [],
         tenant_id: str = None,
@@ -158,7 +161,11 @@ class AgentService:
 
         # 知识库工具
         for kb_id in kb_ids:
-            tools.append(await aget_knowledgebase_tool(kb_id=kb_id, user_id=user_id, rag_service=rag_service, tenant_id=tenant_id, metadata_condition=metadata_condition))
+            tools.append(await aget_knowledgebase_tool(
+                kb_id=kb_id, user_id=user_id, rag_service=rag_service,
+                tenant_id=tenant_id, metadata_condition=metadata_condition,
+                enable_auto_metadata_filter=enable_auto_metadata_filter,
+            ))
         logger.info(f"Resolved {len(kb_ids)} knowledgebase tools.")
 
         # 搜索工具
