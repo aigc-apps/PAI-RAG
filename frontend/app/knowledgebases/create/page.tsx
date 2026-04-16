@@ -1,7 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Save, AlertCircleIcon } from 'lucide-react';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -10,10 +9,10 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { KbConfig, MetadataConfig, KbConfigCard } from '../kbconfig';
+import { KbConfig, KbConfigCard } from '../kbconfig';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/app/providers/i18n';
+import { HeaderPortal } from '@/components/header-portal';
 
 export default function KnowledgeBaseCreatePage() {
   const { t } = useI18n();
@@ -40,67 +39,50 @@ export default function KnowledgeBaseCreatePage() {
     },
   };
 
-  const [createErrorMsg, setCreateErrorMsg] = useState('');
   const router = useRouter();
 
-  const handleCreateSuccess = (kbConfig: KbConfig) => {
-    console.log('创建知识库成功', kbConfig);
-    setCreateErrorMsg('');
-    router.push(`/knowledgebases/${kbConfig.id}`);
+  const handleCreateSuccess = (created: KbConfig) => {
+    router.push(`/knowledgebases/${created.id}`);
   };
 
   const handleCancel = () => {
-    console.log('取消创建知识库。');
-    setCreateErrorMsg('');
     router.push('/knowledgebases');
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="flex-none">
-        <div className="p-2 space-y-2">
-          <div className="mb-2 flex items-center gap-2">
-            {/* 面包屑导航 */}
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => router.push('/knowledgebases')}
-                    >
-                      {t('knowledgebase.title')}
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{t('knowledgebase.createPageTitle')}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-          <div className="mb-2 flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="h-8 w-8"
-              onClick={() => router.push('/knowledgebases')}
-            >
-              <ArrowLeft />
-            </Button>
-            <h1 className="text-xl font-medium">{t('knowledgebase.createPageTitle')}</h1>
-          </div>
+    <div className="flex flex-col h-full min-h-0">
+      <HeaderPortal>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Button
+                  variant="link"
+                  className="px-0 h-auto"
+                  onClick={() => router.push('/knowledgebases')}
+                >
+                  {t('knowledgebase.title')}
+                </Button>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage className="font-semibold">
+                {t('knowledgebase.createPageTitle')}
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </HeaderPortal>
+      <div className="flex-1 min-h-0">
+        <div className="max-w-5xl mx-auto h-full flex flex-col">
+          <KbConfigCard
+            kbConfig={kbConfig}
+            isCreate={true}
+            onSaveSuccess={handleCreateSuccess}
+            onCancel={handleCancel}
+          />
         </div>
-      </div>
-      {/* 可滚动内容区域 */}
-      <div className="flex-1 overflow-y-auto">
-        <KbConfigCard
-          kbConfig={kbConfig}
-          isCreate={true}
-          onSaveSuccess={handleCreateSuccess}
-          onCancel={handleCancel}
-        />
       </div>
     </div>
   );

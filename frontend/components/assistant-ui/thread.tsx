@@ -233,7 +233,7 @@ export const Thread: FC<{
       <ThreadPrimitive.Root
         className="box-border flex h-full flex-col overflow-hidden"
         style={{
-          ['--thread-max-width' as string]: '60rem',
+          ['--thread-max-width' as string]: 'min(90vw, 70rem)',
         }}
       >
         <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-2">
@@ -328,14 +328,14 @@ const ThreadWelcome: FC = () => {
 const ThreadWelcomeSuggestions: FC = () => {
   const { t } = useI18n();
   return (
-    <div className="mt-6 flex w-full items-stretch justify-center gap-3 pb-8 flex-wrap">
+    <div className="mt-6 flex w-full items-stretch justify-center gap-2 pb-8 flex-wrap">
       <ThreadPrimitive.Suggestion
         className="suggest-pill cursor-pointer max-w-sm"
         prompt={t('chat.thread.suggestion1')}
         method="replace"
         autoSend
       >
-        <Brain className="w-4 h-4 text-primary shrink-0" />
+        <Brain className="w-3.5 h-3.5 text-primary shrink-0" />
         <span className="line-clamp-1">
           {t('chat.thread.suggestion1')}
         </span>
@@ -346,7 +346,7 @@ const ThreadWelcomeSuggestions: FC = () => {
         method="replace"
         autoSend
       >
-        <Search className="w-4 h-4 text-primary shrink-0" />
+        <Search className="w-3.5 h-3.5 text-primary shrink-0" />
         <span className="line-clamp-1">
           {t('chat.thread.suggestion2')}
         </span>
@@ -375,70 +375,62 @@ const Composer: FC<ComposerProps> = ({
     <ComposerPrimitive.Root
       className="composer-box flex w-full flex-col px-3"
     >
-      {/* First row: input box */}
-      <div className="flex items-center justify-between px-2 pb-1">
-        <div className="w-full">
-          <div className="flex gap-3 pt-2">
+      <div className="flex items-center justify-between gap-2 px-2 pb-1">
+        <div className="w-full min-w-0">
+          <div className="flex gap-2 pt-2">
             <ComposerAttachments />
             <ComposerPrimitive.Input
               rows={1}
               autoFocus
               placeholder={t('chat.thread.inputQuestion')}
-              className="flex-1 placeholder:text-muted-foreground max-h-40 resize-none border-none bg-transparent px-2 py-3 text-sm outline-none focus:ring-0 disabled:cursor-not-allowed"
+              className="flex-1 placeholder:text-muted-foreground max-h-40 resize-none border-none bg-transparent px-2 py-2.5 text-[13px] leading-relaxed outline-none focus:ring-0 disabled:cursor-not-allowed"
             />
           </div>
-          {/* Second row: button group + ComposerAction */}
           {optionsVisible && (
-            <div className="flex flex-row items-center px-2 pb-1">
-                <ComposerAddAttachment />
-                <ToggleGroup
-                  type="multiple"
-                  variant="outline"
-                  className="flex gap-x-4 px-6 overflow-visible"
-                  value={value} // 同步 Thread 的 activeTools
-                  onValueChange={onValueChange}
+            <div className="flex flex-row items-center gap-2.5 px-1 pb-1 flex-wrap">
+              <ComposerAddAttachment />
+              <ToggleGroup
+                type="multiple"
+                variant="outline"
+                className="flex gap-2.5"
+                value={value}
+                onValueChange={onValueChange}
+              >
+                <ToggleGroupItem
+                  value="search"
+                  aria-label="Toggle web search"
+                  className="!rounded-md h-6 px-1.5 gap-1 text-[11px] text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary [&_svg]:w-3 [&_svg]:h-3"
                 >
-                  <ToggleGroupItem
-                    value="search"
-                    aria-label="Toggle web search"
-                    className="!rounded-full px-2 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
-                  >
-                    <Search /> {t('chat.thread.search')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="mcp"
-                    aria-label="Toggle mcp"
-                    className="!rounded-full px-2 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
-                    onClick={() => {
-                      onOpenMcpModal?.();
-                    }}
-                  >
-                    <Wrench /> MCP
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="kb"
-                    aria-label="Toggle kb"
-                    className="!rounded-full px-2 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
-                    onClick={() => {
-                      onOpenKbModal?.();
-                    }}
-                  >
-                    <LibraryBig /> {t('chat.thread.knowledgeBase')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="chatdb"
-                    aria-label="Toggle chatdb"
-                    className="!rounded-full px-6 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
-                  >
-                    <DatabaseIcon /> ChatDB
-                  </ToggleGroupItem>
-                </ToggleGroup>
-
-              {/* Right button: ComposerAction */}
+                  <Search /> {t('chat.thread.search')}
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="mcp"
+                  aria-label="Toggle mcp"
+                  className="!rounded-md h-6 px-1.5 gap-1 text-[11px] text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary [&_svg]:w-3 [&_svg]:h-3"
+                  onClick={() => onOpenMcpModal?.()}
+                >
+                  <Wrench /> MCP
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="kb"
+                  aria-label="Toggle kb"
+                  className="!rounded-md h-6 px-1.5 gap-1 text-[11px] text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary [&_svg]:w-3 [&_svg]:h-3"
+                  onClick={() => onOpenKbModal?.()}
+                >
+                  <LibraryBig /> {t('chat.thread.knowledgeBase')}
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="chatdb"
+                  aria-label="Toggle chatdb"
+                  className="!rounded-md h-6 px-1.5 gap-1 text-[11px] text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary [&_svg]:w-3 [&_svg]:h-3"
+                >
+                  <DatabaseIcon /> ChatDB
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
           )}
         </div>
-        <div className="ml-auto">
+        <div className="shrink-0">
           <ComposerAction />
         </div>
       </div>
@@ -478,14 +470,15 @@ const ComposerAction: FC = () => {
 
 const UserMessage: FC = () => {
   return (
-    <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
-      <UserActionBar />
-      <div className="msg-user max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-2xl px-5 py-2 col-start-2 row-start-2 text-sm">
-        <UserMessageAttachments />
-        <MessagePrimitive.Content />
+    <MessagePrimitive.Root className="flex flex-col items-end gap-1 w-full max-w-[var(--thread-max-width)] py-3">
+      <div className="flex items-center gap-1 max-w-[90%]">
+        <UserActionBar />
+        <div className="msg-user break-words rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed">
+          <UserMessageAttachments />
+          <MessagePrimitive.Content />
+        </div>
       </div>
-
-      <BranchPicker className="col-span-full col-start-1 row-start-3 -mr-1 justify-end" />
+      <BranchPicker className="-mr-1" />
     </MessagePrimitive.Root>
   );
 };
@@ -496,7 +489,7 @@ const UserActionBar: FC = () => {
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
-      className="flex flex-col items-end col-start-1 row-start-2 mr-3 mt-2.5"
+      className="shrink-0"
     >
       <ActionBarPrimitive.Edit asChild>
         <TooltipIconButton tooltip={t('chat.thread.edit')}>
@@ -529,7 +522,7 @@ const AssistantMessage: FC = () => {
 
   return (
     <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-1">
-      <div className="gap-2 text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-5 col-span-2 col-start-2 row-start-1 my-1.5 text-sm">
+      <div className="gap-2 text-foreground max-w-[calc(var(--thread-max-width)*0.95)] break-words leading-relaxed col-span-2 col-start-2 row-start-1 my-1.5 text-[13px]">
         {/* <MessagePrimitive.Content components={{ Text: MarkdownText }} /> */}
         <MessagePrimitive.Content
           components={{

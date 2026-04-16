@@ -31,7 +31,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Plus, Edit, Trash2, Settings, HelpCircle, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings, HelpCircle, Upload, MessageSquareQuote, FileQuestion, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Section } from './chatbot_config';
 import { toast } from 'sonner';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { Switch } from '@/components/ui/switch';
@@ -44,6 +46,7 @@ import {
 } from '@/components/ui/tooltip';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 const DEFAULT_SCORE_THRESHOLD = 0.8;
 
@@ -81,6 +84,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [isListExpanded, setIsListExpanded] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadConfig, setUploadConfig] = useState<{
     header_index_max: number | null;
@@ -462,115 +466,137 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   const isFAQActive = botConfig.enable_faq ?? false;
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="enable_faq_switch">{t('apps.faqEnableReply')}</Label>
+    <div className="max-w-5xl mx-auto px-6">
+      <Section
+        icon={<MessageSquareQuote className="w-4 h-4" />}
+        title={t('apps.faqEnableReply')}
+        description={isFAQActive ? undefined : t('apps.faqDisabledDesc')}
+        rightSlot={
+          <div className="flex items-center gap-3">
+            {isFAQActive && (
+              <Badge variant="secondary" className="font-normal">
+                {t('apps.faqNumTip', { faqNum: String(totalItems) })}
+              </Badge>
+            )}
             <Switch
               id="enable_faq_switch"
               checked={isFAQActive}
               onCheckedChange={handleToggleFAQ}
             />
           </div>
-          <span className="text-xs text-muted-foreground">
-            {isFAQActive ? t('apps.faqTip') : t('apps.faqTipOn')}
-          </span>
-        </div>
+        }
+      >
         {isFAQActive && (
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsConfigDialogOpen(true)}
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              {t('common.settings')}
-            </Button>
-            <Button onClick={() => handleOpenDialog()} size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              {t('apps.faqAddNew')}
-            </Button>
-            <Button onClick={() => setIsUploadDialogOpen(true)} size="sm" variant="outline">
-              <Upload className="w-4 h-4 mr-2" />
-              {t('apps.faqUpload')}
-            </Button>
-            {selectedItems.size > 0 && (
-              <Button 
-                onClick={handleBatchDelete} 
-                size="sm" 
-                variant="destructive"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                {t('apps.faqDeleteSelected', { count: String(selectedItems.size) })}
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {isFAQActive && (
-        <>
+          <Collapsible open={isListExpanded} onOpenChange={setIsListExpanded}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2 -ml-2">
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${isListExpanded ? '' : '-rotate-90'}`}
+                  />
+                  {isListExpanded ? t('apps.faqCollapseList') : t('apps.faqExpandList')}
+                </Button>
+              </CollapsibleTrigger>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsConfigDialogOpen(true)}
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  {t('common.settings')}
+                </Button>
+                <Button onClick={() => { setIsListExpanded(true); handleOpenDialog(); }} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  {t('apps.faqAddNew')}
+                </Button>
+                <Button onClick={() => setIsUploadDialogOpen(true)} size="sm" variant="outline">
+                  <Upload className="w-4 h-4 mr-2" />
+                  {t('apps.faqUpload')}
+                </Button>
+                {selectedItems.size > 0 && (
+                  <Button
+                    onClick={handleBatchDelete}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {t('apps.faqDeleteSelected', { count: String(selectedItems.size) })}
+                  </Button>
+                )}
+              </div>
+            </div>
+            <CollapsibleContent className="mt-4">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
           ) : faqs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {t('apps.faqEmpty')}
+            <div className="empty-state">
+              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
+                <FileQuestion className="w-7 h-7" />
+              </div>
+              <p className="text-base font-semibold mb-1">{t('apps.faqEmptyTitle')}</p>
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                {t('apps.faqEmptyDesc')}
+              </p>
             </div>
           ) : (
             <>
-              <div className="mb-4 text-sm text-muted-foreground">
-                {t('apps.faqPaginationInfo', { total: String(totalItems), page: String(page), pages: String(totalPages) })}
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={isAllSelected}
-                        onCheckedChange={handleSelectAll}
-                        aria-label={t('apps.faqSelectAll')}
-                      />
-                    </TableHead>
-                    <TableHead className="w-[200px]">{t('apps.faqQuestion')}</TableHead>
-                    <TableHead>{t('apps.faqAnswer')}</TableHead>
-                    <TableHead className="w-[120px]">{t('apps.faqOperation')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {faqs.map((faq) => (
-                    <TableRow key={faq.id}>
-                      <TableCell>
+              <div className="rounded-lg border border-border overflow-hidden bg-background">
+                <div className="px-4 py-2.5 border-b border-border bg-muted/30 text-sm text-muted-foreground">
+                  {t('apps.faqPaginationInfo', { total: String(totalItems), page: String(page), pages: String(totalPages) })}
+                </div>
+                <Table className="table-modern">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px] pl-4">
                         <Checkbox
-                          checked={faq.id ? selectedItems.has(faq.id) : false}
-                          onCheckedChange={() => faq.id && handleSelectItem(faq.id)}
-                          aria-label={`${t('apps.faqSelectAll')} ${faq.question}`}
+                          checked={isAllSelected}
+                          onCheckedChange={handleSelectAll}
+                          aria-label={t('apps.faqSelectAll')}
                         />
-                      </TableCell>
-                      <TableCell className="font-medium">{faq.question}</TableCell>
-                      <TableCell className="max-w-md truncate">{faq.answer}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenDialog(faq)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => faq.id && handleDelete(faq.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      </TableHead>
+                      <TableHead className="w-[260px]">{t('apps.faqQuestion')}</TableHead>
+                      <TableHead>{t('apps.faqAnswer')}</TableHead>
+                      <TableHead className="w-[120px] text-right pr-4">{t('apps.faqOperation')}</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {faqs.map((faq) => (
+                      <TableRow key={faq.id}>
+                        <TableCell className="pl-4">
+                          <Checkbox
+                            checked={faq.id ? selectedItems.has(faq.id) : false}
+                            onCheckedChange={() => faq.id && handleSelectItem(faq.id)}
+                            aria-label={`${t('apps.faqSelectAll')} ${faq.question}`}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{faq.question}</TableCell>
+                        <TableCell className="max-w-md truncate text-muted-foreground">{faq.answer}</TableCell>
+                        <TableCell className="pr-4">
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleOpenDialog(faq)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:text-destructive"
+                              onClick={() => faq.id && handleDelete(faq.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               {totalItems > 0 && (
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
@@ -589,8 +615,10 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
               )}
             </>
           )}
-        </>
-      )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+      </Section>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">

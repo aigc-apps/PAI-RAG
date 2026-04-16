@@ -359,32 +359,39 @@ const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
   );
 };
 
-const AttachmentThumb: FC = () => {
+const AttachmentThumb: FC<{ inBubble: boolean }> = ({ inBubble }) => {
   const isImage = useAttachment((a) => a.contentType?.startsWith('image/') ?? false);
   const isVideo = useIsVideo();
   const isFromMessage = useIsFromMessage();
   const attachmentId = useAttachmentId();
   const localContentType = useAttachmentContentType();
   const localImageSrc = useAttachmentSrc();
-  
-  // Fetch remote data for message attachments
-  const { url: remoteUrl, contentType: remoteContentType } = useRemoteAttachmentUrl(attachmentId, isFromMessage);
-  
+
+  const { url: remoteUrl, contentType: remoteContentType } = useRemoteAttachmentUrl(
+    attachmentId,
+    isFromMessage,
+  );
+
   const effectiveContentType = remoteContentType || localContentType;
   const isText = isTextContentType(effectiveContentType);
   const isEffectiveVideo = isVideo || isVideoContentType(effectiveContentType);
   const isEffectiveImage = isImage || isImageContentType(effectiveContentType);
-  
-  // Use remote URL for message attachments, local URL for composer attachments
+
   const thumbSrc = isFromMessage ? remoteUrl : localImageSrc;
-  
+
+  const bg = inBubble
+    ? 'bg-white/20 text-white'
+    : 'bg-primary/10 text-primary';
+
   return (
-    <Avatar className="bg-muted flex size-10 items-center justify-center rounded border text-sm">
-      <AvatarFallback delayMs={isEffectiveImage ? 200 : 0}>
+    <Avatar
+      className={`flex size-8 items-center justify-center rounded-md overflow-hidden shrink-0 ${bg} [&_svg]:w-4 [&_svg]:h-4`}
+    >
+      <AvatarFallback delayMs={isEffectiveImage ? 200 : 0} className="bg-transparent">
         {isEffectiveVideo ? (
-          <PlayCircleIcon className="text-primary" />
+          <PlayCircleIcon />
         ) : isText ? (
-          <FileTextIcon className="text-blue-500" />
+          <FileTextIcon />
         ) : (
           <FileIcon />
         )}
@@ -399,64 +406,60 @@ const AttachmentUI: FC = () => {
   const canRemove = useAttachment((a) => a.source !== 'message');
   const uploadStatus = useAttachment((a) => a.status);
   const isFromMessage = useIsFromMessage();
-  const typeLabel = useAttachment((a) => {
-    const type = a.type;
-    switch (type) {
-    case 'image':
-      return t('chat.attachment.image');
-    case 'document':
-      return t('chat.attachment.document');
-    case 'file':
-      // Check if it's a video file
-      if (isVideoContentType(a.contentType)) {
-        return t('chat.attachment.video');
-      }
-      return t('chat.attachment.file');
-    default:
-      const _exhaustiveCheck: never = type;
-      throw new Error(`Unknown attachment type: ${_exhaustiveCheck}`);
-    }
-  });
-  
-  // Safe property access
+
   const progress =
     'progress' in (uploadStatus ?? {})
       ? (uploadStatus as { progress: number }).progress
       : 0;
   const isUploading = uploadStatus.type === 'running' && progress < 100;
   const isError = uploadStatus.type === 'incomplete';
-  
+
+  // Palette adapts to context: inside the blue user bubble we use
+  // translucent white; in the light-colored composer we use muted tones.
+  const cardClass = isFromMessage
+    ? 'bg-white/12 border-white/25 hover:bg-white/18'
+    : 'bg-muted/40 border-border hover:bg-muted/60';
+  const nameClass = isFromMessage ? 'text-white/95' : 'text-foreground/90';
+  const statusColor = isError
+    ? 'text-rose-300'
+    : isUploading
+      ? 'text-amber-200'
+      : isFromMessage
+        ? 'text-emerald-200'
+        : 'text-emerald-600';
+
   return (
     <Tooltip>
-      <AttachmentPrimitive.Root className="relative mt-3">
+      <AttachmentPrimitive.Root className="relative">
         <AttachmentPreviewDialog>
           <TooltipTrigger asChild>
-            <div className="flex h-12 w-40 items-center justify-center gap-2 rounded-lg border p-1">
-              <AttachmentThumb />
-              <div className="flex-grow basis-0">
-                <p className="text-muted-foreground line-clamp-1 text-ellipsis break-all text-xs font-medium">
+            <div
+              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors cursor-pointer w-[200px] ${cardClass}`}
+            >
+              <AttachmentThumb inBubble={isFromMessage} />
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`line-clamp-1 text-ellipsis break-all text-[11px] font-medium ${nameClass}`}
+                >
                   <AttachmentPrimitive.Name />
                 </p>
-                <div className="flex felx-row items-center gap-2 py-1">
+                <div className={`flex items-center gap-1 mt-0.5 text-[10px] ${statusColor}`}>
                   {isError ? (
                     <>
-                      {/* Upload failed status */}
-                      <XCircle className="h-3 w-3 text-red-500" />
-                      <span className="text-red-500 text-xs">{t('chat.attachment.uploadFailed')}</span>
+                      <XCircle className="h-2.5 w-2.5" />
+                      <span>{t('chat.attachment.uploadFailed')}</span>
                     </>
                   ) : isUploading ? (
                     <>
-                      {/* Uploading status */}
-                      <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
-                      <span className="text-yellow-500 text-xs">{t('chat.attachment.uploading')}</span>
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      <span>{t('chat.attachment.uploading')}</span>
                     </>
                   ) : (
                     <>
-                      {/* Upload complete status */}
-                      <CheckCircle className="h-3 w-3 text-green-500" />
-                      <span className="text-green-500 text-xs">{t('chat.attachment.uploaded')}</span>
+                      <CheckCircle className="h-2.5 w-2.5" />
+                      <span>{t('chat.attachment.uploaded')}</span>
                     </>
-                  ) }
+                  )}
                 </div>
               </div>
             </div>
@@ -464,7 +467,7 @@ const AttachmentUI: FC = () => {
         </AttachmentPreviewDialog>
         {canRemove && <AttachmentRemove />}
       </AttachmentPrimitive.Root>
-      <TooltipContent side="top">
+      <TooltipContent side="top" className="text-xs">
         <AttachmentPrimitive.Name />
       </TooltipContent>
     </Tooltip>
@@ -474,20 +477,20 @@ const AttachmentUI: FC = () => {
 const AttachmentRemove: FC = () => {
   return (
     <AttachmentPrimitive.Remove asChild>
-      <TooltipIconButton
-        tooltip=""
-        className="absolute -right-3 -top-3 w-6 h-6"
-        side="top"
+      <button
+        type="button"
+        className="absolute -right-1.5 -top-1.5 w-4 h-4 rounded-full bg-background border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive transition-colors shadow-sm"
+        title="Remove"
       >
-        <CircleXIcon className="text-red-500 hover:text-red-700" />
-      </TooltipIconButton>
+        <CircleXIcon className="w-3 h-3" />
+      </button>
     </AttachmentPrimitive.Remove>
   );
 };
 
 export const UserMessageAttachments: FC = () => {
   return (
-    <div className="flex w-full flex-row gap-3 col-span-full col-start-1 row-start-1 justify-end">
+    <div className="flex flex-wrap gap-1.5 mb-1 justify-end">
       <MessagePrimitive.Attachments components={{ Attachment: AttachmentUI }} />
     </div>
   );
@@ -495,7 +498,7 @@ export const UserMessageAttachments: FC = () => {
 
 export const ComposerAttachments: FC = () => {
   return (
-    <div>
+    <div className="flex flex-wrap gap-1.5">
       <ComposerPrimitive.Attachments
         components={{ Attachment: AttachmentUI }}
       />
@@ -507,14 +510,14 @@ export const ComposerAddAttachment: FC = () => {
   const { t } = useI18n();
   return (
     <ComposerPrimitive.AddAttachment asChild>
-      <TooltipIconButton
-        className="my-2.5 w-24 h-8 p-2 transition-opacity ease-in"
-        tooltip={t('chat.attachment.uploadAttachment')}
-        variant="ghost"
+      <button
+        type="button"
+        title={t('chat.attachment.uploadAttachment')}
+        className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md border border-input bg-background shadow-xs text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
       >
-        <PaperclipIcon />
-        {t('chat.attachment.uploadAttachment')}
-      </TooltipIconButton>
+        <PaperclipIcon className="w-3 h-3" />
+        <span>{t('chat.attachment.uploadAttachment')}</span>
+      </button>
     </ComposerPrimitive.AddAttachment>
   );
 };

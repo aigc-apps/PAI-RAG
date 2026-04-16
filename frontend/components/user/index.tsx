@@ -40,8 +40,14 @@ export default function UserIdInput({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="absolute right-8 top-1">
-          <CircleUser className='w-5 h-5'/>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          title={user_id}
+        >
+          <CircleUser className="w-3.5 h-3.5" />
+          {user_id && <span className="truncate max-w-[100px]">{user_id}</span>}
         </Button>
       </DialogTrigger>
       <DialogContent>

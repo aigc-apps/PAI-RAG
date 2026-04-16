@@ -1,15 +1,12 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import React, { useState, useEffect, FC } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
-  CardHeader,
-  CardTitle,
   CardContent,
-  CardFooter,
 } from '@/components/ui/card';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, MoreHorizontal, Pencil, Clock, AppWindow } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { formatBeijingTime } from '../knowledgebases/utils/utils';
 import {
@@ -21,35 +18,47 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Chatbot } from './chatbot_config';
 import { useRouter } from 'next/navigation';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
+import { HeaderPortal } from '@/components/header-portal';
 
 const ChatbotPage = () => {
   const { t } = useI18n();
   const [chatbots, setChatbots] = useState(Array<Chatbot>);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 6;
+  const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<Chatbot | null>(null);
+  const pageSize = 12;
   const router = useRouter();
   const { tenantFetch } = useTenantFetch();
-  
+
   useEffect(() => {
     const fetchConfigs = async () => {
       try {
+        setLoading(true);
         const res = await tenantFetch(
           `/api/config/apps?page=${page}&size=${pageSize}`,
         );
         if (!res.ok) throw new Error(t('apps.fetchError'));
         const json_data = await res.json();
         const data = json_data.data.items;
-        setChatbots(data || []); // 更新状态
-        setTotalPages(json_data.data.pages);
+        setChatbots(data || []);
+        setTotalPages(json_data.data.pages || 1);
       } catch (err: unknown) {
         console.log(err || '加载失败');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -60,119 +69,187 @@ const ChatbotPage = () => {
     if (newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
   };
+
   const deleteChatbot = async (bot_id: string) => {
     try {
       const res = await tenantFetch(`/api/config/apps/${bot_id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!res.ok) {
-        throw new Error(t('apps.deleteError'));
-      }
+      if (!res.ok) throw new Error(t('apps.deleteError'));
 
-      // 显示成功提示（可选）
-
-      // 删除成功后更新本地状态
       setChatbots((prev) => prev.filter((bot) => bot.id !== bot_id));
     } catch (err: unknown) {
       console.log('删除Chatbot失败。', err);
+    } finally {
+      setDeleteTarget(null);
     }
-    // 显示错误提示
   };
 
   return (
-    <div className="flex flex-col h-screen px-6 space-y-2">
-      <div className="flex justify-between items-center h-1/10">
-        <h1 className="page-title">{t('apps.title')}</h1>
-        <Button
-          className="px-4 py-2 bg-primary rounded-md text-sm font-medium hover:bg-primary/90 w-40"
-          onClick={()=>{router.push('/apps/create')}}
-        >
-          <Plus className="w-6 h-6" />
-          {t('apps.create')}
-        </Button>
-      </div>
-      <div className="text-sm text-muted-foreground pb-2">
-        {t('apps.subtitle')}
-      </div>
+    <div className="flex flex-col h-full min-h-0">
+      <HeaderPortal>
+        <div className="flex items-center gap-2">
+          <h1 className="text-base font-semibold">{t('apps.title')}</h1>
+          <span className="text-xs text-muted-foreground hidden md:inline">
+            · {t('apps.subtitle')}
+          </span>
+        </div>
+        <div className="ml-auto">
+          <Button
+            size="sm"
+            onClick={() => router.push('/apps/create')}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            {t('apps.create')}
+          </Button>
+        </div>
+      </HeaderPortal>
 
-      {/* 卡片容器 */}
-      <div className="h-4/5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-          {chatbots.map((bot) => (
-            <Card
-              onClick={(e) => {
-                // 检查是否点击了交互元素
-                const target = e.target as HTMLElement;
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          {loading ? (
+            <div className="text-center py-16 text-sm text-muted-foreground">
+              {t('common.loading')}
+            </div>
+          ) : chatbots.length === 0 ? (
+            <div className="empty-state mt-8">
+              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
+                <AppWindow className="w-7 h-7" />
+              </div>
+              <p className="text-base font-semibold mb-1">{t('apps.emptyTitle')}</p>
+              <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
+                {t('apps.emptyMessage')}
+              </p>
+              <Button size="sm" onClick={() => router.push('/apps/create')}>
+                <Plus className="w-4 h-4 mr-1" />
+                {t('apps.create')}
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {chatbots.map((bot) => {
+                const initial = (bot.app_id || 'A').charAt(0).toUpperCase();
+                return (
+                  <Card
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target instanceof HTMLElement && target.closest('[data-stop-click]')) {
+                        return;
+                      }
+                      router.push(`/apps/${bot.app_id}`);
+                    }}
+                    key={bot.id}
+                    className="group relative cursor-pointer flex flex-col gap-0 p-4 rounded-xl border border-border bg-card card-hover-glow transition-all duration-200"
+                  >
+                    {/* Top: avatar + title + more menu */}
+                    <div className="flex items-start gap-3">
+                      <div className="model-icon type-llm shrink-0">
+                        {initial}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold truncate leading-tight">
+                          {bot.app_id}
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                          ID · {bot.id.slice(0, 8)}
+                        </p>
+                      </div>
+                      <div data-stop-click className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 -mr-1.5"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="menu-compact">
+                            <DropdownMenuItem
+                              onSelect={() => router.push(`/apps/${bot.app_id}`)}
+                            >
+                              <Pencil />
+                              {t('common.edit')}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                setDeleteTarget(bot);
+                              }}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 />
+                              {t('common.delete')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
 
-                if (target instanceof HTMLElement && target.closest('button')) {
-                  console.log('按钮被点击');
-                  return; // 是交互元素，不触发卡片跳转
-                }
-                router.push(`/apps/${bot.app_id}`);
-              }}
-              key={bot.id}
-              className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 card-hover-glow duration-300"
-            >
-              <CardHeader>
-                <CardTitle className="text-md flex pt-4 pb-1">
-                  {bot.app_id}
-                </CardTitle>
-              </CardHeader>
+                    {/* Description */}
+                    <CardContent className="px-0 pt-3 pb-3 flex-1">
+                      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                        {bot.description || t('knowledgebase.noDescription')}
+                      </p>
+                    </CardContent>
 
-              <CardContent className="pt-0 pb-0">
-                <p className="text-xs text-muted-foreground line-clamp-1">
-                  {bot.description
-                    ? bot.description
-                    : t('knowledgebase.noDescription')}
-                </p>
-              </CardContent>
-              <CardFooter className="px-3 pt-0 flex justify-between w-full py-0">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="link" className="text-muted-foreground">
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{t('apps.deleteConfirmTitle')}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {t('apps.deleteConfirmMessage')}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteChatbot(bot.id)}
-                      >
-                        {t('common.delete')}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-
-                <div className="text-xs text-muted-foreground line-clamp-1 truncate">
-                  {formatBeijingTime(bot.updated_at)}
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
+                    {/* Footer */}
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-2 border-t border-border">
+                      <Clock className="w-3 h-3" />
+                      <span className="truncate">{formatBeijingTime(bot.updated_at)}</span>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
-      {/* 分页组件 */}
-      <div className="flex justify-center items-center h-1/10">
-        <PaginationComponent
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
-      </div>
+
+      {!loading && chatbots.length > 0 && (
+        <div className="flex-none border-t border-border bg-background/60 backdrop-blur-sm py-2">
+          <PaginationComponent
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('apps.deleteConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('apps.deleteConfirmMessage')}
+              {deleteTarget && (
+                <span className="block mt-2 font-medium text-foreground">
+                  {deleteTarget.app_id}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteChatbot(deleteTarget.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-}
+};
 
 export default ChatbotPage;

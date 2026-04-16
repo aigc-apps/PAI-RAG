@@ -1,85 +1,143 @@
 'use client';
 import { GlobeIcon } from '@radix-ui/react-icons';
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { makeAssistantToolUI } from '@assistant-ui/react';
 import React, { useState, useEffect } from 'react';
-import { PaperclipIcon, Search, FileSearch, FileText, ListTodoIcon, BookCheckIcon, Code2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Badge } from "@/components/ui/badge";
-import { PhotoProvider, PhotoView } from "react-photo-view";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from "remark-gfm";
+  PaperclipIcon,
+  FileSearch,
+  ListTodoIcon,
+  BookCheckIcon,
+  Code2,
+  ChevronRight,
+  Loader2,
+  AlertCircle,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { PhotoProvider, PhotoView } from 'react-photo-view';
 import { MarkdownRenderer } from '@/components/customized/markdown/markdown';
 import { jsonrepair } from 'jsonrepair';
 import { useI18n } from '@/app/providers/i18n';
 
-// Helper function to safely parse JSON with error handling
-const safeParseJSON = <T = any>(jsonString: string, fallback?: T): T => {
+// ===== Helpers =====
+
+const safeParseJSON = <T = any,>(jsonString: string, fallback?: T): T => {
   try {
     return JSON.parse(jsonString) as T;
-  } catch (error) {
-    // If parsing fails, try to repair JSON using jsonrepair
+  } catch {
     try {
-      const repairedJson = jsonrepair(jsonString);
-      return JSON.parse(repairedJson) as T;
+      return JSON.parse(jsonrepair(jsonString)) as T;
     } catch (repairError) {
-      console.error('Failed to parse JSON:', error, repairError, 'Original string:', jsonString);
-      if (fallback !== undefined) {
-        return fallback;
-      }
+      console.error('Failed to parse JSON:', repairError, 'Original:', jsonString);
+      if (fallback !== undefined) return fallback;
       throw new Error('Invalid JSON format');
     }
   }
 };
 
-const JsonCodeBlock = ({
-  jsonString,
+/** Compact monospace code block, uniform across all tool UIs. */
+const CodeBlock = ({
+  text,
+  language,
 }: {
-  jsonString: string | null | undefined;
-}) => {
-  return (
-    <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-2 font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
-      <code className="language-json whitespace-pre-wrap break-words">
-        {jsonString ?? ''}
-      </code>
+  text: string;
+  language?: string;
+}) => (
+  <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 overflow-hidden">
+    {language && (
+      <div className="px-2.5 py-1 border-b border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+        {language}
+      </div>
+    )}
+    <pre className="text-[11px] leading-relaxed font-mono text-slate-700 dark:text-slate-200 px-2.5 py-1.5 whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
+      {text}
     </pre>
+  </div>
+);
+
+// ===== Shared bubble primitives =====
+
+/** The tight running bubble: spinner + tool label + query. */
+const RunningBubble: FC<{
+  icon: ReactNode;
+  label: string;
+  detail?: string;
+}> = ({ icon, label, detail }) => (
+  <div className="my-1 inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-[11px] text-muted-foreground">
+    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+    {icon}
+    <span>{label}</span>
+    {detail !== undefined && detail !== '' && (
+      <>
+        <span className="text-muted-foreground/60">·</span>
+        <span className="font-mono text-foreground/90 truncate max-w-[220px]">
+          {detail}
+        </span>
+      </>
+    )}
+  </div>
+);
+
+/** The inline collapsible bubble: header row + expand-in-place content. */
+const CollapsibleBubble: FC<{
+  icon: ReactNode;
+  label: string;
+  detail?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}> = ({ icon, label, detail, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="my-1 rounded-md border border-primary/20 bg-primary/[0.04] overflow-hidden text-xs">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 hover:bg-primary/10 transition-colors text-left"
+      >
+        <ChevronRight
+          className={`w-3 h-3 text-primary/70 shrink-0 transition-transform ${
+            open ? 'rotate-90' : ''
+          }`}
+        />
+        {icon}
+        <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
+        {detail !== undefined && detail !== '' && (
+          <span className="font-mono text-[11px] text-foreground/90 truncate">
+            · {detail}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="px-2 pb-2 pt-1 border-t border-primary/15 bg-background/60 space-y-2">
+          {children}
+        </div>
+      )}
+    </div>
   );
 };
 
-const PythonCodeBlock = ({
-  code,
-}: {
-  code: string | null | undefined;
-}) => {
-  return (
-    <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-3 rounded-md font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
-      <code className="language-python whitespace-pre-wrap break-words">
-        {code ?? ''}
-      </code>
-    </pre>
-  );
-};
+/** Inline error bubble. */
+const ErrorBubble: FC<{ icon: ReactNode; label: string; detail?: string }> = ({
+  icon,
+  label,
+  detail,
+}) => (
+  <div className="my-1 inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-600 dark:text-rose-400">
+    <AlertCircle className="w-3 h-3" />
+    {icon}
+    <span>{label}</span>
+    {detail && <span className="truncate max-w-[260px]">· {detail}</span>}
+  </div>
+);
 
-/* Search Web Tool UI */
+// Small icon-coloring helper
+const DimIcon = ({ children }: { children: ReactNode }) => (
+  <span className="text-muted-foreground shrink-0 [&_svg]:w-3 [&_svg]:h-3">
+    {children}
+  </span>
+);
+
+// ===== Tool UIs =====
 
 export type SearchWebArgs = {
   query: string;
@@ -87,115 +145,115 @@ export type SearchWebArgs = {
 
 type SearchWebResult = {
   result: {
-      title: string;
-      content: string;
-      url: string;
-      favicon: string;
-      hostname: string;
-      publish_time: string;
-      score: string;
-    }[],
+    title: string;
+    content: string;
+    url: string;
+    favicon: string;
+    hostname: string;
+    publish_time: string;
+    score: string;
+  }[];
 };
 
+const WebSearchResults: FC<{ items: SearchWebResult['result'] }> = ({ items }) => {
+  // Dedup by URL + title — some backends echo the same result multiple times
+  // (e.g. aggregating different providers), which should show as one card.
+  const deduped = React.useMemo(() => {
+    if (!items?.length) return [];
+    const seen = new Set<string>();
+    const out: SearchWebResult['result'] = [];
+    for (const item of items) {
+      const key = `${item.url || ''}|${item.title || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+    return out;
+  }, [items]);
+
+  if (!deduped.length) {
+    return <p className="text-[11px] text-muted-foreground">—</p>;
+  }
+  return (
+    <div className="space-y-1.5">
+      {deduped.map((item, index) => (
+        <a
+          key={index}
+          href={item.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-muted/60 transition-colors"
+        >
+          <div className="w-5 h-5 rounded bg-muted flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
+            {item.favicon ? (
+              <img
+                src={item.favicon}
+                alt={item.hostname || ''}
+                className="w-3.5 h-3.5 object-cover"
+              />
+            ) : (
+              <GlobeIcon className="w-3 h-3 text-muted-foreground" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-medium text-foreground hover:text-primary truncate">
+              {item.title}
+            </div>
+            {item.content && (
+              <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
+                {item.content}
+              </p>
+            )}
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+};
 
 export const TavilySearchToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'tavily-websearch',
   render: ({ args, status, result, isError }) => {
     const { t } = useI18n();
-    console.log('TavilySearchTool 参数:', args);
-    console.log('TavilySearchTool 状态:', status);
 
     if (status.type === 'running') {
       return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-          >
-            <GlobeIcon className="size-4" /> {t('chat.tools.searchingWeb')}: {args.query}{' '}
-          </Button>
-        </div>
-      );
-    } else if (status.type === 'complete') {
-      if (!result || isError) {
-        return (
-          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
-            <GlobeIcon className="h-4 w-4" />
-            <span>{t('chat.tools.searchFailed')}. {result || ''}</span>
-          </div>
-        );
-      }
-      let search_result: SearchWebResult;
-      try {
-        search_result = safeParseJSON<SearchWebResult>(result);
-      } catch (error) {
-        console.error('Failed to parse SearchWeb result:', error);
-        search_result = { result: [] };
-      }
-
-      return (
-        <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center justify-start h-7 w-full text-gray-600 text-xs gap-2 px-4 "
-              >
-                {' '}
-                <GlobeIcon className="size-4" /> {t('chat.tools.webSearchComplete')}: {args.query}{' '}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>
-                  {t('chat.tools.webSearchResults')} · {search_result?.result.length}
-                </SheetTitle>
-                <SheetDescription>{args.query}</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-                <div className="pl-6 pr-2">
-                  {search_result?.result.map((item, index) => (
-                    <div
-                      key={index}
-                      className="text-sm p-3 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 transition-colors">
-                        {/* Logo与标题行 */}
-                        <div className="flex items-center gap-1">
-                          <div className="flex-shrink-0 w-8 h-7 bg-muted flex items-center justify-center">
-                            <img
-                              src={item.favicon}
-                              alt={item.hostname || ''}
-                              className="w-5 h-5 object-cover rounded-sm"
-                            />
-                          </div>
-
-                          {/* 标题链接 */}
-                          <a
-                            href={item.url}
-                            className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
-                          >
-                            {item.title}
-                          </a>
-                        </div>
-
-                        {/* 内容区域 */}
-                        <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
-                          {item.content}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        <RunningBubble
+          icon={<DimIcon><GlobeIcon /></DimIcon>}
+          label={t('chat.tools.searchingWeb')}
+          detail={args.query}
+        />
       );
     }
+    if (status.type === 'complete') {
+      if (!result || isError) {
+        return (
+          <ErrorBubble
+            icon={<DimIcon><GlobeIcon /></DimIcon>}
+            label={t('chat.tools.searchFailed')}
+            detail={String(result || '')}
+          />
+        );
+      }
+      let data: SearchWebResult;
+      try {
+        data = safeParseJSON<SearchWebResult>(result);
+      } catch {
+        data = { result: [] };
+      }
+      return (
+        <CollapsibleBubble
+          icon={<DimIcon><GlobeIcon /></DimIcon>}
+          label={t('chat.tools.webSearchComplete')}
+          detail={args.query}
+        >
+          <WebSearchResults items={data.result} />
+        </CollapsibleBubble>
+      );
+    }
+    return null;
   },
 });
-
 
 export type ChatDbArgs = {
   query: string;
@@ -206,87 +264,53 @@ type ChatDbResult = {
   sql: string;
 };
 
-
-
 export const ChatDbToolUI = makeAssistantToolUI<ChatDbArgs, string>({
   toolName: 'chat-db',
   render: ({ args, status, result, isError }) => {
     const { t } = useI18n();
-    console.log('ChatDbTool 参数:', args);
-    console.log('ChatDbTool 状态:', status);
-    console.log('ChatDbTool 是否出错:', isError);
-    console.log('ChatDbTool 结果:', result);
 
     if (status.type === 'running') {
       return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-          >
-            <GlobeIcon className="size-4" /> {t('chat.tools.queryingDb')}: {args.query}{' '}
-          </Button>
-        </div>
-      );
-    } else if (status.type === 'complete') {
-      if (!result || isError) {
-        return (
-          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
-            <GlobeIcon className="h-4 w-4" />
-            <span>{t('chat.tools.dbSearchFailed')}{result || ''}</span>
-          </div>
-        );
-      }
-      let db_result: ChatDbResult;
-      try {
-        db_result = safeParseJSON<ChatDbResult>(result);
-      } catch (error) {
-        console.error('Failed to parse ChatDb result:', error);
-        db_result = { result: '', sql: '' };
-      }
-
-      return (
-        <div className="h-7 items-center bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center justify-start h-7 w-full text-gray-600 text-xs gap-2 px-4 "
-              >
-                {' '}
-                <GlobeIcon className="size-4" /> {t('chat.tools.dbQueryComplete')}: {args.query}{' '}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>
-                  {t('chat.tools.queryResults')}
-                </SheetTitle>
-                <SheetDescription>Query: {args.query}</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-                <div className="pl-6 pr-2">
-                <MarkdownRenderer content={`${t('chat.tools.dataResult')}
-
-${db_result.result}
-
-SQL:
-
-\`\`\`sql
-${db_result.sql}
-\`\`\``} />
-
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        <RunningBubble
+          icon={<DimIcon><GlobeIcon /></DimIcon>}
+          label={t('chat.tools.queryingDb')}
+          detail={args.query}
+        />
       );
     }
+    if (status.type === 'complete') {
+      if (!result || isError) {
+        return (
+          <ErrorBubble
+            icon={<DimIcon><GlobeIcon /></DimIcon>}
+            label={t('chat.tools.dbSearchFailed')}
+            detail={String(result || '')}
+          />
+        );
+      }
+      let data: ChatDbResult;
+      try {
+        data = safeParseJSON<ChatDbResult>(result);
+      } catch {
+        data = { result: '', sql: '' };
+      }
+      return (
+        <CollapsibleBubble
+          icon={<DimIcon><GlobeIcon /></DimIcon>}
+          label={t('chat.tools.dbQueryComplete')}
+          detail={args.query}
+        >
+          <div className="prose prose-sm max-w-none text-xs">
+            <MarkdownRenderer
+              content={`${t('chat.tools.dataResult')}\n\n${data.result}\n\nSQL:\n\n\`\`\`sql\n${data.sql}\n\`\`\``}
+            />
+          </div>
+        </CollapsibleBubble>
+      );
+    }
+    return null;
   },
 });
-
-
 
 export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'planning-tool',
@@ -295,78 +319,57 @@ export const PlanningToolUI = makeAssistantToolUI<SearchWebArgs, string>({
 
     if (status.type === 'running') {
       return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-          >
-            <ListTodoIcon className="size-4" /> {t('chat.tools.makingPlan')}
-          </Button>
-        </div>
-      );
-    } else if (status.type === 'complete') {
-      if (!result || isError) {
-        return (
-          <div className="flex items-center gap-2 text-sm font-medium text-red-500 mb-1">
-            <ListTodoIcon className="h-4 w-4" />
-            <span>{t('chat.tools.planFailed')} {result || ''}</span>
-          </div>
-        );
-      }
-      
-      let plan_result;
-      try {
-        plan_result = safeParseJSON(result);
-      } catch (error) {
-        console.error('Failed to parse plan result JSON:', error);
-        return (
-          <div className="flex items-center gap-2 text-sm font-medium text-red-500 mb-1">
-            <ListTodoIcon className="h-4 w-4" />
-            <span>{t('chat.tools.parsePlanFailed')}</span>
-          </div>
-        );
-      }
-      return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-              >
-                {' '}
-                <ListTodoIcon className="size-4" /> {t('chat.tools.planComplete')}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>
-                  {t('chat.tools.executionPlan')} - {t('common.total')}{plan_result?.steps.length}{t('chat.tools.steps')} 
-                </SheetTitle>
-                <SheetDescription>{args.query}</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-                <div className="pl-3 pr-2">
-                  {plan_result?.steps.map((item: any, index: number) => (
-                    <div
-                      key={index}
-                      className="text-sm p-1 hover:bg-muted/50 transition-colors py-3"
-                    >
-                        {/* 标题 */}
-                        <div
-                          className="font-medium text-foreground hover:text-primary transition-colors bg-gray-50 p-1 rounded"
-                        >
-                          {index + 1}. {item}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        <RunningBubble
+          icon={<DimIcon><ListTodoIcon /></DimIcon>}
+          label={t('chat.tools.makingPlan')}
+        />
       );
     }
+    if (status.type === 'complete') {
+      if (!result || isError) {
+        return (
+          <ErrorBubble
+            icon={<DimIcon><ListTodoIcon /></DimIcon>}
+            label={t('chat.tools.planFailed')}
+            detail={String(result || '')}
+          />
+        );
+      }
+      let plan: any;
+      try {
+        plan = safeParseJSON(result);
+      } catch {
+        return (
+          <ErrorBubble
+            icon={<DimIcon><ListTodoIcon /></DimIcon>}
+            label={t('chat.tools.parsePlanFailed')}
+          />
+        );
+      }
+      const steps: string[] = plan?.steps ?? [];
+      return (
+        <CollapsibleBubble
+          icon={<DimIcon><ListTodoIcon /></DimIcon>}
+          label={t('chat.tools.planComplete')}
+          detail={`${steps.length} ${t('chat.tools.steps')}`}
+        >
+          <ol className="space-y-1">
+            {steps.map((item, index) => (
+              <li
+                key={index}
+                className="flex items-start gap-2 text-xs rounded-md px-1.5 py-1 hover:bg-muted/40"
+              >
+                <span className="text-[10px] font-mono text-muted-foreground shrink-0 mt-0.5">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <span className="flex-1">{item}</span>
+              </li>
+            ))}
+          </ol>
+        </CollapsibleBubble>
+      );
+    }
+    return null;
   },
 });
 
@@ -374,101 +377,47 @@ export const SearchWebToolUI = makeAssistantToolUI<SearchWebArgs, string>({
   toolName: 'aliyun-websearch',
   render: ({ args, status, result, isError }) => {
     const { t } = useI18n();
-    console.log('SearchWebToolUI 参数:', args);
-    console.log('SearchWebToolUI 状态:', status);
 
     if (status.type === 'running') {
       return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-          >
-            <GlobeIcon className="size-4" /> {t('chat.tools.searchingWeb')}: {args.query}{' '}
-          </Button>
-        </div>
-      );
-    } else if (status.type === 'complete') {
-      if (!result || isError) {
-        return (
-          <div className="flex items-center gap-2 text-sm font-medium text-red-400">
-            <GlobeIcon className="h-4 w-4" />
-            <span>{t('chat.tools.searchFailed')} {result || ''}</span>
-          </div>
-        );
-      }
-      let search_result: SearchWebResult;
-      try {
-        search_result = safeParseJSON<SearchWebResult>(result);
-      } catch (error) {
-        console.error('Failed to parse SearchWeb result:', error);
-        search_result = { result: [] };
-      }
-      return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-7 flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-              >
-                {' '}
-                <GlobeIcon className="size-4" /> {t('chat.tools.webSearchComplete')}: {args.query}{' '}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>
-                  {t('chat.tools.webSearchResults')} · {search_result?.result.length}
-                </SheetTitle>
-                <SheetDescription>{args.query}</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-                <div className="pl-6 pr-2">
-                  {search_result?.result.map((item, index) => (
-                    <div
-                      key={index}
-                      className="text-sm p-3 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex flex-col gap-1 p-1 hover:bg-muted/50 transition-colors">
-                        {/* Logo与标题行 */}
-                        <div className="flex items-center gap-1">
-                          <div className="flex-shrink-0 w-8 h-7 bg-muted flex items-center justify-center">
-                            <img
-                              src={item.favicon}
-                              alt={item.hostname || ''}
-                              className="w-5 h-5 object-cover rounded-sm"
-                            />
-                          </div>
-
-                          {/* 标题链接 */}
-                          <a
-                            href={item.url}
-                            className="font-medium text-foreground hover:text-primary hover:underline truncate transition-colors"
-                          >
-                            {item.title}
-                          </a>
-                        </div>
-
-                        {/* 内容区域 */}
-                        <p className="text-muted-foreground text-xs mt-1 leading-relaxed line-clamp-3">
-                          {item.content}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        <RunningBubble
+          icon={<DimIcon><GlobeIcon /></DimIcon>}
+          label={t('chat.tools.searchingWeb')}
+          detail={args.query}
+        />
       );
     }
+    if (status.type === 'complete') {
+      if (!result || isError) {
+        return (
+          <ErrorBubble
+            icon={<DimIcon><GlobeIcon /></DimIcon>}
+            label={t('chat.tools.searchFailed')}
+            detail={String(result || '')}
+          />
+        );
+      }
+      let data: SearchWebResult;
+      try {
+        data = safeParseJSON<SearchWebResult>(result);
+      } catch {
+        data = { result: [] };
+      }
+      return (
+        <CollapsibleBubble
+          icon={<DimIcon><GlobeIcon /></DimIcon>}
+          label={t('chat.tools.webSearchComplete')}
+          detail={args.query}
+        >
+          <WebSearchResults items={data.result} />
+        </CollapsibleBubble>
+      );
+    }
+    return null;
   },
 });
 
-
-/* Read File Tool UI */
+// ===== Read File =====
 
 export type ReadFileToolArgs = {
   file_id: string;
@@ -479,144 +428,85 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
   toolName: 'read-file',
   render: ({ args, status, result, isError }) => {
     const { t } = useI18n();
+
     if (status.type === 'running') {
       return (
-        <div className="h-7 bg-muted/50  cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-          >
-            <PaperclipIcon className="size-4" /> {t('chat.tools.readingFile')}: {args.file_id}
-          </Button>
-        </div>
-      );
-    } else if (status.type === 'complete') {
-      if (!result || isError) {
-        return null;
-      }
-
-      let parsedResult;
-      try {
-        parsedResult = safeParseJSON(result);
-      } catch (error) {
-        console.error('Failed to parse ReadFile result:', error);
-        return null;
-      }
-      console.log('ReadFileToolUI 结果:', parsedResult);
-      console.log('ReadFileToolUI 参数:', args);
-
-      return (
-        <div className="h-7 bg-muted/50  cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-              >
-                <PaperclipIcon className="size-4" /> {t('chat.tools.fileReadComplete')}: {args.file_name}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>{t('chat.tools.fileReadResults')}</SheetTitle>
-                <SheetDescription>{t('chat.tools.fileName')}:{args.file_name}</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-                <div className="border-t border-dashed px-4 pt-2">
-                  <p className="font-semibold">{t('chat.tools.fileReadResult')}:</p>
-                  <JsonCodeBlock
-                    jsonString={
-                      typeof parsedResult === 'string'
-                        ? parsedResult
-                        : JSON.stringify(parsedResult, null, 2)
-                    }
-                  />
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        <RunningBubble
+          icon={<DimIcon><PaperclipIcon /></DimIcon>}
+          label={t('chat.tools.readingFile')}
+          detail={args.file_id}
+        />
       );
     }
+    if (status.type === 'complete') {
+      if (!result || isError) return null;
+      let parsed: any;
+      try {
+        parsed = safeParseJSON(result);
+      } catch {
+        return null;
+      }
+      return (
+        <CollapsibleBubble
+          icon={<DimIcon><PaperclipIcon /></DimIcon>}
+          label={t('chat.tools.fileReadComplete')}
+          detail={args.file_name}
+        >
+          <CodeBlock
+            text={typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)}
+          />
+        </CollapsibleBubble>
+      );
+    }
+    return null;
   },
 });
 
-/* Search File Tool UI */
+// ===== Search File =====
 
 export type SearchFileToolArgs = {
   query_str: string;
 };
 
-export const SearchFileToollUI = makeAssistantToolUI<
-  SearchFileToolArgs,
-  string
->({
+export const SearchFileToollUI = makeAssistantToolUI<SearchFileToolArgs, string>({
   toolName: 'search-file',
   render: ({ args, status, result, isError }) => {
     const { t } = useI18n();
-    console.log('SearchFileToollUI 参数:', args);
 
     if (status.type === 'running') {
       return (
-        <div className="h-7 bg-muted/50  cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-          >
-            <FileSearch className="size-4" /> {t('chat.tools.searchingFile')}: {args.query_str}
-          </Button>
-        </div>
-      );
-    } else if (status.type === 'complete') {
-      if (!result || isError) {
-        return null;
-      }
-      let parsedResult;
-      try {
-        parsedResult = safeParseJSON(result);
-      } catch (error) {
-        console.error('Failed to parse SearchFile result:', error);
-        return null;
-      }
-      console.log('SearchFileToollUI 结果:', parsedResult);
-
-      return (
-        <div className="h-7 bg-muted/50  cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-              >
-                <FileSearch className="size-4" /> {t('chat.tools.fileSearchComplete')}: {args.query_str}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>{t('chat.tools.fileSearchResults')}</SheetTitle>
-                <SheetDescription>{t('chat.tools.searchQuery')}:{args.query_str}</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto">
-                <div className="border-t border-dashed px-4 pt-2">
-                  <p className="font-semibold">{t('chat.tools.fileSearchResult')}:</p>
-                  <JsonCodeBlock
-                    jsonString={
-                      typeof parsedResult === 'string'
-                        ? parsedResult
-                        : JSON.stringify(parsedResult, null, 2)
-                    }
-                  />
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        <RunningBubble
+          icon={<DimIcon><FileSearch /></DimIcon>}
+          label={t('chat.tools.searchingFile')}
+          detail={args.query_str}
+        />
       );
     }
+    if (status.type === 'complete') {
+      if (!result || isError) return null;
+      let parsed: any;
+      try {
+        parsed = safeParseJSON(result);
+      } catch {
+        return null;
+      }
+      return (
+        <CollapsibleBubble
+          icon={<DimIcon><FileSearch /></DimIcon>}
+          label={t('chat.tools.fileSearchComplete')}
+          detail={args.query_str}
+        >
+          <CodeBlock
+            text={typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)}
+          />
+        </CollapsibleBubble>
+      );
+    }
+    return null;
   },
 });
 
-/* Search Knowledgebase Tool UI */
+// ===== Search Knowledge Base =====
 
 export type SearchKbArgs = {
   query: string;
@@ -631,121 +521,139 @@ type SearchKbResult = {
     hostname: string;
     publish_time: string;
     score: string;
-    images: {
-      url: string;
-      desc: string;
-    }[];
-
+    images: { url: string; desc: string }[];
   }[];
   error: string;
 };
 
 export const SearchKbToolUI = makeAssistantToolUI<SearchKbArgs, string>({
-  toolName: "search-knowledgebase",
+  toolName: 'search-knowledgebase',
   render: ({ args, status, result, isError }) => {
     const { t } = useI18n();
-    console.log("SearchKbToolUI 参数:", args);
-    console.log("SearchKbToolUI 状态:", status);
 
-    if (status.type === "running") {
+    if (status.type === 'running') {
       return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors">
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-          >
-            <BookCheckIcon className="size-4" /> {t('chat.tools.searchingKb')}: {args.query}{" "}
-          </Button>
-        </div>
-      );
-    } else if (status.type === "complete") {
-      if (!result || isError) {
-        return (
-          <div className="flex items-center gap-2 text-sm font-medium text-red-500">
-            <GlobeIcon className="h-4 w-4" />
-            <span>{t('chat.tools.searchFailed')} {result || ''}</span>
-          </div>
-        );
-      }
-      let search_result: SearchKbResult;
-      try {
-        search_result = safeParseJSON<SearchKbResult>(result);
-      } catch (error) {
-        console.error('Failed to parse SearchKb result:', error);
-        search_result = { result: [], error: '' };
-      }
-      return (
-        <div className="h-7 bg-muted/50 cursor-pointer mb-1 hover:bg-muted/100 rounded transition-colors round-sm">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-              >
-                {" "}
-                <BookCheckIcon className="size-4" /> {t('chat.tools.kbSearchComplete')}: {args.query}{" "}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>{t('chat.tools.kbSearchResults')}</SheetTitle>
-                <SheetDescription>{args.query}</SheetDescription>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 border-t pt-2 pb-2 overflow-y-auto max-h-[calc(100vh-120px)]">
-                <div className="pl-4 pr-2">
-                  <Accordion
-                    type="single"
-                    collapsible
-                    className="max-w-lg my-4 w-full space-y-2"
-                  >
-                    {search_result?.result.map((item, index) => (
-                      <AccordionItem
-                        key={index}
-                        value={`item-${index}`}
-                        className="border px-4"
-                      >
-                        <AccordionTrigger>
-                          Chunk{index + 1}: {item.title}{" "} 
-                          <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 shadow-none rounded-full">
-                            {parseFloat(item.score).toFixed(4)}
-                          </Badge>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <a href={item.url} className='text-blue-600 hover:underline'>{t('chat.tools.documentLink')}</a>
-                          <div>{item.content}</div>
-                          
-                          {item?.images.map((meta, index) => (
-                            <PhotoProvider
-                              key={index}
-                              maskOpacity={0.8}
-                              overlayRender={({}) => {
-                                return (
-                                  <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
-                                    <div>{t('chat.tools.imageDesc')}:{meta.desc}</div>
-                                  </div>
-                                );
-                              }}
-                            >
-                              <PhotoView key={index} src={meta.url}>
-                                <img src={meta.url} className="w-10 h-10" />
-                              </PhotoView>
-                            </PhotoProvider>
-                          ))}
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        <RunningBubble
+          icon={<DimIcon><BookCheckIcon /></DimIcon>}
+          label={t('chat.tools.searchingKb')}
+          detail={args.query}
+        />
       );
     }
+    if (status.type === 'complete') {
+      if (!result || isError) {
+        return (
+          <ErrorBubble
+            icon={<DimIcon><BookCheckIcon /></DimIcon>}
+            label={t('chat.tools.searchFailed')}
+            detail={String(result || '')}
+          />
+        );
+      }
+      let data: SearchKbResult;
+      try {
+        data = safeParseJSON<SearchKbResult>(result);
+      } catch {
+        data = { result: [], error: '' };
+      }
+      const chunks = data?.result ?? [];
+      return (
+        <CollapsibleBubble
+          icon={<DimIcon><BookCheckIcon /></DimIcon>}
+          label={t('chat.tools.kbSearchComplete')}
+          detail={args.query}
+        >
+          {chunks.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">—</p>
+          ) : (
+            <div className="space-y-1.5">
+              {chunks.map((item, index) => (
+                <KbChunkItem key={index} item={item} index={index} />
+              ))}
+            </div>
+          )}
+        </CollapsibleBubble>
+      );
+    }
+    return null;
   },
 });
 
-/* Python Interpreter Tool UI */
+const KbChunkItem: FC<{
+  item: SearchKbResult['result'][number];
+  index: number;
+}> = ({ item, index }) => {
+  const [open, setOpen] = useState(false);
+  const { t } = useI18n();
+  return (
+    <div className="rounded-md border border-border bg-background">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-muted/40"
+      >
+        <ChevronRight
+          className={`w-3 h-3 text-muted-foreground shrink-0 transition-transform ${
+            open ? 'rotate-90' : ''
+          }`}
+        />
+        <Badge
+          variant="secondary"
+          className="h-4 px-1 text-[9px] font-mono shrink-0"
+        >
+          #{index + 1}
+        </Badge>
+        <span className="text-xs font-medium truncate flex-1">{item.title}</span>
+        <Badge className="bg-green-500/10 hover:bg-green-500/10 text-green-700 border-green-500/30 shadow-none h-4 px-1 text-[10px] font-mono shrink-0">
+          {parseFloat(item.score).toFixed(3)}
+        </Badge>
+      </button>
+      {open && (
+        <div className="px-3 pb-2 pt-1 border-t border-border/50 space-y-1.5 text-[11px] leading-relaxed">
+          {item.url && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary hover:underline inline-block"
+            >
+              {t('chat.tools.documentLink')}
+            </a>
+          )}
+          <div className="whitespace-pre-wrap break-words text-foreground/80">
+            {item.content}
+          </div>
+          {item.images?.length > 0 && (
+            <div className="flex gap-1 flex-wrap pt-1">
+              {item.images.map((meta, idx) => (
+                <PhotoProvider
+                  key={idx}
+                  maskOpacity={0.8}
+                  overlayRender={() => (
+                    <div className="absolute left-0 bottom-0 p-3 w-full min-h-20 text-xs text-slate-300 z-50 bg-black/50">
+                      {t('chat.tools.imageDesc')}: {meta.desc}
+                    </div>
+                  )}
+                >
+                  <PhotoView src={meta.url}>
+                    <img
+                      src={meta.url}
+                      className="w-8 h-8 rounded object-cover cursor-pointer"
+                    />
+                  </PhotoView>
+                </PhotoProvider>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ===== Python Interpreter =====
+// Keeps special streaming behaviour: auto-expand on run, auto-collapse 3s
+// after complete (users can still toggle manually).
 
 export type PythonInterpreterArgs = {
   code: string;
@@ -755,182 +663,124 @@ export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs
   toolName: 'PythonInterpreter',
   render: ({ args, status, result, isError }) => {
     const { t } = useI18n();
-    const [isOpen, setIsOpen] = useState(false);
+    const [open, setOpen] = useState(false);
     const [savedCode, setSavedCode] = useState('');
-    const [codeGenerated, setCodeGenerated] = useState(false); // Mark whether code generation is complete
 
-    // When status changes from running to complete, first expand to show results, then auto-collapse after 3 seconds
     useEffect(() => {
-      if (status.type === 'complete') {
-        setIsOpen(true); // Expand when complete to show results
-        // Auto-collapse after 3 seconds
-        const timer = setTimeout(() => {
-          setIsOpen(false);
-        }, 3000);
+      if (status.type === 'running') {
+        setOpen(true);
+      } else if (status.type === 'complete') {
+        setOpen(true);
+        const timer = setTimeout(() => setOpen(false), 3000);
         return () => clearTimeout(timer);
-      } else if (status.type === 'running') {
-        // Expand immediately when running, don't wait for code
-        setIsOpen(true);
-        // Reset code generation status
-        setCodeGenerated(false);
       }
     }, [status.type]);
 
-    // Extract code and save the last valid code value (using useMemo for performance optimization)
+    // Extract code progressively from streaming args
     const extractCode = React.useMemo(() => {
       if (!args) return '';
-      
-      // Check if it's an empty object
-      if (typeof args === 'object' && Object.keys(args).length === 0) {
-        return '';
-      }
-      
       if (typeof args === 'object' && 'code' in args) {
         const code = typeof args.code === 'string' ? args.code : String(args.code || '');
-        // Only return when code is not empty
-        if (code && code.trim()) {
-          return code;
-        }
-      } else if (typeof args === 'string') {
-        const argsString: string = args as string; // Store as string to preserve type
+        return code && code.trim() ? code : '';
+      }
+      if (typeof args === 'string') {
+        const s = args as string;
         try {
-          const parsed = safeParseJSON(argsString);
+          const parsed = safeParseJSON(s);
           if (parsed && typeof parsed === 'object' && 'code' in parsed) {
             const code = typeof parsed.code === 'string' ? parsed.code : String(parsed.code || '');
-            if (code && code.trim()) {
-              return code;
-            }
-          }
-          // If not JSON format, might be direct code string
-          if (argsString.trim() && argsString !== '{}') {
-            return argsString;
+            if (code && code.trim()) return code;
           }
         } catch {
-          // If parsing fails, might be direct code string
-          if (argsString.trim() && argsString !== '{}') {
-            return argsString;
-          }
+          // fall through
         }
+        if (s.trim() && s !== '{}') return s;
       }
       return '';
     }, [args]);
 
-    // Update saved code (only update when there's valid code)
     useEffect(() => {
-      if (extractCode && extractCode.trim()) {
-        setSavedCode(extractCode);
-      }
+      if (extractCode && extractCode.trim()) setSavedCode(extractCode);
     }, [extractCode]);
 
-    // Use saved code or current code (prefer current code, use saved code if empty)
     const codeToShow = extractCode && extractCode.trim() ? extractCode : savedCode;
-
-    // Detect if code generation is complete (code is stable and no longer changing)
-    useEffect(() => {
-      if (status.type === 'running' && codeToShow && codeToShow.trim()) {
-        // After 1.5 seconds delay, consider code generation complete (code hasn't changed during this time)
-        // Timer resets with each code change, only considered complete after code is stable for 1.5 seconds
-        const timer = setTimeout(() => {
-          setCodeGenerated(true);
-        }, 1500);
-        return () => clearTimeout(timer);
-      } else {
-        // If code is empty or status is not running, reset status
-        setCodeGenerated(false);
-      }
-    }, [codeToShow, status.type]);
-
-    if (status.type === 'running') {
-      return (
-        <div className="mb-1 rounded transition-colors">
-          <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-            <div className="h-7 bg-muted/50 cursor-pointer hover:bg-muted/100 rounded transition-colors">
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-                >
-                  <Code2 className="size-4" /> {t('chat.tools.callingTool')}: PythonInterpreter
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-            <CollapsibleContent className="mt-2">
-              <div className="rounded-md border border-border bg-background p-2 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold mb-2 text-muted-foreground">{t('chat.tools.generatingCode')}:</p>
-                  {codeToShow && codeToShow.trim() ? (
-                    <PythonCodeBlock code={codeToShow} />
-                  ) : (
-                    <div className="bg-muted/30 rounded p-3 text-sm text-muted-foreground italic">
-                      {t('chat.tools.codeLoading')}
-                    </div>
-                  )}
-                </div>
-                {/* Show running prompt if code generation is complete */}
-                {codeToShow && codeToShow.trim() && codeGenerated && (
-                  <div className="bg-muted/50 rounded p-3 text-xs font-semibold text-muted-foreground flex items-center gap-2">
-                    <span>⚙️</span>
-                    <span>{t('chat.tools.codeRunning')}</span>
-                  </div>
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
-      );
-    } else if (status.type === 'complete') {
-      const parsedResult = (typeof result === 'object' && result !== null && 'content' in result) 
-        ? (result as any).content?.[0]?.text ?? result 
+    const parsedResult =
+      typeof result === 'object' && result !== null && 'content' in result
+        ? (result as any).content?.[0]?.text ?? result
         : result;
-      
-      return (
-        <div className="mb-1 rounded transition-colors">
-          <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-            <div className="h-7 bg-muted/50 cursor-pointer hover:bg-muted/100 rounded transition-colors">
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="flex items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-                >
-                  <Code2 className="size-4" /> {t('chat.tools.toolCallComplete')}: PythonInterpreter
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-            <CollapsibleContent className="mt-2">
-              <div className="rounded-md border border-border bg-background p-2 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold mb-2 text-muted-foreground">{t('chat.tools.generatingCode')}:</p>
-                  {codeToShow && codeToShow.trim() ? (
-                    <PythonCodeBlock code={codeToShow} />
-                  ) : (
-                    <div className="bg-muted/30 rounded p-3 text-sm text-muted-foreground italic">
-                      {t('chat.tools.codeNotProvided')}
-                    </div>
-                  )}
+
+    const isRunning = status.type === 'running';
+    const label = isRunning
+      ? t('chat.tools.callingTool')
+      : t('chat.tools.toolCallComplete');
+
+    return (
+      <div className="my-1 rounded-md border border-border bg-muted/30 overflow-hidden text-xs">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center gap-1.5 px-2 py-1.5 hover:bg-muted/60 transition-colors text-left"
+        >
+          {isRunning ? (
+            <Loader2 className="w-3 h-3 animate-spin text-primary shrink-0" />
+          ) : (
+            <ChevronRight
+              className={`w-3 h-3 text-muted-foreground shrink-0 transition-transform ${
+                open ? 'rotate-90' : ''
+              }`}
+            />
+          )}
+          <DimIcon><Code2 /></DimIcon>
+          <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
+          <span className="font-mono text-[11px] text-foreground/90 truncate">
+            · PythonInterpreter
+          </span>
+        </button>
+
+        {open && (
+          <div className="px-2 pb-2 pt-1 border-t border-border/60 space-y-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                {isRunning ? t('chat.tools.generatingCode') : t('chat.tools.generatingCode')}
+              </p>
+              {codeToShow && codeToShow.trim() ? (
+                <CodeBlock text={codeToShow} language="python" />
+              ) : (
+                <div className="text-[11px] text-muted-foreground italic bg-muted/40 rounded px-2.5 py-1.5 border border-border">
+                  {isRunning ? t('chat.tools.codeLoading') : t('chat.tools.codeNotProvided')}
                 </div>
-                {parsedResult !== undefined && (
-                  <div className="border-t border-dashed pt-3">
-                    <p className="text-xs font-semibold mb-2 text-muted-foreground">{t('chat.tools.executionResult')}:</p>
-                    <div className="bg-muted/30 rounded p-2 text-sm whitespace-pre-wrap break-words">
-                      {typeof parsedResult === 'string' ? parsedResult : JSON.stringify(parsedResult, null, 2)}
-                    </div>
-                  </div>
-                )}
-                {isError && (
-                  <div className="border-t border-dashed pt-3">
-                    <p className="text-xs font-semibold mb-2 text-red-500">{t('chat.tools.error')}:</p>
-                    <div className="bg-red-50 dark:bg-red-950/20 rounded p-2 text-sm text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">
-                      {typeof parsedResult === 'string' ? parsedResult : JSON.stringify(parsedResult, null, 2)}
-                    </div>
-                  </div>
-                )}
+              )}
+            </div>
+            {!isRunning && parsedResult !== undefined && !isError && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                  {t('chat.tools.executionResult')}
+                </p>
+                <CodeBlock
+                  text={
+                    typeof parsedResult === 'string'
+                      ? parsedResult
+                      : JSON.stringify(parsedResult, null, 2)
+                  }
+                />
               </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
-      );
-    }
-    return null;
+            )}
+            {!isRunning && isError && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-destructive mb-1">
+                  {t('chat.tools.error')}
+                </p>
+                <pre className="text-[11px] leading-relaxed font-mono bg-destructive/10 text-destructive rounded-md border border-destructive/30 px-2.5 py-1.5 whitespace-pre-wrap break-words max-h-[280px] overflow-auto">
+                  {typeof parsedResult === 'string'
+                    ? parsedResult
+                    : JSON.stringify(parsedResult, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   },
 });
 

@@ -1,7 +1,16 @@
 'use client';
 import React, { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, Plus, Trash2Icon } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  Hash,
+  Loader2,
+  FileText,
+  Save,
+} from 'lucide-react';
 import { useI18n } from '@/app/providers/i18n';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -12,18 +21,11 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { PhotoProvider, PhotoView } from "react-photo-view";
-import "react-photo-view/dist/react-photo-view.css";
-import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { PhotoProvider, PhotoView } from 'react-photo-view';
+import 'react-photo-view/dist/react-photo-view.css';
+import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import {
   Dialog,
   DialogContent,
@@ -31,30 +33,49 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
-import { htmlRender } from "@/app/knowledgebases/[kbId]/viewer/htmlRender";
+import { htmlRender } from '@/app/knowledgebases/[kbId]/viewer/htmlRender';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { HeaderPortal } from '@/components/header-portal';
 
 interface KnowledgeBase {
   id: string;
   name: string;
   description: string;
   chunk_config: {
-    parser_type: string; // Chunking type
-    separator: string; // Chunking separator
-    chunk_size: string; // Chunk size
-    chunk_overlap: string; // Chunk overlap size
+    parser_type: string;
+    separator: string;
+    chunk_size: string;
+    chunk_overlap: string;
   };
-  embedding_model: string; // Embedding model name
+  embedding_model: string;
   retrieval_config: {
-    retrieval_mode: string; // Index type: vector, fulltext, hybrid
-    top_k: number; // Top-K value
-    similarity_threshold: string; // Similarity score threshold
+    retrieval_mode: string;
+    top_k: number;
+    similarity_threshold: string;
     enable_rerank: boolean;
-    rerank_model: string; // Rerank model name
-    vector_weight?: string; // Vector retrieval weight (for hybrid only)
+    rerank_model: string;
+    vector_weight?: string;
   };
 }
 
@@ -63,9 +84,7 @@ interface KnowledgeBaseFile {
   file_name: string;
   file_size: string;
   file_extension: string;
-  file_metadata: {
-    file_url: string;
-  };
+  file_metadata: { file_url: string };
   updated_at: string;
 }
 
@@ -89,38 +108,21 @@ interface KbFileChunk {
   updated_at: string;
 }
 
-// Status mapping
-const statusMap: Record<string, string> = {
-  succeeded: 'bg-blue-100 text-blue-800',
-  failed: 'bg-green-100 text-green-800',
-  pending: 'bg-yellow-100 text-yellow-800',
-};
-
-const activeMap: Record<string, string> = {
-  false: 'bg-red-100 text-red-800',
-  true: 'bg-green-100 text-green-800',
-};
-export default function KnowledgeBaseFileChunksPage(  
-  { params } : { params: Promise<{ kbId: string, fileId: string }> }
-) {
+export default function KnowledgeBaseFileChunksPage({
+  params,
+}: {
+  params: Promise<{ kbId: string; fileId: string }>;
+}) {
   const { t } = useI18n();
-
-  const {kbId, fileId} = use(params);
-  const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>(); // Knowledgebase details
-  const [knowledgebaseloading, setKnowledgeBaseLoading] = useState(true); // Knowledgebase loading state
-  const [knowledgebaseerror, setKnowledgeBaseError] = useState(''); // Knowledgebase error message
-
-  const [kbfile, setKbFile] = useState<KnowledgeBaseFile>(); // File details
-  const [kbfileloading, setKbFileLoading] = useState(true); // File loading state
-  const [kbfileerror, setKbFileError] = useState(''); // File error message
-
-  const [kbfilechunks, setKbFileChunks] = useState(Array<KbFileChunk>); // File chunks list details
-  const [kbfilechunksloading, setKbFileChunksLoading] = useState(true); // File loading state
-  const [kbfilechunkserror, setKbFilChunksError] = useState(''); // File error message
+  const { kbId, fileId } = use(params);
+  const [knowledgebase, setKnowledgeBase] = useState<KnowledgeBase>();
+  const [kbfile, setKbFile] = useState<KnowledgeBaseFile>();
+  const [kbfilechunks, setKbFileChunks] = useState(Array<KbFileChunk>);
+  const [kbfilechunksloading, setKbFileChunksLoading] = useState(true);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const chunksSizePerPage = 8;
+  const chunksSizePerPage = 12;
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editText, setEditText] = useState('');
@@ -129,68 +131,63 @@ export default function KnowledgeBaseFileChunksPage(
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newChunkText, setNewChunkText] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<KbFileChunk | null>(null);
+
   const { tenantFetch } = useTenantFetch();
   const router = useRouter();
 
+  const reloadChunks = async (nextPage = page) => {
+    const res = await tenantFetch(
+      `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${nextPage}&size=${chunksSizePerPage}`,
+    );
+    if (res.ok) {
+      const json = await res.json();
+      setKbFileChunks(json.data.items || []);
+      setTotalPages(json.data.pages);
+    }
+  };
+
+  // Belt-and-suspenders: Radix sometimes leaves <body style="pointer-events:none">
+  // when a Dialog is opened from a DropdownMenuItem. Whenever every modal is
+  // closed, reset the body styles so the page stays interactive.
   useEffect(() => {
-    const fetchKbConfigs = async () => {
-      try {
-        const res = await tenantFetch(
-          `/api/config/knowledgebases/${kbId}`,
-        );
-        if (!res.ok) throw new Error(t('knowledgebase.fetchKbFailed'));
-        const json_data = await res.json();
-        const kb_data = json_data.data;
+    const anyOpen = isEditOpen || isAddOpen || !!deleteTarget;
+    if (!anyOpen) {
+      const id = setTimeout(() => {
+        document.body.style.pointerEvents = '';
+      }, 300);
+      return () => clearTimeout(id);
+    }
+  }, [isEditOpen, isAddOpen, deleteTarget]);
 
-        setKnowledgeBase(kb_data);
-        console.log(t('knowledgebase.kbDetails'), kb_data);
-      } catch (err: any) {
-        setKnowledgeBaseError(err || t('knowledgebase.loadError'));
-      } finally {
-        setKnowledgeBaseLoading(false);
-      }
-    };
-    const fetchKbFile = async () => {
+  useEffect(() => {
+    const run = async () => {
       try {
-        const res = await tenantFetch(
-          `/api/config/knowledgebases/${kbId}/files/${fileId}`,
-        );
-        if (!res.ok) throw new Error(t('knowledgebase.fetchKbFileFailed'));
-        const json_data = await res.json();
-        const kb_file_data = json_data.data;
-
-        setKbFile(kb_file_data);
-        console.log(t('knowledgebase.kbFileDetails'), kb_file_data);
-      } catch (err: any) {
-        setKbFileError(err || t('knowledgebase.loadError'));
-      } finally {
-        setKbFileLoading(false);
-      }
-    };
-
-    const fetchKbFileChunks = async () => {
-      try {
-        const res = await tenantFetch(
-          `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
-        );
-        if (!res.ok) throw new Error(t('knowledgebase.fetchChunksFailed'));
-        const json_data = await res.json();
-        const kb_file_chunks_data = json_data.data.items;
-        setTotalPages(json_data.data.pages);
-        setKbFileChunks(kb_file_chunks_data || []);
-        console.log(t('knowledgebase.chunksDetails'), kb_file_chunks_data);
-      } catch (err: any) {
-        setKbFilChunksError(err || t('knowledgebase.loadError'));
+        const [kbRes, fileRes, chunksRes] = await Promise.all([
+          tenantFetch(`/api/config/knowledgebases/${kbId}`),
+          tenantFetch(`/api/config/knowledgebases/${kbId}/files/${fileId}`),
+          tenantFetch(
+            `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
+          ),
+        ]);
+        if (kbRes.ok) setKnowledgeBase((await kbRes.json()).data);
+        if (fileRes.ok) setKbFile((await fileRes.json()).data);
+        if (chunksRes.ok) {
+          const json = await chunksRes.json();
+          setKbFileChunks(json.data.items || []);
+          setTotalPages(json.data.pages);
+        }
+      } catch (err) {
+        console.error(err);
       } finally {
         setKbFileChunksLoading(false);
       }
     };
-    fetchKbConfigs();
-    fetchKbFile();
-    fetchKbFileChunks();
-  }, [page, fileId, kbId]);
+    run();
+  }, [page, fileId, kbId, tenantFetch]);
+
   if (!knowledgebase || !kbfile) {
-    return <div className="p-6">{t('common.loading')}</div>;
+    return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
   }
 
   const handlePageChange = (newPage: number) => {
@@ -199,18 +196,18 @@ export default function KnowledgeBaseFileChunksPage(
   };
 
   const handleActivateToggle = async (chunk: KbFileChunk) => {
-    chunk.active = !chunk.active;
-    const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
-
-    const res = await tenantFetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(chunk),
-    });
-
-    if (!res.ok) throw new Error(t('knowledgebase.modifyConfigFailed', { id: chunk.id }));
+    const next = { ...chunk, active: !chunk.active };
+    const res = await tenantFetch(
+      `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      },
+    );
+    if (!res.ok) return;
     setKbFileChunks((prev) =>
-      prev.map((c) => (c.id === chunk.id ? { ...c, active: chunk.active } : c)),
+      prev.map((c) => (c.id === chunk.id ? next : c)),
     );
   };
 
@@ -220,332 +217,442 @@ export default function KnowledgeBaseFileChunksPage(
     setIsEditOpen(true);
   };
 
-  const handleDeleteClick = async (chunk: KbFileChunk) => {
-    if (!confirm(t('knowledgebase.confirmDeleteChunk'))) {
-      return;
-    }
-
-    try {
-      const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${chunk.id}`;
-      const response = await tenantFetch(url, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || t('knowledgebase.deleteChunkFailed'));
-      }
-
-      // Remove from local state
-      setKbFileChunks((prev) => prev.filter((c) => c.id !== chunk.id));
-
-      // If current page has no data, go back to previous page
-      if (kbfilechunks.length === 1 && page > 1) {
-        setPage(page - 1);
-      } else {
-        // Refresh chunks list
-        const res = await tenantFetch(
-          `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
-        );
-        if (res.ok) {
-          const json_data = await res.json();
-          setKbFileChunks(json_data.data.items || []);
-          setTotalPages(json_data.data.pages);
-        }
-      }
-    } catch (err: any) {
-      console.error(t('knowledgebase.deleteChunkFailed'), err);
-      alert(err.message || t('knowledgebase.deleteChunkFailed'));
-    }
-  };
-
   const handleSaveEdit = async () => {
     if (!selectedChunk) return;
-    selectedChunk.text = editText;
-    const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${selectedChunk.id}`;
-
+    const updated = { ...selectedChunk, text: editText };
     try {
-      const response = await tenantFetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(selectedChunk),
-      });
-
-      if (!response.ok) throw new Error(t('knowledgebase.updateFailed'));
-
-      // Update local state
+      const res = await tenantFetch(
+        `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${selectedChunk.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        },
+      );
+      if (!res.ok) throw new Error(t('knowledgebase.updateFailed'));
       setKbFileChunks((prev) =>
-        prev.map((c) =>
-          c.id === selectedChunk.id ? { ...c, text: selectedChunk.text } : c,
-        ),
+        prev.map((c) => (c.id === selectedChunk.id ? updated : c)),
       );
       setIsEditOpen(false);
     } catch (err) {
-      console.error(t('knowledgebase.editFailed'), err);
-      // Optional: add error notification (e.g., toast)
+      console.error(err);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const res = await tenantFetch(
+        `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks/${deleteTarget.id}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) throw new Error(t('knowledgebase.deleteChunkFailed'));
+      setKbFileChunks((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+      if (kbfilechunks.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        await reloadChunks();
+      }
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
   const handleAddChunk = async () => {
-    if (!newChunkText.trim()) {
-      alert(t('knowledgebase.inputChunkText'));
-      return;
-    }
-
+    if (!newChunkText.trim()) return;
     setIsAdding(true);
     try {
-      const url = `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks`;
-      const response = await tenantFetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: newChunkText,
-          chunk_metadata: {},
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || t('knowledgebase.addChunkFailed'));
-      }
-
-      // Reset state
+      const res = await tenantFetch(
+        `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: newChunkText, chunk_metadata: {} }),
+        },
+      );
+      if (!res.ok) throw new Error(t('knowledgebase.addChunkFailed'));
       setNewChunkText('');
       setIsAddOpen(false);
-
-      // Refresh chunks list
-      const res = await tenantFetch(
-        `/api/config/knowledgebases/${kbId}/files/${fileId}/chunks?page=${page}&size=${chunksSizePerPage}`,
-      );
-      if (res.ok) {
-        const json_data = await res.json();
-        setKbFileChunks(json_data.data.items || []);
-        setTotalPages(json_data.data.pages);
-      }
-    } catch (err: any) {
-      console.error(t('knowledgebase.addChunkFailed'), err);
-      alert(err.message || t('knowledgebase.addChunkFailed'));
+      await reloadChunks();
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsAdding(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-screen w-full">
-      <div className="flex-none">
-        <div className="p-2 space-y-2">
-          <div className="flex items-center gap-2">
-            {/* Breadcrumb navigation */}
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() => router.push('/knowledgebases')}
-                    >
-                      {t('knowledgebase.title')}
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Button
-                      variant="link"
-                      className="px-0"
-                      onClick={() =>
-                        router.push(
-                          `/knowledgebases/${knowledgebase.id}`,
-                        )
-                      }
-                    >
-                      {knowledgebase.name}
-                    </Button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{kbfile.file_name}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                className="h-8 w-8"
-                onClick={() =>
-                  router.push(`/knowledgebases/${knowledgebase.id}`)
-                }
-              >
-                <ArrowLeft />
-              </Button>
-              <h1 className="text-xl font-medium pl-2">{t('knowledgebase.fileChunksList')}</h1>
-            </div>
-            <Button
-              variant="default"
-              className="h-8"
-              onClick={() => setIsAddOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              {t('knowledgebase.newChunk')}
-            </Button>
-          </div>
+    <div className="flex flex-col h-full min-h-0">
+      <HeaderPortal>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Button
+                  variant="link"
+                  className="px-0 h-auto"
+                  onClick={() => router.push('/knowledgebases')}
+                >
+                  {t('knowledgebase.title')}
+                </Button>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Button
+                  variant="link"
+                  className="px-0 h-auto"
+                  onClick={() => router.push(`/knowledgebases/${knowledgebase.id}`)}
+                >
+                  {knowledgebase.name}
+                </Button>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage className="font-semibold flex items-center gap-1">
+                <FileText className="w-3.5 h-3.5 text-primary" />
+                {kbfile.file_name}
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        {kbfilechunks.length > 0 && (
+          <Badge variant="secondary" className="text-[10px] font-mono bg-muted text-muted-foreground">
+            {kbfilechunks.length} / page
+          </Badge>
+        )}
+        <div className="ml-auto">
+          <Button size="sm" onClick={() => setIsAddOpen(true)}>
+            <Plus className="w-4 h-4 mr-1" />
+            {t('knowledgebase.newChunk')}
+          </Button>
         </div>
-      </div>
-      {/* Scrollable content area */}
-      <div className="overflow-y-auto h-4/5">
-        <div className="flex border-dashed border-gray-200 rounded-xl p-0">
+      </HeaderPortal>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           {kbfilechunksloading ? (
-            <div className="py-12 text-center">
-              <p className="text-gray-500">{t('common.loading')}</p>
-            </div>
-          ) : kbfilechunkserror ? (
-            <div className="py-12 text-center text-red-500">
-              <p>{t('knowledgebase.chunksLoadFailed')}</p>
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t('common.loading')}
             </div>
           ) : kbfilechunks.length === 0 ? (
-            <div className="py-12 text-center text-red-500">
-              <h3 className="text-lg font-medium text-gray-700 py-6">{t('knowledgebase.noChunks')}</h3>
+            <div className="empty-state mt-8">
+              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
+                <FileText className="w-7 h-7" />
+              </div>
+              <p className="text-base font-semibold mb-1">{t('knowledgebase.noChunks')}</p>
+              <Button size="sm" className="mt-3" onClick={() => setIsAddOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" />
+                {t('knowledgebase.newChunk')}
+              </Button>
             </div>
           ) : (
-            <div className="gap-1 px-3 py-0 w-full">
-              <div className="grid grid-cols-4 items-center gap-2">
-                {kbfilechunks.map((chunk) => (
-                  <Card key={chunk.id} className="h-70 px-0 pt-3 pb-1 gap-2 group relative chunk-card">
-                    <CardHeader>
-                      <CardTitle className="flex justify-between items-start">
-                        <div className="flex items-center gap-2">
-                          <Badge className={activeMap[String(chunk.active)]}>
-                            {chunk.active ? t('knowledgebase.enabled') : t('knowledgebase.disabled')}
-                          </Badge>
-                          {chunk.chunk_metadata?.token_count !== undefined && (
-                            <Badge variant="outline" className="text-xs">
-                              tokens: {chunk.chunk_metadata.token_count}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={chunk.active}
-                            className="rounded-full transition-color"
-                            onCheckedChange={() => handleActivateToggle(chunk)}
-                          />
-                          <button
-                            className="text-black-500 hover:text-black-700 px-2"
-                            onClick={() => handleEditClick(chunk)}
-                          >
-                            <Edit className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="bg-gray-200/10 flex-grow overflow-y-auto overflow-x-auto pr-3 p-2 pb-2">
-                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed whitespace-normal pr-2">
-                        {htmlRender(chunk.text)}
-                      </div>
-                    </CardContent>
-                    <CardFooter className="shrink-0 gap-2">
-                      {chunk.chunk_metadata.images_info?.map((meta, index) => (
-                        <PhotoProvider
-                          key={index}
-                          maskOpacity={0.8}
-                          overlayRender={() => {
-                            return (
-                              <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
-                                <div>{t('knowledgebase.imageDesc')}：{meta.desc}</div>
-                              </div>
-                            );
-                          }}
-                        >
-                          <PhotoView key={index} src={meta.url}>
-                            <img src={meta.url} className="w-10 h-10" />
-                          </PhotoView>
-                        </PhotoProvider>
-                      ))}
-                    </CardFooter>
-                    {/* Hover delete button */}
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute bottom-2 right-2 w-8 h-8 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                      onClick={() => handleDeleteClick(chunk)}
-                    >
-                      <Trash2Icon className="w-4 h-4" />
-                    </Button>
-                  </Card>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {kbfilechunks.map((chunk, idx) => (
+                <ChunkCard
+                  key={chunk.id}
+                  chunk={chunk}
+                  index={(page - 1) * chunksSizePerPage + idx + 1}
+                  onToggle={() => handleActivateToggle(chunk)}
+                  onEdit={() => handleEditClick(chunk)}
+                  onDelete={() => setDeleteTarget(chunk)}
+                  t={t}
+                />
+              ))}
             </div>
           )}
         </div>
       </div>
-      <div className="absolute left-0 bottom-0 w-full min-h-[24px] text-sm">
-        <PaginationComponent
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
-      </div>
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t('knowledgebase.editChunk')}</DialogTitle>
-            <DialogDescription>{t('knowledgebase.editAndSave')}</DialogDescription>
+
+      {!kbfilechunksloading && kbfilechunks.length > 0 && (
+        <div className="flex-none border-t border-border bg-background/60 backdrop-blur-sm py-2">
+          <PaginationComponent
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        </div>
+      )}
+
+      {/* Edit */}
+      <Dialog
+        open={isEditOpen}
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) {
+            // Hard-reset in case Radix leaves <body> with pointer-events:none
+            setTimeout(() => {
+              document.body.style.pointerEvents = '';
+            }, 0);
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-2xl gap-0 p-0 overflow-hidden"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
+            <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+              <Pencil className="w-4 h-4 text-primary" />
+              {t('knowledgebase.editChunk')}
+            </DialogTitle>
+            <DialogDescription className="text-xs mt-0.5">
+              {t('knowledgebase.editAndSave')}
+            </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label className="block mb-2 text-sm font-medium">{t('knowledgebase.textContent')}</Label>
+          <div className="px-5 py-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                {t('knowledgebase.textContent')}
+              </Label>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {editText.length}
+              </span>
+            </div>
             <Textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
-              className="w-full h-40"
+              className="w-full h-56 text-xs font-mono leading-relaxed bg-muted/30 resize-none"
               placeholder={t('knowledgebase.enterNewContent')}
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              {t('common.cancel')}
+          <DialogFooter className="px-5 py-3 border-t border-border bg-muted/20">
+            <DialogClose asChild>
+              <Button variant="outline" size="sm">
+                {t('common.cancel')}
+              </Button>
+            </DialogClose>
+            <Button
+              size="sm"
+              onClick={handleSaveEdit}
+              disabled={!editText.trim() || editText === selectedChunk?.text}
+            >
+              <Save className="w-3 h-3 mr-1" />
+              {t('common.save')}
             </Button>
-            <Button onClick={handleSaveEdit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t('knowledgebase.newChunk')}</DialogTitle>
-            <DialogDescription>{t('knowledgebase.enterChunkContent')}</DialogDescription>
+      {/* Add */}
+      <Dialog
+        open={isAddOpen}
+        onOpenChange={(open) => {
+          setIsAddOpen(open);
+          if (!open) {
+            setNewChunkText('');
+            setTimeout(() => {
+              document.body.style.pointerEvents = '';
+            }, 0);
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-2xl gap-0 p-0 overflow-hidden"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
+            <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+              <Plus className="w-4 h-4 text-primary" />
+              {t('knowledgebase.newChunk')}
+            </DialogTitle>
+            <DialogDescription className="text-xs mt-0.5">
+              {t('knowledgebase.enterChunkContent')}
+            </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label className="block mb-2 text-sm font-medium">{t('knowledgebase.chunkText')}</Label>
+          <div className="px-5 py-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                {t('knowledgebase.chunkText')}
+              </Label>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {newChunkText.length}
+              </span>
+            </div>
             <Textarea
               value={newChunkText}
               onChange={(e) => setNewChunkText(e.target.value)}
-              className="w-full h-40"
+              className="w-full h-56 text-xs font-mono leading-relaxed bg-muted/30 resize-none"
               placeholder={t('knowledgebase.enterChunkText')}
             />
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-5 py-3 border-t border-border bg-muted/20">
+            <DialogClose asChild>
+              <Button variant="outline" size="sm" disabled={isAdding}>
+                {t('common.cancel')}
+              </Button>
+            </DialogClose>
             <Button
-              variant="outline"
-              onClick={() => {
-                setIsAddOpen(false);
-                setNewChunkText('');
-              }}
-              disabled={isAdding}
+              size="sm"
+              onClick={handleAddChunk}
+              disabled={isAdding || !newChunkText.trim()}
             >
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleAddChunk} disabled={isAdding || !newChunkText.trim()}>
-              {isAdding ? t('common.saving') : t('common.save')}
+              {isAdding ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  {t('common.saving')}
+                </>
+              ) : (
+                <>
+                  <Save className="w-3 h-3 mr-1" />
+                  {t('common.save')}
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirm */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDeleteTarget(null);
+            setTimeout(() => {
+              document.body.style.pointerEvents = '';
+            }, 0);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('knowledgebase.confirmDeleteChunk')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              {deleteTarget?.text?.slice(0, 80)}...
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ===== Chunk card =====
+
+interface ChunkCardProps {
+  chunk: KbFileChunk;
+  index: number;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  t: (k: string) => string;
+}
+
+function ChunkCard({ chunk, index, onToggle, onEdit, onDelete, t }: ChunkCardProps) {
+  const active = chunk.active;
+
+  return (
+    <div
+      className={`group relative flex flex-col rounded-lg border transition-colors overflow-hidden ${
+        active ? 'border-border bg-card' : 'border-border/60 bg-muted/30 opacity-70'
+      }`}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 bg-background/40">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+            #{String(index).padStart(2, '0')}
+          </span>
+          {chunk.chunk_metadata?.token_count !== undefined && (
+            <Badge
+              variant="outline"
+              className="h-5 px-1.5 text-[10px] font-mono gap-0.5"
+            >
+              <Hash className="w-2.5 h-2.5" />
+              {chunk.chunk_metadata.token_count}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0" data-stop-click>
+          <Switch
+            checked={active}
+            onCheckedChange={onToggle}
+            className="scale-75 -mr-1"
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="menu-compact">
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  // Let DropdownMenu finish its close/focus cleanup before
+                  // mounting the Dialog; otherwise Radix leaves
+                  // pointer-events: none stuck on <body>.
+                  setTimeout(onEdit, 0);
+                }}
+              >
+                <Pencil />
+                {t('common.edit')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setTimeout(onDelete, 0);
+                }}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 />
+                {t('common.delete')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 text-xs leading-relaxed text-foreground/90 max-h-[220px]">
+        <div className="whitespace-pre-wrap break-words">
+          {htmlRender(chunk.text)}
+        </div>
+      </div>
+
+      {/* Images footer (if any) */}
+      {chunk.chunk_metadata.images_info?.length > 0 && (
+        <div className="flex gap-1 px-3 py-1.5 border-t border-border/60 bg-muted/20 flex-wrap">
+          {chunk.chunk_metadata.images_info.map((meta, i) => (
+            <PhotoProvider
+              key={i}
+              maskOpacity={0.8}
+              overlayRender={() => (
+                <div className="absolute left-0 bottom-0 p-4 w-full min-h-30 text-sm text-slate-300 z-50 bg-black/50">
+                  {t('knowledgebase.imageDesc')}：{meta.desc}
+                </div>
+              )}
+            >
+              <PhotoView src={meta.url}>
+                <img
+                  src={meta.url}
+                  className="w-7 h-7 rounded object-cover cursor-pointer"
+                />
+              </PhotoView>
+            </PhotoProvider>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

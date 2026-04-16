@@ -23,6 +23,10 @@ import {
   CirclePlus,
   Trash2Icon,
   HelpCircle,
+  FileText,
+  Scissors,
+  SearchCheck,
+  Info,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -284,69 +288,75 @@ export const KbConfigCard: FC<KbConfigProps> = ({
 
 
   return (
-    <div className="h-200 overflow-y-auto">
-      <div className="space-y-4 px-4">
-        {/* 基本信息 */}
-        <div className="flex gap-3 items-center">
-          <Label htmlFor="name" className="w-[100px] text-xs">
-            {t('knowledgebase.nameLabel')} <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="name"
-            className="w-80 h-8 text-xs font-normal"
-            value={kb.name}
-            onChange={(e) =>
-              setKb((prev) => ({ ...prev, name: e.target.value }))
-            }
-            placeholder={t('knowledgebase.namePlaceholder')}
-            required
-          />
-        </div>
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex-1 overflow-y-auto px-6 pb-2">
+        {/* Section 1: 基本信息 */}
+        <section className="py-3 border-b border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary shrink-0">
+              <FileText className="w-3.5 h-3.5" />
+            </div>
+            <h3 className="text-sm font-semibold leading-tight">{t('knowledgebase.nameLabel').replace('*', '').trim() || '基本信息'}</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start pl-8">
+            <div className="space-y-1.5 md:col-span-4">
+              <Label htmlFor="name" className="text-xs font-medium">
+                {t('knowledgebase.nameLabel')} <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="name"
+                className="h-8 text-xs"
+                value={kb.name}
+                onChange={(e) =>
+                  setKb((prev) => ({ ...prev, name: e.target.value }))
+                }
+                placeholder={t('knowledgebase.namePlaceholder')}
+                required
+              />
+            </div>
+            <div className="space-y-1.5 md:col-span-8">
+              <Label htmlFor="description" className="text-xs font-medium">
+                {t('knowledgebase.descriptionLabel')}
+              </Label>
+              <Input
+                id="description"
+                className="h-8 text-xs"
+                value={kb.description}
+                onChange={(e) =>
+                  setKb((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
+                placeholder={t('knowledgebase.descriptionPlaceholder')}
+              />
+            </div>
+          </div>
+        </section>
 
-        <div className="flex gap-3 items-start">
-          <Label htmlFor="description" className="w-[100px] text-xs pt-2">
-            {t('knowledgebase.descriptionLabel')}
-          </Label>
-          <Textarea
-            id="description"
-            className="w-[600px] text-xs"
-            value={kb.description}
-            onChange={(e) =>
-              setKb((prev) => ({
-                ...prev,
-                description: e.target.value,
-              }))
-            }
-            placeholder={t('knowledgebase.descriptionPlaceholder')}
-            rows={3}
-          />
-        </div>
-
-        {/* 分段设置卡片 */}
-        <div className="flex gap-3 items-start">
-          <div className="flex items-center gap-1 w-[100px] pt-2">
-            <Label className="text-xs">
-              {t('knowledgebase.chunkSettings')}
-            </Label>
+        {/* Section 2: 分段设置 */}
+        <section className="py-3 border-b border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary shrink-0">
+              <Scissors className="w-3.5 h-3.5" />
+            </div>
+            <h3 className="text-sm font-semibold leading-tight">{t('knowledgebase.chunkSettings')}</h3>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-xs">
-                    {t('knowledgebase.chunkSettingsHint')}
-                  </p>
+                  <p className="text-xs">{t('knowledgebase.chunkSettingsHint')}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
-          <Card className="pt-3">
-            <CardContent className="space-y-3">
-            <div className="flex gap-3 items-center">
-              <Label htmlFor="parserType" className="w-[100px] text-xs">
+          <div className="space-y-3 pl-8">
+            <div className="space-y-1.5 w-full max-w-md">
+              <Label htmlFor="parserType" className="text-xs font-medium">
                 {t('knowledgebase.parserType')}
-                <span className="text-destructive">*</span>
+                <span className="text-destructive ml-1">*</span>
               </Label>
               <Select
                 value={kb.chunk_config.parser_type || 'structure'}
@@ -356,8 +366,7 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       ...prev.chunk_config,
                       parser_type: value,
                     };
-                    
-                    // 根据新的 parser_type 初始化相应的配置
+
                     if (value === 'table') {
                       newConfig.table_config = prev.chunk_config.table_config || {
                         concat_rows: false,
@@ -365,25 +374,21 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                         header_index_max: 0,
                         format_sheet_data_to_json: false,
                       };
-                      // 保留chunk_size，设置默认值
                       newConfig.chunk_size = prev.chunk_config.chunk_size || '1000';
-                      // 清除其他类型的配置
                       delete newConfig.chunk_overlap;
                       delete newConfig.separator;
                     } else if (value === 'paragraph') {
                       newConfig.separator = prev.chunk_config.separator || '\n\n';
                       newConfig.chunk_size = prev.chunk_config.chunk_size || '1000';
                       newConfig.chunk_overlap = prev.chunk_config.chunk_overlap || '50';
-                      // 清除 table_config
                       delete newConfig.table_config;
                     } else {
                       newConfig.separator = prev.chunk_config.separator || '\n\n';
                       newConfig.chunk_size = prev.chunk_config.chunk_size || '1000';
                       newConfig.chunk_overlap = prev.chunk_config.chunk_overlap || '50';
-                      // 清除 table_config
                       delete newConfig.table_config;
                     }
-                    
+
                     return {
                       ...prev,
                       chunk_config: newConfig,
@@ -391,140 +396,93 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   });
                 }}
               >
-                <SelectTrigger className="w-60 h-6 text-xs">
+                <SelectTrigger className="h-8 text-xs w-full">
                   <SelectValue placeholder={t('knowledgebase.selectParserType')} />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectGroup>
-                    <SelectItem value="structure" className="text-xs h-5">
+                    <SelectItem value="structure" className="text-xs">
                       {t('knowledgebase.structure')}
                     </SelectItem>
-                    <SelectItem value="token" className="text-xs h-5">
+                    <SelectItem value="token" className="text-xs">
                       {t('knowledgebase.token')}
                     </SelectItem>
-                    <SelectItem value="table" className="text-xs h-5">
+                    <SelectItem value="table" className="text-xs">
                       {t('knowledgebase.table')}
                     </SelectItem>
-                    <SelectItem value="paragraph" className="text-xs h-5">
+                    <SelectItem value="paragraph" className="text-xs">
                       {t('knowledgebase.paragraph')}
                     </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">{t('knowledgebase.selectChunkMode')}</p>
+              <p className="text-[11px] text-muted-foreground">{t('knowledgebase.selectChunkMode')}</p>
             </div>
 
-            {/* Table Config - 只在 parser_type === 'table' 时显示 */}
+            {/* Table Config */}
             {kb.chunk_config.parser_type === 'table' && (
-              <div className="space-y-3">
-                <div className="flex gap-3 items-center">
-                  <div className="flex gap-3 items-center flex-1">
-                    <Label htmlFor="table-header-index-max" className="w-[100px] text-xs">
-                      {t('knowledgebase.maxHeaderIndex')}
-                    </Label>
-                    <Input
-                      type="number"
-                      className="w-60 h-6 text-xs"
-                      id="table-header-index-max"
-                      value={kb.chunk_config.table_config?.header_index_max ?? 0}
-                      onChange={(e) =>
-                        setKb((prev) => ({
-                          ...prev,
-                          chunk_config: {
-                            ...prev.chunk_config,
-                            table_config: {
-                              ...prev.chunk_config.table_config,
-                              header_index_max: e.target.value ? parseInt(e.target.value) : 0,
-                            },
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-md bg-muted/30 p-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="table-header-index-max" className="text-xs font-medium">
+                    {t('knowledgebase.maxHeaderIndex')}
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-8 text-xs"
+                    id="table-header-index-max"
+                    value={kb.chunk_config.table_config?.header_index_max ?? 0}
+                    onChange={(e) =>
+                      setKb((prev) => ({
+                        ...prev,
+                        chunk_config: {
+                          ...prev.chunk_config,
+                          table_config: {
+                            ...prev.chunk_config.table_config,
+                            header_index_max: e.target.value ? parseInt(e.target.value) : 0,
                           },
-                        }))
-                      }
-                      min="0"
-                    />
-                  </div>
-                  <div className="flex gap-3 items-center flex-1">
-                    <Label htmlFor="table-format-json" className="w-[100px] text-xs">
-                      {t('knowledgebase.formatAsJson')}
-                    </Label>
-                    <Checkbox
-                      id="table-format-json"
-                      checked={kb.chunk_config.table_config?.format_sheet_data_to_json ?? false}
-                      onCheckedChange={(checked) =>
-                        setKb((prev) => ({
-                          ...prev,
-                          chunk_config: {
-                            ...prev.chunk_config,
-                            table_config: {
-                              ...prev.chunk_config.table_config,
-                              format_sheet_data_to_json: checked === true,
-                            },
-                          },
-                        }))
-                      }
-                    />
-                  </div>
+                        },
+                      }))
+                    }
+                    min="0"
+                  />
                 </div>
-                <div className="flex gap-3 items-center">
-                  <div className="flex gap-3 items-center flex-1">
-                    <Label htmlFor="table-concat-rows" className="w-[100px] text-xs">
-                      {t('knowledgebase.mergeRows')}
-                    </Label>
-                    <Checkbox
-                      id="table-concat-rows"
-                      checked={kb.chunk_config.table_config?.concat_rows ?? false}
-                      onCheckedChange={(checked) =>
-                        setKb((prev) => ({
-                          ...prev,
-                          chunk_config: {
-                            ...prev.chunk_config,
-                            table_config: {
-                              ...prev.chunk_config.table_config,
-                              concat_rows: checked === true,
-                            },
+                <div className="space-y-1.5">
+                  <Label htmlFor="table-row-joiner" className="text-xs font-medium">
+                    {t('knowledgebase.rowJoiner')}
+                  </Label>
+                  <Input
+                    type="text"
+                    className="h-8 text-xs"
+                    id="table-row-joiner"
+                    value={kb.chunk_config.table_config?.row_joiner || '\n'}
+                    onChange={(e) =>
+                      setKb((prev) => ({
+                        ...prev,
+                        chunk_config: {
+                          ...prev.chunk_config,
+                          table_config: {
+                            ...prev.chunk_config.table_config,
+                            row_joiner: e.target.value,
                           },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex gap-3 items-center flex-1">
-                    <Label htmlFor="table-row-joiner" className="w-[100px] text-xs">
-                      {t('knowledgebase.rowJoiner')}
-                    </Label>
-                    <Input
-                      type="text"
-                      className="w-60 h-6 text-xs"
-                      id="table-row-joiner"
-                      value={kb.chunk_config.table_config?.row_joiner || '\n'}
-                      onChange={(e) =>
-                        setKb((prev) => ({
-                          ...prev,
-                          chunk_config: {
-                            ...prev.chunk_config,
-                            table_config: {
-                              ...prev.chunk_config.table_config,
-                              row_joiner: e.target.value,
-                            },
-                          },
-                        }))
-                      }
-                    />
-                  </div>
+                        },
+                      }))
+                    }
+                  />
                 </div>
-                <div className="flex gap-3 items-center">
-                  <Label htmlFor="table-chunkSize" className="w-[100px] text-xs">
+                <div className="space-y-1.5">
+                  <Label htmlFor="table-chunkSize" className="text-xs font-medium">
                     {t('knowledgebase.chunkSize')}
-                    <span className="text-destructive">*</span>
+                    <span className="text-destructive ml-1">*</span>
                   </Label>
                   <Input
                     type="text"
                     inputMode="numeric"
-                    className="w-60 h-6 text-xs"
+                    className="h-8 text-xs"
                     id="table-chunkSize"
                     value={kb.chunk_config.chunk_size ?? ''}
                     placeholder="1000"
                     onChange={(e) => {
                       const value = e.target.value;
-                      // 只允许数字和空字符串
                       if (value === '' || /^\d+$/.test(value)) {
                         setKb((prev) => ({
                           ...prev,
@@ -537,22 +495,65 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     }}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium block">{t('knowledgebase.mergeRows')} / {t('knowledgebase.formatAsJson')}</Label>
+                  <div className="flex gap-4 items-center h-8">
+                    <label htmlFor="table-concat-rows" className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <Checkbox
+                        id="table-concat-rows"
+                        checked={kb.chunk_config.table_config?.concat_rows ?? false}
+                        onCheckedChange={(checked) =>
+                          setKb((prev) => ({
+                            ...prev,
+                            chunk_config: {
+                              ...prev.chunk_config,
+                              table_config: {
+                                ...prev.chunk_config.table_config,
+                                concat_rows: checked === true,
+                              },
+                            },
+                          }))
+                        }
+                      />
+                      {t('knowledgebase.mergeRows')}
+                    </label>
+                    <label htmlFor="table-format-json" className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <Checkbox
+                        id="table-format-json"
+                        checked={kb.chunk_config.table_config?.format_sheet_data_to_json ?? false}
+                        onCheckedChange={(checked) =>
+                          setKb((prev) => ({
+                            ...prev,
+                            chunk_config: {
+                              ...prev.chunk_config,
+                              table_config: {
+                                ...prev.chunk_config.table_config,
+                                format_sheet_data_to_json: checked === true,
+                              },
+                            },
+                          }))
+                        }
+                      />
+                      {t('knowledgebase.formatAsJson')}
+                    </label>
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Paragraph Config */}
             {kb.chunk_config.parser_type === 'paragraph' && (
-              <div className="space-y-3">
-                <div className="flex gap-3 items-center">
-                  <Label htmlFor="paragraph-separator" className="w-[100px] text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-md bg-muted/30 p-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="paragraph-separator" className="text-xs font-medium">
                     {t('knowledgebase.separator')}
-                    <span className="text-destructive">*</span>
+                    <span className="text-destructive ml-1">*</span>
                   </Label>
                   <Input
                     type="text"
-                    className="w-60 h-6 text-xs"
+                    className="h-8 text-xs"
                     id="paragraph-separator"
                     value={kb.chunk_config.separator || '\n\n'}
                     onChange={(e) =>
@@ -566,15 +567,15 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     }
                   />
                 </div>
-                <div className="flex gap-3 items-center">
-                  <Label htmlFor="chunkSize" className="w-[100px] text-xs">
+                <div className="space-y-1.5">
+                  <Label htmlFor="chunkSize" className="text-xs font-medium">
                     {t('knowledgebase.chunkSize')}
-                    <span className="text-destructive">*</span>
+                    <span className="text-destructive ml-1">*</span>
                   </Label>
                   <Input
                     type="text"
                     inputMode="numeric"
-                    className="w-60 h-6 text-xs"
+                    className="h-8 text-xs"
                     id="chunkSize"
                     value={kb.chunk_config.chunk_size ?? ''}
                     placeholder="1000"
@@ -592,17 +593,17 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                     }}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
                 </div>
-                <div className="flex gap-3 items-center">
-                  <Label htmlFor="chunkOverlap" className="w-[100px] text-xs">
+                <div className="space-y-1.5">
+                  <Label htmlFor="chunkOverlap" className="text-xs font-medium">
                     {t('knowledgebase.chunkOverlap')}
-                    <span className="text-destructive">*</span>
+                    <span className="text-destructive ml-1">*</span>
                   </Label>
                   <Input
                     type="text"
                     inputMode="numeric"
-                    className="w-60 h-6 text-xs"
+                    className="h-8 text-xs"
                     id="chunkOverlap"
                     value={kb.chunk_config.chunk_overlap ?? ''}
                     placeholder="50"
@@ -619,280 +620,288 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       }
                     }}
                   />
-                  <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
                 </div>
               </div>
             )}
 
             {/* Default Config - structure or token */}
             {(kb.chunk_config.parser_type === 'structure' || kb.chunk_config.parser_type === 'token') && (
-              <div className="space-y-3">
-              <div className="flex gap-3 items-center">
-                <Label htmlFor="chunkSize" className="w-[100px] text-xs">
-                  {t('knowledgebase.chunkSize')}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  className="w-60 h-6 text-xs"
-                  id="chunkSize"
-                  value={kb.chunk_config.chunk_size ?? ''}
-                  placeholder="1000"
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || /^\d+$/.test(value)) {
-                      setKb((prev) => ({
-                        ...prev,
-                        chunk_config: {
-                          ...prev.chunk_config,
-                          chunk_size: value,
-                        },
-                      }));
-                    }
-                  }}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
-              </div>
-              <div className="flex gap-3 items-center">
-                <Label htmlFor="chunkOverlap" className="w-[100px] text-xs">
-                  {t('knowledgebase.chunkOverlap')}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  className="w-60 h-6 text-xs"
-                  id="chunkOverlap"
-                  value={kb.chunk_config.chunk_overlap ?? ''}
-                  placeholder="50"
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || /^\d+$/.test(value)) {
-                      setKb((prev) => ({
-                        ...prev,
-                        chunk_config: {
-                          ...prev.chunk_config,
-                          chunk_overlap: value,
-                        },
-                      }));
-                    }
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-md bg-muted/30 p-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="chunkSize" className="text-xs font-medium">
+                    {t('knowledgebase.chunkSize')}
+                    <span className="text-destructive ml-1">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    className="h-8 text-xs"
+                    id="chunkSize"
+                    value={kb.chunk_config.chunk_size ?? ''}
+                    placeholder="1000"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || /^\d+$/.test(value)) {
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            chunk_size: value,
+                          },
+                        }));
+                      }
+                    }}
+                    required
+                  />
+                  <p className="text-[11px] text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '1000' })}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="chunkOverlap" className="text-xs font-medium">
+                    {t('knowledgebase.chunkOverlap')}
+                    <span className="text-destructive ml-1">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    className="h-8 text-xs"
+                    id="chunkOverlap"
+                    value={kb.chunk_config.chunk_overlap ?? ''}
+                    placeholder="50"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || /^\d+$/.test(value)) {
+                        setKb((prev) => ({
+                          ...prev,
+                          chunk_config: {
+                            ...prev.chunk_config,
+                            chunk_overlap: value,
+                          },
+                        }));
+                      }
+                    }}
+                  />
+                  <p className="text-[11px] text-muted-foreground">{t('knowledgebase.recommendedValue', { value: '50' })}</p>
+                </div>
               </div>
             )}
 
-            <div className="flex gap-3 items-center">
-              <Label htmlFor="imageCaptionModel" className="w-[100px] text-xs">
-                {t('knowledgebase.imageCaptionModelLabel')}
-              </Label>
-              <Select
-                value={kb.chunk_config.image_caption_model || 'DISABLED'}
-                onValueChange={(value) => {
-                  const selectedModel = visionModels.find(m => m.model_id === value);
-                  setKb((prev) => ({
-                    ...prev,
-                    chunk_config: {
-                      ...prev.chunk_config,
-                      image_caption_model: value !== "DISABLED" ? value : undefined,
-                      image_caption_provider_name: selectedModel?.provider_name || prev.chunk_config.image_caption_provider_name,
-                    },
-                  }));
-                }}
-              >
-                <SelectTrigger className="w-60 h-6 text-xs">
-                  <SelectValue placeholder={t('knowledgebase.selectImageModel')} />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectGroup>
-                    <SelectItem value="DISABLED" className="text-xs h-5">
-                      {t('knowledgebase.disableImageModel')}
-                    </SelectItem>
-                    {visionModels.map((model) => (
-                      <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
-                        {model.model_id} ({model.model})
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">{t('knowledgebase.imageModelHint')}</p>
-            </div>
-
-            <div className="flex gap-3 items-center">
-              <Label htmlFor="embeddingModel" className="w-[100px] text-xs">
-                {t('knowledgebase.embeddingModelLabel')} <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={kb.embedding_model}
-                onValueChange={(value) => {
-                  const selectedModel = embeddingmodels.find(m => m.model_id === value);
-                  setKb((prev) => ({ 
-                    ...prev, 
-                    embedding_model: value,
-                    embedding_provider_name: selectedModel?.provider_name || prev.embedding_provider_name,
-                  }));
-                }}
-              >
-                <SelectTrigger className="w-60 h-6 text-xs">
-                  <SelectValue placeholder={t('knowledgebase.selectEmbeddingModel')} />
-                </SelectTrigger>
-                <SelectContent className="text-xs">
-                  <SelectGroup>
-                    {embeddingmodels.map((model) => (
-                      <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
-                        {model.model_id}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Retrieval settings */}
-        <div className="flex gap-3 items-start">
-          <Label className="w-[100px] text-xs">
-            {t('knowledgebase.retrievalSettings')}
-          </Label>
-          <Card className="pt-3">
-            <CardContent className="space-y-3">
-            <div className="flex gap-3 items-center">
-              <Label className="w-[100px] text-xs">{t('knowledgebase.retrievalStrategy')}</Label>
-              <ToggleGroup
-                type="single"
-                value={kb.retrieval_config.retrieval_mode}
-                onValueChange={(value) => {
-                  setIndexType(value);
-                  setKb((prev) => ({
-                    ...prev,
-                    retrieval_config: {
-                      ...prev.retrieval_config,
-                      retrieval_mode: value,
-                    },
-                  }));
-                }}
-                variant="outline"
-                className="flex gap-x-1 overflow-visible"
-              >
-                <ToggleGroupItem
-                  value="vector"
-                  aria-label={t('knowledgebase.vectorSearch')}
-                  className="!rounded-full px-1.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-7"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="embeddingModel" className="text-xs font-medium">
+                  {t('knowledgebase.embeddingModelLabel')} <span className="text-destructive ml-1">*</span>
+                </Label>
+                <Select
+                  value={kb.embedding_model}
+                  onValueChange={(value) => {
+                    const selectedModel = embeddingmodels.find(m => m.model_id === value);
+                    setKb((prev) => ({
+                      ...prev,
+                      embedding_model: value,
+                      embedding_provider_name: selectedModel?.provider_name || prev.embedding_provider_name,
+                    }));
+                  }}
                 >
-                  <ScanSearch className="w-2 h-2 mr-0.5" />
-                  {t('knowledgebase.vectorSearch')}
-                </ToggleGroupItem>
-                {isFulltextSupported && (
-                  <ToggleGroupItem
-                    value="fulltext"
-                    aria-label={t('knowledgebase.fulltextSearch')}
-                    className="!rounded-full px-6 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-7"
-                  >
-                    <TextSearch />
-                    {t('knowledgebase.fulltextSearch')}
-                  </ToggleGroupItem>
-                )}
-                {isFulltextSupported && (
-                  <ToggleGroupItem
-                    value="hybrid"
-                    aria-label={t('knowledgebase.hybridSearch')}
-                    className="!rounded-full px-6 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-7"
-                  >
-                    <SearchCode />
-                    {t('knowledgebase.hybridSearch')}
-                  </ToggleGroupItem>
-                )}
-              </ToggleGroup>
+                  <SelectTrigger className="h-8 text-xs w-full">
+                    <SelectValue placeholder={t('knowledgebase.selectEmbeddingModel')} />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectGroup>
+                      {embeddingmodels.map((model) => (
+                        <SelectItem key={model.id} value={model.model_id} className="text-xs">
+                          {model.model_id}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="imageCaptionModel" className="text-xs font-medium">
+                  {t('knowledgebase.imageCaptionModelLabel')}
+                </Label>
+                <Select
+                  value={kb.chunk_config.image_caption_model || 'DISABLED'}
+                  onValueChange={(value) => {
+                    const selectedModel = visionModels.find(m => m.model_id === value);
+                    setKb((prev) => ({
+                      ...prev,
+                      chunk_config: {
+                        ...prev.chunk_config,
+                        image_caption_model: value !== "DISABLED" ? value : undefined,
+                        image_caption_provider_name: selectedModel?.provider_name || prev.chunk_config.image_caption_provider_name,
+                      },
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs w-full">
+                    <SelectValue placeholder={t('knowledgebase.selectImageModel')} />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectGroup>
+                      <SelectItem value="DISABLED" className="text-xs">
+                        {t('knowledgebase.disableImageModel')}
+                      </SelectItem>
+                      {visionModels.map((model) => (
+                        <SelectItem key={model.id} value={model.model_id} className="text-xs">
+                          {model.model_id} ({model.model})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">{t('knowledgebase.imageModelHint')}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-              {indexType === 'hybrid' && (
-                <div className="ml-10 flex items-center">
-                  <Label htmlFor="embeddingWeight" className="w-[100px] text-xs">
-                    {t('knowledgebase.vectorWeight')}
+        {/* Section 3: 检索设置 */}
+        <section className="py-3 border-b border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary shrink-0">
+              <SearchCheck className="w-3.5 h-3.5" />
+            </div>
+            <h3 className="text-sm font-semibold leading-tight">{t('knowledgebase.retrievalSettings')}</h3>
+          </div>
+          <div className="space-y-3 pl-8">
+            {/* 检索策略 */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">{t('knowledgebase.retrievalStrategy')}</Label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <ToggleGroup
+                  type="single"
+                  value={kb.retrieval_config.retrieval_mode}
+                  onValueChange={(value) => {
+                    setIndexType(value);
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        retrieval_mode: value,
+                      },
+                    }));
+                  }}
+                  variant="outline"
+                  className="gap-x-1"
+                >
+                  <ToggleGroupItem
+                    value="vector"
+                    aria-label={t('knowledgebase.vectorSearch')}
+                    className="!rounded-md px-3 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-7"
+                  >
+                    <ScanSearch className="w-3 h-3 mr-1" />
+                    {t('knowledgebase.vectorSearch')}
+                  </ToggleGroupItem>
+                  {isFulltextSupported && (
+                    <ToggleGroupItem
+                      value="fulltext"
+                      aria-label={t('knowledgebase.fulltextSearch')}
+                      className="!rounded-md px-3 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-7"
+                    >
+                      <TextSearch className="w-3 h-3 mr-1" />
+                      {t('knowledgebase.fulltextSearch')}
+                    </ToggleGroupItem>
+                  )}
+                  {isFulltextSupported && (
+                    <ToggleGroupItem
+                      value="hybrid"
+                      aria-label={t('knowledgebase.hybridSearch')}
+                      className="!rounded-md px-3 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-7"
+                    >
+                      <SearchCode className="w-3 h-3 mr-1" />
+                      {t('knowledgebase.hybridSearch')}
+                    </ToggleGroupItem>
+                  )}
+                </ToggleGroup>
+                {indexType === 'hybrid' && (
+                  <div className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1">
+                    <Label htmlFor="embeddingWeight" className="text-xs whitespace-nowrap">
+                      {t('knowledgebase.vectorWeight')}
+                    </Label>
+                    <Slider
+                      id="embeddingWeight"
+                      className="w-40"
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      value={[kb.retrieval_config.vector_weight || 0.7]}
+                      onValueChange={(value) =>
+                        setKb((prev) => ({
+                          ...prev,
+                          retrieval_config: {
+                            ...prev.retrieval_config,
+                            vector_weight: value[0],
+                          },
+                        }))
+                      }
+                    />
+                    <span className="w-8 text-right text-xs font-medium tabular-nums">
+                      {kb.retrieval_config.vector_weight?.toFixed(1) ?? '0.7'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Top-K + Similarity threshold in one grid row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="topk" className="text-xs font-medium">Top-K</Label>
+                  <span className="text-xs font-medium tabular-nums">{kb.retrieval_config.top_k}</span>
+                </div>
+                <Slider
+                  id="topk"
+                  defaultValue={[5]}
+                  max={100}
+                  min={0}
+                  step={1}
+                  value={[kb.retrieval_config.top_k]}
+                  onValueChange={(value: number[]) => {
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        top_k: value[0],
+                      },
+                    }));
+                  }}
+                />
+                <p className="text-[11px] text-muted-foreground">{t('knowledgebase.topKHint')}</p>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="similarityThreshold" className="text-xs font-medium">
+                    {t('knowledgebase.similarityThreshold')}
                   </Label>
-                  <Slider
-                    id="embeddingWeight"
-                    className="w-60"
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    value={[kb.retrieval_config.vector_weight || 0.7]}
-                    onValueChange={(value) =>
-                      setKb((prev) => ({
-                        ...prev,
-                        retrieval_config: {
-                          ...prev.retrieval_config,
-                          vector_weight: value[0],
-                        },
-                      }))
-                    }
-                  />
-                  <span className="w-12 text-right text-xs font-medium ml-2">
-                    {kb.retrieval_config.vector_weight?.toFixed(1) ?? '0.7'}
+                  <span className="text-xs font-medium tabular-nums">
+                    {kb.retrieval_config.similarity_threshold?.toFixed(2) ?? '0.00'}
                   </span>
                 </div>
-              )}
+                <Slider
+                  id="similarityThreshold"
+                  defaultValue={[0]}
+                  max={1}
+                  step={0.01}
+                  value={[kb.retrieval_config.similarity_threshold]}
+                  onValueChange={(value: number[]) => {
+                    setKb((prev) => ({
+                      ...prev,
+                      retrieval_config: {
+                        ...prev.retrieval_config,
+                        similarity_threshold: value[0],
+                      },
+                    }));
+                  }}
+                />
+                <p className="text-[11px] text-muted-foreground">{t('knowledgebase.similarityHint')}</p>
+              </div>
             </div>
 
-            <div className="flex gap-3 items-center">
-              <Label htmlFor="topk" className="w-[100px] text-xs">
-                Top-K
-              </Label>
-              <Slider
-                className="w-60"
-                defaultValue={[5]}
-                max={100}
-                min={0}
-                step={1}
-                value={[kb.retrieval_config.top_k]}
-                onValueChange={(value: number[]) => {
-                  setKb((prev) => ({
-                    ...prev,
-                    retrieval_config: {
-                      ...prev.retrieval_config,
-                      top_k: value[0],
-                    },
-                  }));
-                }}
-              />
-              <span className="font-medium text-xs ml-2"> {kb.retrieval_config.top_k} </span>
-              <p className="text-xs text-muted-foreground ml-4">{t('knowledgebase.topKHint')}</p>
-            </div>
-
-            <div className="flex gap-3 items-center">
-              <Label htmlFor="similarityThreshold" className="w-[100px] text-xs">
-                {t('knowledgebase.similarityThreshold')}
-              </Label>
-              <Slider
-                className="w-60"
-                defaultValue={[0]}
-                max={1}
-                step={0.01}
-                value={[kb.retrieval_config.similarity_threshold]}
-                onValueChange={(value: number[]) => {
-                  setKb((prev) => ({
-                    ...prev,
-                    retrieval_config: {
-                      ...prev.retrieval_config,
-                      similarity_threshold: value[0],
-                    },
-                  }));
-                }}
-              />
-              <span className="font-medium text-xs ml-2">
-                {kb.retrieval_config.similarity_threshold?.toFixed(2) ?? '0.00'}
-              </span>
-              <p className="text-xs text-muted-foreground ml-4">{t('knowledgebase.similarityHint')}</p>
-            </div>
-
-            <div className="gap-3 items-center">
-              <div className="flex gap-3">
-                <Label className="w-[100px] text-xs">{t('knowledgebase.enableRerank')}</Label>
+            {/* Rerank toggle + options */}
+            <div className="rounded-md bg-muted/30 p-3 space-y-3">
+              <label htmlFor="enable_reranker" className="flex items-center gap-2 cursor-pointer">
                 <Checkbox
                   id="enable_reranker"
                   checked={kb.retrieval_config.enable_rerank ?? false}
@@ -907,13 +916,14 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                   }}
                   className="h-3.5 w-3.5"
                 />
-              </div>
+                <span className="text-xs font-medium">{t('knowledgebase.enableRerank')}</span>
+              </label>
               {kb.retrieval_config.enable_rerank && (
-                <div className="space-y-3 pt-3">
-                  <div className="flex items-center">
-                    <Label htmlFor="rerank_model" className="w-[100px] text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rerank_model" className="text-xs font-medium">
                       {t('knowledgebase.rerankModelLabel')}
-                      <span className="text-destructive">*</span>
+                      <span className="text-destructive ml-1">*</span>
                     </Label>
                     <Select
                       defaultValue={kb.retrieval_config.rerank_model}
@@ -929,13 +939,13 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                         }));
                       }}
                     >
-                      <SelectTrigger className="h-6 text-xs w-60">
+                      <SelectTrigger className="h-8 text-xs w-full">
                         <SelectValue placeholder={t('knowledgebase.selectRerankModel')} />
                       </SelectTrigger>
                       <SelectContent className="text-xs">
                         <SelectGroup>
                           {rerankermodels.map((model) => (
-                            <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
+                            <SelectItem key={model.id} value={model.model_id} className="text-xs">
                               {model.model_id}
                             </SelectItem>
                           ))}
@@ -943,12 +953,17 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center">
-                    <Label htmlFor="rerank_top_k" className="w-[100px] text-xs">
-                      {t('knowledgebase.rerankTopK')}
-                    </Label>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="rerank_top_k" className="text-xs font-medium">
+                        {t('knowledgebase.rerankTopK')}
+                      </Label>
+                      <span className="text-xs font-medium tabular-nums">
+                        {kb.retrieval_config.rerank_top_k ?? 5}
+                      </span>
+                    </div>
                     <Slider
-                      className="w-60"
+                      id="rerank_top_k"
                       defaultValue={[5]}
                       max={10}
                       min={0}
@@ -964,61 +979,40 @@ export const KbConfigCard: FC<KbConfigProps> = ({
                         }));
                       }}
                     />
-                    <span className="font-medium ml-2 text-xs">
-                      {kb.retrieval_config.rerank_top_k ?? 5}
-                    </span>
                   </div>
                 </div>
               )}
             </div>
-            </CardContent>
-          </Card>
-        </div>
+          </div>
+        </section>
 
-        <div className="block w-full">
-          {saveErrorMsg !== '' && (
-            <Alert variant="destructive" className="text-xs py-2">
-              <AlertCircleIcon className="h-3 w-3" />
-              <AlertDescription className="text-xs">
-                <p>{saveErrorMsg}</p>
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
+        {saveErrorMsg !== '' && (
+          <Alert variant="destructive" className="text-xs py-2 mt-3">
+            <AlertCircleIcon className="h-3 w-3" />
+            <AlertDescription className="text-xs">
+              <p>{saveErrorMsg}</p>
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 h-16 bg-white border-t left-64 flex justify-around items-center z-50 ">
-        <div>
-          {isCreate && (
-            <div className="flex justify-center gap-2 pb-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-32 text-xs h-7"
-                onClick={() => onCancel()}
-              >
-                <SkipBack className="h-3 w-3" />
-                {t('common.cancel')}
-              </Button>
-              <Button type="button" size="sm" className="w-32 text-xs h-7" onClick={handleSubmit}>
-                {' '}
-                <Save className="h-3 w-3" />
-                {t('common.create')}
-              </Button>
-            </div>
-          )}
-          {!isCreate && (
-            <div className="flex justify-center gap-2 pb-2">
-              <Button type="button" size="sm" className="w-32 text-xs h-7" onClick={handleSubmit}>
-                {' '}
-                <Save className="h-3 w-3" />
-                {t('knowledgebase.saveSettings')}
-              </Button>
-            </div>
-          )}
-
-        </div>
+      {/* Sticky save bar (in-flow, no fixed positioning) */}
+      <div className="flex-none border-t border-border bg-background/90 backdrop-blur-sm px-6 py-2.5 flex justify-end items-center gap-2">
+        {isCreate && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onCancel()}
+          >
+            <SkipBack className="h-3 w-3 mr-1" />
+            {t('common.cancel')}
+          </Button>
+        )}
+        <Button type="button" size="sm" className="min-w-28" onClick={handleSubmit}>
+          <Save className="h-3 w-3 mr-1" />
+          {isCreate ? t('common.create') : t('knowledgebase.saveSettings')}
+        </Button>
       </div>
     </div>
   );

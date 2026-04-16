@@ -5,6 +5,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 const CHAT_OPTIONS_STORAGE_KEY = 'pai-rag-chat-options';
+const USER_QUERY_PARAM = 'user';
 
 interface ChatOptionsState {
   model: string;
@@ -41,6 +42,14 @@ const defaultChatOptions: ChatOptionsState = {
 
 // 从 localStorage 读取状态
 function loadChatOptionsFromStorage(): ChatOptionsState {
+  // Testing override: ?user=xxx from URL wins over localStorage for user_id.
+  let urlUser: string | undefined;
+  try {
+    urlUser = new URLSearchParams(window.location.search).get(USER_QUERY_PARAM)?.trim() || undefined;
+  } catch {
+    // ignore
+  }
+
   const saved = localStorage.getItem(CHAT_OPTIONS_STORAGE_KEY);
   if (saved) {
     try {
@@ -52,13 +61,16 @@ function loadChatOptionsFromStorage(): ChatOptionsState {
         enable_chatdb: parsed.enable_chatdb ?? defaultChatOptions.enable_chatdb,
         mcp_ids: parsed.mcp_ids ?? defaultChatOptions.mcp_ids,
         kb_ids: parsed.kb_ids ?? defaultChatOptions.kb_ids,
-        user_id: parsed.user_id ?? defaultChatOptions.user_id,
+        user_id: urlUser ?? parsed.user_id ?? defaultChatOptions.user_id,
       };
     } catch (e) {
       console.error('Failed to parse chat options from localStorage:', e);
     }
   }
-  return defaultChatOptions;
+  return {
+    ...defaultChatOptions,
+    user_id: urlUser ?? defaultChatOptions.user_id,
+  };
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {

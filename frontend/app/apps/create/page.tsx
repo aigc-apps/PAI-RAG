@@ -9,6 +9,16 @@ import { LlmConfig } from '@/app/config/model/llm/page';
 import { KbConfig } from '@/app/knowledgebases/kbconfig';
 import { REACT_PROMPT } from '@/app/common/prompts';
 import { useI18n } from '@/app/providers/i18n';
+import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import { HeaderPortal } from "@/components/header-portal";
 
 
 
@@ -113,15 +123,50 @@ const default_chat_config: Chatbot = {
     }
 
     return (
-        <ChatbotConfigCard
-            botConfig={botConfig}
-            onConfigChange={handleConfigChange}
-            onSave={handleSave}
-            saving={saving}
-            llms={llms}
-            mcps={mcps}
-            kbs={kbs}
-            isCreate={true}
-        />
+        <div className="flex flex-col h-full min-h-0">
+            <HeaderPortal>
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink asChild>
+                                <Button
+                                    variant="link"
+                                    className="px-0 h-auto"
+                                    onClick={() => router.push('/apps')}
+                                >
+                                    {t('sidebar.apps')}
+                                </Button>
+                            </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            <BreadcrumbPage className="font-semibold">
+                                {t('apps.create')}
+                            </BreadcrumbPage>
+                        </BreadcrumbItem>
+                    </BreadcrumbList>
+                </Breadcrumb>
+                <div className="ml-auto flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => router.push('/apps')}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button size="sm" className="min-w-24" onClick={handleSave} disabled={saving}>
+                        {saving ? t('common.saving') : t('apps.createApp')}
+                    </Button>
+                </div>
+            </HeaderPortal>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+                <ChatbotConfigCard
+                    botConfig={botConfig}
+                    onConfigChange={handleConfigChange}
+                    onSave={handleSave}
+                    saving={saving}
+                    llms={llms}
+                    mcps={mcps}
+                    kbs={kbs}
+                    isCreate={true}
+                />
+            </div>
+        </div>
     );
 }
