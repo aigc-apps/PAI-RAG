@@ -22,6 +22,7 @@ class ChatBotCreate(SQLModel):
     enable_output_guardrail: Optional[bool] = Field(default=False)
     guardrail_hint: Optional[str] = Field(default=None, sa_column=Column(Text))
     enable_faq: Optional[bool] = Field(default=False)
+    enable_auto_metadata_filter: Optional[bool] = Field(default=False)
     faq_config: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     prompts: Optional[dict] = Field(default={})
 

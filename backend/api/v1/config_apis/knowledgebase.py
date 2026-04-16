@@ -33,6 +33,24 @@ from common.i18n import i18n
 knowledgebase_router = APIRouter()
 
 
+@knowledgebase_router.delete("/metadata-schema-cache")
+async def clear_metadata_schema_cache(
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Clear metadata schema cache for the current tenant.
+    The background task will automatically repopulate the cache."""
+    try:
+        from service.cache.metadata_schema_cache import metadata_schema_cache
+        count = await metadata_schema_cache.clear_cache_by_tenant(tenant_id)
+        return success_response(
+            data={"cleared": count},
+            message="Metadata schema cache cleared.",
+        )
+    except Exception as e:
+        logger.error(f"Failed to clear metadata schema cache: {e}")
+        raise ApiException(code=500, message=f"Failed to clear metadata schema cache: {e}")
+
+
 @knowledgebase_router.post("", response_model=ResponseModel[KbEntity])
 async def create_knowledgebase(
     kb_data: KnowledgebaseCreate,

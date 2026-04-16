@@ -312,6 +312,8 @@ class ChatappService:
             chatbot.prompts = update_data.prompts
         if update_data.enable_faq is not None:
             chatbot.enable_faq = update_data.enable_faq
+        if update_data.enable_auto_metadata_filter is not None:
+            chatbot.enable_auto_metadata_filter = update_data.enable_auto_metadata_filter
 
         chatbot.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.session.add(chatbot)

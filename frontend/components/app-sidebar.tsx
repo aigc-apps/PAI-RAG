@@ -1,5 +1,5 @@
 'use client';
-import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck, Code, Users, Plus, Check, X } from 'lucide-react';
+import { Search, Settings, Bot, Wrench, Database, PlugZap, SquareActivity, GlobeLock, ShieldCheck, Code, Users, Plus, Check, X, HardDrive } from 'lucide-react';
 import React, { useState } from 'react';
 import {
   Sidebar,
@@ -238,6 +238,9 @@ export function AppSidebar() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/config/guardrail"><ShieldCheck /> <span suppressHydrationWarning>{t('sidebar.guardrail')}</span> </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/config/cache"><HardDrive /> <span suppressHydrationWarning>{t('sidebar.cache')}</span></Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

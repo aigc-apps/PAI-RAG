@@ -167,5 +167,8 @@ def kb_key(tenant_id: str, kb_id: str) -> str:
 def kb_name_key(tenant_id: str, name: str) -> str:
     return f"tenant:{tenant_id}:kb_name:{name}"
 
+def kb_metadata_schema_key(tenant_id: str, kb_id: str) -> str:
+    return f"tenant:{tenant_id}:kb_metadata_schema:{kb_id}"
+
 def vector_table_name_key(tenant_id: str, kb_id: str) -> str:
     return f"tenant:{tenant_id}:kb_id:{kb_id}:vector_table_name"

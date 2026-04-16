@@ -151,7 +151,7 @@ def get_retrieval_tool(
 
     func_arg_metadata = func_metadata(
         asearch_knowledgebase_wrapper,
-    skip_names=["user_id", "metadata_condition", "knowledgebase_id", "retrieval_setting", "session"],
+    skip_names=["user_id", "knowledgebase_id", "retrieval_setting", "session"],
         structured_output=True,
     )
     parameters = func_arg_metadata.arg_model.model_json_schema(by_alias=True)

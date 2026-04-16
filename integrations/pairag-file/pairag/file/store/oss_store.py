@@ -125,30 +125,9 @@ class OssFileStore(BaseFileStore):
             raise
 
     async def get_url_async(self, file_path: str, tenant_id: str) -> Optional[str]:
-        try:
-            oss_file_key = os.path.join(self.prefix_path, file_path)
-            op_input = oss.OperationInput(
-                op_name="GetObject",
-                method="GET",
-                bucket=self.bucket,
-                key=oss_file_key,
-                headers={},
-                parameters={},
-                op_metadata={
-                    "expiration_time": self._get_sign_expire_time()
-                }
-            )
-            op_output = await self.async_client.invoke_operation(op_input, auth_method="query")
-            assert op_output.status_code == 200, f"Failed to presign file {oss_file_key}. status_code: {op_output.status_code}"
-            oss_url = op_output.http_response.request.url
-
-            if self.is_internal:
-                oss_url = oss_url.replace(self.endpoint, self.public_endpoint)
-            logger.info(f"Get url for file {oss_file_key}.")
-            return oss_url
-        except Exception as e:
-            logger.error(f"Failed to get url for file {oss_file_key}. error: {traceback.format_exc()}")
-            raise
+        # Presigning is a local crypto operation (no network I/O),
+        # so reuse the sync client to avoid unnecessary HTTP requests.
+        return self.get_url(file_path, tenant_id)
 
     async def write_async(self, file: BinaryIO, file_name: str, file_path: str, tenant_id: str) -> FileUploadResult:
         oss_file_key = os.path.join(self.prefix_path, file_path)
