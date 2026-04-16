@@ -24,14 +24,19 @@ const ThreadListNew: FC = () => {
   const router = useRouter();
   return (
     <ThreadListPrimitive.New asChild>
-      <Button
-        className="data-[active]:bg-muted hover:bg-muted flex items-center justify-start gap-1 rounded-lg px-2.5 py-2 text-start"
-        variant="ghost"
+      <button
+        className="new-chat-btn mb-1"
         onClick={() => {router.push('/')}}
       >
-        <PlusIcon />
-        <span suppressHydrationWarning>{t('chat.threadList.newConversation')}</span>
-      </Button>
+        <span className="flex items-center gap-2">
+          <PlusIcon className="w-4 h-4" />
+          <span suppressHydrationWarning>{t('chat.threadList.newConversation')}</span>
+        </span>
+        <span className="flex items-center gap-0.5">
+          <span className="kbd-badge">⌘</span>
+          <span className="kbd-badge">P</span>
+        </span>
+      </button>
     </ThreadListPrimitive.New>
   );
 };

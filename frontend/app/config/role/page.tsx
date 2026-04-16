@@ -19,13 +19,13 @@ export default function RoleConfigPage() {
     <div id="access-control">
       <div className="flex flex-col h-screen p-6 space-y-6">
         <div className="flex justify-between items-center h-1/10">
-          <h1 className="text-xl font-medium">{t('config.role.title')}</h1>
+          <h1 className="page-title">{t('config.role.title')}</h1>
         </div>
 
         <div className="h-4/5">
           <div className="">
             <Tabs defaultValue="roles">
-              <TabsList className="py-4 bg-muted rounded-lg flex-none">
+              <TabsList className="py-4 tabs-modern flex-none">
                 <TabsTrigger value="roles" className="p-4">
                   {t('config.role.roles')}
                 </TabsTrigger>

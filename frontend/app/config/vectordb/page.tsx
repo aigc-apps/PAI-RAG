@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -8,8 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Key, useEffect, useState } from "react";
 import { PostgresqlConfig, PostgresqlForm } from "./forms/postgresql";
@@ -159,56 +156,65 @@ export default function VectorDBConsole() {
   };
 
   return (
-    <Card className="w-full max-w-3xl mx-auto">
-      <CardHeader>
-        <CardTitle>{t('config.vectordb.title')}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {
-            loading ? <Skeleton className="h-12 w-12 rounded-full" /> :
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <Label>{t('config.vectordb.dbType')}</Label>
-            <Select value={dbType} onValueChange={(v) => {
-                cache.set(dbType, db);
-                setDbType(v as DBType);
-                setDb(cache.get(v as DBType) || {});
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder={t('config.vectordb.selectDbType')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="local">{t('config.vectordb.localChroma')}</SelectItem>
-                <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                <SelectItem value="milvus">Milvus</SelectItem>
-                <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
-                <SelectItem value="hologres">Hologres</SelectItem>
-                <SelectItem value="opensearch">Opensearch</SelectItem>
-                <SelectItem value="tablestore">Tablestore</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Separator />
-
-          {renderForm()}
-
-          <div className="flex gap-4 pt-4">
-            <Button variant="outline" onClick={testConnection}> 
-                {connectionTesting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {t('config.vectordb.testing')}
-                          </>
-                        ) : (
-                          <>{t('config.vectordb.testConnection')}</>
-                        )}</Button>
-                        
-            <Button onClick={saveConnection}>{t('common.save')}</Button>
-          </div>
+    <div id="vectordb" className="settings-page">
+      <div className="settings-page-header">
+        <h1 className="page-title">{t('config.vectordb.title')}</h1>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={testConnection} disabled={connectionTesting}>
+            {connectionTesting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t('config.vectordb.testing')}
+              </>
+            ) : (
+              t('config.vectordb.testConnection')
+            )}
+          </Button>
+          <Button size="sm" onClick={saveConnection}>
+            {t('common.save')}
+          </Button>
         </div>
-        }
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="settings-page-content">
+        {loading ? (
+          <Skeleton className="h-12 w-12 rounded-full" />
+        ) : (
+          <div className="space-y-6">
+            <div>
+              <div className="dialog-section-title mb-2">数据库类型</div>
+              <Select
+                value={dbType}
+                onValueChange={(v) => {
+                  cache.set(dbType, db);
+                  setDbType(v as DBType);
+                  setDb(cache.get(v as DBType) || {});
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('config.vectordb.selectDbType')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="local">{t('config.vectordb.localChroma')}</SelectItem>
+                  <SelectItem value="postgresql">PostgreSQL</SelectItem>
+                  <SelectItem value="milvus">Milvus</SelectItem>
+                  <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
+                  <SelectItem value="hologres">Hologres</SelectItem>
+                  <SelectItem value="opensearch">Opensearch</SelectItem>
+                  <SelectItem value="tablestore">Tablestore</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {dbType !== 'local' && (
+              <div>
+                <div className="dialog-section-title mb-2">连接配置</div>
+                {renderForm()}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

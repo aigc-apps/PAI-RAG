@@ -86,7 +86,7 @@ const ChatbotPage = () => {
   return (
     <div className="flex flex-col h-screen px-6 space-y-2">
       <div className="flex justify-between items-center h-1/10">
-        <h1 className="text-xl font-medium">{t('apps.title')}</h1>
+        <h1 className="page-title">{t('apps.title')}</h1>
         <Button
           className="px-4 py-2 bg-primary rounded-md text-sm font-medium hover:bg-primary/90 w-40"
           onClick={()=>{router.push('/apps/create')}}
@@ -115,7 +115,7 @@ const ChatbotPage = () => {
                 router.push(`/apps/${bot.app_id}`);
               }}
               key={bot.id}
-              className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300"
+              className="flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 card-hover-glow duration-300"
             >
               <CardHeader>
                 <CardTitle className="text-md flex pt-4 pb-1">

@@ -72,14 +72,11 @@ export function AppSidebar() {
   return (
     <Sidebar side="left">
       <SidebarHeader>
-        <div className="flex items-center space-x-2">
-          <Avatar>
-            <AvatarImage
-              src="https://pai-rag.oss-cn-hangzhou.aliyuncs.com/logo/pairag_1.png"
-              alt="@shadcn"
-            />
-          </Avatar>
-          <span className="text-lg font-medium">PAI-RAG</span>
+        <div className="flex items-center gap-2.5 px-1 py-1">
+          <div className="logo-icon flex items-center justify-center w-8 h-8 rounded-lg font-bold text-sm shrink-0">
+            P
+          </div>
+          <span className="text-base font-semibold tracking-tight">PAI-RAG</span>
         </div>
         {/* 工作空间选择器 */}
         <div className="mt-1">

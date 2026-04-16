@@ -1,19 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { TrashIcon, Edit, AlertCircleIcon } from 'lucide-react';
+import { TrashIcon, Edit, AlertCircleIcon, Plus, Sparkles, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RerankerModelDialog } from '@/app/config/model/reranker/modelDialog';
-import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 
@@ -39,13 +37,7 @@ export default function RerankerConfigPage() {
   const [editRerankerConfig, setEditRerankerConfig] =
     useState<RerankerConfig>(newrerankerconfig);
   const [rerankerconfigs, setRerankerConfigs] = useState<RerankerConfig[]>([]);
-  const [modelloading, setModelLoading] = useState(true);
-  const [modelerror, setModelError] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const modelSizePerPage = 8;
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -54,177 +46,169 @@ export default function RerankerConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const res = await tenantFetch(
-          `/api/config/rerankers?page=${page}&size=${modelSizePerPage}`,
-        );
+        const res = await tenantFetch(`/api/config/rerankers?page=1&size=100`);
         if (!res.ok) throw new Error(t('config.model.fetchRerankerListFailed'));
         const json_data = await res.json();
-        // Convert backend type values to frontend format
         const reverseTypeMapping: Record<string, string> = {
           'openai_like': 'OpenAICompatible',
           'dashscope': 'DashScope',
         };
-        const data = json_data.data.items.map((item: RerankerConfig) => ({
+        const data = (json_data.data.items || []).map((item: RerankerConfig) => ({
           ...item,
           type: item.type ? (reverseTypeMapping[item.type] || item.type) : 'OpenAICompatible',
         }));
         setRerankerConfigs(data);
-        setTotalPages(json_data.data.pages);
       } catch (err: any) {
-        setModelError(err || t('config.model.loadFailed'));
-      } finally {
-        setModelLoading(false);
+        // swallow
       }
     };
     fetchModelConfigs();
-  }, [page, rerankerconfigs.length]);
+  }, [rerankerconfigs.length]);
 
-  const handleCreateSuccess = (llmConfig: RerankerConfig) => {
-    setRerankerConfigs((prev) => [...prev, llmConfig]);
-    console.log(t('config.model.createRerankerSuccess'), llmConfig);
+  const handleCreateSuccess = (config: RerankerConfig) => {
+    setRerankerConfigs((prev) => [...prev, config]);
     setEditRerankerConfig(newrerankerconfig);
   };
 
-  const handleSaveSuccess = (llmConfig: RerankerConfig) => {
-    setRerankerConfigs((prev) =>
-      prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
-    );
-    console.log(t('config.model.editRerankerSuccess'), llmConfig);
+  const handleSaveSuccess = (config: RerankerConfig) => {
+    setRerankerConfigs((prev) => prev.map((c) => (c.id === config.id ? config : c)));
     setEditRerankerConfig(newrerankerconfig);
   };
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages) return;
-    setPage(newPage);
-  };
-
-  const removeModel = async (id: string, model_type: string) => {
+  const removeModel = async (id: string) => {
     setErrorMsg('');
     try {
-      console.log('removeModel: id: ', id, 'model_type: ', model_type);
-      const res = await tenantFetch(`/api/config/${model_type}/${id}`, {
+      const res = await tenantFetch(`/api/config/rerankers/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!res.ok) {
-        setErrorMsg(t('config.model.deleteModelFailed', { modelType: model_type }));
+        setErrorMsg(t('config.model.deleteModelFailed', { modelType: 'Reranker' }));
         return;
       }
-
-      // Delete success, update local state
-      if (model_type === 'rerankers') {
-        setRerankerConfigs((prev) => prev.filter((config) => config.id !== id));
-      }
+      setRerankerConfigs((prev) => prev.filter((c) => c.id !== id));
     } catch (err: any) {
       setErrorMsg(t('config.model.deleteFailed'));
     }
   };
 
-  return (
-    <div id="llm">
-      <div className="grid grid-cols-1 pb-8">
-        <Button
-          onClick={() => {
-            setIsCreateOpen(true);
-            setEditRerankerConfig(newrerankerconfig);
-          }}
-        >
-          {t('config.model.addRerankerModel')}
-        </Button>
-        <RerankerModelDialog
-          isAdd={isCreateOpen ? true : false}
-          isOpen={isEditOpen || isCreateOpen}
-          setIsOpen={(open: boolean) => {
-            if (!open) {
-              setEditRerankerConfig(newrerankerconfig);
-            }
-            setIsEditOpen(open);
-            setIsCreateOpen(open);
-          }}
-          rerankerConfig={editRerankerConfig || newrerankerconfig}
-          onSaveSuccess={(reranker: RerankerConfig) => {
-            if (isCreateOpen) {
-              handleCreateSuccess(reranker);
-            } else {
-              handleSaveSuccess(reranker);
-            }
-          }}
-        />
-      </div>
-      {rerankerconfigs.length > 0 ? (
-        <div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-            {rerankerconfigs.map((reranker) => (
-              <Card
-                key={reranker.id}
-                className="flex flex-col border rounded-lg shadow-sm h-full pt-2 pb-2"
-              >
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <Badge className="bg-red-100 text-red-800">
-                        {reranker.model_name}
-                      </Badge>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="truncate">{reranker.model_id}</p>
-                  <p className="truncate text-muted-foreground pt-2 text-xs">
-                    {reranker.base_url}
-                  </p>
-                </CardContent>
-                <CardFooter className="mt-auto pt-0 flex justify-end pb-0">
-                  <Button
-                    variant="link"
-                    onClick={() => removeModel(reranker.id, 'rerankers')}
-                    className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
-                  >
-                    <TrashIcon className="ml-1" size={16} />
-                  </Button>
+  const openCreate = () => {
+    setIsCreateOpen(true);
+    setEditRerankerConfig(newrerankerconfig);
+  };
 
-                  <Button
-                    variant="link"
-                    className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
-                    onClick={() => {
-                      setEditRerankerConfig(reranker);
-                      setIsEditOpen(true);
-                    }}
-                  >
-                    <Edit className="ml-1" size={16} />
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-          <div className="flex justify-center items-center h-1/10 py-6">
-            <PaginationComponent
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-            />
-          </div>
+  return (
+    <section id="reranker" className="section-panel">
+      {/* Section header */}
+      <div className="section-header">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <h2 className="section-title">{t('config.model.tabReranker') || 'Reranker'}</h2>
+          <span className="text-xs text-muted-foreground">· {rerankerconfigs.length}</span>
+        </div>
+        <Button size="sm" variant="outline" onClick={openCreate}>
+          <Plus className="w-4 h-4" />
+          Add
+        </Button>
+      </div>
+
+      <RerankerModelDialog
+        isAdd={isCreateOpen ? true : false}
+        isOpen={isEditOpen || isCreateOpen}
+        setIsOpen={(open: boolean) => {
+          if (!open) {
+            setEditRerankerConfig(newrerankerconfig);
+          }
+          setIsEditOpen(open);
+          setIsCreateOpen(open);
+        }}
+        rerankerConfig={editRerankerConfig || newrerankerconfig}
+        onSaveSuccess={(reranker: RerankerConfig) => {
+          if (isCreateOpen) handleCreateSuccess(reranker);
+          else handleSaveSuccess(reranker);
+        }}
+      />
+
+      {rerankerconfigs.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+          {rerankerconfigs.map((reranker) => (
+            <div key={reranker.id} className="model-card group">
+              {/* Top-right corner: type badge + more menu */}
+              <div className="absolute top-3 right-3 flex items-center gap-2">
+                <span className="type-corner-badge type-reranker">RNK</span>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="icon-action-btn" aria-label="More">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="menu-compact">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setEditRerankerConfig(reranker);
+                        setIsEditOpen(true);
+                      }}
+                    >
+                      <Edit />
+                      {t('common.edit') || 'Edit'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onSelect={() => removeModel(reranker.id)}
+                    >
+                      <TrashIcon />
+                      {t('common.delete') || 'Delete'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="flex items-start gap-3 pr-20">
+                <div className="model-icon type-reranker shrink-0">{(reranker.model_name || 'R').charAt(0)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate" title={reranker.model_id}>
+                    {reranker.model_id}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {reranker.model_name}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {reranker.type && (
+                  <Badge className="badge-tech text-[10.5px] py-0">{reranker.type}</Badge>
+                )}
+              </div>
+
+              {reranker.base_url && (
+                <div className="endpoint-text" title={reranker.base_url}>
+                  {reranker.base_url}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       ) : (
-        <div className="flex justify-center items-center h-1/10 py-6">
-          <h3 className="text-lg font-medium text-gray-700 py-6">
-            {t('config.model.noModelsYet')}
-          </h3>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Sparkles className="w-10 h-10 text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">
+            暂无模型，点击右上角按钮添加
+          </p>
         </div>
       )}
-      <div className="block w-full">
-        {errorMsg !== '' && (
+
+      {errorMsg !== '' && (
+        <div className="block w-full mt-3">
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertDescription>
               <p>{errorMsg}</p>
             </AlertDescription>
           </Alert>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </section>
   );
 }

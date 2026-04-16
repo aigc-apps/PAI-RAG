@@ -10,8 +10,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { AlertCircleIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -27,8 +25,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
+import { cn } from '@/lib/utils';
 
-// Component props
 interface EmbeddingModelDialogProps {
   isAdd: boolean;
   isOpen: boolean;
@@ -37,7 +35,6 @@ interface EmbeddingModelDialogProps {
   onSaveSuccess: (emb: EmbConfig) => void;
 }
 
-// Model data type
 export interface EmbConfig {
   id: string;
   model_id: string;
@@ -59,10 +56,15 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
   onSaveSuccess,
 }) => {
   const [emb, setEmb] = useState<EmbConfig>(embConfig);
-  const [error, setError] = useState<string | null>(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const { tenantFetch } = useTenantFetch();
   const { t } = useI18n();
+
+  // Freeze isAdd while the dialog is closing (prevents title flicker).
+  const [displayIsAdd, setDisplayIsAdd] = useState(isAdd);
+  useEffect(() => {
+    if (isOpen) setDisplayIsAdd(isAdd);
+  }, [isOpen, isAdd]);
 
   useEffect(() => {
     setEmb(embConfig);
@@ -76,8 +78,6 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     setSaveErrorMsg('');
     const is_api_model = emb.type != 'local';
     if (emb.dimension === 0) emb.dimension = undefined;
-
-    console.log('handleSubmit', emb, is_api_model);
 
     if (
       is_api_model &&
@@ -101,7 +101,6 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
       : `/api/config/embeddings/${emb.id}`;
     const updateMethod = isAdd ? 'POST' : 'PUT';
     if (emb.api_key === '******') emb.api_key = '';
-    console.log('updateMethod', isAdd, updateMethod, submit_url, emb);
     try {
       const res = await tenantFetch(submit_url, {
         method: updateMethod,
@@ -121,206 +120,205 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     }
   };
 
-  // Reset form when dialog closes
   const handleDialogClose = (open: boolean) => {
     setIsOpen(open);
-    if (!open) {
-      setError(null);
-      setSaveErrorMsg('');
-    }
+    if (!open) setSaveErrorMsg('');
   };
 
-  // Manage confirmation dialog open state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  // Temporarily store user's target state
   const [pendingState, setPendingState] = useState<boolean | null>(null);
+
+  const isApiLike = emb?.type === 'openai_like';
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-      <DialogContent className="sm:max-w-[700px]">
-        {error && <div className="text-red-500 mb-4">{error}</div>}
+      <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>{isAdd ? t('config.model.addModel') : t('config.model.editModel')}</DialogTitle>
-          <DialogDescription>{t('config.model.fillModelConfig')}</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="type-corner-badge type-embedding">EMB</span>
+            {displayIsAdd ? '添加 Embedding 模型' : '编辑 Embedding 模型'}
+          </DialogTitle>
+          <DialogDescription>
+            填写 Embedding（向量）模型的配置信息后保存
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="model_id" className="text-right">
-              {t('config.model.modelId')}
-              <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="model_id"
-              placeholder={t('config.model.modelIdPlaceholder')}
-              value={emb?.model_id ?? ''}
-              onChange={(e) =>
-                setEmb((prev) => ({ ...prev, model_id: e.target.value }))
-              }
-              className="col-span-3"
-            />
-          </div>
-        </div>
-        {emb?.type === 'openai_like' && (
-          <div className="grid grid-cols-4 items-center gap-4 py-2">
-            <Label htmlFor="endpoint" className="text-right">
-              {t('config.model.endpointUrl')}
-              <span className="text-destructive">*</span>
-            </Label>
-            <div className="col-span-3">
-              <input
-                id="endpoint"
-                list="endpoint_options"
-                placeholder={t('config.model.endpointPlaceholder')}
-                value={emb?.endpoint ?? ''}
-                onChange={(e) =>
-                  setEmb((prev) => ({ ...prev, endpoint: e.target.value }))
-                }
-                className="w-full border border-gray-300 rounded-md p-2 text-sm"
-              />
-              <datalist id="endpoint_options">
-                <option value="https://api.openai.com/v1">OpenAI</option>
-                <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
-                  {t('config.model.qwenModel')}
-                </option>
-              </datalist>
-            </div>
-          </div>
-        )}
-        {emb?.type === 'openai_like' && (
-          <div className="grid grid-cols-4 items-center gap-4 py-2">
-            <Label htmlFor="api_key" className="text-right">
-              {t('config.model.apiKey')}
-              <span className="text-destructive">*</span>
-            </Label>
-            {isAdd ? (
-              <Input
-                id="api_key"
-                type="password"
-                placeholder={t('config.model.apiKeyPlaceholder')}
-                value={emb?.api_key ?? ''}
-                onChange={(e) =>
-                  setEmb((prev) => ({ ...prev, api_key: e.target.value }))
-                }
-                className="col-span-3"
-              />
-            ) : (
-              <Input
-                id="api_key"
-                type="password"
-                placeholder={t('config.model.apiKeyPlaceholder')}
-                value={emb?.api_key || '******'}
-                onChange={(e) =>
-                  setEmb((prev) => ({ ...prev, api_key: e.target.value }))
-                }
-                className="col-span-3"
-              />
-            )}
-          </div>
-        )}
-        <div className="grid gap-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="model_name" className="text-right">
-              {t('config.model.modelName')}
-              <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="model_name"
-              placeholder={t('config.model.modelNamePlaceholder')}
-              value={emb?.model_name ?? ''}
-              onChange={(e) =>
-                setEmb((prev) => ({ ...prev, model_name: e.target.value }))
-              }
-              className="col-span-3"
-            />
-          </div>
-        </div>
-        <div className="grid gap-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="model_type" className="text-right">
+        <div className="space-y-4 py-2">
+          {/* Type selector — segmented */}
+          <div>
+            <label className="form-label">
               {t('config.model.modelType')}
-              <span className="text-destructive">*</span>
-            </Label>
-            <RadioGroup
-              className="flex flex-row gap-6 col-span-3"
-              value={emb?.type}
-              onValueChange={(value) => setEmb({ ...emb, type: value })}
-            >
-              <div className="flex items-center gap-3">
-                <RadioGroupItem value="local" />
-                <Label>{t('config.model.localHosted')}</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <RadioGroupItem value="openai_like" />
-                <Label>{t('config.model.apiOpenaiLike')}</Label>
-              </div>
-            </RadioGroup>
+              <span className="required">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-lg bg-muted">
+              <button
+                type="button"
+                className={cn(
+                  'px-3 py-2 text-sm rounded-md transition-all',
+                  emb?.type === 'local'
+                    ? 'bg-background shadow-sm font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => setEmb({ ...emb, type: 'local' })}
+              >
+                {t('config.model.localHosted')}
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'px-3 py-2 text-sm rounded-md transition-all',
+                  emb?.type === 'openai_like'
+                    ? 'bg-background shadow-sm font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => setEmb({ ...emb, type: 'openai_like' })}
+              >
+                {t('config.model.apiOpenaiLike')}
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="grid gap-4">
-          <div className="grid grid-cols-4 items-center gap-4 py-2">
-            <Label htmlFor="dimension" className="text-right">
-              {t('config.model.vectorDimension')}
-            </Label>
-            <div className="col-span-3">
-              <Input
-                id="dimension"
-                type="number"
-                placeholder={t('config.model.vectorDimensionPlaceholder')}
-                defaultValue={emb?.dimension}
-                onChange={(e) =>
-                  setEmb({
-                    ...emb,
-                    dimension: Number(e.target.value),
-                  })
-                }
+
+          {/* Basic section */}
+          <div>
+            <div className="dialog-section-title">Basic</div>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="model_id" className="form-label">
+                  {t('config.model.modelId')}
+                  <span className="required">*</span>
+                </label>
+                <Input
+                  id="model_id"
+                  placeholder={t('config.model.modelIdPlaceholder')}
+                  value={emb?.model_id ?? ''}
+                  onChange={(e) => setEmb((prev) => ({ ...prev, model_id: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="model_name" className="form-label">
+                  {t('config.model.modelName')}
+                  <span className="required">*</span>
+                </label>
+                <Input
+                  id="model_name"
+                  placeholder={t('config.model.modelNamePlaceholder')}
+                  value={emb?.model_name ?? ''}
+                  onChange={(e) => setEmb((prev) => ({ ...prev, model_name: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Endpoint section (only for API-like) */}
+          {isApiLike && (
+            <div>
+              <div className="dialog-section-title">Endpoint</div>
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="endpoint" className="form-label">
+                    {t('config.model.endpointUrl')}
+                    <span className="required">*</span>
+                  </label>
+                  <Input
+                    id="endpoint"
+                    list="endpoint_options"
+                    placeholder={t('config.model.endpointPlaceholder')}
+                    value={emb?.endpoint ?? ''}
+                    onChange={(e) => setEmb((prev) => ({ ...prev, endpoint: e.target.value }))}
+                  />
+                  <datalist id="endpoint_options">
+                    <option value="https://api.openai.com/v1">OpenAI</option>
+                    <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
+                      {t('config.model.qwenModel')}
+                    </option>
+                  </datalist>
+                </div>
+
+                <div>
+                  <label htmlFor="api_key" className="form-label">
+                    {t('config.model.apiKey')}
+                    <span className="required">*</span>
+                  </label>
+                  <Input
+                    id="api_key"
+                    type="password"
+                    placeholder={t('config.model.apiKeyPlaceholder')}
+                    value={isAdd ? (emb?.api_key ?? '') : (emb?.api_key || '******')}
+                    onChange={(e) => setEmb((prev) => ({ ...prev, api_key: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Advanced section */}
+          <div>
+            <div className="dialog-section-title">Advanced</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="dimension" className="form-label">
+                  {t('config.model.vectorDimension')}
+                  {!isApiLike && <span className="required">*</span>}
+                </label>
+                <Input
+                  id="dimension"
+                  type="number"
+                  placeholder={t('config.model.vectorDimensionPlaceholder')}
+                  value={emb?.dimension ?? ''}
+                  onChange={(e) =>
+                    setEmb({ ...emb, dimension: Number(e.target.value) || undefined })
+                  }
+                />
+              </div>
+
+              <div>
+                <label htmlFor="embed_batch_size" className="form-label">
+                  {t('config.model.vectorBatchSize')}
+                </label>
+                <Input
+                  id="embed_batch_size"
+                  type="number"
+                  placeholder={t('config.model.vectorBatchSizePlaceholder')}
+                  value={emb?.embed_batch_size ?? ''}
+                  onChange={(e) =>
+                    setEmb({ ...emb, embed_batch_size: Number(e.target.value) })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="form-row-inline mt-3">
+              <div className="form-row-inline-label">
+                <span className="title">{t('config.model.defaultVectorModel')}</span>
+                <span className="hint">作为知识库默认的 Embedding 模型</span>
+              </div>
+              <Switch
+                checked={emb.is_default}
+                onCheckedChange={(checked) => {
+                  if (emb.is_default === checked) return;
+                  setPendingState(checked);
+                  setIsDialogOpen(true);
+                }}
               />
             </div>
           </div>
+
+          {saveErrorMsg !== '' && (
+            <Alert className="bg-destructive/10 dark:bg-destructive/20 border-none">
+              <AlertCircleIcon className="h-4 w-4 !text-destructive" />
+              <AlertTitle>{saveErrorMsg}</AlertTitle>
+            </Alert>
+          )}
         </div>
-        <div className="grid gap-4">
-          <div className="grid grid-cols-4 items-center gap-4 py-2">
-            <Label htmlFor="embed_batch_size" className="text-right">
-              {t('config.model.vectorBatchSize')}
-            </Label>
-            <Input
-              id="embed_batch_size"
-              type="number"
-              placeholder={t('config.model.vectorBatchSizePlaceholder')}
-              defaultValue={emb?.embed_batch_size || 'null'}
-              onChange={(e) =>
-                setEmb({
-                  ...emb,
-                  embed_batch_size: Number(e.target.value),
-                })
-              }
-              className="col-span-3"
-            />
-          </div>
-        </div>
-        <div className="grid gap-4">
-          <div className="grid grid-cols-4 items-center gap-4 py-2">
-            <Label htmlFor="embed_batch_size" className="text-right">
-              {t('config.model.defaultVectorModel')}
-            </Label>
-            <Switch
-              checked={emb.is_default}
-              className="justify-start rounded-full transition-color"
-              onCheckedChange={(checked) => {
-                const targetState = checked;
-                if (emb.is_default === targetState) return;
-                setPendingState(targetState);
-                setIsDialogOpen(true);
-              }}
-            />
-          </div>
-        </div>
-        {/* 确认对话框 */}
+
+        {/* Confirm default change */}
         <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>{t('config.model.confirmChangeDefaultModel')}</AlertDialogTitle>
+              <AlertDialogTitle>
+                {t('config.model.confirmChangeDefaultModel')}
+              </AlertDialogTitle>
               <AlertDialogDescription>
                 {pendingState
                   ? t('config.model.setAsDefaultWarning')
@@ -331,10 +329,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
-                  setEmb({
-                    ...emb,
-                    is_default: pendingState || false,
-                  });
+                  setEmb({ ...emb, is_default: pendingState || false });
                   setIsDialogOpen(false);
                 }}
               >
@@ -344,14 +339,13 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
           </AlertDialogContent>
         </AlertDialog>
 
-        <DialogFooter className="flex flex-col gap-4">
-          {saveErrorMsg !== '' && (
-            <Alert className="bg-destructive/10 dark:bg-destructive/20 border-none">
-              <AlertCircleIcon className="h-4 w-4 !text-destructive" />
-              <AlertTitle>{saveErrorMsg}</AlertTitle>
-            </Alert>
-          )}
-          <Button onClick={handleSubmit}>{isAdd ? t('config.model.create') : t('common.save')}</Button>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsOpen(false)}>
+            {t('common.cancel') || 'Cancel'}
+          </Button>
+          <Button onClick={handleSubmit}>
+            {displayIsAdd ? '创建 Embedding 模型' : t('common.save')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

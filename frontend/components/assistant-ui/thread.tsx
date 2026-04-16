@@ -231,7 +231,7 @@ export const Thread: FC<{
   return (
     <>
       <ThreadPrimitive.Root
-        className="bg-background box-border flex h-full flex-col overflow-hidden"
+        className="box-border flex h-full flex-col overflow-hidden"
         style={{
           ['--thread-max-width' as string]: '60rem',
         }}
@@ -312,7 +312,12 @@ const ThreadWelcome: FC = () => {
     <ThreadPrimitive.Empty>
       <div className="flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
-          <p className="mt-4 font-medium">{t('chat.thread.welcomeMessage')}</p>
+          <h2 className="text-3xl font-semibold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+            {t('chat.thread.welcomeMessage')}
+          </h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            提问、上传文档进行知识分析，或交由我规划并执行任务
+          </p>
         </div>
         <ThreadWelcomeSuggestions />
       </div>
@@ -323,24 +328,26 @@ const ThreadWelcome: FC = () => {
 const ThreadWelcomeSuggestions: FC = () => {
   const { t } = useI18n();
   return (
-    <div className="mt-3 flex w-full items-stretch justify-center gap-4 pb-8">
+    <div className="mt-6 flex w-full items-stretch justify-center gap-3 pb-8 flex-wrap">
       <ThreadPrimitive.Suggestion
-        className="hover:bg-muted/80 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
+        className="suggest-pill cursor-pointer max-w-sm"
         prompt={t('chat.thread.suggestion1')}
         method="replace"
         autoSend
       >
-        <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
+        <Brain className="w-4 h-4 text-primary shrink-0" />
+        <span className="line-clamp-1">
           {t('chat.thread.suggestion1')}
         </span>
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion
-        className="hover:bg-muted/80 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
+        className="suggest-pill cursor-pointer max-w-sm"
         prompt={t('chat.thread.suggestion2')}
         method="replace"
         autoSend
       >
-        <span className="line-clamp-2 text-gray-800 text-xs text-ellipsis text-sm font-semibold">
+        <Search className="w-4 h-4 text-primary shrink-0" />
+        <span className="line-clamp-1">
           {t('chat.thread.suggestion2')}
         </span>
       </ThreadPrimitive.Suggestion>
@@ -366,8 +373,7 @@ const Composer: FC<ComposerProps> = ({
   const { t } = useI18n();
   return (
     <ComposerPrimitive.Root
-      // className="focus-within:border-ring/20 flex w-full flex-wrap items-end rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
-      className="focus-within:border-ring/20 flex w-full flex-col rounded-lg border bg-inherit px-2.5 shadow-sm transition-colors ease-in"
+      className="composer-box flex w-full flex-col px-3"
     >
       {/* First row: input box */}
       <div className="flex items-center justify-between px-2 pb-1">
@@ -395,14 +401,14 @@ const Composer: FC<ComposerProps> = ({
                   <ToggleGroupItem
                     value="search"
                     aria-label="Toggle web search"
-                    className="!rounded-full px-2 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
+                    className="!rounded-full px-2 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
                   >
                     <Search /> {t('chat.thread.search')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="mcp"
                     aria-label="Toggle mcp"
-                    className="!rounded-full px-2 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
+                    className="!rounded-full px-2 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
                     onClick={() => {
                       onOpenMcpModal?.();
                     }}
@@ -412,7 +418,7 @@ const Composer: FC<ComposerProps> = ({
                   <ToggleGroupItem
                     value="kb"
                     aria-label="Toggle kb"
-                    className="!rounded-full px-2 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
+                    className="!rounded-full px-2 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
                     onClick={() => {
                       onOpenKbModal?.();
                     }}
@@ -422,7 +428,7 @@ const Composer: FC<ComposerProps> = ({
                   <ToggleGroupItem
                     value="chatdb"
                     aria-label="Toggle chatdb"
-                    className="!rounded-full px-6 py-1 data-[state=on]:bg-black data-[state=on]:text-white h-8"
+                    className="!rounded-full px-6 py-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-8"
                   >
                     <DatabaseIcon /> ChatDB
                   </ToggleGroupItem>
@@ -446,24 +452,24 @@ const ComposerAction: FC = () => {
     <>
       <ThreadPrimitive.If running={false}>
         <ComposerPrimitive.Send asChild>
-          <TooltipIconButton
-            tooltip={t('chat.thread.send')}
-            variant="default"
-            className="my-2.5 w-18 h-10 p-2 transition-opacity ease-in"
+          <button
+            aria-label={t('chat.thread.send')}
+            title={t('chat.thread.send')}
+            className="send-btn-circle my-2"
           >
-            <SendHorizontalIcon />
-          </TooltipIconButton>
+            <SendHorizontalIcon className="w-4 h-4" />
+          </button>
         </ComposerPrimitive.Send>
       </ThreadPrimitive.If>
       <ThreadPrimitive.If running>
         <ComposerPrimitive.Cancel asChild>
-          <TooltipIconButton
-            tooltip={t('chat.thread.cancel')}
-            variant="default"
-            className="my-2.5 w-18 h-10 p-2 transition-opacity ease-in"
+          <button
+            aria-label={t('chat.thread.cancel')}
+            title={t('chat.thread.cancel')}
+            className="send-btn-circle my-2"
           >
             <CircleStopIcon />
-          </TooltipIconButton>
+          </button>
         </ComposerPrimitive.Cancel>
       </ThreadPrimitive.If>
     </>
@@ -474,7 +480,7 @@ const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
       <UserActionBar />
-      <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-2xl px-5 py-2 col-start-2 row-start-2 text-sm">
+      <div className="msg-user max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-2xl px-5 py-2 col-start-2 row-start-2 text-sm">
         <UserMessageAttachments />
         <MessagePrimitive.Content />
       </div>

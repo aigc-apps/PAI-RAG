@@ -51,7 +51,7 @@ export default function RootLayout({
                 <MyChatRuntimeProvider>
                   <SidebarProvider>
                     <AppSidebar />
-                    <SidebarInset>
+                    <SidebarInset className="main-gradient-bg">
                       <div className="h-screen w-full overflow-hidden flex flex-col">
                         <header className="flex items-center justify-between shrink-0 w-full px-2 pt-3 pb-1">
                           <SidebarTrigger className="w-10" />
