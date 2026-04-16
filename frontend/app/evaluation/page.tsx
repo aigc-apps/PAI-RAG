@@ -9,7 +9,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -19,17 +19,35 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Trash2, Database } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Plus, Trash2, Database, MoreHorizontal, Pencil, Clock, FlaskConical, FileStack } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { formatBeijingTime } from '@/app/knowledgebases/utils/utils';
 import { Badge } from '@/components/ui/badge';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
+import { HeaderPortal } from '@/components/header-portal';
 
-// 评估数据类型定义
 interface Dataset {
   id: string;
   name: string;
@@ -39,44 +57,42 @@ interface Dataset {
   experiments_count: number;
 }
 
-
 const EvaluationPage = () => {
   const { t } = useI18n();
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [datasets, setDatasets] = useState(Array<Dataset>);
-  const [isLoading, setIsLoading] = useState(true);
-  const [evaluationerror, setEvaluationError] = useState('');
-  const pageSize = 6;
+  const [loading, setLoading] = useState(true);
+  const pageSize = 12;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreateLoading, setIsCreateLoading] = useState(false);
-  const [datasetName, setEvalTaskName] = useState("");
-  const [datasetDesc, setEvalTaskDesc] = useState("");
+  const [datasetName, setDatasetName] = useState('');
+  const [datasetDesc, setDatasetDesc] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Dataset | null>(null);
   const router = useRouter();
   const { tenantFetch } = useTenantFetch();
 
   useEffect(() => {
     const fetchConfigs = async () => {
-      setIsLoading(true);
+      setLoading(true);
       try {
         const res = await tenantFetch(
           `/api/config/evaluation?page=${page}&size=${pageSize}`,
         );
         if (!res.ok) throw new Error(t('evaluation.fetchError'));
         const json_data = await res.json();
-        console.log("evaluation json_data", json_data)
         const data = json_data.data.items;
         setDatasets(data);
-        setTotalPages(json_data.data.pages);
+        setTotalPages(json_data.data.pages || 1);
       } catch (err: any) {
-        setEvaluationError(err || t('evaluation.loadError'));
+        console.log(err || t('evaluation.loadError'));
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
     fetchConfigs();
-  }, [page]);
+  }, [page, tenantFetch, t]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -87,225 +103,310 @@ const EvaluationPage = () => {
     const data = {
       name: datasetName,
       description: datasetDesc || t('evaluation.defaultEvalDesc'),
-      type: "custom"
+      type: 'custom',
     };
 
     try {
-      const res = await tenantFetch(
-        `/api/config/evaluation`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        },
-      );
+      setIsCreateLoading(true);
+      const res = await tenantFetch(`/api/config/evaluation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
       if (!res.ok) {
         alert(t('evaluation.createFailed'));
         return;
       }
       const upload_result = await res.json();
-      console.log('创建成功:', upload_result);
-      setDatasets((prev) => [...prev, upload_result.data]); // 追加新 LLM 配置
+      setDatasets((prev) => [...prev, upload_result.data]);
+      setDatasetName('');
+      setDatasetDesc('');
     } catch (error) {
       console.error('创建失败:', error);
     } finally {
       setIsCreateLoading(false);
       setIsCreateOpen(false);
     }
-  }
+  };
 
   const deleteEval = async (eval_id: string) => {
     try {
       const res = await tenantFetch(`/api/config/evaluation/${eval_id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!res.ok) {
-        throw new Error(t('evaluation.deleteError'));
-      }
+      if (!res.ok) throw new Error(t('evaluation.deleteError'));
       setDatasets((prev) => prev.filter((config) => config.id !== eval_id));
-    } catch (err: any) { console.log('删除评估任务出错: ', err); }
-    // 显示错误提示
-  }
+    } catch (err: any) {
+      console.log('删除评估任务出错: ', err);
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-screen px-6 py-6">
-      <div className="mb-6">
-        <div className="p-6 rounded-2xl border border-primary/20">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-medium bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                {t('evaluation.datasetAndEval')}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
+    <div className="flex flex-col h-full min-h-0">
+      <HeaderPortal>
+        <div className="flex items-center gap-2">
+          <h1 className="text-base font-semibold">{t('evaluation.datasetAndEval')}</h1>
+          <span className="text-xs text-muted-foreground hidden md:inline">
+            · {t('evaluation.datasetDescription')}
+          </span>
+        </div>
+        <div className="ml-auto">
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="w-4 h-4 mr-1" />
+                {t('evaluation.createDataset')}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileStack className="w-4 h-4 text-primary" />
+                  {t('evaluation.newEvalTask')}
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  {t('evaluation.evalTaskDescription')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="dataset_name" className="text-xs font-medium">
+                    {t('evaluation.datasetName')} <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="dataset_name"
+                    value={datasetName}
+                    onChange={(e) => setDatasetName(e.target.value)}
+                    className="h-8 text-xs"
+                    placeholder={t('evaluation.datasetName')}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="dataset_desc" className="text-xs font-medium">
+                    {t('evaluation.datasetDesc')}
+                  </Label>
+                  <Textarea
+                    id="dataset_desc"
+                    value={datasetDesc}
+                    onChange={(e) => setDatasetDesc(e.target.value)}
+                    className="text-xs resize-none"
+                    rows={3}
+                    placeholder={t('evaluation.datasetDesc')}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  onClick={createNewEvalDataset}
+                  size="sm"
+                  type="submit"
+                  disabled={isCreateLoading || !datasetName.trim()}
+                >
+                  {isCreateLoading ? t('evaluation.submitting') : t('evaluation.submit')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </HeaderPortal>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          {loading ? (
+            <div className="text-center py-16 text-sm text-muted-foreground">
+              {t('common.loading')}
+            </div>
+          ) : datasets.length === 0 ? (
+            <div className="empty-state mt-8">
+              <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
+                <Database className="w-7 h-7" />
+              </div>
+              <p className="text-base font-semibold mb-1">{t('evaluation.noDataset')}</p>
+              <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
                 {t('evaluation.datasetDescription')}
               </p>
+              <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" />
+                {t('evaluation.createFirstDataset')}
+              </Button>
             </div>
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5">
-                  <Plus className="mr-2 h-4 w-4" /> {t('evaluation.createDataset')}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>{t('evaluation.newEvalTask')}</DialogTitle>
-                  <DialogDescription>
-                    {t('evaluation.evalTaskDescription')}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="dataset_name" className="text-right">
-                      {t('evaluation.datasetName')}
-                    </Label>
-                    <Input
-                      id="dataset_name"
-                      className="col-span-3"
-                      onChange={(e) => setEvalTaskName(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="dataset_desc" className="text-right">
-                      {t('evaluation.datasetDesc')}
-                    </Label>
-                    <Input
-                      id="dataset_desc"
-                      className="col-span-3"
-                      onChange={(e) => setEvalTaskDesc(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsCreateOpen(false)}
-                  >
-                    {t('common.cancel')}
-                  </Button>
-                  <Button
-                    onClick={createNewEvalDataset}
-                    type="submit"
-                    disabled={isCreateLoading}
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    {isCreateLoading ? t('evaluation.submitting') : t('evaluation.submit')}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </div>
-
-      {/* 数据表格区 —— 卡片容器 + 悬停效果 */}
-      <div className="flex-1 overflow-hidden rounded-2xl border bg-card shadow-sm hover:shadow-md transition-shadow duration-300">
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-medium flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            {t('evaluation.datasetList')}
-          </h2>
-        </div>
-        <div className="overflow-auto h-full">
-          <Table className=' border-b'>
-            <TableHeader>
-              <TableRow className="hover:bg-muted/30 transition-colors">
-                <TableHead className="w-[200px] pl-8">{t('evaluation.dataset')}</TableHead>
-                <TableHead>{t('evaluation.type')}</TableHead>
-                <TableHead>{t('evaluation.description')}</TableHead>
-                <TableHead>{t('evaluation.sampleCount')}</TableHead>
-                <TableHead>{t('evaluation.experimentCount')}</TableHead>
-                <TableHead>{t('evaluation.createTime')}</TableHead>
-                <TableHead className="text-right pr-6">{t('evaluation.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {datasets.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center gap-2">
-                      <Database className="h-8 w-8 text-muted-foreground/50" />
-                      <span>{t('evaluation.noDataset')}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsCreateOpen(true)}
-                        className="mt-2"
-                      >
-                        <Plus className="mr-1 h-3 w-3" /> {t('evaluation.createFirstDataset')}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                datasets.map((dataset) => (
-                  <TableRow
-                    key={dataset.id}
-                    className="cursor-pointer hover:bg-muted/30 transition-colors group border-b"
-                    onClick={(e) => {
-                      const target = e.target as HTMLElement;
-                      if (target.closest('button')) {
-                        console.log('按钮被点击');
-                        return;
-                      }
-                      router.push(`/evaluation/${dataset.id}`);
-                    }}
-                  >
-                    <TableCell className="font-medium pl-8 group-hover:text-primary transition-colors">
-                      {dataset.name}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={dataset.name === "GAIA" ? "default" : "secondary"}
-                        className={dataset.name === "GAIA" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}
-                      >
-                        {dataset.name === "GAIA" ? t('evaluation.builtin') : t('evaluation.custom')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-md">
-                      {dataset.description || t('knowledgebase.noDescription')}
-                    </TableCell>
-                    <TableCell className="font-medium">{dataset.dataset_count}</TableCell>
-                    <TableCell className="font-medium">{dataset.experiments_count}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatBeijingTime(dataset.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-red-50"
+          ) : (
+            <div className="rounded-lg border border-border overflow-hidden bg-background">
+              <Table className="table-modern">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[220px] pl-4 text-xs text-muted-foreground">
+                      {t('evaluation.dataset')}
+                    </TableHead>
+                    <TableHead className="w-[80px] text-xs text-muted-foreground">
+                      {t('evaluation.type')}
+                    </TableHead>
+                    <TableHead className="text-xs text-muted-foreground">
+                      {t('evaluation.description')}
+                    </TableHead>
+                    <TableHead className="w-[80px] text-xs text-muted-foreground text-right">
+                      {t('evaluation.sampleCount')}
+                    </TableHead>
+                    <TableHead className="w-[80px] text-xs text-muted-foreground text-right">
+                      {t('evaluation.experimentCount')}
+                    </TableHead>
+                    <TableHead className="w-[160px] text-xs text-muted-foreground">
+                      {t('evaluation.createTime')}
+                    </TableHead>
+                    <TableHead className="w-[60px] text-xs text-muted-foreground text-right pr-3">
+                      {t('evaluation.actions')}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {datasets.map((dataset) => {
+                    const isBuiltin = dataset.name === 'GAIA';
+                    return (
+                      <TableRow
+                        key={dataset.id}
+                        className="cursor-pointer group h-10"
                         onClick={(e) => {
-                          e.stopPropagation();
-                          deleteEval(dataset.id);
+                          const target = e.target as HTMLElement;
+                          if (target.closest('[data-stop-click]')) return;
+                          router.push(`/evaluation/${dataset.id}`);
                         }}
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                        <TableCell className="pl-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center w-7 h-7 rounded-md bg-primary/10 text-primary shrink-0 text-xs font-semibold">
+                              {(dataset.name || 'D').charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-xs font-medium truncate group-hover:text-primary transition-colors">
+                              {dataset.name}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`h-5 px-1.5 text-[10px] ${
+                              isBuiltin
+                                ? 'bg-blue-500/10 text-blue-600 border-blue-500/30'
+                                : 'bg-purple-500/10 text-purple-600 border-purple-500/30'
+                            }`}
+                          >
+                            {isBuiltin ? t('evaluation.builtin') : t('evaluation.custom')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                          {dataset.description || t('knowledgebase.noDescription')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-mono">
+                            <FileStack className="w-2.5 h-2.5 mr-1" />
+                            {dataset.dataset_count}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-mono">
+                            <FlaskConical className="w-2.5 h-2.5 mr-1" />
+                            {dataset.experiments_count}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatBeijingTime(dataset.created_at)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right pr-3" data-stop-click>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="menu-compact">
+                              <DropdownMenuItem
+                                onSelect={() => router.push(`/evaluation/${dataset.id}`)}
+                              >
+                                <Pencil />
+                                {t('common.view')}
+                              </DropdownMenuItem>
+                              {!isBuiltin && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      setDeleteTarget(dataset);
+                                    }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 />
+                                    {t('common.delete')}
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 分页组件 —— 固定在底部，带背景 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-t py-3">
-        <div className="flex justify-center">
+      {!loading && datasets.length > 0 && (
+        <div className="flex-none border-t border-border bg-background/60 backdrop-blur-sm py-2">
           <PaginationComponent
             currentPage={page}
             totalPages={totalPages}
             onPageChange={handlePageChange}
           />
         </div>
-      </div>
+      )}
+
+      {/* Delete confirmation */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('evaluation.deleteConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('evaluation.deleteConfirmMessage')}
+              {deleteTarget && (
+                <span className="block mt-2 font-medium text-foreground">
+                  {deleteTarget.name}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteEval(deleteTarget.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-}
+};
 
 export default EvaluationPage;

@@ -16,33 +16,23 @@ export default function RoleConfigPage() {
   const { t } = useI18n();
 
   return (
-    <div id="access-control">
-      <div className="flex flex-col h-screen p-6 space-y-6">
-        <div className="flex justify-between items-center h-1/10">
-          <h1 className="page-title">{t('config.role.title')}</h1>
-        </div>
-
-        <div className="h-4/5">
-          <div className="">
-            <Tabs defaultValue="roles">
-              <TabsList className="py-4 tabs-modern flex-none">
-                <TabsTrigger value="roles" className="p-4">
-                  {t('config.role.roles')}
-                </TabsTrigger>
-                <TabsTrigger value="userroles" className="p-4">
-                  {t('config.role.users')}
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="roles" className="py-4">
-                <RolePage />
-              </TabsContent>
-              <TabsContent value="userroles" className="py-4">
-                <UserRolePage />
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      </div>
+    <div id="access-control" className="px-6 py-4">
+      <Tabs defaultValue="roles">
+        <TabsList className="tabs-modern flex-none">
+          <TabsTrigger value="roles" className="px-4">
+            {t('config.role.roles')}
+          </TabsTrigger>
+          <TabsTrigger value="userroles" className="px-4">
+            {t('config.role.users')}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="roles" className="py-4">
+          <RolePage />
+        </TabsContent>
+        <TabsContent value="userroles" className="py-4">
+          <UserRolePage />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

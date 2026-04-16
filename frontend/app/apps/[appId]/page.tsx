@@ -2,9 +2,9 @@
 import { use, useState, useEffect, useCallback } from "react";
 import { ChatbotConfigCard, Chatbot } from "../chatbot_config";
 import { FAQManagement } from "../faq_management";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HeaderPortal } from "@/components/header-portal";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -151,15 +151,15 @@ export default function ViewChatApp(
     }
 
     return (
-        <div className="flex flex-col h-full min-h-0 space-y-0">
-            <div className="absolute top-2 left-12 py-0 flex items-center z-10">
+        <div className="flex flex-col h-full min-h-0">
+            <HeaderPortal>
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>
                             <BreadcrumbLink asChild>
                                 <Button
                                     variant="link"
-                                    className="px-0"
+                                    className="px-0 h-auto"
                                     onClick={() => router.push('/apps')}
                                 >
                                     {t('sidebar.apps')}
@@ -168,52 +168,49 @@ export default function ViewChatApp(
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />
                         <BreadcrumbItem>
-                            <BreadcrumbPage>{botConfig?.app_id || t('apps.edit')}</BreadcrumbPage>
+                            <BreadcrumbPage className="font-semibold">
+                                {botConfig?.app_id || t('apps.edit')}
+                            </BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
-                <div className="flex gap-2 items-center ml-4">
-                    <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">
-                        ID: {botConfig?.id || ''}
+                {botConfig?.id && (
+                    <Badge variant="secondary" className="text-[10px] font-mono bg-muted text-muted-foreground">
+                        ID: {botConfig.id}
                     </Badge>
-                    {botConfig?.description && (
-                        <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground max-w-[200px] truncate">
-                            {botConfig.description}
-                        </Badge>
-                    )}
+                )}
+                {botConfig?.description && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[280px]">
+                        {botConfig.description}
+                    </span>
+                )}
+                <div className="ml-auto flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => router.push('/apps')}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button size="sm" className="min-w-24" onClick={() => handleSave()} disabled={saving}>
+                        {saving ? t('common.saving') : t('apps.saveApp')}
+                    </Button>
                 </div>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto px-2">
-                <Tabs defaultValue="settings" className="h-full min-h-0 flex flex-col">
-                    <TabsList className="py-0 bg-muted rounded-lg flex-none">
-                        <TabsTrigger value="settings" className="py-1 px-2">
-                            <span className="text-xs">{t('apps.title')}</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="faq" className="py-1 px-2">
-                            <span className="text-xs">FAQ</span>
-                        </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="settings" className="py-2">
-                        <ChatbotConfigCard
-                            botConfig={botConfig}
-                            onConfigChange={handleConfigChange}
-                            onSave={handleSave}
-                            saving={saving}
-                            llms={llms}
-                            mcps={mcps}
-                            kbs={kbs}
-                        />
-                    </TabsContent>
-                    <TabsContent value="faq" className="py-2">
-                        <FAQManagement
-                            appId={botConfig.app_id}
-                            botConfig={botConfig}
-                            onConfigChange={handleConfigChange}
-                            onSave={(config) => handleSave(config, false)}
-                            saving={saving}
-                        />
-                    </TabsContent>
-                </Tabs>
+            </HeaderPortal>
+
+            <div className="flex-1 min-h-0 overflow-y-auto">
+                <ChatbotConfigCard
+                    botConfig={botConfig}
+                    onConfigChange={handleConfigChange}
+                    onSave={handleSave}
+                    saving={saving}
+                    llms={llms}
+                    mcps={mcps}
+                    kbs={kbs}
+                />
+                <FAQManagement
+                    appId={botConfig.app_id}
+                    botConfig={botConfig}
+                    onConfigChange={handleConfigChange}
+                    onSave={(config) => handleSave(config, false)}
+                    saving={saving}
+                />
             </div>
         </div>
     );

@@ -124,6 +124,8 @@ import { Slider } from '@/components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { SearchCode, TextSearch, ScanSearch, ChevronDownIcon as ChevronDown, ChevronUpIcon as ChevronUp, Save } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { HeaderPortal } from '@/components/header-portal';
+import { Settings as SettingsIcon } from 'lucide-react';
 interface KnowledgeBaseFile {
   id: string;
   file_name: string;
@@ -268,6 +270,8 @@ export default function KnowledgeBaseDetailPage(
     [],
   );
   const [metadataConfigDialogOpen, setMetadataConfigDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [view, setView] = useState<'details' | 'retrieval_test'>('details');
   const [metadataEditDialogOpen, setMetadataEditDialogOpen] = useState(false);
   const [editingMetadataConfig, setEditingMetadataConfig] = useState<MetadataConfig | null>(null);
   const [newMetadataName, setNewMetadataName] = useState('');
@@ -1666,15 +1670,15 @@ export default function KnowledgeBaseDetailPage(
 
 
   return (
-    <div className="flex flex-col h-screen pt-0 space-y-0">
-      <div className="absolute top-2 left-12 py-0 flex items-center z-10">
+    <div className="flex flex-col h-full min-h-0">
+      <HeaderPortal>
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
                 <Button
                   variant="link"
-                  className="px-0"
+                  className="px-0 h-auto"
                   onClick={() => router.push('/knowledgebases')}
                 >
                   {t('knowledgebase.title')}
@@ -1683,33 +1687,51 @@ export default function KnowledgeBaseDetailPage(
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>{knowledgebase.name}</BreadcrumbPage>
+              <BreadcrumbPage className="font-semibold">{knowledgebase.name}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-        <div className="flex gap-2 items-center ml-4">
-          <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">
+        {knowledgebase?.id && (
+          <Badge variant="secondary" className="text-[10px] font-mono bg-muted text-muted-foreground">
             ID: {knowledgebase.id}
           </Badge>
-          {knowledgebase.description && (
-            <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground max-w-[200px] truncate">
-              {knowledgebase.description}
-            </Badge>
-          )}
+        )}
+        {knowledgebase.description && (
+          <span className="text-xs text-muted-foreground truncate max-w-[240px]">
+            {knowledgebase.description}
+          </span>
+        )}
+      </HeaderPortal>
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        {/* Small inline view switcher: 文件管理 / 检索测试 */}
+        <div className="flex items-center gap-4 px-4 pb-2 border-b border-border mb-3">
+          <button
+            type="button"
+            onClick={() => setView('details')}
+            className={`text-xs py-1.5 border-b-2 -mb-[9px] transition-colors ${
+              view === 'details'
+                ? 'border-primary text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t('knowledgebase.fileManagement')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('retrieval_test')}
+            className={`text-xs py-1.5 border-b-2 -mb-[9px] transition-colors ${
+              view === 'retrieval_test'
+                ? 'border-primary text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t('knowledgebase.retrievalTest')}
+          </button>
         </div>
-      </div>
-      <div className="flex-1 overflow-y-auto px-2 py-6">
-        <Tabs defaultValue="details">
-          <TabsList className="py-0 bg-muted rounded-lg flex-none">
-            <TabsTrigger value="details" className="py-1 px-2">
-              <span className="text-xs">{t('knowledgebase.fileManagement')}</span>
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="py-1 px-2">
-              <span className="text-xs">{t('knowledgebase.kbSettings')}</span>
-            </TabsTrigger>
-            <TabsTrigger value="retrieval_test" className="py-1 px-2">
-              <span className="text-xs">{t('knowledgebase.retrievalTest')}</span>
-            </TabsTrigger>
+        <Tabs value={view} onValueChange={(v) => setView(v as 'details' | 'retrieval_test')}>
+          <TabsList className="sr-only" aria-hidden="true">
+            <TabsTrigger value="details">{t('knowledgebase.fileManagement')}</TabsTrigger>
+            <TabsTrigger value="retrieval_test">{t('knowledgebase.retrievalTest')}</TabsTrigger>
           </TabsList>
           <TabsContent value="details" className="py-2">
             <div className="mb-4 rounded-lg">
@@ -2328,43 +2350,50 @@ export default function KnowledgeBaseDetailPage(
                     variant="outline"
                     className="h-6 text-xs"
                     onClick={() => setMetadataConfigDialogOpen(true)}
-                  > 
+                  >
                     <Database className="h-3 w-3"/> {t('knowledgebase.metadata')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-6 text-xs"
+                    onClick={() => setSettingsDialogOpen(true)}
+                  >
+                    <SettingsIcon className="h-3 w-3"/> {t('knowledgebase.kbSettings')}
                   </Button>
                 </div>
               </div>
               <div>
                     <Table>
                       <TableHeader>
-                        <TableRow className='border-border/30 border-y'>
-                          <TableHead className="w-12">
+                        <TableRow className='border-border/30 border-y h-8'>
+                          <TableHead className="w-12 px-2 py-1">
                             <Checkbox
                               checked={isAllSelected}
                               onCheckedChange={handleSelectAll}
                             />
                           </TableHead>
-                          <TableHead>
+                          <TableHead className="px-2 py-1">
                             <div className="flex gap-2 items-center max-w-[400px] text-xs text-muted-foreground">
                                {t('knowledgebase.fileName')}
                             </div>
                           </TableHead>
-                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.fileSize')}</TableHead>
-                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.updatedTime')}</TableHead>
-                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.parserTypeCol')}</TableHead>
-                          <TableHead>
-                            <FileStatusFilter 
+                          <TableHead className="text-xs text-muted-foreground px-2 py-1">{t('knowledgebase.fileSize')}</TableHead>
+                          <TableHead className="text-xs text-muted-foreground px-2 py-1">{t('knowledgebase.updatedTime')}</TableHead>
+                          <TableHead className="text-xs text-muted-foreground px-2 py-1">{t('knowledgebase.parserTypeCol')}</TableHead>
+                          <TableHead className="px-2 py-1">
+                            <FileStatusFilter
                               value={statusFilter as 'all' | 'succeeded' | 'failed' | 'pending' | 'parsing' | 'persisting'}
                               onValueChange={setStatusFilter}
                             />
                           </TableHead>
-                          <TableHead className="text-xs text-muted-foreground">{t('knowledgebase.actions')}</TableHead>
+                          <TableHead className="text-xs text-muted-foreground px-2 py-1">{t('knowledgebase.actions')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {kbfiles.map((file) => (
-                          <TableRow 
+                          <TableRow
                             key={file.id}
-                            className="cursor-pointer hover:bg-muted/100 transition-colors h-8 border-border/30"
+                            className="cursor-pointer hover:bg-muted/60 transition-colors h-7 border-border/30"
                             onClick={(e) => {
                               // 如果点击的是checkbox或操作按钮，不跳转
                               const target = e.target as HTMLElement;
@@ -2377,7 +2406,7 @@ export default function KnowledgeBaseDetailPage(
                             }}
                             title={t('knowledgebase.clickToViewChunks')}
                           >
-                            <TableCell className="py-1" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="px-2 py-0.5" onClick={(e) => e.stopPropagation()}>
                               <Checkbox
                                 checked={selectedFiles.has(file.id)}
                                 onCheckedChange={(checked) =>
@@ -2385,22 +2414,22 @@ export default function KnowledgeBaseDetailPage(
                                 }
                               />
                             </TableCell>
-                            <TableCell className="p-1">
+                            <TableCell className="px-2 py-0.5">
                               <span className="truncate block w-full text-left font-medium text-xs">
-                                {file.file_name}            
+                                {file.file_name}
                               </span>
                             </TableCell>
-                            <TableCell className="text-xs p-1">
+                            <TableCell className="text-xs px-2 py-0.5 text-muted-foreground">
                               {formatFileSize(Number(file.file_size))}
                             </TableCell>
-                            <TableCell className="text-xs p-1">
+                            <TableCell className="text-xs px-2 py-0.5 text-muted-foreground">
                               {formatBeijingTime(file.updated_at)}
                             </TableCell>
-                            <TableCell className="text-xs p-1" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="text-xs px-2 py-0.5" onClick={(e) => e.stopPropagation()}>
                               {file.chunk_config?.parser_type && (
-                                <Badge 
-                                  variant="secondary" 
-                                  className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 cursor-pointer"
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 cursor-pointer h-5 px-1.5 text-[10px]"
                                   onClick={() => {
                                     setViewingChunkConfig({
                                       file_name: file.file_name,
@@ -2418,31 +2447,31 @@ export default function KnowledgeBaseDetailPage(
                                 </Badge>
                               )}
                             </TableCell>
-                            <TableCell className="text-xs p-1">
+                            <TableCell className="text-xs px-2 py-0.5">
                               {file.status === 'pending' ? (
-                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 h-5 px-1.5 text-[10px]">
                                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                                   {t('knowledgebase.pendingParse')}
                                 </Badge>
                               ) : file.status === 'parsing' ? (
-                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 h-5 px-1.5 text-[10px]">
                                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                                   {t('knowledgebase.parsing')}
                                 </Badge>
                               ) : file.status === 'persisting' ? (
-                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 h-5 px-1.5 text-[10px]">
                                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                                   {t('knowledgebase.persisting')}
                                 </Badge>
                               ) : file.status === 'succeeded' ? (
-                                <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400">
+                                <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400 h-5 px-1.5 text-[10px]">
                                   <CheckCircle className="mr-1 h-3 w-3" />
                                   {t('knowledgebase.parseSuccess')}
                                 </Badge>
                               ) : file.status === 'failed' ? (
                                 <HoverCard>
                                   <HoverCardTrigger asChild>
-                                    <Badge variant="secondary" className="bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 cursor-pointer">
+                                    <Badge variant="secondary" className="bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 cursor-pointer h-5 px-1.5 text-[10px]">
                                       <XCircle className="mr-1 h-3 w-3" />
                                       {t('knowledgebase.parseFailed')}
                                     </Badge>
@@ -2452,10 +2481,10 @@ export default function KnowledgeBaseDetailPage(
                                   </HoverCardContent>
                                 </HoverCard>
                               ) : (
-                                <Badge variant="secondary">{file.status}</Badge>
+                                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{file.status}</Badge>
                               )}
                             </TableCell>
-                            <TableCell className="gap-1 p-1" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="gap-1 px-2 py-0.5" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-2">
                                 <DropdownMenu
                                   open={dropdownOpen[file.id] || false}
@@ -3126,101 +3155,75 @@ export default function KnowledgeBaseDetailPage(
                 />
               </div>
           </TabsContent>
-          <TabsContent value="settings" className="py-2">
-            <KbConfigCard
-              isCreate={false}
-              kbConfig={knowledgebase}
-              onSaveSuccess={handleSaveSuccess}
-              onCancel={() => {}}
-            ></KbConfigCard>
-          </TabsContent>
           <TabsContent value="retrieval_test" className="py-2 flex flex-col h-full min-h-0">
-            <div className="flex gap-3 flex-1 min-h-0 overflow-hidden">
-              {/* 左侧：查询输入和检索设置 */}
-              <div className="flex flex-col w-[400px] shrink-0 h-full justify-between overflow-y-auto">
-                {/* 检索测试输入区域 - 左上角 */}
-                <Card className="flex-[4] flex flex-col min-h-0 mb-2">
-                  <CardHeader className="flex-shrink-0">
-                    <div className="flex-1 min-w-[200px] relative">
-                        <SearchIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                          type="text"
-                          id="search_query"
-                          placeholder={t('knowledgebase.queryPlaceholder')}
-                          onChange={handleQueryInputChange}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleSearchSubmit();
-                            }
-                          }}
-                          className="w-full text-xs pl-8"
-                        />
-                      </div>
-                  </CardHeader>
-                  <CardContent className="flex-1 flex flex-col min-h-0">
-                    {/* 搜索框和按钮 */}
-                    <div className="flex flex-col gap-2 flex-1">
-                      <div className="flex flex-wrap gap-2 flex-shrink-0">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="text-xs h-7">
-                              <FilterIcon className="h-3 w-3" />
-                              {t('knowledgebase.metadata')}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[500px] max-h-[400px] overflow-y-auto">
-                            <ConditionGroupEditor
-                              group={conditionGroup}
-                              onChange={setConditionGroup}
-                              metadataConfigs={metadataConfigs}
-                              metadataValueTypes={metadataValueTypes}
-                              t={t}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <Input
-                          className="w-30 text-xs h-7"
-                          placeholder={t('knowledgebase.userIdPlaceholder')}
-                          value={user}
-                          onChange={(e) => {
-                            setUser(e.target.value);
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          onClick={handleSearchSubmit}
-                          className="whitespace-nowrap text-xs h-7"
-                          size="sm"
-                        >
-                          <SearchIcon className="h-3 w-3" />
-                          {t('knowledgebase.startQuery')}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* 检索设置板块 - 左下角 */}
-                <Card className={`flex-[0.8] overflow-y-auto text-xs min-h-0 p-2`}>
-                  <CardHeader className="px-3 pt-2">
-                    <div className="flex items-center justify-between h-6">
-                      <CardTitle className="text-sm">{t('knowledgebase.retrievalSettingsCard')}</CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0"
-                        onClick={() => setRetrievalSettingOpen(!retrievalSettingOpen)}
-                      >
-                        {retrievalSettingOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            <div className="flex flex-col flex-1 min-h-0 px-4 gap-3">
+              {/* 顶部：搜索栏 + 工具栏 */}
+              <div className="flex flex-col gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="text"
+                      id="search_query"
+                      placeholder={t('knowledgebase.queryPlaceholder')}
+                      onChange={handleQueryInputChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSearchSubmit();
+                        }
+                      }}
+                      className="w-full text-xs pl-8 h-9"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleSearchSubmit}
+                    className="text-xs h-9 px-4"
+                    size="sm"
+                  >
+                    <SearchIcon className="h-3.5 w-3.5 mr-1" />
+                    {t('knowledgebase.startQuery')}
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-xs h-7">
+                        <FilterIcon className="h-3 w-3 mr-1" />
+                        {t('knowledgebase.metadata')}
                       </Button>
-                    </div>
-                  </CardHeader>
-                  {retrievalSettingOpen && (
-                    <CardContent className="space-y-4 px-3 pb-2">
-                      {/* 检索策略 */}
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2 items-center">
-                          <Label className="w-[80px] text-xs">{t('knowledgebase.retrievalStrategy')}</Label>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[500px] max-h-[400px] overflow-y-auto">
+                      <ConditionGroupEditor
+                        group={conditionGroup}
+                        onChange={setConditionGroup}
+                        metadataConfigs={metadataConfigs}
+                        metadataValueTypes={metadataValueTypes}
+                        t={t}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Input
+                    className="w-40 text-xs h-7"
+                    placeholder={t('knowledgebase.userIdPlaceholder')}
+                    value={user}
+                    onChange={(e) => setUser(e.target.value)}
+                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-xs h-7">
+                        <SettingsIcon className="h-3 w-3 mr-1" />
+                        {t('knowledgebase.retrievalSettingsCard')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[460px] p-0" align="start">
+                      <div className="px-4 py-3 border-b border-border">
+                        <h4 className="text-sm font-semibold">{t('knowledgebase.retrievalSettingsCard')}</h4>
+                      </div>
+                      <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+                        {/* 检索策略 */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium">{t('knowledgebase.retrievalStrategy')}</Label>
                           <ToggleGroup
                             type="single"
                             value={retrievalSetting.retrieval_mode || 'hybrid'}
@@ -3231,23 +3234,23 @@ export default function KnowledgeBaseDetailPage(
                               }));
                             }}
                             variant="outline"
-                            className="flex gap-x-2 overflow-visible"
+                            className="gap-x-1"
                           >
                             <ToggleGroupItem
                               value="vector"
                               aria-label={t('knowledgebase.vectorSearch')}
-                              className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white h-6"
+                              className="!rounded-md px-3 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-7"
                             >
-                              <ScanSearch className="w-2 h-2" />
+                              <ScanSearch className="w-3 h-3 mr-1" />
                               {t('knowledgebase.vectorSearch')}
                             </ToggleGroupItem>
                             {isFulltextSupported && (
                               <ToggleGroupItem
                                 value="fulltext"
                                 aria-label={t('knowledgebase.fulltextSearch')}
-                                className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                                className="!rounded-md px-3 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-7"
                               >
-                                <TextSearch className="w-2 h-2 mr-0.5" />
+                                <TextSearch className="w-3 h-3 mr-1" />
                                 {t('knowledgebase.fulltextSearch')}
                               </ToggleGroupItem>
                             )}
@@ -3255,295 +3258,269 @@ export default function KnowledgeBaseDetailPage(
                               <ToggleGroupItem
                                 value="hybrid"
                                 aria-label={t('knowledgebase.hybridSearch')}
-                                className="!rounded-full px-1.5 py-0.5 text-xs data-[state=on]:bg-black data-[state=on]:text-white"
+                                className="!rounded-md px-3 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground h-7"
                               >
-                                <SearchCode className="w-2 h-2 mr-0.5" />
+                                <SearchCode className="w-3 h-3 mr-1" />
                                 {t('knowledgebase.hybridSearch')}
                               </ToggleGroupItem>
                             )}
                           </ToggleGroup>
                         </div>
-                      </div>
 
-                      {/* Top-K 和相似度阈值 */}
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2 items-center">
-                          <Label htmlFor="top_k" className="w-[80px] text-xs">
-                            Top K
-                          </Label>
-                          <Slider
-                            className="w-40"
-                            defaultValue={[5]}
-                            max={100}
-                            min={1}
-                            step={1}
-                            value={[retrievalSetting.top_k ?? 5]}
-                            onValueChange={(value: number[]) => {
-                              setRetrievalSetting((prev) => ({
-                                ...prev,
-                                top_k: value[0],
-                              }));
-                            }}
-                          />
-                          <span className="font-medium w-10 text-xs">
-                            {retrievalSetting.top_k ?? 5}
-                          </span>
+                        {/* Top-K / Similarity */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="top_k" className="text-xs font-medium">Top K</Label>
+                              <span className="text-xs font-medium tabular-nums">{retrievalSetting.top_k ?? 5}</span>
+                            </div>
+                            <Slider
+                              id="top_k"
+                              defaultValue={[5]}
+                              max={100}
+                              min={1}
+                              step={1}
+                              value={[retrievalSetting.top_k ?? 5]}
+                              onValueChange={(value: number[]) => {
+                                setRetrievalSetting((prev) => ({ ...prev, top_k: value[0] }));
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="similarity_threshold" className="text-xs font-medium">
+                                {t('knowledgebase.similarityThreshold')}
+                              </Label>
+                              <span className="text-xs font-medium tabular-nums">
+                                {retrievalSetting.similarity_threshold?.toFixed(2) ?? '0.20'}
+                              </span>
+                            </div>
+                            <Slider
+                              id="similarity_threshold"
+                              defaultValue={[0.2]}
+                              max={1}
+                              min={0}
+                              step={0.01}
+                              value={[retrievalSetting.similarity_threshold ?? 0.2]}
+                              onValueChange={(value: number[]) => {
+                                setRetrievalSetting((prev) => ({ ...prev, similarity_threshold: value[0] }));
+                              }}
+                            />
+                          </div>
                         </div>
-                        <div className="flex gap-2 items-center">
-                          <Label htmlFor="similarity_threshold" className="w-[80px] text-xs">
-                            {t('knowledgebase.similarityThreshold')}
-                          </Label>
-                          <Slider
-                            className="w-40"
-                            defaultValue={[0.2]}
-                            max={1}
-                            min={0}
-                            step={0.01}
-                            value={[retrievalSetting.similarity_threshold ?? 0.2]}
-                            onValueChange={(value: number[]) => {
-                              setRetrievalSetting((prev) => ({
-                                ...prev,
-                                similarity_threshold: value[0],
-                              }));
-                            }}
-                          />
-                          <span className="font-medium w-10 text-xs">
-                            {retrievalSetting.similarity_threshold?.toFixed(2) ?? '0.20'}
-                          </span>
-                        </div>
+
                         {retrievalSetting.retrieval_mode === 'hybrid' && !retrievalSetting.enable_rerank && (
-                          <div className="flex gap-2 items-center">
-                            <Label htmlFor="vector_weight" className="w-[80px] text-xs">
-                              {t('knowledgebase.vectorWeight')}
-                            </Label>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="vector_weight" className="text-xs font-medium">
+                                {t('knowledgebase.vectorWeight')}
+                              </Label>
+                              <span className="text-xs font-medium tabular-nums">
+                                {retrievalSetting.vector_weight ?? 0.5}
+                              </span>
+                            </div>
                             <Slider
                               id="vector_weight"
-                              className="w-40"
                               min={0}
                               max={1}
                               step={0.1}
                               value={[retrievalSetting.vector_weight ?? 0.5]}
                               onValueChange={(value) =>
-                                setRetrievalSetting((prev) => ({
-                                  ...prev,
-                                  vector_weight: value[0],
-                                }))
+                                setRetrievalSetting((prev) => ({ ...prev, vector_weight: value[0] }))
                               }
                             />
-                            <span className="w-10 text-right text-xs font-medium">
-                              {retrievalSetting.vector_weight ?? 0.5}
-                            </span>
+                            <p className="text-[11px] text-muted-foreground">{t('knowledgebase.vectorWeightTip')}</p>
                           </div>
                         )}
-                        {retrievalSetting.retrieval_mode === 'hybrid' && !retrievalSetting.enable_rerank && (
-                          <p className="text-xs text-muted-foreground ml-[88px]">
-                            {t('knowledgebase.vectorWeightTip')}
-                          </p>
-                        )}
-                      </div>
 
-                      {/* 开启重排序 */}
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2 items-center">
-                          <Label className="w-[80px] text-xs">{t('knowledgebase.enableRerank')}</Label>
-                          <Checkbox
-                            id="enable_rerank"
-                            checked={retrievalSetting.enable_rerank ?? false}
-                            onCheckedChange={(checked) => {
-                              setRetrievalSetting((prev) => ({
-                                ...prev,
-                                enable_rerank: Boolean(checked),
-                              }));
-                            }}
-                            className="h-3.5 w-3.5"
-                          />
+                        {/* 开启重排序 */}
+                        <div className="rounded-md bg-muted/30 p-3 space-y-3">
+                          <label htmlFor="enable_rerank" className="flex items-center gap-2 cursor-pointer">
+                            <Checkbox
+                              id="enable_rerank"
+                              checked={retrievalSetting.enable_rerank ?? false}
+                              onCheckedChange={(checked) => {
+                                setRetrievalSetting((prev) => ({ ...prev, enable_rerank: Boolean(checked) }));
+                              }}
+                              className="h-3.5 w-3.5"
+                            />
+                            <span className="text-xs font-medium">{t('knowledgebase.enableRerank')}</span>
+                          </label>
+                          {retrievalSetting.enable_rerank && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <Label htmlFor="rerank_model" className="text-xs font-medium">
+                                  {t('knowledgebase.rerankModelLabel')}
+                                </Label>
+                                <Select
+                                  value={retrievalSetting.rerank_model || ''}
+                                  onValueChange={(value) => {
+                                    setRetrievalSetting((prev) => ({
+                                      ...prev,
+                                      rerank_model: value,
+                                      rerank_provider_name: retrievalSetting.rerank_provider_name || '',
+                                    }));
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs w-full">
+                                    <SelectValue placeholder={t('knowledgebase.selectRerankModel')} />
+                                  </SelectTrigger>
+                                  <SelectContent className="text-xs">
+                                    <SelectGroup>
+                                      {rerankerModels.map((model) => (
+                                        <SelectItem key={model.id} value={model.model_id} className="text-xs">
+                                          {model.model_id}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <Label htmlFor="rerank_top_k" className="text-xs font-medium">
+                                    Rerank Top K
+                                  </Label>
+                                  <span className="text-xs font-medium tabular-nums">
+                                    {retrievalSetting.rerank_top_k ?? 5}
+                                  </span>
+                                </div>
+                                <Slider
+                                  id="rerank_top_k"
+                                  defaultValue={[5]}
+                                  max={20}
+                                  min={1}
+                                  step={1}
+                                  value={[retrievalSetting.rerank_top_k ?? 5]}
+                                  onValueChange={(value: number[]) => {
+                                    setRetrievalSetting((prev) => ({ ...prev, rerank_top_k: value[0] }));
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        {retrievalSetting.enable_rerank && (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor="rerank_model" className="w-[80px] text-xs">
-                                {t('knowledgebase.rerankModelLabel')}
-                              </Label>
-                              <Select
-                                value={retrievalSetting.rerank_model || ''}
-                                onValueChange={(value) => {
-                                  setRetrievalSetting((prev) => ({
-                                    ...prev,
-                                    rerank_model: value,
-                                    rerank_provider_name: retrievalSetting.rerank_provider_name || '',
-                                  }));
-                                }}
-                              >
-                                <SelectTrigger className="w-40 h-6 text-xs">
-                                  <SelectValue placeholder={t('knowledgebase.selectRerankModel')} />
-                                </SelectTrigger>
-                                <SelectContent className="text-xs">
-                                  <SelectGroup>
-                                    {rerankerModels.map((model) => (
-                                      <SelectItem key={model.id} value={model.model_id} className="text-xs h-5">
-                                        {model.model_id}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor="rerank_top_k" className="w-[80px] text-xs">
-                                Rerank-Top-K
-                              </Label>
-                              <Slider
-                                className="w-40"
-                                defaultValue={[5]}
-                                max={20}
-                                min={1}
-                                step={1}
-                                value={[retrievalSetting.rerank_top_k ?? 5]}
-                                onValueChange={(value: number[]) => {
-                                  setRetrievalSetting((prev) => ({
-                                    ...prev,
-                                    rerank_top_k: value[0],
-                                  }));
-                                }}
-                              />
-                              <span className="font-medium ml-2 text-xs">
-                                {retrievalSetting.rerank_top_k ?? 5}
-                              </span>
-                            </div>
-                          </>
-                        )}
                       </div>
-                      
-                      {/* 保存按钮 */}
-                      <div className="flex items-center border-t gap-3 pt-3">
+                      <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-border bg-muted/20">
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <InfoIcon className="w-3 h-3" />
+                          {t('knowledgebase.saveChangesRetrievalHint')}
+                        </div>
                         <Button
                           type="button"
                           onClick={handleSaveRetrievalSetting}
-
-                          className="whitespace-nowrap h-8 text-xs px-2 hover:bg-gray-700 text-white"
+                          className="text-xs h-7"
                           size="sm"
                         >
                           <Save className="w-3 h-3 mr-1" />
                           {t('knowledgebase.applyToKbSettings')}
                         </Button>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1"><InfoIcon className="w-4 h-4" />{t('knowledgebase.saveChangesRetrievalHint')}</div>
                       </div>
-                    </CardContent>
-                  )}
-                </Card>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
 
-              {/* 右侧：查询结果 */}
-              <div className="flex-1 overflow-y-auto min-h-0">
-                {/* 搜索结果提示 */}
+              {/* 结果列表 */}
+              <div className="flex-1 overflow-y-auto min-h-0 pr-1">
                 {searching && (
-                  <div className="flex items-center space-x-3 p-3">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-3 w-[250px]" />
-                      <Skeleton className="h-3 w-[200px]" />
-                    </div>
+                  <div className="space-y-2 py-2">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="flex items-center space-x-3 p-3 rounded-md border border-border">
+                        <Skeleton className="h-6 w-6 rounded-full" />
+                        <div className="space-y-1.5 flex-1">
+                          <Skeleton className="h-3 w-[40%]" />
+                          <Skeleton className="h-2.5 w-[90%]" />
+                          <Skeleton className="h-2.5 w-[70%]" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {!searching && searchError && (
-                  <div className="p-6">
-                    <Alert variant="destructive">
-                      <AlertCircleIcon className="h-4 w-4" />
-                      <AlertTitle className="text-sm">{t('knowledgebase.retrievalFailed')}</AlertTitle>
-                      <AlertDescription className="text-xs mt-2">
-                        {searchError}
-                      </AlertDescription>
-                    </Alert>
-                  </div>
+                  <Alert variant="destructive">
+                    <AlertCircleIcon className="h-4 w-4" />
+                    <AlertTitle className="text-sm">{t('knowledgebase.retrievalFailed')}</AlertTitle>
+                    <AlertDescription className="text-xs mt-1">{searchError}</AlertDescription>
+                  </Alert>
                 )}
                 {!searching && !searchError && searchrecords.length === 0 && (
-                  <div className="text-center py-6 text-gray-500">
-                    <h2 className="text-sm">{t('knowledgebase.noRelatedChunks')}</h2>
-                    <p className="mt-2 text-xs">{t('knowledgebase.tryAdjustSearch')}</p>
+                  <div className="text-center py-12 text-muted-foreground">
+                    <SearchIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <h2 className="text-xs font-medium">{t('knowledgebase.noRelatedChunks')}</h2>
+                    <p className="mt-1 text-[11px]">{t('knowledgebase.tryAdjustSearch')}</p>
                   </div>
                 )}
-                {!searching && (
-                  <div className="flex flex-col gap-2 w-full max-w-full overflow-x-hidden pb-4">
+                {!searching && searchrecords.length > 0 && (
+                  <div className="flex flex-col gap-1.5 w-full pb-4">
                     {searchrecords.map((chunk, i) => {
                       const isExpanded = expandedCards[i] || false;
                       return (
-                        <Card
+                        <div
                           key={i}
-                          className="w-full max-w-full border shadow-none hover:bg-muted/50 transition-colors cursor-pointer py-2 gap-1 overflow-hidden"
+                          className="w-full rounded-md border border-border hover:border-primary/30 hover:bg-muted/40 transition-colors cursor-pointer px-3 py-2"
                           onClick={() => {
-                            setExpandedCards(prev => ({
-                              ...prev,
-                              [i]: !prev[i]
-                            }));
+                            setExpandedCards((prev) => ({ ...prev, [i]: !prev[i] }));
                           }}
                         >
-                          <CardHeader className="px-3 py-0">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                                <Badge className="bg-red-600/10 dark:bg-red-600/20 hover:bg-red-600/10 text-red-500 border-red-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
-                                  {i + 1}
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                              <Badge className="bg-rose-500/10 hover:bg-rose-500/10 text-rose-600 border-rose-500/30 shadow-none rounded-full text-[10px] h-4 px-1.5 shrink-0">
+                                #{i + 1}
+                              </Badge>
+                              <Badge className="bg-amber-500/10 hover:bg-amber-500/10 text-amber-600 border-amber-500/30 shadow-none rounded-full text-[10px] h-4 px-1.5 shrink-0">
+                                {t('knowledgebase.score')}: {chunk.score.toFixed(4)}
+                              </Badge>
+                              <Badge className="bg-blue-500/10 hover:bg-blue-500/10 text-blue-600 border-blue-500/30 shadow-none rounded-full text-[10px] h-4 px-1.5 shrink-0 max-w-[240px] truncate">
+                                {chunk.title}
+                              </Badge>
+                              {chunk.metadata.rerank && (
+                                <Badge className="bg-green-500/10 hover:bg-green-500/10 text-green-600 border-green-500/30 shadow-none rounded-full text-[10px] h-4 px-1.5 shrink-0">
+                                  Rerank
                                 </Badge>
-                                <Badge className="bg-amber-600/10 dark:bg-amber-600/20 hover:bg-amber-600/10 text-amber-500 border-amber-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
-                                  {t('knowledgebase.score')}: {chunk.score.toFixed(4)}
-                                </Badge>
-                                <Badge className="bg-blue-600/10 dark:bg-blue-600/20 hover:bg-blue-600/10 text-blue-500 border-blue-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
-                                  {chunk.title}
-                                </Badge>
-                                {chunk.metadata.rerank && (
-                                  <Badge className="bg-green-600/10 dark:bg-green-600/20 hover:bg-green-600/10 text-green-500 border-green-600/60 shadow-none rounded-full text-xs h-5 shrink-0">
-                                    Rerank
-                                  </Badge>
-                                )}
-                              </div>
-                              {isExpanded ? (
-                                <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                               )}
                             </div>
-                          </CardHeader>
-                          <CardContent 
-                            className={`px-3 pb-0 overflow-hidden transition-all duration-200 ${
-                              isExpanded ? 'max-h-none' : ''
+                            {isExpanded ? (
+                              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            )}
+                          </div>
+                          <div
+                            className={`text-[11px] leading-relaxed break-words text-foreground/80 ${
+                              !isExpanded ? 'line-clamp-2' : ''
                             }`}
                           >
-                            <div className={`text-xs leading-relaxed break-words ${
-                              !isExpanded ? 'line-clamp-3' : ''
-                            }`}>
-                              {chunk.content.replace(/\n/g, '\\n')}
+                            {chunk.content.replace(/\n/g, '\\n')}
+                          </div>
+                          {chunk.metadata?.images_info?.length > 0 && (
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                              {chunk.metadata.images_info.map((meta, index) => (
+                                <PhotoProvider
+                                  key={index}
+                                  maskOpacity={0.8}
+                                  overlayRender={() => (
+                                    <div className="absolute left-0 bottom-0 p-3 w-full min-h-30 text-xs text-slate-300 z-50 bg-black/50">
+                                      <div>{t('knowledgebase.imageDesc')}：{meta.desc}</div>
+                                    </div>
+                                  )}
+                                >
+                                  <PhotoView key={index} src={meta.url}>
+                                    <img
+                                      src={meta.url}
+                                      className="w-8 h-8 object-cover rounded-md cursor-pointer"
+                                    />
+                                  </PhotoView>
+                                </PhotoProvider>
+                              ))}
                             </div>
-                            {chunk.metadata?.images_info?.length > 0 && (
-                              <div className="flex gap-2 mt-2 flex-wrap">
-                                {chunk.metadata.images_info.map((meta, index) => (
-                                  <PhotoProvider
-                                    key={index}
-                                    maskOpacity={0.8}
-                                    overlayRender={() => {
-                                      return (
-                                        <div className="absolute left-0 bottom-0 p-3 w-full min-h-30 text-xs text-slate-300 z-50 bg-black/50">
-                                          <div>{t('knowledgebase.imageDesc')}：{meta.desc}</div>
-                                        </div>
-                                      );
-                                    }}
-                                  >
-                                    <PhotoView key={index} src={meta.url}>
-                                      <img
-                                        src={meta.url}
-                                        className="w-8 h-8 object-cover rounded-md cursor-pointer"
-                                      />
-                                    </PhotoView>
-                                  </PhotoProvider>
-                                ))}
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
+                          )}
+                        </div>
                       );
                     })}
-                    { searchrecords.length > 0 && (
-                      <p className="text-xs text-center text-muted-foreground pt-4 pb-4"> {t('knowledgebase.noMoreContent')} </p>
-                    )}
-
+                    <p className="text-[11px] text-center text-muted-foreground pt-4 pb-2">
+                      {t('knowledgebase.noMoreContent')}
+                    </p>
                   </div>
                 )}
               </div>
@@ -3551,6 +3528,32 @@ export default function KnowledgeBaseDetailPage(
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* 知识库设置Dialog */}
+      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+        <DialogContent className="sm:max-w-3xl lg:max-w-4xl h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="space-y-1 px-6 pt-5 pb-3 border-b border-border flex-none">
+            <DialogTitle className="flex items-center gap-2">
+              <SettingsIcon className="w-4 h-4 text-primary" />
+              {t('knowledgebase.kbSettings')}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {knowledgebase.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            <KbConfigCard
+              isCreate={false}
+              kbConfig={knowledgebase}
+              onSaveSuccess={(updated) => {
+                handleSaveSuccess(updated);
+                setSettingsDialogOpen(false);
+              }}
+              onCancel={() => setSettingsDialogOpen(false)}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 元数据管理Dialog */}
       <Dialog open={metadataConfigDialogOpen} onOpenChange={setMetadataConfigDialogOpen}>

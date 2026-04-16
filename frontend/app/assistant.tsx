@@ -1,68 +1,43 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Thread } from '@/components/assistant-ui/thread';
 import ModelSelector from '@/components/model-selector/index';
-import UserIdInput from '@/components/user/index';
 import ToolUIWrapper from '@/components/assistant-ui/tool-ui';
 import { useChatOptions } from './providers/chat';
+import { HeaderPortal } from '@/components/header-portal';
 
 export const Assistant = () => {
   const [optionsVisible, setoptionsVisible] = useState(true);
-  const {
-    model, 
-    updateModel, 
-    user_id, 
-    updateUser,
-    updateEnablePlanning,
-    updateEnableSearch,
-    updateMcpIds,
-    updateKbIds,
-    updateEnableChatdb,
-  } = useChatOptions();
+  const { model, updateModel } = useChatOptions();
 
   // 模型选择回调
   const handleModelChange = async (
-    id: string,
+    _id: string,
     source: string,
     model_id: string,
   ) => {
     updateModel(model_id);
-
     setoptionsVisible(source !== 'chatbot');
-    console.log(source);
   };
 
-  const handleUserChange = async (user_id: string) => {
-    updateUser(user_id);
-  }
-
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-
-  useEffect(() => {
-    console.log('selectedOptions updated:', selectedOptions);
-  }, [selectedOptions]);
+  const [, setSelectedOptions] = useState<string[]>([]);
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="flex p-1 border-b border-border/50">
+    <div className="flex flex-col h-full min-h-0">
+      <HeaderPortal>
         <ModelSelector
           selectedModel={{
             model_id: model || undefined,
           }}
           onModelChange={handleModelChange}
         />
-        <UserIdInput
-          user_id={user_id}
-          onChange={handleUserChange}
-        />
-      </header>
+      </HeaderPortal>
       <div className="flex flex-col flex-1 justify-end pb-8 overflow-y-auto">
         <Thread
           optionsVisible={optionsVisible}
           onToggleChange={(options) => {
-            console.log('Received options from Thread:', options); // ✅ 添加日志
-            setSelectedOptions(options); // 更新状态
+            setSelectedOptions(options);
           }}
         />
         <ToolUIWrapper />

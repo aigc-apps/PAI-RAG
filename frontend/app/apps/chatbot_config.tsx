@@ -1,9 +1,16 @@
 'use client';
 import React, { useState, useEffect, FC } from 'react';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { ChevronDownIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  Info,
+  ShieldCheck,
+  Sparkles,
+  Database,
+  Boxes,
+  Pencil,
+} from 'lucide-react';
 import { useI18n } from '@/app/providers/i18n';
 
 import {
@@ -31,7 +38,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { Button } from '@/components/ui/button';
 import { McpConfig } from '@/app/config/mcp/mcp';
@@ -44,7 +50,6 @@ import { REACT_PROMPT, getPrompts } from '../common/prompts';
 
 // Add import for ResettableTextarea
 import { ResettableTextarea } from '@/app/apps/resetable_textarea';
-import { toast } from 'sonner';
 
 
 interface PromptConfig {
@@ -94,6 +99,47 @@ interface ChatbotConfigProps {
   saveErrorMsg?: string;
 }
 
+// Compact section: icon + title (description inline as subtitle)
+export const Section: FC<{
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  rightSlot?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}> = ({ icon, title, description, rightSlot, children, className = '' }) => (
+  <section className={`py-3.5 border-b border-border last:border-b-0 ${className}`}>
+    <div className="flex items-center gap-2 mb-2.5">
+      <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary shrink-0">
+        {icon}
+      </div>
+      <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+      {description && (
+        <span className="text-xs text-muted-foreground truncate">· {description}</span>
+      )}
+      {rightSlot && <div className="ml-auto shrink-0">{rightSlot}</div>}
+    </div>
+    <div className="space-y-3 pl-8">{children}</div>
+  </section>
+);
+
+// Toggle row with title + hint, switch on the right
+const ToggleRow: FC<{
+  id: string;
+  title: string;
+  hint?: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}> = ({ id, title, hint, checked, onCheckedChange }) => (
+  <div className="flex items-center justify-between rounded-md px-3 py-1.5 bg-muted/40 hover:bg-muted/70 transition-colors">
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className="text-[13px] font-medium truncate">{title}</span>
+      {hint && <span className="text-[11px] text-muted-foreground truncate">{hint}</span>}
+    </div>
+    <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+  </div>
+);
+
 // 知识库配置卡片 - 受控组件
 export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   botConfig,
@@ -110,7 +156,6 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   const [openPrompt, setOpenPrompt] = useState(false);
   const [selectedKbNames, setSelectedKbNames] = useState<string[]>([]);
   const [selectedMcpNames, setSelectedMcpNames] = useState<string[]>([]);
-  const [saveErrorMsg, setSaveErrorMsg] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [defaultPrompts, setDefaultPrompts] = useState({
     react: REACT_PROMPT,
@@ -203,328 +248,325 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
     }
   };
 
-  const handleSave = async () => {
-    setSaveErrorMsg('');
-    try {
-      await onSave();
-    } catch (err: any) {
-      toast.error(err.message || t('messages.saveError'));
-    }
-  };
-
-
   return (
-    <div className="space-y-4 px-6 pt-3">
-      <div className="space-y-2">
-        <Label htmlFor="app-id">
-          App ID <span className="text-destructive">*</span>
-        </Label>
-        <Input
-          id="appid"
-          value={botConfig.app_id || ''}
-          onChange={(e) => onConfigChange({ app_id: e.target.value })}
-          placeholder={t('apps.appIdPlaceholder')}
-          required
-          disabled={!isCreate}
-        />
-        <p className="text-sm text-muted-foreground">
-          {t('apps.appIdTip')}
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="description">{t('apps.descriptionLabel')}</Label>
-        <Textarea
-          id="description"
-          value={botConfig.description || ''}
-          onChange={(e) => onConfigChange({ description: e.target.value })}
-          placeholder={t('apps.descriptionPlaceholder')}
-          rows={3}
-        />
-      </div>
-      <div className="flex">
-        <Label htmlFor="basemodel" className="w-[120px]">
-          {t('apps.baseModel')} <span className="text-destructive">*</span>{' '}
-        </Label>
-        <div className="px-6">
-          {llms.length > 0 ? (
-            <Select
-              value={botConfig.model_id || ''}
-              onValueChange={(value) => onConfigChange({ model_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t('apps.selectModel')} />
-              </SelectTrigger>
-              <SelectContent>
-                {llms.map((llm) => (
-                  <SelectItem key={llm.id} value={llm.model_id}>
-                    {llm.model_id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div>
-              <p className="text-sm text-muted-foreground">{t('apps.noModelConfigured')}</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  router.push('/config/model/llm');
-                }}
-              >
-                {t('apps.addModel')}
-              </Button>
+    <div className="max-w-5xl mx-auto px-6">
+      {/* Section 1: 基本信息 */}
+      <Section
+        icon={<Info className="w-4 h-4" />}
+        title={t('apps.sectionBasicInfo')}
+        description={t('apps.sectionBasicInfoDesc')}
+      >
+        {/* 第一行: 描述 (创建时左侧加 App ID) */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+          {isCreate && (
+            <div className="space-y-1.5 md:col-span-4">
+              <Label htmlFor="appid" className="text-xs font-medium">
+                App ID <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="appid"
+                value={botConfig.app_id || ''}
+                onChange={(e) => onConfigChange({ app_id: e.target.value })}
+                placeholder={t('apps.appIdPlaceholder')}
+                required
+                className="h-9"
+              />
             </div>
           )}
+          <div className={`space-y-1.5 ${isCreate ? 'md:col-span-8' : 'md:col-span-12'}`}>
+            <Label htmlFor="description" className="text-xs font-medium">
+              {t('apps.descriptionLabel')}
+            </Label>
+            <Input
+              id="description"
+              value={botConfig.description || ''}
+              onChange={(e) => onConfigChange({ description: e.target.value })}
+              placeholder={t('apps.descriptionPlaceholder')}
+              className="h-9"
+            />
+          </div>
         </div>
-        <div className="px-2">
-          <Dialog open={openPrompt} onOpenChange={setOpenPrompt}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="text-xs">{t('apps.editPrompts')}</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col">
-              <DialogHeader>
-                <DialogTitle>{t('apps.editPrompts')}</DialogTitle>
-                <DialogDescription>
-                  {t('apps.editPromptDesc')}
-                </DialogDescription>
-              </DialogHeader>
 
-              <div className="flex-1 overflow-hidden">
-                  <div className="flex-1 overflow-hidden">
-                      <ResettableTextarea
-                        value={systemPrompt}
-                        onReset={() => setSystemPrompt(defaultPrompts.react)}
-                        onChange={(e) => setSystemPrompt(e.target.value)}
-                        defaultValue={defaultPrompts.react}
-                      />
-                  </div>
-              </div>
+        {/* 第二行: 基模型 + 编辑提示词 */}
+        <div className="space-y-1.5">
+          <Label htmlFor="basemodel" className="text-xs font-medium">
+            {t('apps.baseModel')} <span className="text-destructive">*</span>
+          </Label>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              {llms.length > 0 ? (
+                <Select
+                  value={botConfig.model_id || ''}
+                  onValueChange={(value) => onConfigChange({ model_id: value })}
+                >
+                  <SelectTrigger className="w-full h-9">
+                    <SelectValue placeholder={t('apps.selectModel')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {llms.map((llm) => (
+                      <SelectItem key={llm.id} value={llm.model_id}>
+                        {llm.model_id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-muted-foreground font-normal h-9"
+                  onClick={() => router.push('/config/model/llm')}
+                >
+                  {t('apps.noModelConfigured')} — {t('apps.addModel')}
+                </Button>
+              )}
+            </div>
+            <Dialog open={openPrompt} onOpenChange={setOpenPrompt}>
+              <DialogTrigger asChild>
+                <Button
+                  size="sm"
+                  className="shrink-0 h-9 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 shadow-none"
+                >
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  {t('apps.editPrompts')}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col gap-4">
+                <DialogHeader className="space-y-1">
+                  <DialogTitle className="flex items-center gap-2">
+                    <Pencil className="w-4 h-4 text-primary" />
+                    {t('apps.editPrompts')}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs">
+                    {t('apps.editPromptDesc')}
+                  </DialogDescription>
+                </DialogHeader>
 
-              <DialogFooter className="gap-2 sm:gap-0">
-                <div className="flex items-center justify-between w-full">
-                  <p className="text-sm text-muted-foreground" suppressHydrationWarning>
-                    {t('apps.promptSaveReminder')}
-                  </p>
-                  <div className="flex gap-2">
-                    <DialogClose asChild>
-                      <Button variant="outline" onClick={() => {
-                        setSystemPrompt(botConfig.prompts?.react || defaultPrompts.react);
-                      }}>{t('common.cancel')}</Button>
-                    </DialogClose>
-                    <Button type="button" onClick={async () => {
-                      onConfigChange({
-                        prompts: {
-                          react: systemPrompt,
-                        }
-                      });
-                      setOpenPrompt(false);
-                    }}>
-                      {t('common.save')}
-                    </Button>
-                  </div>
+                <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                  <ResettableTextarea
+                    value={systemPrompt}
+                    onReset={() => setSystemPrompt(defaultPrompts.react)}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                    defaultValue={defaultPrompts.react}
+                    resetLabel={t('common.reset') || '重置默认'}
+                  />
                 </div>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-      <div className="flex gap-6">
-        <Label htmlFor="enable_search" className="w-[120px]">
-          {t('apps.enableSearch')}
-        </Label>
-        <Switch
-          id="enable_search"
-          checked={botConfig.enable_search || false}
-          onCheckedChange={(checked) => onConfigChange({ enable_search: checked })}
-        />
-      </div>
-      <div className="flex gap-6">
-        <Label htmlFor="enable_chatdb" className="w-[120px]">
-          {t('apps.enableChatDb')}
-        </Label>
-        <Switch
-          id="enable_chatdb"
-          checked={botConfig.enable_chatdb || false}
-          onCheckedChange={(checked) => onConfigChange({ enable_chatdb: checked })}
-        />
-      </div>
-      <div className="flex gap-6">
-        <Label htmlFor="enable_faq" className="w-[120px]">
-          {t('apps.enableFaq')}
-        </Label>
-        <Switch
-          id="enable_faq"
-          checked={botConfig.enable_faq || false}
-          onCheckedChange={(checked) => onConfigChange({ enable_faq: checked })}
-        />
-      </div>
-      <div className="flex">
-        <Label htmlFor="kb_selection" className="w-[120px]">
-          {t('apps.knowledgebaseSelection')}
-        </Label>
-        <div className="pl-6 pr-6">
-          {kbs.length > 0 ? (
-            <DropdownMenu modal={true}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="text-sm text-muted-foreground"
-                >
-                  {t('apps.selectedKbNum', { num: botConfig?.kb_ids?.length || 0 })} <ChevronDownIcon />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>{t('apps.knowledgebaseSelection')}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {kbs.map((kb) => (
-                  <DropdownMenuCheckboxItem
-                    key={kb.id}
-                    checked={botConfig.kb_ids?.includes(kb.id) || false}
-                    onCheckedChange={(checked) =>
-                      handleKbSelect(kb.id, kb.name, checked)
-                    }
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    {kb.name}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div>
-              <p className="text-sm text-muted-foreground">{t('apps.noKbConfigured')}</p>
-            </div>
-          )}
-        </div>
-        {selectedKbNames.length > 0 && (
-          <div className="flex gap-1.5 items-center">
-            {selectedKbNames.map((name) => (
-              <Badge variant="secondary" className="h-6" key={name}>
-                {name}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="flex gap-6">
-        <Label htmlFor="enable_auto_metadata_filter" className="w-[120px]">
-          {t('apps.enableAutoMetadataFilter')}
-        </Label>
-        <Switch
-          id="enable_auto_metadata_filter"
-          checked={botConfig.enable_auto_metadata_filter || false}
-          onCheckedChange={(checked) => onConfigChange({ enable_auto_metadata_filter: checked })}
-        />
-      </div>
-      <div className="flex">
-        <Label htmlFor="mcp_selection" className="w-[120px]">
-          {t('apps.mcpSelection')}
-        </Label>
-        <div className="pl-6 pr-6">
-          {mcps.length > 0 ? (
-            <DropdownMenu modal={true}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="text-sm text-muted-foreground"
-                >
-                  {t('apps.selectedMcpNum', { num: botConfig.mcp_ids?.length || 0 })}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>MCP</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {mcps.map((mcp) => (
-                  <DropdownMenuCheckboxItem
-                    key={mcp.id}
-                    checked={botConfig.mcp_ids?.includes(mcp.id) || false}
-                    onCheckedChange={(checked) =>
-                      handleMcpSelect(mcp.id, mcp.name, checked)
-                    }
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    {mcp.name}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div>
-              <p className="text-sm text-muted-foreground">{t('apps.noMcpConfigured')}</p>
-            </div>
-          )}
-        </div>
-        {selectedMcpNames.length > 0 && (
-          <div className="flex gap-1.5 items-center">
-            {selectedMcpNames.map((name) => (
-              <Badge variant="secondary" className="h-6" key={name}>
-                {name}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center">
-        <Label htmlFor="ai_guardrail" className="w-[120px]">
-          {t('apps.guardrail')}
-        </Label>
 
-        <div className="flex gap-4 pl-6 text-sm items-center">
-          <div className="space-y-2">
-            <Switch
+                <DialogFooter className="gap-2 sm:gap-0 border-t border-border pt-3">
+                  <div className="flex items-center justify-between w-full">
+                    <p
+                      className="text-xs text-muted-foreground flex items-center gap-1.5"
+                      suppressHydrationWarning
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                      {t('apps.promptSaveReminder')}
+                    </p>
+                    <div className="flex gap-2">
+                      <DialogClose asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSystemPrompt(botConfig.prompts?.react || defaultPrompts.react);
+                          }}
+                        >
+                          {t('common.cancel')}
+                        </Button>
+                      </DialogClose>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={async () => {
+                          onConfigChange({
+                            prompts: {
+                              react: systemPrompt,
+                            },
+                          });
+                          setOpenPrompt(false);
+                        }}
+                      >
+                        {t('common.save')}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </Section>
+
+      {/* Section 2: 功能开关 */}
+      <Section
+        icon={<Sparkles className="w-4 h-4" />}
+        title={t('apps.sectionFeatures')}
+        description={t('apps.sectionFeaturesDesc')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <ToggleRow
+            id="enable_search"
+            title={t('apps.enableSearch')}
+            checked={botConfig.enable_search || false}
+            onCheckedChange={(checked) => onConfigChange({ enable_search: checked })}
+          />
+          <ToggleRow
+            id="enable_chatdb"
+            title={t('apps.enableChatDb')}
+            checked={botConfig.enable_chatdb || false}
+            onCheckedChange={(checked) => onConfigChange({ enable_chatdb: checked })}
+          />
+        </div>
+      </Section>
+
+      {/* Section 3: 知识库 + MCP 工具 (并列两列) */}
+      <section className="py-3.5 border-b border-border">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+          {/* 知识库 */}
+          <div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary shrink-0">
+                <Database className="w-4 h-4" />
+              </div>
+              <h3 className="text-sm font-semibold leading-tight">{t('apps.knowledgebaseSelection')}</h3>
+            </div>
+            <div className="space-y-2 pl-8">
+              <div className="flex items-center gap-2 flex-wrap">
+                {kbs.length > 0 ? (
+                  <DropdownMenu modal={true}>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="shrink-0 h-8">
+                        {t('apps.selectedKbNum', { num: botConfig?.kb_ids?.length || 0 })}
+                        <ChevronDownIcon className="ml-1 w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>{t('apps.knowledgebaseSelection')}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {kbs.map((kb) => (
+                        <DropdownMenuCheckboxItem
+                          key={kb.id}
+                          checked={botConfig.kb_ids?.includes(kb.id) || false}
+                          onCheckedChange={(checked) =>
+                            handleKbSelect(kb.id, kb.name, checked)
+                          }
+                          onSelect={(e) => e.preventDefault()}
+                        >
+                          {kb.name}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('apps.noKbConfigured')}</p>
+                )}
+                {selectedKbNames.length > 0 && (
+                  <div className="flex gap-1 items-center flex-wrap">
+                    {selectedKbNames.map((name) => (
+                      <Badge variant="secondary" className="h-6 text-xs" key={name}>
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <ToggleRow
+                id="enable_auto_metadata_filter"
+                title={t('apps.enableAutoMetadataFilter')}
+                checked={botConfig.enable_auto_metadata_filter || false}
+                onCheckedChange={(checked) => onConfigChange({ enable_auto_metadata_filter: checked })}
+              />
+            </div>
+          </div>
+
+          {/* MCP工具 */}
+          <div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary shrink-0">
+                <Boxes className="w-4 h-4" />
+              </div>
+              <h3 className="text-sm font-semibold leading-tight">{t('apps.mcpSelection')}</h3>
+            </div>
+            <div className="space-y-2 pl-8">
+              <div className="flex items-center gap-2 flex-wrap">
+                {mcps.length > 0 ? (
+                  <DropdownMenu modal={true}>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="shrink-0 h-8">
+                        {t('apps.selectedMcpNum', { num: botConfig.mcp_ids?.length || 0 })}
+                        <ChevronDownIcon className="ml-1 w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>MCP</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {mcps.map((mcp) => (
+                        <DropdownMenuCheckboxItem
+                          key={mcp.id}
+                          checked={botConfig.mcp_ids?.includes(mcp.id) || false}
+                          onCheckedChange={(checked) =>
+                            handleMcpSelect(mcp.id, mcp.name, checked)
+                          }
+                          onSelect={(e) => e.preventDefault()}
+                        >
+                          {mcp.name}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('apps.noMcpConfigured')}</p>
+                )}
+                {selectedMcpNames.length > 0 && (
+                  <div className="flex gap-1 items-center flex-wrap">
+                    {selectedMcpNames.map((name) => (
+                      <Badge variant="secondary" className="h-6 text-xs" key={name}>
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: 安全护栏 */}
+      <Section
+        icon={<ShieldCheck className="w-4 h-4" />}
+        title={t('apps.guardrail')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div className="md:col-span-3">
+            <ToggleRow
               id="enable_input_check"
+              title={t('apps.inputGuardrail')}
               checked={botConfig.enable_input_guardrail || false}
               onCheckedChange={(checked) => onConfigChange({ enable_input_guardrail: checked })}
             />
-            <Label htmlFor="input_guardrail" className="w-[120px]">
-              {t('apps.inputGuardrail')}
-            </Label>
           </div>
-          <div className="space-y-2">
-            <Switch
+          <div className="md:col-span-3">
+            <ToggleRow
               id="enable_output_check"
+              title={t('apps.outputGuardrail')}
               checked={botConfig.enable_output_guardrail || false}
               onCheckedChange={(checked) => onConfigChange({ enable_output_guardrail: checked })}
             />
-            <Label htmlFor="output_guardrail" className="w-[120px]">
-              {t('apps.outputGuardrail')}
-            </Label>
           </div>
-
-          <div className="space-y-1">
-            <Input
-              className="w-120"
-              value={botConfig.guardrail_hint}     
-              placeholder={t('apps.guardrailHint')}
-              onChange={(e) => onConfigChange({ guardrail_hint: e.target.value })}
-            />
-            <Label htmlFor="guardrail_hint" className="w-[200px]">
+          <div className="md:col-span-6 space-y-1.5">
+            <Label htmlFor="guardrail_hint" className="text-xs font-medium text-muted-foreground">
               {t('apps.guardrailHintTip')}
             </Label>
+            <Input
+              id="guardrail_hint"
+              value={botConfig.guardrail_hint}
+              placeholder={t('apps.guardrailHint')}
+              onChange={(e) => onConfigChange({ guardrail_hint: e.target.value })}
+              className="h-9"
+            />
           </div>
         </div>
-      </div>
+      </Section>
 
-      <div className="sticky bottom-0 z-10 -mx-6 px-6 pt-4 flex gap-6 justify-center items-center bg-background border-t">
-        <Button
-          variant="secondary"
-          className="w-20"
-          onClick={() => {
-            router.push('/apps');
-          }}
-        >
-          {t('common.cancel')}
-        </Button>
-
-        <Button
-          className="w-40"
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? t('common.saving') : (isCreate ? t('apps.createApp') : t('apps.saveApp'))}
-        </Button>
-      </div>
     </div>
   );
 };

@@ -1,131 +1,116 @@
+'use client';
+
 import { ToolCallContentPartComponent } from '@assistant-ui/react';
 import React, { useState } from 'react';
-import { Button } from './button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+import { ChevronRight, Loader2, Wrench } from 'lucide-react';
+import { useI18n } from '@/app/providers/i18n';
 
-import { Wrench } from 'lucide-react';
+/** Parse loose JSON-ish strings emitted by LLMs. */
+function safeParseJson(raw: string): unknown {
+  if (!raw || !raw.trim()) return raw;
+  if (raw.trim() === '{}') return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Fallback: fix unquoted keys / single quotes, try again.
+    try {
+      const cleaned = raw
+        .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":')
+        .replace(/'/g, '"')
+        .replace(/(\w+):/g, '"$1":')
+        .replace(/:\s*([^,"}\]]+)/g, (m, v) =>
+          isNaN(v as any) ? `:"${v}"` : m,
+        );
+      return JSON.parse(cleaned);
+    } catch {
+      return { error: 'Invalid JSON', raw };
+    }
+  }
+}
 
-const JsonCodeBlock = ({
-  jsonString,
-}: {
-  jsonString: string | null | undefined;
-}) => {
-  return (
-    // <pre className="bg-gray-900 text-gray-100 p-4 rounded-md overflow-auto whitespace-pre-wrap break-words">
-    //   <code ref={codeRef} className="language-json whitespace-pre-wrap break-words">
-    //     {jsonString ?? ''}
-    //   </code>
-    // </pre>
-    <pre className="overflow-x-auto bg-[#1e1e1e] text-[#d4d4d4] p-2 rounded-md font-mono text-sm leading-relaxed shadow-md border border-[#2d2d2d]">
-      <code className="language-json whitespace-pre-wrap break-words">
-        {jsonString ?? ''}
-      </code>
-    </pre>
-  );
-};
+function formatPayload(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/** Compact monospace code block used inside the collapsed tool panel. */
+const CodeBlock = ({ text }: { text: string }) => (
+  <pre className="text-[11px] leading-relaxed font-mono text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/60 rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 whitespace-pre-wrap break-words max-h-[280px] overflow-auto">
+    {text}
+  </pre>
+);
+
 export const ToolFallback: ToolCallContentPartComponent = ({
   toolName,
   argsText,
   status,
   result,
 }) => {
-  if (status.type === 'running') {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+
+  const isRunning = status.type === 'running';
+
+  if (isRunning) {
     return (
-      <div className="rounded mb-1 bg-muted/50 h-7 cursor-pointer hover:bg-muted/100 transition-colors">
-        <Button
-          variant="ghost"
-          className="flex h-7 items-center gap-2 px-4 justify-start h-7 w-full text-gray-600 text-xs"
-        >
-          <Wrench className="size-4" /> 正在调用工具: {toolName}{' '}
-          (请稍候，结果将会显示在这里)
-        </Button>
-      </div>
-    );
-  } else if (status.type === 'complete') {
-    let parsedArgs: any = null;
-    if (!argsText || argsText.trim() === '') {
-      parsedArgs = argsText;
-    } else if (argsText.trim() === '{}') {
-      parsedArgs = {};
-    } else {
-      try {
-        // 先尝试直接解析
-        parsedArgs = JSON.parse(argsText);
-      } catch (error) {
-        // 如果直接解析失败，尝试修复格式后解析
-        try {
-          // 修复JSON格式
-          const cleanedJson = argsText
-            .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // 修复键未加引号
-            .replace(/'/g, '"') // 替换单引号为双引号
-            .replace(/(\w+):/g, '"$1":') // 修复未加引号的键
-            .replace(/:\s*([^,"}\]]+)/g, (match, p1) =>
-              isNaN(p1 as any) ? `:"${p1}"` : match,
-            ); // 修复未加引号的字符串值
-
-          parsedArgs = JSON.parse(cleanedJson);
-        } catch (formatError) {
-          console.error('JSON 解析失败:', formatError);
-          parsedArgs = { error: '无效的JSON格式', raw: argsText };
-        }
-      }
-    }
-
-    const parsedResult = result?.content?.[0]?.text ?? result;
-    // const parsedArgs = JSON.parse(argsText);
-
-    return (
-      <div className="rounded mb-1 bg-muted/50 h-7 cursor-pointer hover:bg-muted/100 transition-colors">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 justify-start h-7 w-full text-gray-600 text-xs"
-            >
-              {' '}
-              <Wrench className="size-4" /> 完成工具调用: {toolName}{' '}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right">
-            <SheetHeader>
-              <SheetTitle>工具调用结果</SheetTitle>
-              <SheetDescription>工具名称: {toolName}</SheetDescription>
-            </SheetHeader>
-            <div className="flex flex-col gap-2 border-t pt-2 overflow-y-auto">
-              <div className="px-4">
-                <p className="font-semibold">工具调用参数:</p>
-                <JsonCodeBlock
-                  jsonString={
-                    typeof parsedArgs === 'string'
-                      ? parsedArgs
-                      : JSON.stringify(parsedArgs, null, 2)
-                  }
-                />
-              </div>
-
-              {result !== undefined && (
-                <div className="border-t border-dashed px-4 pt-2">
-                  <p className="font-semibold">工具调用结果:</p>
-                  <JsonCodeBlock
-                    jsonString={
-                      typeof parsedResult === 'string'
-                        ? parsedResult
-                        : JSON.stringify(parsedResult, null, 2)
-                    }
-                  />
-                </div>
-              )}
-            </div>
-          </SheetContent>
-        </Sheet>
+      <div className="my-1 inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-[11px] text-muted-foreground">
+        <Loader2 className="w-3 h-3 animate-spin text-primary" />
+        <Wrench className="w-3 h-3 text-muted-foreground" />
+        <span>{t('chat.tools.callingTool')}</span>
+        <span className="text-muted-foreground/60">·</span>
+        <span className="font-mono text-foreground/90">{toolName}</span>
       </div>
     );
   }
+
+  const parsedArgs = safeParseJson(argsText ?? '');
+  const parsedResult =
+    (result as any)?.content?.[0]?.text ?? result;
+
+  return (
+    <div className="my-1 rounded-md border border-primary/20 bg-primary/[0.04] overflow-hidden text-xs">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 hover:bg-primary/10 transition-colors text-left"
+      >
+        <ChevronRight
+          className={`w-3 h-3 text-primary/70 shrink-0 transition-transform ${
+            open ? 'rotate-90' : ''
+          }`}
+        />
+        <Wrench className="w-3 h-3 text-muted-foreground shrink-0" />
+        <span className="text-[11px] text-muted-foreground shrink-0">
+          {t('chat.tools.toolCallComplete')}:
+        </span>
+        <span className="font-mono text-[11px] text-foreground/90 truncate">
+          {toolName}
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-2 pb-2 pt-1 border-t border-primary/15 bg-background/60 space-y-2">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              {t('chat.tools.toolArguments')}
+            </p>
+            <CodeBlock text={formatPayload(parsedArgs)} />
+          </div>
+          {result !== undefined && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                {t('chat.tools.toolResult')}
+              </p>
+              <CodeBlock text={formatPayload(parsedResult)} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };

@@ -1,21 +1,74 @@
-import type { FC } from 'react';
+'use client';
+
+import { type FC, createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   ThreadListItemPrimitive,
   ThreadListPrimitive,
+  useThreadListItem,
 } from '@assistant-ui/react';
-import { ArchiveIcon, PlusIcon, TrashIcon } from 'lucide-react';
+import { PlusIcon, TrashIcon } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/app/providers/i18n';
+import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { formatFriendlyTime } from '@/lib/time-format';
+
+/**
+ * Provide a map of {remoteThreadId -> created_at} to children.
+ * assistant-ui's ThreadListItemState doesn't expose timestamps,
+ * so we fetch /api/threads separately once and refresh when the list mutates.
+ */
+type ThreadTimestampMap = Record<string, string>;
+const ThreadTimestampContext = createContext<ThreadTimestampMap>({});
+
+function ThreadTimestampProvider({ children }: { children: React.ReactNode }) {
+  const { tenantFetch } = useTenantFetch();
+  const [map, setMap] = useState<ThreadTimestampMap>({});
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await tenantFetch(`/api/threads`);
+      if (!res.ok) return;
+      const response = await res.json();
+      const next: ThreadTimestampMap = {};
+      for (const t of response.data || []) {
+        if (t.id && t.created_at) next[t.id] = t.created_at;
+      }
+      setMap(next);
+    } catch {
+      // ignore
+    }
+  }, [tenantFetch]);
+
+  useEffect(() => {
+    refresh();
+    // Refresh periodically so new threads / deletions reconcile
+    const id = setInterval(refresh, 30_000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  return (
+    <ThreadTimestampContext.Provider value={map}>
+      {children}
+    </ThreadTimestampContext.Provider>
+  );
+}
+
+function useThreadCreatedAt(remoteId: string | undefined): string | undefined {
+  const map = useContext(ThreadTimestampContext);
+  if (!remoteId) return undefined;
+  return map[remoteId];
+}
 
 export const ThreadList: FC = () => {
   return (
-    <ThreadListPrimitive.Root className="flex flex-col items-stretch gap-1.5">
-      <ThreadListNew />
-      <ThreadListItems />
-    </ThreadListPrimitive.Root>
+    <ThreadTimestampProvider>
+      <ThreadListPrimitive.Root className="flex flex-col items-stretch gap-0.5">
+        <ThreadListNew />
+        <ThreadListItems />
+      </ThreadListPrimitive.Root>
+    </ThreadTimestampProvider>
   );
 };
 
@@ -24,17 +77,10 @@ const ThreadListNew: FC = () => {
   const router = useRouter();
   return (
     <ThreadListPrimitive.New asChild>
-      <button
-        className="new-chat-btn mb-1"
-        onClick={() => {router.push('/')}}
-      >
+      <button className="new-chat-btn mb-1" onClick={() => router.push('/')}>
         <span className="flex items-center gap-2">
-          <PlusIcon className="w-4 h-4" />
+          <PlusIcon className="w-3.5 h-3.5" />
           <span suppressHydrationWarning>{t('chat.threadList.newConversation')}</span>
-        </span>
-        <span className="flex items-center gap-0.5">
-          <span className="kbd-badge">⌘</span>
-          <span className="kbd-badge">P</span>
         </span>
       </button>
     </ThreadListPrimitive.New>
@@ -47,12 +93,22 @@ const ThreadListItems: FC = () => {
 
 const ThreadListItem: FC = () => {
   const router = useRouter();
+  const remoteId = useThreadListItem((i) => i.remoteId);
+  const createdAt = useThreadCreatedAt(remoteId);
+
   return (
-    <ThreadListItemPrimitive.Root className="data-[active]:bg-muted hover:bg-muted focus-visible:bg-muted focus-visible:ring-ring flex items-center gap-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2">
-      <ThreadListItemPrimitive.Trigger className="flex-grow px-3 py-2 text-start" onClick={() => {router.push('/')}}>
+    <ThreadListItemPrimitive.Root className="group/thread data-[active]:bg-muted hover:bg-muted focus-visible:bg-muted focus-visible:ring-ring flex items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2">
+      <ThreadListItemPrimitive.Trigger
+        className="flex-1 min-w-0 pl-1.5 pr-1 py-1 text-start"
+        onClick={() => router.push('/')}
+      >
         <ThreadListItemTitle />
+        {createdAt && (
+          <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+            {formatFriendlyTime(createdAt)}
+          </p>
+        )}
       </ThreadListItemPrimitive.Trigger>
-      {/* <ThreadListItemArchive /> */}
       <ThreadListItemDelete />
     </ThreadListItemPrimitive.Root>
   );
@@ -61,24 +117,9 @@ const ThreadListItem: FC = () => {
 const ThreadListItemTitle: FC = () => {
   const { t } = useI18n();
   return (
-    <p className="text-sm" suppressHydrationWarning>
+    <p className="text-xs truncate leading-tight" suppressHydrationWarning>
       <ThreadListItemPrimitive.Title fallback={t('chat.threadList.newSession')} />
     </p>
-  );
-};
-
-const ThreadListItemArchive: FC = () => {
-  const { t } = useI18n();
-  return (
-    <ThreadListItemPrimitive.Archive asChild>
-      <TooltipIconButton
-        className="hover:text-primary text-foreground ml-auto mr-3 size-4 p-0"
-        variant="ghost"
-        tooltip={t('chat.threadList.archiveThread')}
-      >
-        <ArchiveIcon />
-      </TooltipIconButton>
-    </ThreadListItemPrimitive.Archive>
   );
 };
 
@@ -87,11 +128,11 @@ const ThreadListItemDelete: FC = () => {
   return (
     <ThreadListItemPrimitive.Delete asChild>
       <TooltipIconButton
-        className="hover:text-primary text-foreground ml-auto mr-3 size-4 p-0"
+        className="shrink-0 h-5 w-5 mr-0.5 p-0 text-muted-foreground/60 hover:text-destructive opacity-0 group-hover/thread:opacity-100 transition-opacity"
         variant="ghost"
         tooltip={t('chat.threadList.deleteThread')}
       >
-        <TrashIcon />
+        <TrashIcon className="h-3 w-3" />
       </TooltipIconButton>
     </ThreadListItemPrimitive.Delete>
   );
