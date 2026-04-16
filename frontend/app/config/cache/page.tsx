@@ -18,9 +18,7 @@ export default function CacheConfig() {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
-
       if (!res.ok) throw new Error(t('config.cache.clearFailed'));
-
       const data = await res.json();
       const cleared = data?.data?.cleared ?? 0;
       toast.success(`${t('config.cache.clearSuccess')} (${cleared})`);
@@ -32,22 +30,28 @@ export default function CacheConfig() {
   };
 
   return (
-    <div id="cache">
-      <div className="transition-colors rounded-lg p-4 overflow-hidden duration-200">
-        <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          <h2 className="text-xl font-medium text-gray-800" suppressHydrationWarning>
-            {t('config.cache.title')}
-          </h2>
+    <div id="cache" className="settings-page">
+      <div className="settings-page-header">
+        <h1 className="page-title" suppressHydrationWarning>
+          {t('config.cache.title')}
+        </h1>
+      </div>
 
-          <div className="max-w-xl w-full mx-auto mt-8 space-y-6">
-            <div className="border rounded-lg p-6 bg-white">
-              <h3 className="text-base font-medium text-gray-700 mb-2" suppressHydrationWarning>
-                {t('config.cache.metadataSchemaTitle')}
-              </h3>
-              <p className="text-sm text-gray-500 mb-4" suppressHydrationWarning>
-                {t('config.cache.metadataSchemaDescription')}
-              </p>
+      <div className="settings-page-content">
+        <div className="space-y-6">
+          <div>
+            <div className="dialog-section-title mb-2">缓存项</div>
+            <div className="form-row-inline">
+              <div className="form-row-inline-label">
+                <span className="title" suppressHydrationWarning>
+                  {t('config.cache.metadataSchemaTitle')}
+                </span>
+                <span className="hint" suppressHydrationWarning>
+                  {t('config.cache.metadataSchemaDescription')}
+                </span>
+              </div>
               <Button
+                size="sm"
                 variant="destructive"
                 onClick={handleClearMetadataSchemaCache}
                 disabled={isClearing}

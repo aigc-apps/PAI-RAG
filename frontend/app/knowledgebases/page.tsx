@@ -116,7 +116,7 @@ export default function KnowledgeBasePage() {
   return (
     <div className="flex flex-col h-screen px-6 py-0 space-y-4">
       <div className="flex justify-between items-center h-1/10 gap-4">
-        <h1 className="text-xl font-medium">{t('knowledgebase.title')}</h1>
+        <h1 className="page-title">{t('knowledgebase.title')}</h1>
         <div className="flex items-center gap-3 flex-1 max-w-md">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -157,7 +157,7 @@ export default function KnowledgeBasePage() {
                     router.push(`/knowledgebases/${base.id}`);
                   }}
                   key={base.id}
-                  className="group flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 transition-shadow hover:shadow-md hover:bg-muted/50 duration-300 relative"
+                  className="group flex flex-col border rounded-lg shadow-sm h-full gap-0 py-0 card-hover-glow duration-300 relative"
                 >
                   {/* 右上角：删除按钮（hover时显示） */}
                   <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -211,7 +211,7 @@ export default function KnowledgeBasePage() {
                     {/* 文档数量 Badge */}
                     <Badge 
                       variant="outline" 
-                      className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 dark:border-blue-400/30"
+                      className="text-xs badge-tech"
                     >
                       <FileText className="w-3 h-3" />
                       {base.file_count || 0}
@@ -220,7 +220,7 @@ export default function KnowledgeBasePage() {
                     {/* 更新时间 Badge */}
                     <Badge 
                       variant="outline" 
-                      className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 dark:border-blue-400/30"
+                      className="text-xs badge-tech"
                     >
                       {formatFriendlyTime(base.updated_at)}
                     </Badge>

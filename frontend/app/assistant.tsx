@@ -45,7 +45,7 @@ export const Assistant = () => {
 
   return (
     <div className="flex flex-col h-screen">
-      <header className="flex p-1 border-b">
+      <header className="flex p-1 border-b border-border/50">
         <ModelSelector
           selectedModel={{
             model_id: model || undefined,

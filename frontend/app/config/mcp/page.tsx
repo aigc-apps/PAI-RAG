@@ -1,11 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  TrashIcon,
-  SettingsIcon,
-  Edit,
-} from 'lucide-react';
+import { TrashIcon, Edit, Plus, PlugZap, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,10 +10,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -33,8 +27,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
-import { v4 as uuidv4 } from 'uuid';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { McpConfig } from './mcp';
 import { toast } from 'sonner';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
@@ -43,13 +43,13 @@ import { useI18n } from '@/app/providers/i18n';
 export default function McpConfigPage() {
   const { t } = useI18n();
 
-  const [isOpen, setIsOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<McpConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditLoading, setIsEditLoading] = useState(false);
 
-  const [addFormData, setAddFormData] = useState({
+  const emptyForm = {
     id: '',
     name: '',
     url: '',
@@ -57,20 +57,23 @@ export default function McpConfigPage() {
     auth_token: '',
     need_token: false,
     enabled: true,
-  });
+  };
+  const [addFormData, setAddFormData] = useState(emptyForm);
 
-  const [mcpconfigs, setMcpConfigs] = useState<Array<{
-    id: string;
-    name: string;
-    url: string;
-    type: string;
-    auth_token: string;
-    need_token: boolean;
-    enabled: boolean;
-  }>>([]);
+  const [mcpconfigs, setMcpConfigs] = useState<
+    Array<{
+      id: string;
+      name: string;
+      url: string;
+      type: string;
+      auth_token: string;
+      need_token: boolean;
+      enabled: boolean;
+    }>
+  >([]);
   const [mcploading, setMcpLoading] = useState(true);
   const { tenantFetch } = useTenantFetch();
-  // 提取 fetchConfigs 为可复用函数
+
   const fetchConfigs = useCallback(async () => {
     try {
       setMcpLoading(true);
@@ -94,37 +97,6 @@ export default function McpConfigPage() {
     setIsEditOpen(true);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = e.target;
-    const key = id.replace(/^mcp_/, '');
-    setAddFormData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = e.target;
-    const key = id.replace(/^edit_mcp_/, '');
-    setEditingConfig((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        [key]: value,
-      };
-    });
-  };
-
-  const handleEditInputChangeCheckbox = (isChecked: boolean, id?: string) => {
-    if (!id || !editingConfig) return;
-
-    const key = id.replace(/^edit_mcp_/, '');
-    setEditingConfig((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        [key]: isChecked,
-      };
-    });
-  };
-
   const handleToggleEnabled = async (id: string, enabled: boolean) => {
     try {
       const res = await tenantFetch(`/api/config/mcps/${id}`, {
@@ -132,16 +104,10 @@ export default function McpConfigPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !enabled }),
       });
-
       if (!res.ok) throw new Error(t('config.mcp.updateStatusFailed'));
-
-      // Directly update local state to maintain data consistency
       setMcpConfigs((prev) =>
-        prev.map((config) =>
-          config.id === id ? { ...config, enabled: !enabled } : config
-        )
+        prev.map((c) => (c.id === id ? { ...c, enabled: !enabled } : c)),
       );
-
       toast.success(t(!enabled ? 'config.mcp.mcpEnabled' : 'config.mcp.mcpDisabled'));
     } catch (err: any) {
       toast.error(`${t('config.mcp.updateFailed')}: ${err.message}`);
@@ -149,400 +115,354 @@ export default function McpConfigPage() {
   };
 
   const addMCP = async () => {
-  try {
-    setIsLoading(true);
-    
-    // Use form data directly, without ID
-    const mcp_data = {
-      name: addFormData.name,
-      url: addFormData.url,
-      type: addFormData.type,
-      auth_token: addFormData.auth_token,
-      need_token: addFormData.auth_token ? true : false,
-      enabled: addFormData.enabled,
-    };
-    
-    const res = await tenantFetch(`/api/config/mcps`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mcp_data),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`${t('config.mcp.addError')}: ${res.status} ${errorText || res.statusText}`);
+    try {
+      setIsLoading(true);
+      const mcp_data = {
+        name: addFormData.name,
+        url: addFormData.url,
+        type: addFormData.type,
+        auth_token: addFormData.auth_token,
+        need_token: !!addFormData.auth_token,
+        enabled: addFormData.enabled,
+      };
+      const res = await tenantFetch(`/api/config/mcps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mcp_data),
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`${t('config.mcp.addError')}: ${res.status} ${errorText || res.statusText}`);
+      }
+      await fetchConfigs();
+      toast.success(t('config.mcp.addSuccess'));
+      setIsAddOpen(false);
+      setAddFormData(emptyForm);
+    } catch (err: any) {
+      toast.error(err.message || t('config.mcp.addFailed'));
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    // After success, re-fetch list to ensure ID consistency
-    await fetchConfigs();
-    toast.success(t('config.mcp.addSuccess'));
-
-    setIsOpen(false);
-
-    // Reset form data
-    setAddFormData({
-      id: uuidv4(),
-      name: '',
-      url: '',
-      type: 'sse',
-      auth_token: '',
-      need_token: false,
-      enabled: true,
-    });
-  } catch (err: any) {
-    const errorMessage = err.message || err.toString() || t('config.mcp.addFailed');
-    toast.error(errorMessage);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-const updatedMCP = async () => {
-  try {
-    if (!editingConfig) return;
-    setIsEditLoading(true);
-    
-    // Construct clean request body
-    const updateData: any = {
-      name: editingConfig.name,
-      url: editingConfig.url,
-      type: editingConfig.type,
-      enabled: editingConfig.enabled,
-    };
-
-    // Only send auth_token if it's not empty
-    if (editingConfig.auth_token && editingConfig.auth_token.trim() !== '') {
-      updateData.auth_token = editingConfig.auth_token;
-      updateData.need_token = true;
-    } else {
-      updateData.need_token = false;
+  const updatedMCP = async () => {
+    try {
+      if (!editingConfig) return;
+      setIsEditLoading(true);
+      const updateData: any = {
+        name: editingConfig.name,
+        url: editingConfig.url,
+        type: editingConfig.type,
+        enabled: editingConfig.enabled,
+      };
+      if (editingConfig.auth_token && editingConfig.auth_token.trim() !== '') {
+        updateData.auth_token = editingConfig.auth_token;
+        updateData.need_token = true;
+      } else {
+        updateData.need_token = false;
+      }
+      const res = await tenantFetch(`/api/config/mcps/${editingConfig.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`${t('config.mcp.updateError')}: ${res.status} ${errorText || res.statusText}`);
+      }
+      await fetchConfigs();
+      toast.success(t('config.mcp.updateSuccess'));
+      setIsEditOpen(false);
+    } catch (err: any) {
+      toast.error(`${t('config.mcp.updateError')}${err.message || t('config.mcp.updateFailed2')}`);
+    } finally {
+      setIsEditLoading(false);
     }
+  };
 
-    const res = await tenantFetch(`/api/config/mcps/${editingConfig.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`${t('config.mcp.updateError')}: ${res.status} ${errorText || res.statusText}`);
-    }
-    
-    // After success, re-fetch list
-    await fetchConfigs();
-    
-    toast.success(t('config.mcp.updateSuccess'));
-    setIsEditOpen(false);
-  } catch (err: any) {
-    const errorMessage = err.message || err.toString() || t('config.mcp.updateFailed2');
-    toast.error(`${t('config.mcp.updateError')}${errorMessage}`);
-  } finally {
-    setIsEditLoading(false);
-  }
-};
   const removeMCP = async (id: string) => {
     try {
       const res = await tenantFetch(`/api/config/mcps/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
-
-      if (!res.ok) {
-        throw new Error(t('config.mcp.deleteFailed'));
-      }
-      
+      if (!res.ok) throw new Error(t('config.mcp.deleteFailed'));
       toast.success(t('config.mcp.deleteSuccess'));
-
-
-      // Remove directly from local state
-      setMcpConfigs((prev) => prev.filter((config) => config.id !== id));
+      setMcpConfigs((prev) => prev.filter((c) => c.id !== id));
     } catch (err: any) {
       toast.error(`${t('config.mcp.deleteError')}${err.message}`);
     }
   };
 
   return (
-    <div id="mcp">
-      <div className={'transition-colors rounded-lg overflow-hidden'}>
-        <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          {mcploading ? (
-            <div className="py-12 text-center">
-              <p className="text-gray-500">{t('config.mcp.loading')}</p>
-            </div>
-          ) : mcpconfigs.length === 0 ? (
-            <h3 className="text-lg font-medium text-gray-700 py-6">{t('config.mcp.noMcp')}</h3>
-          ) : (
-            <div className="gap-6 p-4 w-full">
-              <Table className="w-full table-fixed border bg-white rounded-md overflow-hidden">
-                <TableHeader className="bg-gray-100">
-                  <TableRow>
-                    <TableHead className="w-1/10">{t('config.mcp.mcpName')}</TableHead>
-                    <TableHead className="w-2/5">{t('config.mcp.mcpUrl')}</TableHead>
-                    <TableHead className="w-1/10">{t('config.mcp.mcpType')}</TableHead>
-                    <TableHead className="w-1/10">{t('config.mcp.isEnabled')}</TableHead>
-                    <TableHead className="w-1/5">{t('config.mcp.actions')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mcpconfigs.map((config) => (
-                    <TableRow key={config.id}>
-                      <TableCell>{config.name || ''}</TableCell>
-                      <TableCell>{config.url || ''}</TableCell>
-                      <TableCell>{config.type || ''}</TableCell>
-                      <TableCell>
-                        <Checkbox
-                          id={`enabled-${config.id}`}
-                          checked={config.enabled}
-                          onCheckedChange={(checked) => 
-                            handleToggleEnabled(config.id, config.enabled)
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                          <DialogTrigger asChild>
-                            <button
-                              className="text-black-500 hover:text-black-700 px-1 py-1"
-                              onClick={() => handleEditClick(config)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader>
-                              <DialogTitle>{t('config.mcp.editMcp')}</DialogTitle>
-                              <DialogDescription>
-                                {t('config.mcp.editDialogDesc')}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label
-                                  htmlFor="edit_mcp_name"
-                                  className="text-right"
-                                >
-                                  {t('config.mcp.mcpNameLabel')}
-                                </Label>
-                                <Input
-                                  id="edit_mcp_name"
-                                  value={editingConfig?.name || ''}
-                                  onChange={handleEditInputChange}
-                                  className="col-span-3"
-                                />
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label
-                                  htmlFor="edit_mcp_url"
-                                  className="text-right"
-                                >
-                                  {t('config.mcp.mcpUrlLabel')}
-                                </Label>
-                                <Input
-                                  id="edit_mcp_url"
-                                  value={editingConfig?.url || ''}
-                                  onChange={handleEditInputChange}
-                                  className="col-span-3"
-                                />
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label
-                                  htmlFor="edit_mcp_type"
-                                  className="text-right"
-                                >
-                                  {t('config.mcp.mcpTypeLabel')}
-                                </Label>
-                                <Select
-                                  value={editingConfig?.type || 'streamable_http'}
-                                  onValueChange={(value) =>
-                                    setEditingConfig((prev) =>
-                                      prev ? { ...prev, type: value } : prev
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger className="col-span-3">
-                                    <SelectValue placeholder={t('config.mcp.mcpTypePlaceholder')} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="streamable_http">
-                                      <span suppressHydrationWarning>{t('config.mcp.streamableHttp')}</span>
-                                    </SelectItem>
-                                    <SelectItem value="sse">
-                                      <span suppressHydrationWarning>{t('config.mcp.sse')}</span>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="grid grid-cols-7 items-center gap-4">
-                                <Label
-                                  htmlFor="edit_mcp_auth_token"
-                                  className="text-right col-span-2"
-                                >
-                                  {t('config.mcp.bearerToken')}
-                                </Label>
-                                <Input
-                                  id="edit_mcp_auth_token"
-                                  type="password"
-                                  value={
-                                    editingConfig?.auth_token || ''
-                                  }
-                                  onChange={handleEditInputChange}
-                                  className="col-span-5"
-                                />
-                              </div>
-                              <div className="grid grid-cols-4 items-center gap-4">
-                                <Label
-                                  htmlFor="edit_mcp_enabled"
-                                  className="text-right"
-                                >
-                                  {t('config.mcp.isEnabled')}
-                                </Label>
-                                <Checkbox
-                                  id="edit_mcp_enabled"
-                                  checked={editingConfig?.enabled || false}
-                                  onCheckedChange={(checkedState) => {
-                                    const isChecked = checkedState === true;
-                                    handleEditInputChangeCheckbox(
-                                      isChecked,
-                                      'edit_mcp_enabled',
-                                    );
-                                  }}
-                                  className="col-span-3"
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button
-                                onClick={updatedMCP}
-                                type="submit"
-                                disabled={isEditLoading}
-                              >
-                                {isEditLoading ? t('config.mcp.submitting') : t('config.mcp.editButton')}
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-
-                        <button
-                          onClick={() => removeMCP(config.id)}
-                          className="text-red-500 hover:text-red-700 px-4 py-1"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          <SettingsIcon className="w-10 h-6 text-gray-400 mb-4" />
-          <p className="text-gray-500 mt-1">{t('config.mcp.clickToAddNew')}</p>
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button className="mt-4 px-4 py-2 text-white rounded-lg transition-colors">
-                {t('config.mcp.addMcp')}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>{t('config.mcp.addMcp')}</DialogTitle>
-                <DialogDescription>
-                  {t('config.mcp.addDialogDesc')}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="mcp_name" className="text-right">
-                    {t('config.mcp.mcpNameLabel')}
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="mcp_name"
-                    placeholder="MCP"
-                    value={addFormData.name}
-                    onChange={handleInputChange}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="mcp_url" className="text-right">
-                    {t('config.mcp.mcpUrlLabel')}
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="mcp_url"
-                    placeholder="URL"
-                    value={addFormData.url}
-                    onChange={handleInputChange}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="mcp_type" className="text-right">
-                    {t('config.mcp.mcpTypeLabel')}
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <Select
-                    value={addFormData.type}
-                    onValueChange={(value) =>
-                      setAddFormData((prev) => ({ ...prev, type: value }))
-                    }
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder={t('config.mcp.mcpTypePlaceholder')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="streamable_http">
-                        <span suppressHydrationWarning>{t('config.mcp.streamableHttp')}</span>
-                      </SelectItem>
-                      <SelectItem value="sse">
-                        <span suppressHydrationWarning>{t('config.mcp.sse')}</span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-7 items-center gap-4">
-                  <Label
-                    htmlFor="mcp_auth_token"
-                    className="text-right col-span-2"
-                  >
-                    {t('config.mcp.bearerToken')}
-                  </Label>
-                  <Input
-                    id="mcp_auth_token"
-                    type="password"
-                    placeholder={t('config.mcp.bearerTokenPlaceholder')}
-                    value={addFormData.auth_token}
-                    onChange={handleInputChange}
-                    className="col-span-5"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="mcp_enabled" className="text-right">
-                    {t('config.mcp.defaultEnabled')}
-                  </Label>
-                  <Checkbox
-                    id="mcp_enabled"
-                    checked={addFormData.enabled}
-                    onCheckedChange={(checked) => 
-                      setAddFormData(prev => ({ ...prev, enabled: checked === true }))
-                    }
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={addMCP} type="submit" disabled={isLoading}>
-                  {isLoading ? t('config.mcp.submitting') : t('config.mcp.addButton')}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+    <div id="mcp" className="settings-page">
+      <div className="settings-page-header">
+        <h1 className="page-title">
+          MCP <span className="text-xs text-muted-foreground font-normal ml-1">· {mcpconfigs.length}</span>
+        </h1>
+        <Button size="sm" onClick={() => { setAddFormData(emptyForm); setIsAddOpen(true); }}>
+          <Plus className="w-4 h-4" />
+          {t('config.mcp.addMcp')}
+        </Button>
       </div>
+
+      <div className="settings-page-content">
+        {mcploading ? (
+          <div className="py-12 text-center">
+            <p className="text-sm text-muted-foreground">{t('config.mcp.loading')}</p>
+          </div>
+        ) : mcpconfigs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <PlugZap className="w-12 h-12 text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground mb-3">{t('config.mcp.noMcp')}</p>
+            <Button size="sm" variant="outline" onClick={() => { setAddFormData(emptyForm); setIsAddOpen(true); }}>
+              <Plus className="w-4 h-4" />
+              {t('config.mcp.addMcp')}
+            </Button>
+          </div>
+        ) : (
+          <Table className="table-modern w-full border rounded-md overflow-hidden">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[20%]">{t('config.mcp.mcpName')}</TableHead>
+                <TableHead>{t('config.mcp.mcpUrl')}</TableHead>
+                <TableHead className="w-[140px]">{t('config.mcp.mcpType')}</TableHead>
+                <TableHead className="w-[90px] text-center">{t('config.mcp.isEnabled')}</TableHead>
+                <TableHead className="w-[60px] text-right pr-4">{t('config.mcp.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {mcpconfigs.map((config) => (
+                <TableRow key={config.id}>
+                  <TableCell className="font-medium text-sm">{config.name || ''}</TableCell>
+                  <TableCell className="text-xs font-mono text-muted-foreground truncate max-w-0">
+                    <span title={config.url}>{config.url || ''}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="badge-tech text-[10.5px] py-0">{config.type || ''}</Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Switch
+                      checked={config.enabled}
+                      onCheckedChange={() => handleToggleEnabled(config.id, config.enabled)}
+                    />
+                  </TableCell>
+                  <TableCell className="text-right pr-2">
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="icon-action-btn" aria-label="More">
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="menu-compact">
+                        <DropdownMenuItem onSelect={() => handleEditClick(config)}>
+                          <Edit />
+                          {t('common.edit') || 'Edit'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={() => removeMCP(config.id)}
+                        >
+                          <TrashIcon />
+                          {t('common.delete') || 'Delete'}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+
+      {/* Add Dialog */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PlugZap className="w-4 h-4 text-primary" />
+              {t('config.mcp.addMcp')}
+            </DialogTitle>
+            <DialogDescription>{t('config.mcp.addDialogDesc')}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label htmlFor="mcp_name" className="form-label">
+                {t('config.mcp.mcpNameLabel')}<span className="required">*</span>
+              </label>
+              <Input
+                id="mcp_name"
+                placeholder="MCP"
+                value={addFormData.name}
+                onChange={(e) => setAddFormData((p) => ({ ...p, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="mcp_url" className="form-label">
+                {t('config.mcp.mcpUrlLabel')}<span className="required">*</span>
+              </label>
+              <Input
+                id="mcp_url"
+                placeholder="URL"
+                value={addFormData.url}
+                onChange={(e) => setAddFormData((p) => ({ ...p, url: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="mcp_type" className="form-label">
+                {t('config.mcp.mcpTypeLabel')}<span className="required">*</span>
+              </label>
+              <Select
+                value={addFormData.type}
+                onValueChange={(v) => setAddFormData((p) => ({ ...p, type: v }))}
+              >
+                <SelectTrigger id="mcp_type">
+                  <SelectValue placeholder={t('config.mcp.mcpTypePlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="streamable_http">
+                    <span suppressHydrationWarning>{t('config.mcp.streamableHttp')}</span>
+                  </SelectItem>
+                  <SelectItem value="sse">
+                    <span suppressHydrationWarning>{t('config.mcp.sse')}</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="mcp_auth_token" className="form-label">
+                {t('config.mcp.bearerToken')}
+              </label>
+              <Input
+                id="mcp_auth_token"
+                type="password"
+                placeholder={t('config.mcp.bearerTokenPlaceholder')}
+                value={addFormData.auth_token}
+                onChange={(e) => setAddFormData((p) => ({ ...p, auth_token: e.target.value }))}
+              />
+            </div>
+            <div className="form-row-inline">
+              <div className="form-row-inline-label">
+                <span className="title">{t('config.mcp.defaultEnabled')}</span>
+                <span className="hint">启用后可在对话中使用</span>
+              </div>
+              <Switch
+                checked={addFormData.enabled}
+                onCheckedChange={(v) => setAddFormData((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+              {t('common.cancel') || 'Cancel'}
+            </Button>
+            <Button onClick={addMCP} disabled={isLoading}>
+              {isLoading ? t('config.mcp.submitting') : t('config.mcp.addButton')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PlugZap className="w-4 h-4 text-primary" />
+              {t('config.mcp.editMcp')}
+            </DialogTitle>
+            <DialogDescription>{t('config.mcp.editDialogDesc')}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label htmlFor="edit_mcp_name" className="form-label">
+                {t('config.mcp.mcpNameLabel')}
+              </label>
+              <Input
+                id="edit_mcp_name"
+                value={editingConfig?.name || ''}
+                onChange={(e) =>
+                  setEditingConfig((prev) => (prev ? { ...prev, name: e.target.value } : prev))
+                }
+              />
+            </div>
+            <div>
+              <label htmlFor="edit_mcp_url" className="form-label">
+                {t('config.mcp.mcpUrlLabel')}
+              </label>
+              <Input
+                id="edit_mcp_url"
+                value={editingConfig?.url || ''}
+                onChange={(e) =>
+                  setEditingConfig((prev) => (prev ? { ...prev, url: e.target.value } : prev))
+                }
+              />
+            </div>
+            <div>
+              <label htmlFor="edit_mcp_type" className="form-label">
+                {t('config.mcp.mcpTypeLabel')}
+              </label>
+              <Select
+                value={editingConfig?.type || 'streamable_http'}
+                onValueChange={(v) =>
+                  setEditingConfig((prev) => (prev ? { ...prev, type: v } : prev))
+                }
+              >
+                <SelectTrigger id="edit_mcp_type">
+                  <SelectValue placeholder={t('config.mcp.mcpTypePlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="streamable_http">
+                    <span suppressHydrationWarning>{t('config.mcp.streamableHttp')}</span>
+                  </SelectItem>
+                  <SelectItem value="sse">
+                    <span suppressHydrationWarning>{t('config.mcp.sse')}</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="edit_mcp_auth_token" className="form-label">
+                {t('config.mcp.bearerToken')}
+              </label>
+              <Input
+                id="edit_mcp_auth_token"
+                type="password"
+                value={editingConfig?.auth_token || ''}
+                onChange={(e) =>
+                  setEditingConfig((prev) =>
+                    prev ? { ...prev, auth_token: e.target.value } : prev,
+                  )
+                }
+              />
+            </div>
+            <div className="form-row-inline">
+              <div className="form-row-inline-label">
+                <span className="title">{t('config.mcp.isEnabled')}</span>
+              </div>
+              <Switch
+                checked={editingConfig?.enabled || false}
+                onCheckedChange={(v) =>
+                  setEditingConfig((prev) => (prev ? { ...prev, enabled: v } : prev))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              {t('common.cancel') || 'Cancel'}
+            </Button>
+            <Button onClick={updatedMCP} disabled={isEditLoading}>
+              {isEditLoading ? t('config.mcp.submitting') : t('config.mcp.editButton')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

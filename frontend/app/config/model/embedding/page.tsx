@@ -7,19 +7,20 @@ import {
   AlertCircleIcon,
   Loader2,
   CheckCircle,
+  Plus,
+  Layers,
+  MoreHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardFooter,
-} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmbeddingModelDialog, EmbConfig } from '@/app/config/model/embedding/modelDialog';
-import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 
@@ -40,13 +41,7 @@ export default function EmbConfigPage() {
 
   const [editEmbConfig, setEditEmbConfig] = useState<EmbConfig>(newembconfig);
   const [embconfigs, setEmbConfigs] = useState<EmbConfig[]>([]);
-  const [modelloading, setModelLoading] = useState(true);
-  const [modelerror, setModelError] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const modelSizePerPage = 8;
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -55,207 +50,189 @@ export default function EmbConfigPage() {
   useEffect(() => {
     const fetchModelConfigs = async () => {
       try {
-        const res = await tenantFetch(
-          `/api/config/embeddings?page=${page}&size=${modelSizePerPage}`,
-        );
+        const res = await tenantFetch(`/api/config/embeddings?page=1&size=100`);
         if (!res.ok) throw new Error(t('config.model.fetchModelListFailed'));
         const json_data = await res.json();
-        const data = json_data.data.items;
-        setEmbConfigs(data);
-        setTotalPages(json_data.data.pages);
+        setEmbConfigs(json_data.data.items || []);
       } catch (err: any) {
-        setModelError(err || t('config.model.loadFailed'));
-      } finally {
-        setModelLoading(false);
+        // swallow
       }
     };
     fetchModelConfigs();
-  }, [page, embconfigs.length, isEditOpen]);
+  }, [embconfigs.length, isEditOpen]);
 
-  const handleCreateSuccess = (llmConfig: EmbConfig) => {
-    setEmbConfigs((prev) => [...prev, llmConfig]);
-    console.log(t('config.model.createModelSuccess'), llmConfig);
+  const handleCreateSuccess = (config: EmbConfig) => {
+    setEmbConfigs((prev) => [...prev, config]);
     setEditEmbConfig(newembconfig);
   };
 
-  const handleSaveSuccess = (llmConfig: EmbConfig) => {
-    setEmbConfigs((prev) =>
-      prev.map((config) => (config.id === llmConfig.id ? llmConfig : config)),
-    );
-    console.log(t('config.model.editModelSuccess'), llmConfig);
+  const handleSaveSuccess = (config: EmbConfig) => {
+    setEmbConfigs((prev) => prev.map((c) => (c.id === config.id ? config : c)));
     setEditEmbConfig(newembconfig);
   };
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages) return;
-    setPage(newPage);
-  };
-
-  const removeModel = async (id: string, model_type: string) => {
+  const removeModel = async (id: string) => {
     setErrorMsg('');
     try {
-      console.log('removeModel: id: ', id, 'model_type: ', model_type);
-
-      const res = await tenantFetch(`/api/config/${model_type}/${id}`, {
+      const res = await tenantFetch(`/api/config/embeddings/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!res.ok) {
-        setErrorMsg(t('config.model.deleteModelFailed', { modelType: model_type }));
+        setErrorMsg(t('config.model.deleteModelFailed', { modelType: 'Embedding' }));
         return;
       }
-
-      // Delete success, update local state
-      if (model_type === 'embeddings') {
-        setEmbConfigs((prev) => prev.filter((config) => config.id !== id));
-      }
+      setEmbConfigs((prev) => prev.filter((config) => config.id !== id));
     } catch (err: any) {
       setErrorMsg(t('config.model.deleteFailed'));
     }
   };
 
-  return (
-    <div id="llm">
-      <div className="grid grid-cols-1 pb-8">
-        <Button
-          onClick={() => {
-            setIsCreateOpen(true);
-            setEditEmbConfig(newembconfig);
-          }}
-        >
-          {t('config.model.addEmbeddingModel')}
-        </Button>
-        <EmbeddingModelDialog
-          isAdd={isCreateOpen ? true : false}
-          isOpen={isEditOpen || isCreateOpen}
-          setIsOpen={(open: boolean) => {
-            if (!open) {
-              setEditEmbConfig(newembconfig);
-            }
-            setIsEditOpen(open);
-            setIsCreateOpen(open);
-          }}
-          embConfig={editEmbConfig || newembconfig}
-          onSaveSuccess={(emb: EmbConfig) => {
-            if (isCreateOpen) {
-              handleCreateSuccess(emb);
-            } else {
-              handleSaveSuccess(emb);
-            }
-          }}
-        />
-      </div>
-      {embconfigs.length > 0 ? (
-        <div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-            {embconfigs.map((emb) => (
-              <Card
-                key={emb.id}
-                className="flex flex-col border rounded-lg shadow-sm h-full pt-4 pb-2"
-              >
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {emb.is_default && (
-                        <Badge className="bg-red-100 text-red-800">{t('config.model.default')}</Badge>
-                      )}
-                      <Badge className="bg-yellow-100 text-yellow-800">
-                        {emb.model_name}
-                      </Badge>
-                      <Badge className="bg-blue-100 text-blue-800">
-                        {emb.type}
-                      </Badge>
-                      {emb.type === 'local' ? (
-                        <Badge
-                          className={
-                            emb.is_ready
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }
-                        >
-                          {emb.is_ready ? (
-                            <span className="inline-flex items-center">
-                              {' '}
-                              {t('config.model.available')}{' '}
-                              <CheckCircle className="h-3 w-3 text-green-500" />{' '}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center">
-                              {' '}
-                              {t('config.model.downloading')}{' '}
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            </span>
-                          )}
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-green-100 text-green-800">
-                          <span className="inline-flex items-center">
-                            {' '}
-                            {t('config.model.available')}{' '}
-                            <CheckCircle className="h-3 w-3 text-green-500" />{' '}
-                          </span>
-                        </Badge>
-                      )}
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 pb-0">
-                  <p className="truncate">{emb.model_id}</p>
-                  <p className="truncate text-xs text-muted-foreground pt-2">
-                    {emb.endpoint}
-                  </p>
-                </CardContent>
-                <CardFooter className="mt-auto pt-0 flex justify-end pb-0">
-                  <Button
-                    variant="link"
-                    onClick={() => removeModel(emb.id, 'embeddings')}
-                    className="text-sm text-primary text-red-600 hover:text-primary/80 underline-offset-4 hover:underline"
-                  >
-                    <TrashIcon className="ml-1" size={16} />
-                  </Button>
+  const openCreate = () => {
+    setIsCreateOpen(true);
+    setEditEmbConfig(newembconfig);
+  };
 
-                  <Button
-                    variant="link"
-                    className="text-sm text-primary text-blue-600 hover:text-primary/80 underline-offset-4 hover:underline"
-                    onClick={() => {
-                      setEditEmbConfig(emb);
-                      setIsEditOpen(true);
-                    }}
+  return (
+    <section id="embedding" className="section-panel">
+      {/* Section header */}
+      <div className="section-header">
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-primary" />
+          <h2 className="section-title">{t('config.model.tabEmbedding') || 'Embedding'}</h2>
+          <span className="text-xs text-muted-foreground">· {embconfigs.length}</span>
+        </div>
+        <Button size="sm" variant="outline" onClick={openCreate}>
+          <Plus className="w-4 h-4" />
+          Add
+        </Button>
+      </div>
+
+      <EmbeddingModelDialog
+        isAdd={isCreateOpen ? true : false}
+        isOpen={isEditOpen || isCreateOpen}
+        setIsOpen={(open: boolean) => {
+          if (!open) {
+            setEditEmbConfig(newembconfig);
+          }
+          setIsEditOpen(open);
+          setIsCreateOpen(open);
+        }}
+        embConfig={editEmbConfig || newembconfig}
+        onSaveSuccess={(emb: EmbConfig) => {
+          if (isCreateOpen) handleCreateSuccess(emb);
+          else handleSaveSuccess(emb);
+        }}
+      />
+
+      {embconfigs.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+          {embconfigs.map((emb) => (
+            <div key={emb.id} className="model-card group">
+              {/* Top-right corner: type badge + default + more menu */}
+              <div className="absolute top-3 right-3 flex items-center gap-2">
+                {emb.is_default && (
+                  <Badge className="badge-danger text-[10.5px] py-0">
+                    {t('config.model.default')}
+                  </Badge>
+                )}
+                <span className="type-corner-badge type-embedding">EMB</span>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="icon-action-btn" aria-label="More">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="menu-compact">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setEditEmbConfig(emb);
+                        setIsEditOpen(true);
+                      }}
+                    >
+                      <Edit />
+                      {t('common.edit') || 'Edit'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onSelect={() => removeModel(emb.id)}
+                    >
+                      <TrashIcon />
+                      {t('common.delete') || 'Delete'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="flex items-start gap-3 pr-28">
+                <div className="model-icon type-embedding shrink-0">{(emb.model_name || 'E').charAt(0)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate" title={emb.model_id}>
+                    {emb.model_id}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{emb.model_name}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge className="badge-tech text-[10.5px] py-0">{emb.type}</Badge>
+                {emb.type === 'local' ? (
+                  <Badge
+                    className={
+                      (emb.is_ready ? 'badge-success' : 'badge-neutral') +
+                      ' text-[10.5px] py-0'
+                    }
                   >
-                    <Edit className="ml-1" size={16} />
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-          <div className="flex justify-center items-center h-1/10 py-6">
-            <PaginationComponent
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-            />
-          </div>
+                    {emb.is_ready ? (
+                      <span className="inline-flex items-center gap-1">
+                        {t('config.model.available')}
+                        <CheckCircle className="h-3 w-3" />
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        {t('config.model.downloading')}
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      </span>
+                    )}
+                  </Badge>
+                ) : (
+                  <Badge className="badge-success text-[10.5px] py-0">
+                    <span className="inline-flex items-center gap-1">
+                      {t('config.model.available')}
+                      <CheckCircle className="h-3 w-3" />
+                    </span>
+                  </Badge>
+                )}
+              </div>
+
+              {emb.endpoint && (
+                <div className="endpoint-text" title={emb.endpoint}>
+                  {emb.endpoint}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       ) : (
-        <div className="flex justify-center items-center h-1/10 py-6">
-          <h3 className="text-lg font-medium text-gray-700 py-6">
-            {t('config.model.noModelsYet')}
-          </h3>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Layers className="w-10 h-10 text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">
+            暂无模型，点击右上角按钮添加
+          </p>
         </div>
       )}
-      <div className="block w-full">
-        {errorMsg !== '' && (
+
+      {errorMsg !== '' && (
+        <div className="block w-full mt-3">
           <Alert variant="destructive">
             <AlertCircleIcon />
             <AlertDescription>
               <p>{errorMsg}</p>
             </AlertDescription>
           </Alert>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </section>
   );
 }

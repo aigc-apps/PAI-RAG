@@ -3,9 +3,9 @@
 import { Button } from '@/components/ui/button';
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { ExternalLink } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 
@@ -15,25 +15,18 @@ export default function TracingConfig() {
   const [token, setToken] = useState('');
   const [serviceName, setServiceName] = useState('');
   const [traceEnabled, setTraceEnabled] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
   const [error, setError] = useState('');
-
   const { tenantFetch } = useTenantFetch();
-  // Initialize and load configuration
+
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        setIsLoading(true);
-
         const res = await tenantFetch(`/api/config/trace`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
-
         if (!res.ok) throw new Error(t('config.loadError'));
-
         const data = (await res.json()).data;
         setEndpoint(data['endpoint'] || '');
         setToken(data['token'] || '');
@@ -41,14 +34,11 @@ export default function TracingConfig() {
         setTraceEnabled(data['enabled'] || false);
       } catch (err: any) {
         toast.error(err.message);
-      } finally {
-        setIsLoading(false);
       }
     };
-
     fetchConfig();
   }, []);
-  // Save configuration
+
   const handleSave = async () => {
     if (!endpoint || !token || !serviceName) {
       setError(t('config.tracing.fieldsRequired'));
@@ -57,7 +47,6 @@ export default function TracingConfig() {
     try {
       setIsSaving(true);
       setError('');
-
       const res = await tenantFetch(`/api/config/trace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,95 +57,97 @@ export default function TracingConfig() {
           enabled: traceEnabled,
         }),
       });
-
       if (!res.ok) throw new Error(t('config.tracing.saveFailed'));
-
       toast.success(t('config.tracing.saveSuccess'));
     } catch (err: any) {
-        toast.error(err.message);
+      toast.error(err.message);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div id="tracing">
-      <div
-        className={
-          'transition-colors rounded-lg p-4 overflow-hidden duration-200'
-        }
-      >
-        <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-          <h2 className="text-xl font-medium text-gray-800">
-            {t('config.tracing.aliyunTracingConfig')}
-          </h2>
-          <a
-            href="https://help.aliyun.com/zh/opentelemetry/quick-start?spm=a2c4g.11186623.help-menu-90275.d_1.15c45dc7tG5ukV#prereq-3jq-3as-xo9"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline text-sm"
-          >
-            {t('config.tracing.howToGetInfo')}
-          </a>
+    <div id="tracing" className="settings-page">
+      <div className="settings-page-header">
+        <h1 className="page-title">{t('config.tracing.aliyunTracingConfig')}</h1>
+        <Button size="sm" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? t('config.tracing.saving') : t('config.tracing.saveTracingConfig')}
+        </Button>
+      </div>
 
-          <div className="grid gap-4 py-4 max-w-xl w-full mx-auto">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="endpoint">{t('config.tracing.endpoint')}</Label>
-              <div className="col-span-3 flex items-center">
+      <div className="settings-page-content">
+        <div className="space-y-6">
+          <div>
+            <a
+              href="https://help.aliyun.com/zh/opentelemetry/quick-start?spm=a2c4g.11186623.help-menu-90275.d_1.15c45dc7tG5ukV#prereq-3jq-3as-xo9"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+            >
+              {t('config.tracing.howToGetInfo')}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          <div>
+            <div className="dialog-section-title mb-2">OpenTelemetry 端点</div>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="endpoint" className="form-label">
+                  {t('config.tracing.endpoint')}
+                  <span className="required">*</span>
+                </label>
                 <Input
                   id="endpoint"
                   value={endpoint}
                   onChange={(e) => setEndpoint(e.target.value)}
                   placeholder={t('config.tracing.endpointPlaceholder')}
-                  className="col-span-3"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="token">Token</Label>
-              <div className="col-span-3 flex items-center">
+
+              <div>
+                <label htmlFor="token" className="form-label">
+                  Token<span className="required">*</span>
+                </label>
                 <Input
                   id="token"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
                   placeholder={t('config.tracing.tokenPlaceholder')}
-                  className="col-span-3"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="serivceName">{t('config.tracing.serviceName')}</Label>
-              <div className="col-span-3 flex items-center">
+
+              <div>
+                <label htmlFor="serivceName" className="form-label">
+                  {t('config.tracing.serviceName')}
+                  <span className="required">*</span>
+                </label>
                 <Input
                   id="serivceName"
                   value={serviceName}
                   onChange={(e) => setServiceName(e.target.value)}
                   placeholder={t('config.tracing.serviceNamePlaceholder')}
-                  className="col-span-3"
                 />
               </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="traceEnabled">{t('config.tracing.isEnabled')}</Label>
-              <Checkbox
+          </div>
+
+          <div>
+            <div className="dialog-section-title mb-2">追踪开关</div>
+            <div className="form-row-inline">
+              <div className="form-row-inline-label">
+                <span className="title">{t('config.tracing.isEnabled')}</span>
+                <span className="hint">开启后系统请求将上报至配置的 OpenTelemetry Endpoint</span>
+              </div>
+              <Switch
                 id="traceEnabled"
                 checked={traceEnabled || false}
-                onCheckedChange={(checkedState) => {
-                  const isChecked = checkedState === true;
-                  setTraceEnabled(isChecked);
-                }}
-                className="col-span-3"
+                onCheckedChange={(v) => setTraceEnabled(v === true)}
               />
             </div>
           </div>
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="mt-4 px-4 py-2 text-white rounded-lg transition-colors"
-          >
-            {isSaving ? t('config.tracing.saving') : t('config.tracing.saveTracingConfig')}
-          </Button>
-          {error && <p className="text-red-500 mt-2">{error}</p>}
+
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
       </div>
     </div>

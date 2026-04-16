@@ -415,7 +415,7 @@ export default function KnowledgeBaseFileChunksPage(
             <div className="gap-1 px-3 py-0 w-full">
               <div className="grid grid-cols-4 items-center gap-2">
                 {kbfilechunks.map((chunk) => (
-                  <Card key={chunk.id} className="h-70 px-0 pt-3 pb-1 gap-2 group relative">
+                  <Card key={chunk.id} className="h-70 px-0 pt-3 pb-1 gap-2 group relative chunk-card">
                     <CardHeader>
                       <CardTitle className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
