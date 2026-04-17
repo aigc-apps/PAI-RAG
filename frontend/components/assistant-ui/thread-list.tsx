@@ -97,17 +97,15 @@ const ThreadListItem: FC = () => {
   const createdAt = useThreadCreatedAt(remoteId);
 
   return (
-    <ThreadListItemPrimitive.Root className="group/thread data-[active]:bg-muted hover:bg-muted focus-visible:bg-muted focus-visible:ring-ring flex items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2">
+    <ThreadListItemPrimitive.Root
+      className="group/thread data-[active]:bg-muted hover:bg-muted focus-visible:bg-muted focus-visible:ring-ring flex items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2"
+      title={createdAt ? formatFriendlyTime(createdAt) : undefined}
+    >
       <ThreadListItemPrimitive.Trigger
         className="flex-1 min-w-0 pl-1.5 pr-1 py-1 text-start"
         onClick={() => router.push('/')}
       >
         <ThreadListItemTitle />
-        {createdAt && (
-          <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-            {formatFriendlyTime(createdAt)}
-          </p>
-        )}
       </ThreadListItemPrimitive.Trigger>
       <ThreadListItemDelete />
     </ThreadListItemPrimitive.Root>
@@ -117,7 +115,10 @@ const ThreadListItem: FC = () => {
 const ThreadListItemTitle: FC = () => {
   const { t } = useI18n();
   return (
-    <p className="text-xs truncate leading-tight" suppressHydrationWarning>
+    <p
+      className="text-[12px] truncate leading-tight text-sidebar-foreground/90"
+      suppressHydrationWarning
+    >
       <ThreadListItemPrimitive.Title fallback={t('chat.threadList.newSession')} />
     </p>
   );
@@ -128,7 +129,7 @@ const ThreadListItemDelete: FC = () => {
   return (
     <ThreadListItemPrimitive.Delete asChild>
       <TooltipIconButton
-        className="shrink-0 h-5 w-5 mr-0.5 p-0 text-muted-foreground/60 hover:text-destructive opacity-0 group-hover/thread:opacity-100 transition-opacity"
+        className="shrink-0 h-5 w-5 mr-0.5 p-0 text-sidebar-foreground/40 hover:text-destructive opacity-0 group-hover/thread:opacity-100 transition-opacity"
         variant="ghost"
         tooltip={t('chat.threadList.deleteThread')}
       >

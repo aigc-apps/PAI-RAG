@@ -11,7 +11,8 @@ import { KnowledgeBase } from '@/app/knowledgebases/page';
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { useI18n } from '@/app/providers/i18n';
-import { BookOpen, Check, Loader2 } from 'lucide-react';
+import { BookOpen, Check } from 'lucide-react';
+import { Loading } from '@/components/ui/loading';
 
 export class KbSelection implements KnowledgeBase {
   id: string;
@@ -90,9 +91,8 @@ export const KbModal: FC<KbModalProps> = ({
 
         <div className="max-h-[360px] overflow-y-auto p-2 space-y-0.5">
           {isLoading ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {t('common.loading')}
+            <div className="flex items-center justify-center py-8">
+              <Loading size="sm" />
             </div>
           ) : error ? (
             <p className="text-xs text-destructive text-center py-6">{error}</p>

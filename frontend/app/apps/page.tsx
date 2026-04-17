@@ -9,16 +9,7 @@ import {
 import { Plus, Trash2, MoreHorizontal, Pencil, Clock, AppWindow } from 'lucide-react';
 import { PaginationComponent } from '@/components/customized/pagination/pagination-component';
 import { formatBeijingTime } from '../knowledgebases/utils/utils';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 import { HeaderPortal } from '@/components/header-portal';
+import { PageLoading } from '@/components/ui/loading';
 
 const ChatbotPage = () => {
   const { t } = useI18n();
@@ -110,9 +102,7 @@ const ChatbotPage = () => {
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-5">
           {loading ? (
-            <div className="text-center py-16 text-sm text-muted-foreground">
-              {t('common.loading')}
-            </div>
+            <PageLoading />
           ) : chatbots.length === 0 ? (
             <div className="empty-state mt-8">
               <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -156,7 +146,11 @@ const ChatbotPage = () => {
                           ID · {bot.id.slice(0, 8)}
                         </p>
                       </div>
-                      <div data-stop-click className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div
+                        data-stop-click
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -178,7 +172,11 @@ const ChatbotPage = () => {
                             <DropdownMenuItem
                               onSelect={(e) => {
                                 e.preventDefault();
-                                setDeleteTarget(bot);
+                                // Defer opening the dialog so DropdownMenu
+                                // finishes its close/focus cleanup first —
+                                // otherwise Radix leaves body.style.pointerEvents
+                                // stuck at 'none' and the page freezes.
+                                setTimeout(() => setDeleteTarget(bot), 0);
                               }}
                               className="text-destructive focus:text-destructive"
                             >
@@ -221,33 +219,16 @@ const ChatbotPage = () => {
       )}
 
       {/* Delete confirmation */}
-      <AlertDialog
+      <ConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('apps.deleteConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('apps.deleteConfirmMessage')}
-              {deleteTarget && (
-                <span className="block mt-2 font-medium text-foreground">
-                  {deleteTarget.app_id}
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteTarget && deleteChatbot(deleteTarget.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={t('apps.deleteConfirmTitle')}
+        description={t('apps.deleteConfirmMessage')}
+        target={deleteTarget ? { label: 'App', value: deleteTarget.app_id } : undefined}
+        onConfirm={() => {
+          if (deleteTarget) deleteChatbot(deleteTarget.id);
+        }}
+      />
     </div>
   );
 };

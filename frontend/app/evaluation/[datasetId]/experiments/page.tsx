@@ -21,10 +21,10 @@ import {
   BookOpen,
   BarChart2,
   Trash2,
-  Loader2,
   Clock,
   CheckCircle2,
 } from 'lucide-react';
+import { PageLoading } from '@/components/ui/loading';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -81,10 +81,7 @@ export default function EvalExperimentsDetailsPage({
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-3">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t('evaluation.loadingExperiments')}
-          </div>
+          <PageLoading label={t('evaluation.loadingExperiments')} />
         ) : experiments.length === 0 ? (
           <div className="empty-state mt-8">
             <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -136,7 +133,11 @@ export default function EvalExperimentsDetailsPage({
                     router.push(`/evaluation/${datasetId}/experiments/${item.id}`);
                   }}>
                     <TableCell className="pl-4">
-                      <div className="flex items-center gap-1" data-stop-click>
+                      <div
+                        className="flex items-center gap-1"
+                        data-stop-click
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
                           type="button"
                           className="text-xs font-mono text-primary hover:underline truncate max-w-[110px]"
@@ -211,7 +212,11 @@ export default function EvalExperimentsDetailsPage({
                       )}
                     </TableCell>
 
-                    <TableCell className="text-right pr-3" data-stop-click>
+                    <TableCell
+                      className="text-right pr-3"
+                      data-stop-click
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -224,16 +229,26 @@ export default function EvalExperimentsDetailsPage({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="menu-compact">
                           <DropdownMenuItem
-                            onClick={() =>
-                              router.push(`/evaluation/${datasetId}/experiments/${item.id}`)
-                            }
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              setTimeout(
+                                () =>
+                                  router.push(
+                                    `/evaluation/${datasetId}/experiments/${item.id}`,
+                                  ),
+                                0,
+                              );
+                            }}
                           >
                             <Eye />
                             {t('evaluation.viewDetails')}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => deleteExperiment(item.id)}
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              setTimeout(() => deleteExperiment(item.id), 0);
+                            }}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 />

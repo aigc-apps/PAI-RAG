@@ -16,8 +16,8 @@ import { HologresConfig, HologresForm } from "./forms/hologres";
 import { OpensearchConfig, OpensearchForm } from "./forms/opensearch";
 import { TablestoreConfig, TablestoreForm } from "./forms/tablestore";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/loading";
+import { PageLoading } from "@/components/ui/loading";
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 
@@ -163,7 +163,7 @@ export default function VectorDBConsole() {
           <Button size="sm" variant="outline" onClick={testConnection} disabled={connectionTesting}>
             {connectionTesting ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Spinner size="sm" className="mr-1" />
                 {t('config.vectordb.testing')}
               </>
             ) : (
@@ -178,7 +178,7 @@ export default function VectorDBConsole() {
 
       <div className="settings-page-content">
         {loading ? (
-          <Skeleton className="h-12 w-12 rounded-full" />
+          <PageLoading />
         ) : (
           <div className="space-y-6">
             <div>

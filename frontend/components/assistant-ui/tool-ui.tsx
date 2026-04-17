@@ -10,9 +10,9 @@ import {
   BookCheckIcon,
   Code2,
   ChevronRight,
-  Loader2,
   AlertCircle,
 } from 'lucide-react';
+import { Spinner } from '@/components/ui/loading';
 import { Badge } from '@/components/ui/badge';
 import { PhotoProvider, PhotoView } from 'react-photo-view';
 import { MarkdownRenderer } from '@/components/customized/markdown/markdown';
@@ -64,7 +64,7 @@ const RunningBubble: FC<{
   detail?: string;
 }> = ({ icon, label, detail }) => (
   <div className="my-1 inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-[11px] text-muted-foreground">
-    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+    <Spinner size="sm" />
     {icon}
     <span>{label}</span>
     {detail !== undefined && detail !== '' && (
@@ -722,7 +722,7 @@ export const PythonInterpreterToolUI = makeAssistantToolUI<PythonInterpreterArgs
           className="w-full flex items-center gap-1.5 px-2 py-1.5 hover:bg-muted/60 transition-colors text-left"
         >
           {isRunning ? (
-            <Loader2 className="w-3 h-3 animate-spin text-primary shrink-0" />
+            <Spinner size="sm" />
           ) : (
             <ChevronRight
               className={`w-3 h-3 text-muted-foreground shrink-0 transition-transform ${

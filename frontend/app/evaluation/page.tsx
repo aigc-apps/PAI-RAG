@@ -19,16 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 import { HeaderPortal } from '@/components/header-portal';
+import { PageLoading } from '@/components/ui/loading';
 
 interface Dataset {
   id: string;
@@ -220,9 +212,7 @@ const EvaluationPage = () => {
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-5">
           {loading ? (
-            <div className="text-center py-16 text-sm text-muted-foreground">
-              {t('common.loading')}
-            </div>
+            <PageLoading />
           ) : datasets.length === 0 ? (
             <div className="empty-state mt-8">
               <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -321,7 +311,11 @@ const EvaluationPage = () => {
                             {formatBeijingTime(dataset.created_at)}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right pr-3" data-stop-click>
+                        <TableCell
+                          className="text-right pr-3"
+                          data-stop-click
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -345,7 +339,7 @@ const EvaluationPage = () => {
                                   <DropdownMenuItem
                                     onSelect={(e) => {
                                       e.preventDefault();
-                                      setDeleteTarget(dataset);
+                                      setTimeout(() => setDeleteTarget(dataset), 0);
                                     }}
                                     className="text-destructive focus:text-destructive"
                                   >
@@ -378,33 +372,16 @@ const EvaluationPage = () => {
       )}
 
       {/* Delete confirmation */}
-      <AlertDialog
+      <ConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('evaluation.deleteConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('evaluation.deleteConfirmMessage')}
-              {deleteTarget && (
-                <span className="block mt-2 font-medium text-foreground">
-                  {deleteTarget.name}
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteTarget && deleteEval(deleteTarget.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={t('evaluation.deleteConfirmTitle')}
+        description={t('evaluation.deleteConfirmMessage')}
+        target={deleteTarget ? { label: 'Dataset', value: deleteTarget.name } : undefined}
+        onConfirm={() => {
+          if (deleteTarget) deleteEval(deleteTarget.id);
+        }}
+      />
     </div>
   );
 };

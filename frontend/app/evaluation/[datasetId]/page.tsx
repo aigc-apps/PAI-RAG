@@ -23,6 +23,7 @@ import RunConfigsPage from '@/app/evaluation/[datasetId]/runconfigs/page';
 import EvaluatorConfigsPage from '@/app/evaluation/[datasetId]/evalconfigs/page';
 import { EvalConfig } from '@/app/evaluation/[datasetId]/types';
 import { HeaderPortal } from '@/components/header-portal';
+import { PageLoading } from '@/components/ui/loading';
 
 type EvalView = 'datasets' | 'experiments' | 'runconfigs' | 'evalconfigs';
 
@@ -59,11 +60,7 @@ export default function EvalExpDetailsPage({
   }, [datasetId, t]);
 
   if (!evaluation) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground" suppressHydrationWarning>
-        {t('evaluation.loading')}
-      </div>
-    );
+    return <PageLoading className="h-full" label={t('evaluation.loading')} />;
   }
 
   return (

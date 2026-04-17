@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'; // shadcn/ui 容器组
 import { ScrollArea } from '@/components/ui/scroll-area'; // 滚动区域支持 [[9]]
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
+import { PageLoading } from '@/components/ui/loading';
 
 export function JsonlViewer({ file_url }: { file_url: string }) {
   const { t } = useI18n();
@@ -37,7 +38,7 @@ export function JsonlViewer({ file_url }: { file_url: string }) {
     fetchData();
   }, [file_url, tenantFetch]);
 
-  if (loading) return <div>{t('common.loading')}</div>;
+  if (loading) return <PageLoading />;
   if (error)
     return (
       <div className="text-red-500">

@@ -7,7 +7,6 @@ import {
   Trash2,
   MoreHorizontal,
   Hash,
-  Loader2,
   FileText,
   Save,
 } from 'lucide-react';
@@ -35,16 +34,7 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +47,7 @@ import { useRouter } from 'next/navigation';
 import { htmlRender } from '@/app/knowledgebases/[kbId]/viewer/htmlRender';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { HeaderPortal } from '@/components/header-portal';
+import { PageLoading, Loading, Spinner } from '@/components/ui/loading';
 
 interface KnowledgeBase {
   id: string;
@@ -187,7 +178,7 @@ export default function KnowledgeBaseFileChunksPage({
   }, [page, fileId, kbId, tenantFetch]);
 
   if (!knowledgebase || !kbfile) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
+    return <PageLoading className="h-full" />;
   }
 
   const handlePageChange = (newPage: number) => {
@@ -336,10 +327,7 @@ export default function KnowledgeBaseFileChunksPage({
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-4">
           {kbfilechunksloading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('common.loading')}
-            </div>
+            <PageLoading />
           ) : kbfilechunks.length === 0 ? (
             <div className="empty-state mt-8">
               <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -494,7 +482,7 @@ export default function KnowledgeBaseFileChunksPage({
             >
               {isAdding ? (
                 <>
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  <Spinner size="sm" className="mr-1" />
                   {t('common.saving')}
                 </>
               ) : (
@@ -509,35 +497,19 @@ export default function KnowledgeBaseFileChunksPage({
       </Dialog>
 
       {/* Delete confirm */}
-      <AlertDialog
+      <ConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(o) => {
-          if (!o) {
-            setDeleteTarget(null);
-            setTimeout(() => {
-              document.body.style.pointerEvents = '';
-            }, 0);
-          }
-        }}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={t('knowledgebase.confirmDeleteChunk')}
+        description={t('knowledgebase.deleteChunkHint') || undefined}
+        onConfirm={confirmDelete}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('knowledgebase.confirmDeleteChunk')}</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs">
-              {deleteTarget?.text?.slice(0, 80)}...
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {deleteTarget?.text && (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[11px] font-mono text-foreground/80 leading-relaxed max-h-[80px] overflow-hidden line-clamp-3">
+            {deleteTarget.text}
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

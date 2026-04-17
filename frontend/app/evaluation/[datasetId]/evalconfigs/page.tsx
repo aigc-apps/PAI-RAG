@@ -27,9 +27,9 @@ import {
   Pencil,
   Trash2,
   ClipboardCheck,
-  Loader2,
   MoreHorizontal,
 } from 'lucide-react';
+import { PageLoading } from '@/components/ui/loading';
 import { EvalConfigFormDialog } from '@/app/evaluation/components/evalconfig-form-dialog';
 import { EvaluatorConfig } from '@/app/evaluation/[datasetId]/types';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
@@ -186,10 +186,7 @@ export default function EvaluatorConfigsPage({
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t('evaluation.loadingConfigs')}
-          </div>
+          <PageLoading label={t('evaluation.loadingConfigs')} />
         ) : evaluatorConfigs.length === 0 ? (
           <div className="empty-state mt-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">

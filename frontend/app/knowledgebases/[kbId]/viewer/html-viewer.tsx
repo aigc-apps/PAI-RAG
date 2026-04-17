@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/app/providers/i18n';
+import { PageLoading } from '@/components/ui/loading';
 export function HtmlViewer({ file_url }: { file_url: string }) {
   const { t } = useI18n();
   const [htmlContent, setHtmlContent] = useState('');
@@ -28,7 +29,7 @@ export function HtmlViewer({ file_url }: { file_url: string }) {
     fetchHtml();
   }, [file_url]);
 
-  if (loading) return <div>{t('common.loading')}</div>;
+  if (loading) return <PageLoading />;
   if (error)
     return (
       <div className="text-red-500">

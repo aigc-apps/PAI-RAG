@@ -34,6 +34,8 @@ import { Slider } from '@/components/ui/slider';
 import { Plus, Edit, Trash2, Settings, HelpCircle, Upload, MessageSquareQuote, FileQuestion, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Section } from './chatbot_config';
+import { PageLoading } from '@/components/ui/loading';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { Switch } from '@/components/ui/switch';
@@ -85,6 +87,8 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isListExpanded, setIsListExpanded] = useState(false);
+  const [deleteFaqTarget, setDeleteFaqTarget] = useState<FAQItem | null>(null);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadConfig, setUploadConfig] = useState<{
     header_index_max: number | null;
@@ -258,25 +262,28 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     }
   };
 
-  const handleDelete = async (faqId: string) => {
-    if (!confirm(t('apps.faqConfirmDeleteOne'))) return;
+  const handleDelete = (faq: FAQItem) => {
+    // Open the unified confirm dialog instead of native confirm()
+    setDeleteFaqTarget(faq);
+  };
 
+  const performDelete = async (faqId: string) => {
     try {
       const res = await tenantFetch(`/api/config/apps/${appId}/faqs/${faqId}`, {
         method: 'DELETE',
       });
 
       if (!res.ok) throw new Error(t('apps.deleteError'));
-      
+
       toast.success(t('messages.deleteSuccess'));
-      
+
       // 从选中项中移除
-      setSelectedItems(prev => {
+      setSelectedItems((prev) => {
         const newSet = new Set(prev);
         newSet.delete(faqId);
         return newSet;
       });
-      
+
       // 如果当前页只有一条数据，删除后应该跳转到上一页
       if (faqs.length === 1 && page > 1) {
         setPage(page - 1);
@@ -285,6 +292,8 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
       }
     } catch (error: any) {
       toast.error(error.message || t('apps.deleteError'));
+    } finally {
+      setDeleteFaqTarget(null);
     }
   };
 
@@ -321,14 +330,15 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
     }
   };
 
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = () => {
     if (selectedItems.size === 0) {
       toast.error(t('apps.faqSelectToDelete'));
       return;
     }
+    setShowBatchDeleteConfirm(true);
+  };
 
-    if (!confirm(t('apps.faqConfirmDeleteSelected', { count: String(selectedItems.size) }))) return;
-
+  const performBatchDelete = async () => {
     try {
       const deletePromises = Array.from(selectedItems).map(faqId =>
         tenantFetch(`/api/config/apps/${appId}/faqs/${faqId}`, {
@@ -348,11 +358,13 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
 
       // 清空选中项
       setSelectedItems(new Set());
-      
+
       // 刷新列表
       fetchFAQs();
     } catch (error: any) {
       toast.error(error.message || t('apps.faqBatchDeleteFailed'));
+    } finally {
+      setShowBatchDeleteConfirm(false);
     }
   };
 
@@ -528,7 +540,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
             </div>
             <CollapsibleContent className="mt-4">
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
+            <PageLoading />
           ) : faqs.length === 0 ? (
             <div className="empty-state">
               <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -586,7 +598,7 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 hover:text-destructive"
-                              onClick={() => faq.id && handleDelete(faq.id)}
+                              onClick={() => faq.id && handleDelete(faq)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -1034,6 +1046,25 @@ export const FAQManagement: React.FC<FAQManagementProps> = ({ appId, botConfig, 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Single FAQ delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteFaqTarget}
+        onOpenChange={(o) => !o && setDeleteFaqTarget(null)}
+        title={t('apps.faqConfirmDeleteOne')}
+        target={deleteFaqTarget ? { value: deleteFaqTarget.question } : undefined}
+        onConfirm={() => {
+          if (deleteFaqTarget?.id) performDelete(deleteFaqTarget.id);
+        }}
+      />
+
+      {/* Batch FAQ delete confirmation */}
+      <ConfirmDialog
+        open={showBatchDeleteConfirm}
+        onOpenChange={setShowBatchDeleteConfirm}
+        title={t('apps.faqConfirmDeleteSelected', { count: String(selectedItems.size) })}
+        onConfirm={performBatchDelete}
+      />
     </div>
   );
 };

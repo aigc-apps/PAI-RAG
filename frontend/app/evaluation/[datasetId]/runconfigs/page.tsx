@@ -35,12 +35,12 @@ import {
   Pencil,
   Trash2,
   Settings2,
-  Loader2,
   MoreHorizontal,
   ShieldCheck,
   Check,
   X,
 } from 'lucide-react';
+import { PageLoading } from '@/components/ui/loading';
 import { RunConfigFormDialog } from '@/app/evaluation/components/runconfig-form-dialog';
 import { RunConfig } from '@/app/evaluation/[datasetId]/types';
 import { REACT_PROMPT } from '@/app/common/prompts';
@@ -317,10 +317,7 @@ export default function RunConfigsPage({
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t('evaluation.loadingConfigs')}
-          </div>
+          <PageLoading label={t('evaluation.loadingConfigs')} />
         ) : evalRunConfigs.length === 0 ? (
           <div className="empty-state mt-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">

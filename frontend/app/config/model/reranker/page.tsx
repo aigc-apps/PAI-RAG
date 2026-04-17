@@ -145,9 +145,12 @@ export default function RerankerConfigPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="menu-compact">
                     <DropdownMenuItem
-                      onSelect={() => {
-                        setEditRerankerConfig(reranker);
-                        setIsEditOpen(true);
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setTimeout(() => {
+                          setEditRerankerConfig(reranker);
+                          setIsEditOpen(true);
+                        }, 0);
                       }}
                     >
                       <Edit />
@@ -155,7 +158,10 @@ export default function RerankerConfigPage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
-                      onSelect={() => removeModel(reranker.id)}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setTimeout(() => removeModel(reranker.id), 0);
+                      }}
                     >
                       <TrashIcon />
                       {t('common.delete') || 'Delete'}

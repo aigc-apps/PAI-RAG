@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useI18n } from '@/app/providers/i18n';
+import { PageLoading } from '@/components/ui/loading';
 export function MarkdownViewer({ file_url }: { file_url: string }) {
   const { t } = useI18n();
   const [markdown, setMarkdown] = useState('');
@@ -27,7 +28,7 @@ export function MarkdownViewer({ file_url }: { file_url: string }) {
     fetchMarkdown();
   }, [file_url]);
 
-  if (loading) return <div>{t('common.loading')}</div>;
+  if (loading) return <PageLoading />;
   if (error)
     return (
       <div className="text-red-500">

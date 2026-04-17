@@ -5,12 +5,12 @@ import {
   TrashIcon,
   Edit,
   AlertCircleIcon,
-  Loader2,
   CheckCircle,
   Plus,
   Layers,
   MoreHorizontal,
 } from 'lucide-react';
+import { Spinner } from '@/components/ui/loading';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmbeddingModelDialog, EmbConfig } from '@/app/config/model/embedding/modelDialog';
@@ -192,7 +192,7 @@ export default function EmbConfigPage() {
                     ) : (
                       <span className="inline-flex items-center gap-1">
                         {t('config.model.downloading')}
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Spinner size="sm" />
                       </span>
                     )}
                   </Badge>

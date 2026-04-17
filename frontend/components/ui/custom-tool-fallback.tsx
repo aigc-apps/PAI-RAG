@@ -2,7 +2,8 @@
 
 import { ToolCallContentPartComponent } from '@assistant-ui/react';
 import React, { useState } from 'react';
-import { ChevronRight, Loader2, Wrench } from 'lucide-react';
+import { ChevronRight, Wrench } from 'lucide-react';
+import { Spinner } from '@/components/ui/loading';
 import { useI18n } from '@/app/providers/i18n';
 
 /** Parse loose JSON-ish strings emitted by LLMs. */
@@ -59,7 +60,7 @@ export const ToolFallback: ToolCallContentPartComponent = ({
   if (isRunning) {
     return (
       <div className="my-1 inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-[11px] text-muted-foreground">
-        <Loader2 className="w-3 h-3 animate-spin text-primary" />
+        <Spinner size="sm" />
         <Wrench className="w-3 h-3 text-muted-foreground" />
         <span>{t('chat.tools.callingTool')}</span>
         <span className="text-muted-foreground/60">·</span>

@@ -5,7 +5,6 @@ import {
   TrashIcon,
   Edit,
   AlertCircleIcon,
-  Loader2,
   CheckCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
