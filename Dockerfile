@@ -25,6 +25,7 @@ COPY poetry.lock pyproject.toml ./
 
 # Copy backend code and install dependencies
 COPY backend ./backend
+COPY integrations ./integrations
 RUN poetry install --no-interaction --no-ansi && \
     rm -rf $POETRY_CACHE_DIR && \
     find /app/.venv -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -73,6 +74,7 @@ COPY --from=frontend-builder /app/frontend /app/frontend
 COPY resources ./resources
 COPY scripts ./scripts
 COPY backend ./backend
+COPY integrations ./integrations
 COPY alembic ./alembic
 COPY alembic.ini ./
 
