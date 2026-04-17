@@ -87,12 +87,12 @@ async def delete_thread(
     message_service: MessageService = Depends(get_message_service),
 ):
     try:
-        # Delete related attachments first
+        # Release file refs so unreferenced attachments become eligible for GC.
         try:
-            await message_service.delete_related_attachments(thread_id, tenant_id=tenant_id)
+            await message_service.release_attachment_refs(thread_id, tenant_id=tenant_id)
         except Exception as e:
             logger.error(
-                f"[ThreadProvider] Failed to delete related attachments in messages: {e}"
+                f"[ThreadProvider] Failed to release attachment refs: {e}"
             )
 
         # Delete the thread

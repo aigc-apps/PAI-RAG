@@ -110,7 +110,6 @@ class KnowledgebaseService:
         page: int = 1,
         size: int = 10,
         query: Optional[str] = None,
-        exclude_default_attachments: bool = True,
     ) -> PagedResult[List[dict]]:
         """
         List Knowledgebase entities with pagination and optional filtering.
@@ -119,16 +118,11 @@ class KnowledgebaseService:
             page: Page number (1-indexed)
             size: Page size
             query: Optional search query (searches in id, name, description)
-            exclude_default_attachments: Whether to exclude default_attachments KB
 
         Returns:
             PagedResult containing list of KbEntity with file_count and pagination metadata
         """
         conditions = [KbEntity.tenant_id == tenant_id]
-
-        if exclude_default_attachments:
-            conditions.append(KbEntity.name != "default_attachments")
-
         conditions.append(~KbEntity.name.like(f"%_{FAQ_KNOWLEDGEBASE_NAME}"))
 
         base_condition = and_(*conditions)

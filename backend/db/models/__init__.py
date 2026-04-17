@@ -24,3 +24,5 @@ from db.models.evaluation.run_config import RunConfigEntity
 from db.models.vectordb import VectorDbConfig
 from db.models.chatdb.chatdb import ChatDbConfigEntity
 from db.models.knowledgebase.vector_table_mapping import VectorTableMappingEntity
+from db.models.file.file import FileEntity, FileTextContentEntity
+from db.models.file.upload_session import FileUploadSessionEntity

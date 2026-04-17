@@ -19,7 +19,6 @@ DEFAULT_FAQ_SIMILARITY_THRESHOLD = 0.8
 
 
 DEFAULT_KNOWLEDGEBASE_PATH = "localdata/knowledgebases"
-ATTACHMENT_KNOWLEDGEBASE_NAME = "default_attachments"
 FAQ_KNOWLEDGEBASE_NAME = "default_faqs"
 DEFAULT_VECTOR_ID = "default_vectordb"
 

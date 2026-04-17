@@ -6,7 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from loguru import logger
 
 from db.models.message import MessageEntity, MessageCreate
-from db.models.knowledgebase.file import KbFileEntity
+from service.file.file_resource_service import FileResourceService
 
 
 class MessageService:
@@ -140,16 +140,15 @@ class MessageService:
 
         self.session.add(message_entity)
 
-        # Update attachment file entities
-        for attachment in message_data.attachments:
-            attachment_id = attachment.get("id")
-            if attachment_id:
-                attachment_file_entity = await self.session.get(
-                    KbFileEntity, attachment_id
-                )
-                if attachment_file_entity:
-                    attachment_file_entity.message_id = message_entity.id
-                    self.session.add(attachment_file_entity)
+        # Increment ref_count on attached files so they aren't GC'd while this
+        # message references them. Actual cleanup happens on thread delete
+        # (release_attachment_refs) or via the TTL/GC sweep (Phase 2).
+        attachment_ids = [
+            a.get("id") for a in (message_data.attachments or []) if a.get("id")
+        ]
+        if attachment_ids:
+            file_service = FileResourceService(self.session)
+            await file_service.increment_refs(file_ids=attachment_ids, tenant_id=tenant_id)
 
         # Flush to get the ID, but don't commit
         await self.session.flush()
@@ -158,39 +157,38 @@ class MessageService:
         logger.info(f"Created/Updated Message entity: {message_entity.id}")
         return message_entity
 
-    async def delete_related_attachments(
+    async def release_attachment_refs(
         self, thread_id: str, tenant_id: str
     ) -> None:
+        """Decrement ref_count on all files attached to messages in a thread.
+
+        Files with ref_count=0 and expires_at in the past are later swept by
+        the GC worker (Phase 2). We do not hard-delete here to keep retries
+        idempotent and to avoid losing files still referenced by other threads.
         """
-        Delete all attachment files related to messages in a thread.
-        Note: Caller is responsible for committing the session.
+        logger.info(f"[MessageService] Releasing attachment refs for thread {thread_id}.")
 
-        Args:
-            thread_id: Thread ID
-        """
-        logger.info(f"[MessageService] Start deleting related attachments for thread {thread_id}.")
+        stmt = select(MessageEntity.attachments).where(
+            MessageEntity.thread_id == thread_id,
+            MessageEntity.tenant_id == tenant_id,
+        )
+        rows = list((await self.session.exec(stmt)).all())
+        file_ids: List[str] = []
+        for att_list in rows:
+            if not att_list:
+                continue
+            for att in att_list:
+                fid = att.get("id") if isinstance(att, dict) else None
+                if fid:
+                    file_ids.append(fid)
 
-        # Get all message IDs for this thread
-        message_ids = await self.get_message_ids_by_thread(thread_id, tenant_id)
-
-        if not message_ids:
-            logger.info(f"[MessageService] No messages found for thread {thread_id}.")
+        if not file_ids:
+            logger.info(f"[MessageService] No attachments to release for thread {thread_id}.")
             return
 
-        # Find all attachment files with these message IDs
-        statement = select(KbFileEntity).where(
-            KbFileEntity.message_id.in_(message_ids), KbFileEntity.tenant_id == tenant_id
-        )
-        results = await self.session.exec(statement)
-        attachment_file_entities = list(results.all())
-
-        # Delete each attachment file
-        for attachment_file_entity in attachment_file_entities:
-            await self.session.delete(attachment_file_entity)
-
-        # Flush to ensure deletions are staged
+        file_service = FileResourceService(self.session)
+        await file_service.decrement_refs(file_ids=file_ids, tenant_id=tenant_id)
         await self.session.flush()
-
         logger.info(
-            f"[MessageService] Deleted {len(attachment_file_entities)} related attachments for thread {thread_id}."
+            f"[MessageService] Released {len(file_ids)} attachment refs for thread {thread_id}."
         )

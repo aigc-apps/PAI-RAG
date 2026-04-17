@@ -42,7 +42,7 @@ class AgentService:
         codesandbox_service_getter: Callable[[], Awaitable],
         chatdb_service_getter: Callable[[], Awaitable],
         rag_service_getter: Callable[[], Awaitable],
-        file_service_getter: Callable[[], Awaitable],
+        file_resource_service_getter: Callable[[], Awaitable],
         faq_config_service_getter: Callable[[], Awaitable],
     ):
         self.session = session
@@ -54,7 +54,7 @@ class AgentService:
         self._get_chatdb_service = chatdb_service_getter
         self._get_mcpserver_service = mcpserver_service_getter
         self._get_rag_service = rag_service_getter
-        self._get_file_service = file_service_getter
+        self._get_file_resource_service = file_resource_service_getter
 
     @asynccontextmanager
     async def create_agent(self, chat_request: ChatAgentRequest, tenant_id: str) -> AsyncIterator[ReactAgent]:
@@ -209,7 +209,7 @@ class AgentService:
         messages: List[dict],
         tenant_id: str,
     ) -> tuple[List[FunctionTool], Callable | None]:
-        file_service = await self._get_file_service()
+        file_service = await self._get_file_resource_service()
         llm_service = await self._get_llm_service()
 
         attachment_tools = []
@@ -259,7 +259,10 @@ class AgentService:
                 user_attachments = message.get("attachments", [])
                 if len(user_attachments) > 0:
                     for attachment in user_attachments:
-                        attachment_file_entity = await file_service.get_file_by_id(file_id=attachment.get("id"), tenant_id=tenant_id)
+                        attachment_file_entity = await file_service.get_file(file_id=attachment.get("id"), tenant_id=tenant_id)
+                        if not attachment_file_entity:
+                            logger.warning("Attachment file_id %s not found, skipping.", attachment.get("id"))
+                            continue
                         name = attachment_file_entity.file_name
                         if not name:
                             logger.warning("Attachment missing 'name' field, skipping: %s", attachment)

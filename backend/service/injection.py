@@ -21,6 +21,7 @@ from service.knowledgebase.vectordb_service import VectordbService
 from service.tool.role_service import RoleService
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.knowledgebase.file_service import FileService
+from service.file.file_resource_service import FileResourceService
 from service.knowledgebase.chunk_service import ChunkService
 from service.knowledgebase.metadata_service import MetadataService
 from service.knowledgebase.file_metadata_relation_service import (
@@ -208,6 +209,13 @@ async def get_file_service(
         ```
     """
     return FileService(session)
+
+
+async def get_file_resource_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> FileResourceService:
+    """FastAPI DI for the new /v1/files FileResourceService (decoupled from KB)."""
+    return FileResourceService(session)
 
 
 async def get_chunk_service(
@@ -642,8 +650,8 @@ async def get_agent_service(
     async def rag_service_getter():
         return await get_rag_service(session)
 
-    async def file_service_getter():
-        return await get_file_service(session)
+    async def file_resource_service_getter():
+        return await get_file_resource_service(session)
 
     async def faq_config_service_getter():
         return await get_faq_config_service(session)
@@ -657,7 +665,7 @@ async def get_agent_service(
         codesandbox_service_getter=codesandbox_service_getter,
         chatdb_service_getter=chatdb_service_getter,
         rag_service_getter=rag_service_getter,
-        file_service_getter=file_service_getter,
+        file_resource_service_getter=file_resource_service_getter,
         faq_config_service_getter=faq_config_service_getter,
     )
 

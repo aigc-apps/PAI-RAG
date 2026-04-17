@@ -12,7 +12,7 @@ import json
 from loguru import logger
 from typing import List, Callable
 from utils.lru_cache import LruCache
-from service.knowledgebase.file_service import FileService
+from service.file.file_resource_service import FileResourceService
 from common.llm.llm_model import PaiLlm
 
 search_cache = LruCache(max_size=10)
@@ -96,7 +96,7 @@ def create_chatdb_tools(chatdb_config: ChatDbConfigEntity, chatdb_llm: PaiLlm) -
 def create_codesandbox_tools(
     codesandbox_config: CodeSandboxConfigEntity,
     code_sandbox_attachments_ids: list[str] = None,
-    file_service: FileService = None,
+    file_service: FileResourceService = None,
     tenant_id: str = None,
 ) -> tuple[List[FunctionTool], Callable]:
     """

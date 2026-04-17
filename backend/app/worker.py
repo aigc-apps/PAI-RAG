@@ -56,6 +56,21 @@ if REDIS_CLUSTER_MODE:
         }
     app.conf.update(**cluster_config)
 
+
+# Periodic GC of expired, unreferenced /v1/files rows. Beat is optional —
+# when not running, the task can still be invoked on demand (e.g. via flower)
+# or disabled entirely by setting PAIRAG_FILE_GC_INTERVAL_SECONDS=0.
+_FILE_GC_INTERVAL = int(os.environ.get("PAIRAG_FILE_GC_INTERVAL_SECONDS", "3600"))
+if _FILE_GC_INTERVAL > 0:
+    app.conf.beat_schedule = {
+        **getattr(app.conf, "beat_schedule", {}),
+        "pairag-file-gc": {
+            "task": "file_resource_gc_sweep",
+            "schedule": _FILE_GC_INTERVAL,
+        },
+    }
+
+
 @worker_shutdown.connect
 def on_worker_shutdown(**kwargs):
     from pairag.file.store.file_store_helper import file_store
@@ -131,24 +146,108 @@ def enqueue_file_tasks(file_id: str, file_version: int, is_attachment: bool = Fa
     logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
 
 
-async def process_attachments_content_async(file_id: str, file_extension: str, tenant_id: str = None):
-    from rag.offline_db_helper import update_file_content_async, update_file_status_async
+async def process_file_resource_async(file_id: str, tenant_id: str):
+    """Background extraction for the new /v1/files resource.
+
+    Reads bytes from file_store by file_id, runs the stateless extractor,
+    writes the preview into pai_file_text_content, and flips pai_file.status
+    to succeeded/failed. No coupling to KbFileEntity.
+    """
+    from db.db_context import create_db_session
+    from service.file.file_resource_service import FileResourceService
+    from service.file.content_extractor import (
+        EXTRACTOR_VERSION,
+        extract_text_from_bytes,
+    )
+    from pairag.file.store.file_store_helper import file_store
+
+    async with create_db_session() as session:
+        svc = FileResourceService(session)
+        entity = await svc.get_file(file_id=file_id, tenant_id=tenant_id)
+        if not entity:
+            logger.warning(f"[WORKER] FileEntity {file_id} not found; skipping.")
+            return
+        await svc.mark_status(
+            file_id=file_id, tenant_id=tenant_id, status=FileStatus.parsing
+        )
+
     try:
-        await update_file_content_async(file_id=file_id, is_attachment=True, tenant_id=tenant_id)
-        await update_file_status_async(file_id=file_id, status=FileStatus.succeeded, is_attachment=True, tenant_id=tenant_id)
+        stream = await file_store.read_async(
+            file_path=entity.file_path, tenant_id=tenant_id
+        )
+        raw = stream.read() if hasattr(stream, "read") else stream
+        result = extract_text_from_bytes(raw, entity.file_extension or "")
+        async with create_db_session() as session:
+            svc = FileResourceService(session)
+            if result is not None:
+                content, truncated_at_extract = result
+                await svc.write_text_content(
+                    file_id=file_id,
+                    tenant_id=tenant_id,
+                    content=content,
+                    extractor_version=EXTRACTOR_VERSION,
+                    truncated_at_extract=truncated_at_extract,
+                )
+            await svc.mark_status(
+                file_id=file_id, tenant_id=tenant_id, status=FileStatus.succeeded
+            )
     except Exception as ex:
-        logger.error(f"[WORKER] Process attachments content {file_id} failed, error: {traceback.format_exc()}")
-        await update_file_status_async(file_id=file_id, status=FileStatus.failed, is_attachment=True, failed_reason=str(ex), tenant_id=tenant_id)
+        logger.error(
+            f"[WORKER] process_file_resource {file_id} failed: {traceback.format_exc()}"
+        )
+        async with create_db_session() as session:
+            svc = FileResourceService(session)
+            await svc.mark_status(
+                file_id=file_id,
+                tenant_id=tenant_id,
+                status=FileStatus.failed,
+                failed_reason=str(ex),
+            )
 
 
-@app.task(name="enqueue_attachments_file_tasks")
-def enqueue_attachments_file_tasks(file_id: str, file_version: int, file_extension: str, is_attachment: bool = False, tenant_id: str = None):
+@app.task(name="process_file_resource_task")
+def process_file_resource_task(file_id: str, tenant_id: str = None):
     loop = asyncio.get_event_loop()
-    if file_extension in [".xlsx", ".xls", ".csv", ".jpg", ".png", ".jpeg", ".jsonl", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv"]:
-        loop.run_until_complete(process_attachments_content_async(file_id=file_id, file_extension=file_extension, tenant_id=tenant_id))
-    else:
-        loop.run_until_complete(enqueue_file_tasks_async(file_id=file_id, file_version=file_version, is_attachment=is_attachment, tenant_id=tenant_id))
-    logger.info(f"[WORKER] Enqueueing file {file_id} completed.")
+    logger.info(f"[WORKER] Processing file resource {file_id} for tenant {tenant_id}.")
+    loop.run_until_complete(
+        process_file_resource_async(file_id=file_id, tenant_id=tenant_id)
+    )
+    logger.info(f"[WORKER] Processed file resource {file_id} successfully.")
+
+
+async def file_resource_gc_sweep_async(batch_size: int = 200):
+    """Hard-delete expired unreferenced files. One batch per tick.
+
+    Safe to run on any schedule; the query is O(log N) with the `expires_at`
+    index and each file delete is independent.
+    """
+    from db.db_context import create_db_session
+    from service.file.file_resource_service import FileResourceService
+
+    async with create_db_session() as session:
+        svc = FileResourceService(session)
+        candidates = await svc.sweep_expired_candidates(limit=batch_size)
+        logger.info(f"[GC] file_resource sweep found {len(candidates)} candidates")
+        deleted = 0
+        for c in candidates:
+            try:
+                ok = await svc.hard_delete(file_id=c.id, tenant_id=c.tenant_id)
+                if ok:
+                    deleted += 1
+            except Exception:
+                logger.warning(
+                    f"[GC] hard_delete failed for {c.id} (tenant={c.tenant_id}): "
+                    f"{traceback.format_exc()}"
+                )
+        logger.info(f"[GC] file_resource sweep deleted {deleted} files")
+        return deleted
+
+
+@app.task(name="file_resource_gc_sweep")
+def file_resource_gc_sweep():
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(file_resource_gc_sweep_async())
+
 
 # Enqueue file for processing, split into multiple tasks for large excels.
 @app.task(name="process_file_task")

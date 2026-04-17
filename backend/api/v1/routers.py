@@ -7,7 +7,6 @@ def add_config_router(app: FastAPI):
     from api.v1.config_apis.websearch import websearch_router
     from api.v1.config_apis.trace import trace_router
     from api.v1.config_apis.embedding import embedding_router
-    from api.v1.config_apis.attachment import attachments_router
     from api.v1.config_apis.reranker import reranker_router
     from api.v1.config_apis.metadata import knowledgebase_router
     from api.v1.config_apis.chatapp import app_router
@@ -28,7 +27,6 @@ def add_config_router(app: FastAPI):
     app.include_router(embedding_router, prefix="/v1/config/embeddings")
     app.include_router(reranker_router, prefix="/v1/config/rerankers")
     app.include_router(knowledgebase_router, prefix="/v1/config/knowledgebases")
-    app.include_router(attachments_router, prefix="/v1/config/attachments")
     app.include_router(app_router, prefix="/v1/config/apps")
     app.include_router(role_router, prefix="/v1/config/roles")
     app.include_router(guardrail_router, prefix="/v1/config/guardrail")
@@ -48,6 +46,9 @@ def add_chat_router(app: FastAPI):
     from api.v1.retrieval_tool_api import retrieval_tool_router
     from api.v1.healthcheck import health_router
     from api.v1.embed import embedding_router
+    from api.v1.files import files_router
+    from api.v1.files_events import files_events_router
+    from api.v1.files_uploads import files_uploads_router
 
     app.include_router(chat_agent_router, prefix="/v1/chat/completions")
     app.include_router(thread_router, prefix="/v1/threads")
@@ -55,5 +56,10 @@ def add_chat_router(app: FastAPI):
     app.include_router(faq_retrieval_router, prefix="/v1/faq-retrieval")
     app.include_router(retrieval_tool_router, prefix="/v1/tools/retrieval")
     app.include_router(embedding_router, prefix="/v1/embeddings")
+    # /events and /uploads must register BEFORE /v1/files so they aren't
+    # shadowed by the `/v1/files/{file_id}` path parameter matcher.
+    app.include_router(files_events_router, prefix="/v1/files/events")
+    app.include_router(files_uploads_router, prefix="/v1/files/uploads")
+    app.include_router(files_router, prefix="/v1/files")
 
     app.include_router(health_router, prefix="/health")
