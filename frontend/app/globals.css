@@ -321,31 +321,33 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 12px;
+  padding: 18px;
   border-radius: 12px;
   border: 1px solid oklch(0.915 0.008 260);
   background: oklch(1 0 0);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.03), 0 1px 3px oklch(0 0 0 / 0.04);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 .model-card:hover {
   border-color: oklch(0.488 0.180 285 / 0.35);
-  box-shadow: 0 6px 20px oklch(0.488 0.180 285 / 0.08);
+  box-shadow: 0 0 0 1px oklch(0.488 0.180 285 / 0.18), 0 6px 20px oklch(0.488 0.180 285 / 0.1);
 }
 .dark .model-card {
   background: oklch(0.185 0.018 265);
   border-color: oklch(0.280 0.018 265);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2), 0 1px 3px oklch(0 0 0 / 0.25);
 }
 .dark .model-card:hover {
   border-color: oklch(0.620 0.180 285 / 0.4);
-  box-shadow: 0 6px 24px oklch(0.620 0.180 285 / 0.12);
+  box-shadow: 0 0 0 1px oklch(0.620 0.180 285 / 0.22), 0 6px 24px oklch(0.620 0.180 285 / 0.12);
 }
 
 /* Brand-icon square for model cards (renders first letter of model) */
 .model-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -489,13 +491,28 @@ body {
   height: 11px !important;
 }
 
+/* Sidebar content alignment: unify horizontal padding to 12px and
+ * vertical row gap to 4px so logo, nav items, and conversation list
+ * share the same left/right offset from the sidebar edge. */
+[data-sidebar="header"],
+[data-sidebar="footer"] {
+  padding-inline: 12px !important;
+  padding-block: 8px !important;
+}
+[data-sidebar="menu-button"],
+[data-sidebar="menu-sub-button"] {
+  padding-inline: 12px !important;
+}
+[data-sidebar="menu"] {
+  gap: 4px !important;
+}
+
 /* Setting page wrapper (standard layout for config sub-pages).
- * Width is now controlled by the parent ConfigLayout (max-w-6xl);
- * this class only provides padding + vertical rhythm. */
+ * Outer 24px padding is provided by ConfigLayout; this class only
+ * controls vertical rhythm between sections. */
 .settings-page {
   display: flex;
   flex-direction: column;
-  padding: 16px 24px 24px;
   gap: 16px;
 }
 .settings-page-header {
@@ -788,15 +805,19 @@ body {
 
 /* Card hover glow effect */
 .card-hover-glow {
-  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.03), 0 1px 3px oklch(0 0 0 / 0.04);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
 }
 .card-hover-glow:hover {
-  box-shadow: 0 0 0 1px oklch(0.488 0.180 285 / 0.15), 0 4px 16px oklch(0.488 0.180 285 / 0.08);
-  border-color: oklch(0.488 0.180 285 / 0.3);
+  box-shadow: 0 0 0 1px oklch(0.488 0.180 285 / 0.18), 0 6px 20px oklch(0.488 0.180 285 / 0.1);
+  border-color: oklch(0.488 0.180 285 / 0.35);
+}
+.dark .card-hover-glow {
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2), 0 1px 3px oklch(0 0 0 / 0.25);
 }
 .dark .card-hover-glow:hover {
-  box-shadow: 0 0 0 1px oklch(0.620 0.180 285 / 0.2), 0 4px 20px oklch(0.620 0.180 285 / 0.1);
-  border-color: oklch(0.620 0.180 285 / 0.3);
+  box-shadow: 0 0 0 1px oklch(0.620 0.180 285 / 0.22), 0 6px 24px oklch(0.620 0.180 285 / 0.12);
+  border-color: oklch(0.620 0.180 285 / 0.32);
 }
 
 /* Chunk card — left border accent */

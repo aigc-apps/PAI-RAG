@@ -136,7 +136,7 @@ export default function KnowledgeBasePage() {
       </HeaderPortal>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-5">
+        <div className="p-6">
           {/* Mobile-only search bar */}
           <div className="relative mb-4 sm:hidden">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
@@ -184,7 +184,7 @@ export default function KnowledgeBasePage() {
                       router.push(`/knowledgebases/${kb.id}`);
                     }}
                     key={kb.id}
-                    className="group relative cursor-pointer flex flex-col gap-0 p-4 rounded-xl border border-border bg-card card-hover-glow transition-all duration-200"
+                    className="group relative cursor-pointer flex flex-col gap-0 p-5 rounded-xl border border-border bg-card card-hover-glow transition-all duration-200"
                   >
                     {/* Top: avatar + title + more menu */}
                     <div className="flex items-start gap-3">
@@ -238,22 +238,23 @@ export default function KnowledgeBasePage() {
                     </div>
 
                     {/* Description */}
-                    <CardContent className="px-0 pt-3 pb-3 flex-1">
+                    <CardContent className="px-0 pt-4 pb-4 flex-1">
                       <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                         {kb.description || t('knowledgebase.noDescription')}
                       </p>
                     </CardContent>
 
-                    {/* Footer: file count + time */}
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
-                      <Badge variant="outline" className="text-[11px] badge-tech h-5 px-1.5 gap-1">
+                    {/* Footer: file count · time */}
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
                         <FileText className="w-3 h-3" />
                         {kb.file_count || 0}
-                      </Badge>
-                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      </span>
+                      <span className="text-border">·</span>
+                      <span className="inline-flex items-center gap-1 truncate">
                         <Clock className="w-3 h-3" />
                         <span className="truncate">{formatFriendlyTime(kb.updated_at)}</span>
-                      </div>
+                      </span>
                     </div>
                   </Card>
                 );

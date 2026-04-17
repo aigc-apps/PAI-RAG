@@ -16,7 +16,7 @@ export default function RoleConfigPage() {
   const { t } = useI18n();
 
   return (
-    <div id="access-control" className="px-6 py-4">
+    <div id="access-control">
       <Tabs defaultValue="roles">
         <TabsList className="tabs-modern flex-none">
           <TabsTrigger value="roles" className="px-4">

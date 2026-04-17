@@ -35,7 +35,7 @@ export function AppSidebar() {
   return (
     <Sidebar side="left">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1.5 py-1">
+        <div className="flex items-center gap-2 py-1">
           <div className="logo-icon flex items-center justify-center w-6 h-6 rounded-md font-semibold text-[11px] shrink-0">
             P
           </div>
@@ -93,7 +93,7 @@ export function AppSidebar() {
       <SidebarRail />
 
       <SidebarFooter>
-        <div className="flex items-center gap-1 px-1">
+        <div className="flex items-center gap-1">
           <SidebarMenuButton asChild size="sm" className="flex-1">
             <Link href="/config/model">
               <Settings />

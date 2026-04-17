@@ -491,7 +491,7 @@ const AttachmentRemove: FC = () => {
 
 export const UserMessageAttachments: FC = () => {
   return (
-    <div className="flex flex-wrap gap-1.5 mb-1 justify-end">
+    <div className="flex flex-wrap gap-1.5 justify-end empty:hidden [&:not(:empty)]:mb-1">
       <MessagePrimitive.Attachments components={{ Attachment: AttachmentUI }} />
     </div>
   );

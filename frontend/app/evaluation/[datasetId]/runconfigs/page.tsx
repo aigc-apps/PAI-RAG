@@ -288,7 +288,7 @@ export default function RunConfigsPage({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
         {/* Toolbar */}
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <p className="text-[11px] text-muted-foreground">

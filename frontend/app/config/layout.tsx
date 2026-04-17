@@ -83,9 +83,9 @@ export default function ConfigLayout({ children }: { children: React.ReactNode }
         </div>
       </div>
 
-      {/* Content — uniform width wrapper for all config sub-pages */}
+      {/* Content — uniform 24px padding for all config sub-pages */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-6xl mx-auto w-full">{children}</div>
+        <div className="p-6 w-full">{children}</div>
       </div>
     </div>
   );

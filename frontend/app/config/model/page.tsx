@@ -10,7 +10,7 @@ export default function ModelConfigPage() {
   const { t } = useI18n();
 
   return (
-    <div id="model" className="px-6 py-4">
+    <div id="model">
       <div className="space-y-4 pb-6">
         <LlmConfigPage />
         <EmbConfigPage />
