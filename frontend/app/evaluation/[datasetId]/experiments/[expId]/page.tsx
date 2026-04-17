@@ -51,7 +51,6 @@ import {
   TrendingDown,
   TrendingUp,
   XCircle,
-  Loader2
 } from "lucide-react";
 import { Fragment } from "react";
 import { PaginationComponent } from "@/components/customized/pagination/pagination-component";
@@ -95,6 +94,7 @@ import { SampleDetailDialog } from '@/app/evaluation/components/sample-detail-di
 import { SampleItem } from '@/app/evaluation/[datasetId]/types';
 import { useTenantFetch } from "@/hooks/use-tenant-fetch";
 import { HeaderPortal } from '@/components/header-portal';
+import { PageLoading } from '@/components/ui/loading';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -387,19 +387,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
   // ========================
 
   if (!experiment) {
-    return (
-      <div className="container mx-auto p-6">
-        <Card>
-          <CardContent className="p-6 justify-center">
-            <div className="flex items-center space-x-2">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <h2 className="text-xl font-medium">{t('evaluation.loadingExperiment')}</h2>
-            </div>
-            <p className="text-gray-500 mt-2">{t('evaluation.loadingExperimentDesc')}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <PageLoading className="h-full" label={t('evaluation.loadingExperiment')} />;
   }
 
   const statusLabel = (value: string | null) => {
@@ -790,7 +778,11 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                             )}
                           </Button>
                         </TableCell>
-                        <TableCell className="px-2 py-0.5" data-stop-click>
+                        <TableCell
+                          className="px-2 py-0.5"
+                          data-stop-click
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
                             type="button"
                             className="text-xs font-mono text-primary hover:underline"
@@ -835,7 +827,11 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
                             ? calculateTimeDifference(sample.started_at, sample.updated_at)
                             : '-'}
                         </TableCell>
-                        <TableCell className="text-right pr-3 px-2 py-0.5" data-stop-click>
+                        <TableCell
+                          className="text-right pr-3 px-2 py-0.5"
+                          data-stop-click
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button

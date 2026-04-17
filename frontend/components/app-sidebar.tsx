@@ -35,11 +35,11 @@ export function AppSidebar() {
   return (
     <Sidebar side="left">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1.5 py-1.5">
-          <div className="logo-icon flex items-center justify-center w-7 h-7 rounded-lg font-bold text-xs shrink-0">
+        <div className="flex items-center gap-2 px-1.5 py-1">
+          <div className="logo-icon flex items-center justify-center w-6 h-6 rounded-md font-semibold text-[11px] shrink-0">
             P
           </div>
-          <span className="text-sm font-semibold tracking-tight flex-1 truncate">
+          <span className="text-[13px] font-semibold tracking-tight flex-1 truncate">
             PAI-RAG
           </span>
         </div>

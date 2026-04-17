@@ -9,6 +9,7 @@ import { Check, ChevronsUpDown, Plus, Bot } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import Link from 'next/link';
 import { useI18n } from '@/app/providers/i18n';
+import { Loading } from '@/components/ui/loading';
 
 interface ModelConfigurationParams {
   id: string;
@@ -125,8 +126,8 @@ export default function ModelSelector({
       >
         <div className="max-h-[420px] overflow-y-auto py-1">
           {loading ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">
-              {t('common.loading')}
+            <div className="py-6 flex justify-center">
+              <Loading size="sm" />
             </div>
           ) : error ? (
             <div className="py-4 px-3 text-center text-xs">

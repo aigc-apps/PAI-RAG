@@ -255,13 +255,21 @@ export default function McpConfigPage() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="menu-compact">
-                        <DropdownMenuItem onSelect={() => handleEditClick(config)}>
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setTimeout(() => handleEditClick(config), 0);
+                          }}
+                        >
                           <Edit />
                           {t('common.edit') || 'Edit'}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onSelect={() => removeMCP(config.id)}
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setTimeout(() => removeMCP(config.id), 0);
+                          }}
                         >
                           <TrashIcon />
                           {t('common.delete') || 'Delete'}

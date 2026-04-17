@@ -3,11 +3,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* 设置中文字体 */
+/* 设置中文字体 + 全局字体渲染优化 */
 html {
   font-family:
     -apple-system,
     BlinkMacSystemFont,
+    "SF Pro Text",
+    "SF Pro Display",
     "Segoe UI",
     "PingFang SC",        /* macOS/iOS 优秀中文字体 */
     "Hiragino Sans GB",   /* macOS 旧版中文字体 */
@@ -18,6 +20,15 @@ html {
     sans-serif,
     "Apple Color Emoji",
     "Segoe UI Emoji";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.005em;
+}
+
+body {
+  font-synthesis-weight: none;
 }
 
 @theme inline {
@@ -744,14 +755,20 @@ html {
   justify-content: space-between;
   width: 100%;
   padding: 5px 8px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: oklch(1 0 0);
   border: 1px solid oklch(0.915 0.008 260);
-  color: oklch(0.205 0.015 265);
+  color: oklch(0.260 0.015 265);
   font-size: 12px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  letter-spacing: -0.01em;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   box-shadow: 0 1px 2px oklch(0.145 0.014 265 / 0.04);
+}
+.new-chat-btn:hover {
+  background: oklch(0.98 0.005 260);
+  border-color: oklch(0.860 0.010 260);
+  color: oklch(0.145 0.014 265);
 }
 .new-chat-btn:hover {
   border-color: oklch(0.488 0.180 285 / 0.4);
@@ -970,4 +987,34 @@ html {
 
 .dark .markdown-content a:hover::after {
   background-color: oklch(0.620 0.180 285);
+}
+
+/* ============================================================
+ * Loading animations
+ * ============================================================ */
+
+/* Three-dot spinner — primary color pulses in sequence */
+@keyframes pulse-dot {
+  0%, 80%, 100% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-pulse-dot-1 { animation: pulse-dot 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.animate-pulse-dot-2 { animation: pulse-dot 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite 0.15s; }
+.animate-pulse-dot-3 { animation: pulse-dot 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite 0.3s; }
+
+/* Shimmer for skeleton placeholders */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.8s linear infinite;
 }

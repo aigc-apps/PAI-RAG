@@ -25,7 +25,8 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button';
 import { DialogContent as DialogPrimitiveContent } from '@radix-ui/react-dialog';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
+import { Spinner } from '@/components/ui/loading';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 
@@ -345,7 +346,7 @@ const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
         <DialogDescription>{t('chat.attachment.fileName')}: {fileName}</DialogDescription>
         {loading ? (
           <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Spinner size="lg" />
           </div>
         ) : previewType === 'text' && fileContent ? (
           <TextPreview content={fileContent} />
@@ -451,7 +452,7 @@ const AttachmentUI: FC = () => {
                     </>
                   ) : isUploading ? (
                     <>
-                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      <Spinner size="sm" />
                       <span>{t('chat.attachment.uploading')}</span>
                     </>
                   ) : (

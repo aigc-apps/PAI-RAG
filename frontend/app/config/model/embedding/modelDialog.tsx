@@ -13,16 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { AlertCircleIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 import { cn } from '@/lib/utils';
@@ -313,31 +304,22 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         </div>
 
         {/* Confirm default change */}
-        <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {t('config.model.confirmChangeDefaultModel')}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {pendingState
-                  ? t('config.model.setAsDefaultWarning')
-                  : t('config.model.unsetAsDefaultWarning')}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  setEmb({ ...emb, is_default: pendingState || false });
-                  setIsDialogOpen(false);
-                }}
-              >
-                {t('config.model.confirmChange')}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          variant="warning"
+          title={t('config.model.confirmChangeDefaultModel')}
+          description={
+            pendingState
+              ? t('config.model.setAsDefaultWarning')
+              : t('config.model.unsetAsDefaultWarning')
+          }
+          confirmLabel={t('config.model.confirmChange')}
+          onConfirm={() => {
+            setEmb({ ...emb, is_default: pendingState || false });
+            setIsDialogOpen(false);
+          }}
+        />
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsOpen(false)}>

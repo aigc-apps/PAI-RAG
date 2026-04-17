@@ -5,6 +5,7 @@ import { FAQManagement } from "../faq_management";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HeaderPortal } from "@/components/header-portal";
+import { PageLoading } from "@/components/ui/loading";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -147,7 +148,7 @@ export default function ViewChatApp(
 
     // Navigate back after save
     if (loading) {
-        return <div className="flex items-center justify-center h-screen">{t('common.loading')}</div>;
+        return <PageLoading className="h-full" />;
     }
 
     return (

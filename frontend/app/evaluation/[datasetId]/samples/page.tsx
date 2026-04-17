@@ -21,7 +21,6 @@ import {
   UploadIcon,
   Eye,
   Trash2,
-  Loader2,
   Pencil,
   FileText,
   Info,
@@ -65,6 +64,7 @@ import { SampleDetailDialog } from '@/app/evaluation/components/sample-detail-di
 import { useDatasetActions } from '@/app/evaluation/[datasetId]/samples/useDatasetActions';
 import { SampleItem } from '@/app/evaluation/[datasetId]/types';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import { PageLoading, Spinner } from '@/components/ui/loading';
 
 export default function EvalDatasetsDetailsPage({
   params,
@@ -451,7 +451,7 @@ export default function EvalDatasetsDetailsPage({
             >
               {uploading ? (
                 <>
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  <Spinner size="sm" className="mr-1" />
                   {t('evaluation.uploading')}
                 </>
               ) : (
@@ -473,10 +473,7 @@ export default function EvalDatasetsDetailsPage({
 
         {/* Content */}
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t('common.loading')}
-          </div>
+          <PageLoading />
         ) : datasets.length === 0 ? (
           <div className="empty-state mt-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -624,18 +621,31 @@ export default function EvalDatasetsDetailsPage({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="menu-compact">
-                              <DropdownMenuItem onSelect={() => handleEyeClick(item)}>
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => handleEyeClick(item), 0);
+                                }}
+                              >
                                 <Eye />
                                 {t('evaluation.viewDetails')}
                               </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => handleEditClick(item)}>
+                              <DropdownMenuItem
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => handleEditClick(item), 0);
+                                }}
+                              >
                                 <Pencil />
                                 {t('evaluation.edit')}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onSelect={() => {
-                                  setIsRunSingleDetailOpen(true);
-                                  setEditingSample(item);
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => {
+                                    setEditingSample(item);
+                                    setIsRunSingleDetailOpen(true);
+                                  }, 0);
                                 }}
                               >
                                 <PlayIcon />
@@ -643,7 +653,10 @@ export default function EvalDatasetsDetailsPage({
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onSelect={() => deleteSample(item.id)}
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => deleteSample(item.id), 0);
+                                }}
                                 className="text-destructive focus:text-destructive"
                               >
                                 <Trash2 />

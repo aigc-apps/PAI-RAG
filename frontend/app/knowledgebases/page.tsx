@@ -19,16 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { useI18n } from '@/app/providers/i18n';
 import { formatFriendlyTime } from '@/lib/time-format';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { HeaderPortal } from '@/components/header-portal';
+import { PageLoading } from '@/components/ui/loading';
 
 export interface KnowledgeBase {
   id: string;
@@ -158,9 +150,7 @@ export default function KnowledgeBasePage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-16 text-sm text-muted-foreground">
-              {t('common.loading')}
-            </div>
+            <PageLoading />
           ) : knowledgebases.length === 0 ? (
             <div className="empty-state mt-8">
               <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -212,6 +202,7 @@ export default function KnowledgeBasePage() {
                       <div
                         data-stop-click
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -234,7 +225,7 @@ export default function KnowledgeBasePage() {
                             <DropdownMenuItem
                               onSelect={(e) => {
                                 e.preventDefault();
-                                setDeleteTarget(kb);
+                                setTimeout(() => setDeleteTarget(kb), 0);
                               }}
                               className="text-destructive focus:text-destructive"
                             >
@@ -283,35 +274,16 @@ export default function KnowledgeBasePage() {
       )}
 
       {/* Delete confirmation */}
-      <AlertDialog
+      <ConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('knowledgebase.deleteConfirmTitle')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('knowledgebase.deleteConfirmMessage')}
-              {deleteTarget && (
-                <span className="block mt-2 font-medium text-foreground">
-                  {deleteTarget.name}
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteTarget && deleteKnowledgebase(deleteTarget.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={t('knowledgebase.deleteConfirmTitle')}
+        description={t('knowledgebase.deleteConfirmMessage')}
+        target={deleteTarget ? { label: 'KB', value: deleteTarget.name } : undefined}
+        onConfirm={() => {
+          if (deleteTarget) deleteKnowledgebase(deleteTarget.id);
+        }}
+      />
     </div>
   );
 }

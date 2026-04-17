@@ -39,19 +39,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 import {
-  Loader2,
   CheckCircle,
   XCircle,
   Trash2Icon,
@@ -126,6 +116,7 @@ import { SearchCode, TextSearch, ScanSearch, ChevronDownIcon as ChevronDown, Che
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
 import { HeaderPortal } from '@/components/header-portal';
 import { Settings as SettingsIcon } from 'lucide-react';
+import { Spinner, PageLoading } from '@/components/ui/loading';
 interface KnowledgeBaseFile {
   id: string;
   file_name: string;
@@ -236,6 +227,7 @@ export default function KnowledgeBaseDetailPage(
   } | null>(null); // 上传时使用的 chunk_config
   const [deleting, setDeleting] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{ id: string; file_name: string } | null>(null);
   const [reprocessChunkConfigDialogOpen, setReprocessChunkConfigDialogOpen] = useState(false);
   const [reprocessChunkConfig, setReprocessChunkConfig] = useState<{
     parser_type: string;
@@ -589,7 +581,7 @@ export default function KnowledgeBaseDetailPage(
   }, [fetchKbConfigs]);
 
   if (!knowledgebase) {
-    return <div className="p-6">{loadingMsg}</div>;
+    return <PageLoading className="h-full" label={loadingMsg} />;
   }
 
   const handleSaveSuccess = async (kb: KbConfig) => {
@@ -1755,7 +1747,7 @@ export default function KnowledgeBaseDetailPage(
                       >
                         {reprocessing ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Spinner size="sm" className="mr-2" />
                             {t('knowledgebase.processing')}
                           </>
                         ) : (
@@ -1773,7 +1765,7 @@ export default function KnowledgeBaseDetailPage(
                       >
                         {deleting ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Spinner size="sm" className="mr-2" />
                             {t('knowledgebase.deleting')}
                           </>
                         ) : (
@@ -1783,43 +1775,36 @@ export default function KnowledgeBaseDetailPage(
                           </>
                         )}
                       </Button>
-                      <AlertDialog open={showBatchReprocessDialog} onOpenChange={setShowBatchReprocessDialog}>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>{t('knowledgebase.confirmBatchReparse')}</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {t('knowledgebase.confirmBatchReparseDesc', { count: selectedFiles.size })}
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={handleBatchReprocessFiles}
-                            >
-                              {t('knowledgebase.confirmReparse')}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                      <AlertDialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>{t('knowledgebase.confirmBatchDelete')}</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {t('knowledgebase.confirmBatchDeleteDesc', { count: selectedFiles.size })}
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={handleBatchDeleteFiles}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              {t('knowledgebase.confirmDelete')}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <ConfirmDialog
+                        open={showBatchReprocessDialog}
+                        onOpenChange={setShowBatchReprocessDialog}
+                        variant="warning"
+                        title={t('knowledgebase.confirmBatchReparse')}
+                        description={t('knowledgebase.confirmBatchReparseDesc', { count: selectedFiles.size })}
+                        confirmLabel={t('knowledgebase.confirmReparse')}
+                        onConfirm={handleBatchReprocessFiles}
+                      />
+                      <ConfirmDialog
+                        open={showBatchDeleteDialog}
+                        onOpenChange={setShowBatchDeleteDialog}
+                        title={t('knowledgebase.confirmBatchDelete')}
+                        description={t('knowledgebase.confirmBatchDeleteDesc', { count: selectedFiles.size })}
+                        confirmLabel={t('knowledgebase.confirmDelete')}
+                        onConfirm={handleBatchDeleteFiles}
+                      />
+                      <ConfirmDialog
+                        open={!!deleteFileTarget}
+                        onOpenChange={(o) => !o && setDeleteFileTarget(null)}
+                        title={t('knowledgebase.confirmDeleteFile') || t('knowledgebase.deleteConfirmTitle')}
+                        description={t('knowledgebase.deleteConfirmMessage')}
+                        target={deleteFileTarget ? { value: deleteFileTarget.file_name } : undefined}
+                        onConfirm={() => {
+                          if (deleteFileTarget) {
+                            handleDeleteFile(deleteFileTarget.id);
+                            setDeleteFileTarget(null);
+                          }
+                        }}
+                      />
                     </>
                   )}
                 </div>
@@ -1940,7 +1925,7 @@ export default function KnowledgeBaseDetailPage(
                       {/* 步骤2: 上传中 - 显示进度条 */}
                       {uploadStep === 'uploading' && (
                         <div className="flex flex-col items-center justify-center py-8 px-4">
-                          <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
+                          <Spinner size="lg" className="mb-4" />
                           <p className="text-sm text-muted-foreground mb-4">{t('knowledgebase.uploadingFile')}</p>
                           <div className="w-full bg-muted rounded-full h-3">
                             <div 
@@ -2320,7 +2305,7 @@ export default function KnowledgeBaseDetailPage(
                       {/* 步骤4: 解析中 */}
                       {uploadStep === 'parsing' && (
                         <div className="flex flex-col items-center justify-center py-8 px-4">
-                          <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
+                          <Spinner size="lg" className="mb-4" />
                           <p className="text-sm text-muted-foreground">{t('knowledgebase.submittingParse')}</p>
                         </div>
                       )}
@@ -2450,17 +2435,17 @@ export default function KnowledgeBaseDetailPage(
                             <TableCell className="text-xs px-2 py-0.5">
                               {file.status === 'pending' ? (
                                 <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 h-5 px-1.5 text-[10px]">
-                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                  <Spinner size="sm" className="mr-1" />
                                   {t('knowledgebase.pendingParse')}
                                 </Badge>
                               ) : file.status === 'parsing' ? (
                                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 h-5 px-1.5 text-[10px]">
-                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                  <Spinner size="sm" className="mr-1" />
                                   {t('knowledgebase.parsing')}
                                 </Badge>
                               ) : file.status === 'persisting' ? (
                                 <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 h-5 px-1.5 text-[10px]">
-                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                  <Spinner size="sm" className="mr-1" />
                                   {t('knowledgebase.persisting')}
                                 </Badge>
                               ) : file.status === 'succeeded' ? (
@@ -2510,13 +2495,15 @@ export default function KnowledgeBaseDetailPage(
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
-                                        setDropdownOpen(prev => ({
+                                        setDropdownOpen((prev) => ({
                                           ...prev,
-                                          [file.id]: false
+                                          [file.id]: false,
                                         }));
-                                        setPreviewFile(file);
-                                        setPreviewOpen(true);
-                                        loadPreviewContent(file.id);
+                                        setTimeout(() => {
+                                          setPreviewFile(file);
+                                          setPreviewOpen(true);
+                                          loadPreviewContent(file.id);
+                                        }, 0);
                                       }}
                                     >
                                       <span className="text-xs font-medium">{t('knowledgebase.viewFile')}</span>
@@ -2524,11 +2511,11 @@ export default function KnowledgeBaseDetailPage(
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
-                                        setDropdownOpen(prev => ({
+                                        setDropdownOpen((prev) => ({
                                           ...prev,
-                                          [file.id]: false
+                                          [file.id]: false,
                                         }));
-                                        checkFileRole(file.id);
+                                        setTimeout(() => checkFileRole(file.id), 0);
                                       }}
                                     >
                                       <span className="text-xs font-medium">{t('knowledgebase.permissionSettings')}</span>
@@ -2536,11 +2523,11 @@ export default function KnowledgeBaseDetailPage(
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
-                                        setDropdownOpen(prev => ({
+                                        setDropdownOpen((prev) => ({
                                           ...prev,
-                                          [file.id]: false
+                                          [file.id]: false,
                                         }));
-                                        handleOpenMetadata(file.id);
+                                        setTimeout(() => handleOpenMetadata(file.id), 0);
                                       }}
                                     >
                                       <span className="text-xs font-medium">{t('knowledgebase.metadata')}</span>
@@ -2548,13 +2535,15 @@ export default function KnowledgeBaseDetailPage(
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
-                                        setDropdownOpen(prev => ({
+                                        setDropdownOpen((prev) => ({
                                           ...prev,
-                                          [file.id]: false
+                                          [file.id]: false,
                                         }));
-                                        setCurrentFileId(file.id);
-                                        setFileSource(file.file_source || '');
-                                        setFileSourceOpen(true);
+                                        setTimeout(() => {
+                                          setCurrentFileId(file.id);
+                                          setFileSource(file.file_source || '');
+                                          setFileSourceOpen(true);
+                                        }, 0);
                                       }}
                                     >
                                       <span className="text-xs font-medium">{t('knowledgebase.sourceLink')}</span>
@@ -2562,28 +2551,33 @@ export default function KnowledgeBaseDetailPage(
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
-                                        setDropdownOpen(prev => ({
+                                        setDropdownOpen((prev) => ({
                                           ...prev,
-                                          [file.id]: false
+                                          [file.id]: false,
                                         }));
-                                        handleReprocessFile(file.id);
+                                        setTimeout(() => handleReprocessFile(file.id), 0);
                                       }}
                                     >
-                                      <span className="text-xs font-medium">{t('knowledgebase.reprocess')}</span> 
+                                      <span className="text-xs font-medium">{t('knowledgebase.reprocess')}</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
-                                        setDropdownOpen(prev => ({
+                                        setDropdownOpen((prev) => ({
                                           ...prev,
-                                          [file.id]: false
+                                          [file.id]: false,
                                         }));
-                                        handleDeleteFile(file.id);
+                                        setTimeout(() => {
+                                          setDeleteFileTarget({
+                                            id: file.id,
+                                            file_name: file.file_name,
+                                          });
+                                        }, 0);
                                       }}
                                       className="text-destructive focus:text-destructive"
                                     >
-                                      <span className="text-xs font-medium">{t('common.delete')}</span> 
+                                      <span className="text-xs font-medium">{t('common.delete')}</span>
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -3070,7 +3064,7 @@ export default function KnowledgeBaseDetailPage(
                       </DialogHeader>
                       {previewLoading ? (
                         <div className="flex items-center justify-center h-full">
-                          <Loader2 className="h-6 w-6 animate-spin" />
+                          <Spinner size="lg" />
                         </div>
                       ) : previewError ? (
                         <div className="text-red-500">{previewError}</div>

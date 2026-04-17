@@ -19,6 +19,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { HeaderPortal } from "@/components/header-portal";
+import { PageLoading } from "@/components/ui/loading";
 
 
 
@@ -119,7 +120,7 @@ const default_chat_config: Chatbot = {
     }, [botConfig, tenantFetch, router]);
 
     if (loading) {
-        return <div className="flex items-center justify-center h-screen">{t('common.loading')}</div>;
+        return <PageLoading className="h-full" />;
     }
 
     return (

@@ -148,9 +148,12 @@ export default function LlmConfigPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="menu-compact">
                     <DropdownMenuItem
-                      onSelect={() => {
-                        setEditLlmConfig(llm);
-                        setIsEditOpen(true);
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setTimeout(() => {
+                          setEditLlmConfig(llm);
+                          setIsEditOpen(true);
+                        }, 0);
                       }}
                     >
                       <Edit />
@@ -158,7 +161,10 @@ export default function LlmConfigPage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
-                      onSelect={() => removeModel(llm.id)}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setTimeout(() => removeModel(llm.id), 0);
+                      }}
                     >
                       <TrashIcon />
                       {t('common.delete') || 'Delete'}
