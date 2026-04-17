@@ -26,3 +26,4 @@ from db.models.chatdb.chatdb import ChatDbConfigEntity
 from db.models.knowledgebase.vector_table_mapping import VectorTableMappingEntity
 from db.models.file.file import FileEntity, FileTextContentEntity
 from db.models.file.upload_session import FileUploadSessionEntity
+from db.models.file.chunk import FileChunkEntity

@@ -17,6 +17,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from common.knowledgebase.types import FileStatus
+from db.models.file.chunk import FileChunkEntity
 from db.models.file.file import (
     FileEntity,
     FilePurpose,
@@ -379,6 +380,106 @@ class FileResourceService:
             file_path=entity.file_path, tenant_id=tenant_id
         )
 
+    # ------------- chunks (in-file retrieval) -------------
+    async def replace_chunks(
+        self,
+        *,
+        file_id: str,
+        tenant_id: str,
+        chunks: List[dict],
+    ) -> int:
+        """Drop any existing chunks for this file and write the new ones.
+
+        Idempotent: re-running extraction (e.g. after revive) produces a fresh
+        set in a single transaction. Returns the number of chunks written.
+        """
+        from sqlalchemy import delete as sa_delete
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        await self.session.exec(
+            sa_delete(FileChunkEntity).where(
+                FileChunkEntity.file_id == file_id,
+                FileChunkEntity.tenant_id == tenant_id,
+            )
+        )
+        rows: List[FileChunkEntity] = []
+        for c in chunks:
+            rows.append(FileChunkEntity(
+                tenant_id=tenant_id,
+                file_id=file_id,
+                chunk_index=c["index"],
+                content=c["content"],
+                start_offset=c.get("start", 0),
+                end_offset=c.get("end", 0),
+                token_count=c.get("token_count", 0),
+                chunk_metadata=c.get("metadata", {}),
+                created_at=now,
+            ))
+        for r in rows:
+            self.session.add(r)
+        await self.session.commit()
+        return len(rows)
+
+    async def count_chunks(self, file_id: str, tenant_id: str) -> int:
+        from sqlalchemy import func as sa_func
+        stmt = select(sa_func.count()).select_from(FileChunkEntity).where(
+            FileChunkEntity.file_id == file_id,
+            FileChunkEntity.tenant_id == tenant_id,
+        )
+        return (await self.session.exec(stmt)).one_or_none() or 0
+
+    async def search_chunks(
+        self,
+        *,
+        file_id: str,
+        tenant_id: str,
+        query: str,
+        top_k: int = 5,
+    ) -> List[dict]:
+        """Keyword-score chunks against ``query`` and return the top ``top_k``.
+
+        Simple, dependency-free retrieval: case-insensitive occurrence count of
+        each whitespace-split query term, summed per chunk. Good enough for a
+        demo over a single file; swap in BM25 / embeddings later without
+        changing the endpoint contract.
+        """
+        if not query.strip():
+            return []
+        stmt = select(FileChunkEntity).where(
+            FileChunkEntity.file_id == file_id,
+            FileChunkEntity.tenant_id == tenant_id,
+        ).order_by(FileChunkEntity.chunk_index)
+        rows = list((await self.session.exec(stmt)).all())
+        if not rows:
+            return []
+
+        terms = [t for t in query.lower().split() if t]
+        if not terms:
+            return []
+
+        scored: List[tuple[float, FileChunkEntity]] = []
+        for row in rows:
+            body = (row.content or "").lower()
+            score = sum(body.count(t) for t in terms)
+            if score > 0:
+                scored.append((score, row))
+        # Fallback: if nothing matched at all, surface the first N chunks so
+        # the caller at least gets some context instead of an empty array.
+        if not scored:
+            scored = [(0.0, r) for r in rows[:top_k]]
+        scored.sort(key=lambda pair: (-pair[0], pair[1].chunk_index))
+        out: List[dict] = []
+        for score, row in scored[:top_k]:
+            out.append({
+                "chunk_id": row.id,
+                "chunk_index": row.chunk_index,
+                "content": row.content,
+                "start_offset": row.start_offset,
+                "end_offset": row.end_offset,
+                "score": float(score),
+            })
+        return out
+
     # ------------- agent-consumer facing helpers -------------
     # Back-compat for the old FileService.get_file_by_id signature used by
     # code_sandbox_tool and the spreadsheet detector in agent_service.
@@ -527,10 +628,17 @@ class FileResourceService:
                 f"[FileResource] file_store delete failed for {file_id} "
                 f"(path={entity.file_path}); proceeding with DB delete."
             )
-        # Cascade text content row (no FK on SQLite, so delete manually).
+        # Cascade text content + chunks (no FK on SQLite, so delete manually).
+        from sqlalchemy import delete as sa_delete
         text_row = await self.get_text_content(file_id=file_id, tenant_id=tenant_id)
         if text_row is not None:
             await self.session.delete(text_row)
+        await self.session.exec(
+            sa_delete(FileChunkEntity).where(
+                FileChunkEntity.file_id == file_id,
+                FileChunkEntity.tenant_id == tenant_id,
+            )
+        )
         await self.session.delete(entity)
         await self.session.commit()
         return True

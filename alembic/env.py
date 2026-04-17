@@ -43,6 +43,7 @@ from db.models import (
     FileEntity,
     FileTextContentEntity,
     FileUploadSessionEntity,
+    FileChunkEntity,
 )
 
 

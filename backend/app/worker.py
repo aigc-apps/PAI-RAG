@@ -157,7 +157,9 @@ async def process_file_resource_async(file_id: str, tenant_id: str):
     from service.file.file_resource_service import FileResourceService
     from service.file.content_extractor import (
         EXTRACTOR_VERSION,
+        chunk_text,
         extract_text_from_bytes,
+        should_chunk,
     )
     from pairag.file.store.file_store_helper import file_store
 
@@ -176,7 +178,12 @@ async def process_file_resource_async(file_id: str, tenant_id: str):
             file_path=entity.file_path, tenant_id=tenant_id
         )
         raw = stream.read() if hasattr(stream, "read") else stream
-        result = extract_text_from_bytes(raw, entity.file_extension or "")
+        result = extract_text_from_bytes(
+            raw,
+            entity.file_extension or "",
+            file_name=entity.file_name,
+            tenant_id=tenant_id,
+        )
         async with create_db_session() as session:
             svc = FileResourceService(session)
             if result is not None:
@@ -188,6 +195,18 @@ async def process_file_resource_async(file_id: str, tenant_id: str):
                     extractor_version=EXTRACTOR_VERSION,
                     truncated_at_extract=truncated_at_extract,
                 )
+                # Only build chunks when the extract is big enough to warrant
+                # search. Small files skip chunking; the agent inlines their
+                # full text via /text directly.
+                if should_chunk(len(content)):
+                    chunks = chunk_text(content)
+                    written = await svc.replace_chunks(
+                        file_id=file_id, tenant_id=tenant_id, chunks=chunks
+                    )
+                    logger.info(
+                        f"[WORKER] {file_id} chunked: {written} chunks "
+                        f"(total_length={len(content)})"
+                    )
             await svc.mark_status(
                 file_id=file_id, tenant_id=tenant_id, status=FileStatus.succeeded
             )

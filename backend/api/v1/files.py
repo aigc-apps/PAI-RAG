@@ -8,7 +8,13 @@ from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from api.api_exception import ApiException
-from api.v1.dto.file_dto import FileRead, FileTextRead, FileUrlRead
+from api.v1.dto.file_dto import (
+    FileChunkHit,
+    FileChunkSearchResult,
+    FileRead,
+    FileTextRead,
+    FileUrlRead,
+)
 from common.chat.response_model import success_response
 from db.models.file.file import FilePurpose
 from service.file.file_resource_service import FileResourceService
@@ -193,6 +199,38 @@ async def get_file_url(
     if not url:
         raise ApiException(code=404, message=f"File {file_id} has no accessible URL")
     return success_response(data=FileUrlRead(file_id=file_id, url=url))
+
+
+@files_router.get("/{file_id}/chunks")
+async def search_file_chunks(
+    file_id: str,
+    query: str = Query(..., min_length=1, description="Keyword query; whitespace-split into terms"),
+    top_k: int = Query(5, ge=1, le=20, description="Max number of chunks to return"),
+    file_service: FileResourceService = Depends(get_file_resource_service),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Search within a single file's chunks and return the top matches.
+
+    Chunks are produced during extraction for files whose text is large enough
+    to warrant retrieval (see ``SEARCHABLE_MIN_CHARS`` in content_extractor).
+    Small files return an empty ``hits`` array — the client should fall back
+    to ``GET /v1/files/{id}/text`` in that case.
+    """
+    entity = await file_service.get_file(file_id=file_id, tenant_id=tenant_id)
+    if not entity:
+        raise ApiException.not_found(file_id, "File")
+    total = await file_service.count_chunks(file_id=file_id, tenant_id=tenant_id)
+    hits = await file_service.search_chunks(
+        file_id=file_id, tenant_id=tenant_id, query=query, top_k=top_k
+    )
+    return success_response(
+        data=FileChunkSearchResult(
+            file_id=file_id,
+            query=query,
+            total_chunks=total,
+            hits=[FileChunkHit(**h) for h in hits],
+        )
+    )
 
 
 @files_router.delete("/{file_id}")

@@ -40,3 +40,19 @@ class FileTextRead(BaseModel):
 class FileUrlRead(BaseModel):
     file_id: str
     url: str
+
+
+class FileChunkHit(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    content: str
+    start_offset: int
+    end_offset: int
+    score: float
+
+
+class FileChunkSearchResult(BaseModel):
+    file_id: str
+    query: str
+    total_chunks: int
+    hits: list[FileChunkHit]

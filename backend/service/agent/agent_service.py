@@ -5,6 +5,7 @@ from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from tools.knowledgebase.faq_tool import aget_faq_tool
 from service.factory.tools import create_search_tools, create_chatdb_tools, create_codesandbox_tools
 from service.factory.mcp_factory import create_mcp_tools_async
+from tools.attachments.file_chunk_searcher import aget_file_chunk_searcher
 from tools.attachments.file_reader import aget_file_reader
 from tools.attachments.multimodal_parser import aget_multimodal_parser_tool
 import os
@@ -250,6 +251,39 @@ class AgentService:
                 attachment_tools.append(await aget_file_reader(file_contents_map=file_contents_map))
                 reply_text = f"\n\n 可以阅读的文件列表: \n\n {file_contents_map.keys()}"
                 append_text(user_message, reply_text)
+
+            # Large files whose full text was truncated for inline injection
+            # get a dedicated search tool. The LLM sees the file catalogue in
+            # the tool description and calls `search-file-chunks` as needed.
+            large_files: List[dict] = []
+            for fid in file_ids_to_read:
+                chunk_count = await file_service.count_chunks(
+                    file_id=fid, tenant_id=tenant_id
+                )
+                if chunk_count <= 0:
+                    continue
+                f_entity = await file_service.get_file(file_id=fid, tenant_id=tenant_id)
+                if not f_entity:
+                    continue
+                large_files.append({
+                    "file_id": fid,
+                    "file_name": f_entity.file_name,
+                    "chunk_count": chunk_count,
+                })
+            if large_files:
+                attachment_tools.append(
+                    await aget_file_chunk_searcher(
+                        file_service=file_service,
+                        tenant_id=tenant_id,
+                        files=large_files,
+                    )
+                )
+                catalog_names = ", ".join(f["file_name"] for f in large_files)
+                append_text(
+                    user_message,
+                    f"\n\n 对于较长的文件 [{catalog_names}] 可以调用 `search-file-chunks` "
+                    f"工具按关键字检索。",
+                )
 
         # coding tool
         attachment_names_in_message = []
