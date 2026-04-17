@@ -87,13 +87,10 @@ async def delete_thread(
     message_service: MessageService = Depends(get_message_service),
 ):
     try:
-        # Release file refs so unreferenced attachments become eligible for GC.
-        try:
-            await message_service.release_attachment_refs(thread_id, tenant_id=tenant_id)
-        except Exception as e:
-            logger.error(
-                f"[ThreadProvider] Failed to release attachment refs: {e}"
-            )
+        # Release file refs FIRST. Any error here must abort the whole request
+        # — otherwise the thread is gone but ref_counts stay elevated with no
+        # way to reach them, and the files would be pinned forever.
+        await message_service.release_attachment_refs(thread_id, tenant_id=tenant_id)
 
         # Delete the thread
         await thread_service.delete_thread(thread_id, tenant_id=tenant_id)

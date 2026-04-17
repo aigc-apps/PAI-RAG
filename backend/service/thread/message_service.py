@@ -117,12 +117,22 @@ class MessageService:
         """
         thread_id = message_data.thread_id
 
+        # Attachments captured *before* we mutate existing_message so we can
+        # compute a precise add/remove delta against the upsert.
+        old_attachment_ids: list[str] = []
+        existing_message = None
+
         # Check if message with local_id already exists
         if message_data.local_id:
             existing_message = await self.get_message_by_local_id(
                 thread_id=thread_id, local_id=message_data.local_id, tenant_id=tenant_id
             )
             if existing_message:
+                old_attachment_ids = [
+                    a.get("id")
+                    for a in (existing_message.attachments or [])
+                    if isinstance(a, dict) and a.get("id")
+                ]
                 # Update existing message
                 existing_message.attachments = message_data.attachments
                 existing_message.content = message_data.content
@@ -140,15 +150,26 @@ class MessageService:
 
         self.session.add(message_entity)
 
-        # Increment ref_count on attached files so they aren't GC'd while this
-        # message references them. Actual cleanup happens on thread delete
-        # (release_attachment_refs) or via the TTL/GC sweep (Phase 2).
-        attachment_ids = [
-            a.get("id") for a in (message_data.attachments or []) if a.get("id")
+        # Ref-count delta: on a fresh insert `old` is empty, so every new
+        # attachment is ++. On upsert (local_id match), only the true delta
+        # moves — retries with identical attachments are a no-op, and edits
+        # that swap attachments ++ new / -- removed. Without this delta the
+        # ref_count monotonically grows and pins files forever.
+        new_attachment_ids = [
+            a.get("id")
+            for a in (message_data.attachments or [])
+            if isinstance(a, dict) and a.get("id")
         ]
-        if attachment_ids:
+        old_set = set(old_attachment_ids)
+        new_set = set(new_attachment_ids)
+        to_add = sorted(new_set - old_set)
+        to_remove = sorted(old_set - new_set)
+        if to_add or to_remove:
             file_service = FileResourceService(self.session)
-            await file_service.increment_refs(file_ids=attachment_ids, tenant_id=tenant_id)
+            if to_add:
+                await file_service.increment_refs(file_ids=to_add, tenant_id=tenant_id)
+            if to_remove:
+                await file_service.decrement_refs(file_ids=to_remove, tenant_id=tenant_id)
 
         # Flush to get the ID, but don't commit
         await self.session.flush()
