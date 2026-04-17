@@ -381,7 +381,7 @@ export default function EvalDatasetsDetailsPage({
         onSave={dialogMode === 'edit' ? handleSaveEdit : undefined}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
         {/* Toolbar */}
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">

@@ -470,10 +470,10 @@ const ComposerAction: FC = () => {
 
 const UserMessage: FC = () => {
   return (
-    <MessagePrimitive.Root className="flex flex-col items-end gap-1 w-full max-w-[var(--thread-max-width)] py-3">
+    <MessagePrimitive.Root className="flex flex-col items-end gap-1 w-full max-w-[var(--thread-max-width)] py-2">
       <div className="flex items-center gap-1 max-w-[90%]">
         <UserActionBar />
-        <div className="msg-user break-words rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed">
+        <div className="msg-user break-words rounded-2xl px-3.5 py-1.5 text-[13px] leading-normal">
           <UserMessageAttachments />
           <MessagePrimitive.Content />
         </div>

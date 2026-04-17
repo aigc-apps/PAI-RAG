@@ -79,7 +79,7 @@ export default function EvalExperimentsDetailsPage({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
         {isLoading ? (
           <PageLoading label={t('evaluation.loadingExperiments')} />
         ) : experiments.length === 0 ? (

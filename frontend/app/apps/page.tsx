@@ -100,7 +100,7 @@ const ChatbotPage = () => {
       </HeaderPortal>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-5">
+        <div className="p-6">
           {loading ? (
             <PageLoading />
           ) : chatbots.length === 0 ? (
@@ -131,7 +131,7 @@ const ChatbotPage = () => {
                       router.push(`/apps/${bot.app_id}`);
                     }}
                     key={bot.id}
-                    className="group relative cursor-pointer flex flex-col gap-0 p-4 rounded-xl border border-border bg-card card-hover-glow transition-all duration-200"
+                    className="group relative cursor-pointer flex flex-col gap-0 p-5 rounded-xl border border-border bg-card card-hover-glow transition-all duration-200"
                   >
                     {/* Top: avatar + title + more menu */}
                     <div className="flex items-start gap-3">
@@ -189,14 +189,14 @@ const ChatbotPage = () => {
                     </div>
 
                     {/* Description */}
-                    <CardContent className="px-0 pt-3 pb-3 flex-1">
+                    <CardContent className="px-0 pt-4 pb-4 flex-1">
                       <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                         {bot.description || t('knowledgebase.noDescription')}
                       </p>
                     </CardContent>
 
                     {/* Footer */}
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-2 border-t border-border">
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                       <Clock className="w-3 h-3" />
                       <span className="truncate">{formatBeijingTime(bot.updated_at)}</span>
                     </div>

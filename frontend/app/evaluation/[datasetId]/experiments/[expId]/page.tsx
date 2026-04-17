@@ -435,7 +435,7 @@ export default function ExperimentDetailPage({ params }: { params: Promise<{ dat
         mode="view"
       />
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {/* Summary stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <div className="rounded-lg border border-border bg-card px-3 py-2">
