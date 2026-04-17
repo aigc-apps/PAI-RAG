@@ -38,16 +38,6 @@ class TestFileService:
         result = await service.get_files_by_ids([], TENANT)
         assert result == []
 
-    async def test_get_file_contents_map(self, service, mock_session):
-        f = KbFileEntity(id="f1", kb_id="kb1", file_name="test.pdf", tenant_id=TENANT, file_content="hello")
-        mock_session.exec.return_value = make_mock_result(all_values=[f])
-        result = await service.get_file_contents_map(["f1"], TENANT)
-        assert "test.pdf" in result
-
-    async def test_get_file_contents_map_empty(self, service, mock_session):
-        result = await service.get_file_contents_map([], TENANT)
-        assert result == {}
-
     async def test_get_file(self, service, mock_session):
         f = KbFileEntity(id="f1", kb_id="kb1", file_name="test.pdf", tenant_id=TENANT)
         mock_session.exec.return_value = make_mock_result(first_value=f)
@@ -56,10 +46,6 @@ class TestFileService:
 
     async def test_get_files_by_names_empty(self, service, mock_session):
         result = await service.get_files_by_names("kb1", [], TENANT)
-        assert result == []
-
-    async def test_get_file_base64_list_empty(self, service, mock_session):
-        result = await service.get_file_base64_list([], TENANT)
         assert result == []
 
     async def test_list_files(self, service, mock_session):

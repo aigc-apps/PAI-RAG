@@ -5,6 +5,7 @@ Decoupled from knowledgebase: writes rows into `pai_file` and
 (agent_service, code_sandbox_tool, message_service).
 """
 import asyncio
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -421,35 +422,55 @@ class FileResourceService:
         return await asyncio.gather(*tasks)
 
     # ------------- ref counting (for message-attached lifecycle) -------------
+    # NB: both inc and dec accept a list that MAY contain duplicate file_ids
+    # (e.g. the same file attached to two messages in a thread). A naive
+    # `UPDATE ... WHERE id IN (...)` would collapse duplicates — SQL evaluates
+    # the predicate once per row, so `[A, A]` only moves A by one. We group
+    # by id and issue one UPDATE per unique id using the occurrence count.
     async def increment_refs(self, file_ids: List[str], tenant_id: str) -> None:
         if not file_ids:
             return
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        stmt = (
-            update(FileEntity)
-            .where(
-                FileEntity.id.in_(file_ids),
-                FileEntity.tenant_id == tenant_id,
+        for fid, count in Counter(file_ids).items():
+            if count <= 0:
+                continue
+            stmt = (
+                update(FileEntity)
+                .where(
+                    FileEntity.id == fid,
+                    FileEntity.tenant_id == tenant_id,
+                )
+                .values(
+                    ref_count=FileEntity.ref_count + count,
+                    updated_at=now,
+                )
             )
-            .values(ref_count=FileEntity.ref_count + 1, updated_at=now)
-        )
-        await self.session.exec(stmt)
+            await self.session.exec(stmt)
 
     async def decrement_refs(self, file_ids: List[str], tenant_id: str) -> None:
         if not file_ids:
             return
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        # Guard against going negative — clamp at 0.
-        stmt = (
-            update(FileEntity)
-            .where(
-                FileEntity.id.in_(file_ids),
-                FileEntity.tenant_id == tenant_id,
-                FileEntity.ref_count > 0,
+        for fid, count in Counter(file_ids).items():
+            if count <= 0:
+                continue
+            # Only move rows with enough headroom — defensive clamp so an
+            # over-release (e.g. a message counted twice by mistake) doesn't
+            # drive ref_count negative. A mismatched row is left untouched;
+            # inspect logs if you see sweep results that surprise you.
+            stmt = (
+                update(FileEntity)
+                .where(
+                    FileEntity.id == fid,
+                    FileEntity.tenant_id == tenant_id,
+                    FileEntity.ref_count >= count,
+                )
+                .values(
+                    ref_count=FileEntity.ref_count - count,
+                    updated_at=now,
+                )
             )
-            .values(ref_count=FileEntity.ref_count - 1, updated_at=now)
-        )
-        await self.session.exec(stmt)
+            await self.session.exec(stmt)
 
     # ------------- deletion / GC -------------
     async def hard_delete(self, file_id: str, tenant_id: str) -> bool:
