@@ -13,6 +13,7 @@ class EvaluatorConfigCreate(SQLModel):
     model_provider_name: Optional[str] = Field(default="openai_like")
     case_sensitive: bool = Field(default=False)
     ignore_punctuation: bool = Field(default=False)
+    prompt_template: Optional[str] = Field(default=None)
 
 class EvaluatorConfigEntity(EvaluatorConfigCreate, table=True):
     __tablename__ = "pai_evaluator_config"

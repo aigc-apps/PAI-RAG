@@ -19,6 +19,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDownIcon } from "lucide-react";
@@ -62,7 +63,8 @@ export function EvalConfigFormDialog({
         type: "",
         model_id: "",
         case_sensitive: false,
-        ignore_punctuation: false
+        ignore_punctuation: false,
+        prompt_template: "",
       }
   );
 
@@ -77,7 +79,8 @@ export function EvalConfigFormDialog({
         type: "",
         model_id: "",
         case_sensitive: false,
-        ignore_punctuation: false
+        ignore_punctuation: false,
+        prompt_template: "",
       });
     }
   }, [mode, config]);
@@ -174,30 +177,53 @@ export function EvalConfigFormDialog({
               )}
 
               {localConfig.type === "LLMJudge" && (
-                <div className="pt-3">
-                  <Label htmlFor="model_id" className="block text-sm mb-2">
-                    {t('evaluation.selectEvaluatorModel')}
-                  </Label>
-                  <Select
-                    value={localConfig.model_id || ""}
-                    onValueChange={(value) => {
-                      setLocalConfig((prev) => ({
-                        ...prev,
-                        model_id: value,
-                      }));
-                    }}
-                  >
-                    <SelectTrigger id="model_id">
-                      <SelectValue placeholder={t('evaluation.selectEvalModel')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {llms.map((llm) => (
-                        <SelectItem key={llm.model_id} value={llm.model_id}>
-                          {llm.model_id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="pt-3 space-y-4">
+                  <div>
+                    <Label htmlFor="model_id" className="block text-sm mb-2">
+                      {t('evaluation.selectEvaluatorModel')}
+                    </Label>
+                    <Select
+                      value={localConfig.model_id || ""}
+                      onValueChange={(value) => {
+                        setLocalConfig((prev) => ({
+                          ...prev,
+                          model_id: value,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger id="model_id">
+                        <SelectValue placeholder={t('evaluation.selectEvalModel')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {llms.map((llm) => (
+                          <SelectItem key={llm.model_id} value={llm.model_id}>
+                            {llm.model_id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="prompt_template" className="block text-sm mb-1">
+                      {t('evaluation.customPromptTemplate')}
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground mb-2">
+                      {t('evaluation.customPromptTemplateHint')}
+                    </p>
+                    <Textarea
+                      id="prompt_template"
+                      value={localConfig.prompt_template || ""}
+                      onChange={(e) =>
+                        setLocalConfig((prev) => ({ ...prev, prompt_template: e.target.value }))
+                      }
+                      placeholder={t('evaluation.customPromptTemplatePlaceholder')}
+                      className="font-mono text-xs min-h-[200px]"
+                      rows={10}
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {t('evaluation.promptPlaceholdersHint')}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

@@ -39,9 +39,10 @@ export interface EvaluatorConfig {
     id: string;
     name: string;
     type: string;
-    model_id: string;    
+    model_id: string;
     case_sensitive?: boolean;
     ignore_punctuation?: boolean;
+    prompt_template?: string;
 }
 
 export interface ExperimentItem {

@@ -1108,6 +1108,7 @@ class EvaluationService:
             model_id=config_data.model_id,
             case_sensitive=config_data.case_sensitive,
             ignore_punctuation=config_data.ignore_punctuation,
+            prompt_template=config_data.prompt_template,
             tenant_id=tenant_id,
         )
 
@@ -1162,6 +1163,8 @@ class EvaluationService:
             eval_config.case_sensitive = update_data.case_sensitive
         if update_data.ignore_punctuation is not None:
             eval_config.ignore_punctuation = update_data.ignore_punctuation
+        if update_data.prompt_template is not None:
+            eval_config.prompt_template = update_data.prompt_template
 
         self.session.add(eval_config)
 

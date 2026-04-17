@@ -41,6 +41,7 @@ const default_evaluator_config: EvaluatorConfig = {
   model_id: '',
   case_sensitive: false,
   ignore_punctuation: false,
+  prompt_template: '',
 };
 
 export default function EvaluatorConfigsPage({
@@ -258,12 +259,19 @@ export default function EvaluatorConfigsPage({
                           </Badge>
                         </div>
                       ) : config.type === 'LLMJudge' ? (
-                        <span className="text-[11px] text-muted-foreground">
-                          {t('evaluation.model')}:{' '}
-                          <span className="font-mono text-foreground/80">
-                            {config.model_id || t('evaluation.notSpecified')}
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="text-[11px] text-muted-foreground">
+                            {t('evaluation.model')}:{' '}
+                            <span className="font-mono text-foreground/80">
+                              {config.model_id || t('evaluation.notSpecified')}
+                            </span>
                           </span>
-                        </span>
+                          {config.prompt_template && (
+                            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
+                              {t('evaluation.customPrompt')}
+                            </Badge>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-[11px] text-muted-foreground">—</span>
                       )}

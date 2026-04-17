@@ -732,6 +732,11 @@ export const translations: I18nConfig = {
       selectEvaluator: '选择评估器',
       selectEvaluatorModel: '选择评估器模型',
       selectEvalModel: '请选择评估模型',
+      customPromptTemplate: '自定义评估提示词',
+      customPromptTemplateHint: '自定义 LLM 评判器使用的提示词模板。留空则使用默认的正确性评估提示词。',
+      customPromptTemplatePlaceholder: '输入自定义提示词模板...',
+      promptPlaceholdersHint: '可用占位符: {inputs}, {outputs}, {reference_outputs}。输出必须是包含 score, reason, correctness_issues 字段的 JSON。',
+      customPrompt: '自定义提示词',
       new: '新建',
       modify: '修改',
       
@@ -1965,6 +1970,11 @@ export const translations: I18nConfig = {
       selectEvaluator: 'Select Evaluator',
       selectEvaluatorModel: 'Select Evaluator Model',
       selectEvalModel: 'Please select evaluation model',
+      customPromptTemplate: 'Custom Prompt Template',
+      customPromptTemplateHint: 'Customize the prompt template used by the LLM Judge. Leave empty to use the default correctness prompt.',
+      customPromptTemplatePlaceholder: 'Enter custom prompt template...',
+      promptPlaceholdersHint: 'Available placeholders: {inputs}, {outputs}, {reference_outputs}. Output must be JSON with score, reason, correctness_issues fields.',
+      customPrompt: 'Custom Prompt',
       new: 'New',
       modify: 'Modify',
       

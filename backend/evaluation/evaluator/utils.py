@@ -29,8 +29,10 @@ def create_evaluator(eval_config: dict, eval_llm: LLM = None) -> BaseEvaluator:
         )
     elif eval_type == "LLMJudge":
         assert eval_llm is not None, "Must provide eval llm instance"
+        prompt_template = eval_config.get("prompt_template") or None
         return LLMJudgeEvaluator(
-            llm=eval_llm
+            llm=eval_llm,
+            prompt_template=prompt_template,
         )
 
     else:
