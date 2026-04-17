@@ -7,7 +7,7 @@ Decoupled from knowledgebase: writes rows into `pai_file` and
 import asyncio
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 from fastapi import UploadFile
 from loguru import logger
@@ -24,11 +24,7 @@ from db.models.file.file import (
 )
 from pairag.file.store.file_store_helper import file_store
 from tools.utils.attachments import aget_file_base64_content, get_file_mime_type
-from utils.upload_file_utils import (
-    StoredFileInfo,
-    preview_upload,
-    write_upload_to_store,
-)
+from utils.upload_file_utils import preview_upload
 
 
 def _yyyymm(dt: Optional[datetime] = None) -> str:
@@ -131,59 +127,97 @@ class FileResourceService:
         alias_id: Optional[str] = None,
         expires_in_seconds: Optional[int] = None,
     ) -> Tuple[FileEntity, bool]:
-        """Persist bytes to file_store and create a FileEntity row.
+        """Single-part upload. Thin wrapper around :meth:`ingest`.
+
+        Peeks md5/size/ext from the UploadFile, then hands the stream (already
+        rewound to 0 by ``preview_upload``) off to the shared ingest flow.
+        """
+        preview = preview_upload(upload)
+        return await self.ingest(
+            tenant_id=tenant_id,
+            purpose=purpose,
+            file_name=preview.file_name,
+            file_extension=preview.file_extension,
+            file_size=preview.file_size,
+            file_md5=preview.file_md5,
+            source_stream=upload.file,
+            metadata=metadata,
+            alias_id=alias_id,
+            expires_in_seconds=expires_in_seconds,
+        )
+
+    async def ingest(
+        self,
+        *,
+        tenant_id: str,
+        purpose: FilePurpose,
+        file_name: str,
+        file_extension: str,
+        file_size: int,
+        file_md5: str,
+        source_stream: BinaryIO,
+        metadata: Optional[dict] = None,
+        alias_id: Optional[str] = None,
+        expires_in_seconds: Optional[int] = None,
+    ) -> Tuple[FileEntity, bool]:
+        """Core dedup / revive / create flow for a fully-known blob.
+
+        Shared by :meth:`create_from_upload` (single-part) and
+        ``UploadSessionService.complete`` (multipart). Callers pre-compute the
+        md5/size/extension/name and hand in a stream positioned at offset 0.
 
         Returns ``(entity, is_new)``:
-        - ``is_new=False`` → existing healthy row reused, no upload performed.
-        - ``is_new=True`` → either a brand-new row or a previously failed row
-          that was revived (bytes re-uploaded, status reset to pending).
-        Callers re-enqueue background processing whenever ``is_new`` is True.
+
+        - ``is_new=False`` — an existing row in a reusable status
+          (pending/parsing/persisting/succeeded) was returned unchanged; the
+          stream is NOT written to storage. Callers MUST NOT re-enqueue
+          processing.
+        - ``is_new=True`` — either a brand-new row, or a previously
+          failed/cancelled row revived in place (bytes written, status reset
+          to pending, ``failed_reason`` cleared). Callers SHOULD re-enqueue
+          background processing.
         """
-        # 1. Peek md5/size/ext without hitting OSS — cheap, enables pre-write dedup.
-        preview = preview_upload(upload)
+        # 1. Pre-write dedup.
         existing = await self.find_by_md5(
-            md5=preview.file_md5, purpose=purpose, tenant_id=tenant_id
+            md5=file_md5, purpose=purpose, tenant_id=tenant_id
         )
         if existing is not None and existing.status in self._REUSABLE_STATUSES:
             logger.info(
-                f"[FileResource] Dedup hit for tenant={tenant_id} md5={preview.file_md5} "
+                f"[FileResource] Dedup hit for tenant={tenant_id} md5={file_md5} "
                 f"purpose={purpose.value} → reusing file_id={existing.id}"
             )
             return existing, False
 
-        # 2. Write bytes. Path is keyed by target entity.id so revive and
-        #    fresh-create flows share the same path template.
-        target_id = existing.id if existing is not None else None
+        # 2. Build entity (revive vs fresh). Storage path is keyed by entity.id
+        #    so the two flows converge on the same template.
         entity = existing or FileEntity(
             tenant_id=tenant_id,
             purpose=purpose.value,
             alias_id=alias_id,
             file_metadata=metadata or {},
         )
-        if target_id is None:
-            target_id = entity.id
-
         destination_path = _build_storage_path(
             tenant_id=tenant_id,
-            file_id=target_id,
-            extension=preview.file_extension,
+            file_id=entity.id,
+            extension=file_extension,
         )
-        stored: StoredFileInfo = await write_upload_to_store(
-            upload=upload,
-            destination_path=destination_path,
+        write_result = await file_store.write_async(
+            file=source_stream,
+            file_name=file_name,
+            file_path=destination_path,
             tenant_id=tenant_id,
         )
 
-        # 3. Revive vs fresh: either way we end up with a pending row pointing
-        #    at the newly-written bytes. Metadata merges (don't clobber caller
-        #    keys) and failed_reason is cleared on revive.
+        # 3. Either way we end up with a pending row pointing at the just-
+        #    written bytes. Metadata merges (don't clobber caller keys) and
+        #    failed_reason is cleared so revive doesn't poison the retry.
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        entity.file_name = preview.file_name
-        entity.file_extension = preview.file_extension
-        entity.file_size = preview.file_size
-        entity.file_md5 = preview.file_md5
-        entity.mime_type = get_file_mime_type(preview.file_extension)
-        entity.file_path = stored.file_path
+        entity.file_name = file_name
+        entity.file_extension = file_extension
+        entity.file_size = file_size
+        entity.file_md5 = file_md5
+        entity.mime_type = get_file_mime_type(file_extension)
+        entity.file_path = write_result.file_path
         entity.status = FileStatus.pending.value
         entity.failed_reason = None
         entity.expires_at = _compute_expires_at(purpose, expires_in_seconds)
@@ -199,15 +233,13 @@ class FileResourceService:
             await self.session.refresh(entity)
         except IntegrityError:
             # Race with a concurrent creator that won the unique constraint.
-            # Two cleanup concerns:
-            #  (a) roll back our half-built ORM state;
-            #  (b) delete the bytes we just wrote so they don't linger as
-            #      orphans in object storage (the winner's bytes live at a
-            #      different path keyed by their entity id).
+            # Roll back the ORM state and best-effort remove the bytes we just
+            # wrote so they don't linger as orphans (the winner's bytes live
+            # at a different path keyed by their entity id).
             await self.session.rollback()
-            await self._try_delete_blob(stored.file_path, tenant_id)
+            await self._try_delete_blob(write_result.file_path, tenant_id)
             winner = await self.find_by_md5(
-                md5=preview.file_md5, purpose=purpose, tenant_id=tenant_id
+                md5=file_md5, purpose=purpose, tenant_id=tenant_id
             )
             if winner is not None and winner.status in self._REUSABLE_STATUSES:
                 return winner, False

@@ -12,6 +12,7 @@ memory on complete — adequate for files up to a few hundred MB. Larger uploads
 should switch to native multipart upload (deferred).
 """
 import hashlib
+import os
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Optional, Tuple
@@ -21,19 +22,13 @@ from loguru import logger
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from common.knowledgebase.types import FileStatus
 from db.models.file.file import FileEntity, FilePurpose
 from db.models.file.upload_session import (
     FileUploadSessionEntity,
     UploadSessionStatus,
 )
 from pairag.file.store.file_store_helper import file_store
-from service.file.file_resource_service import (
-    FileResourceService,
-    _build_storage_path,
-    _compute_expires_at,
-)
-from tools.utils.attachments import get_file_mime_type
+from service.file.file_resource_service import FileResourceService
 from utils.upload_file_utils import write_upload_to_store
 
 
@@ -171,60 +166,50 @@ class UploadSessionService:
 
         buf.seek(0)
 
-        # Dedup check on the concatenated md5 before we commit another copy.
-        purpose_enum = FilePurpose(session_row.purpose)
-        svc = FileResourceService(self.session)
-        existing = await svc.find_by_md5(
-            md5=total_md5.hexdigest(), purpose=purpose_enum, tenant_id=tenant_id
-        )
-        if existing is not None:
-            await self._delete_parts(session_row, tenant_id)
-            session_row.status = UploadSessionStatus.COMPLETED.value
-            session_row.file_id = existing.id
-            session_row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            self.session.add(session_row)
-            await self.session.commit()
-            return existing, False
-
-        # Write the assembled object to its final path.
-        import os
+        # Route through the shared ingest flow so multipart inherits the same
+        # dedup / revive / orphan-cleanup policy as single-part upload. In
+        # particular a previously-failed row for these bytes gets revived
+        # (bytes rewritten, status reset to pending) instead of being reused
+        # as-is, which would skip the retry's reprocess.
+        #
+        # ingest() commits, which expires all session objects — so snapshot
+        # everything we still need from session_row before the call.
         extension = os.path.splitext(session_row.file_name or "")[1].lower()
-        final_entity = FileEntity(
+        file_name = session_row.file_name
+        purpose_enum = FilePurpose(session_row.purpose)
+        expires_in_seconds = session_row.expires_in_seconds
+        parts_snapshot = list(session_row.parts or [])
+
+        svc = FileResourceService(self.session)
+        final_entity, is_new = await svc.ingest(
             tenant_id=tenant_id,
-            purpose=session_row.purpose,
-            file_name=session_row.file_name,
+            purpose=purpose_enum,
+            file_name=file_name,
             file_extension=extension,
             file_size=total_size,
             file_md5=total_md5.hexdigest(),
-            mime_type=get_file_mime_type(extension),
-            status=FileStatus.pending.value,
-            file_metadata={"via": "multipart", "upload_id": upload_id},
-            expires_at=_compute_expires_at(
-                purpose_enum, session_row.expires_in_seconds
-            ),
+            source_stream=buf,
+            metadata={"via": "multipart", "upload_id": upload_id},
+            expires_in_seconds=expires_in_seconds,
         )
-        destination_path = _build_storage_path(
-            tenant_id=tenant_id, file_id=final_entity.id, extension=extension
-        )
-        write_result = await file_store.write_async(
-            file=buf,
-            file_name=session_row.file_name,
-            file_path=destination_path,
-            tenant_id=tenant_id,
-        )
-        final_entity.file_path = write_result.file_path
 
-        self.session.add(final_entity)
+        # Re-fetch the session row since ingest()'s commit expired the original
+        # instance — assigning directly would still work but subsequent reads
+        # (e.g. session_row.parts) would trigger a lazy reload under the async
+        # greenlet and blow up.
+        session_row = await self.get_session(upload_id=upload_id, tenant_id=tenant_id)
         session_row.status = UploadSessionStatus.COMPLETED.value
         session_row.file_id = final_entity.id
         session_row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.session.add(session_row)
         await self.session.commit()
+        # The commit above re-expires final_entity; refresh so callers can read
+        # its attributes synchronously (FastAPI response serialization does).
         await self.session.refresh(final_entity)
 
-        # Clean up part objects — best-effort.
-        await self._delete_parts(session_row, tenant_id)
-        return final_entity, True
+        # Best-effort: part blobs are no longer needed whether we wrote or not.
+        await self._delete_parts_at_paths(parts_snapshot, tenant_id)
+        return final_entity, is_new
 
     async def cancel(self, *, upload_id: str, tenant_id: str) -> bool:
         session_row = await self.get_session(upload_id=upload_id, tenant_id=tenant_id)
@@ -243,9 +228,18 @@ class UploadSessionService:
     async def _delete_parts(
         self, session_row: FileUploadSessionEntity, tenant_id: str
     ) -> None:
+        await self._delete_parts_at_paths(session_row.parts or [], tenant_id)
+
+    async def _delete_parts_at_paths(
+        self, parts: list, tenant_id: str
+    ) -> None:
+        """Stateless version: takes a snapshot of parts so callers can invoke
+        it after the associated session row has been expired by an intervening
+        commit without triggering a lazy reload under async.
+        """
         if not hasattr(file_store, "delete_async"):
             return
-        for p in session_row.parts or []:
+        for p in parts:
             try:
                 await file_store.delete_async(
                     file_path=p["path"], tenant_id=tenant_id
@@ -253,5 +247,5 @@ class UploadSessionService:
             except Exception:
                 logger.warning(
                     f"[UploadSession] failed to delete part {p.get('part')} "
-                    f"at {p.get('path')} for session {session_row.id}"
+                    f"at {p.get('path')}"
                 )
