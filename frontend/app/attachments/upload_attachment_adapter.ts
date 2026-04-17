@@ -5,14 +5,15 @@ import {
 } from '@assistant-ui/react';
 import { toast } from 'sonner';
 
-// Helper function to determine attachment type
-const getAttachmentType = (mimeType: string): 'image' | 'document' | 'file' => {
-  return 'document';
-};
-
+// assistant-ui tracks attachments by their client-side id during composition,
+// but our backend issues the authoritative file_id during upload. We keep a
+// map so that when `send()` runs for a Pending attachment we substitute in
+// the server-issued id — that's what gets stored on the message and what
+// the agent looks up.
 export class UploadAttachmentAdapter implements AttachmentAdapter {
   public accept = '*/*';
   private tenantFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  private serverIdByClientId = new Map<string, string>();
 
   constructor(tenantFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
     this.tenantFetch = tenantFetch;
@@ -23,15 +24,13 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
   }: {
     file: File;
   }): AsyncGenerator<PendingAttachment, void> {
-    // Validate file size
     const { v4: uuidv4 } = require('uuid');
-    const fid = uuidv4();
+    const clientId = uuidv4();
     const contentType = file.type || 'application/octet-stream';
-    const attachmentType = getAttachmentType(contentType);
-    
+
     yield {
-      id: fid,
-      type: attachmentType,
+      id: clientId,
+      type: 'document',
       name: file.name,
       contentType: contentType,
       file,
@@ -42,47 +41,45 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       },
     } as PendingAttachment;
 
-    const maxSize = 10 * 1024 * 1024; // 10MB limit
-    
+    const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
-      toast.error(`File size exceeds 10MB limit`);
+      toast.error('File size exceeds 10MB limit');
       yield {
-        id: fid,
-        type: attachmentType,
+        id: clientId,
+        type: 'document',
         name: file.name,
         contentType: contentType,
         file,
         status: {
           type: 'incomplete',
           reason: 'error',
-          error: new Error(`File size exceeds 10MB limit`),
+          error: new Error('File size exceeds 10MB limit'),
         },
       } as PendingAttachment;
       return;
     }
 
     try {
-      // 构造上传请求
       const formData = new FormData();
-      formData.append('file_id', fid);
-      formData.append('file', file); // 将文件加入 FormData
+      formData.append('file', file);
+      formData.append('purpose', 'chat_attachment');
 
-      const response = await this.tenantFetch(`/api/config/attachments`, {
+      const response = await this.tenantFetch('/api/files', {
         method: 'POST',
-        body: formData, // 自动设置 content-type 为 multipart/form-data
+        body: formData,
       });
 
-      // 解析响应
       const result = await response.json();
-      console.log('result', result);
-      if (result.code !== 200) {
-        throw new Error(result.message);
+      if (result.code !== 200 || !result.data?.id) {
+        throw new Error(result.message || 'Upload failed');
       }
 
-      // 返回成功状态
+      const serverId: string = result.data.id;
+      this.serverIdByClientId.set(clientId, serverId);
+
       yield {
-        id: fid,
-        type: attachmentType,
+        id: clientId,
+        type: 'document',
         name: file.name,
         contentType: contentType,
         file,
@@ -93,37 +90,37 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
         },
       } as PendingAttachment;
       return;
-    } catch (error: any) {
-      // 返回失败状态
-      console.log('error', error);
-      toast.error(error.message || 'Upload failed.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Upload failed.';
+      console.error('[upload-attachment]', error);
+      toast.error(message);
       yield {
-        id: fid,
-        type: attachmentType,
+        id: clientId,
+        type: 'document',
         name: file.name,
         contentType: contentType,
         file,
         status: {
           type: 'incomplete',
           reason: 'error',
-          error: new Error('Upload failed.'),
+          error: new Error(message),
         },
       } as PendingAttachment;
       return;
     }
   }
-  
+
   public async send(
     attachment: PendingAttachment,
   ): Promise<CompleteAttachment> {
     if (attachment.status.type === 'incomplete') {
       throw new Error('Attachment upload failed');
     }
-    
+
     const contentType = attachment.contentType || 'application/octet-stream';
-    console.log("upload attachment success:", attachment);
+    const serverId = this.serverIdByClientId.get(attachment.id) ?? attachment.id;
     return {
-      id: attachment.id,
+      id: serverId,
       type: 'document',
       name: attachment.name,
       contentType: contentType,
@@ -133,8 +130,10 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
   }
 
   public async remove(attachment: PendingAttachment): Promise<void> {
-    // Cleanup if needed
-    console.log('removing attachment:', attachment);
+    // Drop the client→server id mapping. We deliberately don't DELETE the
+    // server-side file here: the upload may still be referenced elsewhere
+    // (other composer threads, retries) and the TTL sweep handles true
+    // orphans on the schedule defined by `purpose=chat_attachment`.
+    this.serverIdByClientId.delete(attachment.id);
   }
-
 }

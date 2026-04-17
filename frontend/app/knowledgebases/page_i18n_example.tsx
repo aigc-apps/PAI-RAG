@@ -67,9 +67,7 @@ export default function KnowledgeBasePageI18n() {
       if (!res.ok) throw new Error(t('knowledgebase.fetchError'));
       const json_data = await res.json();
       const data = json_data.data.items;
-      setKnowledgeBases(() => {
-        return (data || []).filter((item: KnowledgeBase) => item.name !== 'default_attachments');
-      });
+      setKnowledgeBases(() => data || []);
       setTotalPages(json_data.data.pages);
     } catch (err: any) {
       setKnowledgeBasesError(err || t('knowledgebase.loadError'));

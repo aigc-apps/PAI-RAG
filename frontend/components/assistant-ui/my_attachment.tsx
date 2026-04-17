@@ -109,24 +109,49 @@ const useRemoteAttachmentUrl = (attachmentId: string | undefined, isFromMessage:
       return;
     }
 
-    // Create a new request
+    // Create a new request. The /v1/files API splits what the old
+    // /v1/config/attachments/urls endpoint bundled into three calls; we do
+    // metadata + signed URL in parallel, then pull a text preview only when
+    // the mime type warrants one.
     const fetchUrl = async (): Promise<AttachmentUrlData> => {
       const defaultData: AttachmentUrlData = { url: null, contentType: null, fileContent: null };
       try {
-        const response = await tenantFetch(`/api/config/attachments/urls?ids=${attachmentId}`);
-        const result = await response.json();
-        
-        if (result.code === 200 && result.data?.items?.length > 0) {
-          const item = result.data.items[0];
-          const newData: AttachmentUrlData = {
-            url: item.url || null,
-            contentType: item.content_type || null,
-            fileContent: item.file_content || null,
-          };
-          attachmentUrlCache.set(attachmentId, newData);
-          return newData;
+        const [metaResp, urlResp] = await Promise.all([
+          tenantFetch(`/api/files/${attachmentId}`),
+          tenantFetch(`/api/files/${attachmentId}/url`),
+        ]);
+        const metaJson = await metaResp.json();
+        const urlJson = await urlResp.json();
+
+        const contentType: string | null = metaJson?.data?.mime_type ?? null;
+        const url: string | null = urlJson?.data?.url ?? null;
+
+        let fileContent: string | null = null;
+        if (isTextContentType(contentType ?? undefined)) {
+          try {
+            // Cap the inline preview at 5KB — clients paginate via
+            // `?offset=&limit=` if they need the rest.
+            const textResp = await tenantFetch(
+              `/api/files/${attachmentId}/text?limit=5000`,
+            );
+            const textJson = await textResp.json();
+            if (textJson?.code === 200) {
+              fileContent = textJson.data?.content ?? null;
+            }
+          } catch (err) {
+            // Text not ready yet (extraction still running, or format has no
+            // text form). UI falls back to "no preview" — not an error.
+            console.warn('[attachment] text preview unavailable:', err);
+          }
         }
-        return defaultData;
+
+        const newData: AttachmentUrlData = {
+          url,
+          contentType,
+          fileContent,
+        };
+        attachmentUrlCache.set(attachmentId, newData);
+        return newData;
       } catch (error) {
         console.error('Failed to fetch attachment URL:', error);
         return defaultData;
