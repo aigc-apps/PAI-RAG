@@ -105,19 +105,38 @@ async def create_file(
         logger.error(f"[/v1/files] upload failed: {traceback.format_exc()}")
         raise ApiException(code=500, message=f"Failed to create file: {e}")
 
-    if is_new and _needs_background_processing(entity.file_extension):
-        try:
-            import app.worker as background_worker
-            background_worker.process_file_resource_task.delay(
+    if is_new:
+        if _needs_background_processing(entity.file_extension):
+            try:
+                import app.worker as background_worker
+                background_worker.process_file_resource_task.delay(
+                    file_id=entity.id,
+                    tenant_id=tenant_id,
+                )
+                logger.info(f"[/v1/files] enqueued file_resource task for {entity.id}")
+            except Exception:
+                # Enqueue is best-effort; file is already persisted.
+                logger.warning(
+                    f"[/v1/files] failed to enqueue processing for {entity.id}: "
+                    f"{traceback.format_exc()}"
+                )
+        else:
+            # Nothing to extract (images, videos, audio, binary). Mark the row
+            # terminal immediately so callers / UIs that wait for succeeded
+            # don't spin forever. The agent's multimodal tool reads the raw
+            # bytes directly via file_path, independent of status.
+            from common.knowledgebase.types import FileStatus
+            await file_service.mark_status(
                 file_id=entity.id,
                 tenant_id=tenant_id,
+                status=FileStatus.succeeded,
             )
-            logger.info(f"[/v1/files] enqueued file_resource task for {entity.id}")
-        except Exception:
-            # Enqueue is best-effort in Phase 1; file is already persisted.
-            logger.warning(
-                f"[/v1/files] failed to enqueue processing for {entity.id}: {traceback.format_exc()}"
+            # Refresh the local entity so the response body reflects the flip.
+            refreshed = await file_service.get_file(
+                file_id=entity.id, tenant_id=tenant_id
             )
+            if refreshed is not None:
+                entity = refreshed
 
     return success_response(data=_entity_to_read(entity))
 

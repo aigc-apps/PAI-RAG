@@ -10,6 +10,16 @@ import { toast } from 'sonner';
 // map so that when `send()` runs for a Pending attachment we substitute in
 // the server-issued id — that's what gets stored on the message and what
 // the agent looks up.
+
+// Map mime → assistant-ui's attachment type (drives how the composer
+// renders the thumbnail). Backend routing uses contentType, not type, so
+// this is purely a UI concern.
+const typeFromMime = (mime: string): 'image' | 'file' | 'document' => {
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/') || mime.startsWith('audio/')) return 'file';
+  return 'document';
+};
+
 export class UploadAttachmentAdapter implements AttachmentAdapter {
   public accept = '*/*';
   private tenantFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -27,10 +37,11 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     const { v4: uuidv4 } = require('uuid');
     const clientId = uuidv4();
     const contentType = file.type || 'application/octet-stream';
+    const uiType = typeFromMime(contentType);
 
     yield {
       id: clientId,
-      type: 'document',
+      type: uiType,
       name: file.name,
       contentType: contentType,
       file,
@@ -46,7 +57,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       toast.error('File size exceeds 10MB limit');
       yield {
         id: clientId,
-        type: 'document',
+        type: uiType,
         name: file.name,
         contentType: contentType,
         file,
@@ -79,7 +90,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
 
       yield {
         id: clientId,
-        type: 'document',
+        type: uiType,
         name: file.name,
         contentType: contentType,
         file,
@@ -96,7 +107,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
       toast.error(message);
       yield {
         id: clientId,
-        type: 'document',
+        type: uiType,
         name: file.name,
         contentType: contentType,
         file,
@@ -121,7 +132,7 @@ export class UploadAttachmentAdapter implements AttachmentAdapter {
     const serverId = this.serverIdByClientId.get(attachment.id) ?? attachment.id;
     return {
       id: serverId,
-      type: 'document',
+      type: typeFromMime(contentType),
       name: attachment.name,
       contentType: contentType,
       content: [],

@@ -105,19 +105,35 @@ async def complete_upload(
         logger.error(f"[/v1/files/uploads] complete failed: {traceback.format_exc()}")
         raise ApiException(code=500, message=f"Failed to complete upload: {e}")
 
-    # Enqueue background processing for text-extractable types.
+    # Enqueue background processing for text-extractable types. Everything
+    # else (images, videos, audio, other binaries) is marked terminal right
+    # here — the agent's multimodal tool reads raw bytes via file_path and
+    # doesn't need status=succeeded, but callers / UIs that do otherwise
+    # would spin forever.
     if is_new:
-        try:
-            from api.v1.files import _needs_background_processing
-            if _needs_background_processing(entity.file_extension):
+        from api.v1.files import _needs_background_processing
+        if _needs_background_processing(entity.file_extension):
+            try:
                 import app.worker as background_worker
                 background_worker.process_file_resource_task.delay(
                     file_id=entity.id, tenant_id=tenant_id
                 )
-        except Exception:
-            logger.warning(
-                f"[/v1/files/uploads] failed to enqueue processing for {entity.id}"
+            except Exception:
+                logger.warning(
+                    f"[/v1/files/uploads] failed to enqueue processing for {entity.id}"
+                )
+        else:
+            from common.knowledgebase.types import FileStatus
+            from service.file.file_resource_service import FileResourceService
+            svc = FileResourceService(session)
+            await svc.mark_status(
+                file_id=entity.id,
+                tenant_id=tenant_id,
+                status=FileStatus.succeeded,
             )
+            refreshed = await svc.get_file(file_id=entity.id, tenant_id=tenant_id)
+            if refreshed is not None:
+                entity = refreshed
 
     return success_response(data=_entity_to_read(entity))
 
