@@ -21,15 +21,45 @@ from common.chat.models import MetadataFilteringCondition
 from contextlib import asynccontextmanager
 
 def append_text(user_message: Dict, text: str):
+    """Append text to a user message, regardless of whether the content is
+    stored as a string or as a list of content parts (OpenAI content-array
+    format). If the list form has no text block yet — which happens when
+    the user sends *only* attachments with no typed text — we add a fresh
+    text block instead of silently dropping the append.
+    """
     assert "content" in user_message, "Message必须包含content字段"
+    content = user_message["content"]
 
-    if isinstance(user_message["content"], str):
-        user_message["content"] += text
-    else:
-        for block in user_message["content"]:
-            if block.get("type") == "text":
-                block["text"] += text
+    if content is None:
+        user_message["content"] = text
+        return
+    if isinstance(content, str):
+        user_message["content"] = content + text
+        return
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                block["text"] = (block.get("text") or "") + text
                 return
+        # No text block — append one so the hint isn't dropped.
+        content.append({"type": "text", "text": text})
+        return
+
+
+def _user_message_has_text(user_message: Dict) -> bool:
+    """True iff the user actually typed something (not just attached files)."""
+    content = user_message.get("content")
+    if not content:
+        return False
+    if isinstance(content, str):
+        return bool(content.strip())
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                if (block.get("text") or "").strip():
+                    return True
+        return False
+    return False
 
 
 class AgentService:
@@ -259,20 +289,34 @@ class AgentService:
                     tenant_id=tenant_id,
                 )
             )
-            # Give the LLM an explicit nudge so it doesn't silently skip the
-            # tool. Without this hint the chat LLM only sees the tool's
-            # description and has to infer media is attached — unreliable,
-            # especially when the user's question is short like "视频有什么".
             media_summary = []
             if image_ids:
                 media_summary.append(f"{len(image_ids)} 张图片")
             if video_ids:
                 media_summary.append(f"{len(video_ids)} 个视频")
-            append_text(
-                user_message,
-                f"\n\n[已附件：{' + '.join(media_summary)}；"
-                f"如需分析其内容，请调用 `multimodal-parser` 工具。]",
-            )
+
+            # Two cases:
+            # - User typed something: short inline hint, let their query drive
+            #   the agent as usual.
+            # - User sent only media with no text: the chat LLM otherwise
+            #   sees an empty prompt and has no reason to call any tool. Give
+            #   it a direct instruction — understand the media first, then
+            #   decide on further tools (search / KB / etc.) as needed.
+            has_text = _user_message_has_text(user_message)
+            if has_text:
+                append_text(
+                    user_message,
+                    f"\n\n[已附件：{' + '.join(media_summary)}；"
+                    f"如需分析其内容，请调用 `multimodal-parser` 工具。]",
+                )
+            else:
+                append_text(
+                    user_message,
+                    f"用户上传了 {' + '.join(media_summary)}但没有文字提问。"
+                    f"请先调用 `multimodal-parser` 工具理解附件内容，"
+                    f"识别用户的真实意图；如果附件信息已足够回答，请直接给出回答；"
+                    f"如果需要额外信息，再调用搜索 / 知识库等其他工具。",
+                )
 
         if file_ids_to_read:
             # Register `read-file` for every text attachment regardless of
@@ -290,10 +334,20 @@ class AgentService:
                         file_ids=file_ids_to_read, tenant_id=tenant_id,
                     )
                 )
-                append_text(
-                    user_message,
-                    f"\n\n 可以阅读的文件列表: \n\n {read_file_names}",
-                )
+                if _user_message_has_text(user_message):
+                    append_text(
+                        user_message,
+                        f"\n\n 可以阅读的文件列表: \n\n {read_file_names}",
+                    )
+                else:
+                    # User sent files with no typed question — prompt the
+                    # agent to read + summarise + ask-for-clarification.
+                    append_text(
+                        user_message,
+                        f"用户上传了以下文件但没有文字提问：{read_file_names}。"
+                        f"请使用 `read-file` 工具读取文件内容，理解用户可能的意图，"
+                        f"并给出摘要或基于内容的有用回答；若需要额外信息再调用其他工具。",
+                    )
 
             # Only register search-file-chunks for files that already have
             # chunks — small files don't need a search tool, and the LLM

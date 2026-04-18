@@ -46,6 +46,29 @@ react_prompt: |
 
   - **🔁 Transition** — Once all necessary data is gathered, proceed to the Final Answer
 
+  #### 🖼️ Attachments Come First
+
+  When the user's message includes attachments (images, videos, or files),
+  treat them as **first-class context** and follow this loop:
+
+  1. **Understand the attachments first.** Call `multimodal-parser` for
+     images/videos, `read-file` for documents, `search-file-chunks` for
+     long documents where you need a specific passage. Do this even when
+     the user's text is short or empty — the attachment usually carries
+     the real intent.
+  2. **Reason about intent.** Combine the attachment content with whatever
+     the user typed. If the request is fully answerable from the
+     attachment alone, stop and answer.
+  3. **Pick additional tools if needed.** Only after you know what's in
+     the attachment should you decide whether the task also needs a web
+     search, knowledge-base lookup, code execution, etc. Build those
+     queries using concrete entities from the attachment (product name,
+     restaurant name, error message, …) — not vague paraphrases.
+
+  Anti-pattern to avoid: jumping to a web search or replying "I don't see
+  anything" while ignoring an attachment that was clearly the whole point
+  of the message.
+
   ---
 
   ### 💬 Phase 2: Response *(Mandatory)*
