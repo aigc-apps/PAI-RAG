@@ -275,15 +275,32 @@ class AgentService:
             )
 
         if file_ids_to_read:
-            file_contents_map = await file_service.get_file_contents_map(file_ids=file_ids_to_read, tenant_id=tenant_id)
-            if file_contents_map:
-                attachment_tools.append(await aget_file_reader(file_contents_map=file_contents_map))
-                reply_text = f"\n\n 可以阅读的文件列表: \n\n {file_contents_map.keys()}"
-                append_text(user_message, reply_text)
+            # Register `read-file` for every text attachment regardless of
+            # current extraction state. The tool itself does a fresh DB
+            # lookup per invocation (and briefly polls if extraction is
+            # still in flight), so it handles the upload→send race where
+            # the worker is still parsing when parse_attachment_tools runs.
+            read_files = await file_service.get_files(
+                file_ids=file_ids_to_read, tenant_id=tenant_id,
+            )
+            read_file_names = [f.file_name for f in read_files if f.file_name]
+            if read_file_names:
+                attachment_tools.append(
+                    await aget_file_reader(
+                        file_ids=file_ids_to_read, tenant_id=tenant_id,
+                    )
+                )
+                append_text(
+                    user_message,
+                    f"\n\n 可以阅读的文件列表: \n\n {read_file_names}",
+                )
 
-            # Large files whose full text was truncated for inline injection
-            # get a dedicated search tool. The LLM sees the file catalogue in
-            # the tool description and calls `search-file-chunks` as needed.
+            # Only register search-file-chunks for files that already have
+            # chunks — small files don't need a search tool, and the LLM
+            # should just use read-file for them. Files still pending
+            # chunking get picked up on the next chat turn; this is
+            # acceptable because chunking only matters when the file is
+            # large enough that inline reading would be truncated.
             large_files: List[dict] = []
             for fid in file_ids_to_read:
                 chunk_count = await file_service.count_chunks(
@@ -302,7 +319,6 @@ class AgentService:
             if large_files:
                 attachment_tools.append(
                     await aget_file_chunk_searcher(
-                        file_service=file_service,
                         tenant_id=tenant_id,
                         files=large_files,
                     )

@@ -5,6 +5,11 @@ the LLM's context (``FileResourceService.LLM_INLINE_TEXT_LIMIT``), the agent
 is still given the file's name/id and a ``search_file_chunks`` tool. The LLM
 issues natural-language queries against a specific file_id and gets back the
 top-k matching chunks — the standard RAG-over-attachment pattern.
+
+The tool opens a fresh DB session per call rather than closing over a
+request-scoped session: by the time the LLM decides to call the tool the
+original request's session may have been committed/closed by an
+intervening streaming step, which would raise MissingGreenlet on access.
 """
 import json
 from typing import Annotated, List
@@ -12,6 +17,7 @@ from typing import Annotated, List
 from llama_index.core.tools import FunctionTool
 from loguru import logger
 
+from db.db_context import create_db_session
 from service.file.file_resource_service import FileResourceService
 
 
@@ -26,7 +32,6 @@ def _format_catalog(files: List[dict]) -> str:
 
 
 async def aget_file_chunk_searcher(
-    file_service: FileResourceService,
     tenant_id: str,
     files: List[dict],
 ):
@@ -40,6 +45,7 @@ async def aget_file_chunk_searcher(
         raise ValueError("files is required")
 
     catalog = _format_catalog(files)
+    allowed_ids = {f["file_id"] for f in files}
 
     async def asearch_file_chunks(
         file_id: Annotated[
@@ -55,16 +61,24 @@ async def aget_file_chunk_searcher(
             "Maximum number of chunks to return (1-10). Default 5.",
         ] = 5,
     ) -> str:
+        if file_id not in allowed_ids:
+            return json.dumps({
+                "error": f"file_id '{file_id}' is not in the attached file list",
+                "available_file_ids": sorted(allowed_ids),
+            }, ensure_ascii=False)
+
         top_k = max(1, min(int(top_k or 5), 10))
         logger.info(
             f"[file_chunk_searcher] file_id={file_id} query={query!r} top_k={top_k}"
         )
-        hits = await file_service.search_chunks(
-            file_id=file_id,
-            tenant_id=tenant_id,
-            query=query,
-            top_k=top_k,
-        )
+        async with create_db_session() as session:
+            svc = FileResourceService(session)
+            hits = await svc.search_chunks(
+                file_id=file_id,
+                tenant_id=tenant_id,
+                query=query,
+                top_k=top_k,
+            )
         return json.dumps(
             {"file_id": file_id, "query": query, "hits": hits},
             ensure_ascii=False,
