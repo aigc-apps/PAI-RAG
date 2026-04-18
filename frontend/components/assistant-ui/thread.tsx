@@ -386,9 +386,16 @@ const Composer: FC<ComposerProps> = ({
               className="flex-1 placeholder:text-muted-foreground max-h-40 resize-none border-none bg-transparent px-2 py-2.5 text-[13px] leading-relaxed outline-none focus:ring-0 disabled:cursor-not-allowed"
             />
           </div>
-          {optionsVisible && (
-            <div className="flex flex-row items-center gap-2.5 px-1 pb-1 flex-wrap">
-              <ComposerAddAttachment />
+          {/*
+            Upload-attachment is always available because any model can take
+            files (text → read-file tool; image/video → multimodal-parser).
+            The agent-only toggles (search / mcp / kb / chatdb) are gated by
+            `optionsVisible` — off for ChatApps because their config is
+            baked in server-side and the toggles don't apply.
+          */}
+          <div className="flex flex-row items-center gap-2.5 px-1 pb-1 flex-wrap">
+            <ComposerAddAttachment />
+            {optionsVisible && (
               <ToggleGroup
                 type="multiple"
                 variant="outline"
@@ -427,8 +434,8 @@ const Composer: FC<ComposerProps> = ({
                   <DatabaseIcon /> ChatDB
                 </ToggleGroupItem>
               </ToggleGroup>
-            </div>
-          )}
+            )}
+          </div>
         </div>
         <div className="shrink-0">
           <ComposerAction />

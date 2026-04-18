@@ -16,6 +16,7 @@ import { Spinner } from '@/components/ui/loading';
 import { Badge } from '@/components/ui/badge';
 import { PhotoProvider, PhotoView } from 'react-photo-view';
 import { MarkdownRenderer } from '@/components/customized/markdown/markdown';
+import { ToolContent } from '@/components/ui/tool-content';
 import { jsonrepair } from 'jsonrepair';
 import { useI18n } from '@/app/providers/i18n';
 
@@ -57,20 +58,26 @@ const CodeBlock = ({
 
 // ===== Shared bubble primitives =====
 
+// Shared visual treatment so every tool card (running / collapsible / error)
+// reads as "the agent's aside" — a small indented panel with a left accent
+// that's clearly not body text but also doesn't steal focus from the reply.
+const BUBBLE_BASE =
+  'border-l-2 border-l-primary/60 border-y border-r border-primary/20 bg-primary/[0.04]';
+
 /** The tight running bubble: spinner + tool label + query. */
 const RunningBubble: FC<{
   icon: ReactNode;
   label: string;
   detail?: string;
 }> = ({ icon, label, detail }) => (
-  <div className="my-1 inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2 py-1 text-[11px] text-muted-foreground">
+  <div className={`my-1 inline-flex items-center gap-1.5 rounded-md ${BUBBLE_BASE} px-2 py-1 text-[11px] text-muted-foreground`}>
     <Spinner size="sm" />
     {icon}
     <span>{label}</span>
     {detail !== undefined && detail !== '' && (
       <>
         <span className="text-muted-foreground/60">·</span>
-        <span className="font-mono text-foreground/90 truncate max-w-[220px]">
+        <span className="font-mono text-muted-foreground truncate max-w-[220px]">
           {detail}
         </span>
       </>
@@ -88,7 +95,7 @@ const CollapsibleBubble: FC<{
 }> = ({ icon, label, detail, defaultOpen = false, children }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="my-1 rounded-md border border-primary/20 bg-primary/[0.04] overflow-hidden text-xs">
+    <div className={`my-1 rounded-md ${BUBBLE_BASE} overflow-hidden text-xs`}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -102,7 +109,7 @@ const CollapsibleBubble: FC<{
         {icon}
         <span className="text-[11px] text-muted-foreground shrink-0">{label}</span>
         {detail !== undefined && detail !== '' && (
-          <span className="font-mono text-[11px] text-foreground/90 truncate">
+          <span className="font-mono text-[11px] text-muted-foreground truncate">
             · {detail}
           </span>
         )}
@@ -440,21 +447,13 @@ export const ReadFileToollUI = makeAssistantToolUI<ReadFileToolArgs, string>({
     }
     if (status.type === 'complete') {
       if (!result || isError) return null;
-      let parsed: any;
-      try {
-        parsed = safeParseJSON(result);
-      } catch {
-        return null;
-      }
       return (
         <CollapsibleBubble
           icon={<DimIcon><PaperclipIcon /></DimIcon>}
           label={t('chat.tools.fileReadComplete')}
           detail={args.file_name}
         >
-          <CodeBlock
-            text={typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)}
-          />
+          <ToolContent value={result} />
         </CollapsibleBubble>
       );
     }
@@ -484,21 +483,13 @@ export const SearchFileToollUI = makeAssistantToolUI<SearchFileToolArgs, string>
     }
     if (status.type === 'complete') {
       if (!result || isError) return null;
-      let parsed: any;
-      try {
-        parsed = safeParseJSON(result);
-      } catch {
-        return null;
-      }
       return (
         <CollapsibleBubble
           icon={<DimIcon><FileSearch /></DimIcon>}
           label={t('chat.tools.fileSearchComplete')}
           detail={args.query_str}
         >
-          <CodeBlock
-            text={typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)}
-          />
+          <ToolContent value={result} />
         </CollapsibleBubble>
       );
     }
