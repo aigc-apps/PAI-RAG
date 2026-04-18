@@ -10,15 +10,24 @@ from loguru import logger
 
 async def analyze_multimodal(
     image_base64_list: List[str],
-    video_base64_list: List[str],
+    video_url_list: List[str],
     question: str = "",
     multimodal_llm: PaiLlm = None,
 ) -> str:
     data_list = []
     if image_base64_list:
+        # Images ride as base64 data URIs — small enough for context and the
+        # OpenAI "image_url as string shorthand" format works with dashscope
+        # qwen-vl as well as OpenAI-compatible endpoints.
         data_list.extend([{"type": "image_url", "image_url": image} for image in image_base64_list])
-    if video_base64_list:
-        data_list.extend([{"type": "video_url", "video_url": video} for video in video_base64_list])
+    if video_url_list:
+        # Videos MUST be passed as URLs (dashscope / OpenAI expect
+        # `video_url: {url: "..."}`) — a base64 data URI here would either
+        # be silently ignored by the LLM vendor or blow the context window.
+        data_list.extend([
+            {"type": "video_url", "video_url": {"url": video_url}}
+            for video_url in video_url_list
+        ])
 
     system_prompt = (
         "你是一个图片和视频多模态数据理解专家。"
@@ -63,7 +72,7 @@ async def aget_multimodal_analysis_from_db(
         return json.dumps({"error": "无法获取图片或者视频访问链接"}, ensure_ascii=False)
 
     try:
-        answer = await analyze_multimodal(image_base64_list=image_list, video_base64_list=video_list, question=question, multimodal_llm=multimodal_llm)
+        answer = await analyze_multimodal(image_base64_list=image_list, video_url_list=video_list, question=question, multimodal_llm=multimodal_llm)
 
         return json.dumps({
             "question": question,

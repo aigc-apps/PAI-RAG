@@ -236,14 +236,43 @@ class AgentService:
                 file_ids_to_read.append(attachment_file_id)
 
         image_base64_list = []
-        video_base64_list = []
+        video_url_list = []
         if image_ids:
-            image_base64_list = await file_service.get_file_base64_list(file_ids=image_ids, tenant_id=tenant_id)
+            # Images ride as base64 data URIs (small, cacheable, inline-safe).
+            image_base64_list = await file_service.get_file_base64_list(
+                file_ids=image_ids, tenant_id=tenant_id,
+            )
         if video_ids:
-            video_base64_list = await file_service.get_file_base64_list(file_ids=video_ids, tenant_id=tenant_id)
+            # Videos ride as presigned URLs — base64 data URIs for video are
+            # impractical (context explosion) and rejected by qwen-vl /
+            # OpenAI video_url fields anyway.
+            video_url_list = await file_service.get_file_url_list(
+                file_ids=video_ids, tenant_id=tenant_id,
+            )
 
-        if image_base64_list or video_base64_list:
-            attachment_tools.append(await aget_multimodal_parser_tool(image_list=image_base64_list, video_list=video_base64_list, llm_service=llm_service, tenant_id=tenant_id))
+        if image_base64_list or video_url_list:
+            attachment_tools.append(
+                await aget_multimodal_parser_tool(
+                    image_list=image_base64_list,
+                    video_list=video_url_list,
+                    llm_service=llm_service,
+                    tenant_id=tenant_id,
+                )
+            )
+            # Give the LLM an explicit nudge so it doesn't ignore the tool.
+            # Without this, the chat LLM only sees the tool's description and
+            # has to infer media is attached — unreliable, especially when the
+            # user's question is short like "视频有什么".
+            media_summary = []
+            if image_ids:
+                media_summary.append(f"{len(image_ids)} 张图片")
+            if video_ids:
+                media_summary.append(f"{len(video_ids)} 个视频")
+            append_text(
+                user_message,
+                f"\n\n[已附件：{' + '.join(media_summary)}；"
+                f"如需分析其内容，请调用 `multimodal-parser` 工具。]",
+            )
 
         if file_ids_to_read:
             file_contents_map = await file_service.get_file_contents_map(file_ids=file_ids_to_read, tenant_id=tenant_id)

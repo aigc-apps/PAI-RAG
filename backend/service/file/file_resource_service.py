@@ -547,12 +547,50 @@ class FileResourceService:
     async def get_file_base64_list(
         self, file_ids: List[str], tenant_id: str
     ) -> List[str]:
-        """Return base64-encoded data URIs for the multimodal-parser tool."""
+        """Return base64-encoded data URIs for the multimodal-parser tool.
+
+        Used for images — small enough for context, and many LLM APIs accept
+        data URIs inline. Videos should use ``get_file_url_list`` instead
+        (see that method's docstring).
+        """
         if not file_ids:
             return []
         files = await self.get_files(file_ids=file_ids, tenant_id=tenant_id)
         tasks = [aget_file_base64_content(f) for f in files]
         return await asyncio.gather(*tasks)
+
+    async def get_file_url_list(
+        self, file_ids: List[str], tenant_id: str
+    ) -> List[str]:
+        """Return presigned URLs suitable for passing to a multimodal LLM.
+
+        Videos can't practically ride inline as base64 (the data uri would
+        blow the context window and most vision APIs don't accept data uris
+        in `video_url` anyway). For a tenant using OSS file storage these
+        URLs are reachable from the LLM vendor's servers; for local
+        dev (`FILE_STORE_TYPE=local`) the URLs only work from the same host,
+        which is acceptable for the demo runbook.
+        """
+        if not file_ids:
+            return []
+        files = await self.get_files(file_ids=file_ids, tenant_id=tenant_id)
+        urls: List[str] = []
+        for f in files:
+            if not f.file_path:
+                continue
+            try:
+                url = await file_store.get_url_async(
+                    file_path=f.file_path, tenant_id=f.tenant_id
+                )
+            except Exception:
+                logger.warning(
+                    f"[FileResource] get_url_async failed for file {f.id}; "
+                    f"dropping from multimodal tool payload"
+                )
+                continue
+            if url:
+                urls.append(url)
+        return urls
 
     # ------------- ref counting (for message-attached lifecycle) -------------
     # NB: both inc and dec accept a list that MAY contain duplicate file_ids
