@@ -562,19 +562,13 @@ class FileResourceService:
     async def get_file_url_list(
         self, file_ids: List[str], tenant_id: str
     ) -> List[str]:
-        """Return presigned URLs suitable for passing to a multimodal LLM.
+        """Return presigned URLs for a batch of files.
 
-        Used for videos. The underlying reason isn't token cost — multimodal
-        APIs bill vision inputs by the media itself, not by payload bytes,
-        so base64 vs URL is the same price. It's that the vendor `video_url`
-        field itself rejects data URIs (qwen-vl / dashscope / OpenAI all
-        want `{url: "https://..."}`) and that a base64 video easily trips
-        the ~20MB HTTP request-body cap on those endpoints.
-
-        For a tenant on OSS these URLs are reachable from the LLM vendor's
-        servers. `FILE_STORE_TYPE=local` produces localhost URLs that only
-        work on the same host — acceptable for the demo runbook, not for
-        real video analysis.
+        Used by batched /v1/files/{id}/url-style callers and as a future hook
+        if/when a caller needs to pass files to a remote service by URL
+        instead of by base64. The multimodal tool chain itself stays on
+        base64 (verified on the PAI-RAG feature branch), so this method has
+        no current caller inside parse_attachment_tools.
         """
         if not file_ids:
             return []

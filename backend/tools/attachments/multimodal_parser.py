@@ -10,27 +10,21 @@ from loguru import logger
 
 async def analyze_multimodal(
     image_base64_list: List[str],
-    video_url_list: List[str],
+    video_base64_list: List[str],
     question: str = "",
     multimodal_llm: PaiLlm = None,
 ) -> str:
     data_list = []
     if image_base64_list:
-        # Images ride as base64 data URIs — small enough for context and the
-        # OpenAI "image_url as string shorthand" format works with dashscope
-        # qwen-vl as well as OpenAI-compatible endpoints.
+        # Images and videos both ride as base64 data URIs in dashscope's
+        # OpenAI-compatible shorthand: the value is the data URI string (not
+        # a `{url: ...}` object). This was already verified on the PAI-RAG
+        # feature branch and keeps local dev working without requiring an
+        # externally-reachable OSS endpoint. Vision pricing is media-based,
+        # so base64 doesn't cost more tokens than passing a URL.
         data_list.extend([{"type": "image_url", "image_url": image} for image in image_base64_list])
-    if video_url_list:
-        # Videos MUST be passed as URLs. dashscope qwen-vl / OpenAI video
-        # inputs reject data URIs in `video_url` (the field expects
-        # `{url: "..."}` pointing at a fetchable object), and most endpoints
-        # cap the request body around 20MB so base64-encoded video often
-        # can't even be sent. Token cost isn't a factor — vision pricing
-        # is based on the media itself, not payload bytes.
-        data_list.extend([
-            {"type": "video_url", "video_url": {"url": video_url}}
-            for video_url in video_url_list
-        ])
+    if video_base64_list:
+        data_list.extend([{"type": "video_url", "video_url": video} for video in video_base64_list])
 
     system_prompt = (
         "你是一个图片和视频多模态数据理解专家。"
@@ -75,7 +69,7 @@ async def aget_multimodal_analysis_from_db(
         return json.dumps({"error": "无法获取图片或者视频访问链接"}, ensure_ascii=False)
 
     try:
-        answer = await analyze_multimodal(image_base64_list=image_list, video_url_list=video_list, question=question, multimodal_llm=multimodal_llm)
+        answer = await analyze_multimodal(image_base64_list=image_list, video_base64_list=video_list, question=question, multimodal_llm=multimodal_llm)
 
         return json.dumps({
             "question": question,

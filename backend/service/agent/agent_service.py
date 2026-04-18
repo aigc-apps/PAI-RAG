@@ -236,34 +236,33 @@ class AgentService:
                 file_ids_to_read.append(attachment_file_id)
 
         image_base64_list = []
-        video_url_list = []
+        video_base64_list = []
         if image_ids:
-            # Images ride as base64 data URIs (small, cacheable, inline-safe).
             image_base64_list = await file_service.get_file_base64_list(
                 file_ids=image_ids, tenant_id=tenant_id,
             )
         if video_ids:
-            # Videos ride as presigned URLs because the vendor `video_url`
-            # field doesn't accept data URIs and HTTP bodies usually cap
-            # around 20MB. This isn't a token-cost decision — vision pricing
-            # is media-based, not payload-byte-based.
-            video_url_list = await file_service.get_file_url_list(
+            # Videos ride as base64 data URIs too — the format verified on
+            # the PAI-RAG feature branch and compatible with dashscope's
+            # OpenAI-shim video_url shorthand. Keeps local dev working
+            # without requiring an externally-reachable OSS endpoint.
+            video_base64_list = await file_service.get_file_base64_list(
                 file_ids=video_ids, tenant_id=tenant_id,
             )
 
-        if image_base64_list or video_url_list:
+        if image_base64_list or video_base64_list:
             attachment_tools.append(
                 await aget_multimodal_parser_tool(
                     image_list=image_base64_list,
-                    video_list=video_url_list,
+                    video_list=video_base64_list,
                     llm_service=llm_service,
                     tenant_id=tenant_id,
                 )
             )
-            # Give the LLM an explicit nudge so it doesn't ignore the tool.
-            # Without this, the chat LLM only sees the tool's description and
-            # has to infer media is attached — unreliable, especially when the
-            # user's question is short like "视频有什么".
+            # Give the LLM an explicit nudge so it doesn't silently skip the
+            # tool. Without this hint the chat LLM only sees the tool's
+            # description and has to infer media is attached — unreliable,
+            # especially when the user's question is short like "视频有什么".
             media_summary = []
             if image_ids:
                 media_summary.append(f"{len(image_ids)} 张图片")
