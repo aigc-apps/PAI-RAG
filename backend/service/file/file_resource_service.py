@@ -564,12 +564,17 @@ class FileResourceService:
     ) -> List[str]:
         """Return presigned URLs suitable for passing to a multimodal LLM.
 
-        Videos can't practically ride inline as base64 (the data uri would
-        blow the context window and most vision APIs don't accept data uris
-        in `video_url` anyway). For a tenant using OSS file storage these
-        URLs are reachable from the LLM vendor's servers; for local
-        dev (`FILE_STORE_TYPE=local`) the URLs only work from the same host,
-        which is acceptable for the demo runbook.
+        Used for videos. The underlying reason isn't token cost — multimodal
+        APIs bill vision inputs by the media itself, not by payload bytes,
+        so base64 vs URL is the same price. It's that the vendor `video_url`
+        field itself rejects data URIs (qwen-vl / dashscope / OpenAI all
+        want `{url: "https://..."}`) and that a base64 video easily trips
+        the ~20MB HTTP request-body cap on those endpoints.
+
+        For a tenant on OSS these URLs are reachable from the LLM vendor's
+        servers. `FILE_STORE_TYPE=local` produces localhost URLs that only
+        work on the same host — acceptable for the demo runbook, not for
+        real video analysis.
         """
         if not file_ids:
             return []

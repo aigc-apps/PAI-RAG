@@ -21,9 +21,12 @@ async def analyze_multimodal(
         # qwen-vl as well as OpenAI-compatible endpoints.
         data_list.extend([{"type": "image_url", "image_url": image} for image in image_base64_list])
     if video_url_list:
-        # Videos MUST be passed as URLs (dashscope / OpenAI expect
-        # `video_url: {url: "..."}`) — a base64 data URI here would either
-        # be silently ignored by the LLM vendor or blow the context window.
+        # Videos MUST be passed as URLs. dashscope qwen-vl / OpenAI video
+        # inputs reject data URIs in `video_url` (the field expects
+        # `{url: "..."}` pointing at a fetchable object), and most endpoints
+        # cap the request body around 20MB so base64-encoded video often
+        # can't even be sent. Token cost isn't a factor — vision pricing
+        # is based on the media itself, not payload bytes.
         data_list.extend([
             {"type": "video_url", "video_url": {"url": video_url}}
             for video_url in video_url_list

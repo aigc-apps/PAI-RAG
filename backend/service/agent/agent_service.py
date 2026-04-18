@@ -243,9 +243,10 @@ class AgentService:
                 file_ids=image_ids, tenant_id=tenant_id,
             )
         if video_ids:
-            # Videos ride as presigned URLs — base64 data URIs for video are
-            # impractical (context explosion) and rejected by qwen-vl /
-            # OpenAI video_url fields anyway.
+            # Videos ride as presigned URLs because the vendor `video_url`
+            # field doesn't accept data URIs and HTTP bodies usually cap
+            # around 20MB. This isn't a token-cost decision — vision pricing
+            # is media-based, not payload-byte-based.
             video_url_list = await file_service.get_file_url_list(
                 file_ids=video_ids, tenant_id=tenant_id,
             )
