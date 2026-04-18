@@ -2,7 +2,7 @@
 
 import { ToolCallContentPartComponent } from '@assistant-ui/react';
 import React, { useState } from 'react';
-import { ChevronRight, Wrench } from 'lucide-react';
+import { ArrowDownToDot, ArrowUpFromDot, ChevronRight, Wrench } from 'lucide-react';
 import { Spinner } from '@/components/ui/loading';
 import { ToolContent } from '@/components/ui/tool-content';
 import { useI18n } from '@/app/providers/i18n';
@@ -60,14 +60,16 @@ export const ToolFallback: ToolCallContentPartComponent = ({
       {open && (
         <div className="px-2 pb-2 pt-1 border-t border-primary/15 bg-background/60 space-y-2">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+            <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <ArrowDownToDot className="w-3 h-3" />
               {t('chat.tools.toolArguments')}
             </p>
             <ToolContent value={argsText ?? ''} />
           </div>
           {result !== undefined && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1">
+                <ArrowUpFromDot className="w-3 h-3" />
                 {t('chat.tools.toolResult')}
               </p>
               <ToolContent value={parsedResult} />
