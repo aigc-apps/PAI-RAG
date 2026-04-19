@@ -5,6 +5,7 @@ from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
 from tools.knowledgebase.faq_tool import aget_faq_tool
 from service.factory.tools import create_search_tools, create_chatdb_tools, create_codesandbox_tools
 from service.factory.mcp_factory import create_mcp_tools_async
+from tools.attachments.file_chunk_searcher import aget_file_chunk_searcher
 from tools.attachments.file_reader import aget_file_reader
 from tools.attachments.multimodal_parser import aget_multimodal_parser_tool
 import os
@@ -20,15 +21,45 @@ from common.chat.models import MetadataFilteringCondition
 from contextlib import asynccontextmanager
 
 def append_text(user_message: Dict, text: str):
+    """Append text to a user message, regardless of whether the content is
+    stored as a string or as a list of content parts (OpenAI content-array
+    format). If the list form has no text block yet — which happens when
+    the user sends *only* attachments with no typed text — we add a fresh
+    text block instead of silently dropping the append.
+    """
     assert "content" in user_message, "Message必须包含content字段"
+    content = user_message["content"]
 
-    if isinstance(user_message["content"], str):
-        user_message["content"] += text
-    else:
-        for block in user_message["content"]:
-            if block.get("type") == "text":
-                block["text"] += text
+    if content is None:
+        user_message["content"] = text
+        return
+    if isinstance(content, str):
+        user_message["content"] = content + text
+        return
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                block["text"] = (block.get("text") or "") + text
                 return
+        # No text block — append one so the hint isn't dropped.
+        content.append({"type": "text", "text": text})
+        return
+
+
+def _user_message_has_text(user_message: Dict) -> bool:
+    """True iff the user actually typed something (not just attached files)."""
+    content = user_message.get("content")
+    if not content:
+        return False
+    if isinstance(content, str):
+        return bool(content.strip())
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                if (block.get("text") or "").strip():
+                    return True
+        return False
+    return False
 
 
 class AgentService:
@@ -42,7 +73,7 @@ class AgentService:
         codesandbox_service_getter: Callable[[], Awaitable],
         chatdb_service_getter: Callable[[], Awaitable],
         rag_service_getter: Callable[[], Awaitable],
-        file_service_getter: Callable[[], Awaitable],
+        file_resource_service_getter: Callable[[], Awaitable],
         faq_config_service_getter: Callable[[], Awaitable],
     ):
         self.session = session
@@ -54,7 +85,7 @@ class AgentService:
         self._get_chatdb_service = chatdb_service_getter
         self._get_mcpserver_service = mcpserver_service_getter
         self._get_rag_service = rag_service_getter
-        self._get_file_service = file_service_getter
+        self._get_file_resource_service = file_resource_service_getter
 
     @asynccontextmanager
     async def create_agent(self, chat_request: ChatAgentRequest, tenant_id: str) -> AsyncIterator[ReactAgent]:
@@ -209,7 +240,7 @@ class AgentService:
         messages: List[dict],
         tenant_id: str,
     ) -> tuple[List[FunctionTool], Callable | None]:
-        file_service = await self._get_file_service()
+        file_service = await self._get_file_resource_service()
         llm_service = await self._get_llm_service()
 
         attachment_tools = []
@@ -237,19 +268,121 @@ class AgentService:
         image_base64_list = []
         video_base64_list = []
         if image_ids:
-            image_base64_list = await file_service.get_file_base64_list(file_ids=image_ids, tenant_id=tenant_id)
+            image_base64_list = await file_service.get_file_base64_list(
+                file_ids=image_ids, tenant_id=tenant_id,
+            )
         if video_ids:
-            video_base64_list = await file_service.get_file_base64_list(file_ids=video_ids, tenant_id=tenant_id)
+            # Videos ride as base64 data URIs too — the format verified on
+            # the PAI-RAG feature branch and compatible with dashscope's
+            # OpenAI-shim video_url shorthand. Keeps local dev working
+            # without requiring an externally-reachable OSS endpoint.
+            video_base64_list = await file_service.get_file_base64_list(
+                file_ids=video_ids, tenant_id=tenant_id,
+            )
 
         if image_base64_list or video_base64_list:
-            attachment_tools.append(await aget_multimodal_parser_tool(image_list=image_base64_list, video_list=video_base64_list, llm_service=llm_service, tenant_id=tenant_id))
+            attachment_tools.append(
+                await aget_multimodal_parser_tool(
+                    image_list=image_base64_list,
+                    video_list=video_base64_list,
+                    llm_service=llm_service,
+                    tenant_id=tenant_id,
+                )
+            )
+            media_summary = []
+            if image_ids:
+                media_summary.append(f"{len(image_ids)} 张图片")
+            if video_ids:
+                media_summary.append(f"{len(video_ids)} 个视频")
+
+            # Two cases:
+            # - User typed something: short inline hint, let their query drive
+            #   the agent as usual.
+            # - User sent only media with no text: the chat LLM otherwise
+            #   sees an empty prompt and has no reason to call any tool. Give
+            #   it a direct instruction — understand the media first, then
+            #   decide on further tools (search / KB / etc.) as needed.
+            has_text = _user_message_has_text(user_message)
+            if has_text:
+                append_text(
+                    user_message,
+                    f"\n\n[已附件：{' + '.join(media_summary)}；"
+                    f"如需分析其内容，请调用 `multimodal-parser` 工具。]",
+                )
+            else:
+                append_text(
+                    user_message,
+                    f"用户上传了 {' + '.join(media_summary)}但没有文字提问。"
+                    f"请先调用 `multimodal-parser` 工具理解附件内容，"
+                    f"识别用户的真实意图；如果附件信息已足够回答，请直接给出回答；"
+                    f"如果需要额外信息，再调用搜索 / 知识库等其他工具。",
+                )
 
         if file_ids_to_read:
-            file_contents_map = await file_service.get_file_contents_map(file_ids=file_ids_to_read, tenant_id=tenant_id)
-            if file_contents_map:
-                attachment_tools.append(await aget_file_reader(file_contents_map=file_contents_map))
-                reply_text = f"\n\n 可以阅读的文件列表: \n\n {file_contents_map.keys()}"
-                append_text(user_message, reply_text)
+            # Register `read-file` for every text attachment regardless of
+            # current extraction state. The tool itself does a fresh DB
+            # lookup per invocation (and briefly polls if extraction is
+            # still in flight), so it handles the upload→send race where
+            # the worker is still parsing when parse_attachment_tools runs.
+            read_files = await file_service.get_files(
+                file_ids=file_ids_to_read, tenant_id=tenant_id,
+            )
+            read_file_names = [f.file_name for f in read_files if f.file_name]
+            if read_file_names:
+                attachment_tools.append(
+                    await aget_file_reader(
+                        file_ids=file_ids_to_read, tenant_id=tenant_id,
+                    )
+                )
+                if _user_message_has_text(user_message):
+                    append_text(
+                        user_message,
+                        f"\n\n 可以阅读的文件列表: \n\n {read_file_names}",
+                    )
+                else:
+                    # User sent files with no typed question — prompt the
+                    # agent to read + summarise + ask-for-clarification.
+                    append_text(
+                        user_message,
+                        f"用户上传了以下文件但没有文字提问：{read_file_names}。"
+                        f"请使用 `read-file` 工具读取文件内容，理解用户可能的意图，"
+                        f"并给出摘要或基于内容的有用回答；若需要额外信息再调用其他工具。",
+                    )
+
+            # Only register search-file-chunks for files that already have
+            # chunks — small files don't need a search tool, and the LLM
+            # should just use read-file for them. Files still pending
+            # chunking get picked up on the next chat turn; this is
+            # acceptable because chunking only matters when the file is
+            # large enough that inline reading would be truncated.
+            large_files: List[dict] = []
+            for fid in file_ids_to_read:
+                chunk_count = await file_service.count_chunks(
+                    file_id=fid, tenant_id=tenant_id
+                )
+                if chunk_count <= 0:
+                    continue
+                f_entity = await file_service.get_file(file_id=fid, tenant_id=tenant_id)
+                if not f_entity:
+                    continue
+                large_files.append({
+                    "file_id": fid,
+                    "file_name": f_entity.file_name,
+                    "chunk_count": chunk_count,
+                })
+            if large_files:
+                attachment_tools.append(
+                    await aget_file_chunk_searcher(
+                        tenant_id=tenant_id,
+                        files=large_files,
+                    )
+                )
+                catalog_names = ", ".join(f["file_name"] for f in large_files)
+                append_text(
+                    user_message,
+                    f"\n\n 对于较长的文件 [{catalog_names}] 可以调用 `search-file-chunks` "
+                    f"工具按关键字检索。",
+                )
 
         # coding tool
         attachment_names_in_message = []
@@ -259,7 +392,10 @@ class AgentService:
                 user_attachments = message.get("attachments", [])
                 if len(user_attachments) > 0:
                     for attachment in user_attachments:
-                        attachment_file_entity = await file_service.get_file_by_id(file_id=attachment.get("id"), tenant_id=tenant_id)
+                        attachment_file_entity = await file_service.get_file(file_id=attachment.get("id"), tenant_id=tenant_id)
+                        if not attachment_file_entity:
+                            logger.warning("Attachment file_id %s not found, skipping.", attachment.get("id"))
+                            continue
                         name = attachment_file_entity.file_name
                         if not name:
                             logger.warning("Attachment missing 'name' field, skipping: %s", attachment)

@@ -1,7 +1,10 @@
 'use client';
 
 import { PropsWithChildren, useEffect, useState, type FC, useCallback } from 'react';
-import { CircleXIcon, FileIcon, PaperclipIcon, PlayCircleIcon, FileTextIcon } from 'lucide-react';
+import {
+  CircleXIcon, FileIcon, PaperclipIcon, PlayCircleIcon, FileTextIcon,
+  FileCodeIcon, FileSpreadsheetIcon, ImageIcon, PresentationIcon,
+} from 'lucide-react';
 import {
   AttachmentPrimitive,
   ComposerPrimitive,
@@ -43,13 +46,72 @@ const isImageContentType = (contentType?: string): boolean => {
 // Check if content type is text-based
 const isTextContentType = (contentType?: string): boolean => {
   if (!contentType) return false;
-  return contentType.startsWith('text/') || 
+  return contentType.startsWith('text/') ||
          contentType === 'application/json' ||
          contentType === 'application/xml';
 };
 
+// Map mime / filename to a branded icon + accent color. Keeps the generic
+// grey `FileIcon` as a last resort for unknown types.
+type FileVisual = {
+  Icon: typeof FileIcon;
+  // Tailwind classes; `-on-bubble` palette goes over the user's purple bubble.
+  tint: string;
+  tintOnBubble: string;
+};
+
+const FILE_VISUAL_BY_EXT: Record<string, FileVisual> = {
+  pdf:  { Icon: FileTextIcon,        tint: 'bg-rose-500/15 text-rose-600',    tintOnBubble: 'bg-white/20 text-rose-100' },
+  doc:  { Icon: FileTextIcon,        tint: 'bg-sky-500/15 text-sky-600',      tintOnBubble: 'bg-white/20 text-sky-100' },
+  docx: { Icon: FileTextIcon,        tint: 'bg-sky-500/15 text-sky-600',      tintOnBubble: 'bg-white/20 text-sky-100' },
+  ppt:  { Icon: PresentationIcon,    tint: 'bg-orange-500/15 text-orange-600', tintOnBubble: 'bg-white/20 text-orange-100' },
+  pptx: { Icon: PresentationIcon,    tint: 'bg-orange-500/15 text-orange-600', tintOnBubble: 'bg-white/20 text-orange-100' },
+  xls:  { Icon: FileSpreadsheetIcon, tint: 'bg-emerald-500/15 text-emerald-600', tintOnBubble: 'bg-white/20 text-emerald-100' },
+  xlsx: { Icon: FileSpreadsheetIcon, tint: 'bg-emerald-500/15 text-emerald-600', tintOnBubble: 'bg-white/20 text-emerald-100' },
+  csv:  { Icon: FileSpreadsheetIcon, tint: 'bg-emerald-500/15 text-emerald-600', tintOnBubble: 'bg-white/20 text-emerald-100' },
+  md:   { Icon: FileTextIcon,        tint: 'bg-slate-500/15 text-slate-600',  tintOnBubble: 'bg-white/20 text-slate-100' },
+  txt:  { Icon: FileTextIcon,        tint: 'bg-slate-500/15 text-slate-600',  tintOnBubble: 'bg-white/20 text-slate-100' },
+  json: { Icon: FileCodeIcon,        tint: 'bg-violet-500/15 text-violet-600', tintOnBubble: 'bg-white/20 text-violet-100' },
+  xml:  { Icon: FileCodeIcon,        tint: 'bg-violet-500/15 text-violet-600', tintOnBubble: 'bg-white/20 text-violet-100' },
+  yaml: { Icon: FileCodeIcon,        tint: 'bg-violet-500/15 text-violet-600', tintOnBubble: 'bg-white/20 text-violet-100' },
+  yml:  { Icon: FileCodeIcon,        tint: 'bg-violet-500/15 text-violet-600', tintOnBubble: 'bg-white/20 text-violet-100' },
+  py:   { Icon: FileCodeIcon,        tint: 'bg-violet-500/15 text-violet-600', tintOnBubble: 'bg-white/20 text-violet-100' },
+  js:   { Icon: FileCodeIcon,        tint: 'bg-violet-500/15 text-violet-600', tintOnBubble: 'bg-white/20 text-violet-100' },
+  ts:   { Icon: FileCodeIcon,        tint: 'bg-violet-500/15 text-violet-600', tintOnBubble: 'bg-white/20 text-violet-100' },
+};
+
+const DEFAULT_VISUAL: FileVisual = {
+  Icon: FileIcon,
+  tint: 'bg-primary/10 text-primary',
+  tintOnBubble: 'bg-white/20 text-white',
+};
+
+function visualFor(name?: string | null, contentType?: string | null): FileVisual {
+  if (contentType?.startsWith('image/')) {
+    return { Icon: ImageIcon, tint: 'bg-indigo-500/15 text-indigo-600', tintOnBubble: 'bg-white/20 text-indigo-100' };
+  }
+  if (contentType?.startsWith('video/')) {
+    return { Icon: PlayCircleIcon, tint: 'bg-fuchsia-500/15 text-fuchsia-600', tintOnBubble: 'bg-white/20 text-fuchsia-100' };
+  }
+  const ext = name?.toLowerCase().split('.').pop() ?? '';
+  return FILE_VISUAL_BY_EXT[ext] ?? DEFAULT_VISUAL;
+}
+
+function formatBytes(bytes: number | null | undefined): string | null {
+  if (bytes == null || bytes < 0) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 // Attachment URL cache and pending requests tracker to avoid repeated API calls
-type AttachmentUrlData = { url: string | null; contentType: string | null; fileContent: string | null };
+type AttachmentUrlData = {
+  url: string | null;
+  contentType: string | null;
+  fileContent: string | null;
+  fileSize: number | null;
+};
 const attachmentUrlCache = new Map<string, AttachmentUrlData>();
 const pendingRequests = new Map<string, Promise<AttachmentUrlData>>();
 
@@ -79,6 +141,7 @@ const useRemoteAttachmentUrl = (attachmentId: string | undefined, isFromMessage:
     url: null,
     contentType: null,
     fileContent: null,
+    fileSize: null,
   });
   const [loading, setLoading] = useState(false);
   const { tenantFetch } = useTenantFetch();
@@ -109,24 +172,56 @@ const useRemoteAttachmentUrl = (attachmentId: string | undefined, isFromMessage:
       return;
     }
 
-    // Create a new request
+    // Create a new request. The /v1/files API splits what the old
+    // /v1/config/attachments/urls endpoint bundled into three calls; we do
+    // metadata + signed URL in parallel, then pull a text preview only when
+    // the mime type warrants one.
     const fetchUrl = async (): Promise<AttachmentUrlData> => {
-      const defaultData: AttachmentUrlData = { url: null, contentType: null, fileContent: null };
+      const defaultData: AttachmentUrlData = {
+        url: null, contentType: null, fileContent: null, fileSize: null,
+      };
       try {
-        const response = await tenantFetch(`/api/config/attachments/urls?ids=${attachmentId}`);
-        const result = await response.json();
-        
-        if (result.code === 200 && result.data?.items?.length > 0) {
-          const item = result.data.items[0];
-          const newData: AttachmentUrlData = {
-            url: item.url || null,
-            contentType: item.content_type || null,
-            fileContent: item.file_content || null,
-          };
-          attachmentUrlCache.set(attachmentId, newData);
-          return newData;
+        const [metaResp, urlResp] = await Promise.all([
+          tenantFetch(`/api/files/${attachmentId}`),
+          tenantFetch(`/api/files/${attachmentId}/url`),
+        ]);
+        const metaJson = await metaResp.json();
+        const urlJson = await urlResp.json();
+
+        const contentType: string | null = metaJson?.data?.mime_type ?? null;
+        const fileSize: number | null =
+          typeof metaJson?.data?.file_size === 'number'
+            ? metaJson.data.file_size
+            : null;
+        const url: string | null = urlJson?.data?.url ?? null;
+
+        let fileContent: string | null = null;
+        if (isTextContentType(contentType ?? undefined)) {
+          try {
+            // Cap the inline preview at 5KB — clients paginate via
+            // `?offset=&limit=` if they need the rest.
+            const textResp = await tenantFetch(
+              `/api/files/${attachmentId}/text?limit=5000`,
+            );
+            const textJson = await textResp.json();
+            if (textJson?.code === 200) {
+              fileContent = textJson.data?.content ?? null;
+            }
+          } catch (err) {
+            // Text not ready yet (extraction still running, or format has no
+            // text form). UI falls back to "no preview" — not an error.
+            console.warn('[attachment] text preview unavailable:', err);
+          }
         }
-        return defaultData;
+
+        const newData: AttachmentUrlData = {
+          url,
+          contentType,
+          fileContent,
+          fileSize,
+        };
+        attachmentUrlCache.set(attachmentId, newData);
+        return newData;
       } catch (error) {
         console.error('Failed to fetch attachment URL:', error);
         return defaultData;
@@ -361,10 +456,9 @@ const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
 };
 
 const AttachmentThumb: FC<{ inBubble: boolean }> = ({ inBubble }) => {
-  const isImage = useAttachment((a) => a.contentType?.startsWith('image/') ?? false);
-  const isVideo = useIsVideo();
   const isFromMessage = useIsFromMessage();
   const attachmentId = useAttachmentId();
+  const attachmentName = useAttachmentName();
   const localContentType = useAttachmentContentType();
   const localImageSrc = useAttachmentSrc();
 
@@ -374,28 +468,19 @@ const AttachmentThumb: FC<{ inBubble: boolean }> = ({ inBubble }) => {
   );
 
   const effectiveContentType = remoteContentType || localContentType;
-  const isText = isTextContentType(effectiveContentType);
-  const isEffectiveVideo = isVideo || isVideoContentType(effectiveContentType);
-  const isEffectiveImage = isImage || isImageContentType(effectiveContentType);
+  const isEffectiveImage = (effectiveContentType ?? '').startsWith('image/');
 
   const thumbSrc = isFromMessage ? remoteUrl : localImageSrc;
-
-  const bg = inBubble
-    ? 'bg-white/20 text-white'
-    : 'bg-primary/10 text-primary';
+  const visual = visualFor(attachmentName, effectiveContentType);
+  const tint = inBubble ? visual.tintOnBubble : visual.tint;
+  const { Icon } = visual;
 
   return (
     <Avatar
-      className={`flex size-8 items-center justify-center rounded-md overflow-hidden shrink-0 ${bg} [&_svg]:w-4 [&_svg]:h-4`}
+      className={`flex size-8 items-center justify-center rounded-md overflow-hidden shrink-0 ${tint} [&_svg]:w-4 [&_svg]:h-4`}
     >
       <AvatarFallback delayMs={isEffectiveImage ? 200 : 0} className="bg-transparent">
-        {isEffectiveVideo ? (
-          <PlayCircleIcon />
-        ) : isText ? (
-          <FileTextIcon />
-        ) : (
-          <FileIcon />
-        )}
+        <Icon />
       </AvatarFallback>
       {isEffectiveImage && thumbSrc && <AvatarImage src={thumbSrc} />}
     </Avatar>
@@ -408,6 +493,17 @@ const AttachmentUI: FC = () => {
   const uploadStatus = useAttachment((a) => a.status);
   const isFromMessage = useIsFromMessage();
 
+  // Local File (from composer) already has the size; message attachments
+  // fetch it alongside mime/url via the cached hook.
+  const localFileSize = useAttachment((a) => a.file?.size ?? null);
+  const attachmentId = useAttachmentId();
+  const { fileSize: remoteFileSize } = useRemoteAttachmentUrl(
+    attachmentId, isFromMessage,
+  );
+  const displaySize = formatBytes(
+    isFromMessage ? remoteFileSize : localFileSize,
+  );
+
   const progress =
     'progress' in (uploadStatus ?? {})
       ? (uploadStatus as { progress: number }).progress
@@ -418,9 +514,10 @@ const AttachmentUI: FC = () => {
   // Palette adapts to context: inside the blue user bubble we use
   // translucent white; in the light-colored composer we use muted tones.
   const cardClass = isFromMessage
-    ? 'bg-white/12 border-white/25 hover:bg-white/18'
-    : 'bg-muted/40 border-border hover:bg-muted/60';
+    ? 'bg-white/12 border-white/25 hover:bg-white/18 hover:shadow-sm'
+    : 'bg-muted/40 border-border hover:bg-muted/60 hover:shadow-sm';
   const nameClass = isFromMessage ? 'text-white/95' : 'text-foreground/90';
+  const metaClass = isFromMessage ? 'text-white/70' : 'text-muted-foreground';
   const statusColor = isError
     ? 'text-rose-300'
     : isUploading
@@ -435,7 +532,7 @@ const AttachmentUI: FC = () => {
         <AttachmentPreviewDialog>
           <TooltipTrigger asChild>
             <div
-              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-colors cursor-pointer w-[200px] ${cardClass}`}
+              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-all cursor-pointer w-[220px] ${cardClass}`}
             >
               <AttachmentThumb inBubble={isFromMessage} />
               <div className="flex-1 min-w-0">
@@ -444,7 +541,7 @@ const AttachmentUI: FC = () => {
                 >
                   <AttachmentPrimitive.Name />
                 </p>
-                <div className={`flex items-center gap-1 mt-0.5 text-[10px] ${statusColor}`}>
+                <div className={`flex items-center gap-1.5 mt-0.5 text-[10px] ${statusColor}`}>
                   {isError ? (
                     <>
                       <XCircle className="h-2.5 w-2.5" />
@@ -459,6 +556,12 @@ const AttachmentUI: FC = () => {
                     <>
                       <CheckCircle className="h-2.5 w-2.5" />
                       <span>{t('chat.attachment.uploaded')}</span>
+                    </>
+                  )}
+                  {displaySize && !isError && !isUploading && (
+                    <>
+                      <span className={`${metaClass}`}>·</span>
+                      <span className={`${metaClass}`}>{displaySize}</span>
                     </>
                   )}
                 </div>

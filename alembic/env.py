@@ -40,6 +40,10 @@ from db.models import (
     ExperimentSampleEntity,
     RunConfigEntity,
     VectorDbConfig,
+    FileEntity,
+    FileTextContentEntity,
+    FileUploadSessionEntity,
+    FileChunkEntity,
 )
 
 

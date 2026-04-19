@@ -130,7 +130,6 @@ class RagService:
         page: int = 1,
         size: int = 10,
         query: Optional[str] = None,
-        exclude_default_attachments: bool = True,
     ) -> PagedResult[List[KbEntity]]:
         kb_service = await self._get_kb_service()
         return await kb_service.list_knowledgebases(
@@ -138,7 +137,7 @@ class RagService:
             page=page,
             size=size,
             query=query,
-            exclude_default_attachments=exclude_default_attachments)
+        )
 
 
     async def _validate_knowledgebase_models(

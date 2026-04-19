@@ -72,25 +72,33 @@ class TestMessageService:
         result = await service.create_message(data, TENANT)
         assert result is not None
 
-    async def test_delete_related_attachments_no_messages(self, service, mock_session):
-        # No messages found
+    async def test_release_attachment_refs_no_messages(self, service, mock_session):
+        # Thread has no messages (or no messages with attachments)
         mock_session.exec.return_value = make_mock_result(all_values=[])
-        await service.delete_related_attachments("t1", TENANT)
+        await service.release_attachment_refs("t1", TENANT)
+        # Hard-delete is no longer the contract; refs just aren't decremented
         mock_session.delete.assert_not_called()
 
-    async def test_delete_related_attachments_with_files(self, service, mock_session):
-        attachment = MagicMock()
-        # First exec: get_message_ids_by_thread returns IDs
-        # Second exec: find attachment files
-        call_count = 0
-        def side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return make_mock_result(all_values=["m1"])
-            else:
-                return make_mock_result(all_values=[attachment])
+    async def test_release_attachment_refs_decrements_ref_count(self, service, mock_session):
+        # Two messages in the thread, each with one attachment. The service
+        # should decrement ref_count on each referenced file — NOT hard-delete.
+        exec_calls = []
+
+        def side_effect(stmt, *args, **kwargs):
+            exec_calls.append(stmt)
+            # First call: MessageService.release_attachment_refs collects attachments JSON
+            if len(exec_calls) == 1:
+                return make_mock_result(all_values=[
+                    [{"id": "file-a"}],
+                    [{"id": "file-b"}],
+                ])
+            # Second call: FileResourceService.decrement_refs UPDATE (no rows returned)
+            return make_mock_result(all_values=[])
 
         mock_session.exec = AsyncMock(side_effect=side_effect)
-        await service.delete_related_attachments("t1", TENANT)
-        mock_session.delete.assert_called_once_with(attachment)
+        await service.release_attachment_refs("t1", TENANT)
+
+        # Hard-delete must NOT be called (replaced by ref_count decrement)
+        mock_session.delete.assert_not_called()
+        # At least one UPDATE was issued to decrement refs
+        assert len(exec_calls) >= 2, f"expected a SELECT and an UPDATE, got {exec_calls}"

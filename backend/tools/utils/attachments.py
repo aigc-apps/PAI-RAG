@@ -1,6 +1,17 @@
 import base64
-from db.models.knowledgebase.file import KbFileEntity
+from typing import Protocol
 from pairag.file.store.file_store_helper import file_store
+
+
+class _FileLike(Protocol):
+    """Duck-typed minimal surface for base64 encoding.
+
+    Satisfied by both `FileEntity` (new, preferred) and anything else that
+    exposes `file_path` / `tenant_id` / `file_extension`.
+    """
+    file_path: str
+    tenant_id: str
+    file_extension: str
 
 
 mime_type_map = {
@@ -77,7 +88,7 @@ def get_file_mime_type(file_extension: str) -> str:
     return mime_type_map.get(file_extension.lower(), "application/octet-stream")
 
 
-async def aget_file_base64_content(file: KbFileEntity) -> str:
+async def aget_file_base64_content(file: _FileLike) -> str:
     if not file.file_path:
         raise ValueError("File path is required")
 

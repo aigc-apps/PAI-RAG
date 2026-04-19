@@ -1,8 +1,7 @@
 """File Service layer for database operations."""
 
-import asyncio
 from datetime import datetime, timezone
-from typing import Dict, Optional, List
+from typing import Optional, List
 from sqlmodel import select, func, delete
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -10,7 +9,6 @@ from loguru import logger
 
 from db.models.knowledgebase.file import KbFileEntity
 from common.chat.response_model import PagedResult
-from tools.utils.attachments import aget_file_base64_content
 
 
 
@@ -43,27 +41,6 @@ class FileService:
         statement = select(KbFileEntity).where(KbFileEntity.id.in_(file_ids), KbFileEntity.tenant_id == tenant_id)
         result = await self.session.exec(statement)
         return list(result.all())
-
-    async def get_file_contents_map(self, file_ids: List[str], tenant_id: str) -> Dict[str, str]:
-        """
-        Get a map of file contents by IDs.
-        """
-        if not file_ids:
-            return {}
-
-        files = await self.get_files_by_ids(file_ids=file_ids, tenant_id=tenant_id)
-        return {file.file_name: file.get_file_content() for file in files}
-
-    async def get_file_base64_list(self, file_ids: List[str], tenant_id: str) -> List[str]:
-        """
-        Get a list of image base64 by IDs.
-        """
-        if not file_ids:
-            return []
-
-        files = await self.get_files_by_ids(file_ids=file_ids, tenant_id=tenant_id)
-        base_64_tasks = [aget_file_base64_content(file) for file in files]
-        return await asyncio.gather(*base_64_tasks)
 
     async def get_file(self, kb_id: str, file_id: str, tenant_id: str) -> Optional[KbFileEntity]:
         """

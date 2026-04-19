@@ -9,7 +9,7 @@ import os
 from functools import wraps
 from pairag.file.utils.image_utils import compress_image_if_needed
 from pairag.file.store.file_store_helper import file_store
-from service.knowledgebase.file_service import FileService
+from service.file.file_resource_service import FileResourceService
 from llama_index.core.tools import FunctionTool
 from io import BytesIO
 from loguru import logger
@@ -60,7 +60,7 @@ class CodeSandboxTool:
         timeout_default: int = 50,
         enabled: bool = False,
         code_sandbox_attachments_ids: list = None,
-        file_service: FileService = None,
+        file_service: FileResourceService = None,
         api_key: str = None,
     ):
         self.enabled = enabled
@@ -688,7 +688,7 @@ class CodeSandboxTool:
             return None
         for file_id in file_ids:
 
-            file_entity = await self.file_service.get_file_by_id(file_id=file_id, tenant_id=self.tenant_id)
+            file_entity = await self.file_service.get_file(file_id=file_id, tenant_id=self.tenant_id)
             if not file_entity:
                 logger.error(f"File entity not found for file ID: {file_id}")
                 continue

@@ -6,7 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from loguru import logger
 
 from db.models.message import MessageEntity, MessageCreate
-from db.models.knowledgebase.file import KbFileEntity
+from service.file.file_resource_service import FileResourceService
 
 
 class MessageService:
@@ -117,12 +117,22 @@ class MessageService:
         """
         thread_id = message_data.thread_id
 
+        # Attachments captured *before* we mutate existing_message so we can
+        # compute a precise add/remove delta against the upsert.
+        old_attachment_ids: list[str] = []
+        existing_message = None
+
         # Check if message with local_id already exists
         if message_data.local_id:
             existing_message = await self.get_message_by_local_id(
                 thread_id=thread_id, local_id=message_data.local_id, tenant_id=tenant_id
             )
             if existing_message:
+                old_attachment_ids = [
+                    a.get("id")
+                    for a in (existing_message.attachments or [])
+                    if isinstance(a, dict) and a.get("id")
+                ]
                 # Update existing message
                 existing_message.attachments = message_data.attachments
                 existing_message.content = message_data.content
@@ -140,16 +150,26 @@ class MessageService:
 
         self.session.add(message_entity)
 
-        # Update attachment file entities
-        for attachment in message_data.attachments:
-            attachment_id = attachment.get("id")
-            if attachment_id:
-                attachment_file_entity = await self.session.get(
-                    KbFileEntity, attachment_id
-                )
-                if attachment_file_entity:
-                    attachment_file_entity.message_id = message_entity.id
-                    self.session.add(attachment_file_entity)
+        # Ref-count delta: on a fresh insert `old` is empty, so every new
+        # attachment is ++. On upsert (local_id match), only the true delta
+        # moves — retries with identical attachments are a no-op, and edits
+        # that swap attachments ++ new / -- removed. Without this delta the
+        # ref_count monotonically grows and pins files forever.
+        new_attachment_ids = [
+            a.get("id")
+            for a in (message_data.attachments or [])
+            if isinstance(a, dict) and a.get("id")
+        ]
+        old_set = set(old_attachment_ids)
+        new_set = set(new_attachment_ids)
+        to_add = sorted(new_set - old_set)
+        to_remove = sorted(old_set - new_set)
+        if to_add or to_remove:
+            file_service = FileResourceService(self.session)
+            if to_add:
+                await file_service.increment_refs(file_ids=to_add, tenant_id=tenant_id)
+            if to_remove:
+                await file_service.decrement_refs(file_ids=to_remove, tenant_id=tenant_id)
 
         # Flush to get the ID, but don't commit
         await self.session.flush()
@@ -158,39 +178,38 @@ class MessageService:
         logger.info(f"Created/Updated Message entity: {message_entity.id}")
         return message_entity
 
-    async def delete_related_attachments(
+    async def release_attachment_refs(
         self, thread_id: str, tenant_id: str
     ) -> None:
+        """Decrement ref_count on all files attached to messages in a thread.
+
+        Files with ref_count=0 and expires_at in the past are later swept by
+        the GC worker (Phase 2). We do not hard-delete here to keep retries
+        idempotent and to avoid losing files still referenced by other threads.
         """
-        Delete all attachment files related to messages in a thread.
-        Note: Caller is responsible for committing the session.
+        logger.info(f"[MessageService] Releasing attachment refs for thread {thread_id}.")
 
-        Args:
-            thread_id: Thread ID
-        """
-        logger.info(f"[MessageService] Start deleting related attachments for thread {thread_id}.")
+        stmt = select(MessageEntity.attachments).where(
+            MessageEntity.thread_id == thread_id,
+            MessageEntity.tenant_id == tenant_id,
+        )
+        rows = list((await self.session.exec(stmt)).all())
+        file_ids: List[str] = []
+        for att_list in rows:
+            if not att_list:
+                continue
+            for att in att_list:
+                fid = att.get("id") if isinstance(att, dict) else None
+                if fid:
+                    file_ids.append(fid)
 
-        # Get all message IDs for this thread
-        message_ids = await self.get_message_ids_by_thread(thread_id, tenant_id)
-
-        if not message_ids:
-            logger.info(f"[MessageService] No messages found for thread {thread_id}.")
+        if not file_ids:
+            logger.info(f"[MessageService] No attachments to release for thread {thread_id}.")
             return
 
-        # Find all attachment files with these message IDs
-        statement = select(KbFileEntity).where(
-            KbFileEntity.message_id.in_(message_ids), KbFileEntity.tenant_id == tenant_id
-        )
-        results = await self.session.exec(statement)
-        attachment_file_entities = list(results.all())
-
-        # Delete each attachment file
-        for attachment_file_entity in attachment_file_entities:
-            await self.session.delete(attachment_file_entity)
-
-        # Flush to ensure deletions are staged
+        file_service = FileResourceService(self.session)
+        await file_service.decrement_refs(file_ids=file_ids, tenant_id=tenant_id)
         await self.session.flush()
-
         logger.info(
-            f"[MessageService] Deleted {len(attachment_file_entities)} related attachments for thread {thread_id}."
+            f"[MessageService] Released {len(file_ids)} attachment refs for thread {thread_id}."
         )

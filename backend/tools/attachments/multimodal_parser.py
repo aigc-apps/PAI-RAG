@@ -16,6 +16,12 @@ async def analyze_multimodal(
 ) -> str:
     data_list = []
     if image_base64_list:
+        # Images and videos both ride as base64 data URIs in dashscope's
+        # OpenAI-compatible shorthand: the value is the data URI string (not
+        # a `{url: ...}` object). This was already verified on the PAI-RAG
+        # feature branch and keeps local dev working without requiring an
+        # externally-reachable OSS endpoint. Vision pricing is media-based,
+        # so base64 doesn't cost more tokens than passing a URL.
         data_list.extend([{"type": "image_url", "image_url": image} for image in image_base64_list])
     if video_base64_list:
         data_list.extend([{"type": "video_url", "video_url": video} for video in video_base64_list])
