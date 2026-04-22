@@ -38,3 +38,7 @@ tmp/
 
 # local skills
 skills/
+
+# Conversation history (may contain secrets pasted by user)
+memory/sessions/
+memory/L4_raw_sessions/
