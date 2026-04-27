@@ -4,6 +4,7 @@ from datetime import datetime
 
 
 SERVER_USER_ID = '__server__'
+ACTIVE_STATUSES = {'running', 'waiting_user'}
 
 
 class SessionStore:
@@ -21,7 +22,18 @@ class SessionStore:
     def db_path(self):
         return self._db_path
 
-    def save(self, session_id, llm_history, ui_messages, handler_state=None, title=None, user_id=SERVER_USER_ID):
+    def save(
+        self,
+        session_id,
+        llm_history,
+        ui_messages,
+        handler_state=None,
+        title=None,
+        user_id=SERVER_USER_ID,
+        status='idle',
+        active_run_id=None,
+        workspace_path='',
+    ):
         self._validate_session_id(session_id)
         with self._lock_for(session_id):
             old_data = self._load_from_db(session_id, user_id=user_id)
@@ -43,6 +55,9 @@ class SessionStore:
                 'llm_history': llm_history,
                 'ui_messages': ui_messages,
                 'handler_state': handler_state,
+                'status': status or 'idle',
+                'active_run_id': active_run_id,
+                'workspace_path': workspace_path or '',
             }
             self._save_data(data)
 
@@ -55,7 +70,7 @@ class SessionStore:
         with self._connect() as conn:
             rows = conn.execute(
                 '''
-                SELECT session_id, title, created_at, updated_at, message_count
+                SELECT session_id, title, created_at, updated_at, message_count, status, active_run_id
                 FROM sessions
                 WHERE user_id = ?
                 ORDER BY updated_at DESC
@@ -69,14 +84,228 @@ class SessionStore:
             'created_at': row['created_at'] or '',
             'updated_at': row['updated_at'] or '',
             'message_count': row['message_count'] or 0,
+            'status': row['status'] or 'idle',
+            'active_run_id': row['active_run_id'] or '',
         } for row in rows]
 
     def delete(self, session_id, user_id=SERVER_USER_ID):
         self._validate_session_id(session_id)
         with self._lock_for(session_id):
             with self._connect() as conn:
+                conn.execute('DELETE FROM runs WHERE session_id = ? AND user_id = ?', (session_id, user_id))
                 cur = conn.execute('DELETE FROM sessions WHERE session_id = ? AND user_id = ?', (session_id, user_id))
             return cur.rowcount > 0
+
+    def try_start_run(
+        self,
+        session_id,
+        user_id,
+        run_id,
+        mode,
+        user_text,
+        workspace_path='',
+        max_global_runs=0,
+        max_user_runs=0,
+    ):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = self._session_row(conn, session_id, user_id)
+            if row is None:
+                conn.rollback()
+                return {'status': 'not_found'}
+            if row['status'] in ACTIVE_STATUSES:
+                conn.rollback()
+                return {'status': 'busy', 'session_status': row['status'], 'run_id': row['active_run_id'] or ''}
+
+            if max_global_runs:
+                active_count = conn.execute(
+                    'SELECT COUNT(*) AS n FROM sessions WHERE status IN (?, ?)',
+                    ('running', 'waiting_user'),
+                ).fetchone()['n']
+                if active_count >= max_global_runs:
+                    conn.rollback()
+                    return {'status': 'capacity', 'scope': 'global', 'limit': max_global_runs}
+            if max_user_runs:
+                user_active_count = conn.execute(
+                    'SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND status IN (?, ?)',
+                    (user_id, 'running', 'waiting_user'),
+                ).fetchone()['n']
+                if user_active_count >= max_user_runs:
+                    conn.rollback()
+                    return {'status': 'capacity', 'scope': 'user', 'limit': max_user_runs}
+
+            ui_messages = self._json_list(row['ui_messages_json'])
+            ui_messages.append({'role': 'user', 'content': user_text})
+            ui_messages.append({'role': 'assistant', 'content': '', 'events': []})
+            title = row['title'] or next((m['content'][:60] for m in ui_messages if m.get('role') == 'user'), 'New Task')
+            conn.execute(
+                '''
+                UPDATE sessions
+                SET status = ?, active_run_id = ?, workspace_path = ?, ui_messages_json = ?,
+                    message_count = ?, title = ?, updated_at = ?
+                WHERE session_id = ? AND user_id = ?
+                ''',
+                (
+                    'running',
+                    run_id,
+                    workspace_path or row['workspace_path'] or '',
+                    json.dumps(ui_messages, ensure_ascii=False, default=str),
+                    len(ui_messages),
+                    title,
+                    now,
+                    session_id,
+                    user_id,
+                ),
+            )
+            conn.execute(
+                '''
+                INSERT INTO runs (run_id, session_id, user_id, mode, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (run_id, session_id, user_id, mode, 'queued', now, now),
+            )
+            conn.commit()
+        return {'status': 'started', 'run_id': run_id}
+
+    def answer_waiting_run(self, session_id, user_id, run_id, answer):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = self._session_row(conn, session_id, user_id)
+            if row is None or row['status'] != 'waiting_user' or row['active_run_id'] != run_id:
+                conn.rollback()
+                return False
+            ui_messages = self._json_list(row['ui_messages_json'])
+            ui_messages.append({'role': 'user', 'content': answer})
+            conn.execute(
+                '''
+                UPDATE sessions
+                SET status = ?, ui_messages_json = ?, message_count = ?, updated_at = ?
+                WHERE session_id = ? AND user_id = ?
+                ''',
+                (
+                    'running',
+                    json.dumps(ui_messages, ensure_ascii=False, default=str),
+                    len(ui_messages),
+                    now,
+                    session_id,
+                    user_id,
+                ),
+            )
+            conn.execute(
+                'UPDATE runs SET status = ?, updated_at = ? WHERE run_id = ? AND user_id = ?',
+                ('running', now, run_id, user_id),
+            )
+            conn.commit()
+        return True
+
+    def mark_waiting_user(self, session_id, user_id, run_id):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                '''
+                UPDATE sessions
+                SET status = ?, active_run_id = ?, updated_at = ?
+                WHERE session_id = ? AND user_id = ? AND active_run_id = ?
+                ''',
+                ('waiting_user', run_id, now, session_id, user_id, run_id),
+            )
+            conn.execute(
+                'UPDATE runs SET status = ?, updated_at = ? WHERE run_id = ? AND user_id = ?',
+                ('waiting_user', now, run_id, user_id),
+            )
+
+    def set_run_status(self, run_id, user_id, status):
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                'UPDATE runs SET status = ?, updated_at = ? WHERE run_id = ? AND user_id = ?',
+                (status, now, run_id, user_id),
+            )
+
+    def finish_run(self, session_id, user_id, run_id, status, error=''):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                '''
+                UPDATE sessions
+                SET status = ?, active_run_id = NULL, updated_at = ?
+                WHERE session_id = ? AND user_id = ? AND active_run_id = ?
+                ''',
+                (status, now, session_id, user_id, run_id),
+            )
+            conn.execute(
+                'UPDATE runs SET status = ?, error = ?, updated_at = ?, finished_at = ? WHERE run_id = ? AND user_id = ?',
+                (status, error or '', now, now, run_id, user_id),
+            )
+
+    def save_run_snapshot(
+        self,
+        session_id,
+        user_id,
+        run_id,
+        llm_history,
+        ui_messages,
+        handler_state=None,
+        status='running',
+        active_run_id=None,
+        workspace_path='',
+    ):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        ui_messages = ui_messages or []
+        active_run_id = active_run_id if active_run_id is not None else run_id
+        with self._connect() as conn:
+            cur = conn.execute(
+                '''
+                UPDATE sessions
+                SET updated_at = ?,
+                    llm_history_json = ?,
+                    ui_messages_json = ?,
+                    handler_state_json = ?,
+                    message_count = ?,
+                    status = ?,
+                    active_run_id = ?,
+                    workspace_path = ?
+                WHERE session_id = ? AND user_id = ? AND active_run_id = ?
+                ''',
+                (
+                    now,
+                    json.dumps(llm_history or [], ensure_ascii=False, default=str),
+                    json.dumps(ui_messages, ensure_ascii=False, default=str),
+                    json.dumps(handler_state, ensure_ascii=False, default=str),
+                    len(ui_messages),
+                    status or 'running',
+                    active_run_id,
+                    workspace_path or '',
+                    session_id,
+                    user_id,
+                    run_id,
+                ),
+            )
+        return cur.rowcount > 0
+
+    def request_cancel(self, session_id, user_id, run_id):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                '''
+                UPDATE sessions
+                SET status = ?, updated_at = ?
+                WHERE session_id = ? AND user_id = ? AND active_run_id = ?
+                ''',
+                ('cancelled', now, session_id, user_id, run_id),
+            )
+            conn.execute(
+                'UPDATE runs SET status = ?, updated_at = ? WHERE run_id = ? AND user_id = ?',
+                ('cancelled', now, run_id, user_id),
+            )
 
     def owner_for(self, session_id):
         self._validate_session_id(session_id)
@@ -128,7 +357,25 @@ class SessionStore:
                     llm_history_json TEXT NOT NULL,
                     ui_messages_json TEXT NOT NULL,
                     handler_state_json TEXT,
-                    message_count INTEGER NOT NULL DEFAULT 0
+                    message_count INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'idle',
+                    active_run_id TEXT,
+                    workspace_path TEXT
+                )
+                '''
+            )
+            conn.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS runs (
+                    run_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    finished_at TEXT
                 )
                 '''
             )
@@ -138,12 +385,44 @@ class SessionStore:
             }
             if 'user_id' not in columns:
                 conn.execute('ALTER TABLE sessions ADD COLUMN user_id TEXT')
+            if 'status' not in columns:
+                conn.execute("ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'idle'")
+            if 'active_run_id' not in columns:
+                conn.execute('ALTER TABLE sessions ADD COLUMN active_run_id TEXT')
+            if 'workspace_path' not in columns:
+                conn.execute('ALTER TABLE sessions ADD COLUMN workspace_path TEXT')
             conn.execute(
                 'CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC)'
             )
             conn.execute(
                 'CREATE INDEX IF NOT EXISTS idx_sessions_user_updated ON sessions(user_id, updated_at DESC)'
             )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_runs_session_updated ON runs(session_id, updated_at DESC)'
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_runs_user_status ON runs(user_id, status)'
+            )
+
+    def _session_row(self, conn, session_id, user_id):
+        return conn.execute(
+            '''
+            SELECT session_id, user_id, created_at, updated_at, title,
+                   llm_history_json, ui_messages_json, handler_state_json,
+                   status, active_run_id, workspace_path
+            FROM sessions
+            WHERE session_id = ? AND user_id = ?
+            ''',
+            (session_id, user_id),
+        ).fetchone()
+
+    @staticmethod
+    def _json_list(raw):
+        try:
+            value = json.loads(raw or '[]')
+            return value if isinstance(value, list) else []
+        except json.JSONDecodeError:
+            return []
 
     def _save_data(self, data):
         ui_messages = data.get('ui_messages') or []
@@ -160,9 +439,9 @@ class SessionStore:
                 INSERT INTO sessions (
                     session_id, user_id, created_at, updated_at, title,
                     llm_history_json, ui_messages_json, handler_state_json,
-                    message_count
+                    message_count, status, active_run_id, workspace_path
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     user_id = excluded.user_id,
                     created_at = excluded.created_at,
@@ -171,7 +450,10 @@ class SessionStore:
                     llm_history_json = excluded.llm_history_json,
                     ui_messages_json = excluded.ui_messages_json,
                     handler_state_json = excluded.handler_state_json,
-                    message_count = excluded.message_count
+                    message_count = excluded.message_count,
+                    status = excluded.status,
+                    active_run_id = excluded.active_run_id,
+                    workspace_path = excluded.workspace_path
                 ''',
                 (
                     data['session_id'],
@@ -183,6 +465,9 @@ class SessionStore:
                     json.dumps(ui_messages, ensure_ascii=False, default=str),
                     json.dumps(data.get('handler_state'), ensure_ascii=False, default=str),
                     len(ui_messages),
+                    data.get('status') or 'idle',
+                    data.get('active_run_id'),
+                    data.get('workspace_path') or '',
                 ),
             )
 
@@ -191,7 +476,8 @@ class SessionStore:
             row = conn.execute(
                 '''
                 SELECT session_id, user_id, created_at, updated_at, title,
-                       llm_history_json, ui_messages_json, handler_state_json
+                       llm_history_json, ui_messages_json, handler_state_json,
+                       status, active_run_id, workspace_path
                 FROM sessions
                 WHERE session_id = ? AND user_id = ?
                 ''',
@@ -210,6 +496,9 @@ class SessionStore:
                 'llm_history': json.loads(row['llm_history_json']),
                 'ui_messages': json.loads(row['ui_messages_json']),
                 'handler_state': handler_state,
+                'status': row['status'] or 'idle',
+                'active_run_id': row['active_run_id'] or '',
+                'workspace_path': row['workspace_path'] or '',
             }
         except (TypeError, json.JSONDecodeError) as e:
             print(f'[Warn] session {session_id} corrupt in sqlite: {e}')

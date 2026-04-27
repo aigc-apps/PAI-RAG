@@ -60,6 +60,7 @@
 │   ├ global_facts.txt   (L2, agent 按需 file_read)                   │
 │   ├ *_sop.md           (L3, agent 按需 file_read/write)             │
 │   ├ L4_raw_sessions/   (L4, 前端归档)                                 │
+│   ├ users/<user_id>/   (普通用户私有长期记忆)                           │
 │   ├ sessions_v2.sqlite3 (跨进程会话恢复)                               │
 │   └ sessions/          (.gitkeep，占位目录)                            │
 └─────────────────────────────────────────────────────────────────────┘
@@ -245,8 +246,20 @@ for tc in tcs:
 
 - **事务写入**：会话快照写入 `memory/sessions_v2.sqlite3`，SQLite 负责事务一致性
 - **用户隔离**：HTTP 后端 session 都写入 `user_id`，列表/读取/删除/取消/继续对话均按当前认证用户过滤；历史 `user_id IS NULL` 记录默认不展示
+- **运行状态**：持久化 `status`、`active_run_id`、`workspace_path`；同一 session 在 `running` 时拒绝新 prompt，`waiting_user` 时才允许把下一条消息作为 ask_user 回答
 - **保存内容**：LLM 完整对话历史（OpenAI 格式）+ UI 消息 + handler 状态（history_info + working）
 - **跨进程恢复**：前端拿 sessionId → `store.load()` → 重建 client.history 和 handler
+
+### 4.1 多用户并发边界
+
+- 普通登录用户默认进入独立 workspace：`WORKSPACE_ROOT/<user_id>/<session_id>/`
+- `file_write` / `file_patch` / `code_run cwd` 必须在 workspace 内；越界返回 `workspace_violation`
+- 普通用户启用长期记忆时写入 `memory/users/<user_id>/`；服务级调用继续使用全局 `memory/`
+- 服务级 `SERVER_API_KEY` 默认保留可信 cwd 能力；生产可开启 `ENFORCE_WORKSPACE_FOR_SERVER`
+- `MAX_GLOBAL_RUNS` / `MAX_USER_RUNS` 可限制同时运行的 agent run 数
+- `RUNNER_BACKEND=thread` 保留进程内线程执行，适合本地开发
+- `RUNNER_BACKEND=celery` 时 FastAPI 只负责鉴权、创建 run、读取 Redis Stream；agent run 由 `backend.celery_app` worker 执行
+- Celery 模式使用 Redis 作为 broker、事件流、cancel 信号和 ask_user 回答通道，可支持多 Uvicorn worker；本阶段仍要求 SQLite 和 workspace 在同一台机器共享磁盘
 
 ### 5. 技能动态加载 `skill_manager.py`
 

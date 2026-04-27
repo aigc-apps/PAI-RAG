@@ -49,3 +49,6 @@ skills/
 
 # Conversation history (may contain secrets pasted by user)
 memory/
+
+# User workspaces created by the multi-user backend
+workspaces/

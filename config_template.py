@@ -35,6 +35,34 @@ MAX_TURNS = 40                     # 单任务最大轮数
 HISTORY_TRIM_TOKENS = 80000        # 历史超过此估算值后裁剪最早消息
 TIMEOUT = 300                      # 秒（请求总超时）
 
+# ─────────────────────────── 多用户并发 ───────────────────────────
+# 普通登录用户的 file/code 工具会被限制在:
+#   WORKSPACE_ROOT/<user_id>/<session_id>/
+# 服务级 SERVER_API_KEY 默认仍可使用请求中的 cwd；如需强制服务级调用也隔离，
+# 设置 ENFORCE_WORKSPACE_FOR_SERVER = True。
+WORKSPACE_ROOT = "./workspaces"
+ENFORCE_WORKSPACE_FOR_SERVER = False
+
+# 0 表示不限制。生产环境建议按机器资源和上游模型 QPS 设置。
+MAX_GLOBAL_RUNS = 0
+MAX_USER_RUNS = 0
+
+# thread: FastAPI 进程内线程执行，适合本地开发。
+# celery: FastAPI 只入队和读 Redis Stream，agent run 由独立 Celery worker 执行。
+RUNNER_BACKEND = "thread"
+REDIS_URL = "redis://127.0.0.1:6379/0"
+CELERY_BROKER_URL = REDIS_URL
+RUN_EVENT_TTL_SECONDS = 24 * 60 * 60
+ASK_USER_TIMEOUT_SECONDS = 30 * 60
+RUN_IDLE_TIMEOUT_SECONDS = 60 * 60
+
+# 多用户生产环境默认不要把共享 memory/global_index.txt 注入普通用户 prompt，
+# 避免泄漏全局环境事实。服务级调用不受此开关影响。
+# ENABLE_LONG_TERM_MEMORY_FOR_USERS=True 时，普通用户使用独立的
+# memory/users/<user_id>/ 长期记忆，不写入全局 memory。
+ENABLE_SHARED_MEMORY_FOR_USERS = False
+ENABLE_LONG_TERM_MEMORY_FOR_USERS = False
+
 # ─────────────────────────── HTTP 后端 ───────────────────────────
 # OpenAI compatible backend exposed by backend/server.py.
 BACKEND_BASE_URL = "http://127.0.0.1:8000"

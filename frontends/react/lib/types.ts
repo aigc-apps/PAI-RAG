@@ -84,6 +84,8 @@ export interface SessionSummary {
   updated_at: string;
   message_count?: number;
   running?: boolean;
+  status?: string;
+  active_run_id?: string;
 }
 
 export interface SessionDetail {
@@ -91,6 +93,8 @@ export interface SessionDetail {
   title: string;
   created_at: string;
   updated_at: string;
+  status?: string;
+  active_run_id?: string;
   messages: ChatMessage[];
 }
 

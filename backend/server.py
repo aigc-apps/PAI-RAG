@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.agent_service import (
     AgentService,
+    ServiceCapacityError,
+    SessionBusyError,
     last_user_text,
     openai_chat_chunk,
     openai_chat_completion,
@@ -15,7 +17,9 @@ from backend.agent_service import (
     openai_role_chunk,
 )
 from backend.auth import AuthContext, UserStore, create_token, decode_token
+from backend.workspace import WorkspaceViolation
 from session_store import SERVER_USER_ID
+from tools import WorkspaceViolation as ToolWorkspaceViolation
 
 try:
     import config
@@ -25,6 +29,12 @@ except ImportError as e:
 
 app = FastAPI(title='PAI-RAG OpenAI Compatible Backend')
 service = AgentService()
+RUNNER_BACKEND = (os.environ.get('RUNNER_BACKEND') or getattr(config, 'RUNNER_BACKEND', 'thread') or 'thread').lower()
+celery_service = None
+if RUNNER_BACKEND == 'celery':
+    from backend.celery_runner import CeleryRunService
+
+    celery_service = CeleryRunService(service.store, service.workspace_manager)
 user_store = UserStore(service.store.db_path)
 AUTH_SECRET = getattr(config, 'AUTH_SECRET', '') or os.environ.get('AUTH_SECRET', '')
 if not AUTH_SECRET:
@@ -63,6 +73,43 @@ def require_auth(authorization: str | None = Header(default=None)):
     if not user:
         raise HTTPException(status_code=401, detail='Unauthorized')
     return AuthContext(user_id=user['user_id'], username=user['username'])
+
+
+def backend_error(exc):
+    if isinstance(exc, SessionBusyError):
+        return HTTPException(
+            status_code=409,
+            detail={'code': 'session_busy', 'message': str(exc), 'status': exc.status},
+        )
+    if isinstance(exc, ServiceCapacityError):
+        return HTTPException(
+            status_code=429,
+            detail={'code': 'capacity_exceeded', 'message': str(exc), 'scope': exc.scope, 'limit': exc.limit},
+        )
+    if isinstance(exc, (WorkspaceViolation, ToolWorkspaceViolation)):
+        return HTTPException(status_code=400, detail={'code': 'workspace_violation', 'message': str(exc)})
+    return exc
+
+
+def stream_headers(session_id, run_id=''):
+    return {
+        'X-Session-Id': session_id,
+        'X-Run-Id': run_id or '',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+    }
+
+
+def start_celery_run(session_id, user_id, text, mode='events', cwd=None):
+    if celery_service is None:
+        raise HTTPException(status_code=500, detail='Celery runner is not enabled')
+    try:
+        result = celery_service.start_or_answer(session_id, user_id, text, mode=mode, cwd=cwd)
+    except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
+        raise backend_error(e) from e
+    if result is None:
+        raise HTTPException(status_code=404, detail='Session not found')
+    return result
 
 
 @app.get('/health')
@@ -114,14 +161,34 @@ async def chat_completions(
     if not last_user_text(messages).strip():
         raise HTTPException(status_code=400, detail='messages must include a non-empty user message')
 
-    sess, text_iter = service.chat_text(x_session_id, messages, user_id=auth.user_id, cwd=cwd)
-    if sess is None:
-        raise HTTPException(status_code=404, detail='Session not found')
-    headers = {
-        'X-Session-Id': sess.sid,
-        'Cache-Control': 'no-cache, no-transform',
-        'X-Accel-Buffering': 'no',
-    }
+    if celery_service is not None:
+        if x_session_id:
+            session_id = x_session_id
+        else:
+            try:
+                sess = service.create_session(user_id=auth.user_id, cwd=cwd)
+            except WorkspaceViolation as e:
+                raise backend_error(e) from e
+            session_id = sess.sid
+        run = start_celery_run(session_id, auth.user_id, last_user_text(messages), mode='text', cwd=cwd)
+        headers = stream_headers(run.session_id, run.run_id)
+        response_session_id = run.session_id
+
+        def text_events():
+            for update in celery_service.iter_events(run.run_id, run.stream_from):
+                if update.get('sessionUpdate') == 'agent_message_chunk':
+                    yield ((update.get('content') or {}).get('text') or '')
+
+        text_iter = text_events()
+    else:
+        try:
+            sess, text_iter = service.chat_text(x_session_id, messages, user_id=auth.user_id, cwd=cwd)
+        except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
+            raise backend_error(e) from e
+        if sess is None:
+            raise HTTPException(status_code=404, detail='Session not found')
+        headers = stream_headers(sess.sid, getattr(sess, 'active_run_id', '') or '')
+        response_session_id = sess.sid
 
     if stream:
         def event_stream():
@@ -137,7 +204,7 @@ async def chat_completions(
         return StreamingResponse(event_stream(), media_type='text/event-stream', headers=headers)
 
     content = ''.join(text_iter)
-    payload = openai_chat_completion(model, content, sess.sid)
+    payload = openai_chat_completion(model, content, response_session_id)
     return JSONResponse(payload, headers=headers)
 
 
@@ -153,18 +220,24 @@ async def agent_prompt(
     if not str(text or '').strip():
         raise HTTPException(status_code=400, detail='message must be non-empty')
 
-    sess, event_iter = service.chat_events(session_id, str(text), user_id=auth.user_id, cwd=cwd)
-    if sess is None:
-        raise HTTPException(status_code=404, detail='Session not found')
-    headers = {
-        'X-Session-Id': sess.sid,
-        'Cache-Control': 'no-cache, no-transform',
-        'X-Accel-Buffering': 'no',
-    }
+    if celery_service is not None:
+        run = start_celery_run(session_id, auth.user_id, str(text), mode='events', cwd=cwd)
+        event_iter = celery_service.iter_events(run.run_id, run.stream_from)
+        headers = stream_headers(run.session_id, run.run_id)
+        response_session_id = run.session_id
+    else:
+        try:
+            sess, event_iter = service.chat_events(session_id, str(text), user_id=auth.user_id, cwd=cwd)
+        except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
+            raise backend_error(e) from e
+        if sess is None:
+            raise HTTPException(status_code=404, detail='Session not found')
+        headers = stream_headers(sess.sid, getattr(sess, 'active_run_id', '') or '')
+        response_session_id = sess.sid
 
     def event_stream():
         for update in event_iter:
-            payload = {'sessionId': sess.sid, 'update': update}
+            payload = {'sessionId': response_session_id, 'update': update}
             yield f'data: {json.dumps(payload, ensure_ascii=False)}\n\n'
 
     return StreamingResponse(event_stream(), media_type='text/event-stream', headers=headers)
@@ -178,13 +251,18 @@ def list_sessions(auth: AuthContext = Depends(require_auth)):
 @app.post('/v1/sessions')
 async def create_session(request: Request, auth: AuthContext = Depends(require_auth)):
     body = await request.json() if request.headers.get('content-length') not in (None, '0') else {}
-    sess = service.create_session(user_id=auth.user_id, cwd=(body or {}).get('cwd'))
+    try:
+        sess = service.create_session(user_id=auth.user_id, cwd=(body or {}).get('cwd'))
+    except WorkspaceViolation as e:
+        raise backend_error(e) from e
     loaded = service.store.load(sess.sid, user_id=auth.user_id) or {}
     return {
         'session_id': sess.sid,
         'title': loaded.get('title', 'New Task'),
         'created_at': loaded.get('created_at', ''),
         'updated_at': loaded.get('updated_at', ''),
+        'status': loaded.get('status', 'idle'),
+        'active_run_id': loaded.get('active_run_id', ''),
         'messages': loaded.get('ui_messages', []),
     }
 
@@ -199,6 +277,8 @@ def get_session(session_id: str, auth: AuthContext = Depends(require_auth)):
         'title': loaded.get('title', 'New Task'),
         'created_at': loaded.get('created_at', ''),
         'updated_at': loaded.get('updated_at', ''),
+        'status': loaded.get('status', 'idle'),
+        'active_run_id': loaded.get('active_run_id', ''),
         'messages': loaded.get('ui_messages', []),
     }
     if getattr(config, 'EXPOSE_SESSION_DEBUG', False):
@@ -217,7 +297,10 @@ def delete_session(session_id: str, auth: AuthContext = Depends(require_auth)):
 
 @app.post('/v1/sessions/{session_id}/cancel')
 def cancel_session(session_id: str, auth: AuthContext = Depends(require_auth)):
-    cancelled = service.cancel_session(session_id, user_id=auth.user_id)
+    if celery_service is not None:
+        cancelled = celery_service.cancel_session(session_id, user_id=auth.user_id)
+    else:
+        cancelled = service.cancel_session(session_id, user_id=auth.user_id)
     if not cancelled:
         raise HTTPException(status_code=404, detail='Session not found')
     return {'cancelled': True, 'session_id': session_id}

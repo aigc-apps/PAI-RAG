@@ -15,6 +15,8 @@
 ---
 ## 记忆层级架构
 ```
+以下 `memory/...` 均指运行时注入的当前长期记忆目录。
+
 L1: memory/global_index.txt (极简索引层 - 严格控制 ≤30 行)
     ↓ 导航指向 (Pointer)
 L2: memory/global_facts.txt (事实库层 - 现短但会膨胀)

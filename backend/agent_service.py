@@ -12,6 +12,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from agent_events import agent_message_chunk, ask_user, done, stop_reason  # noqa: E402
+from backend.memory_scope import ensure_memory_scope, memory_scope_for, read_index  # noqa: E402
+from backend.workspace import WorkspaceManager, WorkspaceViolation  # noqa: E402
 from agent_loop import StepOutcome, agent_runner_loop  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
@@ -22,7 +24,7 @@ from skill_manager import (  # noqa: E402
     match_skill,
     scan_skills,
 )
-from tools import GenericHandler, SEDIMENT_HOOK  # noqa: E402
+from tools import GenericHandler, SEDIMENT_HOOK, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
 
 try:
     import config
@@ -37,17 +39,68 @@ if SKILLS:
     TOOLS_SCHEMA.append(get_use_skill_schema())
 
 
-def build_system_prompt():
-    idx_path = os.path.join(ROOT, 'memory', 'global_index.txt')
-    idx = open(idx_path, encoding='utf-8').read() if os.path.exists(idx_path) else '(empty)'
-    return SYS_PROMPT_BASE + '\n' + idx + get_skills_prompt(SKILLS)
+SESSION_IDLE = 'idle'
+SESSION_RUNNING = 'running'
+SESSION_WAITING_USER = 'waiting_user'
+SESSION_COMPLETED = 'completed'
+SESSION_FAILED = 'failed'
+SESSION_CANCELLED = 'cancelled'
+ACTIVE_SESSION_STATUSES = {SESSION_RUNNING, SESSION_WAITING_USER}
 
 
-def archive_session(client, task, exit_reason):
-    archive_dir = os.path.join(ROOT, 'memory', 'L4_raw_sessions')
-    os.makedirs(archive_dir, exist_ok=True)
+class SessionBusyError(RuntimeError):
+    def __init__(self, session_id, status):
+        self.session_id = session_id
+        self.status = status
+        super().__init__(f'session_busy: session {session_id} is {status}')
+
+
+class ServiceCapacityError(RuntimeError):
+    def __init__(self, scope, limit):
+        self.scope = scope
+        self.limit = limit
+        super().__init__(f'capacity_exceeded: {scope} active run limit {limit} reached')
+
+
+def long_term_memory_enabled(user_id=SERVER_USER_ID):
+    return (user_id or SERVER_USER_ID) == SERVER_USER_ID or getattr(config, 'ENABLE_LONG_TERM_MEMORY_FOR_USERS', False)
+
+
+def handler_memory_scope(user_id=SERVER_USER_ID):
+    user_id = user_id or SERVER_USER_ID
+    if user_id == SERVER_USER_ID or long_term_memory_enabled(user_id):
+        return memory_scope_for(ROOT, user_id)
+    if getattr(config, 'ENABLE_SHARED_MEMORY_FOR_USERS', False):
+        return memory_scope_for(ROOT, SERVER_USER_ID)
+    return memory_scope_for(ROOT, user_id)
+
+
+def build_system_prompt(user_id=SERVER_USER_ID):
+    user_id = user_id or SERVER_USER_ID
+    notice = ''
+    if user_id == SERVER_USER_ID:
+        scope = memory_scope_for(ROOT, user_id)
+        idx = read_index(scope)
+        notice = f'\n[MEMORY SCOPE] Service memory root: {scope.root}\n'
+    elif long_term_memory_enabled(user_id):
+        scope = memory_scope_for(ROOT, user_id)
+        idx = read_index(scope)
+        notice = f'\n[MEMORY SCOPE] User-private memory root: {scope.root}\n'
+    elif getattr(config, 'ENABLE_SHARED_MEMORY_FOR_USERS', False):
+        scope = memory_scope_for(ROOT, SERVER_USER_ID)
+        idx = read_index(scope)
+        notice = '\n[MEMORY SCOPE] Shared service memory is readable for this user; user memory updates are disabled.\n'
+    else:
+        idx = '(empty)'
+        notice = '\n[MEMORY SCOPE] Long-term memory is disabled for this user. Do not call start_long_term_update.\n'
+    return SYS_PROMPT_BASE + notice + '\n' + idx + get_skills_prompt(SKILLS)
+
+
+def archive_session(client, task, exit_reason, user_id=SERVER_USER_ID):
+    scope = memory_scope_for(ROOT, user_id)
+    ensure_memory_scope(scope)
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = os.path.join(archive_dir, f'{ts}.md')
+    path = os.path.join(scope.archive_dir, f'{ts}_{uuid.uuid4().hex[:8]}.md')
     with open(path, 'w', encoding='utf-8') as f:
         f.write(f'# Task ({ts})\n{task}\n\n')
         f.write(f'## Exit\n```json\n{json.dumps(exit_reason, ensure_ascii=False, default=str, indent=2)}\n```\n\n')
@@ -78,8 +131,28 @@ def last_user_text(messages):
 
 
 class HttpHandler(GenericHandler):
-    def __init__(self, cwd, mini_agent_root, display_q, ask_q, session):
-        super().__init__(cwd, mini_agent_root)
+    def __init__(
+        self,
+        cwd,
+        mini_agent_root,
+        display_q,
+        ask_q,
+        session,
+        workspace_root=None,
+        readonly_roots=None,
+        writable_roots=None,
+        memory_root=None,
+        long_term_memory_enabled=True,
+    ):
+        super().__init__(
+            cwd,
+            mini_agent_root,
+            workspace_root=workspace_root,
+            readonly_roots=readonly_roots,
+            writable_roots=writable_roots,
+            memory_root=memory_root,
+            long_term_memory_enabled=long_term_memory_enabled,
+        )
         self._dq = display_q
         self._aq = ask_q
         self._session = session
@@ -95,6 +168,7 @@ class HttpHandler(GenericHandler):
         else:
             self._session.emit_event(ask_user(question, candidates), check_cancel=False)
             self._session.emit_event(done('end_turn'), check_cancel=False)
+        self._session.mark_waiting_for_user()
         self._session.turn_done_evt.set()
         answer = self._aq.get()
         if answer.strip().isdigit() and candidates and 1 <= int(answer) <= len(candidates):
@@ -108,7 +182,9 @@ class AgentSession:
         self.service = service
         self.sid = sid
         self.user_id = user_id
-        self.cwd = cwd or ROOT
+        self.cwd, self.workspace_root, self.readonly_roots = self.service.prepare_workspace(user_id, sid, cwd)
+        self.workspace_path = self.workspace_root or self.cwd
+        self.memory_scope = handler_memory_scope(user_id)
         self.client = self._create_client()
         self.client.history_changed = self.save
         self.handler = None
@@ -120,6 +196,8 @@ class AgentSession:
         self.worker = None
         self.exit_reason = None
         self.output_mode = 'events'
+        self.status = SESSION_IDLE
+        self.active_run_id = ''
         self._lock = threading.RLock()
 
     def _create_client(self):
@@ -137,9 +215,17 @@ class AgentSession:
             return
         self.client.history = loaded.get('llm_history', []) or []
         self.ui_msgs = loaded.get('ui_messages', []) or []
+        loaded_status = loaded.get('status') or SESSION_IDLE
+        self.status = SESSION_IDLE if loaded_status in ACTIVE_SESSION_STATUSES else loaded_status
+        self.active_run_id = ''
+        if loaded.get('workspace_path') and self.workspace_root:
+            self.workspace_path = loaded.get('workspace_path')
+            self.workspace_root = self.workspace_path
+            self.cwd = self.workspace_path
+            os.makedirs(self.workspace_path, exist_ok=True)
         state = loaded.get('handler_state') or {}
         if state:
-            handler = HttpHandler(self.cwd, ROOT, self.display_q, self.ask_q, self)
+            handler = self._new_handler()
             handler.history_info = state.get('history_info', [])
             handler.working = state.get('working', {})
             self.handler = handler
@@ -162,14 +248,47 @@ class AgentSession:
             llm_history=llm_history,
             ui_messages=ui_msgs,
             handler_state=self.snapshot_handler_state(),
+            status=self.status,
+            active_run_id=self.active_run_id,
+            workspace_path=self.workspace_path,
         )
+
+    def _new_handler(self):
+        allow_long_term = long_term_memory_enabled(self.user_id)
+        writable_roots = [self.memory_scope.root] if self.workspace_root and allow_long_term else []
+        readonly_roots = list(self.readonly_roots)
+        if (
+            self.workspace_root
+            and self.user_id != SERVER_USER_ID
+            and not allow_long_term
+            and getattr(config, 'ENABLE_SHARED_MEMORY_FOR_USERS', False)
+        ):
+            readonly_roots.append(self.memory_scope.root)
+        handler = HttpHandler(
+            self.cwd,
+            ROOT,
+            self.display_q,
+            self.ask_q,
+            self,
+            workspace_root=self.workspace_root,
+            readonly_roots=readonly_roots,
+            writable_roots=writable_roots,
+            memory_root=self.memory_scope.root,
+            long_term_memory_enabled=allow_long_term,
+        )
+        handler.cancel_evt = self.cancel_evt
+        return handler
+
+    def _append_ui_message_locked(self, role, content='', events=None):
+        msg = {'role': role, 'content': content}
+        if events:
+            msg['events'] = list(events)
+        self.ui_msgs.append(msg)
+        return msg
 
     def append_ui_message(self, role, content='', events=None):
         with self._lock:
-            msg = {'role': role, 'content': content}
-            if events:
-                msg['events'] = list(events)
-            self.ui_msgs.append(msg)
+            self._append_ui_message_locked(role, content, events)
         self.save()
 
     def _ensure_assistant_message(self):
@@ -190,25 +309,36 @@ class AgentSession:
                 msg.setdefault('events', []).append(event)
         self.save()
 
-    def run_or_answer(self, text, mode='events'):
-        if self.worker is not None and self.worker.is_alive():
-            if self.turn_done_evt.is_set() and self.exit_reason is not None:
-                self.worker.join(timeout=0.1)
-            if self.worker is not None and not self.worker.is_alive():
-                self._spawn_worker(text, mode=mode)
-                return
-            self.append_ui_message('user', text)
-            self.turn_done_evt.clear()
-            self.ask_q.put(text)
-            return
-        self._spawn_worker(text, mode=mode)
+    def mark_waiting_for_user(self):
+        with self._lock:
+            self.status = SESSION_WAITING_USER
+        self.save()
 
-    def _spawn_worker(self, text, mode='events'):
+    def run_or_answer(self, text, mode='events'):
+        with self._lock:
+            if self.worker is not None and self.worker.is_alive():
+                if self.status == SESSION_WAITING_USER:
+                    self._append_ui_message_locked('user', text)
+                    self.status = SESSION_RUNNING
+                    self.turn_done_evt.clear()
+                    self.ask_q.put(text)
+                    self.save()
+                    return self.active_run_id
+                raise SessionBusyError(self.sid, self.status)
+
+            if self.worker is not None and not self.worker.is_alive():
+                self.worker.join(timeout=0.1)
+                self.worker = None
+
+            return self._spawn_worker_locked(text, mode=mode)
+
+    def _spawn_worker_locked(self, text, mode='events'):
+        self.service.ensure_capacity(self.user_id, exclude_sid=self.sid)
         self.output_mode = mode
         sk, sk_args = match_skill(text, SKILLS)
         task_text = build_skill_user_input(sk, sk_args) if sk else text
         prev = self.handler
-        handler = HttpHandler(self.cwd, ROOT, self.display_q, self.ask_q, self)
+        handler = self._new_handler()
         if sk:
             handler.working['active_skill'] = sk.name
             handler.working['related_sop'] = f'skills/{sk.name}/SKILL.md'
@@ -224,27 +354,33 @@ class AgentSession:
                     f'若已在新任务，先更新或清除工作记忆。\n'
                 )
         handler.history_info.append(f"[USER]: {task_text[:200]}")
-        handler._done_hooks.append(SEDIMENT_HOOK)
+        if long_term_memory_enabled(self.user_id):
+            handler._done_hooks.append(SEDIMENT_HOOK)
         self.handler = handler
 
         user_input = task_text
         if prev:
             user_input = handler._anchor_prompt() + f'\n\n### 用户当前消息\n{task_text}'
 
-        self.append_ui_message('user', text)
+        self._append_ui_message_locked('user', text)
         self._ensure_assistant_message()
-        self.save()
         self.turn_done_evt.clear()
         self.cancel_evt.clear()
         self.exit_reason = None
-        self.worker = threading.Thread(target=self._run_loop, args=(user_input, task_text, mode), daemon=True)
+        self.status = SESSION_RUNNING
+        self.active_run_id = uuid.uuid4().hex
+        run_id = self.active_run_id
+        self.save()
+        self.worker = threading.Thread(target=self._run_loop, args=(user_input, task_text, mode, run_id), daemon=True)
         self.worker.start()
+        return run_id
 
-    def _run_loop(self, user_input, task_text, mode='events'):
+    def _run_loop(self, user_input, task_text, mode='events', run_id=''):
+        final_status = SESSION_COMPLETED
         try:
             kwargs = {
                 'client': self.client,
-                'system_prompt': build_system_prompt(),
+                'system_prompt': build_system_prompt(self.user_id),
                 'user_input': user_input,
                 'handler': self.handler,
                 'tools_schema': TOOLS_SCHEMA,
@@ -257,14 +393,24 @@ class AgentSession:
             self.exit_reason = agent_runner_loop(**kwargs)
         except KeyboardInterrupt:
             self.exit_reason = {'result': 'INTERRUPTED'}
+            final_status = SESSION_CANCELLED
             if mode == 'text':
                 pass
             else:
                 self.emit_event(done('cancelled'), check_cancel=False)
+        except (WorkspaceViolation, ToolWorkspaceViolation) as e:
+            self.exit_reason = {'result': 'WORKSPACE_VIOLATION', 'msg': str(e)}
+            final_status = SESSION_FAILED
+            if mode == 'text':
+                self._on_text_chunk(f'\n**[Workspace violation]** {e}\n', check_cancel=False)
+            else:
+                self.emit_event(agent_message_chunk(f'**[Workspace violation]** {e}'), check_cancel=False)
+                self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
         except Exception as e:
             import traceback
             traceback.print_exc()
             self.exit_reason = {'result': 'ERROR', 'msg': str(e)}
+            final_status = SESSION_FAILED
             if mode == 'text':
                 self._on_text_chunk(f'\n**[Error]** {e}\n', check_cancel=False)
             else:
@@ -272,9 +418,16 @@ class AgentSession:
                 self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
         finally:
             try:
-                archive_session(self.client, task_text, self.exit_reason)
+                archive_session(self.client, task_text, self.exit_reason, user_id=self.user_id)
             except Exception:
                 pass
+            with self._lock:
+                if self.active_run_id == run_id and self.status != SESSION_WAITING_USER:
+                    if self.status == SESSION_CANCELLED:
+                        final_status = SESSION_CANCELLED
+                    self.status = final_status
+                    self.active_run_id = ''
+                    self.worker = None
             self.save()
             self.turn_done_evt.set()
 
@@ -300,14 +453,17 @@ class AgentSession:
         self.save()
 
     def cancel(self):
-        self.cancel_evt.set()
+        with self._lock:
+            if self.status in ACTIVE_SESSION_STATUSES:
+                self.status = SESSION_CANCELLED
+            self.cancel_evt.set()
         try:
             self.ask_q.put_nowait('[Cancelled]')
         except queue.Full:
             pass
+        self.save()
 
-    def iter_events(self, text):
-        self.run_or_answer(text, mode='events')
+    def iter_events(self):
         while True:
             try:
                 item = self.display_q.get(timeout=0.1)
@@ -320,8 +476,7 @@ class AgentSession:
             if self.turn_done_evt.is_set() and self.display_q.empty():
                 break
 
-    def iter_text(self, text):
-        self.run_or_answer(text, mode='text')
+    def iter_text(self):
         while True:
             try:
                 item = self.display_q.get(timeout=0.1)
@@ -337,18 +492,45 @@ class AgentSession:
                 break
 
     def is_running(self):
-        return self.worker is not None and self.worker.is_alive()
+        return self.status in ACTIVE_SESSION_STATUSES or (self.worker is not None and self.worker.is_alive())
 
 
 class AgentService:
     def __init__(self):
         self.store = SessionStore(os.path.join(ROOT, 'memory', 'sessions'))
+        workspace_root = getattr(config, 'WORKSPACE_ROOT', os.path.join(ROOT, 'workspaces'))
+        self.workspace_manager = WorkspaceManager(workspace_root)
         self._sessions = {}
         self._lock = threading.RLock()
 
     @staticmethod
     def _key(user_id, sid):
         return (user_id or SERVER_USER_ID, sid)
+
+    def prepare_workspace(self, user_id, sid, cwd=None):
+        user_id = user_id or SERVER_USER_ID
+        enforce_server_workspace = getattr(config, 'ENFORCE_WORKSPACE_FOR_SERVER', False)
+        if user_id == SERVER_USER_ID and not enforce_server_workspace:
+            return os.path.abspath(cwd or ROOT), None, []
+        workspace_cwd = self.workspace_manager.prepare_session(user_id, sid, cwd=cwd)
+        return workspace_cwd, self.workspace_manager.session_root(user_id, sid), []
+
+    def ensure_capacity(self, user_id, exclude_sid=None):
+        max_global = int(getattr(config, 'MAX_GLOBAL_RUNS', 0) or 0)
+        max_user = int(getattr(config, 'MAX_USER_RUNS', 0) or 0)
+        if not max_global and not max_user:
+            return
+        with self._lock:
+            active = [
+                sess for (owner_id, sid), sess in self._sessions.items()
+                if sid != exclude_sid and sess.status in ACTIVE_SESSION_STATUSES
+            ]
+            if max_global and len(active) >= max_global:
+                raise ServiceCapacityError('global', max_global)
+            if max_user:
+                user_active = [sess for sess in active if sess.user_id == user_id]
+                if len(user_active) >= max_user:
+                    raise ServiceCapacityError('user', max_user)
 
     def create_session(self, user_id=SERVER_USER_ID, cwd=None):
         sid = str(uuid.uuid4())
@@ -404,7 +586,7 @@ class AgentService:
                 if owner_id == user_id
             }
         for row in rows:
-            row['running'] = running.get(row['session_id'], False)
+            row['running'] = running.get(row['session_id'], False) or row.get('status') in ACTIVE_SESSION_STATUSES
         return rows
 
     def delete_session(self, sid, user_id=SERVER_USER_ID):
@@ -430,13 +612,15 @@ class AgentService:
         if sess is None:
             return None, iter(())
         text = last_user_text(messages)
-        return sess, sess.iter_text(text)
+        sess.run_or_answer(text, mode='text')
+        return sess, sess.iter_text()
 
     def chat_events(self, sid, text, user_id=SERVER_USER_ID, cwd=None):
         sess = self.get_session(sid, user_id=user_id, cwd=cwd)
         if sess is None:
             return None, iter(())
-        return sess, sess.iter_events(text)
+        sess.run_or_answer(text, mode='events')
+        return sess, sess.iter_events()
 
 
 def openai_chat_completion(model, content, session_id):

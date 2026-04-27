@@ -31,13 +31,29 @@ def smart_format(data, max_str_len=100, omit_str=' ... '):
     return f"{data[:max_str_len // 2]}{omit_str}{data[-max_str_len // 2:]}"
 
 
-def expand_file_refs(text, base_dir=None):
+class WorkspaceViolation(ValueError):
+    pass
+
+
+def _is_relative_to(path, root):
+    path = os.path.abspath(path)
+    root = os.path.abspath(root)
+    try:
+        return os.path.commonpath([path, root]) == root
+    except ValueError:
+        return False
+
+
+def expand_file_refs(text, base_dir=None, resolver=None):
     """展开 {{file:路径:起始行:结束行}} 引用为实际内容。"""
     pattern = r'\{\{file:(.+?):(\d+):(\d+)\}\}'
 
     def replacer(m):
         path, start, end = m.group(1), int(m.group(2)), int(m.group(3))
-        path = os.path.abspath(os.path.join(base_dir or '.', path))
+        if resolver is not None:
+            path = resolver(path)
+        else:
+            path = os.path.abspath(os.path.join(base_dir or '.', path))
         if not os.path.isfile(path):
             raise ValueError(f"引用文件不存在: {path}")
         with open(path, 'r', encoding='utf-8') as f:
@@ -208,9 +224,23 @@ def file_read(path, start=1, keyword=None, count=200, show_linenos=True):
 class GenericHandler(BaseHandler):
     """工具分发 + 工作记忆 + 历史摘要。"""
 
-    def __init__(self, cwd, mini_agent_root):
+    def __init__(
+        self,
+        cwd,
+        mini_agent_root,
+        workspace_root=None,
+        readonly_roots=None,
+        writable_roots=None,
+        memory_root=None,
+        long_term_memory_enabled=True,
+    ):
         self.cwd = os.path.abspath(cwd)
         self.root = mini_agent_root          # 用于定位 prompts/memory 目录
+        self.workspace_root = os.path.abspath(workspace_root) if workspace_root else None
+        self.readonly_roots = [os.path.abspath(p) for p in (readonly_roots or [])]
+        self.writable_roots = [os.path.abspath(p) for p in (writable_roots or [])]
+        self.memory_root = os.path.abspath(memory_root or os.path.join(mini_agent_root, 'memory'))
+        self.long_term_memory_enabled = long_term_memory_enabled
         self.working = {}                    # key_info / related_sop / passed_sessions
         self.history_info = []               # 每轮的 <summary> 摘要
         self.current_turn = 0
@@ -221,7 +251,39 @@ class GenericHandler(BaseHandler):
 
     # ── 路径与代码块抽取 ──
     def _abs(self, path):
-        return os.path.abspath(os.path.join(self.cwd, path)) if path else ''
+        return self._resolve_path(path, for_write=False) if path else ''
+
+    def _write_path(self, path):
+        return self._resolve_path(path, for_write=True) if path else ''
+
+    def _resolve_path(self, path, for_write=False):
+        raw = str(path or '')
+        normalized = raw.replace('\\', '/')
+        if normalized == 'memory':
+            candidate = self.memory_root
+        elif normalized.startswith('memory/'):
+            candidate = os.path.join(self.memory_root, normalized[len('memory/'):])
+        else:
+            candidate = raw if os.path.isabs(raw) else os.path.join(self.cwd, raw)
+        candidate = os.path.abspath(candidate)
+        if not self.workspace_root:
+            return candidate
+        if _is_relative_to(candidate, self.workspace_root):
+            return candidate
+        if any(_is_relative_to(candidate, root) for root in self.writable_roots):
+            return candidate
+        if not for_write and any(_is_relative_to(candidate, root) for root in self.readonly_roots):
+            return candidate
+        raise WorkspaceViolation(f'workspace_violation: path escapes workspace: {raw}')
+
+    def _ensure_memory_root(self):
+        os.makedirs(self.memory_root, exist_ok=True)
+        os.makedirs(os.path.join(self.memory_root, 'L4_raw_sessions'), exist_ok=True)
+        for name in ('global_index.txt', 'global_facts.txt'):
+            path = os.path.join(self.memory_root, name)
+            if not os.path.exists(path):
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write('(empty)\n')
 
     @staticmethod
     def _extract_code_block(text, code_type):
@@ -254,7 +316,7 @@ class GenericHandler(BaseHandler):
             return StepOutcome('[Error] code missing — provide `script` or a ```python/bash block.',
                                next_prompt='\n')
         timeout = args.get('timeout', 60)
-        cwd = os.path.abspath(os.path.join(self.cwd, args.get('cwd', '.')))
+        cwd = self._resolve_path(args.get('cwd', '.'), for_write=True)
         preview = (code[:60].replace('\n', ' ') + ('...' if len(code) > 60 else ''))
         print(f"[Action] Running {code_type} in {os.path.basename(cwd) or cwd}: {preview}")
         result = code_run(
@@ -291,11 +353,11 @@ class GenericHandler(BaseHandler):
         return StepOutcome(result, next_prompt=next_prompt)
 
     def do_file_patch(self, args, response):
-        path = self._abs(args.get('path', ''))
+        path = self._write_path(args.get('path', ''))
         old = args.get('old_content', '')
         new = args.get('new_content', '')
         try:
-            new = expand_file_refs(new, base_dir=self.cwd)
+            new = expand_file_refs(new, base_dir=self.cwd, resolver=self._abs)
         except ValueError as e:
             print(f'[Status] ❌ 引用展开失败: {e}')
             return StepOutcome({'status': 'error', 'msg': str(e)}, next_prompt='\n')
@@ -305,7 +367,7 @@ class GenericHandler(BaseHandler):
         return StepOutcome(result, next_prompt=self._anchor_prompt(skip=args.get('_index', 0) > 0))
 
     def do_file_write(self, args, response):
-        path = self._abs(args.get('path', ''))
+        path = self._write_path(args.get('path', ''))
         mode = args.get('mode', 'overwrite')
         action = {'prepend': 'Prepending to', 'append': 'Appending to'}.get(mode, 'Overwriting')
         print(f'[Action] {action}: {path}')
@@ -325,7 +387,7 @@ class GenericHandler(BaseHandler):
                 {'status': 'error', 'msg': '请把内容放进 <file_content>...</file_content> 或代码块'},
                 next_prompt='\n')
         try:
-            content = expand_file_refs(blocks, base_dir=self.cwd)
+            content = expand_file_refs(blocks, base_dir=self.cwd, resolver=self._abs)
             os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
             if mode == 'prepend':
                 old = open(path, 'r', encoding='utf-8').read() if os.path.exists(path) else ''
@@ -369,19 +431,26 @@ class GenericHandler(BaseHandler):
                            next_prompt=self._anchor_prompt(skip=args.get('_index', 0) > 0))
 
     def do_start_long_term_update(self, args, response):
+        if not self.long_term_memory_enabled:
+            return StepOutcome(
+                {'status': 'disabled', 'msg': 'long-term memory is disabled for this user'},
+                next_prompt='\n',
+            )
+        self._ensure_memory_root()
         sop_path = os.path.join(self.root, 'prompts', 'memory_management_sop.md')
         sop_text = open(sop_path, 'r', encoding='utf-8').read() if os.path.exists(sop_path) \
             else '(SOP file missing — skip memory update)'
-        index_path = os.path.join(self.root, 'memory', 'global_index.txt')
-        facts_path = os.path.join(self.root, 'memory', 'global_facts.txt')
+        index_path = os.path.join(self.memory_root, 'global_index.txt')
+        facts_path = os.path.join(self.memory_root, 'global_facts.txt')
+        archive_dir = os.path.join(self.memory_root, 'L4_raw_sessions')
         skill_hint = ''
         if self.working.get('active_skill'):
             skill_name = self.working['active_skill']
             skill_hint = (
                 f'\n**注意**：本次任务在 Skill `{skill_name}` 下执行。'
                 f'沉淀经验时：\n'
-                f'- SOP 文件建议命名为 `memory/{skill_name}_sop.md`\n'
-                f'- L1 索引中关联标注：`{skill_name} → skills/{skill_name} + memory/{skill_name}_sop.md`\n'
+                f'- SOP 文件建议命名为 `{os.path.join(self.memory_root, skill_name + "_sop.md")}`\n'
+                f'- L1 索引中关联标注：`{skill_name} → skills/{skill_name} + {os.path.join(self.memory_root, skill_name + "_sop.md")}`\n'
                 f'- 只记录 Skill 指令中未覆盖的踩坑经验，不要复制 SKILL.md 的内容\n'
             )
         prompt = (
@@ -389,12 +458,15 @@ class GenericHandler(BaseHandler):
             '请按下方 SOP 提取本次任务中【行动验证成功且长期有效】的信息更新长期记忆。\n'
             '**禁止**：临时变量、推理过程、未验证信息、通用常识。\n'
             f'{skill_hint}'
+            f'**当前长期记忆目录**：`{self.memory_root}`\n'
+            f'**L4 归档目录**：`{archive_dir}`\n'
+            'SOP 中若出现 `memory/...`，均应理解为当前长期记忆目录下的路径；执行时以下方绝对路径为准。\n'
             '**操作步骤**：\n'
             f'1. file_read {index_path} 看现有索引\n'
             f'2. file_read {facts_path} 看现有事实\n'
             '3. 按 SOP 决策树分类信息\n'
             '4. file_patch 最小化更新（绝不 overwrite）\n'
-            '5. 若新增 L3 SOP，file_write `memory/<场景>_sop.md` 并 file_patch L1 加导航行\n'
+            f'5. 若新增 L3 SOP，file_write `{self.memory_root}/<场景>_sop.md` 并 file_patch L1 加导航行\n'
             '6. 无新内容直接结束\n\n'
             '## 记忆更新 SOP（L0）\n' + sop_text
         )

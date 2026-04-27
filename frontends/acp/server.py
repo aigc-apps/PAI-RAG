@@ -19,7 +19,8 @@ sys.path.insert(0, ROOT)
 from agent_loop import agent_runner_loop, StepOutcome
 from tools import GenericHandler
 from llm_client import LLMClient
-from session_store import SessionStore
+from backend.memory_scope import ensure_memory_scope, memory_scope_for, read_index
+from session_store import SERVER_USER_ID, SessionStore
 from skill_manager import (
     scan_skills, get_skills_prompt, get_use_skill_schema,
     match_skill, build_skill_user_input,
@@ -68,17 +69,19 @@ class _StdoutTee(io.TextIOBase):
         pass
 
 
+MEMORY_SCOPE = memory_scope_for(ROOT, SERVER_USER_ID)
+
+
 def build_system_prompt():
-    idx_path = os.path.join(ROOT, 'memory', 'global_index.txt')
-    idx = open(idx_path, encoding='utf-8').read() if os.path.exists(idx_path) else '(empty)'
-    return SYS_PROMPT_BASE + '\n' + idx + get_skills_prompt(SKILLS)
+    idx = read_index(MEMORY_SCOPE)
+    notice = f'\n[MEMORY SCOPE] Service memory root: {MEMORY_SCOPE.root}\n'
+    return SYS_PROMPT_BASE + notice + '\n' + idx + get_skills_prompt(SKILLS)
 
 
 def archive_session(client, task, exit_reason):
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    archive_dir = os.path.join(ROOT, 'memory', 'L4_raw_sessions')
-    os.makedirs(archive_dir, exist_ok=True)
-    path = os.path.join(archive_dir, f'{ts}.md')
+    ensure_memory_scope(MEMORY_SCOPE)
+    path = os.path.join(MEMORY_SCOPE.archive_dir, f'{ts}.md')
     try:
         with open(path, 'w', encoding='utf-8') as f:
             f.write(f'# Task ({ts})\n{task}\n\n')
@@ -115,7 +118,7 @@ class AcpFsBridge:
 
 class AcpHandler(GenericHandler):
     def __init__(self, cwd, mini_agent_root, display_q, ask_q, fs, cancel_evt, turn_done_evt):
-        super().__init__(cwd, mini_agent_root)
+        super().__init__(cwd, mini_agent_root, memory_root=MEMORY_SCOPE.root, long_term_memory_enabled=True)
         self._dq = display_q
         self._aq = ask_q
         self._fs = fs                       # AcpFsBridge or None (fallback to local)
