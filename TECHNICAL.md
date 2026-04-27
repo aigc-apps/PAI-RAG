@@ -3,7 +3,7 @@
 一个**~2400 行 Python 的小型自治 Agent**，强调"骨架够清楚就能扩"：
 
 - **核心 ~1100 行**（执行循环 + 7 个原子工具 + LLM 客户端 + 持久化 + 技能加载），坚持单一执行路径、无 SDK 抽象、无注册表
-- **三个入口** 复用同一份核心，分别覆盖：终端 REPL、Next.js Web、ACP（IDE 集成，Zed/VSCode）
+- **两个入口** 复用同一份核心，分别覆盖：Next.js Web、ACP（IDE 集成，Zed/VSCode）
 - **四层自进化记忆系统**：L1 索引 → L2 事实 → L3 SOP → L4 原始归档；agent 通过 `start_long_term_update` 自主沉淀经验
 - **OpenAI 兼容多后端**：默认 Qwen via DashScope，可一行切换 OpenAI / DeepSeek / 本地 vLLM·Ollama / OpenRouter
 
@@ -21,8 +21,7 @@
   - [LLM 客户端 llm_client.py](#3-llm-客户端-llm_clientpy)
   - [会话持久化 session_store.py](#4-会话持久化-session_storepy)
   - [技能动态加载 skill_manager.py](#5-技能动态加载-skill_managerpy)
-- [三个入口](#三个入口)
-  - [CLI main.py](#cli-mainpy)
+- [两个入口](#两个入口)
   - [React `frontends/react`](#react-frontendsreact)
   - [ACP `frontends/acp`](#acp-frontendsacp)
 - [记忆架构：四层自进化系统](#记忆架构四层自进化系统)
@@ -36,8 +35,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  入口层（三选一，复用同一份 core）                                      │
-│   CLI(main.py)    Next.js(frontends/react)  ACP(frontends/acp)      │
+│  入口层（二选一，复用同一份 core）                                      │
+│   Next.js(frontends/react)              ACP(frontends/acp)          │
 └────────────────────────────┬────────────────────────────────────────┘
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -61,7 +60,7 @@
 │   ├ global_facts.txt   (L2, agent 按需 file_read)                   │
 │   ├ *_sop.md           (L3, agent 按需 file_read/write)             │
 │   ├ L4_raw_sessions/   (L4, 前端归档)                                 │
-│   ├ sessions.sqlite3   (跨进程会话恢复)                                │
+│   ├ sessions_v2.sqlite3 (跨进程会话恢复)                               │
 │   └ sessions/          (.gitkeep，占位目录)                            │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -71,11 +70,11 @@
 | 层 | 模块 | 职责 | 行数 |
 |---|------|------|-----:|
 | Core | `agent_loop.py` | 执行循环、工具调度、退出判断 | 123 |
+| Core | `agent_events.py` | ACP 风格结构化事件构造 | - |
 | Core | `tools.py` | 7 个原子工具实现 + GenericHandler | 414 |
 | Core | `llm_client.py` | OpenAI 兼容流式调用、历史裁剪 | 167 |
 | Core | `session_store.py` | SQLite 会话持久化 | 90 |
 | Core | `skill_manager.py` | 技能动态加载 + 斜杠命令分发 | 140 |
-| Frontend | `main.py` | CLI REPL | 152 |
 | Frontend | `frontends/react/` | Next.js Web UI | - |
 | Frontend | `frontends/acp/server.py` | ACP（JSON-RPC over stdio） | 533 |
 | Frontend | `frontends/acp/jsonrpc.py` | 双向 JSON-RPC 框架 | 97 |
@@ -96,7 +95,7 @@
                      ▼
 ┌─ agent_loop.py ───────────────────────────────────────────────┐
 │ for turn in 1..max_turns:                                      │
-│   ① client.chat()  → 流式输出文本 → 收集完整 Response           │
+│   ① client.chat()  → 收集完整 Response                          │
 │   ② 解析 response.tool_calls                                   │
 │      └ 无工具调用 → return NO_TOOL_CALL（任务结束）              │
 │   ③ 顺序执行: handler.dispatch(name, args, response)           │
@@ -109,7 +108,7 @@
                      ▼
 ┌─ 前端（收尾）─────────────────────────────────────────────────┐
 │ 4. archive_session → dump 到 L4_raw_sessions/                 │
-│ 5. store.save → 持久化到 sessions.sqlite3                      │
+│ 5. store.save → 持久化到 sessions_v2.sqlite3                   │
 │ 6. prev_handler = handler（传递给下一任务）                     │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -170,7 +169,7 @@ class BaseHandler:
 | `file_read` | keyword 搜索时用滑动窗口（`collections.deque`）保留上下文；FileNotFoundError 时用 `difflib.SequenceMatcher` 做模糊路径推荐 |
 | `file_patch` | **唯一性约束**：匹配 0 次或 >1 次都拒绝，迫使 LLM 先读再改 |
 | `file_write` | 从 LLM 回复中提取 `<file_content>` 标签或代码块；支持 `{{file:path:start:end}}` 引用展开 |
-| `ask_user` | CLI 是 `input()` + 数字快捷选项；Web/ACP 重写为 queue 阻塞，前端把答案 put 进来唤醒 |
+| `ask_user` | Web/ACP 重写为 queue 阻塞，前端把答案 put 进来唤醒 |
 
 **元认知类（agent 管理自身状态）：**
 
@@ -244,7 +243,8 @@ for tc in tcs:
 
 ### 4. 会话持久化 `session_store.py`
 
-- **事务写入**：会话快照写入 `memory/sessions.sqlite3`，SQLite 负责事务一致性
+- **事务写入**：会话快照写入 `memory/sessions_v2.sqlite3`，SQLite 负责事务一致性
+- **用户隔离**：HTTP 后端 session 都写入 `user_id`，列表/读取/删除/取消/继续对话均按当前认证用户过滤；历史 `user_id IS NULL` 记录默认不展示
 - **保存内容**：LLM 完整对话历史（OpenAI 格式）+ UI 消息 + handler 状态（history_info + working）
 - **跨进程恢复**：前端拿 sessionId → `store.load()` → 重建 client.history 和 handler
 
@@ -261,38 +261,20 @@ for tc in tcs:
 
 ---
 
-## 三个入口
+## 两个入口
 
-三个入口共享同一份 core，**核心模块完全不感知入口**——通过 `on_chunk` 回调和 `do_ask_user` 重写解耦。
-
-### CLI `main.py`
-
-最薄的一个，~150 行。`agent_runner_loop` 直接同步跑在主线程，`on_chunk` 不传 → 走默认 `print()`。
-
-**跨任务状态传递：**
-
-```python
-prev_handler = None
-while True:
-    handler = GenericHandler(cwd, ROOT)
-    if prev_handler:
-        handler.history_info = list(prev_handler.history_info)
-        handler.working["key_info"] = prev_handler.working["key_info"]
-        handler.working["key_info"] += "\n[SYSTEM] 此为 N 个对话前设置的key_info..."
-    ...
-    prev_handler = handler
-```
-
-每次新任务建新 handler 避免状态泄漏，但继承上一任务的 `history_info` 和 `key_info`。注入 `[SYSTEM]` 提示让 agent 知道这是旧记忆，应该主动更新或清除。
+两个入口共享同一份 core，**核心模块完全不感知入口**——通过 `on_event` 回调和 `do_ask_user` 重写解耦。
 
 ### React `frontends/react`
 
-Web 前端基于 Next.js App Router、Tailwind CSS 和 shadcn/ui。浏览器请求先到 Next route handlers，再由代理层转发到 `backend/server.py` 暴露的 OpenAI compatible 接口和 session API。
+Web 前端基于 Next.js App Router、Tailwind CSS 和 shadcn/ui。浏览器请求先到 Next route handlers，再由代理层转发到 `backend/server.py` 暴露的 Agent SSE、OpenAI compatible 接口和 session API。
 
+- 登录注册：`POST /api/auth/register`、`POST /api/auth/login` -> 代理到 `/v1/auth/*`，浏览器保存 bearer token
 - 会话列表：`GET/POST/DELETE /api/sessions` -> 代理到 `/v1/sessions`
-- 对话：`POST /api/chat/completions`，支持流式输出并透传 `X-Session-Id`
+- 对话：`POST /api/agent/sessions/{session_id}/prompt`，消费 ACP 风格结构化 SSE
+- OpenAI 兼容：`POST /api/chat/completions`，保留给外部兼容客户端
 - 暂停：`POST /api/sessions/{session_id}/cancel`
-- 持久化：由后端统一写入 `SessionStore`，前端刷新后可恢复
+- 持久化：由后端统一写入 `SessionStore`，前端刷新后可恢复新格式消息和事件
 
 ### ACP `frontends/acp`
 
@@ -304,7 +286,7 @@ Web 前端基于 Next.js App Router、Tailwind CSS 和 shadcn/ui。浏览器请�
 
 - **挂起式 ask_user**：worker 线程跨 `session/prompt` RPC **存活**——`ask_user` 时 set `turn_done_evt`，本轮 RPC 返回 `stopReason=end_turn`；下次 `session/prompt` 到达时识别到 worker 还活着，把文本喂进 `ask_q` 唤醒，而不是新启 worker
 - **文件操作委托**：声明 `clientCapabilities.fs` 的 client 会接管 file_read/write/patch；缺失能力时降级回本地 IO
-- **stdout 劫持**：`sys.stdout = _StdoutTee()`（线程局部路由到 `display_q` 转 `agent_message_chunk`），`sys.__stdout__` 留给 JSON-RPC 报文。所有 `tools.py` 里的 `print()` 自动变成 `session/update`，零侵入
+- **结构化事件**：core 输出 `AgentEvent`，ACP 入口映射为 `session/update`；`sys.__stdout__` 只用于 JSON-RPC 报文，工具 `print()` 只进 stderr 调试日志
 - **session 恢复**：声明 `loadSession` 能力，复用 `SessionStore` 还原历史
 
 启动方式：`/frontends/acp/run.sh`（Zed 配置里指向它）。烟雾测试见 `tests/acp_smoke.py`。
@@ -456,10 +438,10 @@ usage: /deploy_eas <service_name>
 
 ### 加新前端
 
-参考 `main.py` 或 `frontends/acp/server.py`：
+参考 `backend/agent_service.py` 或 `frontends/acp/server.py`：
 
 - 继承 `GenericHandler` 覆盖 `do_ask_user`（queue 阻塞 / 网络 RPC / etc.）
-- 用 `on_chunk` 回调替代 `print` 做流式输出
+- 用 `on_event` 回调消费结构化 AgentEvent
 - 跨任务/多会话可复用 `SessionStore` 和独立 handler 上下文的组合模式
 
 ### 加可观测性

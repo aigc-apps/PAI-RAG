@@ -2,3 +2,5 @@ openai
 requests
 fastapi
 uvicorn
+bcrypt
+PyJWT

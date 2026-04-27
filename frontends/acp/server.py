@@ -32,6 +32,8 @@ except ImportError:
     sys.__stderr__.write('config.py not found. Run `cp config_template.py config.py` first.\n')
     sys.exit(1)
 
+from agent_events import agent_message_chunk, ask_user, done, stop_reason
+
 
 TOOLS_SCHEMA = json.load(open(os.path.join(ROOT, 'tools_schema.json'), encoding='utf-8'))
 SYS_PROMPT_BASE = open(os.path.join(ROOT, 'prompts', 'sys_prompt.txt'), encoding='utf-8').read()
@@ -56,14 +58,10 @@ class _StdoutTee(io.TextIOBase):
     def write(self, s):
         if not s:
             return 0
-        q = getattr(_thread_local, 'display_q', None)
-        if q is not None:
-            q.put({'chunk': s})
-        else:
-            try:
-                sys.__stderr__.write(s)
-            except Exception:
-                pass
+        try:
+            sys.__stderr__.write(s)
+        except Exception:
+            pass
         return len(s)
 
     def flush(self):
@@ -128,7 +126,8 @@ class AcpHandler(GenericHandler):
     def do_ask_user(self, args, response):
         question = args.get('question', '请提供输入：')
         candidates = args.get('candidates') or []
-        self._dq.put({'ask': {'question': question, 'candidates': candidates}})
+        self._dq.put({'event': ask_user(question, candidates)})
+        self._dq.put({'event': done('end_turn')})
         self._turn_done_evt.set()           # tell prompt RPC to return now
         answer = self._aq.get()             # block until next session/prompt
         if self.cancel_evt.is_set():
@@ -314,29 +313,13 @@ class AcpSession:
                 pass
 
     def _emit_update(self, item):
-        if 'chunk' in item:
-            text = item['chunk']
-            if not text:
+        if 'event' in item:
+            update = item['event']
+            if update.get('sessionUpdate') == 'done':
                 return
             self.rpc.send_notification('session/update', {
                 'sessionId': self.sid,
-                'update': {
-                    'sessionUpdate': 'agent_message_chunk',
-                    'content': {'type': 'text', 'text': text},
-                },
-            })
-        elif 'ask' in item:
-            ask = item['ask']
-            text = f"\n❓ {ask['question']}\n"
-            if ask.get('candidates'):
-                for i, c in enumerate(ask['candidates'], 1):
-                    text += f"  {i}. {c}\n"
-            self.rpc.send_notification('session/update', {
-                'sessionId': self.sid,
-                'update': {
-                    'sessionUpdate': 'agent_message_chunk',
-                    'content': {'type': 'text', 'text': text},
-                },
+                'update': update,
             })
 
     def run_or_answer(self, text):
@@ -359,7 +342,7 @@ class AcpSession:
             pass
 
     def _spawn_worker(self, text):
-        # Skill matching follows the same path as the CLI entrypoint.
+        # Skill matching follows the same path as the HTTP frontend.
         sk, sk_args = match_skill(text, SKILLS)
         task_text = build_skill_user_input(sk, sk_args) if sk else text
         prev = self.handler
@@ -389,6 +372,7 @@ class AcpSession:
         self.turn_done_evt.clear()
         self.exit_reason = None
         self.response_chunks = []
+        self.append_ui_message('assistant', '')
         self.worker = threading.Thread(target=self._run_loop,
                                        args=(user_input, task_text), daemon=True)
         self.worker.start()
@@ -403,29 +387,40 @@ class AcpSession:
                 handler=self.handler,
                 tools_schema=TOOLS_SCHEMA,
                 max_turns=getattr(config, 'MAX_TURNS', 40),
-                on_chunk=self._on_chunk,
+                on_event=self._on_event,
             )
         except KeyboardInterrupt:
             self.exit_reason = {'result': 'INTERRUPTED'}
+            self._emit_event(done('cancelled'), check_cancel=False)
         except Exception as e:
             traceback.print_exc(file=sys.__stderr__)
             self.exit_reason = {'result': 'ERROR', 'msg': str(e)}
-            self.display_q.put({'chunk': f'\n**[Error]** {e}\n'})
-            self.response_chunks.append(f'\n**[Error]** {e}\n')
+            self._emit_event(agent_message_chunk(f'**[Error]** {e}'), check_cancel=False)
+            self._emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
         finally:
-            full_response = ''.join(self.response_chunks)
-            if full_response:
-                self.append_ui_message('assistant', full_response)
-            else:
-                self.save()
             archive_session(self.client, task_text, self.exit_reason)
             self.turn_done_evt.set()
 
-    def _on_chunk(self, chunk):
-        if self.cancel_evt.is_set():
+    def _emit_event(self, event, check_cancel=True):
+        if check_cancel and self.cancel_evt.is_set():
             raise KeyboardInterrupt('User cancelled')
-        self.display_q.put({'chunk': chunk})
-        self.response_chunks.append(chunk)
+        self.display_q.put({'event': event})
+        if event.get('sessionUpdate') == 'agent_message_chunk':
+            text = ((event.get('content') or {}).get('text') or '')
+            self.response_chunks.append(text)
+            with self._lock:
+                if self.ui_msgs and self.ui_msgs[-1].get('role') == 'assistant':
+                    self.ui_msgs[-1]['content'] = (self.ui_msgs[-1].get('content') or '') + text
+            self.save()
+        elif event.get('sessionUpdate') != 'done':
+            with self._lock:
+                if not self.ui_msgs or self.ui_msgs[-1].get('role') != 'assistant':
+                    self.ui_msgs.append({'role': 'assistant', 'content': '', 'events': []})
+                self.ui_msgs[-1].setdefault('events', []).append(event)
+            self.save()
+
+    def _on_event(self, event):
+        self._emit_event(event)
 
     def _stop_reason(self):
         if self.cancel_evt.is_set():

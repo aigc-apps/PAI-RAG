@@ -51,7 +51,7 @@ def expand_file_refs(text, base_dir=None):
 
 # ──────────────────────────── 原子工具实现 ──────────────────────────── #
 
-def code_run(code, code_type='python', timeout=60, cwd=None, cancel_evt=None):
+def code_run(code, code_type='python', timeout=60, cwd=None, cancel_evt=None, on_output=None):
     """同步执行 python 或 bash，流式打印 stdout。cancel_evt 触发即 kill 子进程。"""
     cwd = cwd or os.getcwd()
     os.makedirs(cwd, exist_ok=True)
@@ -76,6 +76,11 @@ def code_run(code, code_type='python', timeout=60, cwd=None, cancel_evt=None):
             except UnicodeDecodeError:
                 line = line_bytes.decode('utf-8', errors='replace')
             full.append(line)
+            if on_output is not None:
+                try:
+                    on_output(line)
+                except Exception:
+                    pass
             try:
                 print(line, end='')
             except Exception:
@@ -212,6 +217,7 @@ class GenericHandler(BaseHandler):
         self.max_turns = 40
         self.cancel_evt = None               # 前端可注入 threading.Event 用于中止
         self._done_hooks = []                # 任务完成前必须执行的 prompt 队列
+        self._tool_event_emit = None
 
     # ── 路径与代码块抽取 ──
     def _abs(self, path):
@@ -236,6 +242,10 @@ class GenericHandler(BaseHandler):
             out += f"\n有不清晰的地方请再次读取 {self.working['related_sop']}"
         return out
 
+    def emit_tool_output(self, text):
+        if self._tool_event_emit is not None and text:
+            self._tool_event_emit('in_progress', text)
+
     # ── 7 个工具 ──
     def do_code_run(self, args, response):
         code_type = args.get('type', 'python')
@@ -247,7 +257,14 @@ class GenericHandler(BaseHandler):
         cwd = os.path.abspath(os.path.join(self.cwd, args.get('cwd', '.')))
         preview = (code[:60].replace('\n', ' ') + ('...' if len(code) > 60 else ''))
         print(f"[Action] Running {code_type} in {os.path.basename(cwd) or cwd}: {preview}")
-        result = code_run(code, code_type, timeout, cwd, cancel_evt=self.cancel_evt)
+        result = code_run(
+            code,
+            code_type,
+            timeout,
+            cwd,
+            cancel_evt=self.cancel_evt,
+            on_output=self.emit_tool_output,
+        )
         icon = {'success': '✅', 'error': '❌'}.get(result.get('status'), '⏳')
         snippet = smart_format(result.get('stdout', ''), max_str_len=600,
                                omit_str='\n\n[omitted long output]\n\n')

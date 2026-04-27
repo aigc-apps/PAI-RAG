@@ -1,6 +1,6 @@
 # MiniAgent
 
-MiniAgent 是一个 OpenAI compatible 的 自我进化 Agent 项目，包含 FastAPI 后端、Next.js Web 前端、CLI 入口和 ACP/JSON-RPC 入口。日常使用推荐启动 **FastAPI 后端 + Next.js 前端**。
+MiniAgent 是一个 OpenAI compatible 的自我进化 Agent 项目，包含 FastAPI 后端、Next.js Web 前端和 ACP/JSON-RPC 入口。日常使用推荐启动 **FastAPI 后端 + Next.js 前端**。
 
 技术设计、模块说明和扩展细节见 [TECHNICAL.md](./TECHNICAL.md)。
 
@@ -49,6 +49,7 @@ cp config_template.py config.py
 API_KEY = "sk-..."
 API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 MODEL = "qwen-plus"
+AUTH_SECRET = "replace-with-a-long-random-string"
 ```
 
 
@@ -97,7 +98,9 @@ BACKEND_BASE_URL=http://127.0.0.1:8000 npm run dev -- --hostname 0.0.0.0 --port 
 http://your-server-ip:3001
 ```
 
-如果后端配置了 `SERVER_API_KEY`，启动前端时也设置同一个值。这个值只在 Next.js 服务端使用，不会暴露给浏览器：
+首次打开 Web 前端后，先注册账号再开始对话。聊天记录会按登录用户隔离保存。
+
+`SERVER_API_KEY` 是服务级 API 密钥，主要用于脚本或 OpenAI compatible 调用。Web 前端的普通用户请求使用登录 token，不需要把 `SERVER_API_KEY` 暴露给浏览器。
 
 ```bash
 BACKEND_BASE_URL=http://127.0.0.1:8000 \
@@ -106,13 +109,6 @@ npm run dev -- --hostname 0.0.0.0 --port 3001
 ```
 
 ## 其他入口
-
-CLI：
-
-```bash
-cd PAI-RAG
-python main.py
-```
 
 ACP/JSON-RPC：
 
@@ -129,10 +125,37 @@ Zed 等编辑器可以使用脚本：
 
 ## API 测试
 
+先注册或登录获取用户 token：
+
+```bash
+curl --location 'http://127.0.0.1:8000/v1/auth/register' \
+  --header 'Content-Type: application/json' \
+  --data '{"username":"demo","password":"demo1234"}'
+
+TOKEN=$(curl -s --location 'http://127.0.0.1:8000/v1/auth/login' \
+  --header 'Content-Type: application/json' \
+  --data '{"username":"demo","password":"demo1234"}' \
+  | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+```
+
+Web 前端使用 ACP 风格结构化 SSE：
+
+```bash
+SESSION_ID=$(curl -s -X POST http://127.0.0.1:8000/v1/sessions \
+  --header "Authorization: Bearer ${TOKEN}" \
+  | python -c "import sys,json; print(json.load(sys.stdin)['session_id'])")
+
+curl --no-buffer --location "http://127.0.0.1:8000/v1/agent/sessions/${SESSION_ID}/prompt" \
+  --header "Authorization: Bearer ${TOKEN}" \
+  --header 'Content-Type: application/json' \
+  --data '{"message":"你好，请用一句话介绍你自己"}'
+```
+
 非流式 Chat Completions：
 
 ```bash
 curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
+  --header "Authorization: Bearer ${TOKEN}" \
   --header 'Content-Type: application/json' \
   --data '{
     "model": "hermes-agent",
@@ -147,6 +170,7 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
 
 ```bash
 curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
+  --header "Authorization: Bearer ${TOKEN}" \
   --header 'Content-Type: application/json' \
   --header 'X-Session-Id: test-session-001' \
   --data '{
@@ -158,7 +182,7 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
   }'
 ```
 
-如果设置了 `SERVER_API_KEY`，加上：
+如果使用服务级 `SERVER_API_KEY` 直接调用后端，也可以把上面的用户 token 换成：
 
 ```bash
 --header 'Authorization: Bearer your-server-api-key'
@@ -167,8 +191,8 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
 Session API：
 
 ```bash
-curl http://127.0.0.1:8000/v1/sessions
-curl -X POST http://127.0.0.1:8000/v1/sessions
-curl http://127.0.0.1:8000/v1/sessions/test-session-001
-curl -X DELETE http://127.0.0.1:8000/v1/sessions/test-session-001
+curl --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions
+curl -X POST --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions
+curl --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions/test-session-001
+curl -X DELETE --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions/test-session-001
 ```

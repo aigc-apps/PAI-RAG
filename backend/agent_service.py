@@ -11,9 +11,10 @@ import uuid
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from agent_events import agent_message_chunk, ask_user, done, stop_reason  # noqa: E402
 from agent_loop import StepOutcome, agent_runner_loop  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
-from session_store import SessionStore  # noqa: E402
+from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import (  # noqa: E402
     build_skill_user_input,
     get_skills_prompt,
@@ -76,11 +77,6 @@ def last_user_text(messages):
     return ''
 
 
-def encode_ask_user_block(ask):
-    payload = json.dumps(ask, ensure_ascii=False)
-    return f'\n[[ASK_USER]]{payload}[[/ASK_USER]]\n'
-
-
 class HttpHandler(GenericHandler):
     def __init__(self, cwd, mini_agent_root, display_q, ask_q, session):
         super().__init__(cwd, mini_agent_root)
@@ -91,10 +87,14 @@ class HttpHandler(GenericHandler):
     def do_ask_user(self, args, response):
         question = args.get('question', '请提供输入：')
         candidates = args.get('candidates') or []
-        ask = {'question': question, 'candidates': candidates}
-        self._session.commit_response_so_far()
-        self._session.append_ui_message('assistant', encode_ask_user_block(ask))
-        self._dq.put({'ask': ask})
+        if getattr(self._session, 'output_mode', 'events') == 'text':
+            text = f'\n[Agent asks] {question}\n'
+            if candidates:
+                text += ''.join(f'{i}. {c}\n' for i, c in enumerate(candidates, 1))
+            self._session._on_text_chunk(text, check_cancel=False)
+        else:
+            self._session.emit_event(ask_user(question, candidates), check_cancel=False)
+            self._session.emit_event(done('end_turn'), check_cancel=False)
         self._session.turn_done_evt.set()
         answer = self._aq.get()
         if answer.strip().isdigit() and candidates and 1 <= int(answer) <= len(candidates):
@@ -104,9 +104,10 @@ class HttpHandler(GenericHandler):
 
 
 class AgentSession:
-    def __init__(self, service, sid, cwd=None):
+    def __init__(self, service, sid, user_id=SERVER_USER_ID, cwd=None):
         self.service = service
         self.sid = sid
+        self.user_id = user_id
         self.cwd = cwd or ROOT
         self.client = self._create_client()
         self.client.history_changed = self.save
@@ -118,7 +119,7 @@ class AgentSession:
         self.cancel_evt = threading.Event()
         self.worker = None
         self.exit_reason = None
-        self.response_chunks = []
+        self.output_mode = 'events'
         self._lock = threading.RLock()
 
     def _create_client(self):
@@ -157,50 +158,53 @@ class AgentSession:
             ui_msgs = list(self.ui_msgs)
         self.service.store.save(
             session_id=self.sid,
+            user_id=self.user_id,
             llm_history=llm_history,
             ui_messages=ui_msgs,
             handler_state=self.snapshot_handler_state(),
         )
 
-    def append_ui_message(self, role, content):
+    def append_ui_message(self, role, content='', events=None):
         with self._lock:
             msg = {'role': role, 'content': content}
-            if (
-                role == 'assistant'
-                and self.ui_msgs
-                and self.ui_msgs[-1].get('role') == 'assistant'
-                and content.startswith(self.ui_msgs[-1].get('content') or '')
-            ):
-                self.ui_msgs[-1] = msg
-            elif not (
-                self.ui_msgs
-                and self.ui_msgs[-1].get('role') == role
-                and self.ui_msgs[-1].get('content') == content
-            ):
-                self.ui_msgs.append(msg)
+            if events:
+                msg['events'] = list(events)
+            self.ui_msgs.append(msg)
         self.save()
 
-    def commit_response_so_far(self):
+    def _ensure_assistant_message(self):
         with self._lock:
-            content = ''.join(self.response_chunks)
-            self.response_chunks = []
-        if content:
-            self.append_ui_message('assistant', content)
+            if not self.ui_msgs or self.ui_msgs[-1].get('role') != 'assistant':
+                self.ui_msgs.append({'role': 'assistant', 'content': '', 'events': []})
+            else:
+                self.ui_msgs[-1].setdefault('events', [])
 
-    def run_or_answer(self, text):
+    def _record_assistant_event(self, event):
+        self._ensure_assistant_message()
+        with self._lock:
+            msg = self.ui_msgs[-1]
+            if event.get('sessionUpdate') == 'agent_message_chunk':
+                text = ((event.get('content') or {}).get('text') or '')
+                msg['content'] = (msg.get('content') or '') + text
+            else:
+                msg.setdefault('events', []).append(event)
+        self.save()
+
+    def run_or_answer(self, text, mode='events'):
         if self.worker is not None and self.worker.is_alive():
             if self.turn_done_evt.is_set() and self.exit_reason is not None:
                 self.worker.join(timeout=0.1)
             if self.worker is not None and not self.worker.is_alive():
-                self._spawn_worker(text)
+                self._spawn_worker(text, mode=mode)
                 return
             self.append_ui_message('user', text)
             self.turn_done_evt.clear()
             self.ask_q.put(text)
             return
-        self._spawn_worker(text)
+        self._spawn_worker(text, mode=mode)
 
-    def _spawn_worker(self, text):
+    def _spawn_worker(self, text, mode='events'):
+        self.output_mode = mode
         sk, sk_args = match_skill(text, SKILLS)
         task_text = build_skill_user_input(sk, sk_args) if sk else text
         prev = self.handler
@@ -228,34 +232,45 @@ class AgentSession:
             user_input = handler._anchor_prompt() + f'\n\n### 用户当前消息\n{task_text}'
 
         self.append_ui_message('user', text)
+        self._ensure_assistant_message()
+        self.save()
         self.turn_done_evt.clear()
         self.cancel_evt.clear()
         self.exit_reason = None
-        with self._lock:
-            self.response_chunks = []
-        self.worker = threading.Thread(target=self._run_loop, args=(user_input, task_text), daemon=True)
+        self.worker = threading.Thread(target=self._run_loop, args=(user_input, task_text, mode), daemon=True)
         self.worker.start()
 
-    def _run_loop(self, user_input, task_text):
+    def _run_loop(self, user_input, task_text, mode='events'):
         try:
-            self.exit_reason = agent_runner_loop(
-                client=self.client,
-                system_prompt=build_system_prompt(),
-                user_input=user_input,
-                handler=self.handler,
-                tools_schema=TOOLS_SCHEMA,
-                max_turns=getattr(config, 'MAX_TURNS', 40),
-                on_chunk=self._on_chunk,
-            )
+            kwargs = {
+                'client': self.client,
+                'system_prompt': build_system_prompt(),
+                'user_input': user_input,
+                'handler': self.handler,
+                'tools_schema': TOOLS_SCHEMA,
+                'max_turns': getattr(config, 'MAX_TURNS', 40),
+            }
+            if mode == 'text':
+                kwargs['on_chunk'] = self._on_text_chunk
+            else:
+                kwargs['on_event'] = self._on_event
+            self.exit_reason = agent_runner_loop(**kwargs)
         except KeyboardInterrupt:
             self.exit_reason = {'result': 'INTERRUPTED'}
+            if mode == 'text':
+                pass
+            else:
+                self.emit_event(done('cancelled'), check_cancel=False)
         except Exception as e:
             import traceback
             traceback.print_exc()
             self.exit_reason = {'result': 'ERROR', 'msg': str(e)}
-            self._on_chunk(f'\n**[Error]** {e}\n')
+            if mode == 'text':
+                self._on_text_chunk(f'\n**[Error]** {e}\n', check_cancel=False)
+            else:
+                self.emit_event(agent_message_chunk(f'**[Error]** {e}'), check_cancel=False)
+                self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
         finally:
-            self.commit_response_so_far()
             try:
                 archive_session(self.client, task_text, self.exit_reason)
             except Exception:
@@ -263,12 +278,26 @@ class AgentSession:
             self.save()
             self.turn_done_evt.set()
 
-    def _on_chunk(self, chunk):
-        if self.cancel_evt.is_set():
+    def emit_event(self, event, check_cancel=True):
+        if check_cancel and self.cancel_evt.is_set():
             raise KeyboardInterrupt('User cancelled')
-        self.display_q.put({'chunk': chunk})
+        self.display_q.put({'event': event})
+        self._record_assistant_event(event)
+
+    def _on_event(self, event):
+        self.emit_event(event)
+
+    def _on_text_chunk(self, chunk, check_cancel=True):
+        if check_cancel and self.cancel_evt.is_set():
+            raise KeyboardInterrupt('User cancelled')
+        if not chunk:
+            return
+        self.display_q.put({'text': chunk})
+        self._ensure_assistant_message()
         with self._lock:
-            self.response_chunks.append(chunk)
+            msg = self.ui_msgs[-1]
+            msg['content'] = (msg.get('content') or '') + chunk
+        self.save()
 
     def cancel(self):
         self.cancel_evt.set()
@@ -277,8 +306,8 @@ class AgentSession:
         except queue.Full:
             pass
 
-    def iter_text(self, text):
-        self.run_or_answer(text)
+    def iter_events(self, text):
+        self.run_or_answer(text, mode='events')
         while True:
             try:
                 item = self.display_q.get(timeout=0.1)
@@ -286,10 +315,24 @@ class AgentSession:
                 if self.turn_done_evt.is_set():
                     break
                 continue
-            if 'chunk' in item:
-                yield item['chunk']
-            elif 'ask' in item:
-                yield encode_ask_user_block(item['ask'])
+            if 'event' in item:
+                yield item['event']
+            if self.turn_done_evt.is_set() and self.display_q.empty():
+                break
+
+    def iter_text(self, text):
+        self.run_or_answer(text, mode='text')
+        while True:
+            try:
+                item = self.display_q.get(timeout=0.1)
+            except queue.Empty:
+                if self.turn_done_evt.is_set():
+                    break
+                continue
+            if 'text' in item:
+                yield item['text']
+            elif 'event' in item and item['event'].get('sessionUpdate') == 'agent_message_chunk':
+                yield ((item['event'].get('content') or {}).get('text') or '')
             if self.turn_done_evt.is_set() and self.display_q.empty():
                 break
 
@@ -303,70 +346,97 @@ class AgentService:
         self._sessions = {}
         self._lock = threading.RLock()
 
-    def create_session(self, cwd=None):
+    @staticmethod
+    def _key(user_id, sid):
+        return (user_id or SERVER_USER_ID, sid)
+
+    def create_session(self, user_id=SERVER_USER_ID, cwd=None):
         sid = str(uuid.uuid4())
-        sess = AgentSession(self, sid, cwd=cwd)
+        user_id = user_id or SERVER_USER_ID
+        sess = AgentSession(self, sid, user_id=user_id, cwd=cwd)
         with self._lock:
-            self._sessions[sid] = sess
+            self._sessions[self._key(user_id, sid)] = sess
         sess.save()
         return sess
 
-    def get_session(self, sid=None, cwd=None):
+    def get_session(self, sid=None, user_id=SERVER_USER_ID, cwd=None):
+        user_id = user_id or SERVER_USER_ID
         if not sid:
-            return self.create_session(cwd=cwd)
+            return self.create_session(user_id=user_id, cwd=cwd)
+        key = self._key(user_id, sid)
         with self._lock:
-            sess = self._sessions.get(sid)
+            sess = self._sessions.get(key)
             if sess:
                 return sess
-            sess = AgentSession(self, sid, cwd=cwd)
-            loaded = self.store.load(sid)
+            sess = AgentSession(self, sid, user_id=user_id, cwd=cwd)
+            loaded = self.store.load(sid, user_id=user_id)
             if loaded is not None:
                 sess.restore_from(loaded)
-            self._sessions[sid] = sess
+            elif self.store.session_exists(sid):
+                return None
+            self._sessions[key] = sess
             if loaded is None:
                 sess.save()
             return sess
 
-    def load_session(self, sid):
+    def load_session(self, sid, user_id=SERVER_USER_ID):
+        user_id = user_id or SERVER_USER_ID
+        key = self._key(user_id, sid)
         with self._lock:
-            sess = self._sessions.get(sid)
-        loaded = self.store.load(sid)
+            sess = self._sessions.get(key)
+        loaded = self.store.load(sid, user_id=user_id)
         if loaded is None:
             return None
         if sess is None:
-            sess = AgentSession(self, sid)
+            sess = AgentSession(self, sid, user_id=user_id)
             sess.restore_from(loaded)
             with self._lock:
-                self._sessions[sid] = sess
+                self._sessions[key] = sess
         return sess
 
-    def list_sessions(self):
-        rows = self.store.list_sessions()
+    def list_sessions(self, user_id=SERVER_USER_ID):
+        user_id = user_id or SERVER_USER_ID
+        rows = self.store.list_sessions(user_id=user_id)
         with self._lock:
-            running = {sid: sess.is_running() for sid, sess in self._sessions.items()}
+            running = {
+                sid: sess.is_running()
+                for (owner_id, sid), sess in self._sessions.items()
+                if owner_id == user_id
+            }
         for row in rows:
             row['running'] = running.get(row['session_id'], False)
         return rows
 
-    def delete_session(self, sid):
+    def delete_session(self, sid, user_id=SERVER_USER_ID):
+        user_id = user_id or SERVER_USER_ID
+        key = self._key(user_id, sid)
         with self._lock:
-            sess = self._sessions.pop(sid, None)
+            sess = self._sessions.pop(key, None)
         if sess:
             sess.cancel()
-        return self.store.delete(sid)
+        return self.store.delete(sid, user_id=user_id)
 
-    def cancel_session(self, sid):
+    def cancel_session(self, sid, user_id=SERVER_USER_ID):
+        user_id = user_id or SERVER_USER_ID
         with self._lock:
-            sess = self._sessions.get(sid)
+            sess = self._sessions.get(self._key(user_id, sid))
         if not sess:
             return False
         sess.cancel()
         return True
 
-    def chat_text(self, sid, messages, cwd=None):
-        sess = self.get_session(sid, cwd=cwd)
+    def chat_text(self, sid, messages, user_id=SERVER_USER_ID, cwd=None):
+        sess = self.get_session(sid, user_id=user_id, cwd=cwd)
+        if sess is None:
+            return None, iter(())
         text = last_user_text(messages)
         return sess, sess.iter_text(text)
+
+    def chat_events(self, sid, text, user_id=SERVER_USER_ID, cwd=None):
+        sess = self.get_session(sid, user_id=user_id, cwd=cwd)
+        if sess is None:
+            return None, iter(())
+        return sess, sess.iter_events(text)
 
 
 def openai_chat_completion(model, content, session_id):
@@ -396,6 +466,21 @@ def openai_chat_chunk(model, content):
         'choices': [{
             'index': 0,
             'delta': {'content': content},
+            'finish_reason': None,
+        }],
+    }
+
+
+def openai_role_chunk(model):
+    now = int(time.time())
+    return {
+        'id': f'chatcmpl-{uuid.uuid4().hex}',
+        'object': 'chat.completion.chunk',
+        'created': now,
+        'model': model,
+        'choices': [{
+            'index': 0,
+            'delta': {'role': 'assistant'},
             'finish_reason': None,
         }],
     }

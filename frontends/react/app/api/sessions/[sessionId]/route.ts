@@ -1,11 +1,11 @@
 import { proxyToBackend } from "@/lib/backend";
 
-export async function GET(_: Request, { params }: { params: Promise<{ sessionId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
-  return proxyToBackend(`/v1/sessions/${sessionId}`);
+  return proxyToBackend(`/v1/sessions/${sessionId}`, {}, request);
 }
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ sessionId: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
-  return proxyToBackend(`/v1/sessions/${sessionId}`, { method: "DELETE" });
+  return proxyToBackend(`/v1/sessions/${sessionId}`, { method: "DELETE" }, request);
 }

@@ -43,6 +43,12 @@ BACKEND_BASE_URL = "http://127.0.0.1:8000"
 # Authorization: Bearer <SERVER_API_KEY>
 SERVER_API_KEY = ""
 
+# User login token signing secret. Set this to a long random string in any
+# shared or persistent deployment. If empty, the server uses a temporary
+# development secret and all login tokens become invalid after restart.
+AUTH_SECRET = ""
+AUTH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60
+
 # Browser frontends usually run on a different port from the backend.
 # Use ["*"] for local development, or lock this down in production.
 SERVER_CORS_ORIGINS = ["*"]

@@ -23,6 +23,16 @@ class ToolCall:
 
 
 @dataclass
+class ToolCallDelta:
+    index: int
+    id: str = ''
+    name: str = ''
+    name_delta: str = ''
+    arguments_delta: str = ''
+    arguments_text: str = ''
+
+
+@dataclass
 class Response:
     content: str = ''
     tool_calls: list = field(default_factory=list)
@@ -134,14 +144,27 @@ class LLMClient:
                         for tc in tcs:
                             idx = getattr(tc, 'index', 0) or 0
                             slot = tool_acc.setdefault(idx, {'id': '', 'name': '', 'args': ''})
+                            name_delta = ''
+                            args_delta = ''
                             if getattr(tc, 'id', None):
                                 slot['id'] = tc.id
                             fn = getattr(tc, 'function', None)
                             if fn is not None:
                                 if getattr(fn, 'name', None):
                                     slot['name'] = fn.name
+                                    name_delta = fn.name
                                 if getattr(fn, 'arguments', None):
-                                    slot['args'] += fn.arguments
+                                    args_delta = fn.arguments
+                                    slot['args'] += args_delta
+                            if getattr(tc, 'id', None) or name_delta or args_delta:
+                                yield ToolCallDelta(
+                                    index=idx,
+                                    id=slot['id'],
+                                    name=slot['name'],
+                                    name_delta=name_delta,
+                                    arguments_delta=args_delta,
+                                    arguments_text=slot['args'],
+                                )
                 if getattr(choice, 'finish_reason', None):
                     finish_reason = choice.finish_reason
         except Exception as e:
