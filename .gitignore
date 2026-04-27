@@ -19,6 +19,7 @@ env/
 .ruff_cache/
 .mypy_cache/
 .ipynb_checkpoints/
+*.tsbuildinfo
 
 # Local config & secrets
 .env
@@ -31,10 +32,17 @@ config.py
 *.swp
 *~
 .DS_Store
+.codex
 
 # Logs & temp
 *.log
 tmp/
+
+# Frontend build artifacts
+frontends/react/.next/
+frontends/react/.turbo/
+frontends/react/node_modules/
+frontends/react/dist/
 
 # local skills
 skills/

@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    @apply h-full bg-background text-foreground;
+  }
+
+  body {
+    font-feature-settings: "rlig" 1, "calt" 1;
+    background:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.1), transparent 28rem),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
+  }
+}
+
+@layer components {
+  .prose-agent {
+    @apply text-sm leading-7 text-slate-700;
+  }
+
+  .prose-agent p,
+  .prose-agent ul,
+  .prose-agent ol,
+  .prose-agent pre,
+  .prose-agent blockquote,
+  .prose-agent table {
+    @apply my-3;
+  }
+
+  .prose-agent ul,
+  .prose-agent ol {
+    @apply pl-5;
+  }
+
+  .prose-agent code:not(pre code) {
+    @apply rounded bg-slate-100 px-1.5 py-0.5 text-[0.85em] text-slate-800;
+  }
+
+  .prose-agent pre {
+    @apply overflow-x-auto rounded-lg border border-slate-200 bg-slate-950 px-4 py-3 text-slate-100;
+  }
+
+  .prose-agent pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+
+  .prose-agent blockquote {
+    @apply border-l-2 border-slate-300 pl-4 text-slate-600;
+  }
+
+  .prose-agent table {
+    @apply w-full border-collapse overflow-hidden rounded-lg border border-slate-200;
+  }
+
+  .prose-agent th {
+    @apply bg-slate-50 px-3 py-2 text-left text-xs font-semibold uppercase tracking-normal text-slate-500;
+  }
+
+  .prose-agent td {
+    @apply border-t border-slate-200 px-3 py-2 align-top;
+  }
+}
