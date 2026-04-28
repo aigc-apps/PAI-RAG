@@ -228,6 +228,9 @@ class AgentSession:
             handler = self._new_handler()
             handler.history_info = state.get('history_info', [])
             handler.working = state.get('working', {})
+            active_skill = handler.working.get('active_skill')
+            if active_skill in SKILLS:
+                handler.allow_readonly_root(os.path.dirname(SKILLS[active_skill].path))
             self.handler = handler
 
     def snapshot_handler_state(self):
@@ -340,6 +343,7 @@ class AgentSession:
         prev = self.handler
         handler = self._new_handler()
         if sk:
+            handler.allow_readonly_root(os.path.dirname(sk.path))
             handler.working['active_skill'] = sk.name
             handler.working['related_sop'] = f'skills/{sk.name}/SKILL.md'
         if prev:

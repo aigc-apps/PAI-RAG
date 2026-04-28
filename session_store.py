@@ -5,6 +5,28 @@ from datetime import datetime
 
 SERVER_USER_ID = '__server__'
 ACTIVE_STATUSES = {'running', 'waiting_user'}
+DEFAULT_SESSION_TITLE = 'New Task'
+SQLITE_JOURNAL_MODES = {'DELETE', 'TRUNCATE', 'PERSIST', 'MEMORY', 'WAL', 'OFF'}
+
+
+def sqlite_journal_mode():
+    try:
+        import config
+        configured = getattr(config, 'SQLITE_JOURNAL_MODE', '')
+    except ImportError:
+        configured = ''
+    mode = (os.environ.get('SQLITE_JOURNAL_MODE') or configured or 'DELETE').upper()
+    return mode if mode in SQLITE_JOURNAL_MODES else 'DELETE'
+
+
+def session_title_from_messages(ui_messages, current_title=None):
+    title = (current_title or '').strip()
+    if title and title != DEFAULT_SESSION_TITLE:
+        return title
+    return next(
+        ((m.get('content') or '').strip()[:60] for m in ui_messages if m.get('role') == 'user' and (m.get('content') or '').strip()),
+        DEFAULT_SESSION_TITLE,
+    )
 
 
 class SessionStore:
@@ -42,10 +64,7 @@ class SessionStore:
             if ui_messages is None:
                 ui_messages = old_data.get('ui_messages', []) if old_data else []
             if title is None:
-                title = next(
-                    (m['content'][:60] for m in ui_messages if m.get('role') == 'user'),
-                    'New Task',
-                )
+                title = session_title_from_messages(ui_messages, old_data.get('title') if old_data else None)
             data = {
                 'session_id': session_id,
                 'user_id': user_id,
@@ -80,7 +99,7 @@ class SessionStore:
             ).fetchall()
         return [{
             'session_id': row['session_id'],
-            'title': row['title'] or 'New Task',
+            'title': row['title'] or DEFAULT_SESSION_TITLE,
             'created_at': row['created_at'] or '',
             'updated_at': row['updated_at'] or '',
             'message_count': row['message_count'] or 0,
@@ -139,7 +158,7 @@ class SessionStore:
             ui_messages = self._json_list(row['ui_messages_json'])
             ui_messages.append({'role': 'user', 'content': user_text})
             ui_messages.append({'role': 'assistant', 'content': '', 'events': []})
-            title = row['title'] or next((m['content'][:60] for m in ui_messages if m.get('role') == 'user'), 'New Task')
+            title = session_title_from_messages(ui_messages, row['title'])
             conn.execute(
                 '''
                 UPDATE sessions
@@ -260,11 +279,16 @@ class SessionStore:
         now = datetime.now().isoformat()
         ui_messages = ui_messages or []
         active_run_id = active_run_id if active_run_id is not None else run_id
+        title = session_title_from_messages(ui_messages)
         with self._connect() as conn:
             cur = conn.execute(
                 '''
                 UPDATE sessions
                 SET updated_at = ?,
+                    title = CASE
+                        WHEN title IS NULL OR trim(title) = '' OR title = ? THEN ?
+                        ELSE title
+                    END,
                     llm_history_json = ?,
                     ui_messages_json = ?,
                     handler_state_json = ?,
@@ -276,6 +300,8 @@ class SessionStore:
                 ''',
                 (
                     now,
+                    DEFAULT_SESSION_TITLE,
+                    title,
                     json.dumps(llm_history or [], ensure_ascii=False, default=str),
                     json.dumps(ui_messages, ensure_ascii=False, default=str),
                     json.dumps(handler_state, ensure_ascii=False, default=str),
@@ -344,7 +370,7 @@ class SessionStore:
 
     def _init_db(self):
         with self._connect() as conn:
-            conn.execute('PRAGMA journal_mode=WAL')
+            conn.execute(f'PRAGMA journal_mode={sqlite_journal_mode()}')
             conn.execute('PRAGMA busy_timeout=30000')
             conn.execute(
                 '''
@@ -460,7 +486,7 @@ class SessionStore:
                     user_id,
                     data.get('created_at') or datetime.now().isoformat(),
                     data.get('updated_at') or datetime.now().isoformat(),
-                    data.get('title') or 'New Task',
+                    data.get('title') or DEFAULT_SESSION_TITLE,
                     json.dumps(data.get('llm_history') or [], ensure_ascii=False, default=str),
                     json.dumps(ui_messages, ensure_ascii=False, default=str),
                     json.dumps(data.get('handler_state'), ensure_ascii=False, default=str),

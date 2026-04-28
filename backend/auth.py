@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 
+from session_store import sqlite_journal_mode
+
 
 USERNAME_RE = re.compile(r'^[A-Za-z0-9_.-]{3,32}$')
 BCRYPT_MAX_PASSWORD_BYTES = 72
@@ -32,7 +34,7 @@ class UserStore:
 
     def _init_db(self):
         with self._connect() as conn:
-            conn.execute('PRAGMA journal_mode=WAL')
+            conn.execute(f'PRAGMA journal_mode={sqlite_journal_mode()}')
             conn.execute('PRAGMA busy_timeout=30000')
             conn.execute(
                 '''

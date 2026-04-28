@@ -162,7 +162,11 @@ class WorkerSession:
         )
         handler.history_info = list(state.get('history_info', []) or [])
         handler.working = dict(state.get('working', {}) or {})
+        active_skill = handler.working.get('active_skill')
+        if active_skill in SKILLS:
+            handler.allow_readonly_root(os.path.dirname(SKILLS[active_skill].path))
         if sk:
+            handler.allow_readonly_root(os.path.dirname(sk.path))
             handler.working['active_skill'] = sk.name
             handler.working['related_sop'] = f'skills/{sk.name}/SKILL.md'
         if 'key_info' in handler.working:

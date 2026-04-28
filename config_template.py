@@ -47,6 +47,9 @@ ENFORCE_WORKSPACE_FOR_SERVER = False
 MAX_GLOBAL_RUNS = 0
 MAX_USER_RUNS = 0
 
+# SQLite 日志模式。DELETE 只有主库文件，方便 GUI 查看；WAL 并发更好但会生成 -wal/-shm 文件。
+SQLITE_JOURNAL_MODE = "DELETE"
+
 # thread: FastAPI 进程内线程执行，适合本地开发。
 # celery: FastAPI 只入队和读 Redis Stream，agent run 由独立 Celery worker 执行。
 RUNNER_BACKEND = "thread"

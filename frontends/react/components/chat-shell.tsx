@@ -774,6 +774,15 @@ function sessionTitle(session: SessionSummary) {
   return session.title?.trim() || "New Task";
 }
 
+function titleFromMessages(messages: ChatMessage[]) {
+  return messages.find((message) => message.role === "user" && message.content.trim())?.content.trim().slice(0, 60) || "New Task";
+}
+
+function shouldReplaceSessionTitle(title?: string) {
+  const value = title?.trim();
+  return !value || value === "New Task";
+}
+
 function AuthPanel({
   mode,
   username,
@@ -957,6 +966,8 @@ export function ChatShell() {
   }, [messages, streaming]);
 
   const isAnsweringAsk = Boolean(latestAsk(messages));
+  const activeSession = sessions.find((session) => session.session_id === currentSessionId);
+  const activeSessionTitle = activeSession ? sessionTitle(activeSession) : titleFromMessages(messages);
 
   async function handleAuthSubmit() {
     if (authLoading) {
@@ -1048,6 +1059,39 @@ export function ChatShell() {
       }
 
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: "", events: [] }]);
+      setSessions((prev) => {
+        const optimisticTitle = text.slice(0, 60);
+        const now = new Date().toISOString();
+        let matched = false;
+        const next = prev.map((session) => {
+          if (session.session_id !== activeSessionId) {
+            return session;
+          }
+          matched = true;
+          return {
+            ...session,
+            title: shouldReplaceSessionTitle(session.title) ? optimisticTitle : session.title,
+            status: "running",
+            running: true,
+            updated_at: now,
+          };
+        });
+        if (matched || !activeSessionId) {
+          return next;
+        }
+        return [
+          {
+            session_id: activeSessionId,
+            title: optimisticTitle,
+            created_at: now,
+            updated_at: now,
+            status: "running",
+            running: true,
+            message_count: 2,
+          },
+          ...next,
+        ];
+      });
 
       const returnedSessionId = await streamAgentPrompt(
         activeSessionId,
@@ -1188,7 +1232,9 @@ export function ChatShell() {
         <header className="shrink-0 border-b border-slate-200/80 bg-white/75 px-5 py-4 backdrop-blur lg:px-8">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">{currentSessionId ? "Chat" : "Connecting"}</h2>
+              <h2 className="max-w-[60vw] truncate text-lg font-semibold text-slate-900">
+                {currentSessionId ? activeSessionTitle : "Connecting"}
+              </h2>
               <p className="text-sm text-slate-500">{loading ? "Loading sessions..." : `${messages.length} messages`}</p>
             </div>
             <div className="flex items-center gap-2">

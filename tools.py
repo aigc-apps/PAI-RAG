@@ -250,6 +250,13 @@ class GenericHandler(BaseHandler):
         self._tool_event_emit = None
 
     # ── 路径与代码块抽取 ──
+    def allow_readonly_root(self, path):
+        if not path:
+            return
+        root = os.path.abspath(path)
+        if not any(_is_relative_to(root, existing) and _is_relative_to(existing, root) for existing in self.readonly_roots):
+            self.readonly_roots.append(root)
+
     def _abs(self, path):
         return self._resolve_path(path, for_write=False) if path else ''
 
@@ -263,6 +270,8 @@ class GenericHandler(BaseHandler):
             candidate = self.memory_root
         elif normalized.startswith('memory/'):
             candidate = os.path.join(self.memory_root, normalized[len('memory/'):])
+        elif not for_write and (normalized == 'skills' or normalized.startswith('skills/')):
+            candidate = os.path.join(self.root, normalized)
         else:
             candidate = raw if os.path.isabs(raw) else os.path.join(self.cwd, raw)
         candidate = os.path.abspath(candidate)
@@ -485,6 +494,7 @@ class GenericHandler(BaseHandler):
                 next_prompt='\n')
         sk = skills[name]
         skill_args = args.get('args', '')
+        self.allow_readonly_root(os.path.dirname(sk.path))
         self.working['active_skill'] = sk.name
         self.working['related_sop'] = f'skills/{sk.name}/SKILL.md'
         prompt = f'[SKILL ACTIVATED: {sk.name}]\n' + build_skill_user_input(sk, skill_args)
