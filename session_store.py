@@ -242,8 +242,59 @@ class SessionStore:
         now = datetime.now().isoformat()
         with self._connect() as conn:
             conn.execute(
-                'UPDATE runs SET status = ?, updated_at = ? WHERE run_id = ? AND user_id = ?',
-                (status, now, run_id, user_id),
+                '''
+                UPDATE runs
+                SET status = ?,
+                    updated_at = ?,
+                    started_at = CASE WHEN started_at IS NULL AND ? = 'running' THEN ? ELSE started_at END
+                WHERE run_id = ? AND user_id = ?
+                ''',
+                (status, now, status, now, run_id, user_id),
+            )
+
+    def load_run(self, run_id, user_id=SERVER_USER_ID):
+        with self._connect() as conn:
+            row = conn.execute(
+                '''
+                SELECT run_id, session_id, user_id, mode, status, error,
+                       created_at, updated_at, started_at, finished_at,
+                       cancel_requested_at, last_event_id, metadata_json
+                FROM runs
+                WHERE run_id = ? AND user_id = ?
+                ''',
+                (run_id, user_id),
+            ).fetchone()
+        if row is None:
+            return None
+        metadata = {}
+        try:
+            metadata = json.loads(row['metadata_json'] or '{}')
+        except json.JSONDecodeError:
+            metadata = {}
+        return {
+            'run_id': row['run_id'],
+            'session_id': row['session_id'],
+            'user_id': row['user_id'],
+            'mode': row['mode'],
+            'status': row['status'],
+            'error': row['error'] or '',
+            'created_at': row['created_at'],
+            'updated_at': row['updated_at'],
+            'started_at': row['started_at'] or '',
+            'finished_at': row['finished_at'] or '',
+            'cancel_requested_at': row['cancel_requested_at'] or '',
+            'last_event_id': row['last_event_id'] or '',
+            'metadata': metadata,
+        }
+
+    def set_run_last_event(self, run_id, user_id, event_id):
+        if not event_id:
+            return
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                'UPDATE runs SET last_event_id = ?, updated_at = ? WHERE run_id = ? AND user_id = ?',
+                (event_id, now, run_id, user_id),
             )
 
     def finish_run(self, session_id, user_id, run_id, status, error=''):
@@ -329,8 +380,8 @@ class SessionStore:
                 ('cancelled', now, session_id, user_id, run_id),
             )
             conn.execute(
-                'UPDATE runs SET status = ?, updated_at = ? WHERE run_id = ? AND user_id = ?',
-                ('cancelled', now, run_id, user_id),
+                'UPDATE runs SET status = ?, updated_at = ?, cancel_requested_at = ? WHERE run_id = ? AND user_id = ?',
+                ('cancelled', now, now, run_id, user_id),
             )
 
     def owner_for(self, session_id):
@@ -401,6 +452,10 @@ class SessionStore:
                     error TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
+                    started_at TEXT,
+                    cancel_requested_at TEXT,
+                    last_event_id TEXT,
+                    metadata_json TEXT,
                     finished_at TEXT
                 )
                 '''
@@ -417,6 +472,18 @@ class SessionStore:
                 conn.execute('ALTER TABLE sessions ADD COLUMN active_run_id TEXT')
             if 'workspace_path' not in columns:
                 conn.execute('ALTER TABLE sessions ADD COLUMN workspace_path TEXT')
+            run_columns = {
+                row['name']
+                for row in conn.execute('PRAGMA table_info(runs)').fetchall()
+            }
+            if 'started_at' not in run_columns:
+                conn.execute('ALTER TABLE runs ADD COLUMN started_at TEXT')
+            if 'cancel_requested_at' not in run_columns:
+                conn.execute('ALTER TABLE runs ADD COLUMN cancel_requested_at TEXT')
+            if 'last_event_id' not in run_columns:
+                conn.execute('ALTER TABLE runs ADD COLUMN last_event_id TEXT')
+            if 'metadata_json' not in run_columns:
+                conn.execute('ALTER TABLE runs ADD COLUMN metadata_json TEXT')
             conn.execute(
                 'CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC)'
             )
@@ -428,6 +495,9 @@ class SessionStore:
             )
             conn.execute(
                 'CREATE INDEX IF NOT EXISTS idx_runs_user_status ON runs(user_id, status)'
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_runs_user_run ON runs(user_id, run_id)'
             )
 
     def _session_row(self, conn, session_id, user_id):

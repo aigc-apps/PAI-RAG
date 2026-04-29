@@ -46,6 +46,7 @@ frontends/react/dist/
 
 # local skills
 skills/
+skills-lock.json
 
 # Conversation history (may contain secrets pasted by user)
 memory/

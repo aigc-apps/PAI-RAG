@@ -372,7 +372,7 @@ class AgentSession:
         self.cancel_evt.clear()
         self.exit_reason = None
         self.status = SESSION_RUNNING
-        self.active_run_id = uuid.uuid4().hex
+        self.active_run_id = f'run_{uuid.uuid4().hex}'
         run_id = self.active_run_id
         self.save()
         self.worker = threading.Thread(target=self._run_loop, args=(user_input, task_text, mode, run_id), daemon=True)

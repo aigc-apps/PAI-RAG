@@ -48,7 +48,7 @@ class CeleryRunService:
             self.bus.push_answer(run_id, text)
             return RunStream(session_id=session_id, run_id=run_id, stream_from=stream_from)
 
-        run_id = uuid.uuid4().hex
+        run_id = f'run_{uuid.uuid4().hex}'
         workspace_path = loaded.get('workspace_path') or self._workspace_for(user_id, session_id, cwd=cwd)
         result = self.store.try_start_run(
             session_id=session_id,
@@ -83,6 +83,28 @@ class CeleryRunService:
 
     def iter_events(self, run_id, stream_from='0-0'):
         return self.bus.iter_events(run_id, last_id=stream_from)
+
+    def load_run(self, run_id, user_id):
+        return self.store.load_run(run_id, user_id=user_id)
+
+    def read_events(self, run_id, user_id, last_id='0-0', block_ms=1000):
+        run = self.load_run(run_id, user_id)
+        if run is None:
+            return None
+        events = self.bus.read_events(run_id, last_id=last_id, block_ms=block_ms)
+        if events:
+            self.store.set_run_last_event(run_id, user_id, events[-1][0])
+        return events
+
+    def cancel_run(self, run_id, user_id):
+        run = self.load_run(run_id, user_id)
+        if run is None:
+            return False
+        self.bus.cancel(run_id)
+        if run.get('status') == 'waiting_user':
+            self.bus.push_answer(run_id, '[Cancelled]')
+        self.store.request_cancel(run['session_id'], user_id, run_id)
+        return True
 
     def cancel_session(self, session_id, user_id):
         loaded = self.store.load(session_id, user_id=user_id)

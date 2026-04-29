@@ -36,15 +36,49 @@ def memory_scope_for(repo_root, user_id=SERVER_USER_ID):
     )
 
 
+def _write_if_missing(path, content):
+    try:
+        with open(path, 'x', encoding='utf-8') as f:
+            f.write(content)
+    except FileExistsError:
+        pass
+
+
+def _copy_or_write_if_missing(path, source_path, default_content):
+    if os.path.exists(path):
+        return
+    source_exists = source_path and os.path.exists(source_path)
+    is_distinct_source = source_path and os.path.abspath(source_path) != os.path.abspath(path)
+    if source_exists and is_distinct_source:
+        try:
+            with open(source_path, 'rb') as src, open(path, 'xb') as dst:
+                dst.write(src.read())
+            return
+        except FileExistsError:
+            return
+    _write_if_missing(path, default_content)
+
+
+def _global_memory_root_for(scope):
+    if scope.is_global:
+        return scope.root
+    return os.path.abspath(os.path.join(scope.root, os.pardir, os.pardir))
+
+
 def ensure_memory_scope(scope):
     os.makedirs(scope.root, exist_ok=True)
     os.makedirs(scope.archive_dir, exist_ok=True)
-    if not os.path.exists(scope.index_path):
-        with open(scope.index_path, 'w', encoding='utf-8') as f:
-            f.write(DEFAULT_INDEX)
-    if not os.path.exists(scope.facts_path):
-        with open(scope.facts_path, 'w', encoding='utf-8') as f:
-            f.write(DEFAULT_FACTS)
+    global_root = _global_memory_root_for(scope)
+    _copy_or_write_if_missing(
+        scope.index_path,
+        None if scope.is_global else os.path.join(global_root, 'global_index.txt'),
+        DEFAULT_INDEX,
+    )
+    _copy_or_write_if_missing(
+        scope.facts_path,
+        None if scope.is_global else os.path.join(global_root, 'global_facts.txt'),
+        DEFAULT_FACTS,
+    )
 
 
 def read_index(scope):

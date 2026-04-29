@@ -7,6 +7,7 @@ import { Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, LogOut, Plus, Squa
 import {
   cancelSession,
   clearAuthToken,
+  createRun,
   createSession,
   currentUser,
   deleteSession,
@@ -16,7 +17,8 @@ import {
   login as loginUser,
   register as registerUser,
   setAuthToken,
-  streamAgentPrompt,
+  stopRun,
+  streamRunEvents,
 } from "@/lib/api";
 import type { AgentUpdate, AskUserPayload, ChatMessage, SessionSummary, UserProfile } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -895,9 +897,11 @@ export function ChatShell() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState(false);
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
 
   const refreshSessions = useCallback(async () => {
     const data = await listSessions();
@@ -908,6 +912,7 @@ export function ChatShell() {
   const loadSession = useCallback(
     async (sessionId: string) => {
       const detail = await getSession(sessionId);
+      shouldStickToBottomRef.current = true;
       setCurrentSessionId(detail.session_id);
       setMessages(detail.messages ?? []);
       await refreshSessions();
@@ -921,6 +926,7 @@ export function ChatShell() {
       await loadSession(data[0].session_id);
     } else {
       const created = await createSession();
+      shouldStickToBottomRef.current = true;
       setCurrentSessionId(created.session_id);
       setMessages(created.messages ?? []);
       await refreshSessions();
@@ -962,7 +968,19 @@ export function ChatShell() {
   }, [loadInitialSession]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!shouldStickToBottomRef.current) {
+      return;
+    }
+    const viewport = messagesViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior: streaming ? "auto" : "smooth",
+      });
+    });
   }, [messages, streaming]);
 
   const isAnsweringAsk = Boolean(latestAsk(messages));
@@ -1012,6 +1030,7 @@ export function ChatShell() {
 
   async function handleNewSession() {
     const created = await createSession();
+    shouldStickToBottomRef.current = true;
     setCurrentSessionId(created.session_id);
     setMessages(created.messages ?? []);
     await refreshSessions();
@@ -1030,11 +1049,19 @@ export function ChatShell() {
   }
 
   async function handleStop() {
-    if (currentSessionId) {
-      await cancelSession(currentSessionId);
+    try {
+      if (currentRunId) {
+        await stopRun(currentRunId);
+      } else if (currentSessionId) {
+        await cancelSession(currentSessionId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      abortRef.current?.abort();
+      setStreaming(false);
+      setCurrentRunId(null);
     }
-    abortRef.current?.abort();
-    setStreaming(false);
   }
 
   async function submitText(rawText: string) {
@@ -1058,6 +1085,7 @@ export function ChatShell() {
         setCurrentSessionId(activeSessionId);
       }
 
+      shouldStickToBottomRef.current = true;
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: "", events: [] }]);
       setSessions((prev) => {
         const optimisticTitle = text.slice(0, 60);
@@ -1093,9 +1121,21 @@ export function ChatShell() {
         ];
       });
 
-      const returnedSessionId = await streamAgentPrompt(
+      const run = await createRun(activeSessionId, text, controller.signal);
+      activeSessionId = run.session_id || activeSessionId;
+      setCurrentSessionId(activeSessionId);
+      setCurrentRunId(run.run_id);
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.session_id === activeSessionId
+            ? { ...session, active_run_id: run.run_id, status: run.status || "running", running: true }
+            : session,
+        ),
+      );
+
+      const returnedSessionId = await streamRunEvents(
+        run.run_id,
         activeSessionId,
-        text,
         ({ sessionId, update }) => {
           activeSessionId = sessionId;
           setCurrentSessionId(sessionId);
@@ -1124,6 +1164,7 @@ export function ChatShell() {
       }
     } finally {
       setStreaming(false);
+      setCurrentRunId(null);
       abortRef.current = null;
     }
   }
@@ -1257,7 +1298,15 @@ export function ChatShell() {
           </div>
         ) : null}
 
-        <ScrollArea className="min-h-0 flex-1">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto"
+          ref={messagesViewportRef}
+          onScroll={(event) => {
+            const target = event.currentTarget;
+            const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+            shouldStickToBottomRef.current = distanceToBottom < 80;
+          }}
+        >
           <section className="flex w-full min-w-0 flex-col gap-4 px-4 py-4 lg:px-8">
             {!messages.length && !loading ? (
               <div className="mx-auto flex min-h-[50vh] max-w-2xl flex-col items-center justify-center text-center">
@@ -1327,9 +1376,8 @@ export function ChatShell() {
                 Loading sessions
               </div>
             ) : null}
-            <div ref={bottomRef} />
           </section>
-        </ScrollArea>
+        </div>
 
         <div className="shrink-0 border-t border-slate-200/80 bg-white/80 px-4 py-4 backdrop-blur lg:px-8">
           <form className="flex w-full min-w-0 items-end gap-3" onSubmit={(event) => void handleSubmit(event)}>

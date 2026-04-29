@@ -51,32 +51,41 @@ class RedisBus:
         self.client.expire(key, self.event_ttl)
         return event_id
 
+    def ping(self):
+        return self.client.ping()
+
     def last_event_id(self, run_id):
         rows = self.client.xrevrange(self.stream_key(run_id), count=1)
         return rows[0][0] if rows else '0-0'
 
+    def read_events(self, run_id, last_id='0-0', count=20, block_ms=1000):
+        rows = self.client.xread({self.stream_key(run_id): last_id}, count=count, block=block_ms)
+        events = []
+        for _, messages in rows:
+            for message_id, fields in messages:
+                raw = fields.get('event') or '{}'
+                try:
+                    event = json.loads(raw)
+                except json.JSONDecodeError:
+                    event = {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': raw}}
+                events.append((message_id, event))
+        return events
+
     def iter_events(self, run_id, last_id='0-0') -> Iterator[dict]:
-        key = self.stream_key(run_id)
         idle_started = time.time()
         while True:
-            rows = self.client.xread({key: last_id}, count=20, block=1000)
-            if not rows:
+            events = self.read_events(run_id, last_id=last_id)
+            if not events:
                 if time.time() - idle_started > self.idle_timeout:
                     yield {'sessionUpdate': 'done', 'stopReason': 'timeout'}
                     break
                 continue
             idle_started = time.time()
-            for _, messages in rows:
-                for message_id, fields in messages:
-                    last_id = message_id
-                    raw = fields.get('event') or '{}'
-                    try:
-                        event = json.loads(raw)
-                    except json.JSONDecodeError:
-                        event = {'sessionUpdate': 'agent_message_chunk', 'content': {'type': 'text', 'text': raw}}
-                    yield event
-                    if event.get('sessionUpdate') == 'done':
-                        return
+            for message_id, event in events:
+                last_id = message_id
+                yield event
+                if event.get('sessionUpdate') == 'done':
+                    return
 
     def cancel(self, run_id):
         self.client.setex(self.cancel_key(run_id), self.event_ttl, '1')

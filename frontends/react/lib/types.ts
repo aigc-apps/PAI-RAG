@@ -108,6 +108,48 @@ export interface StreamEvent {
   update: AgentUpdate;
 }
 
+export interface RunCreateResponse {
+  id?: string;
+  object?: "agent.run";
+  run_id: string;
+  session_id?: string;
+  status: string;
+  stream_from?: string;
+  created_at?: number;
+}
+
+export interface RunStreamEnvelope {
+  event: string;
+  run_id: string;
+  session_id?: string;
+  sequence?: string;
+  created_at?: number;
+  timestamp?: number;
+  output?: string;
+  usage?: unknown;
+  step_id?: string;
+  tool_call_id?: string;
+  title?: string;
+  status?: "pending" | "in_progress" | "completed" | "failed";
+  hidden?: boolean;
+  delta?: string;
+  text?: string;
+  replace?: boolean;
+  tool?: string;
+  preview?: string;
+  kind?: string;
+  input?: Record<string, unknown>;
+  arguments_delta?: string;
+  arguments_text?: string;
+  content?: string;
+  duration?: number;
+  error?: boolean | string;
+  question?: string;
+  candidates?: string[];
+  data?: unknown;
+  update?: AgentUpdate;
+}
+
 export interface UserProfile {
   user_id: string;
   username: string;

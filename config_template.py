@@ -58,6 +58,7 @@ CELERY_BROKER_URL = REDIS_URL
 RUN_EVENT_TTL_SECONDS = 24 * 60 * 60
 ASK_USER_TIMEOUT_SECONDS = 30 * 60
 RUN_IDLE_TIMEOUT_SECONDS = 60 * 60
+SSE_HEARTBEAT_SECONDS = 15
 
 # 多用户生产环境默认不要把共享 memory/global_index.txt 注入普通用户 prompt，
 # 避免泄漏全局环境事实。服务级调用不受此开关影响。
@@ -73,6 +74,8 @@ BACKEND_BASE_URL = "http://127.0.0.1:8000"
 # Optional server-side API key. If non-empty, clients must send:
 # Authorization: Bearer <SERVER_API_KEY>
 SERVER_API_KEY = ""
+MODEL_ALIASES = ["mini-agent", "agent"]
+MAX_REQUEST_BODY_BYTES = 8 * 1024 * 1024
 
 # User login token signing secret. Set this to a long random string in any
 # shared or persistent deployment. If empty, the server uses a temporary
