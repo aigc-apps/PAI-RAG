@@ -9,6 +9,7 @@ MiniAgent 是一个 OpenAI compatible 的自我进化 Agent 项目，包含 Fast
 - [环境要求](#环境要求)
 - [配置](#配置)
 - [启动 Web 版本](#启动-web-版本)
+- [AgentArena 子服务](#agentarena-子服务)
 - [其他入口](#其他入口)
 - [API 测试](#api-测试)
 - [常见问题](#常见问题)
@@ -143,6 +144,38 @@ http://your-server-ip:3001
 BACKEND_BASE_URL=http://127.0.0.1:8000 \
 SERVER_API_KEY=your-server-api-key \
 npm run dev -- --hostname 0.0.0.0 --port 3001
+```
+
+## AgentArena 子服务
+
+AgentArena 是独立的双 Agent 对比页面，源码在 `services/agent-arena/`。它有自己的 `.env`，不要把主项目的 `config.py` 或前端 token 混用。
+
+初始化配置：
+
+```bash
+cd PAI-RAG
+cp services/agent-arena/.env.example services/agent-arena/.env
+```
+
+编辑 `services/agent-arena/.env`，至少配置 `ARENA_API_KEY`、两个 Agent 的 `AGENT_*_BASE_URL` / `AGENT_*_MODEL` / `AGENT_*_API_KEY`，以及可选的 Judge 配置。
+
+AgentArena 不由主项目 `start.sh` 管理，单独启动。常用方式是两个终端分别拉起：
+
+```bash
+# 终端 1：启动 PAI-RAG
+./start.sh --dev --port 3001 --backend-port 8000
+```
+
+```bash
+# 终端 2：启动 AgentArena
+cd services/agent-arena
+./start.sh --host 0.0.0.0 --port 8787
+```
+
+访问 AgentArena：
+
+```text
+http://127.0.0.1:8787
 ```
 
 ## 其他入口

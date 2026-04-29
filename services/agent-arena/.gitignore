@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/
+frontend/dist/
+frontend/.vite/
+logs/
+data/*.sqlite3
+data/*.sqlite3-*

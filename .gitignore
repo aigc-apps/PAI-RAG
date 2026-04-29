@@ -43,6 +43,13 @@ frontends/react/.next/
 frontends/react/.turbo/
 frontends/react/node_modules/
 frontends/react/dist/
+services/agent-arena/.env
+services/agent-arena/frontend/node_modules/
+services/agent-arena/frontend/dist/
+services/agent-arena/frontend/.vite/
+services/agent-arena/logs/
+services/agent-arena/data/*.sqlite3
+services/agent-arena/data/*.sqlite3-*
 
 # local skills
 skills/
