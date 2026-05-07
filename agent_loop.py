@@ -120,14 +120,16 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                       for tc in response.tool_calls]
         if not tool_calls:
             if on_event:
+                process_content = _model_process_content(response.content)
+                cleaned = _model_final_answer(response.content)
                 on_event(thought_done(
                     model_step_id,
                     hidden=True,
-                    content=_model_process_content(response.content),
+                    content=process_content,
                 ))
-                cleaned = _model_final_answer(response.content)
-                if cleaned:
-                    on_event(agent_message_chunk(cleaned))
+                visible_reply = cleaned or process_content
+                if visible_reply:
+                    on_event(agent_message_chunk(visible_reply))
             exit_reason = {'result': 'NO_TOOL_CALL', 'data': response.content}
             handler.turn_end_callback(response, [], [], turn, '', exit_reason)
             if on_event:

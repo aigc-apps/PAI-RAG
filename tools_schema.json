@@ -1,12 +1,12 @@
 [
   {"type": "function", "function": {
     "name": "code_run",
-    "description": "Code executor. Prefer python. Multi-call OK, use script param. Reply code block is executed if no script arg; prefer for single call to avoid escaping. No hardcoding bulk data",
+    "description": "Code executor. Prefer python. Multi-call OK, use script param. Reply code block is executed if no script arg; prefer for single call to avoid escaping. No hardcoding bulk data. For temporary files use relative paths or ./.tmp/ inside the workspace, never system /tmp.",
     "parameters": {"type": "object", "properties": {
       "script": {"type": "string", "description": "[Mutually exclusive] NEVER use this param when use reply code block."},
       "type": {"type": "string", "enum": ["python", "bash"], "description": "Code type", "default": "python"},
       "timeout": {"type": "integer", "description": "in seconds", "default": 60},
-      "cwd": {"type": "string", "description": "Working directory, defaults to cwd"}}}
+      "cwd": {"type": "string", "description": "Working directory, defaults to cwd. Must stay inside the session workspace; use relative paths such as . or ./.tmp."}}}
   }},
   {"type": "function", "function": {
     "name": "file_read",
@@ -22,7 +22,7 @@
     "name": "file_patch",
     "description": "Replace unique old_content with new_content. Exact match required (whitespace/indentation). On failure, file_read to recheck",
     "parameters": {"type": "object", "properties": {
-      "path": {"type": "string", "description": "File path"},
+      "path": {"type": "string", "description": "File path. Writes must stay inside the session workspace; temporary files should use ./.tmp/<name> or a relative path."},
       "old_content": {"type": "string", "description": "Original text block to replace (must be unique)"},
       "new_content": {"type": "string", "description": "New content. Supports {{file:path:startLine:endLine}} to ref file lines, auto-expanded"}}}
   }},
@@ -30,7 +30,7 @@
     "name": "file_write",
     "description": "Create/overwrite/append files. ONLY for HUGE edits. Place <file_content>...</file_content> in reply body BEFORE the file_write call. Supports {{file:path:startLine:endLine}}, auto-expanded",
     "parameters": {"type": "object", "properties": {
-      "path": {"type": "string", "description": "File path"},
+      "path": {"type": "string", "description": "File path. Writes must stay inside the session workspace; temporary files should use ./.tmp/<name> or a relative path."},
       "mode": {"type": "string", "enum": ["overwrite", "append", "prepend"], "description": "Write mode", "default": "overwrite"}}}
   }},
   {"type": "function", "function": {

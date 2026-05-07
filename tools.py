@@ -73,7 +73,7 @@ def code_run(code, code_type='python', timeout=60, cwd=None, cancel_evt=None, on
     os.makedirs(cwd, exist_ok=True)
     tmp_path = None
     if code_type in ('python', 'py'):
-        tmp = tempfile.NamedTemporaryFile(suffix='.ai.py', delete=False, mode='w', encoding='utf-8')
+        tmp = tempfile.NamedTemporaryFile(suffix='.ai.py', delete=False, mode='w', encoding='utf-8', dir=cwd)
         tmp.write(code)
         tmp_path = tmp.name
         tmp.close()
@@ -119,6 +119,8 @@ def code_run(code, code_type='python', timeout=60, cwd=None, cancel_evt=None, on
                 break
             time.sleep(0.1)
         t.join(timeout=1)
+        if proc.stdout:
+            proc.stdout.close()
         exit_code = proc.poll()
         stdout = ''.join(full)
         return {
@@ -263,10 +265,40 @@ class GenericHandler(BaseHandler):
     def _write_path(self, path):
         return self._resolve_path(path, for_write=True) if path else ''
 
+    def _temporary_path_remainder(self, normalized):
+        temporary_roots = (
+            '/tmp',
+            '/var/tmp',
+            '/private/tmp',
+            'tmp',
+            './tmp',
+        )
+        for root in temporary_roots:
+            if normalized == root:
+                return ''
+            prefix = f'{root}/'
+            if normalized.startswith(prefix):
+                return normalized[len(prefix):]
+        return None
+
+    def _workspace_temporary_path(self, raw, normalized):
+        if not self.workspace_root:
+            return None
+        remainder = self._temporary_path_remainder(normalized)
+        if remainder is None:
+            return None
+        parts = [part for part in remainder.split('/') if part and part != '.']
+        if any(part == '..' for part in parts):
+            raise WorkspaceViolation(f'workspace_violation: path escapes workspace: {raw}')
+        return os.path.join(self.workspace_root, '.tmp', *parts)
+
     def _resolve_path(self, path, for_write=False):
         raw = str(path or '')
         normalized = raw.replace('\\', '/')
-        if normalized == 'memory':
+        temporary_candidate = self._workspace_temporary_path(raw, normalized)
+        if temporary_candidate is not None:
+            candidate = temporary_candidate
+        elif normalized == 'memory':
             candidate = self.memory_root
         elif normalized.startswith('memory/'):
             candidate = os.path.join(self.memory_root, normalized[len('memory/'):])

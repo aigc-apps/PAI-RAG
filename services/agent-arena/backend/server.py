@@ -752,6 +752,10 @@ def build_headers(api_key: str) -> dict[str, str]:
     return headers
 
 
+def format_request_error(stage: str, url: str, exc: Exception) -> str:
+    return f"{stage} {url}: {type(exc).__name__}: {exc}"
+
+
 async def call_agent_chat(
     client: httpx.AsyncClient,
     agent: AgentConfig,
@@ -879,8 +883,22 @@ async def call_agent_runs(
     if max_tokens is not None:
         payload["max_tokens"] = max_tokens
 
+    runs_url = agent.runs_url
     try:
-        response = await client.post(agent.runs_url, json=payload, headers=build_headers(agent.api_key))
+        response = await client.post(runs_url, json=payload, headers=build_headers(agent.api_key))
+    except Exception as exc:  # noqa: BLE001
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return AgentResult(
+            ok=False,
+            name=agent.name,
+            model=agent.model,
+            latency_ms=latency_ms,
+            error=format_request_error("runs create failed", runs_url, exc),
+            trace_supported=True,
+            trace_summary=summarize_trace([], True),
+        )
+
+    try:
         if response.status_code >= 400:
             body = response.text[:1000]
             latency_ms = int((time.perf_counter() - started) * 1000)
@@ -896,12 +914,24 @@ async def call_agent_runs(
         run_id = response.json().get("run_id")
         if not run_id:
             raise RuntimeError("runs response did not include run_id")
-        events_url = f"{agent.runs_url.rstrip('/')}/{run_id}/events"
-        events, final_output, final_error = await collect_sse_events(
-            client,
-            events_url,
-            build_headers(agent.api_key),
-        )
+        events_url = f"{runs_url.rstrip('/')}/{run_id}/events"
+        try:
+            events, final_output, final_error = await collect_sse_events(
+                client,
+                events_url,
+                build_headers(agent.api_key),
+            )
+        except Exception as exc:  # noqa: BLE001
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            return AgentResult(
+                ok=False,
+                name=agent.name,
+                model=agent.model,
+                latency_ms=latency_ms,
+                error=format_request_error("runs events failed", events_url, exc),
+                trace_supported=True,
+                trace_summary=summarize_trace([], True),
+            )
         latency_ms = int((time.perf_counter() - started) * 1000)
         return AgentResult(
             ok=final_error is None,

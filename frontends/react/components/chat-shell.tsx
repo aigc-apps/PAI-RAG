@@ -350,6 +350,19 @@ function latestAsk(messages: ChatMessage[]) {
   return asks.length ? asks[asks.length - 1] : null;
 }
 
+function fallbackDisplayContent(events: AgentUpdate[] = []) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.sessionUpdate === "thought_done" && event.status === "completed" && !event.hidden) {
+      const text = cleanInternalDisplayText(event.content?.text || "");
+      if (text) {
+        return text;
+      }
+    }
+  }
+  return "";
+}
+
 function applyAssistantUpdate(messages: ChatMessage[], update: AgentUpdate): ChatMessage[] {
   const next = [...messages];
   let last = next[next.length - 1];
@@ -754,16 +767,26 @@ function MessageContent({
   const processItems = useMemo(() => buildProcessItems(events), [events]);
   const asks = useMemo(() => askEvents(events), [events]);
   const displayContent = useMemo(() => cleanInternalDisplayText(message.content), [message.content]);
+  const fallbackContent = useMemo(() => (displayContent ? "" : fallbackDisplayContent(events)), [displayContent, events]);
   const hasContent = Boolean(displayContent);
+  const hasFallbackContent = Boolean(fallbackContent);
+  const hasVisibleContent = hasContent || hasFallbackContent || processItems.length > 0 || asks.length > 0;
 
-  if (!hasContent && !processItems.length && !asks.length) {
-    return streaming ? <span className="inline-flex h-4 w-1 animate-pulse rounded bg-blue-500" /> : null;
+  if (!hasVisibleContent) {
+    return streaming ? (
+      <span className="inline-flex h-4 w-1 animate-pulse rounded bg-blue-500" />
+    ) : (
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        No displayable response was returned.
+      </div>
+    );
   }
 
   return (
     <div className="space-y-3">
       {processItems.length ? <ProcessBlock items={processItems} streaming={streaming} /> : null}
       {hasContent ? <Markdown content={displayContent} /> : null}
+      {!hasContent && hasFallbackContent ? <Markdown content={fallbackContent} /> : null}
       {asks.map((ask, index) => (
         <AskCard ask={ask} disabled={streaming} key={`${ask.question}-${index}`} onSelectCandidate={onSelectCandidate} />
       ))}
@@ -1269,7 +1292,7 @@ export function ChatShell() {
         </div>
       </aside>
 
-      <main className="flex h-[100dvh] min-h-0 flex-col overflow-hidden">
+      <main className="flex h-[100dvh] min-h-0 min-w-0 flex-col overflow-hidden">
         <header className="shrink-0 border-b border-slate-200/80 bg-white/75 px-5 py-4 backdrop-blur lg:px-8">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -1299,7 +1322,7 @@ export function ChatShell() {
         ) : null}
 
         <div
-          className="min-h-0 flex-1 overflow-y-auto"
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
           ref={messagesViewportRef}
           onScroll={(event) => {
             const target = event.currentTarget;
@@ -1323,7 +1346,7 @@ export function ChatShell() {
             {messages.map((message, index) => (
               <article
                 className={cn(
-                  "flex w-full min-w-0 gap-3",
+                  "flex w-full min-w-0 items-start gap-3",
                   message.role === "user" ? "justify-end" : "justify-start",
                 )}
                 key={`${message.role}-${index}`}
@@ -1338,17 +1361,17 @@ export function ChatShell() {
                   className={cn(
                     "min-w-0 border shadow-sm",
                     message.role === "user"
-                      ? "max-w-[78%] border-blue-200 bg-blue-600 text-white"
-                      : "w-full border-slate-200 bg-white/90 shadow-panel",
+                      ? "max-w-[min(78%,46rem)] border-blue-200 bg-blue-600 text-white"
+                      : "flex-1 border-slate-200 bg-white/90 shadow-panel",
                   )}
                 >
                   <CardContent className={message.role === "user" ? "px-3 py-2 sm:px-3 sm:py-2" : "p-3 sm:p-4"}>
                     {message.role === "user" ? (
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex min-w-0 items-center gap-2.5">
                         <div className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white/15 text-white sm:hidden">
                           <User2 className="h-3.5 w-3.5" />
                         </div>
-                        <div className="prose-agent max-w-none text-sm leading-relaxed text-white [&_*]:my-0 [&_*]:text-inherit">
+                        <div className="prose-agent min-w-0 max-w-none overflow-hidden break-words text-sm leading-relaxed text-white [&_*]:my-0 [&_*]:text-inherit">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                         </div>
                       </div>
