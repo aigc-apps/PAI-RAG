@@ -443,7 +443,7 @@ usage: /deploy_eas <service_name>
 
 ### 换 LLM 后端
 
-改 `config.py` 的 `API_BASE` + `MODEL` + `API_KEY` 即可。常用端点和启动命令见 [README.md](./README.md)。
+改根目录 `.env` 的 `API_BASE` + `MODEL` + `API_KEY` 即可。常用端点和启动命令见 [README.md](./README.md)。
 
 ### 接其他 LLM SDK
 

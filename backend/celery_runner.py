@@ -7,11 +7,7 @@ from backend.agent_service import NoRegeneratableAnswerError, ServiceCapacityErr
 from backend.redis_bus import RedisBus
 from backend.workspace import WorkspaceViolation
 from session_store import SERVER_USER_ID
-
-try:
-    import config
-except ImportError as e:
-    raise RuntimeError('config.py not found. Copy config_template.py to config.py first.') from e
+import settings as config
 
 
 @dataclass

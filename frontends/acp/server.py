@@ -26,12 +26,7 @@ from skill_manager import (
     match_skill, build_skill_user_input,
 )
 from frontends.acp.jsonrpc import JsonRpcServer
-
-try:
-    import config
-except ImportError:
-    sys.__stderr__.write('config.py not found. Run `cp config_template.py config.py` first.\n')
-    sys.exit(1)
+import settings as config
 
 from agent_events import agent_message_chunk, ask_user, done, stop_reason
 

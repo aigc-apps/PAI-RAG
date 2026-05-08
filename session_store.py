@@ -2,6 +2,8 @@
 import json, os, re, sqlite3, threading
 from datetime import datetime
 
+import settings as config
+
 
 SERVER_USER_ID = '__server__'
 ACTIVE_STATUSES = {'running', 'waiting_user'}
@@ -10,11 +12,7 @@ SQLITE_JOURNAL_MODES = {'DELETE', 'TRUNCATE', 'PERSIST', 'MEMORY', 'WAL', 'OFF'}
 
 
 def sqlite_journal_mode():
-    try:
-        import config
-        configured = getattr(config, 'SQLITE_JOURNAL_MODE', '')
-    except ImportError:
-        configured = ''
+    configured = getattr(config, 'SQLITE_JOURNAL_MODE', '')
     mode = (os.environ.get('SQLITE_JOURNAL_MODE') or configured or 'DELETE').upper()
     return mode if mode in SQLITE_JOURNAL_MODES else 'DELETE'
 

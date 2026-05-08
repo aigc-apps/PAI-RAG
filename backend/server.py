@@ -31,10 +31,7 @@ from tools import WorkspaceViolation as ToolWorkspaceViolation
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-try:
-    import config
-except ImportError as e:
-    raise RuntimeError('config.py not found. Copy config_template.py to config.py first.') from e
+import settings as config
 
 
 app = FastAPI(title='PAI-RAG OpenAI Compatible Backend')

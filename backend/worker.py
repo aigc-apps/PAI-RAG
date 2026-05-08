@@ -26,11 +26,7 @@ from llm_client import LLMClient  # noqa: E402
 from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import build_skill_user_input, match_skill, scan_skills  # noqa: E402
 from tools import GenericHandler, SEDIMENT_HOOK, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
-
-try:
-    import config
-except ImportError as e:
-    raise RuntimeError('config.py not found. Copy config_template.py to config.py first.') from e
+import settings as config  # noqa: E402
 
 
 SKILLS = scan_skills(os.path.join(ROOT, 'skills'))

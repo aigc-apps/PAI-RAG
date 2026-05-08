@@ -7,6 +7,37 @@ FRONTEND_DIR="$ROOT_DIR/frontends/react"
 NGINX_TEMPLATE="$ROOT_DIR/scripts/nginx.template.conf"
 NGINX_CONFIG="${NGINX_CONFIG:-/etc/nginx/conf.d/pai-rag.conf}"
 
+load_env_file() {
+  local env_file="$ROOT_DIR/.env"
+  [[ -f "$env_file" ]] || return
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == export\ * ]] && line="${line#export }"
+    [[ "$line" == *=* ]] || continue
+
+    local key="${line%%=*}"
+    local value="${line#*=}"
+    key="${key%"${key##*[![:space:]]}"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+      value="${value:1:${#value}-2}"
+    elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ -z "${!key+x}" ]]; then
+      export "$key=$value"
+    fi
+  done < "$env_file"
+}
+
+load_env_file
+
 PORT="${PORT:-8680}"
 FRONTEND_PORT="${FRONTEND_PORT:-8681}"
 BACKEND_PORT="${BACKEND_PORT:-8682}"
@@ -307,9 +338,8 @@ start_worker() {
   WORKER_PID=$!
 }
 
-if [[ ! -f "$ROOT_DIR/config.py" ]]; then
-  echo "Error: config.py not found. Run: cp config_template.py config.py" >&2
-  exit 1
+if [[ -z "${API_KEY:-${OPENAI_API_KEY:-}}" ]]; then
+  echo "Warning: API_KEY is not configured. LLM calls will fail until API_KEY or OPENAI_API_KEY is set in .env or the environment." >&2
 fi
 
 require_command npm "Install Node.js and npm."

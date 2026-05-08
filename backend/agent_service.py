@@ -25,11 +25,7 @@ from skill_manager import (  # noqa: E402
     scan_skills,
 )
 from tools import GenericHandler, SEDIMENT_HOOK, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
-
-try:
-    import config
-except ImportError as e:
-    raise RuntimeError('config.py not found. Copy config_template.py to config.py first.') from e
+import settings as config  # noqa: E402
 
 
 TOOLS_SCHEMA = json.load(open(os.path.join(ROOT, 'tools_schema.json'), encoding='utf-8'))

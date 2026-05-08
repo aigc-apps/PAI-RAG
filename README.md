@@ -8,6 +8,7 @@ MiniAgent 是一个 OpenAI compatible 的自我进化 Agent 项目，包含 Fast
 
 - [环境要求](#环境要求)
 - [配置](#配置)
+- [启动 Docker 镜像](#启动-docker-镜像)
 - [启动 Web 版本](#启动-web-版本)
 - [AgentArena 子服务](#agentarena-子服务)
 - [其他入口](#其他入口)
@@ -38,42 +39,57 @@ npm install
 
 ## 配置
 
-复制配置模板：
+复制环境变量模板：
 
 ```bash
 cd PAI-RAG
-cp config_template.py config.py
+cp .env.example .env
 ```
 
-编辑 `config.py`，至少填写：
+编辑 `.env`，至少填写：
 
-```python
-API_KEY = "sk-..."
-API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-MODEL = "qwen-plus"
-AUTH_SECRET = "replace-with-a-long-random-string"
-WORKSPACE_ROOT = "./workspaces"
+```env
+API_KEY=sk-...
+API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
+MODEL=qwen-plus
+AUTH_SECRET=replace-with-a-long-random-string
+WORKSPACE_ROOT=./workspaces
 ```
 
 普通登录用户的工具执行会被限制在 `WORKSPACE_ROOT/<user_id>/<session_id>/` 内。服务级 `SERVER_API_KEY` 调用默认仍可使用请求里的 `cwd`，如需同样隔离可设置：
 
-```python
-ENFORCE_WORKSPACE_FOR_SERVER = True
-MAX_GLOBAL_RUNS = 20
-MAX_USER_RUNS = 2
+```env
+ENFORCE_WORKSPACE_FOR_SERVER=true
+MAX_GLOBAL_RUNS=20
+MAX_USER_RUNS=2
 ```
 
 长期 memory 默认只对服务级调用启用。若要给普通登录用户启用长期记忆，会写入用户私有目录 `memory/users/<user_id>/`，不会写入全局 memory：
 
-```python
-ENABLE_LONG_TERM_MEMORY_FOR_USERS = True
-ENABLE_SHARED_MEMORY_FOR_USERS = False
+```env
+ENABLE_LONG_TERM_MEMORY_FOR_USERS=true
+ENABLE_SHARED_MEMORY_FOR_USERS=false
 ```
 
 
+## 启动 Docker 镜像
+
+镜像不会内置 `.env` 或本地凭证，运行时用 `--env-file` 注入：
+
+```bash
+docker build -t pai-rag:local .
+docker run --rm --env-file .env -p 8680:8680 pai-rag:local
+```
+
+浏览器访问：
+
+```text
+http://localhost:8680
+```
+
 ## 启动 Web 版本
 
-默认 `RUNNER_BACKEND = "thread"`，适合本地开发。
+默认 `RUNNER_BACKEND=thread`，适合本地开发。
 
 ### 1. 启动 FastAPI 后端
 
@@ -148,7 +164,7 @@ npm run dev -- --hostname 0.0.0.0 --port 3001
 
 ## AgentArena 子服务
 
-AgentArena 是独立的双 Agent 对比页面，源码在 `services/agent-arena/`。它有自己的 `.env`，不要把主项目的 `config.py` 或前端 token 混用。
+AgentArena 是独立的双 Agent 对比页面，源码在 `services/agent-arena/`。它有自己的 `.env`，不要和主项目 `.env` 或前端 token 混用。
 
 初始化配置：
 

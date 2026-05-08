@@ -2,11 +2,7 @@
 import os
 
 from celery import Celery
-
-try:
-    import config
-except ImportError as e:
-    raise RuntimeError('config.py not found. Copy config_template.py to config.py first.') from e
+import settings as config
 
 
 broker_url = (

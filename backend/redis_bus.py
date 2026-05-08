@@ -5,11 +5,7 @@ import time
 from typing import Iterator
 
 import redis
-
-try:
-    import config
-except ImportError as e:
-    raise RuntimeError('config.py not found. Copy config_template.py to config.py first.') from e
+import settings as config
 
 
 DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379/0'
