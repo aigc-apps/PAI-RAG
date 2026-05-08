@@ -1,12 +1,12 @@
 [
   {"type": "function", "function": {
     "name": "code_run",
-    "description": "Code executor. Prefer python. Multi-call OK, use script param. Reply code block is executed if no script arg; prefer for single call to avoid escaping. No hardcoding bulk data. For temporary files use relative paths or ./.tmp/ inside the workspace, never system /tmp.",
+    "description": "Code executor. Prefer python. Multi-call OK, use script param. Reply code block is executed if no script arg; prefer for single call to avoid escaping. No hardcoding bulk data. Omit cwd or use . so the backend uses the current user session workspace; do not hardcode the project source root or skills/... directories. For temporary files use relative paths or ./.tmp/ inside the workspace, never system /tmp.",
     "parameters": {"type": "object", "properties": {
       "script": {"type": "string", "description": "[Mutually exclusive] NEVER use this param when use reply code block."},
       "type": {"type": "string", "enum": ["python", "bash"], "description": "Code type", "default": "python"},
       "timeout": {"type": "integer", "description": "in seconds", "default": 60},
-      "cwd": {"type": "string", "description": "Working directory, defaults to cwd. Must stay inside the session workspace; use relative paths such as . or ./.tmp."}}}
+      "cwd": {"type": "string", "description": "Working directory, defaults to the current user session workspace. Prefer omitting it or using .; never hardcode the project source root or a skills/... directory. Use relative paths such as . or ./.tmp."}}}
   }},
   {"type": "function", "function": {
     "name": "file_read",

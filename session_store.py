@@ -115,6 +115,116 @@ class SessionStore:
                 cur = conn.execute('DELETE FROM sessions WHERE session_id = ? AND user_id = ?', (session_id, user_id))
             return cur.rowcount > 0
 
+    def create_run_record(self, session_id, user_id, run_id, mode, status='queued', metadata=None):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        started_at = now if status == 'running' else None
+        with self._connect() as conn:
+            conn.execute(
+                '''
+                INSERT INTO runs (
+                    run_id, session_id, user_id, mode, status, created_at, updated_at,
+                    started_at, metadata_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    run_id,
+                    session_id,
+                    user_id,
+                    mode,
+                    status,
+                    now,
+                    now,
+                    started_at,
+                    json.dumps(metadata or {}, ensure_ascii=False, default=str),
+                ),
+            )
+
+    def _capacity_error(self, conn, user_id, max_global_runs=0, max_user_runs=0):
+        if max_global_runs:
+            active_count = conn.execute(
+                'SELECT COUNT(*) AS n FROM sessions WHERE status IN (?, ?)',
+                ('running', 'waiting_user'),
+            ).fetchone()['n']
+            if active_count >= max_global_runs:
+                return {'status': 'capacity', 'scope': 'global', 'limit': max_global_runs}
+        if max_user_runs:
+            user_active_count = conn.execute(
+                'SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND status IN (?, ?)',
+                (user_id, 'running', 'waiting_user'),
+            ).fetchone()['n']
+            if user_active_count >= max_user_runs:
+                return {'status': 'capacity', 'scope': 'user', 'limit': max_user_runs}
+        return None
+
+    def _pre_run_snapshot(self, row, ui_messages, user_text, workspace_path=''):
+        return {
+            'llm_history': self._json_list(row['llm_history_json']),
+            'handler_state': self._json_value(row['handler_state_json']),
+            'ui_message_count': len(ui_messages),
+            'workspace_path': workspace_path or row['workspace_path'] or '',
+            'input_text': user_text,
+        }
+
+    def _latest_run_metadata(self, conn, session_id, user_id):
+        row = conn.execute(
+            '''
+            SELECT run_id, metadata_json
+            FROM runs
+            WHERE session_id = ? AND user_id = ?
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 1
+            ''',
+            (session_id, user_id),
+        ).fetchone()
+        if row is None:
+            return None, {}
+        metadata = self._json_dict(row['metadata_json'])
+        return row['run_id'], metadata
+
+    def _legacy_regenerate_snapshot(self, row, ui_messages):
+        if len(ui_messages) < 2 or ui_messages[-1].get('role') != 'assistant':
+            return None
+        user_index = len(ui_messages) - 2
+        if ui_messages[user_index].get('role') != 'user':
+            return None
+        user_text = (ui_messages[user_index].get('content') or '').strip()
+        if not user_text:
+            return None
+        llm_history = self._json_list(row['llm_history_json'])
+        last_user_index = None
+        for index in range(len(llm_history) - 1, -1, -1):
+            if llm_history[index].get('role') == 'user':
+                last_user_index = index
+                break
+        return {
+            'llm_history': llm_history[:last_user_index] if last_user_index is not None else [],
+            'handler_state': self._json_value(row['handler_state_json']),
+            'ui_message_count': user_index,
+            'workspace_path': row['workspace_path'] or '',
+            'input_text': user_text,
+            'legacy_fallback': True,
+        }
+
+    def _insert_started_run(self, conn, session_id, user_id, run_id, mode, now, metadata):
+        conn.execute(
+            '''
+            INSERT INTO runs (run_id, session_id, user_id, mode, status, created_at, updated_at, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                run_id,
+                session_id,
+                user_id,
+                mode,
+                'queued',
+                now,
+                now,
+                json.dumps(metadata or {}, ensure_ascii=False, default=str),
+            ),
+        )
+
     def try_start_run(
         self,
         session_id,
@@ -138,24 +248,13 @@ class SessionStore:
                 conn.rollback()
                 return {'status': 'busy', 'session_status': row['status'], 'run_id': row['active_run_id'] or ''}
 
-            if max_global_runs:
-                active_count = conn.execute(
-                    'SELECT COUNT(*) AS n FROM sessions WHERE status IN (?, ?)',
-                    ('running', 'waiting_user'),
-                ).fetchone()['n']
-                if active_count >= max_global_runs:
-                    conn.rollback()
-                    return {'status': 'capacity', 'scope': 'global', 'limit': max_global_runs}
-            if max_user_runs:
-                user_active_count = conn.execute(
-                    'SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND status IN (?, ?)',
-                    (user_id, 'running', 'waiting_user'),
-                ).fetchone()['n']
-                if user_active_count >= max_user_runs:
-                    conn.rollback()
-                    return {'status': 'capacity', 'scope': 'user', 'limit': max_user_runs}
-
+            capacity_error = self._capacity_error(conn, user_id, max_global_runs, max_user_runs)
+            if capacity_error:
+                conn.rollback()
+                return capacity_error
             ui_messages = self._json_list(row['ui_messages_json'])
+            effective_workspace_path = workspace_path or row['workspace_path'] or ''
+            pre_run_snapshot = self._pre_run_snapshot(row, ui_messages, user_text, effective_workspace_path)
             ui_messages.append({'role': 'user', 'content': user_text})
             ui_messages.append({'role': 'assistant', 'content': '', 'events': []})
             title = session_title_from_messages(ui_messages, row['title'])
@@ -169,7 +268,7 @@ class SessionStore:
                 (
                     'running',
                     run_id,
-                    workspace_path or row['workspace_path'] or '',
+                    effective_workspace_path,
                     json.dumps(ui_messages, ensure_ascii=False, default=str),
                     len(ui_messages),
                     title,
@@ -178,15 +277,110 @@ class SessionStore:
                     user_id,
                 ),
             )
-            conn.execute(
-                '''
-                INSERT INTO runs (run_id, session_id, user_id, mode, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''',
-                (run_id, session_id, user_id, mode, 'queued', now, now),
-            )
+            self._insert_started_run(conn, session_id, user_id, run_id, mode, now, {
+                'pre_run_snapshot': pre_run_snapshot,
+            })
             conn.commit()
         return {'status': 'started', 'run_id': run_id}
+
+    def try_start_regenerate_run(
+        self,
+        session_id,
+        user_id,
+        run_id,
+        mode,
+        workspace_path='',
+        max_global_runs=0,
+        max_user_runs=0,
+    ):
+        self._validate_session_id(session_id)
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = self._session_row(conn, session_id, user_id)
+            if row is None:
+                conn.rollback()
+                return {'status': 'not_found'}
+            if row['status'] in ACTIVE_STATUSES:
+                conn.rollback()
+                return {'status': 'busy', 'session_status': row['status'], 'run_id': row['active_run_id'] or ''}
+
+            capacity_error = self._capacity_error(conn, user_id, max_global_runs, max_user_runs)
+            if capacity_error:
+                conn.rollback()
+                return capacity_error
+
+            ui_messages = self._json_list(row['ui_messages_json'])
+            regenerated_from_run_id, metadata = self._latest_run_metadata(conn, session_id, user_id)
+            snapshot = metadata.get('pre_run_snapshot') if isinstance(metadata, dict) else None
+            if not isinstance(snapshot, dict) or not snapshot.get('input_text'):
+                snapshot = self._legacy_regenerate_snapshot(row, ui_messages)
+                regenerated_from_run_id = regenerated_from_run_id or ''
+            if not snapshot:
+                conn.rollback()
+                return {'status': 'no_regeneratable_answer'}
+
+            input_text = (snapshot.get('input_text') or '').strip()
+            if not input_text:
+                conn.rollback()
+                return {'status': 'no_regeneratable_answer'}
+            ui_message_count = snapshot.get('ui_message_count')
+            if not isinstance(ui_message_count, int) or ui_message_count < 0 or ui_message_count > len(ui_messages):
+                conn.rollback()
+                return {'status': 'no_regeneratable_answer'}
+
+            base_ui_messages = ui_messages[:ui_message_count]
+            next_ui_messages = list(base_ui_messages)
+            next_ui_messages.append({'role': 'user', 'content': input_text})
+            next_ui_messages.append({'role': 'assistant', 'content': '', 'events': []})
+            next_llm_history = snapshot.get('llm_history') if isinstance(snapshot.get('llm_history'), list) else []
+            next_handler_state = snapshot.get('handler_state')
+            effective_workspace_path = workspace_path or snapshot.get('workspace_path') or row['workspace_path'] or ''
+            title = session_title_from_messages(next_ui_messages, row['title'])
+            conn.execute(
+                '''
+                UPDATE sessions
+                SET status = ?, active_run_id = ?, workspace_path = ?, llm_history_json = ?,
+                    ui_messages_json = ?, handler_state_json = ?, message_count = ?, title = ?, updated_at = ?
+                WHERE session_id = ? AND user_id = ?
+                ''',
+                (
+                    'running',
+                    run_id,
+                    effective_workspace_path,
+                    json.dumps(next_llm_history, ensure_ascii=False, default=str),
+                    json.dumps(next_ui_messages, ensure_ascii=False, default=str),
+                    json.dumps(next_handler_state, ensure_ascii=False, default=str),
+                    len(next_ui_messages),
+                    title,
+                    now,
+                    session_id,
+                    user_id,
+                ),
+            )
+            pre_run_snapshot = {
+                'llm_history': next_llm_history,
+                'handler_state': next_handler_state,
+                'ui_message_count': len(base_ui_messages),
+                'workspace_path': effective_workspace_path,
+                'input_text': input_text,
+            }
+            self._insert_started_run(conn, session_id, user_id, run_id, mode, now, {
+                'regenerate': True,
+                'regenerated_from_run_id': regenerated_from_run_id or '',
+                'pre_run_snapshot': pre_run_snapshot,
+            })
+            conn.commit()
+        return {
+            'status': 'started',
+            'run_id': run_id,
+            'input_text': input_text,
+            'regenerated_from_run_id': regenerated_from_run_id or '',
+            'llm_history': next_llm_history,
+            'ui_messages': next_ui_messages,
+            'handler_state': next_handler_state,
+            'workspace_path': effective_workspace_path,
+        }
 
     def answer_waiting_run(self, session_id, user_id, run_id, answer):
         self._validate_session_id(session_id)
@@ -519,6 +713,21 @@ class SessionStore:
             return value if isinstance(value, list) else []
         except json.JSONDecodeError:
             return []
+
+    @staticmethod
+    def _json_dict(raw):
+        try:
+            value = json.loads(raw or '{}')
+            return value if isinstance(value, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+    @staticmethod
+    def _json_value(raw):
+        try:
+            return json.loads(raw) if raw else None
+        except json.JSONDecodeError:
+            return None
 
     def _save_data(self, data):
         ui_messages = data.get('ui_messages') or []

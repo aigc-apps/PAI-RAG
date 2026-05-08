@@ -55,6 +55,12 @@ class SessionBusyError(RuntimeError):
         super().__init__(f'session_busy: session {session_id} is {status}')
 
 
+class NoRegeneratableAnswerError(RuntimeError):
+    def __init__(self, session_id):
+        self.session_id = session_id
+        super().__init__(f'no_regeneratable_answer: session {session_id} has no completed answer to regenerate')
+
+
 class ServiceCapacityError(RuntimeError):
     def __init__(self, scope, limit):
         self.scope = scope
@@ -224,14 +230,18 @@ class AgentSession:
             self.cwd = self.workspace_path
             os.makedirs(self.workspace_path, exist_ok=True)
         state = loaded.get('handler_state') or {}
-        if state:
-            handler = self._new_handler()
-            handler.history_info = state.get('history_info', [])
-            handler.working = state.get('working', {})
-            active_skill = handler.working.get('active_skill')
-            if active_skill in SKILLS:
-                handler.allow_readonly_root(os.path.dirname(SKILLS[active_skill].path))
-            self.handler = handler
+        self.handler = self._handler_from_state(state) if state else None
+
+    def _handler_from_state(self, state):
+        if not state:
+            return None
+        handler = self._new_handler()
+        handler.history_info = list(state.get('history_info', []) or [])
+        handler.working = dict(state.get('working', {}) or {})
+        active_skill = handler.working.get('active_skill')
+        if active_skill in SKILLS:
+            handler.allow_readonly_root(os.path.dirname(SKILLS[active_skill].path))
+        return handler
 
     def snapshot_handler_state(self):
         if self.handler is None:
@@ -315,6 +325,9 @@ class AgentSession:
     def mark_waiting_for_user(self):
         with self._lock:
             self.status = SESSION_WAITING_USER
+            run_id = self.active_run_id
+        if run_id:
+            self.service.store.set_run_status(run_id, self.user_id, SESSION_WAITING_USER)
         self.save()
 
     def run_or_answer(self, text, mode='events'):
@@ -325,6 +338,8 @@ class AgentSession:
                     self.status = SESSION_RUNNING
                     self.turn_done_evt.clear()
                     self.ask_q.put(text)
+                    if self.active_run_id:
+                        self.service.store.set_run_status(self.active_run_id, self.user_id, SESSION_RUNNING)
                     self.save()
                     return self.active_run_id
                 raise SessionBusyError(self.sid, self.status)
@@ -335,9 +350,26 @@ class AgentSession:
 
             return self._spawn_worker_locked(text, mode=mode)
 
-    def _spawn_worker_locked(self, text, mode='events'):
-        self.service.ensure_capacity(self.user_id, exclude_sid=self.sid)
+    def _spawn_worker_locked(
+        self,
+        text,
+        mode='events',
+        append_ui=True,
+        run_id=None,
+        persist_run_record=True,
+        pre_run_snapshot=None,
+        check_capacity=True,
+    ):
+        if check_capacity:
+            self.service.ensure_capacity(self.user_id, exclude_sid=self.sid)
         self.output_mode = mode
+        pre_run_snapshot = pre_run_snapshot or {
+            'llm_history': list(self.client.history),
+            'handler_state': self.snapshot_handler_state(),
+            'ui_message_count': len(self.ui_msgs),
+            'workspace_path': self.workspace_path,
+            'input_text': text,
+        }
         sk, sk_args = match_skill(text, SKILLS)
         task_text = build_skill_user_input(sk, sk_args) if sk else text
         prev = self.handler
@@ -366,18 +398,85 @@ class AgentSession:
         if prev:
             user_input = handler._anchor_prompt() + f'\n\n### 用户当前消息\n{task_text}'
 
-        self._append_ui_message_locked('user', text)
+        if append_ui:
+            self._append_ui_message_locked('user', text)
         self._ensure_assistant_message()
         self.turn_done_evt.clear()
         self.cancel_evt.clear()
         self.exit_reason = None
         self.status = SESSION_RUNNING
-        self.active_run_id = f'run_{uuid.uuid4().hex}'
+        self.active_run_id = run_id or f'run_{uuid.uuid4().hex}'
         run_id = self.active_run_id
+        if persist_run_record:
+            self.service.store.create_run_record(
+                self.sid,
+                self.user_id,
+                run_id,
+                mode,
+                status=SESSION_RUNNING,
+                metadata={'pre_run_snapshot': pre_run_snapshot},
+            )
         self.save()
         self.worker = threading.Thread(target=self._run_loop, args=(user_input, task_text, mode, run_id), daemon=True)
         self.worker.start()
         return run_id
+
+    def regenerate_last_answer(self, mode='events'):
+        with self._lock:
+            if self.worker is not None and self.worker.is_alive():
+                raise SessionBusyError(self.sid, self.status)
+            if self.worker is not None and not self.worker.is_alive():
+                self.worker.join(timeout=0.1)
+                self.worker = None
+
+            run_id = f'run_{uuid.uuid4().hex}'
+            result = self.service.store.try_start_regenerate_run(
+                session_id=self.sid,
+                user_id=self.user_id,
+                run_id=run_id,
+                mode=mode,
+                workspace_path=self.workspace_path,
+                max_global_runs=int(getattr(config, 'MAX_GLOBAL_RUNS', 0) or 0),
+                max_user_runs=int(getattr(config, 'MAX_USER_RUNS', 0) or 0),
+            )
+            if result['status'] == 'not_found':
+                return None
+            if result['status'] == 'busy':
+                raise SessionBusyError(self.sid, result.get('session_status', 'running'))
+            if result['status'] == 'capacity':
+                raise ServiceCapacityError(result.get('scope', 'global'), result.get('limit', 0))
+            if result['status'] == 'no_regeneratable_answer':
+                raise NoRegeneratableAnswerError(self.sid)
+
+            self.client.history = list(result.get('llm_history') or [])
+            self.ui_msgs = list(result.get('ui_messages') or [])
+            self.workspace_path = result.get('workspace_path') or self.workspace_path
+            if self.workspace_root:
+                self.workspace_root = self.workspace_path
+                self.cwd = self.workspace_path
+                os.makedirs(self.workspace_path, exist_ok=True)
+            self.handler = self._handler_from_state(result.get('handler_state')) if result.get('handler_state') else None
+            started_run_id = self._spawn_worker_locked(
+                result['input_text'],
+                mode=mode,
+                append_ui=False,
+                run_id=run_id,
+                persist_run_record=False,
+                pre_run_snapshot={
+                    'llm_history': list(result.get('llm_history') or []),
+                    'handler_state': result.get('handler_state'),
+                    'ui_message_count': max(0, len(result.get('ui_messages') or []) - 2),
+                    'workspace_path': result.get('workspace_path') or self.workspace_path,
+                    'input_text': result['input_text'],
+                },
+                check_capacity=False,
+            )
+            return {
+                'session_id': self.sid,
+                'run_id': started_run_id,
+                'stream_from': '0-0',
+                'regenerated_from_run_id': result.get('regenerated_from_run_id') or '',
+            }
 
     def _run_loop(self, user_input, task_text, mode='events', run_id=''):
         final_status = SESSION_COMPLETED
@@ -425,6 +524,7 @@ class AgentSession:
                 archive_session(self.client, task_text, self.exit_reason, user_id=self.user_id)
             except Exception:
                 pass
+            should_finish_run = False
             with self._lock:
                 if self.active_run_id == run_id and self.status != SESSION_WAITING_USER:
                     if self.status == SESSION_CANCELLED:
@@ -432,7 +532,16 @@ class AgentSession:
                     self.status = final_status
                     self.active_run_id = ''
                     self.worker = None
+                    should_finish_run = True
             self.save()
+            if should_finish_run:
+                self.service.store.finish_run(
+                    self.sid,
+                    self.user_id,
+                    run_id,
+                    final_status,
+                    error=(self.exit_reason or {}).get('msg', ''),
+                )
             self.turn_done_evt.set()
 
     def emit_event(self, event, check_cancel=True):
@@ -625,6 +734,12 @@ class AgentService:
             return None, iter(())
         sess.run_or_answer(text, mode='events')
         return sess, sess.iter_events()
+
+    def regenerate_session(self, sid, user_id=SERVER_USER_ID):
+        sess = self.load_session(sid, user_id=user_id)
+        if sess is None:
+            return None
+        return sess.regenerate_last_answer(mode='events')
 
 
 def openai_chat_completion(model, content, session_id):

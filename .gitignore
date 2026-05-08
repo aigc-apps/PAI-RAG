@@ -37,6 +37,8 @@ config.py
 # Logs & temp
 *.log
 tmp/
+.tmp/
+*.rdb
 
 # Frontend build artifacts
 frontends/react/.next/

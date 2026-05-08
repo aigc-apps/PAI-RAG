@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, LogOut, Plus, Square, Trash2, User2, Wrench } from "lucide-react";
+import { Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, LogOut, Plus, RefreshCw, Square, Trash2, User2, Wrench } from "lucide-react";
 import {
   cancelSession,
   clearAuthToken,
@@ -15,6 +15,7 @@ import {
   getSession,
   listSessions,
   login as loginUser,
+  regenerateLastAnswer,
   register as registerUser,
   setAuthToken,
   stopRun,
@@ -49,11 +50,20 @@ type ProcessGroup = {
 };
 
 const INTERNAL_TOOL_NAMES = new Set(["update_working_checkpoint", "start_long_term_update"]);
+const MODEL_PROTOCOL_TAG_RE = /<\/?(?:summary|thinking|clinical_thinking|checking|taking|taking_action)\b[^>]*>/gi;
+
+function escapeModelProtocolTags(content = "") {
+  return content.replace(MODEL_PROTOCOL_TAG_RE, (tag) =>
+    tag.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+  );
+}
 
 function Markdown({ content }: { content: string }) {
+  const markdownContent = escapeModelProtocolTags(content);
+
   return (
     <div className="prose-agent">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdownContent}</ReactMarkdown>
     </div>
   );
 }
@@ -767,10 +777,17 @@ function MessageContent({
   const processItems = useMemo(() => buildProcessItems(events), [events]);
   const asks = useMemo(() => askEvents(events), [events]);
   const displayContent = useMemo(() => cleanInternalDisplayText(message.content), [message.content]);
-  const fallbackContent = useMemo(() => (displayContent ? "" : fallbackDisplayContent(events)), [displayContent, events]);
+  const hasProcessItems = processItems.length > 0;
+  const hasAsks = asks.length > 0;
   const hasContent = Boolean(displayContent);
+  const showContent = hasContent && (!streaming || !hasProcessItems);
+  const shouldUseFallbackContent = !streaming && !hasContent && !hasProcessItems && !hasAsks;
+  const fallbackContent = useMemo(
+    () => (shouldUseFallbackContent ? fallbackDisplayContent(events) : ""),
+    [shouldUseFallbackContent, events],
+  );
   const hasFallbackContent = Boolean(fallbackContent);
-  const hasVisibleContent = hasContent || hasFallbackContent || processItems.length > 0 || asks.length > 0;
+  const hasVisibleContent = showContent || hasFallbackContent || hasProcessItems || hasAsks;
 
   if (!hasVisibleContent) {
     return streaming ? (
@@ -784,9 +801,9 @@ function MessageContent({
 
   return (
     <div className="space-y-3">
-      {processItems.length ? <ProcessBlock items={processItems} streaming={streaming} /> : null}
-      {hasContent ? <Markdown content={displayContent} /> : null}
-      {!hasContent && hasFallbackContent ? <Markdown content={fallbackContent} /> : null}
+      {hasProcessItems ? <ProcessBlock items={processItems} streaming={streaming} /> : null}
+      {showContent ? <Markdown content={displayContent} /> : null}
+      {!showContent && hasFallbackContent ? <Markdown content={fallbackContent} /> : null}
       {asks.map((ask, index) => (
         <AskCard ask={ask} disabled={streaming} key={`${ask.question}-${index}`} onSelectCandidate={onSelectCandidate} />
       ))}
@@ -801,6 +818,17 @@ function sessionTitle(session: SessionSummary) {
 
 function titleFromMessages(messages: ChatMessage[]) {
   return messages.find((message) => message.role === "user" && message.content.trim())?.content.trim().slice(0, 60) || "New Task";
+}
+
+function canRegenerateLastAssistant(messages: ChatMessage[]) {
+  const last = messages[messages.length - 1];
+  const previous = messages[messages.length - 2];
+  return Boolean(
+    last?.role === "assistant" &&
+      previous?.role === "user" &&
+      previous.content.trim() &&
+      (last.content.trim() || (last.events?.length ?? 0) > 0),
+  );
 }
 
 function shouldReplaceSessionTitle(title?: string) {
@@ -1006,8 +1034,8 @@ export function ChatShell() {
     });
   }, [messages, streaming]);
 
-  const isAnsweringAsk = Boolean(latestAsk(messages));
   const activeSession = sessions.find((session) => session.session_id === currentSessionId);
+  const isAnsweringAsk = activeSession?.status === "waiting_user" && Boolean(latestAsk(messages));
   const activeSessionTitle = activeSession ? sessionTitle(activeSession) : titleFromMessages(messages);
 
   async function handleAuthSubmit() {
@@ -1184,6 +1212,89 @@ export function ChatShell() {
             content: { type: "text", text: `**Error:** ${message}` },
           }),
         );
+      }
+    } finally {
+      setStreaming(false);
+      setCurrentRunId(null);
+      abortRef.current = null;
+    }
+  }
+
+  async function handleRegenerateLastAnswer() {
+    if (!currentSessionId || streaming || isAnsweringAsk || !canRegenerateLastAssistant(messages)) {
+      return;
+    }
+
+    setError(null);
+    setStreaming(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let activeSessionId = currentSessionId;
+
+    try {
+      shouldStickToBottomRef.current = true;
+      setMessages((prev) => {
+        if (!canRegenerateLastAssistant(prev)) {
+          return prev;
+        }
+        return [...prev.slice(0, -1), { role: "assistant", content: "", events: [] }];
+      });
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.session_id === activeSessionId
+            ? { ...session, status: "running", running: true, updated_at: new Date().toISOString() }
+            : session,
+        ),
+      );
+
+      const run = await regenerateLastAnswer(activeSessionId, controller.signal);
+      activeSessionId = run.session_id || activeSessionId;
+      setCurrentSessionId(activeSessionId);
+      setCurrentRunId(run.run_id);
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.session_id === activeSessionId
+            ? { ...session, active_run_id: run.run_id, status: run.status || "running", running: true }
+            : session,
+        ),
+      );
+
+      const prepared = await getSession(activeSessionId);
+      setMessages(prepared.messages ?? []);
+
+      const returnedSessionId = await streamRunEvents(
+        run.run_id,
+        activeSessionId,
+        ({ sessionId, update }) => {
+          activeSessionId = sessionId;
+          setCurrentSessionId(sessionId);
+          setMessages((prev) => applyAssistantUpdate(prev, update));
+        },
+        controller.signal,
+      );
+
+      activeSessionId = returnedSessionId || activeSessionId;
+      if (activeSessionId) {
+        setCurrentSessionId(activeSessionId);
+        const detail = await getSession(activeSessionId);
+        setMessages(detail.messages ?? []);
+      }
+      await refreshSessions();
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+        try {
+          const detail = await getSession(activeSessionId);
+          setMessages(detail.messages ?? []);
+        } catch {
+          setMessages((prev) =>
+            applyAssistantUpdate(prev, {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: `**Error:** ${message}` },
+            }),
+          );
+        }
       }
     } finally {
       setStreaming(false);
@@ -1372,15 +1483,32 @@ export function ChatShell() {
                           <User2 className="h-3.5 w-3.5" />
                         </div>
                         <div className="prose-agent min-w-0 max-w-none overflow-hidden break-words text-sm leading-relaxed text-white [&_*]:my-0 [&_*]:text-inherit">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{escapeModelProtocolTags(message.content)}</ReactMarkdown>
                         </div>
                       </div>
                     ) : (
-                      <MessageContent
-                        message={message}
-                        onSelectCandidate={(_, candidateIndex) => void submitText(String(candidateIndex + 1))}
-                        streaming={streaming && index === messages.length - 1 && message.role === "assistant"}
-                      />
+                      <>
+                        <MessageContent
+                          message={message}
+                          onSelectCandidate={(_, candidateIndex) => void submitText(String(candidateIndex + 1))}
+                          streaming={streaming && index === messages.length - 1 && message.role === "assistant"}
+                        />
+                        {index === messages.length - 1 && canRegenerateLastAssistant(messages) && !isAnsweringAsk ? (
+                          <div className="mt-3 flex justify-end">
+                            <Button
+                              className="h-8 gap-1.5 px-2.5 text-xs text-slate-600"
+                              disabled={streaming || !currentSessionId}
+                              onClick={() => void handleRegenerateLastAnswer()}
+                              title="Regenerate answer"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              Regenerate
+                            </Button>
+                          </div>
+                        ) : null}
+                      </>
                     )}
                   </CardContent>
                 </Card>

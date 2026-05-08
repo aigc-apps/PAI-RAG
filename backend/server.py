@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.agent_service import (
     AgentService,
+    NoRegeneratableAnswerError,
     ServiceCapacityError,
     SessionBusyError,
     last_user_text,
@@ -117,6 +118,11 @@ def backend_error(exc):
         return HTTPException(
             status_code=429,
             detail={'code': 'capacity_exceeded', 'message': str(exc), 'scope': exc.scope, 'limit': exc.limit},
+        )
+    if isinstance(exc, NoRegeneratableAnswerError):
+        return HTTPException(
+            status_code=409,
+            detail={'code': 'no_regeneratable_answer', 'message': str(exc)},
         )
     if isinstance(exc, (WorkspaceViolation, ToolWorkspaceViolation)):
         return HTTPException(status_code=400, detail={'code': 'workspace_violation', 'message': str(exc)})
@@ -357,10 +363,15 @@ def hermes_events_from_update(run_id, update, state):
     return []
 
 
-def run_response_payload(session_id, run_id, status='started', stream_from='0-0'):
+def run_response_payload(session_id, run_id, status='started', stream_from='0-0', regenerated_from_run_id=''):
     return {
+        'id': run_id,
+        'object': 'agent.run',
         'run_id': run_id,
+        'session_id': session_id,
         'status': status,
+        'stream_from': stream_from,
+        **({'regenerated_from_run_id': regenerated_from_run_id} if regenerated_from_run_id else {}),
     }
 
 
@@ -404,7 +415,7 @@ def start_celery_run(session_id, user_id, text, mode='events', cwd=None):
         raise HTTPException(status_code=500, detail='Celery runner is not enabled')
     try:
         result = celery_service.start_or_answer(session_id, user_id, text, mode=mode, cwd=cwd)
-    except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
+    except (SessionBusyError, ServiceCapacityError, NoRegeneratableAnswerError, WorkspaceViolation, ToolWorkspaceViolation) as e:
         raise backend_error(e) from e
     if result is None:
         raise HTTPException(status_code=404, detail='Session not found')
@@ -417,7 +428,7 @@ def start_thread_run(session_id, user_id, text, cwd=None):
         if sess is None:
             return None
         run_id = sess.run_or_answer(text, mode='events')
-    except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
+    except (SessionBusyError, ServiceCapacityError, NoRegeneratableAnswerError, WorkspaceViolation, ToolWorkspaceViolation) as e:
         raise backend_error(e) from e
     with THREAD_RUNS_LOCK:
         THREAD_RUNS[run_id] = {
@@ -436,6 +447,46 @@ def start_agent_run(session_id, user_id, text, cwd=None):
     if result is None:
         raise HTTPException(status_code=404, detail='Session not found')
     return result
+
+
+def start_celery_regenerate(session_id, user_id, mode='events', cwd=None):
+    if celery_service is None:
+        raise HTTPException(status_code=500, detail='Celery runner is not enabled')
+    try:
+        result = celery_service.regenerate_last_answer(session_id, user_id, mode=mode, cwd=cwd)
+    except (SessionBusyError, ServiceCapacityError, NoRegeneratableAnswerError, WorkspaceViolation, ToolWorkspaceViolation) as e:
+        raise backend_error(e) from e
+    if result is None:
+        raise HTTPException(status_code=404, detail='Session not found')
+    return result
+
+
+def start_thread_regenerate(session_id, user_id):
+    try:
+        result = service.regenerate_session(session_id, user_id=user_id)
+    except (SessionBusyError, ServiceCapacityError, NoRegeneratableAnswerError, WorkspaceViolation, ToolWorkspaceViolation) as e:
+        raise backend_error(e) from e
+    if result is None:
+        raise HTTPException(status_code=404, detail='Session not found')
+    with THREAD_RUNS_LOCK:
+        THREAD_RUNS[result['run_id']] = {
+            'session_id': result['session_id'],
+            'user_id': user_id,
+            'created_at': int(time.time()),
+        }
+    return result
+
+
+def start_agent_regenerate(session_id, user_id, cwd=None):
+    if celery_service is not None:
+        run = start_celery_regenerate(session_id, user_id, mode='events', cwd=cwd)
+        return {
+            'session_id': run.session_id,
+            'run_id': run.run_id,
+            'stream_from': run.stream_from,
+            'regenerated_from_run_id': run.regenerated_from_run_id,
+        }
+    return start_thread_regenerate(session_id, user_id)
 
 
 async def celery_run_event_stream(request, run_id, session_id, user_id, last_id='0-0'):
@@ -660,7 +711,7 @@ async def create_run(
         session_id = sess.sid
 
     run = start_agent_run(session_id, auth.user_id, text, cwd=cwd)
-    payload = run_response_payload(run['session_id'], run['run_id'])
+    payload = run_response_payload(run['session_id'], run['run_id'], stream_from=run.get('stream_from', '0-0'))
     return JSONResponse(payload, status_code=202, headers=stream_headers(run['session_id'], run['run_id']))
 
 
@@ -829,6 +880,26 @@ def get_session(session_id: str, auth: AuthContext = Depends(require_auth)):
         payload['llm_history'] = loaded.get('llm_history', [])
         payload['handler_state'] = loaded.get('handler_state')
     return payload
+
+
+@app.post('/v1/sessions/{session_id}/regenerate')
+async def regenerate_session_answer(session_id: str, request: Request, auth: AuthContext = Depends(require_auth)):
+    try:
+        body = await request.json() if request.headers.get('content-length') not in (None, '0') else {}
+    except Exception:
+        return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+    if body is None:
+        body = {}
+    if not isinstance(body, dict):
+        return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+    run = start_agent_regenerate(session_id, auth.user_id, cwd=body.get('cwd'))
+    payload = run_response_payload(
+        run['session_id'],
+        run['run_id'],
+        stream_from=run.get('stream_from', '0-0'),
+        regenerated_from_run_id=run.get('regenerated_from_run_id') or '',
+    )
+    return JSONResponse(payload, status_code=202, headers=stream_headers(run['session_id'], run['run_id']))
 
 
 @app.delete('/v1/sessions/{session_id}')

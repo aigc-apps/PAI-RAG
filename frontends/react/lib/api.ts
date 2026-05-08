@@ -101,6 +101,17 @@ export async function cancelSession(sessionId: string): Promise<void> {
   await assertOk(response);
 }
 
+export async function regenerateLastAnswer(sessionId: string, signal?: AbortSignal): Promise<RunCreateResponse> {
+  const response = await fetch(`/api/sessions/${sessionId}/regenerate`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({}),
+    signal,
+  });
+  await assertOk(response);
+  return response.json();
+}
+
 export async function createRun(sessionId: string | null, text: string, signal?: AbortSignal): Promise<RunCreateResponse> {
   const headers = authHeaders({
     "Content-Type": "application/json",

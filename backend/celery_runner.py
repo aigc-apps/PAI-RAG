@@ -3,7 +3,7 @@ import os
 import uuid
 from dataclasses import dataclass
 
-from backend.agent_service import ServiceCapacityError, SessionBusyError
+from backend.agent_service import NoRegeneratableAnswerError, ServiceCapacityError, SessionBusyError
 from backend.redis_bus import RedisBus
 from backend.workspace import WorkspaceViolation
 from session_store import SERVER_USER_ID
@@ -19,6 +19,7 @@ class RunStream:
     session_id: str
     run_id: str
     stream_from: str = '0-0'
+    regenerated_from_run_id: str = ''
 
 
 class CeleryRunService:
@@ -75,6 +76,45 @@ class CeleryRunService:
             self.store.finish_run(session_id, user_id, run_id, 'failed', error='failed to enqueue celery task')
             raise
         return RunStream(session_id=session_id, run_id=run_id, stream_from='0-0')
+
+    def regenerate_last_answer(self, session_id, user_id, mode='events', cwd=None):
+        loaded = self.store.load(session_id, user_id=user_id)
+        if loaded is None:
+            return None
+
+        run_id = f'run_{uuid.uuid4().hex}'
+        workspace_path = loaded.get('workspace_path') or self._workspace_for(user_id, session_id, cwd=cwd)
+        result = self.store.try_start_regenerate_run(
+            session_id=session_id,
+            user_id=user_id,
+            run_id=run_id,
+            mode=mode,
+            workspace_path=workspace_path,
+            max_global_runs=int(getattr(config, 'MAX_GLOBAL_RUNS', 0) or 0),
+            max_user_runs=int(getattr(config, 'MAX_USER_RUNS', 0) or 0),
+        )
+        if result['status'] == 'not_found':
+            return None
+        if result['status'] == 'busy':
+            raise SessionBusyError(session_id, result.get('session_status', 'running'))
+        if result['status'] == 'capacity':
+            raise ServiceCapacityError(result.get('scope', 'global'), result.get('limit', 0))
+        if result['status'] == 'workspace_violation':
+            raise WorkspaceViolation(result.get('message') or 'workspace_violation')
+        if result['status'] == 'no_regeneratable_answer':
+            raise NoRegeneratableAnswerError(session_id)
+
+        try:
+            self._enqueue_run(run_id, session_id, user_id, result['input_text'], mode, cwd)
+        except Exception:
+            self.store.finish_run(session_id, user_id, run_id, 'failed', error='failed to enqueue celery task')
+            raise
+        return RunStream(
+            session_id=session_id,
+            run_id=run_id,
+            stream_from='0-0',
+            regenerated_from_run_id=result.get('regenerated_from_run_id') or '',
+        )
 
     def _enqueue_run(self, run_id, session_id, user_id, text, mode, cwd):
         from backend.worker import run_agent_task

@@ -115,6 +115,7 @@ export interface RunCreateResponse {
   session_id?: string;
   status: string;
   stream_from?: string;
+  regenerated_from_run_id?: string;
   created_at?: number;
 }
 

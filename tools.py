@@ -2,8 +2,9 @@
 移植自 ga.py，去除 PowerShell / 浏览器 / Windows 特化代码。
 每个 do_xxx 返回 StepOutcome；中间打印直接 print。
 """
-import os, re, sys, time, json, threading, subprocess, tempfile, itertools, collections, difflib
+import os, re, sys, time, json, threading, subprocess, tempfile, itertools, collections, difflib, uuid
 from pathlib import Path
+from agent_events import strip_internal_thinking_content
 from agent_loop import BaseHandler, StepOutcome
 
 
@@ -29,6 +30,36 @@ def smart_format(data, max_str_len=100, omit_str=' ... '):
     if len(data) < max_str_len + len(omit_str) * 2:
         return data
     return f"{data[:max_str_len // 2]}{omit_str}{data[-max_str_len // 2:]}"
+
+
+CODE_RUN_STDOUT_PREVIEW_CHARS = 10000
+
+
+def _safe_artifact_id(value, fallback='artifact'):
+    text = str(value or '').strip()
+    if not text:
+        text = f'{fallback}-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}'
+    text = re.sub(r'[^A-Za-z0-9_.-]+', '_', text).strip('._-')
+    return (text or fallback)[:120]
+
+
+def _head_tail_preview(text, max_chars, marker='OUTPUT TRUNCATED', full_path=None):
+    if not isinstance(text, str):
+        text = str(text)
+    if len(text) <= max_chars:
+        return text, False
+
+    notice = f'\n\n[{marker}: {len(text) - max_chars} chars omitted from {len(text)} total'
+    if full_path:
+        notice += f'; full output saved at {full_path}'
+    notice += ']\n\n'
+
+    keep_budget = max(max_chars - len(notice), 0)
+    if keep_budget <= 1:
+        return notice.strip(), True
+    head_chars = max(1, int(keep_budget * 0.4))
+    tail_chars = max(1, keep_budget - head_chars)
+    return f'{text[:head_chars]}{notice}{text[-tail_chars:]}', True
 
 
 class WorkspaceViolation(ValueError):
@@ -67,7 +98,18 @@ def expand_file_refs(text, base_dir=None, resolver=None):
 
 # ──────────────────────────── 原子工具实现 ──────────────────────────── #
 
-def code_run(code, code_type='python', timeout=60, cwd=None, cancel_evt=None, on_output=None):
+def code_run(
+    code,
+    code_type='python',
+    timeout=60,
+    cwd=None,
+    cancel_evt=None,
+    on_output=None,
+    output_dir=None,
+    output_ref_dir=None,
+    output_id=None,
+    stdout_preview_chars=CODE_RUN_STDOUT_PREVIEW_CHARS,
+):
     """同步执行 python 或 bash，流式打印 stdout。cancel_evt 触发即 kill 子进程。"""
     cwd = cwd or os.getcwd()
     os.makedirs(cwd, exist_ok=True)
@@ -123,12 +165,54 @@ def code_run(code, code_type='python', timeout=60, cwd=None, cancel_evt=None, on
             proc.stdout.close()
         exit_code = proc.poll()
         stdout = ''.join(full)
-        return {
+        stdout_path = None
+        stdout_save_error = None
+        if len(stdout) > stdout_preview_chars and output_dir:
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+                safe_id = _safe_artifact_id(output_id, fallback='code-run')
+                filename = f'{safe_id}.stdout'
+                full_path = os.path.join(output_dir, filename)
+                with open(full_path, 'w', encoding='utf-8') as f:
+                    f.write(stdout)
+                if output_ref_dir:
+                    stdout_path = os.path.join(output_ref_dir, filename).replace(os.sep, '/')
+                    if not stdout_path.startswith(('.', '/')):
+                        stdout_path = f'./{stdout_path}'
+                else:
+                    stdout_path = full_path
+            except Exception as e:
+                stdout_save_error = str(e)
+        stdout_preview, stdout_truncated = _head_tail_preview(
+            stdout,
+            stdout_preview_chars,
+            marker='OUTPUT TRUNCATED',
+            full_path=stdout_path,
+        )
+        result = {
             'status': 'success' if exit_code == 0 else 'error',
             'exit_code': exit_code,
-            'stdout': smart_format(stdout, max_str_len=10000,
-                                   omit_str='\n\n[omitted long output]\n\n'),
+            'stdout': stdout_preview,
         }
+        if stdout_truncated:
+            stdout_note = 'stdout is a preview only.'
+            if stdout_path:
+                stdout_note += (
+                    ' Read stdout_path for complete output before parsing JSON or making '
+                    'evidence-sensitive conclusions.'
+                )
+            else:
+                stdout_note += ' Full stdout was not saved; rerun with narrower output if exact data is required.'
+            result.update({
+                'stdout_truncated': True,
+                'stdout_chars': len(stdout),
+                'stdout_path': stdout_path,
+                'stdout_preview_policy': f'head_tail:{stdout_preview_chars}',
+                'stdout_note': stdout_note,
+            })
+            if stdout_save_error:
+                result['stdout_save_error'] = stdout_save_error
+        return result
     except Exception as e:
         return {'status': 'error', 'msg': str(e)}
     finally:
@@ -317,6 +401,54 @@ class GenericHandler(BaseHandler):
             return candidate
         raise WorkspaceViolation(f'workspace_violation: path escapes workspace: {raw}')
 
+    def _resolve_code_run_cwd(self, path):
+        raw = '' if path is None else str(path)
+        if not self.workspace_root:
+            return self._resolve_path(raw or '.', for_write=True)
+
+        normalized = raw.strip().replace('\\', '/')
+        if normalized in ('', '.'):
+            return self._resolve_path('.', for_write=True)
+
+        candidate = raw if os.path.isabs(raw) else os.path.join(self.cwd, raw)
+        candidate = os.path.abspath(candidate)
+        mini_agent_root = os.path.abspath(self.root)
+        skills_root = os.path.join(mini_agent_root, 'skills')
+
+        if (
+            candidate == mini_agent_root
+            or normalized == 'skills'
+            or normalized.startswith('skills/')
+            or _is_relative_to(candidate, skills_root)
+            or any(_is_relative_to(candidate, root) for root in self.readonly_roots)
+        ):
+            return self._resolve_path('.', for_write=True)
+
+        return self._resolve_path(raw, for_write=True)
+
+    def _artifact_base_dir(self):
+        return self.workspace_root or self.cwd
+
+    def _artifact_dir(self, subdir):
+        base = self._artifact_base_dir()
+        path = os.path.abspath(os.path.join(base, '.tmp', subdir))
+        if self.workspace_root and not _is_relative_to(path, self.workspace_root):
+            raise WorkspaceViolation(f'workspace_violation: path escapes workspace: {path}')
+        return path
+
+    @staticmethod
+    def _artifact_ref_dir(subdir):
+        return f'./{os.path.join(".tmp", subdir).replace(os.sep, "/")}'
+
+    def persist_tool_result(self, content, tool_call_id, subdir='tool_results'):
+        artifact_dir = self._artifact_dir(subdir)
+        os.makedirs(artifact_dir, exist_ok=True)
+        filename = f'{_safe_artifact_id(tool_call_id, fallback="tool-result")}.txt'
+        path = os.path.join(artifact_dir, filename)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return f'{self._artifact_ref_dir(subdir)}/{filename}'
+
     def _ensure_memory_root(self):
         os.makedirs(self.memory_root, exist_ok=True)
         os.makedirs(os.path.join(self.memory_root, 'L4_raw_sessions'), exist_ok=True)
@@ -357,7 +489,7 @@ class GenericHandler(BaseHandler):
             return StepOutcome('[Error] code missing — provide `script` or a ```python/bash block.',
                                next_prompt='\n')
         timeout = args.get('timeout', 60)
-        cwd = self._resolve_path(args.get('cwd', '.'), for_write=True)
+        cwd = self._resolve_code_run_cwd(args.get('cwd'))
         preview = (code[:60].replace('\n', ' ') + ('...' if len(code) > 60 else ''))
         print(f"[Action] Running {code_type} in {os.path.basename(cwd) or cwd}: {preview}")
         result = code_run(
@@ -367,10 +499,13 @@ class GenericHandler(BaseHandler):
             cwd,
             cancel_evt=self.cancel_evt,
             on_output=self.emit_tool_output,
+            output_dir=self._artifact_dir('code_run_outputs'),
+            output_ref_dir=self._artifact_ref_dir('code_run_outputs'),
+            output_id=args.get('_tool_call_id') or f'code-run-{self.current_turn}-{args.get("_index", 0)}',
         )
         icon = {'success': '✅', 'error': '❌'}.get(result.get('status'), '⏳')
         snippet = smart_format(result.get('stdout', ''), max_str_len=600,
-                               omit_str='\n\n[omitted long output]\n\n')
+                               omit_str='\n\n[output preview omitted]\n\n')
         print(f"[Status] {icon} exit={result.get('exit_code')}\n[Stdout]\n{snippet}")
         return StepOutcome(result, next_prompt=self._anchor_prompt(skip=args.get('_index', 0) > 0))
 
@@ -537,8 +672,8 @@ class GenericHandler(BaseHandler):
     # ── 每轮结束：记录摘要、注入提醒 ──
     def turn_end_callback(self, response, tool_calls, tool_results, turn,
                           next_prompt, exit_reason):
-        text = re.sub(r'```.*?```|<thinking>.*?</thinking>', '',
-                      response.content or '', flags=re.DOTALL)
+        text = strip_internal_thinking_content(response.content or '')
+        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
         m = re.search(r'<summary>(.*?)</summary>', text, re.DOTALL)
         if m:
             summary = m.group(1).strip()

@@ -11,6 +11,7 @@ from typing import Any, Optional
 from agent_events import (
     agent_message_chunk,
     done,
+    model_summary_content,
     split_model_content,
     stop_reason,
     stream_model_process_content,
@@ -24,6 +25,19 @@ from agent_events import (
     tool_call_update,
 )
 from llm_client import ToolCallDelta
+
+SUMMARY_ONLY_FINAL_RETRY_PROMPT = (
+    '上一轮你只输出了内部思考/规划标签和 <summary>...</summary>，没有用户可见的最终回答正文。\n'
+    '<summary> 只是内部历史摘要，前端不会把它当作最终回答展示。\n'
+    '请基于已经完成的工具结果和证据，立即输出用户可见的最终报告正文。\n'
+    '不要再调用工具，不要只输出 <summary>。如果需要保留摘要，只能放在报告正文之后。\n'
+    '报告正文必须包含：诊断结论、日志证据、配置证据、因果链路、证据边界。'
+)
+
+TOOL_RESULT_MAX_CHARS = 100000
+TURN_TOOL_RESULT_BUDGET_CHARS = 200000
+TOOL_RESULT_PREVIEW_CHARS = 12000
+PERSISTED_OUTPUT_TAG = '<persisted-output>'
 
 
 @dataclass
@@ -49,6 +63,96 @@ class BaseHandler:
         args['_index'] = index
         return method(args, response)
 
+    def persist_tool_result(self, content, tool_call_id, subdir='tool_results'):
+        return None
+
+
+def _head_tail_text(text, max_chars=TOOL_RESULT_PREVIEW_CHARS):
+    if len(text) <= max_chars:
+        return text
+    notice = f'\n\n[OUTPUT PREVIEW TRUNCATED: {len(text) - max_chars} chars omitted from {len(text)} total]\n\n'
+    keep_budget = max(max_chars - len(notice), 0)
+    if keep_budget <= 1:
+        return notice.strip()
+    head_chars = max(1, int(keep_budget * 0.4))
+    tail_chars = max(1, keep_budget - head_chars)
+    return f'{text[:head_chars]}{notice}{text[-tail_chars:]}'
+
+
+def _persisted_output_message(content, path, reason):
+    preview = _head_tail_text(content)
+    return (
+        f'{PERSISTED_OUTPUT_TAG}\n'
+        f'reason: {reason}\n'
+        f'chars: {len(content)}\n'
+        f'path: {path}\n'
+        'instruction: This message contains only a preview. Use the path above to inspect '
+        'the complete output before parsing structured data or making evidence-sensitive conclusions.\n'
+        f'</persisted-output>\n\n'
+        f'<preview>\n{preview}\n</preview>'
+    )
+
+
+def _persist_tool_result_if_needed(handler, content, tool_name, tool_call_id, force=False, reason=None):
+    if not isinstance(content, str):
+        content = str(content)
+    if tool_name == 'file_read' or PERSISTED_OUTPUT_TAG in content:
+        return content
+    if not force and len(content) <= TOOL_RESULT_MAX_CHARS:
+        return content
+
+    path = None
+    try:
+        path = handler.persist_tool_result(content, tool_call_id, subdir='tool_results')
+    except Exception as e:
+        path = None
+        reason = f'{reason or "tool result too large"}; persist failed: {type(e).__name__}: {e}'
+    if not path:
+        if force:
+            return _head_tail_text(content)
+        return content
+    return _persisted_output_message(content, path, reason or 'tool result too large')
+
+
+def _enforce_tool_result_budget(handler, tool_results, tool_result_meta):
+    total = sum(len(msg.get('content') or '') for msg in tool_results)
+    while total > TURN_TOOL_RESULT_BUDGET_CHARS:
+        candidates = [
+            (len(msg.get('content') or ''), index)
+            for index, msg in enumerate(tool_results)
+            if tool_result_meta[index].get('tool_name') != 'file_read'
+            and PERSISTED_OUTPUT_TAG not in (msg.get('content') or '')
+        ]
+        if not candidates:
+            break
+        _, index = max(candidates)
+        msg = tool_results[index]
+        meta = tool_result_meta[index]
+        original = msg.get('content') or ''
+        msg['content'] = _persist_tool_result_if_needed(
+            handler,
+            original,
+            meta.get('tool_name', ''),
+            meta.get('tool_call_id', ''),
+            force=True,
+            reason='turn tool-result budget exceeded',
+        )
+        new_total = sum(len(item.get('content') or '') for item in tool_results)
+        if new_total >= total:
+            break
+        total = new_total
+
+
+def _tool_event_data(outcome_data, result_text):
+    if PERSISTED_OUTPUT_TAG not in (result_text or ''):
+        return outcome_data
+    status = outcome_data.get('status') if isinstance(outcome_data, dict) else 'success'
+    return {
+        'status': status or 'success',
+        'result_persisted': True,
+        'result_preview': result_text,
+    }
+
 
 def _model_process_content(content):
     thoughts, cleaned = split_model_content(content or '')
@@ -63,12 +167,17 @@ def _model_final_answer(content):
     return cleaned
 
 
+def _model_summary(content):
+    return model_summary_content(content or '')
+
+
 def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                       max_turns=40, on_chunk=None, on_event=None):
     """主循环。第一轮用 user_input 文本启动；之后用 tool_results + next_prompt。"""
     handler.max_turns = max_turns
     new_messages = [{'role': 'user', 'content': user_input}]
     exit_reason = {}
+    summary_only_retry_used = False
 
     for turn in range(1, max_turns + 1):
         handler.current_turn = turn
@@ -119,17 +228,26 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         tool_calls = [{'tool_name': tc.name, 'args': tc.input, 'id': tc.id}
                       for tc in response.tool_calls]
         if not tool_calls:
+            process_content = _model_process_content(response.content)
+            cleaned = _model_final_answer(response.content)
+            summary = _model_summary(response.content)
+            visible_reply = cleaned or ('' if summary else process_content)
             if on_event:
-                process_content = _model_process_content(response.content)
-                cleaned = _model_final_answer(response.content)
                 on_event(thought_done(
                     model_step_id,
                     hidden=True,
                     content=process_content,
                 ))
-                visible_reply = cleaned or process_content
-                if visible_reply:
-                    on_event(agent_message_chunk(visible_reply))
+
+            if not visible_reply and summary and not summary_only_retry_used and turn < max_turns:
+                summary_only_retry_used = True
+                handler.turn_end_callback(response, [], [], turn, '', {})
+                new_messages = [{'role': 'user', 'content': SUMMARY_ONLY_FINAL_RETRY_PROMPT}]
+                continue
+
+            visible_reply = visible_reply or summary
+            if on_event and visible_reply:
+                on_event(agent_message_chunk(visible_reply))
             exit_reason = {'result': 'NO_TOOL_CALL', 'data': response.content}
             handler.turn_end_callback(response, [], [], turn, '', exit_reason)
             if on_event:
@@ -144,6 +262,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
 
         # 3) 顺序执行所有工具调用
         tool_results = []        # [{role:'tool', tool_call_id, content}]
+        tool_result_meta = []     # [{tool_name, tool_call_id}]
         next_prompts = set()
         for ii, tc in enumerate(tool_calls):
             name, args, tid = tc['tool_name'], tc['args'], tc['id']
@@ -159,7 +278,9 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                     handler._tool_event_emit = lambda status, content='', data=None: on_event(
                         tool_call_update(tool_call_id, status, content, data=data)
                     )
-                outcome = handler.dispatch(name, args, response, index=ii)
+                dispatch_args = dict(args)
+                dispatch_args['_tool_call_id'] = tool_call_id
+                outcome = handler.dispatch(name, dispatch_args, response, index=ii)
             except Exception as e:
                 if on_event and emit_tool_progress:
                     on_event(tool_call_update(tool_call_id, 'failed', str(e)))
@@ -168,16 +289,26 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 if hasattr(handler, '_tool_event_emit'):
                     handler._tool_event_emit = None
             result_text = stringify(outcome.data) or '(no output)'
+            result_text = _persist_tool_result_if_needed(
+                handler,
+                result_text,
+                name,
+                tool_call_id,
+            )
             if on_event and emit_tool_progress:
                 status = 'failed' if isinstance(outcome.data, dict) and outcome.data.get('status') == 'error' else 'completed'
                 content = '' if name == 'code_run' and isinstance(outcome.data, dict) else result_text
-                on_event(tool_call_update(tool_call_id, status, content, data=outcome.data))
+                on_event(tool_call_update(tool_call_id, status, content, data=_tool_event_data(outcome.data, result_text)))
 
             # OpenAI tool 响应消息：tool_call_id 必须与 assistant.tool_calls[i].id 对齐
             tool_results.append({
                 'role': 'tool',
                 'tool_call_id': tid,
                 'content': result_text,
+            })
+            tool_result_meta.append({
+                'tool_name': name,
+                'tool_call_id': tool_call_id,
             })
 
             if outcome.should_exit:
@@ -198,6 +329,8 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 exit_reason = {}
                 if on_event:
                     on_event(thought('Starting internal memory review.', title='Memory review'))
+
+        _enforce_tool_result_budget(handler, tool_results, tool_result_meta)
 
         # 4) 触发 turn_end_callback 拼下一轮 user prompt
         joined = '\n'.join(next_prompts) if next_prompts else ''

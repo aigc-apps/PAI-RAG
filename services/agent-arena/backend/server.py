@@ -48,6 +48,7 @@ DATA_DIR = ROOT_DIR / "data"
 HISTORY_DB_PATH = Path(os.getenv("HISTORY_DB_PATH", DATA_DIR / "arena_history.sqlite3"))
 MAX_TRACE_EVENTS = 240
 MAX_EVENT_TEXT = 1800
+SUPPRESSED_TRACE_EVENTS = {"tool.delta", "tool.updated", "tool_call_delta"}
 
 frontend_logger = logging.getLogger("agent_arena.frontend")
 frontend_logger.setLevel(logging.INFO)
@@ -841,6 +842,8 @@ async def collect_sse_events(
                 except json.JSONDecodeError:
                     continue
                 event = normalize_trace_event(payload)
+                if event.event in SUPPRESSED_TRACE_EVENTS:
+                    continue
                 if len(events) < MAX_TRACE_EVENTS:
                     events.append(event)
                 if event.event == "run.completed":

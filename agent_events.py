@@ -3,9 +3,21 @@ import json
 import re
 from typing import Any
 
+INTERNAL_THINKING_TAGS = (
+    'thinking',
+    'clinical_thinking',
+    'checking',
+    'taking',
+    'taking_action',
+)
+INTERNAL_THINKING_TAG_PATTERN = '|'.join(re.escape(tag) for tag in INTERNAL_THINKING_TAGS)
 
-THINKING_RE = re.compile(r'<thinking>\s*(.*?)\s*</thinking>', re.DOTALL)
+THINKING_RE = re.compile(
+    rf'<(?P<tag>{INTERNAL_THINKING_TAG_PATTERN})\b[^>]*>\s*(?P<content>.*?)\s*</(?P=tag)>',
+    re.DOTALL | re.IGNORECASE,
+)
 SUMMARY_RE = re.compile(r'<summary>\s*(.*?)\s*</summary>', re.DOTALL)
+CONTROL_TAG_OPEN_RE = re.compile(rf'<(?P<tag>summary|{INTERNAL_THINKING_TAG_PATTERN})\b[^>]*>', re.IGNORECASE)
 INTERNAL_TOOL_NAMES = {
     'update_working_checkpoint',
     'start_long_term_update',
@@ -172,17 +184,26 @@ def tool_call_update(tool_call_id: str, status: str, content: str = '', data: An
 
 
 def split_model_content(content: str) -> tuple[list[str], str]:
-    thoughts = [m.group(1).strip() for m in THINKING_RE.finditer(content or '') if m.group(1).strip()]
+    thoughts = [m.group('content').strip() for m in THINKING_RE.finditer(content or '') if m.group('content').strip()]
     cleaned = THINKING_RE.sub('', content or '')
     cleaned = SUMMARY_RE.sub('', cleaned).strip()
     return thoughts, cleaned
+
+
+def strip_internal_thinking_content(content: str) -> str:
+    return THINKING_RE.sub('', content or '')
+
+
+def model_summary_content(content: str) -> str:
+    summaries = [m.group(1).strip() for m in SUMMARY_RE.finditer(content or '') if m.group(1).strip()]
+    return summaries[-1] if summaries else ''
 
 
 def stream_model_process_content(content: str) -> str:
     """Return displayable model-process text from a partial model stream.
 
     This hides protocol tags as soon as they are recognizable, includes open
-    <thinking> blocks before they close, and suppresses <summary> content.
+    internal thinking blocks before they close, and suppresses <summary> content.
     """
     text = content or ''
     last_lt = text.rfind('<')
@@ -193,34 +214,29 @@ def stream_model_process_content(content: str) -> str:
     pieces = []
     pos = 0
     while pos < len(text):
-        thinking_at = text.find('<thinking>', pos)
-        summary_at = text.find('<summary>', pos)
-        starts = [(idx, name) for idx, name in (
-            (thinking_at, 'thinking'),
-            (summary_at, 'summary'),
-        ) if idx != -1]
-        if not starts:
+        match = CONTROL_TAG_OPEN_RE.search(text, pos)
+        if not match:
             pieces.append(text[pos:])
             break
 
-        start, name = min(starts, key=lambda item: item[0])
+        start = match.start()
+        name = match.group('tag').lower()
         pieces.append(text[pos:start])
-        open_tag = f'<{name}>'
-        close_tag = f'</{name}>'
-        inner_start = start + len(open_tag)
-        end = text.find(close_tag, inner_start)
+        inner_start = match.end()
+        close_re = re.compile(rf'</{re.escape(name)}\s*>', re.IGNORECASE)
+        end_match = close_re.search(text, inner_start)
 
-        if name == 'thinking':
-            if end == -1:
+        if name in INTERNAL_THINKING_TAGS:
+            if not end_match:
                 pieces.append(text[inner_start:])
                 break
-            pieces.append(text[inner_start:end])
-            pos = end + len(close_tag)
+            pieces.append(text[inner_start:end_match.start()])
+            pos = end_match.end()
             continue
 
-        if end == -1:
+        if not end_match:
             break
-        pos = end + len(close_tag)
+        pos = end_match.end()
 
     return ''.join(pieces).strip()
 
