@@ -30,8 +30,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        bash \
         ca-certificates \
+        curl \
         gettext-base \
         nginx \
         procps \
@@ -61,6 +61,9 @@ RUN chmod +x /app/start.sh /usr/local/bin/pai-rag-entrypoint \
 EXPOSE 8680 8681 8682
 
 VOLUME ["/app/workspaces", "/app/memory"]
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:${BACKEND_PORT}/health || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/pai-rag-entrypoint"]
 CMD ["./start.sh"]

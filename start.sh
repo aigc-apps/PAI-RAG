@@ -9,7 +9,7 @@ NGINX_CONFIG="${NGINX_CONFIG:-/etc/nginx/conf.d/pai-rag.conf}"
 
 load_env_file() {
   local env_file="$ROOT_DIR/.env"
-  [[ -f "$env_file" ]] || return
+  [[ -f "$env_file" ]] || return 0
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line#"${line%%[![:space:]]*}"}"
