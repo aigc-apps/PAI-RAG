@@ -7,6 +7,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     {
       method: "POST",
     },
-    request,
   );
 }

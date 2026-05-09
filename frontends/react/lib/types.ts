@@ -150,17 +150,3 @@ export interface RunStreamEnvelope {
   data?: unknown;
   update?: AgentUpdate;
 }
-
-export interface UserProfile {
-  user_id: string;
-  username: string;
-  created_at?: string;
-  updated_at?: string;
-  is_service?: boolean;
-}
-
-export interface AuthResponse {
-  access_token: string;
-  token_type: "bearer";
-  user: UserProfile;
-}

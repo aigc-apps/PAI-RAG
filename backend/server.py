@@ -2,12 +2,11 @@ import json
 import os
 import queue
 import re
-import secrets
 import threading
 import time
 
 import anyio
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -17,14 +16,11 @@ from backend.agent_service import (
     ServiceCapacityError,
     SessionBusyError,
     last_user_text,
-    long_term_memory_enabled,
     openai_chat_chunk,
     openai_chat_completion,
     openai_done_chunk,
     openai_role_chunk,
 )
-from backend.auth import AuthContext, UserStore, create_token, decode_token
-from backend.memory_scope import ensure_memory_scope, memory_scope_for
 from backend.workspace import WorkspaceViolation
 from session_store import SERVER_USER_ID
 from tools import WorkspaceViolation as ToolWorkspaceViolation
@@ -42,12 +38,6 @@ if RUNNER_BACKEND == 'celery':
     from backend.celery_runner import CeleryRunService
 
     celery_service = CeleryRunService(service.store, service.workspace_manager)
-user_store = UserStore(service.store.db_path)
-AUTH_SECRET = getattr(config, 'AUTH_SECRET', '') or os.environ.get('AUTH_SECRET', '')
-if not AUTH_SECRET:
-    AUTH_SECRET = secrets.token_urlsafe(32)
-    print('[Warn] AUTH_SECRET is not configured. Using a temporary development secret; tokens will expire on restart.')
-AUTH_TOKEN_TTL_SECONDS = int(getattr(config, 'AUTH_TOKEN_TTL_SECONDS', 7 * 24 * 60 * 60))
 SSE_HEARTBEAT_SECONDS = int(getattr(config, 'SSE_HEARTBEAT_SECONDS', 15))
 MAX_REQUEST_BODY_BYTES = int(getattr(config, 'MAX_REQUEST_BODY_BYTES', 8 * 1024 * 1024))
 THREAD_RUNS = {}
@@ -78,31 +68,6 @@ async def http_guards(request: Request, call_next):
     response.headers.setdefault('Referrer-Policy', 'no-referrer')
     response.headers.setdefault('X-Frame-Options', 'DENY')
     return response
-
-
-def auth_payload(user):
-    return {
-        'access_token': create_token(user, AUTH_SECRET, AUTH_TOKEN_TTL_SECONDS),
-        'token_type': 'bearer',
-        'user': user,
-    }
-
-
-def require_auth(authorization: str | None = Header(default=None)):
-    expected = getattr(config, 'SERVER_API_KEY', '') or os.environ.get('SERVER_API_KEY', '')
-    if not authorization or not authorization.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail='Unauthorized')
-    token = authorization.removeprefix('Bearer ').strip()
-    if expected and secrets.compare_digest(token, expected):
-        return AuthContext(user_id=SERVER_USER_ID, username='server', is_service=True)
-    try:
-        claims = decode_token(token, AUTH_SECRET)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail='Unauthorized') from e
-    user = user_store.get_by_id(claims.get('user_id'))
-    if not user:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-    return AuthContext(user_id=user['user_id'], username=user['username'])
 
 
 def backend_error(exc):
@@ -633,7 +598,7 @@ def health_detailed():
 
 
 @app.get('/v1/models')
-def models(auth: AuthContext = Depends(require_auth)):
+def models():
     configured = getattr(config, 'MODEL', 'qwen-plus')
     aliases = list(getattr(config, 'MODEL_ALIASES', ['mini-agent', 'agent']) or [])
     ids = []
@@ -649,42 +614,9 @@ def models(auth: AuthContext = Depends(require_auth)):
     }
 
 
-@app.post('/v1/auth/register')
-async def register(request: Request):
-    body = await request.json()
-    try:
-        user = user_store.create_user(body.get('username'), body.get('password'))
-        if long_term_memory_enabled(user['user_id']):
-            ensure_memory_scope(memory_scope_for(ROOT, user['user_id']))
-    except ValueError as e:
-        detail = str(e)
-        status_code = 409 if 'already exists' in detail else 400
-        raise HTTPException(status_code=status_code, detail=detail) from e
-    return auth_payload(user)
-
-
-@app.post('/v1/auth/login')
-async def login(request: Request):
-    body = await request.json()
-    user = user_store.authenticate(body.get('username'), body.get('password'))
-    if not user:
-        raise HTTPException(status_code=401, detail='Invalid username or password')
-    return auth_payload(user)
-
-
-@app.get('/v1/auth/me')
-def me(auth: AuthContext = Depends(require_auth)):
-    return {
-        'user_id': auth.user_id,
-        'username': auth.username,
-        'is_service': auth.is_service,
-    }
-
-
 @app.post('/v1/runs')
 async def create_run(
     request: Request,
-    auth: AuthContext = Depends(require_auth),
     x_session_id: str | None = Header(default=None),
 ):
     try:
@@ -702,12 +634,12 @@ async def create_run(
     session_id = body.get('session_id') or x_session_id
     if not session_id:
         try:
-            sess = service.create_session(user_id=auth.user_id, cwd=cwd)
+            sess = service.create_session(user_id=SERVER_USER_ID, cwd=cwd)
         except WorkspaceViolation as e:
             raise backend_error(e) from e
         session_id = sess.sid
 
-    run = start_agent_run(session_id, auth.user_id, text, cwd=cwd)
+    run = start_agent_run(session_id, SERVER_USER_ID, text, cwd=cwd)
     payload = run_response_payload(run['session_id'], run['run_id'], stream_from=run.get('stream_from', '0-0'))
     return JSONResponse(payload, status_code=202, headers=stream_headers(run['session_id'], run['run_id']))
 
@@ -716,12 +648,11 @@ async def create_run(
 async def run_events(
     run_id: str,
     request: Request,
-    auth: AuthContext = Depends(require_auth),
     last_event_id: str | None = None,
     last_event_id_header: str | None = Header(default=None, alias='Last-Event-ID'),
 ):
     if celery_service is not None:
-        run = celery_service.load_run(run_id, auth.user_id)
+        run = celery_service.load_run(run_id, SERVER_USER_ID)
         if run is None:
             return JSONResponse(openai_error(f'Run not found: {run_id}', code='run_not_found'), status_code=404)
         stream_from = last_event_id or last_event_id_header or run.get('last_event_id') or '0-0'
@@ -729,7 +660,7 @@ async def run_events(
             request,
             run_id,
             run['session_id'],
-            auth.user_id,
+            SERVER_USER_ID,
             last_id=stream_from,
         )
         return StreamingResponse(
@@ -740,28 +671,28 @@ async def run_events(
 
     with THREAD_RUNS_LOCK:
         run = THREAD_RUNS.get(run_id)
-    if not run or run.get('user_id') != auth.user_id:
+    if not run or run.get('user_id') != SERVER_USER_ID:
         return JSONResponse(openai_error(f'Run not found: {run_id}', code='run_not_found'), status_code=404)
     return StreamingResponse(
-        thread_run_event_stream(request, run_id, run['session_id'], auth.user_id),
+        thread_run_event_stream(request, run_id, run['session_id'], SERVER_USER_ID),
         media_type='text/event-stream',
         headers=stream_headers(run['session_id'], run_id),
     )
 
 
 @app.post('/v1/runs/{run_id}/stop')
-def stop_run(run_id: str, auth: AuthContext = Depends(require_auth)):
+def stop_run(run_id: str):
     if celery_service is not None:
-        stopped = celery_service.cancel_run(run_id, auth.user_id)
+        stopped = celery_service.cancel_run(run_id, SERVER_USER_ID)
         if not stopped:
             return JSONResponse(openai_error(f'Run not found: {run_id}', code='run_not_found'), status_code=404)
         return {'run_id': run_id, 'status': 'stopping'}
 
     with THREAD_RUNS_LOCK:
         run = THREAD_RUNS.get(run_id)
-    if not run or run.get('user_id') != auth.user_id:
+    if not run or run.get('user_id') != SERVER_USER_ID:
         return JSONResponse(openai_error(f'Run not found: {run_id}', code='run_not_found'), status_code=404)
-    stopped = service.cancel_session(run['session_id'], user_id=auth.user_id)
+    stopped = service.cancel_session(run['session_id'], user_id=SERVER_USER_ID)
     if not stopped:
         raise HTTPException(status_code=404, detail='Session not found')
     return {'run_id': run_id, 'status': 'stopping'}
@@ -770,7 +701,6 @@ def stop_run(run_id: str, auth: AuthContext = Depends(require_auth)):
 @app.post('/v1/chat/completions')
 async def chat_completions(
     request: Request,
-    auth: AuthContext = Depends(require_auth),
     x_session_id: str | None = Header(default=None),
 ):
     body = await request.json()
@@ -786,11 +716,11 @@ async def chat_completions(
             session_id = x_session_id
         else:
             try:
-                sess = service.create_session(user_id=auth.user_id, cwd=cwd)
+                sess = service.create_session(user_id=SERVER_USER_ID, cwd=cwd)
             except WorkspaceViolation as e:
                 raise backend_error(e) from e
             session_id = sess.sid
-        run = start_celery_run(session_id, auth.user_id, last_user_text(messages), mode='text', cwd=cwd)
+        run = start_celery_run(session_id, SERVER_USER_ID, last_user_text(messages), mode='text', cwd=cwd)
         headers = stream_headers(run.session_id, run.run_id)
         response_session_id = run.session_id
 
@@ -802,7 +732,7 @@ async def chat_completions(
         text_iter = text_events()
     else:
         try:
-            sess, text_iter = service.chat_text(x_session_id, messages, user_id=auth.user_id, cwd=cwd)
+            sess, text_iter = service.chat_text(x_session_id, messages, user_id=SERVER_USER_ID, cwd=cwd)
         except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
             raise backend_error(e) from e
         if sess is None:
@@ -813,7 +743,7 @@ async def chat_completions(
     if stream:
         if celery_service is not None:
             return StreamingResponse(
-                openai_celery_stream(request, model, run.run_id, run.session_id, auth.user_id, last_id=run.stream_from),
+                openai_celery_stream(request, model, run.run_id, run.session_id, SERVER_USER_ID, last_id=run.stream_from),
                 media_type='text/event-stream',
                 headers=headers,
             )
@@ -836,18 +766,18 @@ async def chat_completions(
 
 
 @app.get('/v1/sessions')
-def list_sessions(auth: AuthContext = Depends(require_auth)):
-    return {'object': 'list', 'data': service.list_sessions(user_id=auth.user_id)}
+def list_sessions():
+    return {'object': 'list', 'data': service.list_sessions(user_id=SERVER_USER_ID)}
 
 
 @app.post('/v1/sessions')
-async def create_session(request: Request, auth: AuthContext = Depends(require_auth)):
+async def create_session(request: Request):
     body = await request.json() if request.headers.get('content-length') not in (None, '0') else {}
     try:
-        sess = service.create_session(user_id=auth.user_id, cwd=(body or {}).get('cwd'))
+        sess = service.create_session(user_id=SERVER_USER_ID, cwd=(body or {}).get('cwd'))
     except WorkspaceViolation as e:
         raise backend_error(e) from e
-    loaded = service.store.load(sess.sid, user_id=auth.user_id) or {}
+    loaded = service.store.load(sess.sid, user_id=SERVER_USER_ID) or {}
     return {
         'session_id': sess.sid,
         'title': loaded.get('title', 'New Task'),
@@ -860,8 +790,8 @@ async def create_session(request: Request, auth: AuthContext = Depends(require_a
 
 
 @app.get('/v1/sessions/{session_id}')
-def get_session(session_id: str, auth: AuthContext = Depends(require_auth)):
-    loaded = service.store.load(session_id, user_id=auth.user_id)
+def get_session(session_id: str):
+    loaded = service.store.load(session_id, user_id=SERVER_USER_ID)
     if loaded is None:
         raise HTTPException(status_code=404, detail='Session not found')
     payload = {
@@ -880,7 +810,7 @@ def get_session(session_id: str, auth: AuthContext = Depends(require_auth)):
 
 
 @app.post('/v1/sessions/{session_id}/regenerate')
-async def regenerate_session_answer(session_id: str, request: Request, auth: AuthContext = Depends(require_auth)):
+async def regenerate_session_answer(session_id: str, request: Request):
     try:
         body = await request.json() if request.headers.get('content-length') not in (None, '0') else {}
     except Exception:
@@ -889,7 +819,7 @@ async def regenerate_session_answer(session_id: str, request: Request, auth: Aut
         body = {}
     if not isinstance(body, dict):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
-    run = start_agent_regenerate(session_id, auth.user_id, cwd=body.get('cwd'))
+    run = start_agent_regenerate(session_id, SERVER_USER_ID, cwd=body.get('cwd'))
     payload = run_response_payload(
         run['session_id'],
         run['run_id'],
@@ -900,19 +830,19 @@ async def regenerate_session_answer(session_id: str, request: Request, auth: Aut
 
 
 @app.delete('/v1/sessions/{session_id}')
-def delete_session(session_id: str, auth: AuthContext = Depends(require_auth)):
-    deleted = service.delete_session(session_id, user_id=auth.user_id)
+def delete_session(session_id: str):
+    deleted = service.delete_session(session_id, user_id=SERVER_USER_ID)
     if not deleted:
         raise HTTPException(status_code=404, detail='Session not found')
     return {'deleted': True, 'session_id': session_id}
 
 
 @app.post('/v1/sessions/{session_id}/cancel')
-def cancel_session(session_id: str, auth: AuthContext = Depends(require_auth)):
+def cancel_session(session_id: str):
     if celery_service is not None:
-        cancelled = celery_service.cancel_session(session_id, user_id=auth.user_id)
+        cancelled = celery_service.cancel_session(session_id, user_id=SERVER_USER_ID)
     else:
-        cancelled = service.cancel_session(session_id, user_id=auth.user_id)
+        cancelled = service.cancel_session(session_id, user_id=SERVER_USER_ID)
     if not cancelled:
         raise HTTPException(status_code=404, detail='Session not found')
     return {'cancelled': True, 'session_id': session_id}

@@ -1,6 +1,4 @@
-import type { AgentUpdate, AuthResponse, RunCreateResponse, RunStreamEnvelope, SessionDetail, SessionSummary, StreamEvent, UserProfile } from "@/lib/types";
-
-const TOKEN_KEY = "pai-rag.auth_token";
+import type { AgentUpdate, RunCreateResponse, RunStreamEnvelope, SessionDetail, SessionSummary, StreamEvent } from "@/lib/types";
 
 function assertOk(response: Response) {
   if (response.ok) {
@@ -11,65 +9,8 @@ function assertOk(response: Response) {
   });
 }
 
-export function getAuthToken() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  return window.localStorage.getItem(TOKEN_KEY) || "";
-}
-
-export function setAuthToken(token: string) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(TOKEN_KEY, token);
-  }
-}
-
-export function clearAuthToken() {
-  if (typeof window !== "undefined") {
-    window.localStorage.removeItem(TOKEN_KEY);
-  }
-}
-
-function authHeaders(extra?: HeadersInit) {
-  const headers = new Headers(extra);
-  const token = getAuthToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-  return headers;
-}
-
-export async function login(username: string, password: string): Promise<AuthResponse> {
-  const response = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  await assertOk(response);
-  return response.json();
-}
-
-export async function register(username: string, password: string): Promise<AuthResponse> {
-  const response = await fetch("/api/auth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  await assertOk(response);
-  return response.json();
-}
-
-export async function currentUser(): Promise<UserProfile> {
-  const response = await fetch("/api/auth/me", {
-    headers: authHeaders(),
-    cache: "no-store",
-  });
-  await assertOk(response);
-  return response.json();
-}
-
 export async function listSessions(): Promise<SessionSummary[]> {
-  const response = await fetch("/api/sessions", { headers: authHeaders(), cache: "no-store" });
+  const response = await fetch("/api/sessions", { cache: "no-store" });
   await assertOk(response);
   const payload = await response.json();
   return payload.data ?? [];
@@ -78,7 +19,7 @@ export async function listSessions(): Promise<SessionSummary[]> {
 export async function createSession(): Promise<SessionDetail> {
   const response = await fetch("/api/sessions", {
     method: "POST",
-    headers: authHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
   });
   await assertOk(response);
@@ -86,25 +27,25 @@ export async function createSession(): Promise<SessionDetail> {
 }
 
 export async function getSession(sessionId: string): Promise<SessionDetail> {
-  const response = await fetch(`/api/sessions/${sessionId}`, { headers: authHeaders(), cache: "no-store" });
+  const response = await fetch(`/api/sessions/${sessionId}`, { cache: "no-store" });
   await assertOk(response);
   return response.json();
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
-  const response = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE", headers: authHeaders() });
+  const response = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
   await assertOk(response);
 }
 
 export async function cancelSession(sessionId: string): Promise<void> {
-  const response = await fetch(`/api/sessions/${sessionId}/cancel`, { method: "POST", headers: authHeaders() });
+  const response = await fetch(`/api/sessions/${sessionId}/cancel`, { method: "POST" });
   await assertOk(response);
 }
 
 export async function regenerateLastAnswer(sessionId: string, signal?: AbortSignal): Promise<RunCreateResponse> {
   const response = await fetch(`/api/sessions/${sessionId}/regenerate`, {
     method: "POST",
-    headers: authHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
     signal,
   });
@@ -113,7 +54,7 @@ export async function regenerateLastAnswer(sessionId: string, signal?: AbortSign
 }
 
 export async function createRun(sessionId: string | null, text: string, signal?: AbortSignal): Promise<RunCreateResponse> {
-  const headers = authHeaders({
+  const headers = new Headers({
     "Content-Type": "application/json",
     ...(sessionId ? { "X-Session-Id": sessionId } : {}),
   });
@@ -128,7 +69,7 @@ export async function createRun(sessionId: string | null, text: string, signal?:
 }
 
 export async function stopRun(runId: string): Promise<void> {
-  const response = await fetch(`/api/runs/${runId}/stop`, { method: "POST", headers: authHeaders() });
+  const response = await fetch(`/api/runs/${runId}/stop`, { method: "POST" });
   await assertOk(response);
 }
 
@@ -139,7 +80,6 @@ export async function streamRunEvents(
   signal?: AbortSignal,
 ): Promise<string> {
   const response = await fetch(`/api/runs/${runId}/events`, {
-    headers: authHeaders(),
     cache: "no-store",
     signal,
   });

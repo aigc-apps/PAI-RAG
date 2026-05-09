@@ -12,6 +12,5 @@ export async function POST(request: Request) {
       },
       body: await request.text(),
     },
-    request,
   );
 }

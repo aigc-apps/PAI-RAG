@@ -4,22 +4,14 @@ export function backendBaseUrl() {
   return (process.env.BACKEND_BASE_URL || DEFAULT_BACKEND).replace(/\/$/, "");
 }
 
-export function backendHeaders(extra?: HeadersInit, incoming?: Headers) {
-  const headers = new Headers(extra);
-  const incomingAuth = incoming?.get("authorization");
-  const apiKey = process.env.SERVER_API_KEY;
-  if (incomingAuth) {
-    headers.set("Authorization", incomingAuth);
-  } else if (!incoming && apiKey) {
-    headers.set("Authorization", `Bearer ${apiKey}`);
-  }
-  return headers;
+export function backendHeaders(extra?: HeadersInit) {
+  return new Headers(extra);
 }
 
-export async function proxyToBackend(path: string, init: RequestInit = {}, request?: Request) {
+export async function proxyToBackend(path: string, init: RequestInit = {}) {
   const response = await fetch(`${backendBaseUrl()}${path}`, {
     ...init,
-    headers: backendHeaders(init.headers, request?.headers),
+    headers: backendHeaders(init.headers),
     cache: "no-store",
   });
 

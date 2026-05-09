@@ -245,20 +245,19 @@ for tc in tcs:
 ### 4. 会话持久化 `session_store.py`
 
 - **事务写入**：会话快照写入 `memory/sessions_v2.sqlite3`，SQLite 负责事务一致性
-- **用户隔离**：HTTP 后端 session 都写入 `user_id`，列表/读取/删除/取消/继续对话均按当前认证用户过滤；历史 `user_id IS NULL` 记录默认不展示
+- **单用户会话**：HTTP 后端默认使用服务用户 `__server__`，列表/读取/删除/取消/继续对话均按 `session_id` 操作；历史其他 `user_id` 记录默认不展示
 - **运行状态**：持久化 `status`、`active_run_id`、`workspace_path`；同一 session 在 `running` 时拒绝新 prompt，`waiting_user` 时才允许把下一条消息作为 ask_user 回答
 - **保存内容**：LLM 完整对话历史（OpenAI 格式）+ UI 消息 + handler 状态（history_info + working）
 - **跨进程恢复**：前端拿 sessionId → `store.load()` → 重建 client.history 和 handler
 
-### 4.1 多用户并发边界
+### 4.1 并发与 workspace 边界
 
-- 普通登录用户默认进入独立 workspace：`WORKSPACE_ROOT/<user_id>/<session_id>/`
-- `file_write` / `file_patch` / `code_run cwd` 必须在 workspace 内；越界返回 `workspace_violation`
-- 普通用户启用长期记忆时写入 `memory/users/<user_id>/`；服务级调用继续使用全局 `memory/`
-- 服务级 `SERVER_API_KEY` 默认保留可信 cwd 能力；生产可开启 `ENFORCE_WORKSPACE_FOR_SERVER`
+- 单用户免登录模式默认保留可信 cwd 能力；生产可开启 `ENFORCE_WORKSPACE_FOR_SERVER`
+- 开启 workspace 强制隔离后，`file_write` / `file_patch` / `code_run cwd` 必须在 `WORKSPACE_ROOT/<user_id>/<session_id>/` 内；越界返回 `workspace_violation`
+- 长期记忆默认使用服务用户目录；开启用户 memory 配置后写入 `memory/users/<user_id>/`
 - `MAX_GLOBAL_RUNS` / `MAX_USER_RUNS` 可限制同时运行的 agent run 数
 - `RUNNER_BACKEND=thread` 保留进程内线程执行，适合本地开发
-- `RUNNER_BACKEND=celery` 时 FastAPI 只负责鉴权、创建 run、读取 Redis Stream；agent run 由 `backend.celery_app` worker 执行
+- `RUNNER_BACKEND=celery` 时 FastAPI 负责创建 run、读取 Redis Stream；agent run 由 `backend.celery_app` worker 执行
 - Celery 模式使用 Redis 作为 broker、事件流、cancel 信号和 ask_user 回答通道，可支持多 Uvicorn worker；本阶段仍要求 SQLite 和 workspace 在同一台机器共享磁盘
 
 ### 5. 技能动态加载 `skill_manager.py`
@@ -282,9 +281,9 @@ for tc in tcs:
 
 Web 前端基于 Next.js App Router、Tailwind CSS 和 shadcn/ui。浏览器请求先到 Next route handlers，再由代理层转发到 `backend/server.py` 暴露的 Agent SSE、OpenAI compatible 接口和 session API。
 
-- 登录注册：`POST /api/auth/register`、`POST /api/auth/login` -> 代理到 `/v1/auth/*`，浏览器保存 bearer token
+- 免登录：浏览器请求不携带 bearer token，后端统一使用服务用户会话
 - 会话列表：`GET/POST/DELETE /api/sessions` -> 代理到 `/v1/sessions`
-- 对话：`POST /api/agent/sessions/{session_id}/prompt`，消费 ACP 风格结构化 SSE
+- 对话：`POST /api/runs` 创建 run，`GET /api/runs/{run_id}/events` 消费结构化 SSE
 - OpenAI 兼容：`POST /api/chat/completions`，保留给外部兼容客户端
 - 暂停：`POST /api/sessions/{session_id}/cancel`
 - 持久化：由后端统一写入 `SessionStore`，前端刷新后可恢复新格式消息和事件

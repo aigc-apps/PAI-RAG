@@ -4,7 +4,5 @@ fastapi
 uvicorn
 httpx>=0.27,<1
 python-dotenv>=1.0,<2
-bcrypt
-PyJWT
 redis
 celery[redis]

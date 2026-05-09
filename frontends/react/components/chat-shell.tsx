@@ -3,25 +3,19 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, LogOut, Plus, RefreshCw, Square, Trash2, User2, Wrench } from "lucide-react";
+import { Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, Plus, RefreshCw, Square, Trash2, User2, Wrench } from "lucide-react";
 import {
   cancelSession,
-  clearAuthToken,
   createRun,
   createSession,
-  currentUser,
   deleteSession,
-  getAuthToken,
   getSession,
   listSessions,
-  login as loginUser,
   regenerateLastAnswer,
-  register as registerUser,
-  setAuthToken,
   stopRun,
   streamRunEvents,
 } from "@/lib/api";
-import type { AgentUpdate, AskUserPayload, ChatMessage, SessionSummary, UserProfile } from "@/lib/types";
+import type { AgentUpdate, AskUserPayload, ChatMessage, SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -836,112 +830,7 @@ function shouldReplaceSessionTitle(title?: string) {
   return !value || value === "New Task";
 }
 
-function AuthPanel({
-  mode,
-  username,
-  password,
-  error,
-  loading,
-  onModeChange,
-  onUsernameChange,
-  onPasswordChange,
-  onSubmit,
-}: {
-  mode: "login" | "register";
-  username: string;
-  password: string;
-  error: string | null;
-  loading: boolean;
-  onModeChange: (mode: "login" | "register") => void;
-  onUsernameChange: (value: string) => void;
-  onPasswordChange: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <div className="grid min-h-[100dvh] place-items-center bg-slate-50 px-4">
-      <Card className="w-full max-w-md border-slate-200 bg-white shadow-panel">
-        <CardContent className="space-y-5 p-6">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-blue-600 text-white shadow-sm">
-              <Bot className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-slate-900">PAI Assistant</h1>
-              <p className="text-sm text-slate-500">{mode === "login" ? "Sign in to continue" : "Create an account"}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1">
-            <button
-              className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                mode === "login" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900",
-              )}
-              onClick={() => onModeChange("login")}
-              type="button"
-            >
-              Login
-            </button>
-            <button
-              className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                mode === "register" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900",
-              )}
-              onClick={() => onModeChange("register")}
-              type="button"
-            >
-              Register
-            </button>
-          </div>
-
-          <form
-            className="space-y-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmit();
-            }}
-          >
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-slate-700">Username</span>
-              <input
-                autoComplete="username"
-                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                onChange={(event) => onUsernameChange(event.target.value)}
-                placeholder="username"
-                value={username}
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-slate-700">Password</span>
-              <input
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                onChange={(event) => onPasswordChange(event.target.value)}
-                placeholder="password"
-                type="password"
-                value={password}
-              />
-            </label>
-            {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-            <Button className="h-11 w-full rounded-lg" disabled={loading || !username.trim() || !password} type="submit">
-              {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-              {mode === "login" ? "Login" : "Register"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 export function ChatShell() {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [authUsername, setAuthUsername] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -989,25 +878,13 @@ export function ChatShell() {
     async function boot() {
       try {
         setError(null);
-        const token = getAuthToken();
-        if (!token) {
-          setAuthReady(true);
-          setLoading(false);
-          return;
-        }
-        const profile = await currentUser();
-        if (!active) {
-          return;
-        }
-        setUser(profile);
         await loadInitialSession();
       } catch (err) {
-        clearAuthToken();
-        setUser(null);
-        setAuthError("Session expired. Please login again.");
+        if (active) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
         if (active) {
-          setAuthReady(true);
           setLoading(false);
         }
       }
@@ -1037,47 +914,6 @@ export function ChatShell() {
   const activeSession = sessions.find((session) => session.session_id === currentSessionId);
   const isAnsweringAsk = activeSession?.status === "waiting_user" && Boolean(latestAsk(messages));
   const activeSessionTitle = activeSession ? sessionTitle(activeSession) : titleFromMessages(messages);
-
-  async function handleAuthSubmit() {
-    if (authLoading) {
-      return;
-    }
-    setAuthLoading(true);
-    setAuthError(null);
-    setError(null);
-    try {
-      const payload =
-        authMode === "login"
-          ? await loginUser(authUsername, authPassword)
-          : await registerUser(authUsername, authPassword);
-      setAuthToken(payload.access_token);
-      setUser(payload.user);
-      setAuthPassword("");
-      setSessions([]);
-      setCurrentSessionId(null);
-      setMessages([]);
-      setLoading(true);
-      await loadInitialSession();
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-      setAuthLoading(false);
-    }
-  }
-
-  function handleLogout() {
-    abortRef.current?.abort();
-    clearAuthToken();
-    setUser(null);
-    setSessions([]);
-    setCurrentSessionId(null);
-    setMessages([]);
-    setInput("");
-    setStreaming(false);
-    setError(null);
-    setAuthError(null);
-  }
 
   async function handleNewSession() {
     const created = await createSession();
@@ -1308,36 +1144,6 @@ export function ChatShell() {
     await submitText(input);
   }
 
-  if (!authReady) {
-    return (
-      <div className="grid min-h-[100dvh] place-items-center bg-slate-50 text-sm text-slate-500">
-        <span className="inline-flex items-center gap-2">
-          <LoaderCircle className="h-4 w-4 animate-spin" />
-          Loading account
-        </span>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <AuthPanel
-        mode={authMode}
-        username={authUsername}
-        password={authPassword}
-        error={authError}
-        loading={authLoading}
-        onModeChange={(nextMode) => {
-          setAuthMode(nextMode);
-          setAuthError(null);
-        }}
-        onUsernameChange={setAuthUsername}
-        onPasswordChange={setAuthPassword}
-        onSubmit={() => void handleAuthSubmit()}
-      />
-    );
-  }
-
   return (
     <div className="grid h-[100dvh] overflow-hidden bg-transparent lg:grid-cols-[320px_1fr]">
       <aside className="hidden h-[100dvh] border-r border-slate-200/80 bg-white/80 backdrop-blur lg:flex lg:flex-col">
@@ -1387,18 +1193,9 @@ export function ChatShell() {
         </ScrollArea>
         <div className="px-4 pb-5 pt-4">
           <Separator className="mb-4" />
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-slate-800">{user.username}</div>
-              <div className="text-xs text-slate-500">Signed in</div>
-            </div>
-            <Button className="shrink-0 text-slate-500 hover:text-slate-900" onClick={handleLogout} size="icon" variant="ghost">
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
             <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_6px_rgba(34,197,94,0.12)]" />
-            <span>Next proxy -&gt; FastAPI backend</span>
+            <span>Local session store</span>
           </div>
         </div>
       </aside>
@@ -1413,10 +1210,7 @@ export function ChatShell() {
               <p className="text-sm text-slate-500">{loading ? "Loading sessions..." : `${messages.length} messages`}</p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline">{user.username}</Badge>
-              <Button className="lg:hidden" onClick={handleLogout} size="icon" variant="ghost">
-                <LogOut className="h-4 w-4" />
-              </Button>
+              <Badge variant="outline">Local</Badge>
               {streaming ? <Badge>Streaming</Badge> : <Badge variant="secondary">Idle</Badge>}
               <Button variant="outline" disabled={!streaming} onClick={() => void handleStop()}>
                 <Square className="h-4 w-4" />

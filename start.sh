@@ -73,7 +73,6 @@ Environment:
   REDIS_URL                  Redis URL for Celery mode. Default: redis://127.0.0.1:6379/0
   START_REDIS                auto, true, or false. Default: auto
   NGINX_CONFIG               Nginx output config path. Default: /etc/nginx/conf.d/pai-rag.conf
-  SERVER_API_KEY             Optional service token used by the Next.js server proxy.
 
 Examples:
   ./start.sh --dev --port 3001 --backend-port 8000 --worker-instances 0

@@ -52,11 +52,10 @@ cp .env.example .env
 API_KEY=sk-...
 API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
 MODEL=qwen-plus
-AUTH_SECRET=replace-with-a-long-random-string
 WORKSPACE_ROOT=./workspaces
 ```
 
-普通登录用户的工具执行会被限制在 `WORKSPACE_ROOT/<user_id>/<session_id>/` 内。服务级 `SERVER_API_KEY` 调用默认仍可使用请求里的 `cwd`，如需同样隔离可设置：
+主服务默认是单用户免登录模式，会按 `session_id` 区分会话。工具执行默认使用项目根目录或请求里的 `cwd`；如需强制限制到 `WORKSPACE_ROOT/<user_id>/<session_id>/` 可设置：
 
 ```env
 ENFORCE_WORKSPACE_FOR_SERVER=true
@@ -64,7 +63,7 @@ MAX_GLOBAL_RUNS=20
 MAX_USER_RUNS=2
 ```
 
-长期 memory 默认只对服务级调用启用。若要给普通登录用户启用长期记忆，会写入用户私有目录 `memory/users/<user_id>/`，不会写入全局 memory：
+长期 memory 默认写入服务用户目录。若要调整用户 memory 行为，可以配置：
 
 ```env
 ENABLE_LONG_TERM_MEMORY_FOR_USERS=true
@@ -152,19 +151,11 @@ BACKEND_BASE_URL=http://127.0.0.1:8000 npm run dev -- --hostname 0.0.0.0 --port 
 http://your-server-ip:3001
 ```
 
-首次打开 Web 前端后，先注册账号再开始对话。聊天记录会按登录用户隔离保存。
-
-`SERVER_API_KEY` 是服务级 API 密钥，主要用于脚本或 OpenAI compatible 调用。Web 前端的普通用户请求使用登录 token，不需要把 `SERVER_API_KEY` 暴露给浏览器。
-
-```bash
-BACKEND_BASE_URL=http://127.0.0.1:8000 \
-SERVER_API_KEY=your-server-api-key \
-npm run dev -- --hostname 0.0.0.0 --port 3001
-```
+首次打开 Web 前端后可直接开始对话。聊天记录按 `session_id` 区分保存。
 
 ## AgentArena 子服务
 
-AgentArena 是独立的双 Agent 对比页面，源码在 `services/agent-arena/`。它有自己的 `.env`，不要和主项目 `.env` 或前端 token 混用。
+AgentArena 是独立的双 Agent 对比页面，源码在 `services/agent-arena/`。它有自己的 `.env`，不要和主项目 `.env` 混用。
 
 初始化配置：
 
@@ -211,37 +202,24 @@ Zed 等编辑器可以使用脚本：
 
 ## API 测试
 
-先注册或登录获取用户 token：
-
-```bash
-curl --location 'http://127.0.0.1:8000/v1/auth/register' \
-  --header 'Content-Type: application/json' \
-  --data '{"username":"demo","password":"demo1234"}'
-
-TOKEN=$(curl -s --location 'http://127.0.0.1:8000/v1/auth/login' \
-  --header 'Content-Type: application/json' \
-  --data '{"username":"demo","password":"demo1234"}' \
-  | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-```
-
-Web 前端使用 ACP 风格结构化 SSE：
+后端默认免登录，可以直接请求会话和运行接口。Web 前端使用结构化 SSE：
 
 ```bash
 SESSION_ID=$(curl -s -X POST http://127.0.0.1:8000/v1/sessions \
-  --header "Authorization: Bearer ${TOKEN}" \
   | python -c "import sys,json; print(json.load(sys.stdin)['session_id'])")
 
-curl --no-buffer --location "http://127.0.0.1:8000/v1/agent/sessions/${SESSION_ID}/prompt" \
-  --header "Authorization: Bearer ${TOKEN}" \
+RUN_ID=$(curl -s --location 'http://127.0.0.1:8000/v1/runs' \
   --header 'Content-Type: application/json' \
-  --data '{"message":"你好，请用一句话介绍你自己"}'
+  --data "{\"session_id\":\"${SESSION_ID}\",\"input\":\"你好，请用一句话介绍你自己\"}" \
+  | python -c "import sys,json; print(json.load(sys.stdin)['run_id'])")
+
+curl --no-buffer --location "http://127.0.0.1:8000/v1/runs/${RUN_ID}/events"
 ```
 
 非流式 Chat Completions：
 
 ```bash
 curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
-  --header "Authorization: Bearer ${TOKEN}" \
   --header 'Content-Type: application/json' \
   --data '{
     "model": "hermes-agent",
@@ -256,7 +234,6 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
 
 ```bash
 curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
-  --header "Authorization: Bearer ${TOKEN}" \
   --header 'Content-Type: application/json' \
   --header 'X-Session-Id: test-session-001' \
   --data '{
@@ -268,17 +245,11 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
   }'
 ```
 
-如果使用服务级 `SERVER_API_KEY` 直接调用后端，也可以把上面的用户 token 换成：
-
-```bash
---header 'Authorization: Bearer your-server-api-key'
-```
-
 Session API：
 
 ```bash
-curl --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions
-curl -X POST --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions
-curl --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions/test-session-001
-curl -X DELETE --header "Authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/sessions/test-session-001
+curl http://127.0.0.1:8000/v1/sessions
+curl -X POST http://127.0.0.1:8000/v1/sessions
+curl http://127.0.0.1:8000/v1/sessions/test-session-001
+curl -X DELETE http://127.0.0.1:8000/v1/sessions/test-session-001
 ```

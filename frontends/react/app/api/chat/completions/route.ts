@@ -9,5 +9,5 @@ export async function POST(request: Request) {
       ...(sessionId ? { "X-Session-Id": sessionId } : {}),
     },
     body: await request.text(),
-  }, request);
+  });
 }

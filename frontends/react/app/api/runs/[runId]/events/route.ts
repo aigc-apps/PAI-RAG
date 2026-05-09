@@ -11,6 +11,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ runI
       method: "GET",
       headers: lastEventId ? { "Last-Event-ID": lastEventId } : undefined,
     },
-    request,
   );
 }

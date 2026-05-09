@@ -2,9 +2,9 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from backend.auth import AuthContext
 from backend.agent_service import NoRegeneratableAnswerError
 import backend.server as server
+from session_store import SERVER_USER_ID
 
 
 class FakeRegenerateService:
@@ -27,10 +27,6 @@ class RegenerateApiTests(unittest.TestCase):
         self.original_thread_runs = dict(server.THREAD_RUNS)
         server.celery_service = None
         server.THREAD_RUNS.clear()
-        server.app.dependency_overrides[server.require_auth] = lambda: AuthContext(
-            user_id="user-1",
-            username="tester",
-        )
         self.client = TestClient(server.app)
 
     def tearDown(self):
@@ -38,7 +34,6 @@ class RegenerateApiTests(unittest.TestCase):
         server.celery_service = self.original_celery_service
         server.THREAD_RUNS.clear()
         server.THREAD_RUNS.update(self.original_thread_runs)
-        server.app.dependency_overrides.pop(server.require_auth, None)
 
     def test_regenerate_endpoint_returns_run_payload_and_headers(self):
         fake_service = FakeRegenerateService({
@@ -52,7 +47,7 @@ class RegenerateApiTests(unittest.TestCase):
         response = self.client.post("/v1/sessions/session-1/regenerate", json={})
 
         self.assertEqual(response.status_code, 202)
-        self.assertEqual(fake_service.calls, [("session-1", "user-1")])
+        self.assertEqual(fake_service.calls, [("session-1", SERVER_USER_ID)])
         self.assertEqual(response.headers["X-Session-Id"], "session-1")
         self.assertEqual(response.headers["X-Run-Id"], "run-2")
         self.assertEqual(response.json(), {

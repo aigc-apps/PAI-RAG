@@ -9,6 +9,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       headers: { "Content-Type": "application/json" },
       body: await request.text(),
     },
-    request,
   );
 }
