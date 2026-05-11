@@ -7,14 +7,36 @@ from pairag.web.utils import check_variables_in_string, components_to_dict
 
 def change_search_model_argument(search_type):
     return [
-        gr.update(visible=True if search_type == "bing" else False),
-        gr.update(visible=True),
-        gr.update(visible=True if search_type in ["bing", "google"] else False),
-        gr.update(visible=True if search_type == "aliyun" else False),
-        gr.update(visible=True if search_type == "aliyun" else False),
-        gr.update(visible=True if search_type == "aliyun" else False),
-        gr.update(visible=True if search_type == "google" else False),
-        gr.update(visible=True if search_type == "google" else False),
+        gr.update(visible=True if search_type == "bing" else False),  # search_api_key
+        gr.update(visible=True),  # search_count
+        gr.update(
+            visible=True if search_type in ["bing", "google"] else False
+        ),  # search_lang
+        gr.update(
+            visible=True if search_type == "aliyun" else False
+        ),  # aliyun_endpoint
+        gr.update(
+            visible=True if search_type == "aliyun" else False
+        ),  # aliyun_access_key_id
+        gr.update(
+            visible=True if search_type == "aliyun" else False
+        ),  # aliyun_access_key_secret
+        gr.update(
+            visible=True if search_type == "aliyun" else False
+        ),  # aliyun_engine_type
+        gr.update(
+            visible=True if search_type == "aliyun" else False
+        ),  # aliyun_enable_optimization
+        gr.update(
+            visible=True if search_type == "aliyun" else False
+        ),  # aliyun_min_results
+        gr.update(
+            visible=True if search_type == "aliyun" else False
+        ),  # aliyun_max_results
+        gr.update(visible=True if search_type == "google" else False),  # serpapi_key
+        gr.update(
+            visible=True if search_type == "google" else False
+        ),  # serpapi_key_tips
     ]
 
 
@@ -92,6 +114,36 @@ def create_search_web_tab() -> Dict[str, Any]:
                 type="password",
                 elem_id="aliyun_access_key_secret",
             )
+            aliyun_engine_type = gr.Dropdown(
+                label="搜索引擎类型",
+                choices=["Generic", "GenericAdvanced", "LiteAdvanced", "Deep"],
+                value="LiteAdvanced",
+                elem_id="aliyun_engine_type",
+                info="LiteAdvanced（推荐）: 轻量级高级搜索，支持Tags优化；Deep: 深度搜索，最高质量",
+            )
+            aliyun_enable_optimization = gr.Checkbox(
+                label="启用搜索结果优化",
+                value=True,
+                elem_id="aliyun_enable_optimization",
+                info="基于Tags过滤低质量内容，提升搜索结果质量",
+            )
+            with gr.Row():
+                aliyun_min_results = gr.Slider(
+                    label="最少保留结果数",
+                    minimum=1,
+                    maximum=10,
+                    step=1,
+                    value=5,
+                    elem_id="aliyun_min_results",
+                )
+                aliyun_max_results = gr.Slider(
+                    label="最多保留结果数",
+                    minimum=10,
+                    maximum=50,
+                    step=1,
+                    value=20,
+                    elem_id="aliyun_max_results",
+                )
         with gr.Column(scale=7):
             _ = gr.Markdown(value="## \N{WHITE MEDIUM STAR} **调整提示词模板**")
             search_role_template = gr.Textbox(
@@ -126,6 +178,10 @@ def create_search_web_tab() -> Dict[str, Any]:
             aliyun_endpoint,
             aliyun_access_key_id,
             aliyun_access_key_secret,
+            aliyun_engine_type,
+            aliyun_enable_optimization,
+            aliyun_min_results,
+            aliyun_max_results,
             serpapi_key,
             search_role_template,
             search_qa_prompt_template,
@@ -142,6 +198,10 @@ def create_search_web_tab() -> Dict[str, Any]:
                 aliyun_endpoint,
                 aliyun_access_key_id,
                 aliyun_access_key_secret,
+                aliyun_engine_type,
+                aliyun_enable_optimization,
+                aliyun_min_results,
+                aliyun_max_results,
                 serpapi_key,
                 serpapi_key_tips,
             ],

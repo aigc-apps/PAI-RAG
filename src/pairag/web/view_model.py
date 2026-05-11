@@ -117,6 +117,10 @@ class ViewModel(BaseModel):
     aliyun_endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     aliyun_access_key_id: str = None
     aliyun_access_key_secret: str = None
+    aliyun_engine_type: str = "LiteAdvanced"
+    aliyun_enable_optimization: bool = True
+    aliyun_min_results: int = 5
+    aliyun_max_results: int = 20
 
     serpapi_key: str = None
 
@@ -254,6 +258,14 @@ class ViewModel(BaseModel):
             view_model.aliyun_endpoint = config.search.endpoint
             view_model.aliyun_access_key_id = config.search.access_key_id
             view_model.aliyun_access_key_secret = config.search.access_key_secret
+            view_model.aliyun_engine_type = getattr(
+                config.search, "engine_type", "LiteAdvanced"
+            )
+            view_model.aliyun_enable_optimization = getattr(
+                config.search, "enable_optimization", True
+            )
+            view_model.aliyun_min_results = getattr(config.search, "min_results", 5)
+            view_model.aliyun_max_results = getattr(config.search, "max_results", 20)
             view_model.search_count = config.search.search_count
         elif isinstance(config.search, GoogleSearchConfig):
             view_model.search_type = "google"
@@ -441,6 +453,10 @@ class ViewModel(BaseModel):
             config["search"]["endpoint"] = self.aliyun_endpoint
             config["search"]["access_key_id"] = self.aliyun_access_key_id
             config["search"]["access_key_secret"] = self.aliyun_access_key_secret
+            config["search"]["engine_type"] = self.aliyun_engine_type
+            config["search"]["enable_optimization"] = self.aliyun_enable_optimization
+            config["search"]["min_results"] = self.aliyun_min_results
+            config["search"]["max_results"] = self.aliyun_max_results
             config["search"]["search_count"] = self.search_count
         config["search"]["search_qa_prompt_template"] = self.search_qa_prompt_template
         config["search"]["search_role_template"] = self.search_role_template
@@ -634,6 +650,22 @@ class ViewModel(BaseModel):
                 "value": self.aliyun_access_key_secret,
                 "visible": False,
             }
+            settings["aliyun_engine_type"] = {
+                "value": self.aliyun_engine_type,
+                "visible": False,
+            }
+            settings["aliyun_enable_optimization"] = {
+                "value": self.aliyun_enable_optimization,
+                "visible": False,
+            }
+            settings["aliyun_min_results"] = {
+                "value": self.aliyun_min_results,
+                "visible": False,
+            }
+            settings["aliyun_max_results"] = {
+                "value": self.aliyun_max_results,
+                "visible": False,
+            }
         elif self.search_type == "google":
             settings["search_api_key"] = {
                 "value": self.search_api_key,
@@ -652,6 +684,22 @@ class ViewModel(BaseModel):
             }
             settings["aliyun_access_key_secret"] = {
                 "value": self.aliyun_access_key_secret,
+                "visible": False,
+            }
+            settings["aliyun_engine_type"] = {
+                "value": self.aliyun_engine_type,
+                "visible": False,
+            }
+            settings["aliyun_enable_optimization"] = {
+                "value": self.aliyun_enable_optimization,
+                "visible": False,
+            }
+            settings["aliyun_min_results"] = {
+                "value": self.aliyun_min_results,
+                "visible": False,
+            }
+            settings["aliyun_max_results"] = {
+                "value": self.aliyun_max_results,
                 "visible": False,
             }
         # aliyun
@@ -673,6 +721,22 @@ class ViewModel(BaseModel):
             }
             settings["aliyun_access_key_secret"] = {
                 "value": self.aliyun_access_key_secret,
+                "visible": True,
+            }
+            settings["aliyun_engine_type"] = {
+                "value": self.aliyun_engine_type,
+                "visible": True,
+            }
+            settings["aliyun_enable_optimization"] = {
+                "value": self.aliyun_enable_optimization,
+                "visible": True,
+            }
+            settings["aliyun_min_results"] = {
+                "value": self.aliyun_min_results,
+                "visible": True,
+            }
+            settings["aliyun_max_results"] = {
+                "value": self.aliyun_max_results,
                 "visible": True,
             }
 

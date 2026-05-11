@@ -407,6 +407,10 @@ def resolve_searcher(config: RagConfig, model_id: str = None) -> BaseRetriever:
             access_key_secret=config.search.access_key_secret,
             endpoint=config.search.endpoint,
             search_count=config.search.search_count,
+            engine_type=getattr(config.search, "engine_type", "LiteAdvanced"),
+            enable_optimization=getattr(config.search, "enable_optimization", True),
+            min_results=getattr(config.search, "min_results", 5),
+            max_results=getattr(config.search, "max_results", 20),
         )
     elif isinstance(config.search, GoogleSearchConfig) and config.search.serpapi_key:
         searcher = resolve(

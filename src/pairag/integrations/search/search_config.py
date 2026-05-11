@@ -68,6 +68,10 @@ class AliyunSearchConfig(BaseSearchConfig):
     endpoint: str = DEFAULT_ALIYUN_SEARCH_ENDPOINT
     access_key_id: str | None = None
     access_key_secret: str | None = None
+    engine_type: str = "LiteAdvanced"  # Generic, GenericAdvanced, LiteAdvanced, Deep
+    enable_optimization: bool = True
+    min_results: int = 5
+    max_results: int = 20
 
 
 class GoogleSearchConfig(BaseSearchConfig):

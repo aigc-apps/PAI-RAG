@@ -241,3 +241,6 @@ out/
 dist
 apps/docs/generated
 packages/*/generated
+
+.claude/
+graphify-out/
