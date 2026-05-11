@@ -4,6 +4,7 @@
 - Web/ACP 通过结构化 AgentEvent 输出
 - 退出条件：should_exit / 无 next_prompt / 达到 max_turns
 """
+import re
 import sys
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -48,9 +49,30 @@ MAX_TURNS_FALLBACK_PROMPT = (
 )
 
 TOOL_RESULT_MAX_CHARS = 100000
+FILE_READ_RESULT_MAX_CHARS = 12000
 TURN_TOOL_RESULT_BUDGET_CHARS = 200000
 TOOL_RESULT_PREVIEW_CHARS = 12000
 PERSISTED_OUTPUT_TAG = '<persisted-output>'
+ASSISTANT_OUTPUT_MAX_CHARS = 24000
+ASSISTANT_FILE_CONTENT_MAX_CHARS = 8000
+ASSISTANT_STREAM_PREVIEW_CHARS = 12000
+ARCHIVE_TEXT_MAX_CHARS = 30000
+ARCHIVE_LIST_MAX_ITEMS = 200
+ARCHIVE_DICT_MAX_ITEMS = 200
+
+SECRET_PATTERNS = (
+    re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----', re.DOTALL | re.IGNORECASE),
+    re.compile(r'\bLTAI[A-Za-z0-9]{12,}\b'),
+    re.compile(r'\bsk-[A-Za-z0-9_-]{20,}\b'),
+    re.compile(
+        r'(?i)(["\']?[A-Za-z0-9_.-]{0,80}(?:api[_-]?key|secret|token|password|passwd|'
+        r'access[_-]?key|secret[_-]?key|auth[_-]?secret)[A-Za-z0-9_.-]{0,80}["\']?\s*[:=]\s*)'
+        r'(["\']?)([^"\'\s,}\]]{4,})(["\']?)'
+    ),
+)
+SECRET_KEY_RE = re.compile(
+    r'(?i)(api[_-]?key|secret|token|password|passwd|access[_-]?key|secret[_-]?key|auth[_-]?secret)'
+)
 
 
 @dataclass
@@ -92,8 +114,20 @@ def _head_tail_text(text, max_chars=TOOL_RESULT_PREVIEW_CHARS):
     return f'{text[:head_chars]}{notice}{text[-tail_chars:]}'
 
 
+def _stream_preview_text(text, max_chars=ASSISTANT_STREAM_PREVIEW_CHARS):
+    text = redact_sensitive_text(text or '')
+    if len(text) <= max_chars:
+        return text
+    notice = (
+        f'\n\n[ASSISTANT OUTPUT STREAM TRUNCATED after {max_chars} chars; '
+        'complete content will be saved to a workspace file if this response is retained]\n'
+    )
+    keep_budget = max(max_chars - len(notice), 0)
+    return f'{text[:keep_budget]}{notice}'
+
+
 def _persisted_output_message(content, path, reason):
-    preview = _head_tail_text(content)
+    preview = _head_tail_text(redact_sensitive_text(content))
     return (
         f'{PERSISTED_OUTPUT_TAG}\n'
         f'reason: {reason}\n'
@@ -109,9 +143,10 @@ def _persisted_output_message(content, path, reason):
 def _persist_tool_result_if_needed(handler, content, tool_name, tool_call_id, force=False, reason=None):
     if not isinstance(content, str):
         content = str(content)
-    if tool_name == 'file_read' or PERSISTED_OUTPUT_TAG in content:
+    if PERSISTED_OUTPUT_TAG in content:
         return content
-    if not force and len(content) <= TOOL_RESULT_MAX_CHARS:
+    max_chars = FILE_READ_RESULT_MAX_CHARS if tool_name == 'file_read' else TOOL_RESULT_MAX_CHARS
+    if not force and len(content) <= max_chars:
         return content
 
     path = None
@@ -121,9 +156,7 @@ def _persist_tool_result_if_needed(handler, content, tool_name, tool_call_id, fo
         path = None
         reason = f'{reason or "tool result too large"}; persist failed: {type(e).__name__}: {e}'
     if not path:
-        if force:
-            return _head_tail_text(content)
-        return content
+        return _head_tail_text(content)
     return _persisted_output_message(content, path, reason or 'tool result too large')
 
 
@@ -133,8 +166,7 @@ def _enforce_tool_result_budget(handler, tool_results, tool_result_meta):
         candidates = [
             (len(msg.get('content') or ''), index)
             for index, msg in enumerate(tool_results)
-            if tool_result_meta[index].get('tool_name') != 'file_read'
-            and PERSISTED_OUTPUT_TAG not in (msg.get('content') or '')
+            if PERSISTED_OUTPUT_TAG not in (msg.get('content') or '')
         ]
         if not candidates:
             break
@@ -184,11 +216,117 @@ def _model_summary(content):
     return model_summary_content(content or '')
 
 
+def _assistant_persist_reason(content, stop_reason=''):
+    text = content or ''
+    if PERSISTED_OUTPUT_TAG in text:
+        return ''
+    if '<file_content' in text.lower() and len(text) > ASSISTANT_FILE_CONTENT_MAX_CHARS:
+        return 'assistant file_content output too large'
+    if len(text) > ASSISTANT_OUTPUT_MAX_CHARS:
+        return 'assistant output too large'
+    if stop_reason == 'length' and len(text) > ASSISTANT_STREAM_PREVIEW_CHARS:
+        return 'assistant output hit model max_tokens'
+    return ''
+
+
+def _replace_last_assistant_content(client, old_content, new_content):
+    history = getattr(client, 'history', None)
+    if not isinstance(history, list):
+        return
+    for msg in reversed(history):
+        if isinstance(msg, dict) and msg.get('role') == 'assistant':
+            msg['content'] = new_content
+            notify = getattr(client, '_notify_history_changed', None)
+            if callable(notify):
+                notify()
+            return
+
+
+def _persist_assistant_response_if_needed(handler, client, response, step_id, reason=None):
+    content = response.content or ''
+    reason = reason or _assistant_persist_reason(content, getattr(response, 'stop_reason', '') or '')
+    if not reason:
+        return response.content
+    path = None
+    if handler is not None:
+        try:
+            path = handler.persist_tool_result(content, step_id, subdir='assistant_outputs')
+        except Exception as e:
+            reason = f'{reason}; persist failed: {type(e).__name__}: {e}'
+    if path:
+        replacement = _persisted_output_message(content, path, reason)
+    else:
+        replacement = _head_tail_text(content)
+    response.content = replacement
+    _replace_last_assistant_content(client, content, replacement)
+    return replacement
+
+
+class _PlainStreamLimiter:
+    def __init__(self, max_chars=ASSISTANT_STREAM_PREVIEW_CHARS):
+        self.max_chars = max_chars
+        self.count = 0
+        self.truncated = False
+
+    def filter(self, chunk):
+        if not chunk or self.truncated:
+            return ''
+        remaining = self.max_chars - self.count
+        if len(chunk) <= remaining:
+            self.count += len(chunk)
+            return redact_sensitive_text(chunk)
+        self.truncated = True
+        head = chunk[:max(remaining, 0)]
+        return redact_sensitive_text(
+            head
+            + f'\n\n[ASSISTANT OUTPUT STREAM TRUNCATED after {self.max_chars} chars; '
+            'complete content will be saved to a workspace file if this response is retained]\n'
+        )
+
+
+def redact_sensitive_text(text):
+    redacted = '' if text is None else str(text)
+    for pattern in SECRET_PATTERNS:
+        def repl(match):
+            if match.lastindex and match.lastindex >= 4:
+                return f'{match.group(1)}{match.group(2)}[REDACTED]{match.group(4)}'
+            return '[REDACTED]'
+        redacted = pattern.sub(repl, redacted)
+    return redacted
+
+
+def sanitize_for_archive(value, max_text_chars=ARCHIVE_TEXT_MAX_CHARS):
+    if isinstance(value, str):
+        redacted = redact_sensitive_text(value)
+        return _head_tail_text(redacted, max_text_chars)
+    if isinstance(value, dict):
+        items = list(value.items())
+        sanitized = {}
+        for key, val in items[:ARCHIVE_DICT_MAX_ITEMS]:
+            if SECRET_KEY_RE.search(str(key)):
+                sanitized[key] = '[REDACTED]'
+            else:
+                sanitized[key] = sanitize_for_archive(val, max_text_chars=max_text_chars)
+        if len(items) > ARCHIVE_DICT_MAX_ITEMS:
+            sanitized['__archive_truncated__'] = f'{len(items) - ARCHIVE_DICT_MAX_ITEMS} dict entries omitted'
+        return sanitized
+    if isinstance(value, list):
+        sanitized = [
+            sanitize_for_archive(item, max_text_chars=max_text_chars)
+            for item in value[:ARCHIVE_LIST_MAX_ITEMS]
+        ]
+        if len(value) > ARCHIVE_LIST_MAX_ITEMS:
+            sanitized.append({'__archive_truncated__': f'{len(value) - ARCHIVE_LIST_MAX_ITEMS} list items omitted'})
+        return sanitized
+    return value
+
+
 def _emit_model_response(client, system_prompt, new_messages, tools_schema, model_step_id,
-                         title, on_chunk=None, on_event=None):
+                         title, handler=None, on_chunk=None, on_event=None):
     gen = client.chat(system=system_prompt, new_messages=new_messages, tools=tools_schema)
     model_raw_content = ''
     model_process_content = ''
+    plain_limiter = _PlainStreamLimiter()
     if on_event:
         on_event(thought_start(model_step_id, title=title))
     try:
@@ -198,7 +336,7 @@ def _emit_model_response(client, system_prompt, new_messages, tools_schema, mode
                 continue
             if on_event:
                 model_raw_content += chunk
-                next_process_content = stream_model_process_content(model_raw_content)
+                next_process_content = _stream_preview_text(stream_model_process_content(model_raw_content))
                 if next_process_content.startswith(model_process_content):
                     delta = next_process_content[len(model_process_content):]
                     replace = False
@@ -209,18 +347,30 @@ def _emit_model_response(client, system_prompt, new_messages, tools_schema, mode
                     on_event(thought_delta(model_step_id, delta, replace=replace))
                 model_process_content = next_process_content
             elif on_chunk:
-                on_chunk(chunk)
+                display_chunk = plain_limiter.filter(chunk)
+                if display_chunk:
+                    on_chunk(display_chunk)
             else:
-                sys.stdout.write(chunk)
-                sys.stdout.flush()
+                display_chunk = plain_limiter.filter(chunk)
+                if display_chunk:
+                    sys.stdout.write(display_chunk)
+                    sys.stdout.flush()
     except StopIteration as e:
         response = e.value
     if not on_event and not on_chunk:
         print()
+    original_content = response.content
+    _persist_assistant_response_if_needed(handler, client, response, model_step_id)
+    if response.content != original_content:
+        if on_chunk:
+            on_chunk('\n\n' + response.content)
+        elif not on_event:
+            print(response.content)
     return response
 
 
-def _run_max_turns_fallback(client, system_prompt, pending_messages, max_turns, on_chunk=None, on_event=None):
+def _run_max_turns_fallback(client, system_prompt, pending_messages, max_turns,
+                            handler=None, on_chunk=None, on_event=None):
     fallback_messages = list(pending_messages or [])
     fallback_messages.append({'role': 'user', 'content': MAX_TURNS_FALLBACK_PROMPT})
     response = _emit_model_response(
@@ -230,6 +380,7 @@ def _run_max_turns_fallback(client, system_prompt, pending_messages, max_turns, 
         [],
         f'model-{max_turns + 1}-fallback',
         'Final report',
+        handler=handler,
         on_chunk=on_chunk,
         on_event=on_event,
     )
@@ -241,7 +392,7 @@ def _run_max_turns_fallback(client, system_prompt, pending_messages, max_turns, 
         on_event(thought_done(
             f'model-{max_turns + 1}-fallback',
             hidden=True,
-            content=process_content,
+            content=_stream_preview_text(process_content),
         ))
         if visible_reply:
             on_event(agent_message_chunk(visible_reply))
@@ -263,6 +414,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         model_step_id = f'model-{turn}'
         model_raw_content = ''
         model_process_content = ''
+        plain_limiter = _PlainStreamLimiter()
         if on_event:
             on_event(thought_start(model_step_id, title='Agent step'))
         try:
@@ -281,7 +433,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                     continue
                 if on_event:
                     model_raw_content += chunk
-                    next_process_content = stream_model_process_content(model_raw_content)
+                    next_process_content = _stream_preview_text(stream_model_process_content(model_raw_content))
                     if next_process_content.startswith(model_process_content):
                         delta = next_process_content[len(model_process_content):]
                         replace = False
@@ -292,10 +444,14 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                         on_event(thought_delta(model_step_id, delta, replace=replace))
                     model_process_content = next_process_content
                 elif on_chunk:
-                    on_chunk(chunk)
+                    display_chunk = plain_limiter.filter(chunk)
+                    if display_chunk:
+                        on_chunk(display_chunk)
                 else:
-                    sys.stdout.write(chunk)
-                    sys.stdout.flush()
+                    display_chunk = plain_limiter.filter(chunk)
+                    if display_chunk:
+                        sys.stdout.write(display_chunk)
+                        sys.stdout.flush()
         except StopIteration as e:
             response = e.value
         if not on_event and not on_chunk:
@@ -305,6 +461,9 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         tool_calls = [{'tool_name': tc.name, 'args': tc.input, 'id': tc.id}
                       for tc in response.tool_calls]
         if not tool_calls:
+            original_content = response.content
+            _persist_assistant_response_if_needed(handler, client, response, model_step_id)
+            assistant_replaced = response.content != original_content
             process_content = _model_process_content(response.content)
             cleaned = _model_final_answer(response.content)
             summary = _model_summary(response.content)
@@ -325,6 +484,10 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
             visible_reply = visible_reply or summary
             if on_event and visible_reply:
                 on_event(agent_message_chunk(visible_reply))
+            elif assistant_replaced and on_chunk:
+                on_chunk('\n\n' + response.content)
+            elif assistant_replaced and not on_event and not on_chunk:
+                print(response.content)
             exit_reason = {'result': 'NO_TOOL_CALL', 'data': response.content}
             handler.turn_end_callback(response, [], [], turn, '', exit_reason)
             if on_event:
@@ -334,7 +497,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         if on_event:
             on_event(thought_done(
                 model_step_id,
-                content=_model_process_content(response.content),
+                content=_stream_preview_text(_model_process_content(response.content)),
             ))
 
         # 3) 顺序执行所有工具调用
@@ -396,6 +559,8 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 break
             next_prompts.add(outcome.next_prompt)
 
+        _persist_assistant_response_if_needed(handler, client, response, model_step_id)
+
         # 3.5) 拦截任务完成出口：若 handler._done_hooks 还有待办，弹出注入下一轮
         # 参考 GenericAgent agent_loop.py:91-93。仅在 CURRENT_TASK_DONE / 无 next_prompt 时拦截，
         # EXITED（用户取消等强制退出）跳过；hook 队列空也跳过。
@@ -428,6 +593,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         system_prompt,
         new_messages,
         max_turns,
+        handler=handler,
         on_chunk=on_chunk,
         on_event=on_event,
     )

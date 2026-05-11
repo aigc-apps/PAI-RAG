@@ -3,19 +3,20 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, Plus, RefreshCw, Square, Trash2, User2, Wrench } from "lucide-react";
+import { BookOpen, Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, Plus, RefreshCw, Square, Trash2, User2, Wrench, X } from "lucide-react";
 import {
   cancelSession,
   createRun,
   createSession,
   deleteSession,
   getSession,
+  getSkills,
   listSessions,
   regenerateLastAnswer,
   stopRun,
   streamRunEvents,
 } from "@/lib/api";
-import type { AgentUpdate, AskUserPayload, ChatMessage, SessionSummary } from "@/lib/types";
+import type { AgentUpdate, AskUserPayload, ChatMessage, EvolvedSkill, OfficialSkill, SessionSummary, SkillInventory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -825,6 +826,113 @@ function canRegenerateLastAssistant(messages: ChatMessage[]) {
   );
 }
 
+function OfficialSkillRow({ skill }: { skill: OfficialSkill }) {
+  return (
+    <div className="rounded-md border border-blue-200 bg-blue-50/50 px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-blue-950">{skill.name}</div>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-blue-800/70">{skill.description || "No description"}</p>
+        </div>
+        <Badge className="max-w-48 shrink-0 truncate border-blue-200 bg-blue-100 text-blue-700" variant="outline">{skill.trigger}</Badge>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-blue-700/70">
+        <span className="min-w-0 truncate font-mono">{skill.source}</span>
+        {skill.allowed_tools.length ? <Badge className="border-blue-200 text-blue-700" variant="outline">{skill.allowed_tools.length} tools</Badge> : null}
+      </div>
+    </div>
+  );
+}
+
+function EvolvedSkillRow({ skill }: { skill: EvolvedSkill }) {
+  return (
+    <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-emerald-950">{skill.name}</div>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-emerald-800/70">{skill.description || "No description"}</p>
+        </div>
+        <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700" variant="outline">{skill.kind}</Badge>
+      </div>
+      <div className="mt-2 min-w-0 truncate font-mono text-xs text-emerald-700/70">{skill.source}</div>
+    </div>
+  );
+}
+
+function SkillsDialog({
+  inventory,
+  loading,
+  error,
+  onClose,
+}: {
+  inventory: SkillInventory | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const official = inventory?.official ?? [];
+  const evolved = inventory?.evolved ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/30 px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Skills</h3>
+            <p className="text-sm text-slate-500">
+              {official.length} official / {evolved.length} self-evolved
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close skills">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {loading ? (
+            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Loading skills...
+            </div>
+          ) : null}
+          {error ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">{error}</div>
+          ) : null}
+          {!loading && !error ? (
+            <div className="space-y-5">
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-semibold text-blue-800">Official</h4>
+                  <Badge className="bg-blue-100 text-blue-700" variant="secondary">{official.length}</Badge>
+                </div>
+                <div className="space-y-2">
+                  {official.length ? official.map((skill) => <OfficialSkillRow key={skill.source} skill={skill} />) : (
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                      No official skills configured.
+                    </div>
+                  )}
+                </div>
+              </section>
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-semibold text-emerald-800">Self-evolved</h4>
+                  <Badge className="bg-emerald-100 text-emerald-700" variant="secondary">{evolved.length}</Badge>
+                </div>
+                <div className="space-y-2">
+                  {evolved.length ? evolved.map((skill) => <EvolvedSkillRow key={skill.source} skill={skill} />) : (
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                      No self-evolved skills yet.
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function shouldReplaceSessionTitle(title?: string) {
   const value = title?.trim();
   return !value || value === "New Task";
@@ -839,6 +947,10 @@ export function ChatShell() {
   const [streaming, setStreaming] = useState(false);
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [skillsInventory, setSkillsInventory] = useState<SkillInventory | null>(null);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -847,6 +959,18 @@ export function ChatShell() {
     const data = await listSessions();
     setSessions(data);
     return data;
+  }, []);
+
+  const refreshSkills = useCallback(async () => {
+    setSkillsLoading(true);
+    setSkillsError(null);
+    try {
+      setSkillsInventory(await getSkills());
+    } catch (err) {
+      setSkillsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSkillsLoading(false);
+    }
   }, []);
 
   const loadSession = useCallback(
@@ -921,6 +1045,11 @@ export function ChatShell() {
     setCurrentSessionId(created.session_id);
     setMessages(created.messages ?? []);
     await refreshSessions();
+  }
+
+  function handleOpenSkills() {
+    setSkillsOpen(true);
+    void refreshSkills();
   }
 
   async function handleDeleteSession(sessionId: string) {
@@ -1156,10 +1285,22 @@ export function ChatShell() {
             <p className="text-sm text-slate-500">Next.js client</p>
           </div>
         </div>
-        <div className="px-4 pb-4">
+        <div className="space-y-2 px-4 pb-4">
           <Button className="w-full justify-start gap-2 rounded-lg" onClick={() => void handleNewSession()}>
             <Plus className="h-4 w-4" />
             New Task
+          </Button>
+          <Button
+            className="w-full justify-start gap-2 rounded-lg border-blue-200 bg-blue-50/70 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+            variant="outline"
+            onClick={handleOpenSkills}
+          >
+            <BookOpen className="h-4 w-4" />
+            <span className="flex-1 text-left">Skills</span>
+            <span className="flex items-center gap-1" aria-hidden="true">
+              <span className="h-2 w-2 rounded-full bg-blue-500" />
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
           </Button>
         </div>
         <ScrollArea className="flex-1 px-3">
@@ -1346,6 +1487,14 @@ export function ChatShell() {
           </form>
         </div>
       </main>
+      {skillsOpen ? (
+        <SkillsDialog
+          inventory={skillsInventory}
+          loading={skillsLoading}
+          error={skillsError}
+          onClose={() => setSkillsOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

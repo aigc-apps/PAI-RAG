@@ -8,6 +8,7 @@ sys.path.insert(0, ROOT)
 
 from agent_events import agent_message_chunk, ask_user, done, stop_reason  # noqa: E402
 from agent_loop import StepOutcome, agent_runner_loop  # noqa: E402
+from backend.background_review import schedule_background_memory_review  # noqa: E402
 from backend.agent_service import (  # noqa: E402
     SESSION_CANCELLED,
     SESSION_COMPLETED,
@@ -23,11 +24,12 @@ from backend.agent_service import (  # noqa: E402
 )
 from backend.celery_app import celery_app  # noqa: E402
 from backend.redis_bus import RedisBus  # noqa: E402
+from backend.tool_schemas import main_tools_schema  # noqa: E402
 from backend.workspace import WorkspaceManager, WorkspaceViolation  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import build_skill_user_input, match_skill, scan_skills  # noqa: E402
-from tools import GenericHandler, SEDIMENT_HOOK, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
+from tools import GenericHandler, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
 import settings as config  # noqa: E402
 
 
@@ -177,8 +179,6 @@ class WorkerSession:
             )
             handler.working['passed_sessions'] = passed
         handler.history_info.append(f"[USER]: {task_text[:200]}")
-        if allow_long_term:
-            handler._done_hooks.append(SEDIMENT_HOOK)
         self.user_input = task_text
         if state:
             self.user_input = handler._anchor_prompt() + f'\n\n### 用户当前消息\n{task_text}'
@@ -284,6 +284,8 @@ class WorkerSession:
             self.emit_event(done(stop_reason(exit_reason)), check_cancel=False)
             raise
         finally:
+            review_history = list(getattr(self.client, 'history', []) or [])
+            review_active_skill = (getattr(self.handler, 'working', {}) or {}).get('active_skill') or ''
             try:
                 archive_session(self.client, self.task_text, exit_reason, user_id=self.user_id)
             except Exception:
@@ -292,13 +294,26 @@ class WorkerSession:
             self.active_run_id = ''
             self.save()
             self.store.finish_run(self.sid, self.user_id, self.run_id, final_status, error=exit_reason_error(exit_reason))
+            if final_status == SESSION_COMPLETED:
+                try:
+                    schedule_background_memory_review(
+                        user_id=self.user_id,
+                        session_id=self.sid,
+                        run_id=self.run_id,
+                        task_text=self.task_text,
+                        llm_history=review_history,
+                        memory_root=self.memory_scope.root,
+                        active_skill=review_active_skill,
+                        final_status=final_status,
+                        long_term_enabled=long_term_memory_enabled(self.user_id),
+                        use_celery=True,
+                    )
+                except Exception:
+                    pass
 
 
 def json_tools_schema():
-    import json
-
-    tools_path = os.path.join(ROOT, 'tools_schema.json')
-    tools_schema = json.load(open(tools_path, encoding='utf-8'))
+    tools_schema = main_tools_schema()
     if SKILLS:
         from skill_manager import get_use_skill_schema
 

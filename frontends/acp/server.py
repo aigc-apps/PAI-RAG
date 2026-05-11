@@ -16,10 +16,11 @@ import os, sys, io, re, json, queue, uuid, threading, datetime, traceback
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
-from agent_loop import agent_runner_loop, StepOutcome
+from agent_loop import agent_runner_loop, StepOutcome, sanitize_for_archive
 from tools import GenericHandler
 from llm_client import LLMClient
 from backend.memory_scope import ensure_memory_scope, memory_scope_for, read_index
+from backend.tool_schemas import main_tools_schema
 from session_store import SERVER_USER_ID, SessionStore
 from skill_manager import (
     scan_skills, get_skills_prompt, get_use_skill_schema,
@@ -31,7 +32,7 @@ import settings as config
 from agent_events import agent_message_chunk, ask_user, done, stop_reason
 
 
-TOOLS_SCHEMA = json.load(open(os.path.join(ROOT, 'tools_schema.json'), encoding='utf-8'))
+TOOLS_SCHEMA = main_tools_schema()
 SYS_PROMPT_BASE = open(os.path.join(ROOT, 'prompts', 'sys_prompt.txt'), encoding='utf-8').read()
 SKILLS = scan_skills(os.path.join(ROOT, 'skills'))
 if SKILLS:
@@ -77,12 +78,15 @@ def archive_session(client, task, exit_reason):
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     ensure_memory_scope(MEMORY_SCOPE)
     path = os.path.join(MEMORY_SCOPE.archive_dir, f'{ts}.md')
+    archived_task = sanitize_for_archive(task)
+    archived_exit = sanitize_for_archive(exit_reason)
+    archived_history = sanitize_for_archive(client.history)
     try:
         with open(path, 'w', encoding='utf-8') as f:
-            f.write(f'# Task ({ts})\n{task}\n\n')
-            f.write(f'## Exit\n```json\n{json.dumps(exit_reason, ensure_ascii=False, default=str, indent=2)}\n```\n\n')
+            f.write(f'# Task ({ts})\n{archived_task}\n\n')
+            f.write(f'## Exit\n```json\n{json.dumps(archived_exit, ensure_ascii=False, default=str, indent=2)}\n```\n\n')
             f.write('## History\n```json\n')
-            json.dump(client.history, f, ensure_ascii=False, default=str, indent=2)
+            json.dump(archived_history, f, ensure_ascii=False, default=str, indent=2)
             f.write('\n```\n')
     except Exception:
         pass

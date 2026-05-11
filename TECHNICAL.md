@@ -4,7 +4,7 @@
 
 - **核心 ~1100 行**（执行循环 + 7 个原子工具 + LLM 客户端 + 持久化 + 技能加载），坚持单一执行路径、无 SDK 抽象、无注册表
 - **两个入口** 复用同一份核心，分别覆盖：Next.js Web、ACP（IDE 集成，Zed/VSCode）
-- **四层自进化记忆系统**：L1 索引 → L2 事实 → L3 SOP → L4 原始归档；agent 通过 `start_long_term_update` 自主沉淀经验
+- **四层自进化记忆系统**：L1 索引 → L2 事实 → L3 SOP → L4 原始归档；主回答交付后由后台 review agent 通过 `start_long_term_update` 异步沉淀经验
 - **OpenAI 兼容多后端**：默认 Qwen via DashScope，可一行切换 OpenAI / DeepSeek / 本地 vLLM·Ollama / OpenRouter
 
 本文档是**技术开发文档**，重点讲清楚每个模块为什么这样写、关键设计点在哪。使用、启动和 API 调试说明见 [README.md](./README.md)。
@@ -160,7 +160,7 @@ class BaseHandler:
 
 ### 2. 工具系统 `tools.py`
 
-7 个工具分两类。
+主链路暴露 7 个工具；后台 memory review 额外使用 `start_long_term_update`。
 
 **执行类（与外部世界交互）：**
 
@@ -177,7 +177,12 @@ class BaseHandler:
 | 工具 | 关键设计点 |
 |------|-----------|
 | `update_working_checkpoint` | 写入 `handler.working`，每轮通过 `_anchor_prompt()` 自动注入到下轮 prompt |
-| `start_long_term_update` | 读取 `memory_management_sop.md` 全文作为 next_prompt 注入，引导 agent 在后续轮次中按决策树分类信息并更新 L1/L2/L3 |
+
+**后台 review 专用：**
+
+| 工具 | 关键设计点 |
+|------|-----------|
+| `start_long_term_update` | 不暴露给主链路；仅提供给后台 memory review agent。读取 `memory_management_sop.md` 全文作为 next_prompt，引导 review agent 按决策树分类信息并更新 L1/L2/L3 |
 
 **`_anchor_prompt()` —— 工作记忆注入：**
 
@@ -322,8 +327,8 @@ mini-agent 最核心的设计。agent 不仅执行任务，还能从执行中学
 └─────────┘       └──────────┘          └──────────┘
      ▲                  ▲                     ▲
      │                  │                     │
-     └──── start_long_term_update ────────────┘
-                  (agent 自主调用)
+     └──── background review ────────────────┘
+              (异步调用 start_long_term_update)
 
                   ┌──────────────────────────────────┐
                   │  L4 原始会话归档（前端自动写入）     │
@@ -334,16 +339,17 @@ mini-agent 最核心的设计。agent 不仅执行任务，还能从执行中学
 **自进化闭环：**
 
 1. **执行中** → agent 用 `update_working_checkpoint` 保存关键发现到短期工作记忆
-2. **任务完成** → agent 判断是否有可沉淀经验 → 调用 `start_long_term_update`
-3. **结算流程** → `memory_management_sop.md` 决策树被注入为 next_prompt，agent 在后续轮次中：
+2. **任务完成** → 主 run 先交付最终答案、完成状态落库、释放前端流
+3. **后台 review** → 独立 review agent 基于完整会话快照判断是否有可沉淀经验，必要时调用 `start_long_term_update`
+4. **结算流程** → `memory_management_sop.md` 决策树被注入为 next_prompt，review agent 在后台后续轮次中：
    - `file_read` 现有 L1/L2 → 用 `file_patch` 最小化更新 → 新场景则 `file_write` 新 L3 SOP
-4. **下次任务** → L1 索引自动注入 system prompt → agent 发现关键词匹配 → 读取 L3 SOP → 按手册执行
+5. **下次任务** → L1 索引自动注入 system prompt → agent 发现关键词匹配 → 读取 L3 SOP → 按手册执行
 
-**触发条件**（定义在 `prompts/sys_prompt.txt`）：
+**触发条件**（定义在 `backend/background_review.py` + `prompts/memory_management_sop.md`）：
 
 - 发现了新的环境事实（路径、配置、用户偏好）
 - 摸索出关键避坑点或非平凡步骤序列
-- 任务耗时 ≥ 15 轮且过程值得复用
+- 过程值得跨会话复用，且不属于当前任务进度、临时 TODO、一次性结论或敏感信息
 
 **四条核心公理**（定义在 `prompts/memory_management_sop.md`）：
 
@@ -361,7 +367,7 @@ mini-agent 最核心的设计。agent 不仅执行任务，还能从执行中学
 工具返回的 `next_prompt` 不只是"提示"，它是控制 agent 后续行为的核心机制：
 
 - `_anchor_prompt()` 注入工作记忆 → agent 不会忘记之前的发现
-- `start_long_term_update` 注入整个 SOP 决策树 → agent 按流程结算记忆
+- `start_long_term_update` 注入整个 SOP 决策树 → 后台 review agent 按流程结算记忆
 - `turn_end_callback` 注入 `[DANGER]` 警告 → 防止 agent 无效重试
 - `do_ask_user` 注入用户回答 → 引导 agent 基于回答继续
 

@@ -7,19 +7,6 @@ from pathlib import Path
 from agent_events import strip_internal_thinking_content
 from agent_loop import BaseHandler, StepOutcome
 
-
-# 任务"形式上完成"后强制执行的沉淀评估提示。
-# 由前端入口按需 push 到 handler._done_hooks，
-# agent_loop 在 CURRENT_TASK_DONE 出口拦截弹出，让 LLM 必走一次"该不该沉淀"判断。
-SEDIMENT_HOOK = (
-    '[INTERNAL] 任务已收尾。请评估是否值得长期记忆：\n'
-    '- 若本次任务过程中发现了新的环境事实/路径/凭证，或摸索出非平凡的步骤序列（被坑过的经验）'
-    '→ 调用 `start_long_term_update`\n'
-    '- 若纯属常规问答 / 信息已记录 / 任务过短（< 5 轮）'
-    '→ 直接 `<summary>无需沉淀</summary>` 结束\n'
-    '判断标准从严，避免污染长期记忆。'
-)
-
 TODO_STATUSES = {'pending', 'in_progress', 'completed', 'blocked'}
 TODO_ACTIVE_STATUSES = {'pending', 'in_progress', 'blocked'}
 TODO_MAX_ITEMS = 12
@@ -358,7 +345,7 @@ class GenericHandler(BaseHandler):
         self.current_turn = 0
         self.max_turns = 40
         self.cancel_evt = None               # 前端可注入 threading.Event 用于中止
-        self._done_hooks = []                # 任务完成前必须执行的 prompt 队列
+        self._done_hooks = []                # legacy hook queue; normal memory review is async
         self._tool_event_emit = None
 
     # ── 路径与代码块抽取 ──
@@ -617,8 +604,6 @@ class GenericHandler(BaseHandler):
             result = '由于设置了 show_linenos，以下返回信息为：(行号|)内容\n' + result
         if ' ... [TRUNCATED]' in result:
             result += '\n\n（某些行被截断，如需完整内容可改用 code_run 读取）'
-        result = smart_format(result, max_str_len=20000,
-                              omit_str='\n\n[omitted long content]\n\n')
         next_prompt = self._anchor_prompt(skip=args.get('_index', 0) > 0)
         if 'memory' in path or 'sop' in path.lower():
             next_prompt += ('\n[SYSTEM TIPS] 正在读取记忆/SOP 文件。若决定按 SOP 执行，'

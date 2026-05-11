@@ -119,6 +119,26 @@ export interface RunCreateResponse {
   created_at?: number;
 }
 
+export interface OfficialSkill {
+  name: string;
+  description: string;
+  trigger: string;
+  allowed_tools: string[];
+  source: string;
+}
+
+export interface EvolvedSkill {
+  name: string;
+  description: string;
+  kind: "sop" | "script";
+  source: string;
+}
+
+export interface SkillInventory {
+  official: OfficialSkill[];
+  evolved: EvolvedSkill[];
+}
+
 export interface RunStreamEnvelope {
   event: string;
   run_id: string;

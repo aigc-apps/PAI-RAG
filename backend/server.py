@@ -21,6 +21,8 @@ from backend.agent_service import (
     openai_done_chunk,
     openai_role_chunk,
 )
+from backend.agent_service import handler_memory_scope
+from backend.skills_inventory import skills_inventory
 from backend.workspace import WorkspaceViolation
 from session_store import SERVER_USER_ID
 from tools import WorkspaceViolation as ToolWorkspaceViolation
@@ -612,6 +614,12 @@ def models():
             for model_id in ids
         ],
     }
+
+
+@app.get('/v1/skills')
+def skills():
+    scope = handler_memory_scope(SERVER_USER_ID)
+    return skills_inventory(ROOT, scope.root)
 
 
 @app.post('/v1/runs')

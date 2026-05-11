@@ -23,7 +23,8 @@ class SkillDef:
 def parse_skill_md(filepath: str) -> Optional[SkillDef]:
     """解析 SKILL.md：YAML frontmatter + Markdown body。"""
     try:
-        text = open(filepath, 'r', encoding='utf-8').read()
+        with open(filepath, 'r', encoding='utf-8') as f:
+            text = f.read()
     except Exception:
         return None
 

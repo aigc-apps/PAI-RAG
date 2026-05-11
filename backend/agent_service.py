@@ -12,9 +12,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from agent_events import agent_message_chunk, ask_user, done, stop_reason  # noqa: E402
+from backend.background_review import schedule_background_memory_review  # noqa: E402
 from backend.memory_scope import ensure_memory_scope, memory_scope_for, read_index  # noqa: E402
+from backend.tool_schemas import main_tools_schema  # noqa: E402
 from backend.workspace import WorkspaceManager, WorkspaceViolation  # noqa: E402
-from agent_loop import StepOutcome, agent_runner_loop  # noqa: E402
+from agent_loop import StepOutcome, agent_runner_loop, sanitize_for_archive  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import (  # noqa: E402
@@ -24,11 +26,11 @@ from skill_manager import (  # noqa: E402
     match_skill,
     scan_skills,
 )
-from tools import GenericHandler, SEDIMENT_HOOK, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
+from tools import GenericHandler, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
 import settings as config  # noqa: E402
 
 
-TOOLS_SCHEMA = json.load(open(os.path.join(ROOT, 'tools_schema.json'), encoding='utf-8'))
+TOOLS_SCHEMA = main_tools_schema()
 SYS_PROMPT_BASE = open(os.path.join(ROOT, 'prompts', 'sys_prompt.txt'), encoding='utf-8').read()
 SKILLS = scan_skills(os.path.join(ROOT, 'skills'))
 if SKILLS:
@@ -115,7 +117,7 @@ def build_system_prompt(user_id=SERVER_USER_ID):
         notice = '\n[MEMORY SCOPE] Shared service memory is readable for this user; user memory updates are disabled.\n'
     else:
         idx = '(empty)'
-        notice = '\n[MEMORY SCOPE] Long-term memory is disabled for this user. Do not call start_long_term_update.\n'
+        notice = '\n[MEMORY SCOPE] Long-term memory is disabled for this user.\n'
     return SYS_PROMPT_BASE + notice + '\n' + idx + get_skills_prompt(SKILLS)
 
 
@@ -124,11 +126,14 @@ def archive_session(client, task, exit_reason, user_id=SERVER_USER_ID):
     ensure_memory_scope(scope)
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     path = os.path.join(scope.archive_dir, f'{ts}_{uuid.uuid4().hex[:8]}.md')
+    archived_task = sanitize_for_archive(task)
+    archived_exit = sanitize_for_archive(exit_reason)
+    archived_history = sanitize_for_archive(client.history)
     with open(path, 'w', encoding='utf-8') as f:
-        f.write(f'# Task ({ts})\n{task}\n\n')
-        f.write(f'## Exit\n```json\n{json.dumps(exit_reason, ensure_ascii=False, default=str, indent=2)}\n```\n\n')
+        f.write(f'# Task ({ts})\n{archived_task}\n\n')
+        f.write(f'## Exit\n```json\n{json.dumps(archived_exit, ensure_ascii=False, default=str, indent=2)}\n```\n\n')
         f.write('## History\n```json\n')
-        json.dump(client.history, f, ensure_ascii=False, default=str, indent=2)
+        json.dump(archived_history, f, ensure_ascii=False, default=str, indent=2)
         f.write('\n```\n')
 
 
@@ -414,8 +419,6 @@ class AgentSession:
                     f'若已在新任务，先更新或清除工作记忆。\n'
                 )
         handler.history_info.append(f"[USER]: {task_text[:200]}")
-        if long_term_memory_enabled(self.user_id):
-            handler._done_hooks.append(SEDIMENT_HOOK)
         self.handler = handler
 
         user_input = task_text
@@ -545,6 +548,14 @@ class AgentSession:
                 self.emit_event(agent_message_chunk(f'**[Error]** {e}'), check_cancel=False)
                 self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
         finally:
+            review_history = list(getattr(self.client, 'history', []) or [])
+            review_active_skill = ''
+            handler = getattr(self, 'handler', None)
+            working = getattr(handler, 'working', {}) or {}
+            review_active_skill = working.get('active_skill') or ''
+            memory_scope = getattr(self, 'memory_scope', None)
+            review_memory_root = getattr(memory_scope, 'root', '') or ''
+            review_long_term_enabled = long_term_memory_enabled(self.user_id)
             try:
                 archive_session(self.client, task_text, self.exit_reason, user_id=self.user_id)
             except Exception:
@@ -568,6 +579,22 @@ class AgentSession:
                     error=exit_reason_error(self.exit_reason),
                 )
             self.turn_done_evt.set()
+            if should_finish_run and final_status == SESSION_COMPLETED:
+                try:
+                    schedule_background_memory_review(
+                        user_id=self.user_id,
+                        session_id=self.sid,
+                        run_id=run_id,
+                        task_text=task_text,
+                        llm_history=review_history,
+                        memory_root=review_memory_root,
+                        active_skill=review_active_skill,
+                        final_status=final_status,
+                        long_term_enabled=review_long_term_enabled,
+                        use_celery=False,
+                    )
+                except Exception:
+                    pass
 
     def emit_event(self, event, check_cancel=True):
         if check_cancel and self.cancel_evt.is_set():

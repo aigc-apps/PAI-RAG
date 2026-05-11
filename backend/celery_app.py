@@ -13,7 +13,7 @@ broker_url = (
     or 'redis://127.0.0.1:6379/0'
 )
 
-celery_app = Celery('pai_rag_agent', broker=broker_url, backend=None, include=['backend.worker'])
+celery_app = Celery('pai_rag_agent', broker=broker_url, backend=None, include=['backend.worker', 'backend.background_review'])
 celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,

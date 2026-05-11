@@ -1,4 +1,12 @@
-import type { AgentUpdate, RunCreateResponse, RunStreamEnvelope, SessionDetail, SessionSummary, StreamEvent } from "@/lib/types";
+import type {
+  AgentUpdate,
+  RunCreateResponse,
+  RunStreamEnvelope,
+  SessionDetail,
+  SessionSummary,
+  SkillInventory,
+  StreamEvent,
+} from "@/lib/types";
 
 function assertOk(response: Response) {
   if (response.ok) {
@@ -71,6 +79,16 @@ export async function createRun(sessionId: string | null, text: string, signal?:
 export async function stopRun(runId: string): Promise<void> {
   const response = await fetch(`/api/runs/${runId}/stop`, { method: "POST" });
   await assertOk(response);
+}
+
+export async function getSkills(): Promise<SkillInventory> {
+  const response = await fetch("/api/skills", { cache: "no-store" });
+  await assertOk(response);
+  const payload = await response.json();
+  return {
+    official: payload.official ?? [],
+    evolved: payload.evolved ?? [],
+  };
 }
 
 export async function streamRunEvents(
