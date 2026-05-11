@@ -20,6 +20,7 @@ SUMMARY_RE = re.compile(r'<summary>\s*(.*?)\s*</summary>', re.DOTALL)
 CONTROL_TAG_OPEN_RE = re.compile(rf'<(?P<tag>summary|{INTERNAL_THINKING_TAG_PATTERN})\b[^>]*>', re.IGNORECASE)
 INTERNAL_TOOL_NAMES = {
     'update_working_checkpoint',
+    'update_todo',
     'start_long_term_update',
 }
 
@@ -105,7 +106,7 @@ def tool_kind(name: str) -> str:
         return 'execute'
     if name in ('ask_user',):
         return 'ask'
-    if name in ('update_working_checkpoint', 'start_long_term_update', 'use_skill'):
+    if name in ('update_working_checkpoint', 'update_todo', 'start_long_term_update', 'use_skill'):
         return 'think'
     return 'other'
 

@@ -59,6 +59,11 @@ class BigToolHandler(BaseHandler):
         return path
 
 
+class SimpleToolHandler(BaseHandler):
+    def do_simple_tool(self, args, response):
+        return StepOutcome({"status": "success", "value": "checked"}, next_prompt="continue")
+
+
 class AgentLoopEventTests(unittest.TestCase):
     def run_loop_events(self, content):
         events = []
@@ -205,6 +210,36 @@ class AgentLoopEventTests(unittest.TestCase):
             self.assertTrue(completed_update["data"]["result_persisted"])
             self.assertLess(len(str(completed_update["data"])), 20000)
             self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_max_turns_exceeded_emits_fallback_report(self):
+        client = ToolThenFinalClient(
+            [ToolCall(id="call-1", name="simple_tool", input={})],
+            final_content="部分完成报告: 已完成检查，仍需下一步处理",
+        )
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=SimpleToolHandler(),
+            tools_schema=[],
+            max_turns=1,
+            on_event=events.append,
+        )
+
+        chunks = [
+            event["content"]["text"]
+            for event in events
+            if event.get("sessionUpdate") == "agent_message_chunk"
+        ]
+        self.assertEqual(chunks, ["部分完成报告: 已完成检查，仍需下一步处理"])
+        self.assertEqual(exit_reason["result"], "MAX_TURNS_EXCEEDED")
+        self.assertIn("部分完成报告", exit_reason["data"])
+        self.assertEqual(
+            client.new_messages[1][-1]["content"].splitlines()[0],
+            "已达到本次 agent 最大执行轮次，不能再调用工具。",
+        )
 
 
 if __name__ == "__main__":

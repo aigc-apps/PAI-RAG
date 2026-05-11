@@ -16,6 +16,8 @@ from backend.agent_service import (  # noqa: E402
     SESSION_WAITING_USER,
     archive_session,
     build_system_prompt,
+    exit_reason_error,
+    final_status_for_exit_reason,
     handler_memory_scope,
     long_term_memory_enabled,
 )
@@ -158,6 +160,7 @@ class WorkerSession:
         )
         handler.history_info = list(state.get('history_info', []) or [])
         handler.working = dict(state.get('working', {}) or {})
+        handler.todos = list(state.get('todos', []) or [])
         active_skill = handler.working.get('active_skill')
         if active_skill in SKILLS:
             handler.allow_readonly_root(os.path.dirname(SKILLS[active_skill].path))
@@ -185,6 +188,7 @@ class WorkerSession:
         return {
             'history_info': list(self.handler.history_info),
             'working': dict(self.handler.working),
+            'todos': list(getattr(self.handler, 'todos', []) or []),
         }
 
     def save(self):
@@ -263,6 +267,7 @@ class WorkerSession:
             else:
                 kwargs['on_event'] = self._on_event
             exit_reason = agent_runner_loop(**kwargs)
+            final_status = final_status_for_exit_reason(exit_reason)
         except KeyboardInterrupt:
             final_status = SESSION_CANCELLED
             exit_reason = {'result': 'INTERRUPTED'}
@@ -286,7 +291,7 @@ class WorkerSession:
             self.status = final_status
             self.active_run_id = ''
             self.save()
-            self.store.finish_run(self.sid, self.user_id, self.run_id, final_status, error=exit_reason.get('msg', ''))
+            self.store.finish_run(self.sid, self.user_id, self.run_id, final_status, error=exit_reason_error(exit_reason))
 
 
 def json_tools_schema():

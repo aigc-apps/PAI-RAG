@@ -67,6 +67,42 @@ class AgentSessionRunRecordTests(unittest.TestCase):
             agent_service.archive_session = original_archive
             agent_service.build_system_prompt = original_prompt
 
+    def test_thread_run_loop_marks_max_turns_as_failed(self):
+        original_runner = agent_service.agent_runner_loop
+        original_archive = agent_service.archive_session
+        original_prompt = agent_service.build_system_prompt
+        store = FakeStore()
+
+        def fake_runner(**kwargs):
+            return {"result": "MAX_TURNS_EXCEEDED", "data": "partial report"}
+
+        try:
+            agent_service.agent_runner_loop = fake_runner
+            agent_service.archive_session = lambda *args, **kwargs: None
+            agent_service.build_system_prompt = lambda user_id=SERVER_USER_ID: "system"
+
+            session = AgentSession.__new__(AgentSession)
+            session.sid = "session-1"
+            session.user_id = SERVER_USER_ID
+            session.client = object()
+            session.handler = object()
+            session.status = SESSION_RUNNING
+            session.active_run_id = "run-1"
+            session.worker = object()
+            session._lock = threading.RLock()
+            session.turn_done_evt = threading.Event()
+            session.service = SimpleNamespace(store=store)
+            session.save = lambda: None
+
+            session._run_loop("user input", "task text", mode="events", run_id="run-1")
+
+            self.assertEqual(store.finished[0]["status"], "failed")
+            self.assertEqual(store.finished[0]["error"], "MAX_TURNS_EXCEEDED")
+        finally:
+            agent_service.agent_runner_loop = original_runner
+            agent_service.archive_session = original_archive
+            agent_service.build_system_prompt = original_prompt
+
 
 if __name__ == "__main__":
     unittest.main()

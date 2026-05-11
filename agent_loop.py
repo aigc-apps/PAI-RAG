@@ -29,9 +29,22 @@ from llm_client import ToolCallDelta
 SUMMARY_ONLY_FINAL_RETRY_PROMPT = (
     '上一轮你只输出了内部思考/规划标签和 <summary>...</summary>，没有用户可见的最终回答正文。\n'
     '<summary> 只是内部历史摘要，前端不会把它当作最终回答展示。\n'
-    '请基于已经完成的工具结果和证据，立即输出用户可见的最终报告正文。\n'
-    '不要再调用工具，不要只输出 <summary>。如果需要保留摘要，只能放在报告正文之后。\n'
-    '报告正文必须包含：诊断结论、日志证据、配置证据、因果链路、证据边界。'
+    '请先判断任务是否已经真正完成：\n'
+    '- 如果已经完成，立即输出用户可见的最终报告正文；\n'
+    '- 如果尚未完成，继续调用必要工具推进任务，不要只做计划或复述。\n'
+    '不要只输出 <summary>。如果需要保留摘要，只能放在报告正文之后。\n'
+    '复杂诊断类最终报告必须包含：诊断结论、日志证据、配置证据、因果链路、证据边界。'
+)
+
+MAX_TURNS_FALLBACK_PROMPT = (
+    '已达到本次 agent 最大执行轮次，不能再调用工具。\n'
+    '请基于目前已经完成的工具结果和对话上下文，输出用户可见的部分完成报告。\n'
+    '报告必须结构化说明：\n'
+    '1. 已完成的检查或修改；\n'
+    '2. 已确认的证据和结论；\n'
+    '3. 尚未完成的原因或阻塞点；\n'
+    '4. 建议的下一步。\n'
+    '不要输出内部思考标签；不要只输出 <summary>。'
 )
 
 TOOL_RESULT_MAX_CHARS = 100000
@@ -169,6 +182,70 @@ def _model_final_answer(content):
 
 def _model_summary(content):
     return model_summary_content(content or '')
+
+
+def _emit_model_response(client, system_prompt, new_messages, tools_schema, model_step_id,
+                         title, on_chunk=None, on_event=None):
+    gen = client.chat(system=system_prompt, new_messages=new_messages, tools=tools_schema)
+    model_raw_content = ''
+    model_process_content = ''
+    if on_event:
+        on_event(thought_start(model_step_id, title=title))
+    try:
+        while True:
+            chunk = next(gen)
+            if isinstance(chunk, ToolCallDelta):
+                continue
+            if on_event:
+                model_raw_content += chunk
+                next_process_content = stream_model_process_content(model_raw_content)
+                if next_process_content.startswith(model_process_content):
+                    delta = next_process_content[len(model_process_content):]
+                    replace = False
+                else:
+                    delta = next_process_content
+                    replace = True
+                if delta or replace:
+                    on_event(thought_delta(model_step_id, delta, replace=replace))
+                model_process_content = next_process_content
+            elif on_chunk:
+                on_chunk(chunk)
+            else:
+                sys.stdout.write(chunk)
+                sys.stdout.flush()
+    except StopIteration as e:
+        response = e.value
+    if not on_event and not on_chunk:
+        print()
+    return response
+
+
+def _run_max_turns_fallback(client, system_prompt, pending_messages, max_turns, on_chunk=None, on_event=None):
+    fallback_messages = list(pending_messages or [])
+    fallback_messages.append({'role': 'user', 'content': MAX_TURNS_FALLBACK_PROMPT})
+    response = _emit_model_response(
+        client,
+        system_prompt,
+        fallback_messages,
+        [],
+        f'model-{max_turns + 1}-fallback',
+        'Final report',
+        on_chunk=on_chunk,
+        on_event=on_event,
+    )
+    process_content = _model_process_content(response.content)
+    cleaned = _model_final_answer(response.content)
+    summary = _model_summary(response.content)
+    visible_reply = cleaned or ('' if summary else process_content) or summary
+    if on_event:
+        on_event(thought_done(
+            f'model-{max_turns + 1}-fallback',
+            hidden=True,
+            content=process_content,
+        ))
+        if visible_reply:
+            on_event(agent_message_chunk(visible_reply))
+    return response, visible_reply
 
 
 def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
@@ -346,7 +423,19 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         if next_prompt and next_prompt.strip():
             new_messages.append({'role': 'user', 'content': next_prompt})
 
-    exit_reason = {'result': 'MAX_TURNS_EXCEEDED'}
+    fallback_response, _ = _run_max_turns_fallback(
+        client,
+        system_prompt,
+        new_messages,
+        max_turns,
+        on_chunk=on_chunk,
+        on_event=on_event,
+    )
+    exit_reason = {'result': 'MAX_TURNS_EXCEEDED', 'data': fallback_response.content}
+    try:
+        handler.turn_end_callback(fallback_response, [], [], max_turns + 1, '', exit_reason)
+    except Exception:
+        pass
     if on_event:
         on_event(done(stop_reason(exit_reason)))
     return exit_reason

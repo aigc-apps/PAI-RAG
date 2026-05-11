@@ -42,6 +42,11 @@ SESSION_COMPLETED = 'completed'
 SESSION_FAILED = 'failed'
 SESSION_CANCELLED = 'cancelled'
 ACTIVE_SESSION_STATUSES = {SESSION_RUNNING, SESSION_WAITING_USER}
+FAILED_EXIT_RESULTS = {
+    'MAX_TURNS_EXCEEDED',
+    'ERROR',
+    'WORKSPACE_VIOLATION',
+}
 
 
 class SessionBusyError(RuntimeError):
@@ -62,6 +67,22 @@ class ServiceCapacityError(RuntimeError):
         self.scope = scope
         self.limit = limit
         super().__init__(f'capacity_exceeded: {scope} active run limit {limit} reached')
+
+
+def final_status_for_exit_reason(exit_reason):
+    result = (exit_reason or {}).get('result')
+    if result in FAILED_EXIT_RESULTS:
+        return SESSION_FAILED
+    return SESSION_COMPLETED
+
+
+def exit_reason_error(exit_reason):
+    exit_reason = exit_reason or {}
+    if exit_reason.get('msg'):
+        return exit_reason.get('msg', '')
+    if exit_reason.get('result') == 'MAX_TURNS_EXCEEDED':
+        return 'MAX_TURNS_EXCEEDED'
+    return ''
 
 
 def long_term_memory_enabled(user_id=SERVER_USER_ID):
@@ -234,6 +255,7 @@ class AgentSession:
         handler = self._new_handler()
         handler.history_info = list(state.get('history_info', []) or [])
         handler.working = dict(state.get('working', {}) or {})
+        handler.todos = list(state.get('todos', []) or [])
         active_skill = handler.working.get('active_skill')
         if active_skill in SKILLS:
             handler.allow_readonly_root(os.path.dirname(SKILLS[active_skill].path))
@@ -245,6 +267,7 @@ class AgentSession:
         return {
             'history_info': list(self.handler.history_info),
             'working': dict(self.handler.working),
+            'todos': list(getattr(self.handler, 'todos', []) or []),
         }
 
     def save(self):
@@ -376,6 +399,11 @@ class AgentSession:
             handler.working['related_sop'] = f'skills/{sk.name}/SKILL.md'
         if prev:
             handler.history_info = list(prev.history_info)
+            handler.todos = [
+                dict(todo)
+                for todo in getattr(prev, 'todos', []) or []
+                if todo.get('status') in ('pending', 'in_progress', 'blocked')
+            ]
             if 'key_info' in prev.working:
                 ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', prev.working['key_info'])
                 handler.working['key_info'] = ki
@@ -490,6 +518,7 @@ class AgentSession:
             else:
                 kwargs['on_event'] = self._on_event
             self.exit_reason = agent_runner_loop(**kwargs)
+            final_status = final_status_for_exit_reason(self.exit_reason)
         except KeyboardInterrupt:
             self.exit_reason = {'result': 'INTERRUPTED'}
             final_status = SESSION_CANCELLED
@@ -536,7 +565,7 @@ class AgentSession:
                     self.user_id,
                     run_id,
                     final_status,
-                    error=(self.exit_reason or {}).get('msg', ''),
+                    error=exit_reason_error(self.exit_reason),
                 )
             self.turn_done_evt.set()
 

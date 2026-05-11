@@ -43,7 +43,7 @@ type ProcessGroup = {
   items: ProcessItem[];
 };
 
-const INTERNAL_TOOL_NAMES = new Set(["update_working_checkpoint", "start_long_term_update"]);
+const INTERNAL_TOOL_NAMES = new Set(["update_working_checkpoint", "update_todo", "start_long_term_update"]);
 const MODEL_PROTOCOL_TAG_RE = /<\/?(?:summary|thinking|clinical_thinking|checking|taking|taking_action)\b[^>]*>/gi;
 
 function escapeModelProtocolTags(content = "") {

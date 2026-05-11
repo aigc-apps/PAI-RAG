@@ -48,6 +48,17 @@
       "related_sop": {"type": "string", "description": "Related SOP names, tips for further re-read"}}}
   }},
   {"type": "function", "function": {
+    "name": "update_todo",
+    "description": "Session-local todo list for complex tasks. Use for tasks with 3+ steps, multi-turn investigations, or deep debugging. Replace the list with the current plan/status; preserve ids when updating. Only active pending/in_progress/blocked items are injected into future turns. Do not store long-term facts here.",
+    "parameters": {"type": "object", "properties": {
+      "items": {"type": "array", "description": "Current todo list, max 12 items", "items": {"type": "object", "properties": {
+        "id": {"type": "string", "description": "Stable short id, e.g. t1"},
+        "content": {"type": "string", "description": "Concrete task step"},
+        "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "blocked"], "description": "Current step status"}
+      }}}
+    }}
+  }},
+  {"type": "function", "function": {
     "name": "start_long_term_update",
     "description": "Start distilling long-term memory. Call when discovering info worth remembering (env facts/user prefs/lessons learned). Skip if memory already updated or in autonomous flow. Must call when a task that took 15+ turns is completed",
     "parameters": {"type": "object", "properties": {}}}
