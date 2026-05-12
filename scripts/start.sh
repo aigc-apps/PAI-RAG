@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND_DIR="$ROOT_DIR/frontends/react"
 NGINX_TEMPLATE="$ROOT_DIR/scripts/nginx.template.conf"
 NGINX_CONFIG="${NGINX_CONFIG:-/etc/nginx/conf.d/pai-rag.conf}"
@@ -56,7 +56,7 @@ REDIS_PID=""
 
 usage() {
   cat <<'EOF'
-Usage: ./start.sh [options]
+Usage: ./scripts/start.sh [options]
 
 Options:
   --port PORT                App entry port. In dev mode this is the frontend port.
@@ -75,8 +75,8 @@ Environment:
   NGINX_CONFIG               Nginx output config path. Default: /etc/nginx/conf.d/pai-rag.conf
 
 Examples:
-  ./start.sh --dev --port 3001 --backend-port 8000 --worker-instances 0
-  ./start.sh --port 8680 --frontend-port 8681 --backend-port 8682 --api-instances 4 --worker-instances 4
+  ./scripts/start.sh --dev --port 3001 --backend-port 8000 --worker-instances 0
+  ./scripts/start.sh --port 8680 --frontend-port 8681 --backend-port 8682 --api-instances 4 --worker-instances 4
 EOF
 }
 

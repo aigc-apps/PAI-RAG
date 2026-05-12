@@ -54,16 +54,16 @@ COPY --from=frontend-builder /app/frontends/react/.next ./frontends/react/.next
 COPY --from=frontend-builder /app/frontends/react/node_modules ./frontends/react/node_modules
 COPY docker/entrypoint.sh /usr/local/bin/pai-rag-entrypoint
 
-RUN chmod +x /app/start.sh /usr/local/bin/pai-rag-entrypoint \
-    && mkdir -p /app/workspaces /app/memory /app/.tmp /app/services/agent-arena/logs /app/services/agent-arena/data \
+RUN chmod +x /app/scripts/start.sh /usr/local/bin/pai-rag-entrypoint \
+    && mkdir -p /app/workspaces /app/memory /app/skills /app/.tmp /app/services/agent-arena/logs /app/services/agent-arena/data \
     && rm -f /etc/nginx/sites-enabled/default
 
-EXPOSE 8680 8681 8682
+EXPOSE 8680
 
-VOLUME ["/app/workspaces", "/app/memory"]
+VOLUME ["/app/workspaces", "/app/memory", "/app/skills"]
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:${BACKEND_PORT}/health || exit 1
+    CMD curl -fsS http://127.0.0.1:${PORT}/health || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/pai-rag-entrypoint"]
-CMD ["./start.sh"]
+CMD ["./scripts/start.sh"]

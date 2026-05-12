@@ -73,11 +73,11 @@ ENABLE_SHARED_MEMORY_FOR_USERS=false
 
 ## 启动 Docker 镜像
 
-镜像不会内置 `.env` 或本地凭证，运行时用 `--env-file` 注入：
+镜像不会内置 `.env`、本地凭证或 `skills/`，运行时用 `--env-file` 和 volume 注入：
 
 ```bash
 docker build -t pai-rag:local .
-docker run --rm --env-file .env -p 8680:8680 pai-rag:local
+docker run --rm --env-file .env -p 8680:8680 -v "$PWD/skills:/app/skills:ro" pai-rag:local
 ```
 
 浏览器访问：
@@ -166,11 +166,11 @@ cp services/agent-arena/.env.example services/agent-arena/.env
 
 编辑 `services/agent-arena/.env`，至少配置 `ARENA_API_KEY`、两个 Agent 的 `AGENT_*_BASE_URL` / `AGENT_*_MODEL` / `AGENT_*_API_KEY`，以及可选的 Judge 配置。
 
-AgentArena 不由主项目 `start.sh` 管理，单独启动。常用方式是两个终端分别拉起：
+AgentArena 不由主项目 `scripts/start.sh` 管理，单独启动。常用方式是两个终端分别拉起：
 
 ```bash
 # 终端 1：启动 PAI-RAG
-./start.sh --dev --port 3001 --backend-port 8000
+./scripts/start.sh --dev --port 3001 --backend-port 8000
 ```
 
 ```bash
