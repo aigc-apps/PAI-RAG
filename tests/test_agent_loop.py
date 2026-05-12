@@ -108,6 +108,22 @@ class AgentLoopEventTests(unittest.TestCase):
         self.assertEqual(chunks, ["final answer"])
         self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
 
+    def test_text_mode_no_tool_call_streams_final_answer_once(self):
+        chunks = []
+
+        exit_reason = agent_runner_loop(
+            client=FakeClient("final answer"),
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=1,
+            on_chunk=chunks.append,
+        )
+
+        self.assertEqual(chunks, ["final answer"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
     def test_thinking_only_no_tool_call_emits_visible_fallback(self):
         events, exit_reason = self.run_loop_events("<thinking>service is running</thinking>")
 
@@ -194,6 +210,27 @@ class AgentLoopEventTests(unittest.TestCase):
             if event.get("sessionUpdate") == "agent_message_chunk"
         ]
         self.assertEqual(chunks, ["confirmed root cause"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_text_mode_summary_only_retry_falls_back_to_summary(self):
+        client = SequenceFakeClient([
+            "<summary>查询当前系统日期和星期</summary>",
+            "<summary>获取当前系统日期和星期</summary>",
+        ])
+        chunks = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=2,
+            on_chunk=chunks.append,
+        )
+
+        self.assertEqual(chunks, ["获取当前系统日期和星期"])
+        self.assertIn("不要只输出 <summary>", client.new_messages[1][0]["content"])
         self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
 
     def test_large_tool_result_is_persisted_before_next_turn(self):

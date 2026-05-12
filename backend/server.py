@@ -4,6 +4,7 @@ import queue
 import re
 import threading
 import time
+import uuid
 
 import anyio
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -116,6 +117,16 @@ def sse_encode(data=None, event=None, event_id=None, comment=None):
         lines.append(f'event: {event}')
     lines.append(f'data: {json.dumps(data, ensure_ascii=False, default=str)}')
     return '\n'.join(lines) + '\n\n'
+
+
+def stream_state():
+    return {
+        'output_parts': [],
+        'tool_names': {},
+        'tool_inputs': {},
+        'started_tools': set(),
+        'hidden_tools': set(),
+    }
 
 
 def hermes_sse(data=None, comment=None):
@@ -244,6 +255,8 @@ def hermes_events_from_update(run_id, update, state):
         if update.get('hidden'):
             state['hidden_tools'].add(tool_id)
         state['tool_names'][tool_id] = tool_name
+        if update.get('argumentsText'):
+            state.setdefault('tool_inputs', {})[tool_id] = update.get('argumentsText')
         return [{
             'event': 'tool.delta',
             'run_id': run_id,
@@ -265,6 +278,8 @@ def hermes_events_from_update(run_id, update, state):
         if update.get('hidden'):
             state['hidden_tools'].add(tool_id)
         state['tool_names'][tool_id] = tool_name
+        if update.get('input') is not None:
+            state.setdefault('tool_inputs', {})[tool_id] = update.get('input')
         if tool_id in state['started_tools']:
             return []
         state['started_tools'].add(tool_id)
@@ -280,7 +295,7 @@ def hermes_events_from_update(run_id, update, state):
             'kind': update.get('kind') or 'tool',
             'status': update.get('status') or 'in_progress',
             'hidden': bool(update.get('hidden')),
-            'input': update.get('input'),
+            'input': state.get('tool_inputs', {}).get(tool_id, update.get('input')),
         }]
 
     if event_type == 'tool_call_update':
@@ -289,6 +304,8 @@ def hermes_events_from_update(run_id, update, state):
         if tool_id in state['hidden_tools']:
             return []
         tool_name = state['tool_names'].get(tool_id) or 'tool'
+        if update.get('input') is not None:
+            state.setdefault('tool_inputs', {})[tool_id] = update.get('input')
         if status not in ('completed', 'failed'):
             return [{
                 'event': 'tool.updated',
@@ -339,6 +356,96 @@ def run_response_payload(session_id, run_id, status='started', stream_from='0-0'
     }
 
 
+def response_id():
+    return f'resp_{uuid.uuid4().hex}'
+
+
+def response_object(resp_id, model, status='completed', output=None, created_at=None, error=None):
+    payload = {
+        'id': resp_id,
+        'object': 'response',
+        'created_at': created_at or int(time.time()),
+        'status': status,
+        'model': model,
+        'output': output or [],
+        'usage': None,
+    }
+    if error:
+        payload['error'] = error
+    return payload
+
+
+def response_text_item(text):
+    return {
+        'id': f'msg_{uuid.uuid4().hex}',
+        'type': 'message',
+        'status': 'completed',
+        'role': 'assistant',
+        'content': [{'type': 'output_text', 'text': text or ''}],
+    }
+
+
+def response_function_call_item(event):
+    raw_arguments = event.get('input')
+    if isinstance(raw_arguments, str):
+        arguments = raw_arguments
+    else:
+        arguments = json.dumps(raw_arguments or {}, ensure_ascii=False, default=str)
+    return {
+        'id': f'fc_{uuid.uuid4().hex}',
+        'type': 'function_call',
+        'status': 'completed',
+        'call_id': event.get('tool_call_id') or '',
+        'name': event.get('tool') or 'tool',
+        'arguments': arguments,
+    }
+
+
+def response_function_output_item(event):
+    output = event.get('content') or event.get('data')
+    if not isinstance(output, str):
+        output = json.dumps(output or {}, ensure_ascii=False, default=str)
+    return {
+        'id': f'fco_{uuid.uuid4().hex}',
+        'type': 'function_call_output',
+        'status': 'completed',
+        'call_id': event.get('tool_call_id') or '',
+        'output': output,
+    }
+
+
+def response_sse(event_type, data, sequence_number):
+    payload = dict(data or {})
+    payload.setdefault('type', event_type)
+    payload.setdefault('sequence_number', sequence_number)
+    return sse_encode(payload, event=event_type)
+
+
+def chat_tool_progress(event):
+    if event.get('hidden'):
+        return None
+    event_type = event.get('event')
+    if event_type == 'tool.started':
+        status = 'running'
+    elif event_type == 'tool.completed':
+        status = 'failed' if event.get('error') else 'completed'
+    elif event_type == 'tool.updated':
+        status = event.get('status') or 'in_progress'
+    else:
+        return None
+    return {
+        'id': event.get('tool_call_id') or '',
+        'object': 'pai.tool.progress',
+        'run_id': event.get('run_id') or '',
+        'tool': event.get('tool') or 'tool',
+        'status': status,
+        'preview': event.get('preview') or '',
+        'kind': event.get('kind') or 'tool',
+        'content': event.get('content') or '',
+        'error': bool(event.get('error')),
+    }
+
+
 def content_text(value):
     if value is None:
         return ''
@@ -358,7 +465,7 @@ def content_text(value):
             return content_text(value[-1].get('content') if value and isinstance(value[-1], dict) else '')
         parts = []
         for item in value:
-            if isinstance(item, dict) and item.get('type') in ('text', 'input_text') and isinstance(item.get('text'), str):
+            if isinstance(item, dict) and item.get('type') in ('text', 'input_text', 'output_text') and isinstance(item.get('text'), str):
                 parts.append(item.get('text') or '')
             else:
                 parts.append(content_text(item))
@@ -413,6 +520,136 @@ def start_agent_run(session_id, user_id, text, cwd=None):
     return result
 
 
+def load_run_record(run_id, user_id):
+    if celery_service is not None:
+        return celery_service.load_run(run_id, user_id)
+    with THREAD_RUNS_LOCK:
+        thread_run = THREAD_RUNS.get(run_id)
+    if not thread_run or thread_run.get('user_id') != user_id:
+        return None
+    run = service.store.load_run(run_id, user_id=user_id) or {}
+    return {
+        'run_id': run_id,
+        'session_id': thread_run.get('session_id') or run.get('session_id') or '',
+        'status': run.get('status') or 'running',
+        'error': run.get('error') or '',
+        'created_at': run.get('created_at') or thread_run.get('created_at') or '',
+        'updated_at': run.get('updated_at') or '',
+        'started_at': run.get('started_at') or '',
+        'finished_at': run.get('finished_at') or '',
+        'last_event_id': run.get('last_event_id') or '',
+        'mode': run.get('mode') or 'events',
+    }
+
+
+def ensure_session(session_id=None, cwd=None):
+    if session_id:
+        sess = service.get_session(session_id, user_id=SERVER_USER_ID, cwd=cwd)
+    else:
+        sess = service.create_session(user_id=SERVER_USER_ID, cwd=cwd)
+    if sess is None:
+        raise HTTPException(status_code=404, detail='Session not found')
+    return sess
+
+
+def response_messages_from_input(raw_input):
+    if raw_input is None:
+        return []
+    if isinstance(raw_input, str):
+        return [{'role': 'user', 'content': raw_input}]
+    if isinstance(raw_input, dict):
+        role = raw_input.get('role') or 'user'
+        return [{'role': role, 'content': content_text(raw_input.get('content', raw_input))}]
+    if isinstance(raw_input, list):
+        messages = []
+        for item in raw_input:
+            if isinstance(item, str):
+                messages.append({'role': 'user', 'content': item})
+            elif isinstance(item, dict) and 'role' in item:
+                messages.append({'role': item.get('role') or 'user', 'content': content_text(item.get('content'))})
+            else:
+                text = content_text(item)
+                if text:
+                    messages.append({'role': 'user', 'content': text})
+        return messages
+    return [{'role': 'user', 'content': str(raw_input)}]
+
+
+def response_prompt_from_messages(messages, instructions='', include_history=False):
+    user_text = next(
+        ((message.get('content') or '').strip() for message in reversed(messages) if message.get('role') == 'user'),
+        '',
+    )
+    if not user_text:
+        user_text = '\n'.join((message.get('content') or '').strip() for message in messages if message.get('content')).strip()
+    if not include_history:
+        return user_text
+    parts = []
+    if instructions:
+        parts.append(f'Instructions:\n{instructions.strip()}')
+    history = [message for message in messages[:-1] if message.get('content')]
+    if history:
+        parts.append('Conversation history:\n' + json.dumps(history, ensure_ascii=False, default=str))
+    parts.append(user_text)
+    return '\n\n'.join(part for part in parts if part)
+
+
+def build_response_from_run_events(resp_id, model, created_at, run_id, updates):
+    state = stream_state()
+    output = []
+    final_text = ''
+    for update in updates:
+        for event in hermes_events_from_update(run_id, update, state):
+            if event.get('event') == 'tool.started':
+                output.append(response_function_call_item(event))
+            elif event.get('event') == 'tool.completed':
+                output.append(response_function_output_item(event))
+        if update.get('sessionUpdate') == 'done':
+            break
+    final_text = ''.join(state['output_parts'])
+    if final_text:
+        output.append(response_text_item(final_text))
+    return response_object(resp_id, model, output=output, created_at=created_at), final_text
+
+
+def iter_run_updates(run):
+    if celery_service is not None:
+        yield from celery_service.iter_events(run['run_id'], run.get('stream_from', '0-0'))
+        return
+    sess = service.load_session(run['session_id'], user_id=SERVER_USER_ID)
+    if sess is None:
+        raise HTTPException(status_code=404, detail='Session not found')
+    while True:
+        try:
+            item = sess.display_q.get(timeout=1)
+        except queue.Empty:
+            if sess.turn_done_evt.is_set():
+                return
+            continue
+        if 'event' not in item:
+            if sess.turn_done_evt.is_set() and sess.display_q.empty():
+                return
+            continue
+        update = item['event']
+        yield update
+        if update.get('sessionUpdate') == 'done':
+            return
+
+
+def save_response_record(resp_id, response, conversation_history, instructions='', session_id='', conversation='', store=True):
+    if not store:
+        return
+    service.store.save_response(
+        resp_id,
+        response,
+        conversation_history=conversation_history,
+        instructions=instructions,
+        session_id=session_id,
+        conversation=conversation,
+        user_id=SERVER_USER_ID,
+    )
+
+
 def start_celery_regenerate(session_id, user_id, mode='events', cwd=None):
     if celery_service is None:
         raise HTTPException(status_code=500, detail='Celery runner is not enabled')
@@ -456,7 +693,7 @@ def start_agent_regenerate(session_id, user_id, cwd=None):
 async def celery_run_event_stream(request, run_id, session_id, user_id, last_id='0-0'):
     idle_started = time.monotonic()
     last_heartbeat = time.monotonic()
-    state = {'output_parts': [], 'tool_names': {}, 'started_tools': set(), 'hidden_tools': set()}
+    state = stream_state()
     while True:
         if await request.is_disconnected():
             celery_service.cancel_run(run_id, user_id)
@@ -501,7 +738,7 @@ async def thread_run_event_stream(request, run_id, session_id, user_id):
     if sess is None:
         raise HTTPException(status_code=404, detail='Session not found')
     last_heartbeat = time.monotonic()
-    state = {'output_parts': [], 'tool_names': {}, 'started_tools': set(), 'hidden_tools': set()}
+    state = stream_state()
     while True:
         if await request.is_disconnected():
             service.cancel_session(session_id, user_id=user_id)
@@ -536,6 +773,7 @@ async def openai_celery_stream(request, model, run_id, session_id, user_id, last
     yield sse_encode(openai_role_chunk(model))
     idle_started = time.monotonic()
     last_heartbeat = time.monotonic()
+    state = stream_state()
     while True:
         if await request.is_disconnected():
             celery_service.cancel_run(run_id, user_id)
@@ -561,14 +799,252 @@ async def openai_celery_stream(request, model, run_id, session_id, user_id, last
         last_heartbeat = idle_started
         for event_id, update in items:
             last_id = event_id
-            if update.get('sessionUpdate') == 'agent_message_chunk':
-                text = ((update.get('content') or {}).get('text') or '')
-                if text:
-                    yield sse_encode(openai_chat_chunk(model, text))
+            for event in hermes_events_from_update(run_id, update, state):
+                if event.get('event') == 'message.delta':
+                    yield sse_encode(openai_chat_chunk(model, event.get('delta') or ''))
+                progress = chat_tool_progress(event)
+                if progress:
+                    yield sse_encode(progress, event='pai.tool.progress')
             if update.get('sessionUpdate') == 'done':
                 yield sse_encode(openai_done_chunk(model))
                 yield 'data: [DONE]\n\n'
                 return
+
+
+async def openai_thread_stream(request, model, run_id, session_id, user_id):
+    yield sse_encode(openai_role_chunk(model))
+    with THREAD_RUNS_LOCK:
+        run = THREAD_RUNS.get(run_id)
+    if not run or run.get('user_id') != user_id:
+        yield sse_encode(openai_done_chunk(model))
+        yield 'data: [DONE]\n\n'
+        return
+    sess = service.load_session(session_id, user_id=user_id)
+    if sess is None:
+        yield sse_encode(openai_done_chunk(model))
+        yield 'data: [DONE]\n\n'
+        return
+    last_heartbeat = time.monotonic()
+    state = stream_state()
+    while True:
+        if await request.is_disconnected():
+            service.cancel_session(session_id, user_id=user_id)
+            break
+        try:
+            item = await anyio.to_thread.run_sync(lambda: sess.display_q.get(timeout=1))
+        except queue.Empty:
+            if sess.turn_done_evt.is_set():
+                break
+            now = time.monotonic()
+            if now - last_heartbeat >= SSE_HEARTBEAT_SECONDS:
+                yield sse_encode(comment='keepalive')
+                last_heartbeat = now
+            continue
+        if 'event' not in item:
+            if sess.turn_done_evt.is_set() and sess.display_q.empty():
+                break
+            continue
+        update = item['event']
+        for event in hermes_events_from_update(run_id, update, state):
+            if event.get('event') == 'message.delta':
+                yield sse_encode(openai_chat_chunk(model, event.get('delta') or ''))
+            progress = chat_tool_progress(event)
+            if progress:
+                yield sse_encode(progress, event='pai.tool.progress')
+        last_heartbeat = time.monotonic()
+        if update.get('sessionUpdate') == 'done':
+            yield sse_encode(openai_done_chunk(model))
+            yield 'data: [DONE]\n\n'
+            return
+    yield sse_encode(openai_done_chunk(model))
+    yield 'data: [DONE]\n\n'
+
+
+async def response_stream(request, run, resp_id, model, created_at, conversation_history, instructions, conversation, store):
+    sequence = 0
+    state = stream_state()
+    output = []
+    final_text = ''
+    message_started = False
+    completed = False
+
+    def emit(event_type, data):
+        nonlocal sequence
+        sequence += 1
+        return response_sse(event_type, data, sequence)
+
+    yield emit('response.created', response_object(resp_id, model, status='in_progress', created_at=created_at))
+
+    async def handle_update(update):
+        nonlocal message_started, final_text, completed
+        chunks = []
+        for event in hermes_events_from_update(run['run_id'], update, state):
+            if event.get('event') == 'message.delta':
+                if not message_started:
+                    message_started = True
+                    chunks.append(emit('response.output_item.added', {
+                        'response_id': resp_id,
+                        'output_index': len(output),
+                        'item': {
+                            'id': f'msg_{uuid.uuid4().hex}',
+                            'type': 'message',
+                            'status': 'in_progress',
+                            'role': 'assistant',
+                            'content': [],
+                        },
+                    }))
+                chunks.append(emit('response.output_text.delta', {
+                    'response_id': resp_id,
+                    'delta': event.get('delta') or '',
+                    'output_index': len(output),
+                    'content_index': 0,
+                }))
+            elif event.get('event') == 'tool.started':
+                item = response_function_call_item(event)
+                output.append(item)
+                chunks.append(emit('response.output_item.added', {
+                    'response_id': resp_id,
+                    'output_index': len(output) - 1,
+                    'item': item,
+                }))
+                chunks.append(emit('response.output_item.done', {
+                    'response_id': resp_id,
+                    'output_index': len(output) - 1,
+                    'item': item,
+                }))
+            elif event.get('event') == 'tool.completed':
+                item = response_function_output_item(event)
+                output.append(item)
+                chunks.append(emit('response.output_item.added', {
+                    'response_id': resp_id,
+                    'output_index': len(output) - 1,
+                    'item': item,
+                }))
+                chunks.append(emit('response.output_item.done', {
+                    'response_id': resp_id,
+                    'output_index': len(output) - 1,
+                    'item': item,
+                }))
+        if update.get('sessionUpdate') == 'done':
+            final_text = ''.join(state['output_parts'])
+            if final_text:
+                item = response_text_item(final_text)
+                output.append(item)
+                if message_started:
+                    chunks.append(emit('response.output_text.done', {
+                        'response_id': resp_id,
+                        'text': final_text,
+                        'output_index': len(output) - 1,
+                        'content_index': 0,
+                    }))
+                    chunks.append(emit('response.output_item.done', {
+                        'response_id': resp_id,
+                        'output_index': len(output) - 1,
+                        'item': item,
+                    }))
+            response = response_object(resp_id, model, output=output, created_at=created_at)
+            history = list(conversation_history or [])
+            if final_text:
+                history.append({'role': 'assistant', 'content': final_text})
+            save_response_record(
+                resp_id,
+                response,
+                history,
+                instructions=instructions,
+                session_id=run['session_id'],
+                conversation=conversation,
+                store=store,
+            )
+            chunks.append(emit('response.completed', response))
+            chunks.append('data: [DONE]\n\n')
+            completed = True
+        return chunks
+
+    if celery_service is not None:
+        last_id = run.get('stream_from', '0-0')
+        idle_started = time.monotonic()
+        last_heartbeat = time.monotonic()
+        while not completed:
+            if await request.is_disconnected():
+                celery_service.cancel_run(run['run_id'], SERVER_USER_ID)
+                break
+            items = await anyio.to_thread.run_sync(
+                lambda: celery_service.read_events(run['run_id'], SERVER_USER_ID, last_id=last_id, block_ms=1000)
+            )
+            if items is None:
+                yield emit('response.failed', response_object(
+                    resp_id,
+                    model,
+                    status='failed',
+                    output=output,
+                    created_at=created_at,
+                    error={'message': 'Run not found'},
+                ))
+                yield 'data: [DONE]\n\n'
+                break
+            if not items:
+                now = time.monotonic()
+                if now - last_heartbeat >= SSE_HEARTBEAT_SECONDS:
+                    yield sse_encode(comment='keepalive')
+                    last_heartbeat = now
+                if now - idle_started > int(getattr(config, 'RUN_IDLE_TIMEOUT_SECONDS', 60 * 60)):
+                    yield emit('response.failed', response_object(
+                        resp_id,
+                        model,
+                        status='failed',
+                        output=output,
+                        created_at=created_at,
+                        error={'message': 'Run timed out'},
+                    ))
+                    yield 'data: [DONE]\n\n'
+                    break
+                continue
+            idle_started = time.monotonic()
+            last_heartbeat = idle_started
+            for event_id, update in items:
+                last_id = event_id
+                for chunk in await handle_update(update):
+                    yield chunk
+                if completed:
+                    return
+        return
+
+    sess = service.load_session(run['session_id'], user_id=SERVER_USER_ID)
+    if sess is None:
+        yield emit('response.failed', response_object(
+            resp_id,
+            model,
+            status='failed',
+            output=output,
+            created_at=created_at,
+            error={'message': 'Session not found'},
+        ))
+        yield 'data: [DONE]\n\n'
+        return
+    last_heartbeat = time.monotonic()
+    while not completed:
+        if await request.is_disconnected():
+            service.cancel_session(run['session_id'], user_id=SERVER_USER_ID)
+            break
+        try:
+            item = await anyio.to_thread.run_sync(lambda: sess.display_q.get(timeout=1))
+        except queue.Empty:
+            if sess.turn_done_evt.is_set():
+                break
+            now = time.monotonic()
+            if now - last_heartbeat >= SSE_HEARTBEAT_SECONDS:
+                yield sse_encode(comment='keepalive')
+                last_heartbeat = now
+            continue
+        if 'event' not in item:
+            if sess.turn_done_evt.is_set() and sess.display_q.empty():
+                break
+            continue
+        for chunk in await handle_update(item['event']):
+            yield chunk
+        last_heartbeat = time.monotonic()
+        if completed:
+            return
 
 
 @app.get('/health')
@@ -688,6 +1164,27 @@ async def run_events(
     )
 
 
+@app.get('/v1/runs/{run_id}')
+def get_run(run_id: str):
+    run = load_run_record(run_id, SERVER_USER_ID)
+    if run is None:
+        return JSONResponse(openai_error(f'Run not found: {run_id}', code='run_not_found'), status_code=404)
+    return {
+        'id': run_id,
+        'object': 'agent.run',
+        'run_id': run_id,
+        'session_id': run.get('session_id') or '',
+        'status': run.get('status') or '',
+        'mode': run.get('mode') or '',
+        'error': run.get('error') or '',
+        'created_at': run.get('created_at') or '',
+        'updated_at': run.get('updated_at') or '',
+        'started_at': run.get('started_at') or '',
+        'finished_at': run.get('finished_at') or '',
+        'last_event_id': run.get('last_event_id') or '',
+    }
+
+
 @app.post('/v1/runs/{run_id}/stop')
 def stop_run(run_id: str):
     if celery_service is not None:
@@ -706,6 +1203,117 @@ def stop_run(run_id: str):
     return {'run_id': run_id, 'status': 'stopping'}
 
 
+@app.post('/v1/responses')
+async def create_response(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+
+    model = body.get('model') or getattr(config, 'MODEL', 'qwen-plus')
+    stream = bool(body.get('stream'))
+    cwd = body.get('cwd')
+    instructions = body.get('instructions') or ''
+    conversation = body.get('conversation') or body.get('conversation_id') or ''
+    store = bool(body.get('store', True))
+    previous_response_id = body.get('previous_response_id') or ''
+
+    previous = None
+    if previous_response_id:
+        previous = service.store.load_response(previous_response_id, user_id=SERVER_USER_ID)
+        if previous is None:
+            return JSONResponse(openai_error(f'Response not found: {previous_response_id}', code='response_not_found'), status_code=404)
+    elif conversation:
+        latest = service.store.latest_response_for_conversation(conversation, user_id=SERVER_USER_ID)
+        previous = service.store.load_response(latest, user_id=SERVER_USER_ID) if latest else None
+
+    input_messages = response_messages_from_input(body.get('input'))
+    if not input_messages:
+        input_messages = response_messages_from_input(body.get('messages'))
+    if not input_messages:
+        return JSONResponse(openai_error("Missing 'input' field"), status_code=400)
+
+    base_history = []
+    if isinstance(body.get('conversation_history'), list):
+        base_history = response_messages_from_input(body.get('conversation_history'))
+    elif previous:
+        base_history = list(previous.get('conversation_history') or [])
+        if not instructions:
+            instructions = previous.get('instructions') or ''
+        if not conversation:
+            conversation = previous.get('conversation') or ''
+
+    session_id = body.get('session_id') or (previous or {}).get('session_id') or ''
+    try:
+        sess = ensure_session(session_id or None, cwd=cwd)
+    except WorkspaceViolation as e:
+        raise backend_error(e) from e
+
+    history_for_store = [*base_history, *input_messages]
+    task_text = response_prompt_from_messages(
+        history_for_store,
+        instructions=instructions,
+        include_history=bool(base_history and not session_id),
+    )
+    if not task_text.strip():
+        return JSONResponse(openai_error('No user message found in input'), status_code=400)
+
+    run = start_agent_run(sess.sid, SERVER_USER_ID, task_text, cwd=cwd)
+    resp_id = response_id()
+    created_at = int(time.time())
+    headers = stream_headers(run['session_id'], run['run_id'])
+    if stream:
+        return StreamingResponse(
+            response_stream(
+                request,
+                run,
+                resp_id,
+                model,
+                created_at,
+                history_for_store,
+                instructions,
+                conversation,
+                store,
+            ),
+            media_type='text/event-stream',
+            headers=headers,
+        )
+
+    updates = list(iter_run_updates(run))
+    response, final_text = build_response_from_run_events(resp_id, model, created_at, run['run_id'], updates)
+    history = list(history_for_store)
+    if final_text:
+        history.append({'role': 'assistant', 'content': final_text})
+    save_response_record(
+        resp_id,
+        response,
+        history,
+        instructions=instructions,
+        session_id=run['session_id'],
+        conversation=conversation,
+        store=store,
+    )
+    return JSONResponse(response, headers=headers)
+
+
+@app.get('/v1/responses/{resp_id}')
+def get_response(resp_id: str):
+    record = service.store.load_response(resp_id, user_id=SERVER_USER_ID)
+    if record is None:
+        return JSONResponse(openai_error(f'Response not found: {resp_id}', code='response_not_found'), status_code=404)
+    return record.get('response') or {}
+
+
+@app.delete('/v1/responses/{resp_id}')
+def delete_response(resp_id: str):
+    deleted = service.store.delete_response(resp_id, user_id=SERVER_USER_ID)
+    if not deleted:
+        return JSONResponse(openai_error(f'Response not found: {resp_id}', code='response_not_found'), status_code=404)
+    return {'id': resp_id, 'object': 'response.deleted', 'deleted': True}
+
+
 @app.post('/v1/chat/completions')
 async def chat_completions(
     request: Request,
@@ -719,6 +1327,7 @@ async def chat_completions(
     if not last_user_text(messages).strip():
         raise HTTPException(status_code=400, detail='messages must include a non-empty user message')
 
+    user_text = last_user_text(messages)
     if celery_service is not None:
         if x_session_id:
             session_id = x_session_id
@@ -728,7 +1337,14 @@ async def chat_completions(
             except WorkspaceViolation as e:
                 raise backend_error(e) from e
             session_id = sess.sid
-        run = start_celery_run(session_id, SERVER_USER_ID, last_user_text(messages), mode='text', cwd=cwd)
+        if stream:
+            run = start_celery_run(session_id, SERVER_USER_ID, user_text, mode='events', cwd=cwd)
+            return StreamingResponse(
+                openai_celery_stream(request, model, run.run_id, run.session_id, SERVER_USER_ID, last_id=run.stream_from),
+                media_type='text/event-stream',
+                headers=stream_headers(run.session_id, run.run_id),
+            )
+        run = start_celery_run(session_id, SERVER_USER_ID, user_text, mode='text', cwd=cwd)
         headers = stream_headers(run.session_id, run.run_id)
         response_session_id = run.session_id
 
@@ -739,6 +1355,17 @@ async def chat_completions(
 
         text_iter = text_events()
     else:
+        if stream:
+            try:
+                sess = ensure_session(x_session_id, cwd=cwd)
+            except WorkspaceViolation as e:
+                raise backend_error(e) from e
+            run = start_agent_run(sess.sid, SERVER_USER_ID, user_text, cwd=cwd)
+            return StreamingResponse(
+                openai_thread_stream(request, model, run['run_id'], run['session_id'], SERVER_USER_ID),
+                media_type='text/event-stream',
+                headers=stream_headers(run['session_id'], run['run_id']),
+            )
         try:
             sess, text_iter = service.chat_text(x_session_id, messages, user_id=SERVER_USER_ID, cwd=cwd)
         except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
@@ -747,26 +1374,6 @@ async def chat_completions(
             raise HTTPException(status_code=404, detail='Session not found')
         headers = stream_headers(sess.sid, getattr(sess, 'active_run_id', '') or '')
         response_session_id = sess.sid
-
-    if stream:
-        if celery_service is not None:
-            return StreamingResponse(
-                openai_celery_stream(request, model, run.run_id, run.session_id, SERVER_USER_ID, last_id=run.stream_from),
-                media_type='text/event-stream',
-                headers=headers,
-            )
-
-        def event_stream():
-            yield f'data: {json.dumps(openai_role_chunk(model), ensure_ascii=False)}\n\n'
-            for text in text_iter:
-                if not text:
-                    continue
-                chunk = openai_chat_chunk(model, text)
-                yield f'data: {json.dumps(chunk, ensure_ascii=False)}\n\n'
-            yield f'data: {json.dumps(openai_done_chunk(model), ensure_ascii=False)}\n\n'
-            yield 'data: [DONE]\n\n'
-
-        return StreamingResponse(event_stream(), media_type='text/event-stream', headers=headers)
 
     content = ''.join(text_iter)
     payload = openai_chat_completion(model, content, response_session_id)

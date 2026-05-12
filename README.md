@@ -216,6 +216,12 @@ RUN_ID=$(curl -s --location 'http://127.0.0.1:8000/v1/runs' \
 curl --no-buffer --location "http://127.0.0.1:8000/v1/runs/${RUN_ID}/events"
 ```
 
+查询 Run 状态：
+
+```bash
+curl --location "http://127.0.0.1:8000/v1/runs/${RUN_ID}"
+```
+
 非流式 Chat Completions：
 
 ```bash
@@ -241,6 +247,32 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
     "messages": [
       {"role": "user", "content": "你能做什么？"}
     ],
+    "stream": true
+  }'
+```
+
+`stream=true` 时会返回 OpenAI Chat Completions 兼容的 `delta.content` SSE；工具执行进度会额外通过自定义 `event: pai.tool.progress` 输出，不会伪造成 OpenAI `delta.tool_calls`。
+
+Responses API：
+
+```bash
+curl --location 'http://127.0.0.1:8000/v1/responses' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "model": "hermes-agent",
+    "input": "你好，请用一句话介绍你自己",
+    "stream": false
+  }'
+```
+
+流式 Responses API 会输出 `response.created`、`response.output_text.delta`、`response.output_item.*`、`response.completed` 等事件：
+
+```bash
+curl --no-buffer --location 'http://127.0.0.1:8000/v1/responses' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "model": "hermes-agent",
+    "input": "检查当前 workspace 下有哪些文件",
     "stream": true
   }'
 ```

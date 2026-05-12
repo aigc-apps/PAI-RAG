@@ -253,6 +253,7 @@ class WorkerSession:
     def run(self):
         final_status = SESSION_COMPLETED
         exit_reason = {}
+        completed_normally = False
         try:
             kwargs = {
                 'client': self.client,
@@ -268,6 +269,7 @@ class WorkerSession:
                 kwargs['on_event'] = self._on_event
             exit_reason = agent_runner_loop(**kwargs)
             final_status = final_status_for_exit_reason(exit_reason)
+            completed_normally = True
         except KeyboardInterrupt:
             final_status = SESSION_CANCELLED
             exit_reason = {'result': 'INTERRUPTED'}
@@ -286,6 +288,8 @@ class WorkerSession:
         finally:
             review_history = list(getattr(self.client, 'history', []) or [])
             review_active_skill = (getattr(self.handler, 'working', {}) or {}).get('active_skill') or ''
+            if self.mode == 'text' and completed_normally:
+                self.emit_event(done(stop_reason(exit_reason)), check_cancel=False)
             try:
                 archive_session(self.client, self.task_text, exit_reason, user_id=self.user_id)
             except Exception:

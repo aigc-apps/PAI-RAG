@@ -415,6 +415,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         model_raw_content = ''
         model_process_content = ''
         plain_limiter = _PlainStreamLimiter()
+        plain_stream_emitted = False
         if on_event:
             on_event(thought_start(model_step_id, title='Agent step'))
         try:
@@ -444,9 +445,17 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                         on_event(thought_delta(model_step_id, delta, replace=replace))
                     model_process_content = next_process_content
                 elif on_chunk:
-                    display_chunk = plain_limiter.filter(chunk)
+                    model_raw_content += chunk
+                    next_process_content = _stream_preview_text(stream_model_process_content(model_raw_content))
+                    if next_process_content.startswith(model_process_content):
+                        display_chunk = next_process_content[len(model_process_content):]
+                    else:
+                        display_chunk = next_process_content
+                    model_process_content = next_process_content
+                    display_chunk = plain_limiter.filter(display_chunk)
                     if display_chunk:
                         on_chunk(display_chunk)
+                        plain_stream_emitted = True
                 else:
                     display_chunk = plain_limiter.filter(chunk)
                     if display_chunk:
@@ -484,6 +493,8 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
             visible_reply = visible_reply or summary
             if on_event and visible_reply:
                 on_event(agent_message_chunk(visible_reply))
+            elif on_chunk and visible_reply and not plain_stream_emitted:
+                on_chunk(visible_reply)
             elif assistant_replaced and on_chunk:
                 on_chunk('\n\n' + response.content)
             elif assistant_replaced and not on_event and not on_chunk:

@@ -113,6 +113,96 @@ class SessionStore:
                 cur = conn.execute('DELETE FROM sessions WHERE session_id = ? AND user_id = ?', (session_id, user_id))
             return cur.rowcount > 0
 
+    def save_response(
+        self,
+        response_id,
+        response,
+        conversation_history=None,
+        instructions=None,
+        session_id='',
+        user_id=SERVER_USER_ID,
+        conversation='',
+    ):
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                '''
+                INSERT INTO responses (
+                    response_id, user_id, session_id, conversation, created_at, updated_at,
+                    response_json, conversation_history_json, instructions
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(response_id) DO UPDATE SET
+                    user_id = excluded.user_id,
+                    session_id = excluded.session_id,
+                    conversation = excluded.conversation,
+                    updated_at = excluded.updated_at,
+                    response_json = excluded.response_json,
+                    conversation_history_json = excluded.conversation_history_json,
+                    instructions = excluded.instructions
+                ''',
+                (
+                    response_id,
+                    user_id,
+                    session_id or '',
+                    conversation or '',
+                    now,
+                    now,
+                    json.dumps(response or {}, ensure_ascii=False, default=str),
+                    json.dumps(conversation_history or [], ensure_ascii=False, default=str),
+                    instructions or '',
+                ),
+            )
+
+    def load_response(self, response_id, user_id=SERVER_USER_ID):
+        with self._connect() as conn:
+            row = conn.execute(
+                '''
+                SELECT response_id, user_id, session_id, conversation, created_at, updated_at,
+                       response_json, conversation_history_json, instructions
+                FROM responses
+                WHERE response_id = ? AND user_id = ?
+                ''',
+                (response_id, user_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            'response_id': row['response_id'],
+            'user_id': row['user_id'],
+            'session_id': row['session_id'] or '',
+            'conversation': row['conversation'] or '',
+            'created_at': row['created_at'] or '',
+            'updated_at': row['updated_at'] or '',
+            'response': self._json_dict(row['response_json']),
+            'conversation_history': self._json_list(row['conversation_history_json']),
+            'instructions': row['instructions'] or '',
+        }
+
+    def delete_response(self, response_id, user_id=SERVER_USER_ID):
+        with self._connect() as conn:
+            cur = conn.execute(
+                'DELETE FROM responses WHERE response_id = ? AND user_id = ?',
+                (response_id, user_id),
+            )
+        return cur.rowcount > 0
+
+    def latest_response_for_conversation(self, conversation, user_id=SERVER_USER_ID):
+        if not conversation:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                '''
+                SELECT response_id
+                FROM responses
+                WHERE conversation = ? AND user_id = ?
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT 1
+                ''',
+                (conversation, user_id),
+            ).fetchone()
+        return row['response_id'] if row else None
+
     def create_run_record(self, session_id, user_id, run_id, mode, status='queued', metadata=None):
         self._validate_session_id(session_id)
         now = datetime.now().isoformat()
@@ -652,6 +742,21 @@ class SessionStore:
                 )
                 '''
             )
+            conn.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS responses (
+                    response_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    session_id TEXT,
+                    conversation TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    response_json TEXT NOT NULL,
+                    conversation_history_json TEXT NOT NULL,
+                    instructions TEXT
+                )
+                '''
+            )
             columns = {
                 row['name']
                 for row in conn.execute('PRAGMA table_info(sessions)').fetchall()
@@ -690,6 +795,12 @@ class SessionStore:
             )
             conn.execute(
                 'CREATE INDEX IF NOT EXISTS idx_runs_user_run ON runs(user_id, run_id)'
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_responses_user_updated ON responses(user_id, updated_at DESC)'
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_responses_user_conversation ON responses(user_id, conversation, updated_at DESC)'
             )
 
     def _session_row(self, conn, session_id, user_id):
