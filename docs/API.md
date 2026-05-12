@@ -600,7 +600,81 @@ curl --location "$BASE_URL/v1/models"
 curl --location "$BASE_URL/v1/skills"
 ```
 
-## 6. 常见问题
+## 6. 部署后 Smoke Test
+
+仓库提供了一个纯 Python 标准库脚本，用来验证部署后的三类 API 是否可用：
+
+- `/v1/chat/completions`
+- `/v1/responses`
+- `/v1/runs` + `/v1/runs/{run_id}/events`
+
+默认 sample query：
+
+```text
+你好，请用一句话介绍你自己，并说明你可以通过 API 被调用。
+```
+
+Runs API 默认 sample query：
+
+```text
+请确认 /v1/runs 接口可以正常执行，并用一句话说明 Runs API 的作用。
+```
+
+运行方式：
+
+```bash
+python scripts/api_smoke.py \
+  --base-url "$BASE_URL" \
+  --model "pairag-agent"
+```
+
+如果部署网关需要鉴权：
+
+```bash
+python scripts/api_smoke.py \
+  --base-url "$BASE_URL" \
+  --model "pairag-agent" \
+  --auth "Bearer xxx"
+```
+
+如果鉴权头不是 `Authorization`，可以使用自定义 header：
+
+```bash
+python scripts/api_smoke.py \
+  --base-url "$BASE_URL" \
+  --header "Authorization: your-token" \
+  --header "X-Request-Id: smoke-test-001"
+```
+
+只测试某一类 API：
+
+```bash
+python scripts/api_smoke.py --base-url "$BASE_URL" --only chat
+python scripts/api_smoke.py --base-url "$BASE_URL" --only responses
+python scripts/api_smoke.py --base-url "$BASE_URL" --only runs
+```
+
+自定义 sample query：
+
+```bash
+python scripts/api_smoke.py \
+  --base-url "$BASE_URL" \
+  --query "你好，请说明你是什么服务" \
+  --run-query "请确认 Runs API 可以正常返回事件"
+```
+
+测试 Responses API 的 `previous_response_id` 多轮：
+
+```bash
+python scripts/api_smoke.py \
+  --base-url "$BASE_URL" \
+  --only responses \
+  --multi-turn
+```
+
+脚本成功时会打印每类 API 的状态码、`session_id`、`run_id` 或 `response_id`，以及解析出的最终答案。
+
+## 7. 常见问题
 
 ### 为什么 Chat Completions 流式没有 `delta.tool_calls`？
 
