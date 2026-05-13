@@ -941,19 +941,66 @@ function shouldReplaceSessionTitle(title?: string) {
 export function ChatShell() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
+  const [streamingSessions, setStreamingSessions] = useState<Set<string>>(() => new Set());
+  const [runIdBySession, setRunIdBySession] = useState<Record<string, string>>({});
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
-  const [streaming, setStreaming] = useState(false);
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [skillsInventory, setSkillsInventory] = useState<SkillInventory | null>(null);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const abortControllers = useRef<Map<string, AbortController>>(new Map());
+  const streamingSessionsRef = useRef<Set<string>>(streamingSessions);
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
+
+  streamingSessionsRef.current = streamingSessions;
+
+  const messages = currentSessionId ? messagesBySession[currentSessionId] ?? [] : [];
+  const streaming = currentSessionId ? streamingSessions.has(currentSessionId) : false;
+  const currentRunId = currentSessionId ? runIdBySession[currentSessionId] ?? null : null;
+
+  const setSessionMessages = useCallback(
+    (sessionId: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
+      setMessagesBySession((prev) => ({ ...prev, [sessionId]: updater(prev[sessionId] ?? []) }));
+    },
+    [],
+  );
+
+  const markStreaming = useCallback((sessionId: string, on: boolean) => {
+    setStreamingSessions((prev) => {
+      const has = prev.has(sessionId);
+      if (on === has) {
+        return prev;
+      }
+      const next = new Set(prev);
+      if (on) {
+        next.add(sessionId);
+      } else {
+        next.delete(sessionId);
+      }
+      return next;
+    });
+  }, []);
+
+  const setSessionRunId = useCallback((sessionId: string, runId: string | null) => {
+    setRunIdBySession((prev) => {
+      if (runId) {
+        if (prev[sessionId] === runId) {
+          return prev;
+        }
+        return { ...prev, [sessionId]: runId };
+      }
+      if (!(sessionId in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
+  }, []);
 
   const refreshSessions = useCallback(async () => {
     const data = await listSessions();
@@ -975,13 +1022,23 @@ export function ChatShell() {
 
   const loadSession = useCallback(
     async (sessionId: string) => {
-      const detail = await getSession(sessionId);
       shouldStickToBottomRef.current = true;
-      setCurrentSessionId(detail.session_id);
-      setMessages(detail.messages ?? []);
+      setCurrentSessionId(sessionId);
+      // Streaming sessions hold a fresher in-memory transcript than the
+      // server snapshot (which is debounced up to ~750ms behind). Don't
+      // clobber it; just refresh the sidebar.
+      if (streamingSessionsRef.current.has(sessionId)) {
+        await refreshSessions();
+        return;
+      }
+      const detail = await getSession(sessionId);
+      setSessionMessages(detail.session_id, () => detail.messages ?? []);
+      if (detail.session_id !== sessionId) {
+        setCurrentSessionId(detail.session_id);
+      }
       await refreshSessions();
     },
-    [refreshSessions],
+    [refreshSessions, setSessionMessages],
   );
 
   const loadInitialSession = useCallback(async () => {
@@ -992,10 +1049,10 @@ export function ChatShell() {
       const created = await createSession();
       shouldStickToBottomRef.current = true;
       setCurrentSessionId(created.session_id);
-      setMessages(created.messages ?? []);
+      setSessionMessages(created.session_id, () => created.messages ?? []);
       await refreshSessions();
     }
-  }, [loadSession, refreshSessions]);
+  }, [loadSession, refreshSessions, setSessionMessages]);
 
   useEffect(() => {
     let active = true;
@@ -1042,8 +1099,8 @@ export function ChatShell() {
   async function handleNewSession() {
     const created = await createSession();
     shouldStickToBottomRef.current = true;
+    setSessionMessages(created.session_id, () => created.messages ?? []);
     setCurrentSessionId(created.session_id);
-    setMessages(created.messages ?? []);
     await refreshSessions();
   }
 
@@ -1053,6 +1110,18 @@ export function ChatShell() {
   }
 
   async function handleDeleteSession(sessionId: string) {
+    abortControllers.current.get(sessionId)?.abort();
+    abortControllers.current.delete(sessionId);
+    markStreaming(sessionId, false);
+    setSessionRunId(sessionId, null);
+    setMessagesBySession((prev) => {
+      if (!(sessionId in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
     await deleteSession(sessionId);
     const nextSessions = await refreshSessions();
     if (sessionId === currentSessionId) {
@@ -1065,18 +1134,22 @@ export function ChatShell() {
   }
 
   async function handleStop() {
+    const targetSessionId = currentSessionId;
+    const targetRunId = currentRunId;
     try {
-      if (currentRunId) {
-        await stopRun(currentRunId);
-      } else if (currentSessionId) {
-        await cancelSession(currentSessionId);
+      if (targetRunId) {
+        await stopRun(targetRunId);
+      } else if (targetSessionId) {
+        await cancelSession(targetSessionId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      abortRef.current?.abort();
-      setStreaming(false);
-      setCurrentRunId(null);
+      if (targetSessionId) {
+        abortControllers.current.get(targetSessionId)?.abort();
+        // Streaming flag and run id are cleared by the in-flight submitText/
+        // regenerate finally block — don't race them here.
+      }
     }
   }
 
@@ -1088,9 +1161,7 @@ export function ChatShell() {
 
     setInput("");
     setError(null);
-    setStreaming(true);
     const controller = new AbortController();
-    abortRef.current = controller;
 
     let activeSessionId = currentSessionId;
 
@@ -1098,17 +1169,26 @@ export function ChatShell() {
       if (!activeSessionId) {
         const created = await createSession();
         activeSessionId = created.session_id;
+        setSessionMessages(activeSessionId, () => created.messages ?? []);
         setCurrentSessionId(activeSessionId);
       }
 
+      const sessionId = activeSessionId;
+      abortControllers.current.set(sessionId, controller);
+      markStreaming(sessionId, true);
+
       shouldStickToBottomRef.current = true;
-      setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: "", events: [] }]);
+      setSessionMessages(sessionId, (prev) => [
+        ...prev,
+        { role: "user", content: text },
+        { role: "assistant", content: "", events: [] },
+      ]);
       setSessions((prev) => {
         const optimisticTitle = text.slice(0, 60);
         const now = new Date().toISOString();
         let matched = false;
         const next = prev.map((session) => {
-          if (session.session_id !== activeSessionId) {
+          if (session.session_id !== sessionId) {
             return session;
           }
           matched = true;
@@ -1120,12 +1200,12 @@ export function ChatShell() {
             updated_at: now,
           };
         });
-        if (matched || !activeSessionId) {
+        if (matched) {
           return next;
         }
         return [
           {
-            session_id: activeSessionId,
+            session_id: sessionId,
             title: optimisticTitle,
             created_at: now,
             updated_at: now,
@@ -1137,10 +1217,29 @@ export function ChatShell() {
         ];
       });
 
-      const run = await createRun(activeSessionId, text, controller.signal);
-      activeSessionId = run.session_id || activeSessionId;
-      setCurrentSessionId(activeSessionId);
-      setCurrentRunId(run.run_id);
+      const run = await createRun(sessionId, text, controller.signal);
+      const runSessionId = run.session_id || sessionId;
+      setSessionRunId(runSessionId, run.run_id);
+      if (runSessionId !== sessionId) {
+        // Backend reassigned the session — migrate buckets so the stream
+        // keeps writing to a stable id and the user's view follows.
+        setMessagesBySession((prev) => {
+          if (!(sessionId in prev) || runSessionId in prev) {
+            return prev;
+          }
+          const next = { ...prev, [runSessionId]: prev[sessionId] };
+          delete next[sessionId];
+          return next;
+        });
+        markStreaming(sessionId, false);
+        markStreaming(runSessionId, true);
+        abortControllers.current.set(runSessionId, controller);
+        abortControllers.current.delete(sessionId);
+        if (currentSessionId === sessionId) {
+          setCurrentSessionId(runSessionId);
+        }
+        activeSessionId = runSessionId;
+      }
       setSessions((prev) =>
         prev.map((session) =>
           session.session_id === activeSessionId
@@ -1152,36 +1251,42 @@ export function ChatShell() {
       const returnedSessionId = await streamRunEvents(
         run.run_id,
         activeSessionId,
-        ({ sessionId, update }) => {
-          activeSessionId = sessionId;
-          setCurrentSessionId(sessionId);
-          setMessages((prev) => applyAssistantUpdate(prev, update));
+        ({ sessionId: eventSessionId, update }) => {
+          // Route every event by its own session id, regardless of which
+          // session the user is currently viewing. Don't yank the sidebar
+          // selection back — that's the user's choice.
+          setSessionMessages(eventSessionId, (prev) => applyAssistantUpdate(prev, update));
         },
         controller.signal,
       );
 
-      activeSessionId = returnedSessionId || activeSessionId;
-      if (activeSessionId) {
-        setCurrentSessionId(activeSessionId);
-        const detail = await getSession(activeSessionId);
-        setMessages(detail.messages ?? []);
+      const finalSessionId = returnedSessionId || activeSessionId;
+      if (finalSessionId) {
+        const detail = await getSession(finalSessionId);
+        setSessionMessages(detail.session_id, () => detail.messages ?? []);
       }
       await refreshSessions();
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
-        setMessages((prev) =>
-          applyAssistantUpdate(prev, {
-            sessionUpdate: "agent_message_chunk",
-            content: { type: "text", text: `**Error:** ${message}` },
-          }),
-        );
+        if (activeSessionId) {
+          setSessionMessages(activeSessionId, (prev) =>
+            applyAssistantUpdate(prev, {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: `**Error:** ${message}` },
+            }),
+          );
+        }
       }
     } finally {
-      setStreaming(false);
-      setCurrentRunId(null);
-      abortRef.current = null;
+      if (activeSessionId) {
+        markStreaming(activeSessionId, false);
+        setSessionRunId(activeSessionId, null);
+        if (abortControllers.current.get(activeSessionId) === controller) {
+          abortControllers.current.delete(activeSessionId);
+        }
+      }
     }
   }
 
@@ -1191,14 +1296,14 @@ export function ChatShell() {
     }
 
     setError(null);
-    setStreaming(true);
     const controller = new AbortController();
-    abortRef.current = controller;
     let activeSessionId = currentSessionId;
+    abortControllers.current.set(activeSessionId, controller);
+    markStreaming(activeSessionId, true);
 
     try {
       shouldStickToBottomRef.current = true;
-      setMessages((prev) => {
+      setSessionMessages(activeSessionId, (prev) => {
         if (!canRegenerateLastAssistant(prev)) {
           return prev;
         }
@@ -1213,9 +1318,26 @@ export function ChatShell() {
       );
 
       const run = await regenerateLastAnswer(activeSessionId, controller.signal);
-      activeSessionId = run.session_id || activeSessionId;
-      setCurrentSessionId(activeSessionId);
-      setCurrentRunId(run.run_id);
+      const runSessionId = run.session_id || activeSessionId;
+      setSessionRunId(runSessionId, run.run_id);
+      if (runSessionId !== activeSessionId) {
+        setMessagesBySession((prev) => {
+          if (!(activeSessionId in prev) || runSessionId in prev) {
+            return prev;
+          }
+          const next = { ...prev, [runSessionId]: prev[activeSessionId] };
+          delete next[activeSessionId];
+          return next;
+        });
+        markStreaming(activeSessionId, false);
+        markStreaming(runSessionId, true);
+        abortControllers.current.set(runSessionId, controller);
+        abortControllers.current.delete(activeSessionId);
+        if (currentSessionId === activeSessionId) {
+          setCurrentSessionId(runSessionId);
+        }
+        activeSessionId = runSessionId;
+      }
       setSessions((prev) =>
         prev.map((session) =>
           session.session_id === activeSessionId
@@ -1225,24 +1347,21 @@ export function ChatShell() {
       );
 
       const prepared = await getSession(activeSessionId);
-      setMessages(prepared.messages ?? []);
+      setSessionMessages(prepared.session_id, () => prepared.messages ?? []);
 
       const returnedSessionId = await streamRunEvents(
         run.run_id,
         activeSessionId,
-        ({ sessionId, update }) => {
-          activeSessionId = sessionId;
-          setCurrentSessionId(sessionId);
-          setMessages((prev) => applyAssistantUpdate(prev, update));
+        ({ sessionId: eventSessionId, update }) => {
+          setSessionMessages(eventSessionId, (prev) => applyAssistantUpdate(prev, update));
         },
         controller.signal,
       );
 
-      activeSessionId = returnedSessionId || activeSessionId;
-      if (activeSessionId) {
-        setCurrentSessionId(activeSessionId);
-        const detail = await getSession(activeSessionId);
-        setMessages(detail.messages ?? []);
+      const finalSessionId = returnedSessionId || activeSessionId;
+      if (finalSessionId) {
+        const detail = await getSession(finalSessionId);
+        setSessionMessages(detail.session_id, () => detail.messages ?? []);
       }
       await refreshSessions();
     } catch (err) {
@@ -1251,9 +1370,9 @@ export function ChatShell() {
         setError(message);
         try {
           const detail = await getSession(activeSessionId);
-          setMessages(detail.messages ?? []);
+          setSessionMessages(detail.session_id, () => detail.messages ?? []);
         } catch {
-          setMessages((prev) =>
+          setSessionMessages(activeSessionId, (prev) =>
             applyAssistantUpdate(prev, {
               sessionUpdate: "agent_message_chunk",
               content: { type: "text", text: `**Error:** ${message}` },
@@ -1262,9 +1381,11 @@ export function ChatShell() {
         }
       }
     } finally {
-      setStreaming(false);
-      setCurrentRunId(null);
-      abortRef.current = null;
+      markStreaming(activeSessionId, false);
+      setSessionRunId(activeSessionId, null);
+      if (abortControllers.current.get(activeSessionId) === controller) {
+        abortControllers.current.delete(activeSessionId);
+      }
     }
   }
 

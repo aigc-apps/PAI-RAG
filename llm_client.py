@@ -40,6 +40,105 @@ class Response:
     usage: dict = field(default_factory=dict)
 
 
+# ──────────────────────────── 工具参数修复 ──────────────────────────── #
+
+def _repair_truncated_json(s):
+    """把流式截断的 tool args JSON 尽力补齐成可解析对象。
+
+    实测在 OpenAI-compatible 后端上,模型偶尔会在 finish_reason=tool_calls 的情况下
+    少打一两个收尾括号(`}` 或 `]`),`json.loads` 直接报 `Expecting ',' delimiter`,
+    整个 args dict 就被丢给 _raw_args 兜底了 —— 下游工具拿不到任何字段。
+
+    覆盖三种最常见的截断:
+      - 缺收尾括号        `{"a": [1,2,3]`        -> `{"a": [1,2,3]}`
+      - 字符串内截断      `{"a": "hel`           -> `{"a":"hel"}`
+      - 末尾悬空标点      `{"a":1,` 或 `{"a":`   -> `{"a":1}` / `{"a":null}`
+
+    扫描时正确处理 `\\"` / `\\\\` / Unicode 转义,避免把字符串里的 `}` 误数为收尾。
+    成功返回 dict/list,失败返回 None — 不抛异常。
+    """
+    if not isinstance(s, str):
+        return None
+    s = s.strip()
+    if not s:
+        return None
+    # 简单情形:已经合法。OpenAI tool args 必须是对象/数组,标量(数字/字符串/null)
+    # 都视为非法 —— 上层 dispatch 会调 args.get(...) 直接崩。
+    try:
+        parsed = json.loads(s)
+        if isinstance(parsed, (dict, list)):
+            return parsed
+        return None
+    except Exception:
+        pass
+    if s[0] not in '{[':
+        return None
+
+    stack = []                     # 元素是 '{' 或 '['
+    in_string = False
+    escape = False
+    last_significant_idx = -1      # 最后一个非空白、非"开放结构性符号"字符的位置
+    for idx, ch in enumerate(s):
+        if escape:
+            escape = False
+            last_significant_idx = idx
+            continue
+        if in_string:
+            if ch == '\\':
+                escape = True
+            elif ch == '"':
+                in_string = False
+            last_significant_idx = idx
+            continue
+        if ch == '"':
+            in_string = True
+            last_significant_idx = idx
+            continue
+        if ch in '{[':
+            stack.append(ch)
+            continue
+        if ch in '}]':
+            if stack and ((ch == '}' and stack[-1] == '{') or (ch == ']' and stack[-1] == '[')):
+                stack.pop()
+            else:
+                return None        # 结构错位,放弃
+            last_significant_idx = idx
+            continue
+        if ch.isspace():
+            continue
+        last_significant_idx = idx
+
+    repaired = s
+    if in_string:
+        # 1) 字符串没收尾,先补一个 `"`。如果末尾恰好是单独一个 `\\`,
+        #    再补 `"` 会变成 `\\"` 转义,反而引发新错误 —— 直接砍掉那个反斜杠。
+        if repaired.endswith('\\'):
+            repaired = repaired[:-1]
+        repaired += '"'
+    else:
+        # 2) 处理悬空标点。只看 last_significant_idx 之后的尾巴。
+        tail_start = last_significant_idx + 1
+        tail = repaired[tail_start:]
+        head = repaired[:tail_start]
+        # head 末尾可能是 `,` 或 `:` —— 这两种都意味着后面本应跟个值。
+        head = head.rstrip()
+        if head.endswith(','):
+            head = head[:-1].rstrip()
+        elif head.endswith(':'):
+            head = head + ' null'
+        repaired = head + tail.rstrip()
+
+    # 3) 反向补齐 stack。
+    closers = {'{': '}', '[': ']'}
+    while stack:
+        repaired += closers[stack.pop()]
+
+    try:
+        return json.loads(repaired)
+    except Exception:
+        return None
+
+
 # ──────────────────────────── 历史裁剪 ──────────────────────────── #
 
 def _estimate_tokens(messages):
@@ -205,11 +304,21 @@ class LLMClient:
 
         # 构造 Response
         resp = Response(content=full_content, stop_reason=finish_reason or '', usage=usage_dict)
-        for i in ordered_idxs:
+        for list_idx, i in enumerate(ordered_idxs):
             slot = tool_acc[i]
+            raw = slot['args'] or ''
             try:
-                inp = json.loads(slot['args']) if slot['args'] else {}
+                inp = json.loads(raw) if raw else {}
             except Exception:
-                inp = {'_raw_args': slot['args']}
+                # 模型偶发地少打收尾括号/单引号 —— 试着补齐再解一次。修复成功就把
+                # 合法 JSON 写回 history,免得下一轮 LLM 重读自己半截的输出。
+                repaired = _repair_truncated_json(raw)
+                if repaired is not None:
+                    inp = repaired
+                    asst_msg['tool_calls'][list_idx]['function']['arguments'] = json.dumps(
+                        repaired, ensure_ascii=False
+                    )
+                else:
+                    inp = {'_raw_args': raw}
             resp.tool_calls.append(ToolCall(id=slot['id'], name=slot['name'], input=inp))
         return resp
