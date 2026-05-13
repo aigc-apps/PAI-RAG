@@ -90,11 +90,14 @@ def ask_user(question: str, candidates: list[str] | None = None) -> dict:
     }
 
 
-def done(stop_reason: str = 'end_turn') -> dict:
-    return {
+def done(stop_reason: str = 'end_turn', usage: dict | None = None) -> dict:
+    event = {
         'sessionUpdate': 'done',
         'stopReason': stop_reason,
     }
+    if usage:
+        event['usage'] = dict(usage)
+    return event
 
 
 def tool_kind(name: str) -> str:

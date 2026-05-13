@@ -14,7 +14,7 @@ import settings as config
 class RunStream:
     session_id: str
     run_id: str
-    stream_from: str = '0-0'
+    cursor: str = '0-0'
     regenerated_from_run_id: str = ''
 
 
@@ -37,13 +37,13 @@ class CeleryRunService:
 
         if loaded.get('status') == 'waiting_user' and loaded.get('active_run_id'):
             run_id = loaded['active_run_id']
-            stream_from = self.bus.last_event_id(run_id)
+            cursor = self.bus.last_event_id(run_id)
             answered = self.store.answer_waiting_run(session_id, user_id, run_id, text)
             if not answered:
                 latest = self.store.load(session_id, user_id=user_id) or {}
                 raise SessionBusyError(session_id, latest.get('status', 'unknown'))
             self.bus.push_answer(run_id, text)
-            return RunStream(session_id=session_id, run_id=run_id, stream_from=stream_from)
+            return RunStream(session_id=session_id, run_id=run_id, cursor=cursor)
 
         run_id = f'run_{uuid.uuid4().hex}'
         workspace_path = loaded.get('workspace_path') or self._workspace_for(user_id, session_id, cwd=cwd)
@@ -71,7 +71,7 @@ class CeleryRunService:
         except Exception:
             self.store.finish_run(session_id, user_id, run_id, 'failed', error='failed to enqueue celery task')
             raise
-        return RunStream(session_id=session_id, run_id=run_id, stream_from='0-0')
+        return RunStream(session_id=session_id, run_id=run_id, cursor='0-0')
 
     def regenerate_last_answer(self, session_id, user_id, mode='events', cwd=None):
         loaded = self.store.load(session_id, user_id=user_id)
@@ -108,7 +108,7 @@ class CeleryRunService:
         return RunStream(
             session_id=session_id,
             run_id=run_id,
-            stream_from='0-0',
+            cursor='0-0',
             regenerated_from_run_id=result.get('regenerated_from_run_id') or '',
         )
 
@@ -117,8 +117,8 @@ class CeleryRunService:
 
         run_agent_task.delay(run_id, session_id, user_id, text, mode, cwd)
 
-    def iter_events(self, run_id, stream_from='0-0'):
-        return self.bus.iter_events(run_id, last_id=stream_from)
+    def iter_events(self, run_id, cursor='0-0'):
+        return self.bus.iter_events(run_id, last_id=cursor)
 
     def load_run(self, run_id, user_id):
         return self.store.load_run(run_id, user_id=user_id)

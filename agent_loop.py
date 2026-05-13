@@ -406,6 +406,13 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
     new_messages = [{'role': 'user', 'content': user_input}]
     exit_reason = {}
     summary_only_retry_used = False
+    total_usage = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+
+    def _accumulate(resp):
+        u = getattr(resp, 'usage', None) or {}
+        total_usage['prompt_tokens'] += int(u.get('prompt_tokens', 0) or 0)
+        total_usage['completion_tokens'] += int(u.get('completion_tokens', 0) or 0)
+        total_usage['total_tokens'] += int(u.get('total_tokens', 0) or 0)
 
     for turn in range(1, max_turns + 1):
         handler.current_turn = turn
@@ -424,7 +431,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 if isinstance(chunk, ToolCallDelta):
                     if on_event:
                         on_event(tool_call_delta(
-                            f'tool-{turn}-{chunk.index}',
+                            f'call_{turn}_{chunk.index}',
                             index=chunk.index,
                             name=chunk.name,
                             name_delta=chunk.name_delta,
@@ -463,6 +470,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                         sys.stdout.flush()
         except StopIteration as e:
             response = e.value
+        _accumulate(response)
         if not on_event and not on_chunk:
             print()
 
@@ -501,8 +509,9 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 print(response.content)
             exit_reason = {'result': 'NO_TOOL_CALL', 'data': response.content}
             handler.turn_end_callback(response, [], [], turn, '', exit_reason)
+            exit_reason['usage'] = dict(total_usage)
             if on_event:
-                on_event(done(stop_reason(exit_reason)))
+                on_event(done(stop_reason(exit_reason), usage=total_usage))
             return exit_reason
 
         if on_event:
@@ -517,7 +526,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         next_prompts = set()
         for ii, tc in enumerate(tool_calls):
             name, args, tid = tc['tool_name'], tc['args'], tc['id']
-            tool_call_id = f'tool-{turn}-{ii}'
+            tool_call_id = f'call_{turn}_{ii}'
             emit_tool_progress = name != 'ask_user'
             if on_event and emit_tool_progress:
                 on_event(tool_call(tool_call_id, name, args))
@@ -590,8 +599,9 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         next_prompt = handler.turn_end_callback(response, tool_calls, tool_results,
                                                 turn, joined, exit_reason)
         if exit_reason:
+            exit_reason['usage'] = dict(total_usage)
             if on_event:
-                on_event(done(stop_reason(exit_reason)))
+                on_event(done(stop_reason(exit_reason), usage=total_usage))
             return exit_reason
 
         # 5) 拼下一轮 new_messages：先 tool_results，再可选 user 文本提示
@@ -608,11 +618,13 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         on_chunk=on_chunk,
         on_event=on_event,
     )
+    _accumulate(fallback_response)
     exit_reason = {'result': 'MAX_TURNS_EXCEEDED', 'data': fallback_response.content}
     try:
         handler.turn_end_callback(fallback_response, [], [], max_turns + 1, '', exit_reason)
     except Exception:
         pass
+    exit_reason['usage'] = dict(total_usage)
     if on_event:
-        on_event(done(stop_reason(exit_reason)))
+        on_event(done(stop_reason(exit_reason), usage=total_usage))
     return exit_reason

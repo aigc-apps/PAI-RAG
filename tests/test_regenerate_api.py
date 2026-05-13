@@ -39,7 +39,7 @@ class RegenerateApiTests(unittest.TestCase):
         fake_service = FakeRegenerateService({
             "session_id": "session-1",
             "run_id": "run-2",
-            "stream_from": "0-0",
+            "cursor": "0-0",
             "regenerated_from_run_id": "run-1",
         })
         server.service = fake_service
@@ -56,7 +56,7 @@ class RegenerateApiTests(unittest.TestCase):
             "run_id": "run-2",
             "session_id": "session-1",
             "status": "started",
-            "stream_from": "0-0",
+            "cursor": "0-0",
             "regenerated_from_run_id": "run-1",
         })
         self.assertEqual(server.THREAD_RUNS["run-2"]["session_id"], "session-1")
@@ -67,7 +67,7 @@ class RegenerateApiTests(unittest.TestCase):
         response = self.client.post("/v1/sessions/session-1/regenerate", json={})
 
         self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()["detail"]["code"], "no_regeneratable_answer")
+        self.assertEqual(response.json()["error"]["code"], "no_regeneratable_answer")
 
 
 if __name__ == "__main__":

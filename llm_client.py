@@ -37,6 +37,7 @@ class Response:
     content: str = ''
     tool_calls: list = field(default_factory=list)
     stop_reason: str = ''
+    usage: dict = field(default_factory=dict)
 
 
 # ──────────────────────────── 历史裁剪 ──────────────────────────── #
@@ -117,6 +118,7 @@ class LLMClient:
                 tools=tools or None,
                 max_tokens=self.max_tokens,
                 stream=True,
+                stream_options={'include_usage': True},
             )
         except Exception as e:
             err = f'Request failed: {type(e).__name__}: {e}'
@@ -127,9 +129,17 @@ class LLMClient:
         tool_acc = {}                    # index → {id, name, args}
         finish_reason = None
         warn = None
+        usage_dict = {}
 
         try:
             for chunk in stream:
+                chunk_usage = getattr(chunk, 'usage', None)
+                if chunk_usage is not None:
+                    usage_dict = {
+                        'prompt_tokens': getattr(chunk_usage, 'prompt_tokens', 0) or 0,
+                        'completion_tokens': getattr(chunk_usage, 'completion_tokens', 0) or 0,
+                        'total_tokens': getattr(chunk_usage, 'total_tokens', 0) or 0,
+                    }
                 if not chunk.choices:
                     continue
                 choice = chunk.choices[0]
@@ -194,7 +204,7 @@ class LLMClient:
         self._notify_history_changed()
 
         # 构造 Response
-        resp = Response(content=full_content, stop_reason=finish_reason or '')
+        resp = Response(content=full_content, stop_reason=finish_reason or '', usage=usage_dict)
         for i in ordered_idxs:
             slot = tool_acc[i]
             try:

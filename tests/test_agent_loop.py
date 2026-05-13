@@ -256,7 +256,7 @@ class AgentLoopEventTests(unittest.TestCase):
             self.assertIn("path:", tool_message["content"])
             self.assertLess(len(tool_message["content"]), 20000)
 
-            saved_path = os.path.join(output_root, "tool_results", "tool-1-0.txt")
+            saved_path = os.path.join(output_root, "tool_results", "call_1_0.txt")
             with open(saved_path, encoding="utf-8") as file:
                 self.assertEqual(file.read(), "x" * 120000)
             completed_update = [
@@ -334,7 +334,7 @@ class AgentLoopEventTests(unittest.TestCase):
             self.assertIn("path:", tool_message["content"])
             self.assertLess(len(tool_message["content"]), 14000)
 
-            saved_path = os.path.join(output_root, "tool_results", "tool-1-0.txt")
+            saved_path = os.path.join(output_root, "tool_results", "call_1_0.txt")
             with open(saved_path, encoding="utf-8") as file:
                 self.assertEqual(file.read(), "r" * 15000)
             self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")

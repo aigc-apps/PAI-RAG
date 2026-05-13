@@ -188,6 +188,10 @@ class HttpHandler(GenericHandler):
     def do_ask_user(self, args, response):
         question = args.get('question', '请提供输入：')
         candidates = args.get('candidates') or []
+        # 必须先把 session 状态切到 waiting_user，再发 ask_user/done 事件：客户端一旦
+        # 收到 ask_user 就可能立刻发回答，server 这边要确保状态已经是 waiting_user，
+        # 否则会误命中 session_busy。
+        self._session.mark_waiting_for_user()
         if getattr(self._session, 'output_mode', 'events') == 'text':
             text = f'\n[Agent asks] {question}\n'
             if candidates:
@@ -196,9 +200,11 @@ class HttpHandler(GenericHandler):
         else:
             self._session.emit_event(ask_user(question, candidates), check_cancel=False)
             self._session.emit_event(done('end_turn'), check_cancel=False)
-        self._session.mark_waiting_for_user()
         self._session.turn_done_evt.set()
         answer = self._aq.get()
+        # 防止 run_or_answer.clear() 和 do_ask_user.set() 因 _lock 竞争导致 set 后于 clear，
+        # 让下一轮 SSE consumer 看到陈旧的 turn_done=True 误判流结束。
+        self._session.turn_done_evt.clear()
         if answer.strip().isdigit() and candidates and 1 <= int(answer) <= len(candidates):
             answer = candidates[int(answer) - 1]
         return StepOutcome({'status': 'answered', 'answer': answer},
@@ -501,7 +507,7 @@ class AgentSession:
             return {
                 'session_id': self.sid,
                 'run_id': started_run_id,
-                'stream_from': '0-0',
+                'cursor': '0-0',
                 'regenerated_from_run_id': result.get('regenerated_from_run_id') or '',
             }
 
@@ -794,7 +800,7 @@ class AgentService:
         return sess.regenerate_last_answer(mode='events')
 
 
-def openai_chat_completion(model, content, session_id):
+def openai_chat_completion(model, content, session_id, usage=None):
     now = int(time.time())
     return {
         'id': f'chatcmpl-{uuid.uuid4().hex}',
@@ -806,7 +812,7 @@ def openai_chat_completion(model, content, session_id):
             'message': {'role': 'assistant', 'content': content},
             'finish_reason': 'stop',
         }],
-        'usage': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+        'usage': dict(usage) if usage else {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
         'metadata': {'session_id': session_id},
     }
 
@@ -841,9 +847,9 @@ def openai_role_chunk(model):
     }
 
 
-def openai_done_chunk(model):
+def openai_done_chunk(model, usage=None):
     now = int(time.time())
-    return {
+    chunk = {
         'id': f'chatcmpl-{uuid.uuid4().hex}',
         'object': 'chat.completion.chunk',
         'created': now,
@@ -854,3 +860,6 @@ def openai_done_chunk(model):
             'finish_reason': 'stop',
         }],
     }
+    if usage:
+        chunk['usage'] = dict(usage)
+    return chunk

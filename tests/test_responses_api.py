@@ -11,13 +11,13 @@ class ResponseApiHelpersTests(unittest.TestCase):
         updates = [
             {
                 "sessionUpdate": "tool_call",
-                "toolCallId": "tool-1-call",
+                "toolCallId": "call_1_0",
                 "name": "lookup",
                 "input": {"query": "abc"},
             },
             {
                 "sessionUpdate": "tool_call_update",
-                "toolCallId": "tool-1-call",
+                "toolCallId": "call_1_0",
                 "status": "completed",
                 "content": {"text": "found"},
             },
@@ -46,18 +46,25 @@ class ResponseApiHelpersTests(unittest.TestCase):
         ])
         self.assertEqual(response["output"][-1]["content"][0]["text"], "final answer")
 
-    def test_chat_tool_progress_is_custom_non_openai_tool_event(self):
-        progress = server.chat_tool_progress({
-            "event": "tool.started",
-            "run_id": "run_1",
-            "tool_call_id": "call_1",
-            "tool": "exec_command",
-            "preview": "Run command",
-        })
+    def test_build_response_from_run_events_surfaces_usage_from_done(self):
+        updates = [
+            {"sessionUpdate": "agent_message_chunk", "content": {"text": "ok"}},
+            {
+                "sessionUpdate": "done",
+                "stopReason": "end_turn",
+                "usage": {"prompt_tokens": 12, "completion_tokens": 34, "total_tokens": 46},
+            },
+        ]
 
-        self.assertEqual(progress["object"], "pai.tool.progress")
-        self.assertEqual(progress["status"], "running")
-        self.assertEqual(progress["tool"], "exec_command")
+        response, _ = server.build_response_from_run_events(
+            "resp_usage", "test-model", 0, "run_usage", updates,
+        )
+
+        self.assertEqual(response["usage"], {
+            "prompt_tokens": 12,
+            "completion_tokens": 34,
+            "total_tokens": 46,
+        })
 
 
 class SessionStoreResponseTests(unittest.TestCase):

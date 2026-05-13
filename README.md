@@ -228,7 +228,7 @@ curl --location "http://127.0.0.1:8000/v1/runs/${RUN_ID}"
 curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
   --header 'Content-Type: application/json' \
   --data '{
-    "model": "hermes-agent",
+    "model": "pairag-agent",
     "messages": [
       {"role": "user", "content": "你好，请用一句话介绍你自己"}
     ],
@@ -243,7 +243,7 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
   --header 'Content-Type: application/json' \
   --header 'X-Session-Id: test-session-001' \
   --data '{
-    "model": "hermes-agent",
+    "model": "pairag-agent",
     "messages": [
       {"role": "user", "content": "你能做什么？"}
     ],
@@ -251,7 +251,7 @@ curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
   }'
 ```
 
-`stream=true` 时会返回 OpenAI Chat Completions 兼容的 `delta.content` SSE；工具执行进度会额外通过自定义 `event: pai.tool.progress` 输出，不会伪造成 OpenAI `delta.tool_calls`。
+`stream=true` 时只返回 OpenAI Chat Completions 兼容的 `delta.content` SSE；不会伪造 `delta.tool_calls`，也不带任何自定义事件。需要看到工具调用、工具结果请改用 `/v1/responses` 或 `/v1/runs/{run_id}/events`。
 
 Responses API：
 
@@ -259,7 +259,7 @@ Responses API：
 curl --location 'http://127.0.0.1:8000/v1/responses' \
   --header 'Content-Type: application/json' \
   --data '{
-    "model": "hermes-agent",
+    "model": "pairag-agent",
     "input": "你好，请用一句话介绍你自己",
     "stream": false
   }'
@@ -271,7 +271,7 @@ curl --location 'http://127.0.0.1:8000/v1/responses' \
 curl --no-buffer --location 'http://127.0.0.1:8000/v1/responses' \
   --header 'Content-Type: application/json' \
   --data '{
-    "model": "hermes-agent",
+    "model": "pairag-agent",
     "input": "检查当前 workspace 下有哪些文件",
     "stream": true
   }'
