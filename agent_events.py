@@ -10,6 +10,7 @@ INTERNAL_THINKING_TAGS = (
     'checking',
     'taking',
     'taking_action',
+    'taking-action',
 )
 INTERNAL_THINKING_TAG_PATTERN = '|'.join(re.escape(tag) for tag in INTERNAL_THINKING_TAGS)
 

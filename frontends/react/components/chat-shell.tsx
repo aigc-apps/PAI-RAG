@@ -1424,10 +1424,10 @@ export function ChatShell() {
             </span>
           </Button>
         </div>
-        <ScrollArea className="flex-1 px-3">
-          <div className="space-y-2 pb-4">
+        <ScrollArea className="flex-1 px-3 [&>[data-radix-scroll-area-viewport]>div]:!block">
+          <div className="w-full min-w-0 space-y-2 pb-4">
             {sessions.map((session) => (
-              <div className="flex items-center gap-2" key={session.session_id}>
+              <div className="flex w-full min-w-0 items-center gap-2" key={session.session_id}>
                 <button
                   className={cn(
                     "flex min-w-0 flex-1 items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition-colors",
@@ -1443,8 +1443,9 @@ export function ChatShell() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  disabled={session.session_id === currentSessionId && sessions.length <= 1}
+                  className="shrink-0 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                  aria-label="Delete session"
+                  title="Delete session"
                   onClick={() => void handleDeleteSession(session.session_id)}
                 >
                   <Trash2 className="h-4 w-4" />

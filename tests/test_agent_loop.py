@@ -233,6 +233,116 @@ class AgentLoopEventTests(unittest.TestCase):
         self.assertIn("内部思考/规划标签", client.new_messages[1][0]["content"])
         self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
 
+    def test_hyphenated_taking_action_with_summary_retries_for_visible_final_answer(self):
+        # SOP 也会发出 <taking-action>...</taking-action> hyphen 变体;同样需要被识别为
+        # 内部思考标签并触发 summary-only retry。
+        client = SequenceFakeClient([
+            (
+                "<taking-action>aliyun CLI 未安装,需用户确认</taking-action>\n"
+                "<summary>发现 aliyun CLI 未安装</summary>"
+            ),
+            "最终结论: aliyun CLI 未安装,需要用户协助",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=2,
+            on_event=events.append,
+        )
+
+        chunks = [
+            event["content"]["text"]
+            for event in events
+            if event.get("sessionUpdate") == "agent_message_chunk"
+        ]
+        self.assertEqual(chunks, ["最终结论: aliyun CLI 未安装,需要用户协助"])
+        self.assertIn("内部思考/规划标签", client.new_messages[1][0]["content"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_tool_intent_without_actual_call_retries(self):
+        # 模型在文本里声称要调用 ask_user 但实际没有发起 tool_call,
+        # 这种"承诺工具调用却没真的发出"的失败模式应触发一次性 retry。
+        client = SequenceFakeClient([
+            "因此，我将暂停流程，向用户发起明确询问。",
+            "已确认问题,最终回答: 配置缺失",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=2,
+            on_event=events.append,
+        )
+
+        chunks = [
+            event["content"]["text"]
+            for event in events
+            if event.get("sessionUpdate") == "agent_message_chunk"
+        ]
+        self.assertEqual(chunks, ["已确认问题,最终回答: 配置缺失"])
+        self.assertIn("没有发起任何 tool_call", client.new_messages[1][0]["content"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_tool_intent_retry_does_not_fire_on_neutral_final_answer(self):
+        # 普通最终答复(没有"我将调用工具"类预告)不应触发 tool-intent retry,
+        # 否则每次正常结束都会多花一轮。
+        client = SequenceFakeClient([
+            "诊断结论: scene home_feed19 is not configured",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=2,
+            on_event=events.append,
+        )
+
+        # 只调用了一次 LLM,没有 retry
+        self.assertEqual(len(client.new_messages), 1)
+        chunks = [
+            event["content"]["text"]
+            for event in events
+            if event.get("sessionUpdate") == "agent_message_chunk"
+        ]
+        self.assertEqual(chunks, ["诊断结论: scene home_feed19 is not configured"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_tool_intent_retry_is_one_shot(self):
+        # 即使 retry 后模型仍然只输出"我将调用工具"类承诺,也只重试一次,
+        # 不能无限循环。
+        client = SequenceFakeClient([
+            "我将向用户发起询问以确认配置",
+            "我将再次向用户发起询问以确认配置",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=3,
+            on_event=events.append,
+        )
+
+        # 重试且仅重试 1 次:总共 2 次 chat 调用
+        self.assertEqual(len(client.new_messages), 2)
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
     def test_summary_only_emits_summary_when_retry_unavailable(self):
         events, exit_reason = self.run_loop_events("<summary>confirmed root cause</summary>")
 

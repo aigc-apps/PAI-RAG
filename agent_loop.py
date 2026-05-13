@@ -37,6 +37,26 @@ SUMMARY_ONLY_FINAL_RETRY_PROMPT = (
     '复杂诊断类最终报告必须包含：诊断结论、日志证据、配置证据、因果链路、证据边界。'
 )
 
+TOOL_INTENT_WITHOUT_CALL_RETRY_PROMPT = (
+    '上一轮你在文本里声称要调用工具（例如「我将向用户询问」「调用 ask_user」「我将暂停流程」'
+    '或类似表述），但本轮实际并没有发起任何 tool_call，前端因此什么也没收到。\n'
+    '请二选一：\n'
+    '- 如果确实需要调用工具，立即真正发起对应 tool_call（例如 ask_user 必须以工具调用形式发出，'
+    '不能只在文本里描述）；\n'
+    '- 如果不需要再调用工具，直接输出用户可见的最终回答正文，不要再用「我将…」之类的预告口吻。'
+)
+
+TOOL_INTENT_WITHOUT_CALL_RE = re.compile(
+    r'(?:'
+    r'调用\s*(?:ask_user|工具|tool)'
+    r'|(?:向|跟|与)\s*用户\s*(?:发起|进行|做出)?\s*(?:明确)?\s*询问'
+    r'|我(?:将|会|准备|打算|要)\s*(?:暂停|向用户|对用户|询问用户|发起询问|调用|使用)'
+    r'|因此[，,]\s*我(?:将|会|要|准备|打算)'
+    r"|I\s+(?:will|am\s+going\s+to|need\s+to|have\s+to)\s+(?:call|ask|invoke|use)"
+    r')',
+    re.IGNORECASE,
+)
+
 MAX_TURNS_FALLBACK_PROMPT = (
     '已达到本次 agent 最大执行轮次，不能再调用工具。\n'
     '请基于目前已经完成的工具结果和对话上下文，输出用户可见的部分完成报告。\n'
@@ -406,6 +426,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
     new_messages = [{'role': 'user', 'content': user_input}]
     exit_reason = {}
     summary_only_retry_used = False
+    tool_intent_retry_used = False
     total_usage = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
 
     def _accumulate(resp):
@@ -496,6 +517,16 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 summary_only_retry_used = True
                 handler.turn_end_callback(response, [], [], turn, '', {})
                 new_messages = [{'role': 'user', 'content': SUMMARY_ONLY_FINAL_RETRY_PROMPT}]
+                continue
+
+            if (
+                not tool_intent_retry_used
+                and turn < max_turns
+                and TOOL_INTENT_WITHOUT_CALL_RE.search(response.content or '')
+            ):
+                tool_intent_retry_used = True
+                handler.turn_end_callback(response, [], [], turn, '', {})
+                new_messages = [{'role': 'user', 'content': TOOL_INTENT_WITHOUT_CALL_RETRY_PROMPT}]
                 continue
 
             visible_reply = visible_reply or summary
