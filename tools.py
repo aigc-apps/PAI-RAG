@@ -385,6 +385,10 @@ class GenericHandler(BaseHandler):
         if remainder is None:
             return None
         parts = [part for part in remainder.split('/') if part and part != '.']
+        # 只有 `/tmp/<something>` 形式才做隐式重定向；裸 `/tmp`、`/var/tmp` 本身
+        # 不是一个合法的写入目标,让 _resolve_path 退回到正常边界检查并拒绝。
+        if not parts:
+            return None
         if any(part == '..' for part in parts):
             raise WorkspaceViolation(f'workspace_violation: path escapes workspace: {raw}')
         return os.path.join(self.workspace_root, '.tmp', *parts)
@@ -437,7 +441,13 @@ class GenericHandler(BaseHandler):
         ):
             return self._resolve_path('.', for_write=True)
 
-        return self._resolve_path(raw, for_write=True)
+        # cwd 是目录，不应用 /tmp 隐式重定向：要么 cwd 已在 workspace 内，要么显式 allow
+        # 过 writable_root，否则视为越界拒绝。
+        if _is_relative_to(candidate, self.workspace_root):
+            return candidate
+        if any(_is_relative_to(candidate, root) for root in self.writable_roots):
+            return candidate
+        raise WorkspaceViolation(f'workspace_violation: cwd escapes workspace: {raw}')
 
     def _artifact_base_dir(self):
         return self.workspace_root or self.cwd
