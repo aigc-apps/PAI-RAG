@@ -41,6 +41,18 @@ class RedisBus:
     def answer_key(run_id):
         return f'run:{run_id}:answer'
 
+    @staticmethod
+    def cursor_key(run_id):
+        return f'run:{run_id}:cursor'
+
+    def set_run_cursor(self, run_id, last_id):
+        if not last_id:
+            return
+        self.client.setex(self.cursor_key(run_id), self.event_ttl, last_id)
+
+    def get_run_cursor(self, run_id):
+        return self.client.get(self.cursor_key(run_id)) or ''
+
     def publish_event(self, run_id, event):
         key = self.stream_key(run_id)
         event_id = self.client.xadd(key, {'event': json.dumps(event, ensure_ascii=False, default=str)})

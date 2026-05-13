@@ -121,7 +121,18 @@ class CeleryRunService:
         return self.bus.iter_events(run_id, last_id=cursor)
 
     def load_run(self, run_id, user_id):
-        return self.store.load_run(run_id, user_id=user_id)
+        run = self.store.load_run(run_id, user_id=user_id)
+        if run is None:
+            return None
+        # `last_event_id` lives in Redis as of Layer 1 of the SQLite-contention
+        # fix (the per-poll write was the hottest contention point on multi-
+        # process SQLite). The runs row's `last_event_id` column is no longer
+        # written to; overlay the live cursor here so callers see fresh data.
+        cursor = self.bus.get_run_cursor(run_id)
+        if cursor:
+            run = dict(run)
+            run['last_event_id'] = cursor
+        return run
 
     def read_events(self, run_id, user_id, last_id='0-0', block_ms=1000):
         run = self.load_run(run_id, user_id)
@@ -129,17 +140,21 @@ class CeleryRunService:
             return None
         events = self.bus.read_events(run_id, last_id=last_id, block_ms=block_ms)
         if events:
-            self.store.set_run_last_event(run_id, user_id, events[-1][0])
+            self.bus.set_run_cursor(run_id, events[-1][0])
         return events
 
     def cancel_run(self, run_id, user_id):
+        # Layer 3: server only signals cancellation via Redis. The worker
+        # observes the flag at the next event boundary and performs the
+        # SQLite writes (`request_cancel` + `finish_run`) inside its own
+        # process — keeping `(session_id, run_id)` rows single-writer for
+        # the run's active lifetime.
         run = self.load_run(run_id, user_id)
         if run is None:
             return False
         self.bus.cancel(run_id)
         if run.get('status') == 'waiting_user':
             self.bus.push_answer(run_id, '[Cancelled]')
-        self.store.request_cancel(run['session_id'], user_id, run_id)
         return True
 
     def cancel_session(self, session_id, user_id):
@@ -152,5 +167,4 @@ class CeleryRunService:
         self.bus.cancel(run_id)
         if loaded.get('status') == 'waiting_user':
             self.bus.push_answer(run_id, '[Cancelled]')
-        self.store.request_cancel(session_id, user_id, run_id)
         return True

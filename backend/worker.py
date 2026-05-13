@@ -2,6 +2,8 @@
 import os
 import re
 import sys
+import threading
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -94,6 +96,14 @@ class WorkerSession:
         self.cancel_evt = RedisCancelEvent(self.bus, run_id)
         self.status = SESSION_RUNNING
         self.active_run_id = run_id
+        # Layer 4 snapshot debounce: token chunks no longer trigger an
+        # immediate SQLite write; logical-step events (tool calls, ask_user,
+        # done) still flush eagerly so durability matches step boundaries.
+        self._save_lock = threading.Lock()
+        self._save_dirty = False
+        self._save_last_flush_ms = 0.0
+        self._save_timer = None
+        self._save_interval_ms = max(0, int(getattr(config, 'SNAPSHOT_FLUSH_INTERVAL_MS', 750)))
         self.workspace_manager = WorkspaceManager(getattr(config, 'WORKSPACE_ROOT', os.path.join(ROOT, 'workspaces')))
         self.loaded = self.store.load(session_id, user_id=self.user_id)
         if self.loaded is None:
@@ -192,6 +202,11 @@ class WorkerSession:
         }
 
     def save(self):
+        with self._save_lock:
+            self._cancel_pending_flush_locked()
+            self._flush_locked()
+
+    def _flush_locked(self):
         self.store.save_run_snapshot(
             session_id=self.sid,
             user_id=self.user_id,
@@ -203,6 +218,47 @@ class WorkerSession:
             active_run_id=self.active_run_id,
             workspace_path=self.workspace_path,
         )
+        self._save_dirty = False
+        self._save_last_flush_ms = time.monotonic() * 1000.0
+
+    def _cancel_pending_flush_locked(self):
+        timer = self._save_timer
+        if timer is not None:
+            timer.cancel()
+            self._save_timer = None
+
+    def _timer_flush(self):
+        with self._save_lock:
+            self._save_timer = None
+            if not self._save_dirty:
+                return
+            try:
+                self._flush_locked()
+            except Exception as e:
+                # Timer thread runs outside the agent loop; swallow rather
+                # than die silently and lose the next debounced flush.
+                print(f'[WorkerSession] debounced flush failed: {e}', file=sys.stderr)
+
+    def _schedule_save(self, force=False):
+        # Force = step boundary (tool call, ask_user, finish, error). Token
+        # chunks come through with force=False and may coalesce.
+        with self._save_lock:
+            if force or self._save_interval_ms <= 0:
+                self._cancel_pending_flush_locked()
+                self._flush_locked()
+                return
+            self._save_dirty = True
+            now_ms = time.monotonic() * 1000.0
+            if now_ms - self._save_last_flush_ms >= self._save_interval_ms:
+                self._cancel_pending_flush_locked()
+                self._flush_locked()
+                return
+            if self._save_timer is None:
+                delay_s = self._save_interval_ms / 1000.0
+                timer = threading.Timer(delay_s, self._timer_flush)
+                timer.daemon = True
+                self._save_timer = timer
+                timer.start()
 
     def _ensure_assistant_message(self):
         if not self.ui_msgs or self.ui_msgs[-1].get('role') != 'assistant':
@@ -213,12 +269,14 @@ class WorkerSession:
     def _record_assistant_event(self, event):
         self._ensure_assistant_message()
         msg = self.ui_msgs[-1]
-        if event.get('sessionUpdate') == 'agent_message_chunk':
+        update = event.get('sessionUpdate')
+        if update == 'agent_message_chunk':
             text = ((event.get('content') or {}).get('text') or '')
             msg['content'] = (msg.get('content') or '') + text
+            self._schedule_save(force=False)
         else:
             msg.setdefault('events', []).append(event)
-        self.save()
+            self._schedule_save(force=True)
 
     def _check_cancel(self):
         if self.bus.is_cancelled(self.run_id):
@@ -273,6 +331,13 @@ class WorkerSession:
         except KeyboardInterrupt:
             final_status = SESSION_CANCELLED
             exit_reason = {'result': 'INTERRUPTED'}
+            # Layer 3 single-writer: server only sets the Redis cancel flag;
+            # this worker process owns every SQLite write for the run, so
+            # record `cancel_requested_at` here instead of from FastAPI.
+            try:
+                self.store.request_cancel(self.sid, self.user_id, self.run_id)
+            except Exception:
+                pass
             self.emit_event(done('cancelled'), check_cancel=False)
         except (WorkspaceViolation, ToolWorkspaceViolation) as e:
             final_status = SESSION_FAILED
