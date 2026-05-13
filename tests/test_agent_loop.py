@@ -201,6 +201,38 @@ class AgentLoopEventTests(unittest.TestCase):
         self.assertEqual(chunks, ["service is running"])
         self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
 
+    def test_hyphenated_clinical_thinking_with_summary_retries_for_visible_final_answer(self):
+        # SOP 实际下发的是 hyphen 形态 <clinical-thinking>;此前 INTERNAL_THINKING_TAGS
+        # 只列了下划线版本,这种 turn 既不会被识别为思考标签隐藏,也不会触发 summary-only
+        # retry,导致用户只收到一行 <summary>。这条 case 锁住 hyphen 也走 retry 分支。
+        client = SequenceFakeClient([
+            (
+                "<clinical-thinking>Need to enter Step 6 and write the report.</clinical-thinking>\n"
+                "<summary>confirmed root cause</summary>"
+            ),
+            "诊断结论: scene home_feed19 is not configured",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=2,
+            on_event=events.append,
+        )
+
+        chunks = [
+            event["content"]["text"]
+            for event in events
+            if event.get("sessionUpdate") == "agent_message_chunk"
+        ]
+        self.assertEqual(chunks, ["诊断结论: scene home_feed19 is not configured"])
+        self.assertIn("内部思考/规划标签", client.new_messages[1][0]["content"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
     def test_summary_only_emits_summary_when_retry_unavailable(self):
         events, exit_reason = self.run_loop_events("<summary>confirmed root cause</summary>")
 

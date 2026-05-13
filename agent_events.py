@@ -6,6 +6,7 @@ from typing import Any
 INTERNAL_THINKING_TAGS = (
     'thinking',
     'clinical_thinking',
+    'clinical-thinking',
     'checking',
     'taking',
     'taking_action',
