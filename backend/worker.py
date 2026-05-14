@@ -33,6 +33,7 @@ from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import build_skill_user_input, match_skill, scan_skills  # noqa: E402
 from tools import GenericHandler, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
 import settings as config  # noqa: E402
+import runtime_config  # noqa: E402
 
 
 SKILLS = scan_skills(os.path.join(ROOT, 'skills'))
@@ -140,7 +141,7 @@ class WorkerSession:
         return LLMClient(
             api_key=config.API_KEY,
             api_base=getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
-            model=getattr(config, 'MODEL', 'qwen-plus'),
+            model=runtime_config.get_active_model(),
             max_tokens=getattr(config, 'MAX_TOKENS', 8192),
             history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
             timeout=getattr(config, 'TIMEOUT', 300),

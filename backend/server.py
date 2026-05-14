@@ -34,6 +34,7 @@ from tools import WorkspaceViolation as ToolWorkspaceViolation
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import settings as config
+import runtime_config
 
 
 app = FastAPI(title='PAI-RAG OpenAI Compatible Backend')
@@ -1096,26 +1097,49 @@ def health_detailed():
     return {
         'status': status,
         'runner_backend': RUNNER_BACKEND,
-        'model': getattr(config, 'MODEL', 'qwen-plus'),
+        'model': runtime_config.get_active_model(),
         'checks': checks,
     }
 
 
 @app.get('/v1/models')
 def models():
+    active = runtime_config.get_active_model()
     configured = getattr(config, 'MODEL', 'qwen-plus')
     aliases = list(getattr(config, 'MODEL_ALIASES', ['mini-agent', 'agent']) or [])
     ids = []
-    for model_id in [configured, *aliases]:
+    for model_id in [active, configured, *aliases]:
         if model_id and model_id not in ids:
             ids.append(model_id)
     return {
         'object': 'list',
+        'active_model': active,
         'data': [
-            {'id': model_id, 'object': 'model', 'created': int(time.time()), 'owned_by': 'pai-rag'}
+            {
+                'id': model_id,
+                'object': 'model',
+                'created': int(time.time()),
+                'owned_by': 'pai-rag',
+                'active': model_id == active,
+            }
             for model_id in ids
         ],
     }
+
+
+@app.post('/v1/models/active')
+async def set_active_model_endpoint(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+    try:
+        new_model = runtime_config.set_active_model(body.get('model'))
+    except ValueError as exc:
+        return JSONResponse(openai_error(str(exc)), status_code=400)
+    return {'active_model': new_model}
 
 
 @app.get('/v1/skills')
@@ -1257,7 +1281,7 @@ async def create_response(request: Request):
     if not isinstance(body, dict):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
 
-    model = body.get('model') or getattr(config, 'MODEL', 'qwen-plus')
+    model = body.get('model') or runtime_config.get_active_model()
     stream = bool(body.get('stream'))
     cwd = body.get('cwd')
     instructions = body.get('instructions') or ''
@@ -1370,7 +1394,7 @@ async def chat_completions(
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
     if not isinstance(body, dict):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
-    model = body.get('model') or getattr(config, 'MODEL', 'qwen-plus')
+    model = body.get('model') or runtime_config.get_active_model()
     messages = body.get('messages') or []
     stream = bool(body.get('stream'))
     cwd = body.get('cwd')

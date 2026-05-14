@@ -81,6 +81,25 @@ export async function stopRun(runId: string): Promise<void> {
   await assertOk(response);
 }
 
+export type ModelInfo = { id: string; active: boolean };
+export type ModelsResponse = { active_model: string; data: ModelInfo[] };
+
+export async function getActiveModel(): Promise<ModelsResponse> {
+  const response = await fetch("/api/models", { cache: "no-store" });
+  await assertOk(response);
+  return response.json();
+}
+
+export async function setActiveModel(name: string): Promise<{ active_model: string }> {
+  const response = await fetch("/api/models/active", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: name }),
+  });
+  await assertOk(response);
+  return response.json();
+}
+
 export async function getSkills(): Promise<SkillInventory> {
   const response = await fetch("/api/skills", { cache: "no-store" });
   await assertOk(response);

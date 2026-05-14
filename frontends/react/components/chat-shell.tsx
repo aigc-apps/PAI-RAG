@@ -9,10 +9,12 @@ import {
   createRun,
   createSession,
   deleteSession,
+  getActiveModel,
   getSession,
   getSkills,
   listSessions,
   regenerateLastAnswer,
+  setActiveModel,
   stopRun,
   streamRunEvents,
 } from "@/lib/api";
@@ -938,6 +940,88 @@ function shouldReplaceSessionTitle(title?: string) {
   return !value || value === "New Task";
 }
 
+const ACTIVE_MODEL_LS_KEY = "pai-rag.active-model";
+
+function ModelPickerDialog({
+  current,
+  onClose,
+  onSaved,
+}: {
+  current: string;
+  onClose: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const [value, setValue] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    const trimmed = value.trim();
+    if (!trimmed || busy) {
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await setActiveModel(trimmed);
+      onSaved(res.active_model);
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/30 px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <div className="flex w-full max-w-md flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">切换模型</h3>
+            <p className="text-sm text-slate-500">输入要切换到的模型名,例如 qwen-plus、qwen-max、glm-5</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="space-y-3 px-5 py-4">
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                onClose();
+              }
+            }}
+            placeholder="qwen-plus"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          {err ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>
+          ) : null}
+          <p className="text-xs text-slate-500">
+            模型名不会预先校验,如果上游不识别会在下次对话时报错。修改后立即对所有新对话生效,正在进行中的对话沿用原模型。
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            取消
+          </Button>
+          <Button onClick={() => void submit()} disabled={busy || !value.trim()}>
+            {busy ? "保存中…" : "保存"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ChatShell() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -951,6 +1035,15 @@ export function ChatShell() {
   const [skillsInventory, setSkillsInventory] = useState<SkillInventory | null>(null);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [activeModel, setActiveModelState] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return localStorage.getItem(ACTIVE_MODEL_LS_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
   const streamingSessionsRef = useRef<Set<string>>(streamingSessions);
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
@@ -1075,6 +1168,26 @@ export function ChatShell() {
       active = false;
     };
   }, [loadInitialSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getActiveModel()
+      .then((res) => {
+        if (cancelled) return;
+        setActiveModelState(res.active_model);
+        try {
+          localStorage.setItem(ACTIVE_MODEL_LS_KEY, res.active_model);
+        } catch {
+          // ignore quota / private-mode issues
+        }
+      })
+      .catch(() => {
+        // best-effort: keep showing whatever's in state (localStorage cache or empty)
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!shouldStickToBottomRef.current) {
@@ -1473,6 +1586,17 @@ export function ChatShell() {
               <p className="text-sm text-slate-500">{loading ? "Loading sessions..." : `${messages.length} messages`}</p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setModelDialogOpen(true)}
+                className="rounded-md transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                aria-label="切换模型"
+                title="点击切换模型"
+              >
+                <Badge variant="outline" className="cursor-pointer">
+                  Model: {activeModel || "…"}
+                </Badge>
+              </button>
               <Badge variant="outline">Local</Badge>
               {streaming ? <Badge>Streaming</Badge> : <Badge variant="secondary">Idle</Badge>}
               <Button variant="outline" disabled={!streaming} onClick={() => void handleStop()}>
@@ -1615,6 +1739,20 @@ export function ChatShell() {
           loading={skillsLoading}
           error={skillsError}
           onClose={() => setSkillsOpen(false)}
+        />
+      ) : null}
+      {modelDialogOpen ? (
+        <ModelPickerDialog
+          current={activeModel}
+          onClose={() => setModelDialogOpen(false)}
+          onSaved={(name) => {
+            setActiveModelState(name);
+            try {
+              localStorage.setItem(ACTIVE_MODEL_LS_KEY, name);
+            } catch {
+              // ignore
+            }
+          }}
         />
       ) : null}
     </div>

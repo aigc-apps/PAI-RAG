@@ -28,6 +28,7 @@ from skill_manager import (
 )
 from frontends.acp.jsonrpc import JsonRpcServer
 import settings as config
+import runtime_config
 
 from agent_events import agent_message_chunk, ask_user, done, stop_reason
 
@@ -249,7 +250,7 @@ class AcpSession:
         return LLMClient(
             api_key=config.API_KEY,
             api_base=getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
-            model=getattr(config, 'MODEL', 'qwen-plus'),
+            model=runtime_config.get_active_model(),
             max_tokens=getattr(config, 'MAX_TOKENS', 8192),
             history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
             timeout=getattr(config, 'TIMEOUT', 300),

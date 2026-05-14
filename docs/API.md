@@ -293,7 +293,7 @@ Responses API 支持以下字段：
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `input` | string / array | 当前输入，必填 |
-| `model` | string | 模型 id；仅作回显，不会用于路由（实际模型在服务端 `MODEL` 配置） |
+| `model` | string | 模型 id：传入则透传给上游 LLM。不传则使用服务端当前生效模型（`runtime_config` 运行时值或环境变量 `MODEL`，详见下文 `/v1/models` 切换接口） |
 | `instructions` | string | 本轮系统级说明 |
 | `previous_response_id` | string | 继续某个历史 response |
 | `conversation` | string | 业务方自定义会话标识 |
@@ -750,19 +750,55 @@ curl --location "$BASE_URL/health/detailed" # 见下方示例
 curl --location "$BASE_URL/v1/models"
 ```
 
-返回 OpenAI 兼容结构：
+返回 OpenAI 兼容结构，并额外携带 `active_model` 顶层字段以及 `data[].active` 标记：
 
 ```json
 {
   "object": "list",
+  "active_model": "qwen-plus",
   "data": [
-    {"id": "qwen-plus", "object": "model", "created": 1778640000, "owned_by": "pai-rag"},
-    {"id": "mini-agent", "object": "model", "created": 1778640000, "owned_by": "pai-rag"}
+    {"id": "qwen-plus", "object": "model", "created": 1778640000, "owned_by": "pai-rag", "active": true},
+    {"id": "mini-agent", "object": "model", "created": 1778640000, "owned_by": "pai-rag", "active": false},
+    {"id": "agent", "object": "model", "created": 1778640000, "owned_by": "pai-rag", "active": false}
   ]
 }
 ```
 
-`data` 包含 `MODEL` + `MODEL_ALIASES`。`created` 是请求时刻的当前时间戳——客户端发请求时模型 id 用列表里任意一个都可以，服务端只做回显，不影响实际路由。
+- `active_model`：当前实际生效的模型，所有新建的对话默认走它。优先级：运行时切换值（见下文）> 环境变量 `MODEL` > `qwen-plus`。
+- `data`：当前生效模型 + `MODEL_ALIASES`。第一项始终是 active；`data[].active=true` 标记当前生效项。
+- `created` 是请求时刻的时间戳。
+
+### 切换当前生效模型
+
+`POST /v1/models/active` 修改全局生效模型。改动**立即对所有新建对话生效**（已经在跑的 stream 沿用原模型），并写入 `memory/active_model.json` 跨进程 / 跨重启持久化。HTTP server / Celery worker / ACP server 共享同一份。
+
+```bash
+curl --location -X POST "$BASE_URL/v1/models/active" \
+  --header 'Content-Type: application/json' \
+  --data '{"model": "qwen-max"}'
+```
+
+成功返回：
+
+```json
+{"active_model": "qwen-max"}
+```
+
+请求体只接受 `{"model": "<name>"}` 一种 schema。`<name>` 校验规则：
+
+- 必须是非空字符串
+- 不能含空白字符（空格 / tab / 换行）
+- 长度 ≤ 200
+
+不满足返回 `400`：
+
+```json
+{"error": {"message": "model must not contain whitespace", "type": "invalid_request_error", "code": "invalid_request_error"}}
+```
+
+> 注意：服务端不会预先校验上游 LLM 是否真的支持该模型名。如果输错，下次对话调用上游 API 时才会失败（透传上游错误）。
+
+回退到环境变量默认值：直接 `POST` 当前 `MODEL` 即可，没有专门的 reset 接口。
 
 ### Skills 列表
 
