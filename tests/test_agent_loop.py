@@ -320,6 +320,115 @@ class AgentLoopEventTests(unittest.TestCase):
         self.assertEqual(chunks, ["诊断结论: scene home_feed19 is not configured"])
         self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
 
+    def test_summary_only_retry_can_fire_twice(self):
+        # 真实 case (.tmp/20260514_020910): 模型连续两轮都只输出 <summary>...</summary>。
+        # 旧实现 retry 是一次性 bool,第二次直接退出 NO_TOOL_CALL。改成最多 2 次后,
+        # 第三轮还有一次机会拿到可见正文。
+        client = SequenceFakeClient([
+            "<summary>开始执行 PAI Rec 接口诊断任务</summary>",
+            "<summary>启动 PAI Rec 接口诊断技能</summary>",
+            "诊断结论: scene embedding_recall 配置正常",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=3,
+            on_event=events.append,
+        )
+
+        # 前两轮都触发 summary-only retry,第 3 轮拿到正文。共 3 次 chat。
+        self.assertEqual(len(client.new_messages), 3)
+        chunks = [
+            event["content"]["text"]
+            for event in events
+            if event.get("sessionUpdate") == "agent_message_chunk"
+        ]
+        self.assertEqual(chunks, ["诊断结论: scene embedding_recall 配置正常"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_summary_only_retry_caps_at_two(self):
+        # 即使模型连续 3 轮都 summary-only,也只 retry 2 次,第 3 轮 fallback 取 summary 文本。
+        client = SequenceFakeClient([
+            "<summary>S1</summary>",
+            "<summary>S2</summary>",
+            "<summary>S3</summary>",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=5,
+            on_event=events.append,
+        )
+
+        self.assertEqual(len(client.new_messages), 3)
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_skill_activation_announced_without_use_skill_call_retries(self):
+        # B 修复:模型用 <summary> 说"启动 PAI Rec 接口诊断技能",但没有真正发起
+        # use_skill tool_call。summary-only retry 用尽后,tool-intent retry 的扩展
+        # 正则要能识别"启动 X 技能"模式,再给一次机会。
+        client = SequenceFakeClient([
+            "<summary>开始执行 PAI Rec 接口诊断任务</summary>",
+            "<summary>启动 PAI Rec 接口诊断技能</summary>",
+            "<summary>启动 PAI Rec 接口诊断技能</summary>",
+            "诊断结论: 配置就绪",
+        ])
+        events = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=4,
+            on_event=events.append,
+        )
+
+        # 2 次 summary-only retry + 1 次 tool-intent retry = 4 轮 chat
+        self.assertEqual(len(client.new_messages), 4)
+        # 最后那一轮注入的应当是 tool-intent prompt
+        self.assertIn("没有发起任何 tool_call", client.new_messages[3][0]["content"])
+        chunks = [
+            event["content"]["text"]
+            for event in events
+            if event.get("sessionUpdate") == "agent_message_chunk"
+        ]
+        self.assertEqual(chunks, ["诊断结论: 配置就绪"])
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
+    def test_use_skill_literal_in_text_triggers_tool_intent_retry(self):
+        # 模型在文本里直接写 "use_skill alibabacloud-pai-rec-diagnosis" 但没真发 tool_call,
+        # 也应该触发 tool-intent retry。
+        client = SequenceFakeClient([
+            "I will use_skill alibabacloud-pai-rec-diagnosis to start.",
+            "诊断结果",
+        ])
+        client_msgs = []
+
+        exit_reason = agent_runner_loop(
+            client=client,
+            system_prompt="system",
+            user_input="user",
+            handler=BaseHandler(),
+            tools_schema=[],
+            max_turns=2,
+            on_chunk=client_msgs.append,
+        )
+
+        self.assertEqual(len(client.new_messages), 2)
+        self.assertEqual(exit_reason["result"], "NO_TOOL_CALL")
+
     def test_tool_intent_retry_is_one_shot(self):
         # 即使 retry 后模型仍然只输出"我将调用工具"类承诺,也只重试一次,
         # 不能无限循环。

@@ -38,11 +38,12 @@ SUMMARY_ONLY_FINAL_RETRY_PROMPT = (
 )
 
 TOOL_INTENT_WITHOUT_CALL_RETRY_PROMPT = (
-    '上一轮你在文本里声称要调用工具（例如「我将向用户询问」「调用 ask_user」「我将暂停流程」'
-    '或类似表述），但本轮实际并没有发起任何 tool_call，前端因此什么也没收到。\n'
+    '上一轮你在文本里声称要调用工具或激活 skill（例如「我将向用户询问」「调用 ask_user」'
+    '「启动/激活 X 技能」「use_skill …」「我将暂停流程」或类似表述），但本轮实际并没有发起'
+    '任何 tool_call，前端因此什么也没收到。\n'
     '请二选一：\n'
-    '- 如果确实需要调用工具，立即真正发起对应 tool_call（例如 ask_user 必须以工具调用形式发出，'
-    '不能只在文本里描述）；\n'
+    '- 如果确实需要调用工具或激活 skill，立即真正发起对应 tool_call（例如 ask_user / use_skill '
+    '必须以工具调用形式发出，不能只在文本或 <summary> 里描述）；\n'
     '- 如果不需要再调用工具，直接输出用户可见的最终回答正文，不要再用「我将…」之类的预告口吻。'
 )
 
@@ -52,6 +53,8 @@ TOOL_INTENT_WITHOUT_CALL_RE = re.compile(
     r'|(?:向|跟|与)\s*用户\s*(?:发起|进行|做出)?\s*(?:明确)?\s*询问'
     r'|我(?:将|会|准备|打算|要)\s*(?:暂停|向用户|对用户|询问用户|发起询问|调用|使用)'
     r'|因此[，,]\s*我(?:将|会|要|准备|打算)'
+    r'|(?:启动|激活|调用|使用|开启|进入)\s*[\w\-/. ]{0,40}?\s*(?:技能|skill)'
+    r'|use_skill'
     r"|I\s+(?:will|am\s+going\s+to|need\s+to|have\s+to)\s+(?:call|ask|invoke|use)"
     r')',
     re.IGNORECASE,
@@ -425,7 +428,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
     handler.max_turns = max_turns
     new_messages = [{'role': 'user', 'content': user_input}]
     exit_reason = {}
-    summary_only_retry_used = False
+    summary_only_retry_count = 0
     tool_intent_retry_used = False
     total_usage = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
 
@@ -513,8 +516,8 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                     content=process_content,
                 ))
 
-            if not visible_reply and summary and not summary_only_retry_used and turn < max_turns:
-                summary_only_retry_used = True
+            if not visible_reply and summary and summary_only_retry_count < 2 and turn < max_turns:
+                summary_only_retry_count += 1
                 handler.turn_end_callback(response, [], [], turn, '', {})
                 new_messages = [{'role': 'user', 'content': SUMMARY_ONLY_FINAL_RETRY_PROMPT}]
                 continue
