@@ -157,3 +157,164 @@ curl -X POST http://api.example.com/v1/chat/completions \
 |                     |             | - url（string）：来源 URL。|
 |                     |             | - score（float）：分数。|
 
+---
+
+## 图片/视频问答
+
+支持通过上传图片或视频文件，结合多模态大模型（如 Qwen-VL）进行视觉内容问答。
+
+### 前置条件
+
+- 系统中已配置多模态大模型（如 `qwen-vl-plus`、Qwen-VL、Claude 等）
+- 所有请求需携带 `X-TENANT-ID` 请求头
+
+---
+
+### 第一步：上传图片文件
+
+**接口**：`POST /v1/files`
+
+**请求示例**：
+
+```bash
+curl -s -X POST "http://localhost:8680/v1/files" \
+  -H "X-TENANT-ID: your-tenant-id" \
+  -F "file=@/path/to/photo.jpg" \
+  -F "purpose=chat_attachment"
+```
+
+**请求参数**（multipart/form-data）：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `file` | `binary` | ✓ | 上传的文件（图片/视频） |
+| `purpose` | `string` | ✓ | 用途，图片问答使用 `chat_attachment`（TTL 7天）或 `vision`（TTL 24小时） |
+| `metadata` | `string` | ✗ | JSON 格式的自定义元数据 |
+| `expires_in` | `integer` | ✗ | 过期时间（秒），0 表示不过期，覆盖 purpose 默认 TTL |
+
+**响应示例**（HTTP 202）：
+
+```json
+{
+  "data": {
+    "id": "file-abc123",
+    "tenant_id": "your-tenant-id",
+    "purpose": "chat_attachment",
+    "file_name": "photo.jpg",
+    "file_extension": ".jpg",
+    "file_size": 102400,
+    "mime_type": "image/jpeg",
+    "status": "succeeded",
+    "created_at": "2026-05-13T10:00:00",
+    "updated_at": "2026-05-13T10:00:00"
+  }
+}
+```
+
+> 📌 **注意**：图片和视频文件上传后会立即标记为 `succeeded` 状态（无需后台处理），请保存返回的 `id` 用于下一步。
+
+---
+
+### 第二步：带图片问答
+
+**接口**：`POST /v1/chat/completions`
+
+**请求示例**：
+
+```bash
+curl -sN -X POST "http://localhost:8680/v1/chat/completions" \
+  -H "X-TENANT-ID: your-tenant-id" \
+  -H "Content-Type: application/json" \
+  -d '{
+  "model": "qwen-vl-plus",
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": "这张图片里有什么？",
+      "attachments": [
+        {"id": "file-abc123", "contentType": "image/jpeg"}
+      ]
+    }
+  ]
+}'
+```
+
+**请求参数**：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | `string` | ✓ | 模型名称，需支持多模态（如 `qwen-vl-plus`） |
+| `stream` | `boolean` | ✗ | 默认 `true`，SSE 流式输出 |
+| `messages` | `Array` | ✓ | 消息数组 |
+| `messages[].content` | `string` | ✓ | 用户提问文本（可为空，仅发送图片时系统自动引导分析） |
+| `messages[].attachments` | `Array` | ✓ | 附件数组，引用已上传的文件 |
+| `attachments[].id` | `string` | ✓ | 第一步上传返回的文件 ID |
+| `attachments[].contentType` | `string` | ✓ | MIME 类型，如 `image/jpeg`、`image/png`、`video/mp4` |
+
+---
+
+### 多图片示例
+
+```json
+{
+  "model": "qwen-vl-plus",
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": "请对比这两张图片的区别",
+      "attachments": [
+        {"id": "file-abc123", "contentType": "image/jpeg"},
+        {"id": "file-def456", "contentType": "image/png"}
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### 视频问答示例
+
+与图片相同流程，仅 `contentType` 改为视频类型：
+
+```json
+{
+  "model": "qwen-vl-plus",
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": "这个视频讲了什么内容？",
+      "attachments": [
+        {"id": "file-video789", "contentType": "video/mp4"}
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### 工作原理
+
+1. 后端检测用户消息中的 `image/*` 或 `video/*` 类型附件
+2. 将文件转换为 base64 数据 URI
+3. 自动注册 `multimodal-parser` 工具供 Agent 调用
+4. Agent 调用多模态大模型（如 Qwen-VL）分析图片/视频内容
+5. 如果用户提供了文本问题，作为分析指令传给模型；如果未提供文本，系统会自动引导模型先理解媒体内容再回答
+
+---
+
+### 相关接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /v1/files/{file_id}` | 查询文件状态 |
+| `GET /v1/files/{file_id}/content` | 获取文件原始内容 |
+| `GET /v1/files/{file_id}/url` | 获取文件预签名 URL |
+| `DELETE /v1/files/{file_id}` | 手动删除文件 |
+
+> 💡 `purpose=chat_attachment` 的文件会在 7 天后自动过期清理。
+
