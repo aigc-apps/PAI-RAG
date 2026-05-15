@@ -18,7 +18,7 @@ sys.path.insert(0, ROOT)
 
 from agent_loop import agent_runner_loop, StepOutcome, sanitize_for_archive
 from tools import GenericHandler
-from llm_client import LLMClient
+from llm_client import LLMClient, make_llm_client
 from backend.memory_scope import ensure_memory_scope, memory_scope_for, read_index
 from backend.tool_schemas import main_tools_schema
 from session_store import SERVER_USER_ID, SessionStore
@@ -247,14 +247,7 @@ class AcpSession:
 
     @staticmethod
     def _create_client():
-        return LLMClient(
-            api_key=config.API_KEY,
-            api_base=getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
-            model=runtime_config.get_active_model(),
-            max_tokens=getattr(config, 'MAX_TOKENS', 8192),
-            history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
-            timeout=getattr(config, 'TIMEOUT', 300),
-        )
+        return make_llm_client()
 
     def restore_from(self, loaded):
         if not loaded:

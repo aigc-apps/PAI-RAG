@@ -17,6 +17,7 @@ from backend.agent_service import (  # noqa: E402
     SESSION_FAILED,
     SESSION_RUNNING,
     SESSION_WAITING_USER,
+    AskUserTimeoutError,
     archive_session,
     build_system_prompt,
     exit_reason_error,
@@ -28,12 +29,12 @@ from backend.celery_app import celery_app  # noqa: E402
 from backend.redis_bus import RedisBus  # noqa: E402
 from backend.tool_schemas import main_tools_schema  # noqa: E402
 from backend.workspace import WorkspaceManager, WorkspaceViolation  # noqa: E402
-from llm_client import LLMClient  # noqa: E402
+from llm_client import LLMClient, make_llm_client  # noqa: E402
 from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import build_skill_user_input, match_skill, scan_skills  # noqa: E402
 from tools import GenericHandler, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
 import settings as config  # noqa: E402
-import runtime_config  # noqa: E402
+import runtime_config  # noqa: E402,F401
 
 
 SKILLS = scan_skills(os.path.join(ROOT, 'skills'))
@@ -86,12 +87,13 @@ class CeleryHandler(GenericHandler):
 
 
 class WorkerSession:
-    def __init__(self, run_id, session_id, user_id, task_text, mode='events', cwd=None):
+    def __init__(self, run_id, session_id, user_id, task_text, mode='events', cwd=None, model_override=None):
         self.run_id = run_id
         self.sid = session_id
         self.user_id = user_id or SERVER_USER_ID
         self.task_text = task_text
         self.mode = mode
+        self.model_override = model_override
         self.store = SessionStore(os.path.join(ROOT, 'memory', 'sessions'))
         self.bus = RedisBus()
         self.cancel_evt = RedisCancelEvent(self.bus, run_id)
@@ -138,14 +140,7 @@ class WorkerSession:
         return root, root, []
 
     def _create_client(self):
-        return LLMClient(
-            api_key=config.API_KEY,
-            api_base=getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
-            model=runtime_config.get_active_model(),
-            max_tokens=getattr(config, 'MAX_TOKENS', 8192),
-            history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
-            timeout=getattr(config, 'TIMEOUT', 300),
-        )
+        return make_llm_client(model_override=self.model_override)
 
     def _build_handler(self):
         sk, sk_args = match_skill(self.task_text, SKILLS)
@@ -303,7 +298,12 @@ class WorkerSession:
         self.save()
 
     def wait_for_answer(self):
-        answer = self.bus.wait_answer(self.run_id)
+        try:
+            answer = self.bus.wait_answer(self.run_id)
+        except TimeoutError as e:
+            # 转成 AskUserTimeoutError，让 run() 的 except 分支区分"用户没回答"
+            # 与"上游 LLM 网络超时"——前者是终态、需要 finalize；后者是 ERROR。
+            raise AskUserTimeoutError(str(e)) from e
         self.ui_msgs.append({'role': 'user', 'content': answer})
         self.status = SESSION_RUNNING
         self.save()
@@ -344,6 +344,15 @@ class WorkerSession:
             final_status = SESSION_FAILED
             exit_reason = {'result': 'WORKSPACE_VIOLATION', 'msg': str(e)}
             self.emit_event(agent_message_chunk(f'**[Workspace violation]** {e}'), check_cancel=False)
+            self.emit_event(done(stop_reason(exit_reason)), check_cancel=False)
+        except AskUserTimeoutError as e:
+            # 用户没在 ASK_USER_TIMEOUT_SECONDS 内回答 → run 终止为 failed。
+            # 注意：上面 wait_for_answer 抛之前 status 还停在 waiting_user，
+            # 这里 finally 会把它改写成 SESSION_FAILED——不需要 force flag，
+            # 因为 worker 的 finally 没有 waiting_user 守卫。
+            final_status = SESSION_FAILED
+            exit_reason = {'result': 'ASK_USER_TIMEOUT', 'msg': str(e)}
+            self.emit_event(agent_message_chunk(f'**[ask_user timeout]** {e}'), check_cancel=False)
             self.emit_event(done(stop_reason(exit_reason)), check_cancel=False)
         except Exception as e:
             final_status = SESSION_FAILED
@@ -392,6 +401,9 @@ def json_tools_schema():
 
 
 @celery_app.task(name='pai_rag.run_agent')
-def run_agent_task(run_id, session_id, user_id, text, mode='events', cwd=None):
-    session = WorkerSession(run_id, session_id, user_id, text, mode=mode, cwd=cwd)
+def run_agent_task(run_id, session_id, user_id, text, mode='events', cwd=None, model_override=None):
+    session = WorkerSession(
+        run_id, session_id, user_id, text,
+        mode=mode, cwd=cwd, model_override=model_override,
+    )
     session.run()

@@ -17,7 +17,7 @@ from backend.memory_scope import ensure_memory_scope, memory_scope_for, read_ind
 from backend.tool_schemas import main_tools_schema  # noqa: E402
 from backend.workspace import WorkspaceManager, WorkspaceViolation  # noqa: E402
 from agent_loop import StepOutcome, agent_runner_loop, sanitize_for_archive  # noqa: E402
-from llm_client import LLMClient  # noqa: E402
+from llm_client import LLMClient, make_llm_client  # noqa: E402
 from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import (  # noqa: E402
     build_skill_user_input,
@@ -49,7 +49,15 @@ FAILED_EXIT_RESULTS = {
     'MAX_TURNS_EXCEEDED',
     'ERROR',
     'WORKSPACE_VIOLATION',
+    'ASK_USER_TIMEOUT',
 }
+
+
+class AskUserTimeoutError(RuntimeError):
+    """Raised when the user does not answer an ask_user prompt within
+    ``ASK_USER_TIMEOUT_SECONDS``. Treated as a terminal failure: the run is
+    finalized as ``failed`` and the session returns to a free state so a new
+    run can start."""
 
 
 class SessionBusyError(RuntimeError):
@@ -202,7 +210,13 @@ class HttpHandler(GenericHandler):
             self._session.emit_event(ask_user(question, candidates), check_cancel=False)
             self._session.emit_event(done('end_turn'), check_cancel=False)
         self._session.turn_done_evt.set()
-        answer = self._aq.get()
+        timeout = max(1, int(getattr(config, 'ASK_USER_TIMEOUT_SECONDS', 30 * 60)))
+        try:
+            answer = self._aq.get(timeout=timeout)
+        except queue.Empty:
+            raise AskUserTimeoutError(
+                f'ask_user timed out after {timeout}s waiting for user answer'
+            )
         # 防止 run_or_answer.clear() 和 do_ask_user.set() 因 _lock 竞争导致 set 后于 clear，
         # 让下一轮 SSE consumer 看到陈旧的 turn_done=True 误判流结束。
         self._session.turn_done_evt.clear()
@@ -235,15 +249,28 @@ class AgentSession:
         self.active_run_id = ''
         self._lock = threading.RLock()
 
-    def _create_client(self):
-        return LLMClient(
-            api_key=config.API_KEY,
-            api_base=getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
-            model=runtime_config.get_active_model(),
-            max_tokens=getattr(config, 'MAX_TOKENS', 8192),
-            history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
-            timeout=getattr(config, 'TIMEOUT', 300),
-        )
+    def _create_client(self, model_override=None):
+        return make_llm_client(model_override=model_override, history_changed=self.save)
+
+    def _refresh_client_for_run(self, model_override):
+        """Rebuild the LLMClient at the start of each fresh turn.
+
+        Two reasons to always reconstruct:
+          1. ``model_override`` may differ from the previous turn (a session
+             can fan out across providers — qwen on one turn, deepseek on
+             the next), and that means a different ``api_base`` and a
+             different key from the pool.
+          2. Even when the model doesn't change, a key the previous turn
+             used may have been evicted between turns; ``provider_pool.acquire``
+             gives us a fresh live key.
+
+        History on the client is preserved across the swap so the new turn
+        has the same conversation context.
+        """
+        history = self.client.history if self.client else []
+        new_client = self._create_client(model_override=model_override)
+        new_client.history = history
+        self.client = new_client
 
     def restore_from(self, loaded):
         if not loaded:
@@ -361,10 +388,13 @@ class AgentSession:
             self.service.store.set_run_status(run_id, self.user_id, SESSION_WAITING_USER)
         self.save()
 
-    def run_or_answer(self, text, mode='events'):
+    def run_or_answer(self, text, mode='events', model_override=None):
         with self._lock:
             if self.worker is not None and self.worker.is_alive():
                 if self.status == SESSION_WAITING_USER:
+                    # Mid-run ask_user reply: don't switch model — the in-flight
+                    # worker is still bound to the LLMClient that was built when
+                    # *that* turn started.
                     self._append_ui_message_locked('user', text)
                     self.status = SESSION_RUNNING
                     self.turn_done_evt.clear()
@@ -379,6 +409,7 @@ class AgentSession:
                 self.worker.join(timeout=0.1)
                 self.worker = None
 
+            self._refresh_client_for_run(model_override)
             return self._spawn_worker_locked(text, mode=mode)
 
     def _spawn_worker_locked(
@@ -514,6 +545,7 @@ class AgentSession:
 
     def _run_loop(self, user_input, task_text, mode='events', run_id=''):
         final_status = SESSION_COMPLETED
+        force_finalize = False
         try:
             kwargs = {
                 'client': self.client,
@@ -544,6 +576,18 @@ class AgentSession:
             else:
                 self.emit_event(agent_message_chunk(f'**[Workspace violation]** {e}'), check_cancel=False)
                 self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
+        except AskUserTimeoutError as e:
+            # ask_user 超时是终态：session 还停在 waiting_user，但用户没回答 → 把 run
+            # 标 failed 并强制 finalize，让 finally 里的 waiting_user 守卫放行，否则
+            # session 会卡住、新一轮无法启动。
+            self.exit_reason = {'result': 'ASK_USER_TIMEOUT', 'msg': str(e)}
+            final_status = SESSION_FAILED
+            force_finalize = True
+            if mode == 'text':
+                self._on_text_chunk(f'\n**[ask_user timeout]** {e}\n', check_cancel=False)
+            else:
+                self.emit_event(agent_message_chunk(f'**[ask_user timeout]** {e}'), check_cancel=False)
+                self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -569,7 +613,8 @@ class AgentSession:
                 pass
             should_finish_run = False
             with self._lock:
-                if self.active_run_id == run_id and self.status != SESSION_WAITING_USER:
+                still_waiting = self.status == SESSION_WAITING_USER
+                if self.active_run_id == run_id and (force_finalize or not still_waiting):
                     if self.status == SESSION_CANCELLED:
                         final_status = SESSION_CANCELLED
                     self.status = final_status
@@ -779,19 +824,19 @@ class AgentService:
         sess.cancel()
         return True
 
-    def chat_text(self, sid, messages, user_id=SERVER_USER_ID, cwd=None):
+    def chat_text(self, sid, messages, user_id=SERVER_USER_ID, cwd=None, model_override=None):
         sess = self.get_session(sid, user_id=user_id, cwd=cwd)
         if sess is None:
             return None, iter(())
         text = last_user_text(messages)
-        sess.run_or_answer(text, mode='text')
+        sess.run_or_answer(text, mode='text', model_override=model_override)
         return sess, sess.iter_text()
 
-    def chat_events(self, sid, text, user_id=SERVER_USER_ID, cwd=None):
+    def chat_events(self, sid, text, user_id=SERVER_USER_ID, cwd=None, model_override=None):
         sess = self.get_session(sid, user_id=user_id, cwd=cwd)
         if sess is None:
             return None, iter(())
-        sess.run_or_answer(text, mode='events')
+        sess.run_or_answer(text, mode='events', model_override=model_override)
         return sess, sess.iter_events()
 
     def regenerate_session(self, sid, user_id=SERVER_USER_ID):

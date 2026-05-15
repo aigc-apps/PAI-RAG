@@ -16,7 +16,13 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from agent_events import agent_message_chunk, ask_user, done
-from backend.agent_service import HttpHandler, SESSION_RUNNING, SESSION_WAITING_USER, SessionBusyError
+from backend.agent_service import (
+    AskUserTimeoutError,
+    HttpHandler,
+    SESSION_RUNNING,
+    SESSION_WAITING_USER,
+    SessionBusyError,
+)
 import backend.server as server
 from session_store import SERVER_USER_ID
 
@@ -74,6 +80,41 @@ class DoAskUserUnitTests(unittest.TestCase):
             'does not see stale True from a delayed set() racing run_or_answer.clear()',
         )
 
+    def test_empty_queue_after_timeout_raises_ask_user_timeout(self):
+        # 用一个非常短的超时跑一次,_aq 始终为空 → 必须抛 AskUserTimeoutError,
+        # 而不是被 _aq.get(timeout=) 内部的 queue.Empty 漏出去。
+        handler = HttpHandler.__new__(HttpHandler)
+
+        class FakeSession:
+            status = 'running'
+            output_mode = 'events'
+            turn_done_evt = threading.Event()
+            cancel_evt = threading.Event()
+
+            def mark_waiting_for_user(self_):
+                self_.status = SESSION_WAITING_USER
+
+            def emit_event(self_, event, check_cancel=True):
+                pass
+
+            def _on_text_chunk(self_, text, check_cancel=True):
+                pass
+
+        handler._session = FakeSession()
+        handler._aq = queue.Queue()  # 永不投递
+
+        import settings as _config
+        original = getattr(_config, 'ASK_USER_TIMEOUT_SECONDS', None)
+        _config.ASK_USER_TIMEOUT_SECONDS = 1  # 1 秒,够单测但不会等住
+        try:
+            with self.assertRaises(AskUserTimeoutError):
+                handler.do_ask_user({'question': 'q?'}, response=None)
+        finally:
+            if original is None:
+                del _config.ASK_USER_TIMEOUT_SECONDS
+            else:
+                _config.ASK_USER_TIMEOUT_SECONDS = original
+
 
 # ──────────────── Fix 3 & Fix 4: 端到端 SSE 整合测试 ──────────────── #
 
@@ -93,7 +134,7 @@ class _FakeSession:
         self.cancel_called = 0
         self._lock = threading.RLock()
 
-    def run_or_answer(self, text, mode='events'):
+    def run_or_answer(self, text, mode='events', model_override=None):
         with self._lock:
             if self.worker_alive and self.status == SESSION_WAITING_USER:
                 # answer 分支：路由到等待中的 worker

@@ -18,7 +18,7 @@ class FakeSession:
         self.turn_done_evt = threading.Event()
         self.cancel_evt = threading.Event()
 
-    def run_or_answer(self, text, mode="events"):
+    def run_or_answer(self, text, mode="events", model_override=None):
         self.display_q.put({"event": agent_message_chunk("hi back")})
         self.display_q.put({"event": done(stop_reason({"result": "NO_TOOL_CALL"}))})
         self.turn_done_evt.set()

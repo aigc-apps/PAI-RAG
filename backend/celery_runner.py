@@ -30,10 +30,27 @@ class CeleryRunService:
             return os.path.abspath(cwd or os.getcwd())
         return self.workspace_manager.prepare_session(user_id, session_id, cwd=cwd)
 
-    def start_or_answer(self, session_id, user_id, text, mode='events', cwd=None):
-        loaded = self.store.load(session_id, user_id=user_id)
-        if loaded is None:
+    def start_or_answer(self, session_id, user_id, text, mode='events', cwd=None, model=None):
+        try:
+            loaded = self.store.load(session_id, user_id=user_id)
+        except ValueError:
             return None
+        if loaded is None:
+            try:
+                if self.store.session_exists(session_id):
+                    return None
+            except ValueError:
+                return None
+            self.store.save(
+                session_id=session_id,
+                user_id=user_id or SERVER_USER_ID,
+                llm_history=[],
+                ui_messages=[],
+                status='idle',
+                active_run_id=None,
+                workspace_path='',
+            )
+            loaded = self.store.load(session_id, user_id=user_id) or {}
 
         if loaded.get('status') == 'waiting_user' and loaded.get('active_run_id'):
             run_id = loaded['active_run_id']
@@ -67,7 +84,7 @@ class CeleryRunService:
             raise WorkspaceViolation(result.get('message') or 'workspace_violation')
 
         try:
-            self._enqueue_run(run_id, session_id, user_id, text, mode, cwd)
+            self._enqueue_run(run_id, session_id, user_id, text, mode, cwd, model=model)
         except Exception:
             self.store.finish_run(session_id, user_id, run_id, 'failed', error='failed to enqueue celery task')
             raise
@@ -112,10 +129,10 @@ class CeleryRunService:
             regenerated_from_run_id=result.get('regenerated_from_run_id') or '',
         )
 
-    def _enqueue_run(self, run_id, session_id, user_id, text, mode, cwd):
+    def _enqueue_run(self, run_id, session_id, user_id, text, mode, cwd, model=None):
         from backend.worker import run_agent_task
 
-        run_agent_task.delay(run_id, session_id, user_id, text, mode, cwd)
+        run_agent_task.delay(run_id, session_id, user_id, text, mode, cwd, model_override=model)
 
     def iter_events(self, run_id, cursor='0-0'):
         return self.bus.iter_events(run_id, last_id=cursor)

@@ -171,10 +171,36 @@ def stream_state():
     }
 
 
-def hermes_sse(data=None, comment=None):
+def hermes_sse(data=None, comment=None, event_id=None):
     if comment is not None:
         return f': {comment}\n\n'
-    return f'data: {json.dumps(data, ensure_ascii=False, default=str)}\n\n'
+    payload = json.dumps(data, ensure_ascii=False, default=str)
+    if event_id:
+        # 输出 SSE `id:` 行,客户端用 EventSource 时 lastEventId 自动回填,断线
+        # 重连无需额外读 GET /v1/runs/{id} 拿 cursor。cursor schema 与 Redis
+        # Stream 一致:`<13 位毫秒>-<序号>`,thread 模式合成同样格式以便客户端
+        # 不区分后端实现。
+        return f'id: {event_id}\ndata: {payload}\n\n'
+    return f'data: {payload}\n\n'
+
+
+_THREAD_CURSOR_LOCK = threading.Lock()
+_THREAD_CURSOR_LAST = {'ms': 0, 'seq': 0}
+
+
+def _next_thread_cursor():
+    """生成 thread 模式下兼容 Redis Stream 形态的 event id (`<ms>-<seq>`)。
+
+    并发安全;单进程内单调递增。同毫秒内序号自增,跨毫秒重置 seq。"""
+    with _THREAD_CURSOR_LOCK:
+        now_ms = int(time.time() * 1000)
+        if now_ms <= _THREAD_CURSOR_LAST['ms']:
+            now_ms = _THREAD_CURSOR_LAST['ms']
+            _THREAD_CURSOR_LAST['seq'] += 1
+        else:
+            _THREAD_CURSOR_LAST['ms'] = now_ms
+            _THREAD_CURSOR_LAST['seq'] = 0
+        return f"{now_ms}-{_THREAD_CURSOR_LAST['seq']}"
 
 
 def run_completed_payload(run_id, session_id, output, usage=None):
@@ -225,43 +251,51 @@ def hermes_events_from_update(run_id, update, state):
     if event_type == 'thought_start':
         step_id = update.get('thoughtId') or next_generated_step_id(state)
         state['current_step_id'] = step_id
-        return [{
+        evt = {
             'event': 'reasoning.started',
             'run_id': run_id,
             'timestamp': timestamp,
             'step_id': step_id,
             'title': update.get('title') or 'Agent step',
             'status': update.get('status') or 'in_progress',
-            'hidden': bool(update.get('hidden')),
-        }]
+        }
+        # hidden/replace 等"提示位"字段只在 truthy 时下发,默认 false 是噪音——
+        # 客户端若没看到字段就当未设置即可。
+        if update.get('hidden'):
+            evt['hidden'] = True
+        return [evt]
 
     if event_type == 'thought_delta':
         step_id = update.get('thoughtId') or state.get('current_step_id') or next_generated_step_id(state)
         text = text_from_update(update)
         if text:
-            return [{
+            evt = {
                 'event': 'reasoning.available',
                 'run_id': run_id,
                 'timestamp': timestamp,
                 'step_id': step_id,
                 'text': text,
-                'replace': bool(update.get('replace')),
-            }]
+            }
+            if update.get('replace'):
+                evt['replace'] = True
+            return [evt]
         return []
 
     if event_type == 'thought_done':
         step_id = update.get('thoughtId') or state.get('current_step_id') or next_generated_step_id(state)
         if state.get('current_step_id') == step_id:
             state['current_step_id'] = ''
-        return [{
+        evt = {
             'event': 'reasoning.completed',
             'run_id': run_id,
             'timestamp': timestamp,
             'step_id': step_id,
             'status': update.get('status') or 'completed',
-            'hidden': bool(update.get('hidden')),
             'text': text_from_update(update),
-        }]
+        }
+        if update.get('hidden'):
+            evt['hidden'] = True
+        return [evt]
 
     if event_type == 'thought':
         step_id = next_generated_step_id(state, prefix='note')
@@ -299,7 +333,7 @@ def hermes_events_from_update(run_id, update, state):
         state['tool_names'][tool_id] = tool_name
         if update.get('argumentsText'):
             state.setdefault('tool_inputs', {})[tool_id] = update.get('argumentsText')
-        return [{
+        evt = {
             'event': 'tool.delta',
             'run_id': run_id,
             'timestamp': timestamp,
@@ -307,12 +341,17 @@ def hermes_events_from_update(run_id, update, state):
             'step_id': step_id_from_tool_id(tool_id) or state.get('current_step_id') or '',
             'tool': tool_name,
             'preview': update.get('title') or tool_name,
-            'kind': update.get('kind') or 'tool',
             'status': update.get('status') or 'in_progress',
-            'hidden': bool(update.get('hidden')),
             'arguments_delta': update.get('argumentsDelta') or '',
             'arguments_text': update.get('argumentsText') or '',
-        }]
+        }
+        # 上游若没标 kind 就别填一个 'tool' 假值——避免下游把它当成"未知工具"误判;
+        # hidden 同理,默认 false 是噪音,只在 truthy 时下发。
+        if update.get('kind'):
+            evt['kind'] = update.get('kind')
+        if update.get('hidden'):
+            evt['hidden'] = True
+        return [evt]
 
     if event_type == 'tool_call':
         tool_id = update.get('toolCallId') or f"call_{len(state['tool_names'])}"
@@ -326,7 +365,7 @@ def hermes_events_from_update(run_id, update, state):
             return []
         state['started_tools'].add(tool_id)
         preview = update.get('title') or tool_name
-        return [{
+        evt = {
             'event': 'tool.started',
             'run_id': run_id,
             'timestamp': timestamp,
@@ -334,11 +373,14 @@ def hermes_events_from_update(run_id, update, state):
             'step_id': step_id_from_tool_id(tool_id) or state.get('current_step_id') or '',
             'tool': tool_name,
             'preview': preview,
-            'kind': update.get('kind') or 'tool',
             'status': update.get('status') or 'in_progress',
-            'hidden': bool(update.get('hidden')),
             'input': state.get('tool_inputs', {}).get(tool_id, update.get('input')),
-        }]
+        }
+        if update.get('kind'):
+            evt['kind'] = update.get('kind')
+        if update.get('hidden'):
+            evt['hidden'] = True
+        return [evt]
 
     if event_type == 'tool_call_update':
         status = update.get('status')
@@ -498,11 +540,11 @@ def prompt_text_from_body(body):
     return content_text(body.get('messages') or [])
 
 
-def start_celery_run(session_id, user_id, text, mode='events', cwd=None):
+def start_celery_run(session_id, user_id, text, mode='events', cwd=None, model=None):
     if celery_service is None:
         raise HTTPException(status_code=500, detail='Celery runner is not enabled')
     try:
-        result = celery_service.start_or_answer(session_id, user_id, text, mode=mode, cwd=cwd)
+        result = celery_service.start_or_answer(session_id, user_id, text, mode=mode, cwd=cwd, model=model)
     except (SessionBusyError, ServiceCapacityError, NoRegeneratableAnswerError, WorkspaceViolation, ToolWorkspaceViolation) as e:
         raise backend_error(e) from e
     if result is None:
@@ -510,12 +552,12 @@ def start_celery_run(session_id, user_id, text, mode='events', cwd=None):
     return result
 
 
-def start_thread_run(session_id, user_id, text, cwd=None):
+def start_thread_run(session_id, user_id, text, cwd=None, model=None):
     try:
         sess = service.get_session(session_id, user_id=user_id, cwd=cwd)
         if sess is None:
             return None
-        run_id = sess.run_or_answer(text, mode='events')
+        run_id = sess.run_or_answer(text, mode='events', model_override=model)
     except (SessionBusyError, ServiceCapacityError, NoRegeneratableAnswerError, WorkspaceViolation, ToolWorkspaceViolation) as e:
         raise backend_error(e) from e
     with THREAD_RUNS_LOCK:
@@ -527,11 +569,11 @@ def start_thread_run(session_id, user_id, text, cwd=None):
     return {'session_id': sess.sid, 'run_id': run_id, 'cursor': '0-0'}
 
 
-def start_agent_run(session_id, user_id, text, cwd=None):
+def start_agent_run(session_id, user_id, text, cwd=None, model=None):
     if celery_service is not None:
-        run = start_celery_run(session_id, user_id, text, mode='events', cwd=cwd)
+        run = start_celery_run(session_id, user_id, text, mode='events', cwd=cwd, model=model)
         return {'session_id': run.session_id, 'run_id': run.run_id, 'cursor': run.cursor}
-    result = start_thread_run(session_id, user_id, text, cwd=cwd)
+    result = start_thread_run(session_id, user_id, text, cwd=cwd, model=model)
     if result is None:
         raise HTTPException(status_code=404, detail='Session not found')
     return result
@@ -740,12 +782,19 @@ async def celery_run_event_stream(request, run_id, session_id, user_id, last_id=
         last_heartbeat = idle_started
         for event_id, update in items:
             last_id = event_id
-            for event in hermes_events_from_update(run_id, update, state):
-                yield hermes_sse(event)
+            hermes_list = list(hermes_events_from_update(run_id, update, state))
+            for idx, event in enumerate(hermes_list):
+                # 一个 redis-stream 条目可能展开成多条 hermes 事件,只把 id
+                # 挂到最后一条上,这样客户端 lastEventId 始终对齐 redis cursor。
+                pass_id = event_id if idx == len(hermes_list) - 1 else None
+                yield hermes_sse(event, event_id=pass_id)
             if update.get('sessionUpdate') == 'done':
-                yield hermes_sse(run_completed_payload(
-                    run_id, session_id, ''.join(state['output_parts']), usage=update.get('usage'),
-                ))
+                yield hermes_sse(
+                    run_completed_payload(
+                        run_id, session_id, ''.join(state['output_parts']), usage=update.get('usage'),
+                    ),
+                    event_id=event_id,
+                )
                 yield hermes_sse(comment='stream closed')
                 return
 
@@ -781,13 +830,18 @@ async def thread_run_event_stream(request, run_id, session_id, user_id):
                 break
             continue
         update = item['event']
-        for event in hermes_events_from_update(run_id, update, state):
-            yield hermes_sse(event)
+        hermes_list = list(hermes_events_from_update(run_id, update, state))
+        for idx, event in enumerate(hermes_list):
+            pass_id = _next_thread_cursor() if idx == len(hermes_list) - 1 else None
+            yield hermes_sse(event, event_id=pass_id)
         last_heartbeat = time.monotonic()
         if update.get('sessionUpdate') == 'done':
-            yield hermes_sse(run_completed_payload(
-                run_id, session_id, ''.join(state['output_parts']), usage=update.get('usage'),
-            ))
+            yield hermes_sse(
+                run_completed_payload(
+                    run_id, session_id, ''.join(state['output_parts']), usage=update.get('usage'),
+                ),
+                event_id=_next_thread_cursor(),
+            )
             yield hermes_sse(comment='stream closed')
             break
         if sess.turn_done_evt.is_set() and sess.display_q.empty():
@@ -1165,6 +1219,15 @@ async def create_run(
         message = "Missing 'input' field" if 'input' not in body else 'No user message found in input'
         return JSONResponse(openai_error(message), status_code=400)
 
+    model_override = body.get('model')
+    if model_override is not None:
+        if not isinstance(model_override, str):
+            return JSONResponse(openai_error("'model' must be a string"), status_code=400)
+        try:
+            model_override = runtime_config.validate_model_name(model_override)
+        except ValueError as exc:
+            return JSONResponse(openai_error(str(exc)), status_code=400)
+
     session_id = body.get('session_id') or x_session_id
     if not session_id:
         try:
@@ -1174,7 +1237,7 @@ async def create_run(
         session_id = sess.sid
 
     stream = bool(body.get('stream'))
-    run = start_agent_run(session_id, SERVER_USER_ID, text, cwd=cwd)
+    run = start_agent_run(session_id, SERVER_USER_ID, text, cwd=cwd, model=model_override)
     headers = stream_headers(run['session_id'], run['run_id'])
     if stream:
         if celery_service is not None:
@@ -1281,7 +1344,16 @@ async def create_response(request: Request):
     if not isinstance(body, dict):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
 
-    model = body.get('model') or runtime_config.get_active_model()
+    raw_model = body.get('model')
+    model_override = None
+    if raw_model:
+        if not isinstance(raw_model, str):
+            return JSONResponse(openai_error("'model' must be a string"), status_code=400)
+        try:
+            model_override = runtime_config.validate_model_name(raw_model)
+        except ValueError as exc:
+            return JSONResponse(openai_error(str(exc)), status_code=400)
+    model = model_override or runtime_config.get_active_model()
     stream = bool(body.get('stream'))
     cwd = body.get('cwd')
     instructions = body.get('instructions') or ''
@@ -1329,7 +1401,7 @@ async def create_response(request: Request):
     if not task_text.strip():
         return JSONResponse(openai_error('No user message found in input'), status_code=400)
 
-    run = start_agent_run(sess.sid, SERVER_USER_ID, task_text, cwd=cwd)
+    run = start_agent_run(sess.sid, SERVER_USER_ID, task_text, cwd=cwd, model=model_override)
     resp_id = response_id()
     created_at = int(time.time())
     headers = stream_headers(run['session_id'], run['run_id'])
@@ -1394,7 +1466,16 @@ async def chat_completions(
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
     if not isinstance(body, dict):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
-    model = body.get('model') or runtime_config.get_active_model()
+    raw_model = body.get('model')
+    model_override = None
+    if raw_model:
+        if not isinstance(raw_model, str):
+            return JSONResponse(openai_error("'model' must be a string"), status_code=400)
+        try:
+            model_override = runtime_config.validate_model_name(raw_model)
+        except ValueError as exc:
+            return JSONResponse(openai_error(str(exc)), status_code=400)
+    model = model_override or runtime_config.get_active_model()
     messages = body.get('messages') or []
     stream = bool(body.get('stream'))
     cwd = body.get('cwd')
@@ -1412,13 +1493,13 @@ async def chat_completions(
                 raise backend_error(e) from e
             session_id = sess.sid
         if stream:
-            run = start_celery_run(session_id, SERVER_USER_ID, user_text, mode='events', cwd=cwd)
+            run = start_celery_run(session_id, SERVER_USER_ID, user_text, mode='events', cwd=cwd, model=model_override)
             return StreamingResponse(
                 openai_celery_stream(request, model, run.run_id, run.session_id, SERVER_USER_ID, last_id=run.cursor),
                 media_type='text/event-stream',
                 headers=stream_headers(run.session_id, run.run_id),
             )
-        run = start_celery_run(session_id, SERVER_USER_ID, user_text, mode='text', cwd=cwd)
+        run = start_celery_run(session_id, SERVER_USER_ID, user_text, mode='text', cwd=cwd, model=model_override)
         headers = stream_headers(run.session_id, run.run_id)
         response_session_id = run.session_id
         captured_usage: dict = {}
@@ -1438,14 +1519,14 @@ async def chat_completions(
                 sess = ensure_session(x_session_id, cwd=cwd)
             except WorkspaceViolation as e:
                 raise backend_error(e) from e
-            run = start_agent_run(sess.sid, SERVER_USER_ID, user_text, cwd=cwd)
+            run = start_agent_run(sess.sid, SERVER_USER_ID, user_text, cwd=cwd, model=model_override)
             return StreamingResponse(
                 openai_thread_stream(request, model, run['run_id'], run['session_id'], SERVER_USER_ID),
                 media_type='text/event-stream',
                 headers=stream_headers(run['session_id'], run['run_id']),
             )
         try:
-            sess, text_iter = service.chat_text(x_session_id, messages, user_id=SERVER_USER_ID, cwd=cwd)
+            sess, text_iter = service.chat_text(x_session_id, messages, user_id=SERVER_USER_ID, cwd=cwd, model_override=model_override)
         except (SessionBusyError, ServiceCapacityError, WorkspaceViolation, ToolWorkspaceViolation) as e:
             raise backend_error(e) from e
         if sess is None:

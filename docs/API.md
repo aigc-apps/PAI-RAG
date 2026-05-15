@@ -31,6 +31,10 @@ export BASE_URL="http://127.0.0.1:8000"
 
 ### 错误格式
 
+错误分两层：**HTTP 层**（接口本身被拒）走 `error` 字段；**Run 终止层**（接口接受了请求但 Agent 跑错了）走 SSE `done.stop_reason` 与 `GET /v1/runs/{id}.error` 字段。
+
+#### HTTP 错误（请求层）
+
 所有 4xx / 5xx 响应统一形如：
 
 ```json
@@ -43,19 +47,97 @@ export BASE_URL="http://127.0.0.1:8000"
 }
 ```
 
-包括校验失败（422）和未匹配的 404，都会被全局 exception handler 包装成同一 schema。部分错误的 `error` 字段还会带额外上下文键：
+包括校验失败（422）和未匹配的 404，都会被全局 exception handler 包装成同一 schema。`code` 取值枚举：
 
 | HTTP | `error.code` | 含义 | 额外字段 |
 | --- | --- | --- | --- |
-| 400 | `invalid_request_error` | 请求体非法 / 缺字段 | — |
+| 400 | `invalid_request_error` | 请求体非法 / 缺字段（含 `model` 字段不合法） | — |
 | 400 | `workspace_violation` | `cwd` 逃出允许范围 | — |
-| 404 | `run_not_found` / `response_not_found` | 资源不存在 | — |
-| 404 | `""` | 通用 not found（如 session） | — |
-| 409 | `session_busy` | 该 session 上一轮还在运行 | `status` |
+| 404 | `run_not_found` | run id 不存在或不属于当前用户 | — |
+| 404 | `response_not_found` | response id 不存在或不属于当前用户 | — |
+| 404 | `""`（空 code） | 通用 not found（典型为 `session not found`） | — |
+| 409 | `session_busy` | 该 session 上一轮还在运行 | `status`（session 当前状态） |
 | 409 | `no_regeneratable_answer` | 该 session 没有可重生成的答案 | — |
 | 413 | `request_too_large` | 请求体超过 `MAX_REQUEST_BODY_BYTES` | — |
 | 422 | `validation_error` | FastAPI 路径 / 查询参数校验失败 | — |
 | 429 | `capacity_exceeded` | 全局或单用户并发 run 超额 | `scope`、`limit` |
+| 500 | `""` | Celery runner 未启用却调了 celery-only 接口 / 其他未捕获异常 | — |
+
+#### Run 退出码（执行层）
+
+Run 终止后，`exit_reason.result` 决定 run 的最终 `status` 与 SSE `done.stop_reason`，并写入 `GET /v1/runs/{id}` 的 `error` 字段（仅 failed 时非空）。完整枚举：
+
+| `result` | 触发条件 | 终态 status | `done.stop_reason` |
+| --- | --- | --- | --- |
+| `CURRENT_TASK_DONE` | LLM 调了 `current_task_done` 工具，正常结束本轮 | `completed` | `end_turn` |
+| `EXITED` | LLM 调了 `exit` 工具，主动放弃本轮 | `completed` | `end_turn` |
+| `NO_TOOL_CALL` | 一轮 LLM 输出里没有任何 tool_call，被视为最终回答 | `completed` | `end_turn` |
+| `MAX_TURNS_EXCEEDED` | LLM 多轮交互未触达终态（默认 40 轮） | `failed` | `max_turns` |
+| `WORKSPACE_VIOLATION` | 工具调用试图写出 workspace 边界 | `failed` | `error` |
+| `ASK_USER_TIMEOUT` | `ask_user` 后用户在 `ASK_USER_TIMEOUT_SECONDS`（默认 30 分钟）内未回答 | `failed` | `error` |
+| `ERROR` | 其他未捕获异常（上游 LLM 报错、工具异常等） | `failed` | `error` |
+| `INTERRUPTED` | `POST /v1/runs/{id}/stop` 或 `POST /v1/sessions/{sid}/cancel` 主动取消 | `cancelled` | `cancelled` |
+
+**用法**：
+- 只关心成功/失败 → 看 status：`completed` 都算成功，其他都算需要人工或重试介入。
+- 想区分"超时 vs 上游错误 vs 用户取消" → 看 `done.stop_reason` 或 `GET /v1/runs/{id}` 返回里的 `error`。
+- `error` 字段语义：仅在 status=`failed` 时携带具体异常 message；其他终态（completed/cancelled）该字段为空字符串。
+
+### 状态机
+
+#### Session 状态
+
+```
+                    ┌───────── POST /v1/runs（新一轮）─────┐
+                    │                                       │
+                    ▼                                       │
+          ┌────────────────┐  ask_user ┌──────────────────┐ │
+   ──────▶│  idle / 终态  │──────────▶│  waiting_user    │─┘
+   create └────────────────┘           └──────────────────┘
+                  ▲                            │ POST /v1/runs（带回答）
+                  │                            ▼
+                  │                    ┌──────────────────┐
+                  │                    │     running      │
+                  │   run 收尾         └──────────────────┘
+                  └─────────────────────────────┘
+                       (completed / failed /
+                        cancelled — 三者都可
+                        作为新一轮的起点)
+```
+
+可观察值：`idle` / `running` / `waiting_user` / `completed` / `failed` / `cancelled`。
+
+合法转移：
+- `idle` → `running`：`POST /v1/runs` 启动新 run
+- `running` → `waiting_user`：Agent 调 ask_user 工具
+- `running` → `completed` / `failed` / `cancelled`：run 结束（详见上表）
+- `waiting_user` → `running`：用户再 `POST /v1/runs` 带回答
+- `waiting_user` → `failed`：`ASK_USER_TIMEOUT` 触发
+- `waiting_user` → `cancelled`：`POST /v1/sessions/{sid}/cancel`
+- `completed` / `failed` / `cancelled` → `running`：同一 session 启动新一轮 run（终态都可作为新一轮起点）
+
+非法转移：`running` 状态下再 `POST /v1/runs` 同 session 会得到 `409 session_busy`；只有 `waiting_user` 是例外（被解释为 ask_user 续答）。
+
+#### Run 状态
+
+```
+   ┌──────────┐       ┌──────────┐       ┌──────────────────┐
+   │ started  │──────▶│ running  │──────▶│  waiting_user    │──┐
+   └──────────┘       └──────────┘       └──────────────────┘  │
+                            │                    │             │
+                            │                    │ 用户回答     │
+                            │                    └────────────▶┘
+                            │                                  │
+                            ▼                                  ▼
+                     ┌──────────────────────────────────────────────┐
+                     │ completed │ failed │ cancelled               │
+                     │           │        │  (终态：不再有事件流)      │
+                     └──────────────────────────────────────────────┘
+```
+
+可观察值：`started`（已入队待执行）/ `running` / `waiting_user` / `completed` / `failed` / `cancelled`。
+
+`status` 与 `exit_reason.result` 的对应关系见上一节"Run 退出码"。客户端轮询时遇到上述 3 个终态即可结束等待。
 
 ## 推荐调用方式
 
@@ -172,6 +254,7 @@ data: [DONE]
 - `/v1/chat/completions` 是面向通用 OpenAI 客户端的纯文本兼容入口：流式只输出 `delta.content`，不输出 `delta.tool_calls`，也不夹带任何自定义 SSE event。
 - 最后一条 `chat.completion.chunk` 会在 chunk 顶层带上 `usage`（行为对齐 OpenAI `stream_options.include_usage=true`）。
 - 需要在客户端看到工具调用、工具结果或 Agent 思考步骤，请改用 `/v1/responses`（结构化）或 `/v1/runs/{run_id}/events`（完整生命周期事件）。
+- `model` 字段：传入则**仅本次请求**透传给上游；不写入全局生效模型，下一次不传就回到 `/v1/models/active` 的值。具体路由到哪个上游 provider，由 `memory/runtime.json` 的前缀规则决定（详见下文"多 Provider / Key 池"）。
 
 ## 2. Responses API
 
@@ -293,7 +376,7 @@ Responses API 支持以下字段：
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `input` | string / array | 当前输入，必填 |
-| `model` | string | 模型 id：传入则透传给上游 LLM。不传则使用服务端当前生效模型（`runtime_config` 运行时值或环境变量 `MODEL`，详见下文 `/v1/models` 切换接口） |
+| `model` | string | 模型 id：仅本次请求覆盖上游 LLM；不写入全局生效模型，下一次不传则回到服务端当前生效模型（`/v1/models/active` 的值，回退顺序：运行时值 > 环境变量 `MODEL` > `qwen-plus`）。具体路由到哪个 provider 由 `memory/runtime.json` 的前缀规则决定（详见下文"多 Provider / Key 池"） |
 | `instructions` | string | 本轮系统级说明 |
 | `previous_response_id` | string | 继续某个历史 response |
 | `conversation` | string | 业务方自定义会话标识 |
@@ -491,6 +574,28 @@ curl --location "$BASE_URL/v1/runs" \
   --data "{\"session_id\":\"${SESSION_ID}\",\"input\":\"你好\"}"
 ```
 
+请求体字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `input` | string | 当前轮用户输入，必填；session 处于 `waiting_user` 时作为对 `ask_user` 的回答 |
+| `session_id` | string | 复用服务端会话；不传则自动新建（也可通过 `X-Session-Id` 头传入） |
+| `stream` | boolean | 是否同一连接直接返回 SSE 流，默认 `false`（两段式：先 POST 拿 cursor，再 GET 订阅） |
+| `cwd` | string | 任务执行目录（受 workspace 沙箱约束） |
+| `model` | string | 仅本轮覆盖上游 LLM 模型；不传则使用全局生效模型（`/v1/models/active`）。**不写入 session 默认值**，下一轮不带就回到全局值。校验规则同 `/v1/models/active`（非空、无空白、≤200）；不预校验上游是否支持，错了就由上游返错透传。配合 `memory/runtime.json` 的多 provider/多 key 池，按模型名前缀路由到对应 provider。详见下文"多 Provider / Key 池"。 |
+
+例：仅本轮使用 `qwen-max`：
+
+```bash
+curl --location "$BASE_URL/v1/runs" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "session_id": "session_xxx",
+    "input": "请总结一下当前目录",
+    "model": "qwen-max"
+  }'
+```
+
 ### 多轮和会话关联
 
 Runs API 通过 `session_id` 维持多轮上下文。每一轮用户输入都会创建一个新的 `run_id`，但只要使用同一个 `session_id`，Agent 就会复用该 session 内的历史消息和状态。
@@ -555,37 +660,51 @@ curl --no-buffer --location "$BASE_URL/v1/runs/${RUN_ID_2}/events"
 curl --no-buffer --location "$BASE_URL/v1/runs/run_xxx/events"
 ```
 
-事件通过 SSE `data:` 输出，JSON 内的 `event` 字段表示事件类型。所有事件都带 `run_id` 和 `timestamp`（float 秒）；多数事件还会带 `step_id`（如 `model-1`）把工具调用挂到对应的 Agent 步骤：
+事件通过 SSE 输出：每条事件前带一行 `id: <13 位毫秒>-<序号>`，紧跟一行 `data: <JSON>`。该 `id` 等价于 `last_event_id` cursor，celery 模式由 Redis Stream 生成、thread 模式由服务端合成同样格式。浏览器 `EventSource` 自动维护 `lastEventId` 并在重连时回填 `Last-Event-ID:` 头，无需客户端手工管理。
+
+JSON 内的 `event` 字段表示事件类型。所有事件都带 `run_id` 和 `timestamp`（float 秒）；多数事件还会带 `step_id`（如 `model-1`）把工具调用挂到对应的 Agent 步骤：
 
 | `event` | 含义 | 关键字段 |
 | --- | --- | --- |
 | `message.delta` | 最终回答文本增量 | `delta` |
-| `reasoning.started` | Agent 步骤开始 | `step_id`、`title`、`hidden` |
-| `reasoning.available` | Agent 步骤内容更新 | `step_id`、`text`、`replace` |
+| `reasoning.started` | Agent 步骤开始 | `step_id`、`title`、`status` |
+| `reasoning.available` | Agent 步骤内容更新 | `step_id`、`text` |
 | `reasoning.completed` | Agent 步骤结束 | `step_id`、`status`、`text` |
 | `tool.delta` | 工具调用参数增量（流式 tool args） | `tool_call_id`、`tool`、`arguments_delta`、`arguments_text` |
-| `tool.started` | 工具开始执行 | `tool_call_id`、`tool`、`input`、`kind` |
+| `tool.started` | 工具开始执行 | `tool_call_id`、`tool`、`input` |
 | `tool.updated` | 工具状态更新（运行中） | `tool_call_id`、`status`、`content`、`data` |
 | `tool.completed` | 工具执行结束 | `tool_call_id`、`status`（`completed` / `failed`）、`content`、`data` |
 | `ask_user` | Agent 需要用户补充信息 | `question`、`candidates` |
 | `run.completed` | Run 完成 | `output`、`usage` |
 | `run.failed` | Run 失败 | `error` |
 
+**可选字段**（仅在有值时下发，没看到字段就当未设置）：
+
+- `reasoning.started.hidden` / `reasoning.completed.hidden` / `tool.delta.hidden` / `tool.started.hidden`：boolean，true 表示前端可隐藏（如内部步骤、ask_user 工具调用）。
+- `reasoning.available.replace`：boolean，true 表示用 `text` 整体替换之前累计的内容（用于流式预览的非单调修订），false 即追加。
+- `tool.delta.kind` / `tool.started.kind`：工具分类提示（`read` / `edit` / `execute` / `ask` / `think` / `other`），客户端可据此选择图标或样式。
+
 `tool_call_id` 格式：`call_{turn}_{index}`（OpenAI 风格 `call_` 前缀）。
 
 示例：
 
 ```text
-data: {"event":"reasoning.started","run_id":"run_xxx","timestamp":1778640000.1,"step_id":"model-1","title":"Agent step","status":"in_progress","hidden":false}
+id: 1778640000100-0
+data: {"event":"reasoning.started","run_id":"run_xxx","timestamp":1778640000.1,"step_id":"model-1","title":"Agent step","status":"in_progress"}
 
+id: 1778640000500-0
 data: {"event":"tool.delta","run_id":"run_xxx","timestamp":1778640000.5,"tool_call_id":"call_1_0","step_id":"model-1","tool":"exec_command","arguments_delta":"{\"cm","arguments_text":"{\"cm"}
 
+id: 1778640000700-0
 data: {"event":"tool.started","run_id":"run_xxx","timestamp":1778640000.7,"tool_call_id":"call_1_0","step_id":"model-1","tool":"exec_command","input":{"cmd":"ls"}}
 
+id: 1778640001200-0
 data: {"event":"tool.completed","run_id":"run_xxx","timestamp":1778640001.2,"tool_call_id":"call_1_0","tool":"exec_command","status":"completed","content":"README.md\nbackend\n"}
 
+id: 1778640001500-0
 data: {"event":"message.delta","run_id":"run_xxx","timestamp":1778640001.5,"delta":"当前目录包含 README 和 backend。"}
 
+id: 1778640001800-0
 data: {"event":"run.completed","run_id":"run_xxx","timestamp":1778640001.8,"output":"当前目录包含 README 和 backend。","usage":{"prompt_tokens":80,"completion_tokens":25,"total_tokens":105}}
 ```
 
@@ -626,7 +745,7 @@ curl --location "$BASE_URL/v1/runs/run_xxx"
 }
 ```
 
-`status` 取值：`started` / `running` / `completed` / `failed` / `cancelled` / `waiting_user`。时间字段是 ISO-8601 字符串；`error` 仅在 `failed` 时有内容；`last_event_id` 是 Redis Stream cursor 形式，可作为 `Last-Event-ID` 用于断点续传。
+`status` 取值：`started` / `running` / `completed` / `failed` / `cancelled` / `waiting_user`，状态转移见 §通用约定 → §状态机；`error` 字段仅在 `failed` 时携带异常 message，对应的退出码语义见 §错误格式 → §Run 退出码。时间字段是 ISO-8601 字符串；`last_event_id` 是 Redis Stream cursor 形式，可作为 `Last-Event-ID` 用于断点续传。
 
 ### 停止 Run
 
@@ -664,7 +783,7 @@ curl --request POST --location "$BASE_URL/v1/sessions" \
 }
 ```
 
-时间字段是 ISO-8601 字符串；`status` 取值 `idle` / `running` / `waiting_user` / `completed` / `failed` / `cancelled`。
+时间字段是 ISO-8601 字符串；`status` 取值 `idle` / `running` / `waiting_user` / `completed` / `failed` / `cancelled`，状态转移见 §通用约定 → §状态机。
 
 ### 列表与查询
 
@@ -709,6 +828,8 @@ curl --no-buffer --location "$BASE_URL/v1/runs/run_xxx/events"
 若该 session 没有可重生成的答案，返回 409 `no_regeneratable_answer`。
 
 ### 错误码补充
+
+完整错误码枚举见 §通用约定 → §错误格式。Sessions API 上常见的几类：
 
 | HTTP | `error.code` | 触发条件 |
 | --- | --- | --- |
@@ -770,7 +891,7 @@ curl --location "$BASE_URL/v1/models"
 
 ### 切换当前生效模型
 
-`POST /v1/models/active` 修改全局生效模型。改动**立即对所有新建对话生效**（已经在跑的 stream 沿用原模型），并写入 `memory/active_model.json` 跨进程 / 跨重启持久化。HTTP server / Celery worker / ACP server 共享同一份。
+`POST /v1/models/active` 修改全局生效模型。改动**立即对所有新建对话生效**（已经在跑的 stream 沿用原模型），并写入 `memory/runtime.json` 的 `active_model` 字段跨进程 / 跨重启持久化（与多 provider / key 池配置共用同一文件，写入时 read-modify-write 不会动 `providers` 段）。HTTP server / Celery worker / ACP server 共享同一份。
 
 ```bash
 curl --location -X POST "$BASE_URL/v1/models/active" \
@@ -799,6 +920,79 @@ curl --location -X POST "$BASE_URL/v1/models/active" \
 > 注意：服务端不会预先校验上游 LLM 是否真的支持该模型名。如果输错，下次对话调用上游 API 时才会失败（透传上游错误）。
 
 回退到环境变量默认值：直接 `POST` 当前 `MODEL` 即可，没有专门的 reset 接口。
+
+### 多 Provider / Key 池
+
+服务端通过 `memory/runtime.json` 配置多个上游 provider 和每个 provider 下的 key 池，运行时按 model 名前缀路由、按 round-robin 分配 key、按返回状态码自动维护 key 健康度。无此文件、或文件中没有 `providers` 段时回退到环境变量 `API_KEY` / `API_BASE` 拼一个默认 `qwen` provider，行为与单 key 单 base 时完全一致——这是默认状态，不写文件即可。
+
+#### 配置文件 schema
+
+`memory/runtime.json`（同时承载 `/v1/models/active` 写入的 `active_model` 字段）：
+
+```json
+{
+  "active_model": "qwen-plus",
+  "default_provider": "qwen",
+  "cooldown_seconds": 300,
+  "providers": {
+    "qwen": {
+      "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_keys": ["sk-aaa", "sk-bbb"],
+      "model_prefixes": ["qwen-", "qwq-"]
+    },
+    "deepseek": {
+      "api_base": "https://api.deepseek.com",
+      "api_keys": ["sk-ds-1"],
+      "model_prefixes": ["deepseek-"]
+    },
+    "zhipu": {
+      "api_base": "https://open.bigmodel.cn/api/paas/v4",
+      "api_keys": ["zp-1"],
+      "model_prefixes": ["glm-"]
+    }
+  }
+}
+```
+
+字段说明：
+
+- `active_model`：全局生效模型，由 `/v1/models/active` 维护；可手工预置但通常通过接口写入。
+- `default_provider`：未匹配到任何 `model_prefixes` 时使用的 provider。
+- `cooldown_seconds`：429 触发的 key 冷却时长，默认 300 秒。
+- `providers.<name>.api_base`：该 provider 的 OpenAI 兼容 base URL。
+- `providers.<name>.api_keys`：key 池数组，按顺序 round-robin。
+- `providers.<name>.model_prefixes`：模型名前缀列表，用于路由。例 `qwen-max` → `qwen`，`glm-4-plus` → `zhipu`。
+
+文件 `mtime` 变化即热加载，无需重启进程；HTTP server / Celery worker / ACP server 各自维护一份内存状态（不跨进程共享 key 健康度）。`/v1/models/active` 写入时采用 read-modify-write，仅更新 `active_model` 字段，不会动 `providers` 段。
+
+#### Key 健康度与失败规则
+
+每次上游调用失败，按 HTTP 状态码处理对应 key：
+
+| 状态码 | 行为 | 何时复活 |
+| --- | --- | --- |
+| 401 / 403 | 永久 evict（认为 key 失效） | 重启进程 / 改 `runtime.json` 触发重载后 |
+| 429 | 进入 `cooldown_seconds` 秒冷却 | 冷却到期时下次 `acquire` 自动复活，无需 probe |
+| 5xx | 不影响 key 池（透传） | — |
+| 其他 | 不影响 key 池（透传） | — |
+
+LLMClient 在 401/403/429 时会自动从 key 池取下一把 key 重试一次（最多 2 次轮换），全部 evict 时回退到环境变量 `API_KEY` / `API_BASE`，仍失败则按原始错误透传给调用方。
+
+#### 路由优先级
+
+```
+请求里的 body.model
+  ↓ （前缀匹配）providers[*].model_prefixes
+  ↓ 命中 → 该 provider 的 key 池
+  ↓ 未命中 → default_provider 的 key 池
+  ↓ key 池全部 evict → env API_KEY / API_BASE 兜底
+```
+
+#### 安全说明
+
+- `runtime.json` 含明文 key，**严禁入库**（仓库 `.gitignore` 已覆盖 `memory/`）。
+- 服务端日志和事件流不会输出完整 key，最多输出 key 末 4 位用于排查。
+- 上线建议：先从单 provider 单 key 起步，验证 `/v1/models/active` 切换无误后再扩到多 key / 多 provider。
 
 ### Skills 列表
 

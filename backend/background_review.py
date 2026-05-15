@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from agent_loop import StepOutcome, agent_runner_loop
 from backend.celery_app import celery_app
 from backend.tool_schemas import background_memory_review_tools_schema
-from llm_client import LLMClient
+from llm_client import LLMClient, make_llm_client
 from session_store import SERVER_USER_ID
 from tools import GenericHandler, file_read
 import settings as config
@@ -95,14 +95,10 @@ def build_background_review_user_prompt(session_id='', run_id='', task_text=''):
 
 
 def _new_review_client(history):
-    client = LLMClient(
-        api_key=config.API_KEY,
-        api_base=getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
-        model=runtime_config.get_active_model(),
-        max_tokens=getattr(config, 'MAX_TOKENS', 8192),
-        history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
-        timeout=getattr(config, 'TIMEOUT', 300),
-    )
+    # Background memory review always runs on the global active model — there's
+    # no per-run override hook here, and we don't want a stray ``model`` arg
+    # from the foreground turn (long since gone) leaking into this analysis.
+    client = make_llm_client()
     client.history = copy.deepcopy(history or [])
     return client
 
