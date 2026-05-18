@@ -36,6 +36,7 @@ config.py
 
 # Logs & temp
 *.log
+logs/
 tmp/
 .tmp/
 *.rdb
