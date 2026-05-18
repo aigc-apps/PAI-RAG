@@ -12,47 +12,60 @@ export BASE_URL="<your-eas-endpoint>"
 
 | 接口 | 适用场景 |
 | --- | --- |
-| `/v1/runs` | 完整 Agent 生命周期事件流（推理 → 工具调用 → 工具结果 → 后续推理）；支持 `ask_user` 中断 |
+| `/v1/responses` | OpenAI Responses 兼容；流式回看完整 Agent 生命周期事件（推理 → 工具调用 → 工具结果 → 最终回答），显式 `allow_hitl=true` 后支持 HITL 中断与续答 |
 | `/v1/chat/completions` | OpenAI 兼容入口；只需要文本回答，不暴露中间过程 |
-| `/v1/responses` | 返回完整 `output[]`（含工具调用条目）；不需要中途状态 |
 
-下文以 `/v1/runs` 为主，备用接口见 §3。
+下文以 `/v1/responses` 为主，`/v1/chat/completions` 见 §3。
+
+> 历史接口 `/v1/runs` 已在 SDK 迁移过程中整体删除，请改用 `/v1/responses`。
+>
+> 默认新请求是自主模式：`allow_hitl=false`，Agent 会自行推进任务。只有显式传 `allow_hitl:true` 时，才允许 `ask_user` / 人工审批工具把流暂停为 `requires_action`。
 
 ---
 
-## 1. /v1/runs
+## 1. /v1/responses
 
-### 1.1 session_id 获取
+### 1.1 推荐的单轮调用
 
-`session_id` 是多轮对话和 ask_user 续接的唯一标识，所有调用均需保留。两种来源：
+后端集成优先使用 `/v1/responses`，并把业务参数一次性写完整。不要只传“校验 embedding_config”，否则 Agent 可能需要额外推断环境、状态或实例。
+
+```bash
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "conversation": "pairec-embedding-config-check-001",
+    "input": "请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。请列出匹配配置版本，获取 Released 配置并运行配置校验；最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。",
+    "stream": true
+  }'
+```
+
+> `/v1/responses` 仅支持流式（`stream=true`）。如果配置本身存在校验错误，本次 API 调用仍会以 `response.completed` 正常结束，最终文本会说明“配置校验失败”和错误摘要；不要把 `response.completed` 等同于业务校验通过。
+
+### 1.2 session_id 获取（Legacy / 前端兼容）
+
+`session_id` 可用于前端或老客户端复用历史；外部业务集成更推荐使用 `conversation` 或上一轮 `previous_response_id`。两种来源：
 
 | 策略 | 实现 | 取值位置 |
 | --- | --- | --- |
-| 服务端分配（推荐） | POST 时不传 `session_id`，从响应中读取 | `stream=false` 时为响应 JSON 的 `session_id`；`stream=true` 时为响应 header `X-Session-Id` |
-| 客户端生成 | 客户端生成 UUID 并在 POST body 的 `session_id` 字段传入；服务端首次见到时 lazy-create | 客户端本地 |
+| 服务端分配 | 先 POST `/v1/sessions` 拿到 `session_id`，每次请求带回去 | 响应 JSON 的 `session_id` |
+| 客户端生成 | 客户端生成 UUID 当作 `session_id`；服务端首次见到时 lazy-create | 客户端本地 |
 
 格式：`^[A-Za-z0-9_-]+$`，UUID 满足。被其他 user 占用时返回 404。
 
-服务端分配（`stream=false`，从响应 JSON 读取）：
+服务端分配：
 
 ```bash
-RESP=$(curl -s -X POST "$BASE_URL/v1/runs" \
+SESSION_ID=$(curl -s -X POST "$BASE_URL/v1/sessions" -d '{}' \
   -H 'Content-Type: application/json' \
-  -d '{
-    "input": "请校验引擎配置 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region cn-beijing。校验通过后告诉我有没有偏离基线。"
-  }')
-SESSION_ID=$(echo "$RESP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["session_id"])')
-RUN_ID=$(echo "$RESP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["run_id"])')
-```
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["session_id"])')
 
-服务端分配（`stream=true`，从响应 header 读取）：
-
-```bash
-curl -s -D /tmp/runs.h --no-buffer -X POST "$BASE_URL/v1/runs" \
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
   -H 'Content-Type: application/json' \
-  -d '{"input":"校验 embedding_config","stream":true}' > /tmp/runs.sse
-SESSION_ID=$(awk 'BEGIN{IGNORECASE=1}/^x-session-id:/{print $2}' /tmp/runs.h | tr -d '\r')
-RUN_ID=$(awk 'BEGIN{IGNORECASE=1}/^x-run-id:/{print $2}' /tmp/runs.h | tr -d '\r')
+  -d "{
+    \"session_id\": \"${SESSION_ID}\",
+    \"input\": \"请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。\",
+    \"stream\": true
+  }"
 ```
 
 客户端生成：
@@ -60,57 +73,43 @@ RUN_ID=$(awk 'BEGIN{IGNORECASE=1}/^x-run-id:/{print $2}' /tmp/runs.h | tr -d '\r
 ```bash
 SESSION_ID=$(python3 -c 'import uuid;print(uuid.uuid4())')
 
-curl -X POST "$BASE_URL/v1/runs" \
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
   -H 'Content-Type: application/json' \
-  -d "{
-    \"session_id\": \"${SESSION_ID}\",
-    \"input\": \"校验 embedding_config\"
-  }"
+  -d "{\"session_id\":\"${SESSION_ID}\",\"input\":\"请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。\",\"stream\":true}"
 ```
 
-事件订阅有两种模式：
+### 1.3 多轮对话
 
-- `stream=true`：响应 body 直接为 SSE。
-- `stream=false`（默认）：POST 立即返回 JSON（含 `run_id`），随后通过 `GET /v1/runs/{run_id}/events` 订阅 SSE，支持断点续传。
-
-### 1.2 多轮对话
-
-多轮通过复用同一个 `session_id` 实现，每轮独立 POST `/v1/runs`。服务端维护该 session 的完整历史，新 input 无需重复携带 instanceId / region 等上下文。第一轮由服务端分配 `session_id`，后续轮次客户端把它带回去：
+多轮可以复用同一个 `session_id`，每轮独立 POST `/v1/responses`。服务端维护该 session 的完整历史，新 input 无需重复携带 instanceId / region 等上下文。后端集成也可以使用上一轮 `response.completed.id` 作为 `previous_response_id` 并继续传普通文本；这会启动一个新的 response。只有 `previous_response_id` 搭配 `function_call_output` / `mcp_approval_response` 输入项时，才表示 HITL resume。
 
 ```bash
-# 第一轮：不带 session_id，从响应读取
-RESP=$(curl -s -X POST "$BASE_URL/v1/runs" \
+# 第一轮
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
   -H 'Content-Type: application/json' \
-  -d '{"input":"校验 embedding_config"}')
-SESSION_ID=$(echo "$RESP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["session_id"])')
+  -d "{\"session_id\":\"${SESSION_ID}\",\"input\":\"请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。\",\"stream\":true}"
 
-# 第二轮：复用上一轮的 session_id（待第一轮 run.completed 后发起）
-curl -s -X POST "$BASE_URL/v1/runs" \
+# 第二轮：复用上一轮的 session_id（待第一轮 response.completed 后发起）
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
   -H 'Content-Type: application/json' \
-  -d "{\"session_id\":\"${SESSION_ID}\",\"input\":\"再校验同实例的 ranker_config，列出差异\"}"
-# → 新 run_id；session_id 不变
+  -d "{\"session_id\":\"${SESSION_ID}\",\"input\":\"再校验同实例的 ranker_config，列出差异\",\"stream\":true}"
 ```
 
-客户端需维护两项状态：
+约束：上一轮仍在运行中时再 POST 同一 `session_id` 返回 `409 session_busy`；并发请求需新建 session。HITL 暂停属于 run 状态，不再占用 session 的 running 状态，续答必须走 `previous_response_id + function_call_output`。
 
-- `session_id`：会话级，整个 session 内不变
-- `run_id`：每轮一个，从 POST 响应中获取最新值
+### 1.4 本轮覆盖模型
 
-约束：上一轮 `status ∈ {running, started}` 时再 POST 同一 `session_id` 返回 `409 session_busy`；并发请求需新建 session。
-
-### 1.3 本轮覆盖模型
-
-POST `/v1/runs` 支持 `model` 字段，仅对当次 run 覆盖上游 LLM。该字段不写入会话默认值，下一轮不传则回退至全局生效模型（`/v1/models/active` 的值）。
+POST `/v1/responses` 支持 `model` 字段，仅对当次 response 覆盖上游 LLM。该字段不写入会话默认值，下一轮不传则回退至全局生效模型（`/v1/models/active` 的值）。
 
 适用场景：单次复杂校验或排障临时使用更强模型（如 `qwen-max`），不污染该 session 后续轮次和其他 session。
 
 ```bash
-curl -X POST "$BASE_URL/v1/runs" \
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
   -H 'Content-Type: application/json' \
   -d "{
     \"session_id\": \"${SESSION_ID}\",
-    \"input\": \"校验 embedding_config 是否偏离基线\",
-    \"model\": \"qwen-max\"
+    \"input\": \"请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。\",
+    \"model\": \"qwen-max\",
+    \"stream\": true
   }"
 ```
 
@@ -118,123 +117,171 @@ curl -X POST "$BASE_URL/v1/runs" \
 
 `/v1/chat/completions` 与 `/v1/responses` 的 `model` 字段语义一致，均为本次请求覆盖、不写入全局。
 
-### 1.4 ask_user：Agent 中途反问的续接
+### 1.5 ask_user：Agent 中途反问的续接
 
-Agent 执行中如需用户补充输入，会发出 `ask_user` 事件并暂停，run 进入 `waiting_user` 状态。本次 SSE 流随后以 `done(end_turn)` 结束，不会出现 `run.completed` 与 `[DONE]` 之前的最终答案。
-
-```text
-data: {"event":"ask_user","run_id":"run_xxx",
-       "question":"embedding_config 同时存在 Released（v3）和 Staging（v4），校验哪一个？",
-       "candidates":["Released（v3）","Staging（v4）","两个都校验"]}
-```
-
-回答方式与发起新一轮一致：使用同一 `session_id` 再次 POST `/v1/runs`，`input` 即为答案。服务端检测到 `waiting_user` 状态时，将该 input 注入正在等待的 run，**`run_id` 不变**：
+默认自主模式下，Agent 不会因为 `ask_user` 停下来等待用户；它会按工具参数里的 `default_action` 或安全兜底指令继续。需要前端弹出用户选择/补充输入时，启动请求必须传 `allow_hitl:true`：
 
 ```bash
-curl -X POST "$BASE_URL/v1/runs" \
-  -d "{\"session_id\":\"${SESSION_ID}\",\"input\":\"Released（v3）\"}"
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"session_id\": \"${SESSION_ID}\",
+    \"input\": \"请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。如果同时存在多个可校验版本，请暂停让我选择；最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。\",
+    \"allow_hitl\": true,
+    \"stream\": true
+  }"
 ```
 
-随后客户端需重新订阅同一 `run_id` 的 events 流（原 SSE 连接已关闭），Agent 从 `waiting_user` 恢复执行，直至下一次 `ask_user` 或 `run.completed`。
+此时 Agent 执行中如需用户补充输入（如 `ask_user` 工具），会以 `response.requires_action` + `response.incomplete` 终结当前流，附带 `submit_tool_outputs.tool_calls[]`。客户端续答时携带 `previous_response_id` + `function_call_output` 输入项即可：
 
+```text
+event: response.requires_action
+data: {"id":"resp_xxx","status":"requires_action",
+       "required_action":{"type":"submit_tool_outputs",
+         "submit_tool_outputs":{"tool_calls":[{
+           "id":"call_abc","type":"function",
+           "function":{"name":"ask_user","arguments":"{\"question\":\"embedding_config 同时存在 Released 和 Staging，校验哪一个？\",\"candidates\":[\"Released\",\"Staging\",\"两个都校验\"]}"}
+         }]}}}
+event: response.incomplete
+data: {"id":"resp_xxx","status":"incomplete",
+       "incomplete_details":{"reason":"requires_action"},
+       "required_action":{...同上...}}
+data: [DONE]
 ```
-                       ┌── 上一轮已完成 → 新 run_id
-                       │
-POST /v1/runs ─────────┤
-(同 session_id)        │
-                       └── waiting_user 时 → 注入回答，run_id 不变
+
+恢复执行：把 `response.requires_action` 中的 `id` 作为 `previous_response_id`，把回答包成 `function_call_output` 输入项再次 POST：
+
+```bash
+curl --no-buffer -X POST "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"previous_response_id\": \"resp_xxx\",
+    \"input\": [
+      {\"type\":\"function_call_output\",\"call_id\":\"call_abc\",\"output\":\"Released\"}
+    ],
+    \"stream\": true
+  }"
 ```
 
-新一轮与续答两种语义由服务端按当前 session `status` 自动区分，客户端代码路径完全一致。
+服务端从暂停点恢复执行，直至下一次 `requires_action` 或 `response.completed`。同一个暂停 response 只能被成功续答一次；重复续答或对非暂停 response 续答会返回 `409 not_resumable`。
 
-### 1.5 SSE 事件类型
+### 1.6 SSE 事件类型
 
-所有事件携带 `run_id` 与 `timestamp`，多数事件还携带 `step_id`，用于将工具调用挂到对应推理步骤。
+OpenAI Responses 兼容 SSE，每帧形如：
 
-| `event` | 关键字段 |
+```text
+event: <type>
+data: <json>
+```
+
+| `type` | 关键字段 |
 | --- | --- |
-| `reasoning.started` / `reasoning.available` / `reasoning.completed` | `step_id`、`text`、`status` |
-| `tool.delta` | `tool_call_id`、`tool`、`arguments_delta`、`arguments_text` |
-| `tool.started` / `tool.updated` / `tool.completed` | `tool_call_id`、`tool`、`status`、`input` / `content` |
-| `message.delta` | `delta`（最终回答增量） |
-| `ask_user` | `question`、`candidates` |
-| `run.completed` | `output`、`usage` |
-| `run.failed` | `error` |
+| `response.created` | `id`、`status='in_progress'` |
+| `response.output_item.added` | `output_index`、`item.{type, id}` — `type` ∈ {`message`, `function_call`} |
+| `response.output_text.delta` | `delta`（最终回答增量） |
+| `response.function_call_arguments.delta` | `item_id`、`delta`（工具参数流式） |
+| `response.function_call_arguments.done` | `item_id`、`arguments`（工具参数完成） |
+| `response.output_item.done` | `item.{type, id, ...}` |
+| `response.reasoning_step.started` / `completed` | `step_id`（合成的思考步骤边界，前缀 `rs_synth_`） |
+| `response.requires_action` | `allow_hitl=true` 且暂停时出现；`id`、`required_action.submit_tool_outputs.tool_calls[]` |
+| `response.completed` | `output[]`、`usage` |
+| `response.failed` | `error` |
 
-最终答案有两种获取方式：累加 `message.delta` 的 `delta` 字段，或直接读取 `run.completed.output`。
+最终答案有两种获取方式：累加 `response.output_text.delta` 的 `delta` 字段，或直接读取 `response.completed.output[]` 中 `type='message'` 的 `content[].text`。
 
 事件流片段：
 
 ```text
-data: {"event":"reasoning.available","step_id":"model-1","text":"先调 DescribeEngineConfig 拉当前配置..."}
-data: {"event":"tool.started","tool_call_id":"call_1_0","tool":"exec_command","input":{"cmd":"aliyun pai DescribeEngineConfig --InstanceId pairec-cn-inner-khhjd7wnn1geomcirl --ConfigName embedding_config"}}
-data: {"event":"tool.completed","tool_call_id":"call_1_0","status":"completed","content":"{\"ConfigName\":\"embedding_config\",\"Status\":\"Released\",\"Version\":\"v3\"}"}
-data: {"event":"message.delta","delta":"已完成校验，未发现偏离..."}
-data: {"event":"run.completed","output":"...","usage":{...}}
+event: response.created
+data: {"type":"response.created","id":"resp_xxx","status":"in_progress","model":"qwen-plus"}
+event: response.reasoning_step.started
+data: {"type":"response.reasoning_step.started","step_id":"rs_synth_resp_xxx_1","synthetic":true}
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"fc_1","type":"function_call","call_id":"call_1","name":"exec_command","arguments":""}}
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","item_id":"fc_1","delta":"{\"cmd\":\"aliyun pairecservice list-engine-configs"}
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","item_id":"fc_1","arguments":"{\"cmd\":\"aliyun pairecservice list-engine-configs --instance-id pairec-cn-inner-khhjd7wnn1geomcirl --environment Prod --status Released --name embedding_config --region cn-beijing\"}"}
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":1,"item":{"id":"fco_1","type":"function_call_output","call_id":"call_1","output":"{\"EngineConfigs\":[{\"Name\":\"embedding_config\",\"Environment\":\"Prod\",\"Status\":\"Released\",\"EngineConfigId\":\"487\",\"Version\":\"20260514095521\"}],\"TotalCount\":1}"}}
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta":"配置校验完成：未通过，发现若干错误..."}
+event: response.completed
+data: {"type":"response.completed","id":"resp_xxx","status":"completed","output":[...],"usage":{...}}
 data: [DONE]
 ```
 
-### 1.6 状态查询、停止、断点续传
+示例中的 `response.completed` 只表示 Agent 运行完成，不表示配置业务校验通过。最终业务结论以 `response.output_text.delta` 累计文本或 `response.completed.output[]` 中的最终消息为准。
+
+### 1.7 状态查询、停止、刷新恢复
 
 ```bash
-curl "$BASE_URL/v1/runs/${RUN_ID}"                                                  # 查询状态
-curl -X POST "$BASE_URL/v1/runs/${RUN_ID}/stop"                                     # 主动终止
-curl --no-buffer "$BASE_URL/v1/runs/${RUN_ID}/events?last_event_id=1778640000123-0" # 断点续传
+curl "$BASE_URL/v1/responses/${RESPONSE_ID}"               # 查询某次 response
+curl "$BASE_URL/v1/sessions/${SESSION_ID}"                 # 查询会话消息和状态
+curl -X POST "$BASE_URL/v1/sessions/${SESSION_ID}/cancel"  # 主动终止当前 in-flight response
 ```
 
-`status` 取值：`started` / `running` / `waiting_user` / `completed` / `failed` / `cancelled`。
+- 客户端断线重连：普通完成/失败结果可从 `GET /v1/sessions/{session_id}` 的 `messages` 恢复；HITL 暂停需保存 `response.requires_action.id`，再用 `GET /v1/responses/{response_id}` 恢复 `required_action`。
+- 取消：`POST /v1/sessions/{session_id}/cancel` 会让正在跑的 SSE 流以 `response.failed` 终结。
+- `/v1/responses` 不支持断点续传 cursor —— 同 session 重发会得到一条新 response。
 
-**断点续传机制**
-
-- `last_event_id` 形如 `<13 位毫秒时间戳>-<序号>`，celery 模式由 Redis Stream 生成、thread 模式由服务端合成同样格式（客户端不区分后端实现）。
-- SSE 流的每条 `data:` 事件前都带一行 `id: <cursor>`。使用浏览器 `EventSource` 时 `lastEventId` 会自动在重连请求里以 `Last-Event-ID:` 头回填，无需客户端手工管理 cursor。
-- 服务端为每个 run 维护一份"已下发到哪"的 cursor。客户端 GET `/v1/runs/{run_id}/events` 不传 `last_event_id` 时用该 cursor 续读；显式传入 `?last_event_id=...` 查询参数或 `Last-Event-ID:` 头会覆盖该 cursor。
-- 也可通过 `GET /v1/runs/{run_id}` 读响应里的 `last_event_id` 字段拿到当前最新 cursor，作为首次连接时的指定起点。
-
-### 1.7 客户端伪代码
+### 1.8 客户端伪代码
 
 ```python
 import json, uuid, requests
 
-def stream_run(run_id):
-    """订阅 run_id 的 SSE，处理事件直至 ask_user 或终态。
+BASE_URL = "<your-eas-endpoint>"
 
-    返回值：
-      - ask_user 事件本身：表示需要用户补答案
-      - None：表示 run 终态（completed / failed / cancelled）
-    """
-    with requests.get(f"{BASE_URL}/v1/runs/{run_id}/events", stream=True) as r:
+def stream_response(body):
+    """订阅 /v1/responses SSE，遇到 requires_action 就返回 pending；
+    遇到 completed/failed 就返回 None。"""
+    pending = None
+    with requests.post(f"{BASE_URL}/v1/responses",
+                       json=body, stream=True,
+                       headers={"Accept": "text/event-stream"}) as r:
+        event_name = None
         for raw in r.iter_lines():
-            if not raw or not raw.startswith(b"data: "):
+            if not raw:
+                event_name = None
                 continue
-            payload = raw[6:]
-            if payload == b"[DONE]":
-                return None
-            evt = json.loads(payload)
-            if evt.get("event") == "ask_user":
-                return evt
-            if evt.get("event") in ("run.completed", "run.failed"):
-                return None
-            render(evt)
-    return None
+            if raw.startswith(b"event: "):
+                event_name = raw[7:].decode()
+            elif raw.startswith(b"data: "):
+                payload = raw[6:]
+                if payload == b"[DONE]":
+                    return pending
+                evt = json.loads(payload)
+                if event_name == "response.requires_action":
+                    fc = evt["required_action"]["submit_tool_outputs"]["tool_calls"][0]
+                    pending = {
+                        "response_id": evt["id"],
+                        "call_id": fc["id"],
+                        "tool_name": fc["function"]["name"],
+                        "arguments": json.loads(fc["function"]["arguments"] or "{}"),
+                    }
+                elif event_name == "response.output_text.delta":
+                    print(evt["delta"], end="", flush=True)
+    return pending
 
-def chat_one_turn(session_id, user_input, model=None):
-    body = {"session_id": session_id, "input": user_input}
+def chat_one_turn(session_id, user_input, model=None, allow_hitl=False):
+    body = {"session_id": session_id, "input": user_input, "stream": True}
+    if allow_hitl:
+        body["allow_hitl"] = True
     if model:
         body["model"] = model
-    r = requests.post(f"{BASE_URL}/v1/runs", json=body)
-    run_id = r.json()["run_id"]
-    while True:
-        ask = stream_run(run_id)
-        if ask is None:
-            return                                       # run 终态
-        answer = prompt_user(ask["question"], ask.get("candidates", []))
-        requests.post(f"{BASE_URL}/v1/runs",
-                      json={"session_id": session_id, "input": answer})
-        # run_id 不变；服务端使用其 cursor 自动续读，无需显式传 last_event_id
+    pending = stream_response(body)
+    while pending is not None:
+        answer = prompt_user(pending["arguments"].get("question", ""),
+                             pending["arguments"].get("candidates", []))
+        pending = stream_response({
+            "previous_response_id": pending["response_id"],
+            "input": [{"type": "function_call_output",
+                       "call_id": pending["call_id"], "output": answer}],
+            "stream": True,
+        })
 
 session_id = str(uuid.uuid4())
-chat_one_turn(session_id, "校验 embedding_config，输出对照基线的差异", model="qwen-max")
+chat_one_turn(session_id, "请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。", model="qwen-max", allow_hitl=True)
 chat_one_turn(session_id, "再校验 ranker_config")
 ```
 
@@ -255,7 +302,7 @@ curl -X POST "$BASE_URL/v1/models/active" \
 
 效果：
 
-- 立即对所有新建 run / response / chat 生效。
+- 立即对所有新建 response / chat 生效。
 - 写入 `memory/runtime.json` 的 `active_model` 字段持久化（与多 provider / key 池配置共用同一文件）。
 - HTTP server / Celery worker / ACP server 跨进程共享（基于文件 mtime 失效重读）。
 - 不打断已经在跑的 stream。
@@ -267,7 +314,7 @@ curl -X POST "$BASE_URL/v1/models/active" \
 ### 2.2 优先级链
 
 ```
-请求 body.model（per-run / per-request）   ── 仅本次请求生效
+请求 body.model（per-request）              ── 仅本次请求生效
        ↓ 未传
 全局 active_model（/v1/models/active）       ── 跨进程持久化
        ↓ 未设置
@@ -276,7 +323,7 @@ curl -X POST "$BASE_URL/v1/models/active" \
 qwen-plus                                    ── 内置兜底
 ```
 
-请求体 `model` 字段不写入全局，下一次不传即沿此链回退。`/v1/runs`、`/v1/chat/completions`、`/v1/responses` 三处的 body.model 语义一致。
+请求体 `model` 字段不写入全局，下一次不传即沿此链回退。`/v1/responses` 与 `/v1/chat/completions` 两处的 body.model 语义一致。
 
 ### 2.3 多 Provider / Key 池
 
@@ -293,19 +340,15 @@ qwen-plus                                    ── 内置兜底
 
 ---
 
-## 3. 备用接口
+## 3. 备用接口：`/v1/chat/completions`（OpenAI 兼容）
 
-### 3.1 `/v1/chat/completions`（OpenAI 兼容）
-
-仅输出最终文本，不暴露工具调用与思考步骤。多轮通过 `X-Session-Id` 复用 session。`model` 字段语义同 `/v1/runs`，仅本次请求覆盖。
+仅输出最终文本，不暴露工具调用与思考步骤。多轮通过 `X-Session-Id` 复用 session。`model` 与 `allow_hitl` 字段语义同 `/v1/responses`，仅 `model` 是本次请求覆盖。
 
 ```bash
-curl "$BASE_URL/v1/chat/completions" \
+curl --no-buffer "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
   -H "X-Session-Id: ${SESSION_ID}" \
-  -d '{"model":"qwen-max","messages":[{"role":"user","content":"校验 embedding_config"}]}'
+  -d '{"model":"qwen-max","messages":[{"role":"user","content":"请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。"}],"stream":true}'
 ```
 
-### 3.2 `/v1/responses`（结构化结果）
-
-`output[]` 包含 `function_call` / `function_call_output` / `message` 三类条目。**不支持 `ask_user`**；需要中断式交互请改用 `/v1/runs`。多轮可通过 `previous_response_id` / `conversation` / `session_id` 三选一。`model` 字段仅本次请求覆盖。
+中断式交互（ask_user）需要显式 `allow_hitl:true`，通过 chat 兼容线的 `__ask_user__` 协议（`finish_reason='tool_calls'`）+ `role='tool'` 续答消息实现，详见 `API.md`。

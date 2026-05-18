@@ -185,85 +185,37 @@ cd services/agent-arena
 http://127.0.0.1:8787
 ```
 
-## 其他入口
-
-ACP/JSON-RPC：
-
-```bash
-cd PAI-RAG
-python -m frontends.acp
-```
-
-Zed 等编辑器可以使用脚本：
-
-```text
-/path/to/PAI-RAG/frontends/acp/run.sh
-```
-
 ## API 测试
 
-后端默认免登录，可以直接请求会话和运行接口。Web 前端使用结构化 SSE：
+后端默认免登录。会话由前端在调用 `/v1/responses` 时携带 `session_id` 维持，无需单独的 run 资源：
 
 ```bash
 SESSION_ID=$(curl -s -X POST http://127.0.0.1:8000/v1/sessions \
   | python -c "import sys,json; print(json.load(sys.stdin)['session_id'])")
 
-RUN_ID=$(curl -s --location 'http://127.0.0.1:8000/v1/runs' \
+curl --no-buffer --location 'http://127.0.0.1:8000/v1/responses' \
   --header 'Content-Type: application/json' \
-  --data "{\"session_id\":\"${SESSION_ID}\",\"input\":\"你好，请用一句话介绍你自己\"}" \
-  | python -c "import sys,json; print(json.load(sys.stdin)['run_id'])")
-
-curl --no-buffer --location "http://127.0.0.1:8000/v1/runs/${RUN_ID}/events"
+  --data "{\"session_id\":\"${SESSION_ID}\",\"input\":\"你好，请用一句话介绍你自己\",\"stream\":true}"
 ```
 
-查询 Run 状态：
-
-```bash
-curl --location "http://127.0.0.1:8000/v1/runs/${RUN_ID}"
-```
-
-非流式 Chat Completions：
-
-```bash
-curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "messages": [
-      {"role": "user", "content": "你好，请用一句话介绍你自己"}
-    ],
-    "stream": false
-  }'
-```
+两个 OpenAI 兼容入口当前都只支持流式调用；传 `stream:false` 会返回 `400 unsupported_mode`。
 
 流式 Chat Completions：
 
 ```bash
-curl --location 'http://127.0.0.1:8000/v1/chat/completions' \
+curl --no-buffer --location 'http://127.0.0.1:8000/v1/chat/completions' \
   --header 'Content-Type: application/json' \
   --header 'X-Session-Id: test-session-001' \
   --data '{
     "model": "pairag-agent",
     "messages": [
-      {"role": "user", "content": "你能做什么？"}
+      {"role": "user", "content": "你好，请用一句话介绍你自己"}
     ],
     "stream": true
   }'
 ```
 
-`stream=true` 时只返回 OpenAI Chat Completions 兼容的 `delta.content` SSE；不会伪造 `delta.tool_calls`，也不带任何自定义事件。需要看到工具调用、工具结果请改用 `/v1/responses` 或 `/v1/runs/{run_id}/events`。
-
-Responses API：
-
-```bash
-curl --location 'http://127.0.0.1:8000/v1/responses' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "input": "你好，请用一句话介绍你自己",
-    "stream": false
-  }'
-```
+`stream:true` 时只返回 OpenAI Chat Completions 兼容的 `delta.content` SSE；不会输出工具调用和思考步骤。需要看到工具调用、工具结果请改用 `/v1/responses`。
 
 流式 Responses API 会输出 `response.created`、`response.output_text.delta`、`response.output_item.*`、`response.completed` 等事件：
 
@@ -273,6 +225,42 @@ curl --no-buffer --location 'http://127.0.0.1:8000/v1/responses' \
   --data '{
     "model": "pairag-agent",
     "input": "检查当前 workspace 下有哪些文件",
+    "stream": true
+  }'
+```
+
+普通多轮推荐记录上一轮 `response.completed.id`，下一轮作为 `previous_response_id` 传回：
+
+```bash
+curl --no-buffer --location 'http://127.0.0.1:8000/v1/responses' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "model": "pairag-agent",
+    "previous_response_id": "resp_xxx",
+    "input": "继续上一轮，补充风险点",
+    "stream": true
+  }'
+```
+
+默认新请求是自主模式：`allow_hitl:false`，Agent 不会暂停等待用户。需要前端弹出确认/补充输入时显式传 `allow_hitl:true`；暂停后用 `previous_response_id + function_call_output` 续答：
+
+```bash
+curl --no-buffer --location 'http://127.0.0.1:8000/v1/responses' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "model": "pairag-agent",
+    "input": "如缺少关键信息，请暂停询问我",
+    "allow_hitl": true,
+    "stream": true
+  }'
+```
+
+```bash
+curl --no-buffer --location 'http://127.0.0.1:8000/v1/responses' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "previous_response_id": "resp_pause",
+    "input": [{"type":"function_call_output","call_id":"call_ask_001","output":"继续执行"}],
     "stream": true
   }'
 ```

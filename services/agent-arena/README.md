@@ -9,7 +9,7 @@ PAI-RAG 的独立 Agent 竞技场子服务：把同一条输入同时发送给�
 - 前端基于 React、Tailwind 和 shadcn/ui 风格组件。
 - 支持 system prompt、temperature、max tokens。
 - 一个 Agent 失败时，另一个 Agent 的结果仍会展示。
-- 可选展示 Hermes 风格 `/v1/runs` 中间过程事件。
+- 可选展示外部 Hermes 风格 Agent 的 `/v1/runs` 中间过程事件（仅用于消费外部 Agent；PAI-RAG 主服务已不暴露 `/v1/runs`，对接 PAI-RAG 时请使用 `chat` 模式）。
 - 可配置 OpenAI Judge 模型，从答案和公开过程事件两个层面对结果打分。
 - 自动保存每次 PK 和每次 Judge 评估到 SQLite，并提供历史对比页面。
 
@@ -68,13 +68,13 @@ AGENT_A_TRACE_MODE=chat
 
 这只调用 `/v1/chat/completions`，只能展示最终答案。
 
-如果 Agent 支持 Hermes API Server 的 runs 接口，可以开启：
+如果对接的是外部 Hermes API Server 风格的 Agent（PAI-RAG 主服务不属于此类，已转向 OpenAI Responses 风格），可以开启：
 
 ```bash
 AGENT_A_TRACE_MODE=runs
 ```
 
-开启后后端会调用：
+开启后后端会向该外部 Agent 发起：
 
 ```text
 POST /v1/runs

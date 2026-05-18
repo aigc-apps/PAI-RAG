@@ -864,6 +864,57 @@ class SQLiteSessionStore(BaseSessionStore):
             conn.execute(
                 'CREATE INDEX IF NOT EXISTS idx_responses_user_conversation ON responses(user_id, conversation, updated_at DESC)'
             )
+            conn.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS agent_run_states (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL,
+                    response_id TEXT,
+                    user_id TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    run_state_blob TEXT NOT NULL,
+                    pending_interruption_json TEXT,
+                    last_event_id TEXT,
+                    audit_log_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    last_active_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    UNIQUE(session_id, run_id),
+                    UNIQUE(response_id)
+                )
+                '''
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_agent_run_states_session ON agent_run_states(session_id, last_active_at DESC)'
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_agent_run_states_expires ON agent_run_states(expires_at)'
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_agent_run_states_user_status ON agent_run_states(user_id, status)'
+            )
+            conn.execute(
+                '''
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    audit_log_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    response_id TEXT,
+                    ts_ms INTEGER NOT NULL,
+                    category TEXT NOT NULL,
+                    payload_json TEXT NOT NULL
+                )
+                '''
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_audit_events_run ON audit_events(audit_log_id, ts_ms)'
+            )
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_audit_events_session ON audit_events(session_id, ts_ms)'
+            )
 
     def _session_row(self, conn, session_id, user_id):
         return conn.execute(

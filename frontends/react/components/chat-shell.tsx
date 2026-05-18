@@ -6,19 +6,17 @@ import remarkGfm from "remark-gfm";
 import { BookOpen, Bot, Brain, CheckCircle2, ChevronDown, LoaderCircle, Plus, RefreshCw, Square, Trash2, User2, Wrench, X } from "lucide-react";
 import {
   cancelSession,
-  createRun,
   createSession,
   deleteSession,
   getActiveModel,
   getSession,
   getSkills,
   listSessions,
-  regenerateLastAnswer,
   setActiveModel,
-  stopRun,
-  streamRunEvents,
+  streamRegenerate,
+  streamResponses,
 } from "@/lib/api";
-import type { AgentUpdate, AskUserPayload, ChatMessage, EvolvedSkill, OfficialSkill, SessionSummary, SkillInventory } from "@/lib/types";
+import type { AgentUpdate, AskUserPayload, ChatMessage, EvolvedSkill, OfficialSkill, PendingHitl, SessionSummary, SkillInventory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,8 +44,10 @@ type ProcessGroup = {
   items: ProcessItem[];
 };
 
-const INTERNAL_TOOL_NAMES = new Set(["update_working_checkpoint", "update_todo", "start_long_term_update"]);
-const MODEL_PROTOCOL_TAG_RE = /<\/?(?:summary|thinking|clinical_thinking|checking|taking|taking_action)\b[^>]*>/gi;
+const INTERNAL_TOOL_NAMES = new Set(["update_working_checkpoint", "update_todo", "start_long_term_update", "final_report"]);
+const MODEL_PROTOCOL_TAG_RE = /<\/?(?:summary|thinking|clinical[_-]thinking|checking|taking|taking[_-]action|skill[_-]context|working)\b[^>]*>/gi;
+const STICKY_BOTTOM_PX = 96;
+const RESUME_STICKY_PX = 640;
 
 function escapeModelProtocolTags(content = "") {
   return content.replace(MODEL_PROTOCOL_TAG_RE, (tag) =>
@@ -370,6 +370,94 @@ function fallbackDisplayContent(events: AgentUpdate[] = []) {
   return "";
 }
 
+function mergeDetailMessages(detail: { messages?: ChatMessage[] | null; pending_hitl?: PendingHitl | null }): ChatMessage[] {
+  const base = detail.messages ?? [];
+  const pending = detail.pending_hitl ?? null;
+  if (!pending || pending.tool_name !== "ask_user" || !pending.question) {
+    return base;
+  }
+  const last = base[base.length - 1];
+  const lastIsAsk =
+    last?.role === "assistant" &&
+    (last.events ?? []).some(
+      (event) => event.sessionUpdate === "ask_user" && event.question === pending.question,
+    );
+  if (lastIsAsk) {
+    return base;
+  }
+  const askEvent: AgentUpdate = {
+    sessionUpdate: "ask_user",
+    question: pending.question,
+    candidates: pending.candidates,
+  };
+  if (last?.role === "assistant") {
+    return [
+      ...base.slice(0, -1),
+      { ...last, events: [...(last.events ?? []), askEvent] },
+    ];
+  }
+  return [...base, { role: "assistant", content: "", events: [askEvent] }];
+}
+
+function sameUserTurn(a: ChatMessage | undefined, b: ChatMessage | undefined) {
+  return a?.role === "user" && b?.role === "user" && a.content === b.content;
+}
+
+function lastUserIndex(messages: ChatMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      return index;
+    }
+  }
+  return -1;
+}
+
+// After a freshly-finished stream, the in-memory transcript holds a richer
+// view than the server snapshot — it carries reasoning_step / tool_call
+// events that the backend doesn't persist into ui_messages. Keep the last
+// in-memory assistant message (with its events) when the server returns the
+// same number of trailing assistant messages, only refreshing earlier turns
+// from the server. If the server snapshot is stale and doesn't include the
+// just-submitted user turn yet, keep the local transcript so the answer
+// doesn't flash and disappear. Falls back to mergeDetailMessages when prev
+// has nothing.
+function mergePostStreamMessages(
+  prev: ChatMessage[],
+  detail: { messages?: ChatMessage[] | null; pending_hitl?: PendingHitl | null },
+): ChatMessage[] {
+  const merged = mergeDetailMessages(detail);
+  const prevLast = prev[prev.length - 1];
+  const prevUser = prev[prev.length - 2];
+  if (prevLast?.role === "assistant" && prevUser?.role === "user") {
+    const mergedLastUser = lastUserIndex(merged);
+    if (mergedLastUser === -1 || !sameUserTurn(merged[mergedLastUser], prevUser)) {
+      return prev;
+    }
+    if (mergedLastUser === merged.length - 1) {
+      return [...merged, prevLast];
+    }
+  }
+  if (!prevLast || prevLast.role !== "assistant") {
+    return merged;
+  }
+  const prevEventCount = prevLast.events?.length ?? 0;
+  const mergedLast = merged[merged.length - 1];
+  const mergedEventCount = mergedLast?.events?.length ?? 0;
+  const prevContentLen = (prevLast.content || "").length;
+  const mergedContentLen = (mergedLast?.content || "").length;
+  if (
+    mergedLast?.role === "assistant" &&
+    prevEventCount >= mergedEventCount &&
+    prevContentLen >= mergedContentLen
+  ) {
+    return [...merged.slice(0, -1), prevLast];
+  }
+  if (mergedLast?.role !== "assistant" && prevEventCount > 0) {
+    return [...merged, prevLast];
+  }
+  return merged;
+}
+
 function applyAssistantUpdate(messages: ChatMessage[], update: AgentUpdate): ChatMessage[] {
   const next = [...messages];
   let last = next[next.length - 1];
@@ -583,6 +671,24 @@ function AgentReasoningContent({ item }: { item?: ProcessItem }) {
   );
 }
 
+function ThinkDetails({ item }: { item: ProcessItem }) {
+  const content = cleanInternalDisplayText(item.content);
+  if (!content) {
+    return (
+      <div className="rounded bg-slate-50 px-2.5 py-2 text-sm text-slate-500">
+        {item.status === "in_progress" || item.status === "pending"
+          ? "Thinking..."
+          : "No reasoning content"}
+      </div>
+    );
+  }
+  return (
+    <div className="max-h-72 overflow-auto rounded bg-slate-50 p-2.5 text-sm leading-relaxed">
+      <Markdown content={content} />
+    </div>
+  );
+}
+
 function ProcessSubStep({ item, stepNumber }: { item: ProcessItem; stepNumber: number }) {
   const isThought = item.kind === "think";
   const active = isActiveStatus(item.status);
@@ -633,7 +739,13 @@ function ProcessSubStep({ item, stepNumber }: { item: ProcessItem; stepNumber: n
         </span>
       </summary>
       <div className="border-t border-slate-200 p-2.5">
-        {item.kind === "execute" ? <CodeRunDetails item={item} /> : <GenericToolDetails item={item} />}
+        {item.kind === "execute" ? (
+          <CodeRunDetails item={item} />
+        ) : item.kind === "think" ? (
+          <ThinkDetails item={item} />
+        ) : (
+          <GenericToolDetails item={item} />
+        )}
       </div>
     </details>
   );
@@ -708,9 +820,15 @@ function ProcessGroupCard({
         </span>
       </summary>
       <div className="space-y-2.5 border-t border-slate-200 p-3">
-        <AgentReasoningContent item={group.thought} />
+        {hasReasoningContent(group.thought) ? (
+          <ProcessSubStep item={group.thought!} key={group.thought!.id} stepNumber={1} />
+        ) : null}
         {group.items.map((item, index) => (
-          <ProcessSubStep item={item} key={item.id} stepNumber={index + 1} />
+          <ProcessSubStep
+            item={item}
+            key={item.id}
+            stepNumber={index + 1 + (hasReasoningContent(group.thought) ? 1 : 0)}
+          />
         ))}
       </div>
     </details>
@@ -725,7 +843,11 @@ function ProcessBlock({ items, streaming }: { items: ProcessItem[]; streaming: b
     0,
   );
   const title = active ? "Working through agent steps" : "Agent steps";
-  const totalItems = groups.reduce((total, group) => total + group.items.length, 0);
+  const totalItems = groups.reduce(
+    (total, group) =>
+      total + group.items.length + (hasReasoningContent(group.thought) ? 1 : 0),
+    0,
+  );
 
   if (!groups.length) {
     return null;
@@ -777,7 +899,7 @@ function MessageContent({
   const hasProcessItems = processItems.length > 0;
   const hasAsks = asks.length > 0;
   const hasContent = Boolean(displayContent);
-  const showContent = hasContent && (!streaming || !hasProcessItems);
+  const showContent = hasContent;
   const shouldUseFallbackContent = !streaming && !hasContent && !hasProcessItems && !hasAsks;
   const fallbackContent = useMemo(
     () => (shouldUseFallbackContent ? fallbackDisplayContent(events) : ""),
@@ -1027,10 +1149,11 @@ export function ChatShell() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [streamingSessions, setStreamingSessions] = useState<Set<string>>(() => new Set());
-  const [runIdBySession, setRunIdBySession] = useState<Record<string, string>>({});
+  const [pendingHitlBySession, setPendingHitlBySession] = useState<Record<string, PendingHitl | null>>({});
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [skillsInventory, setSkillsInventory] = useState<SkillInventory | null>(null);
   const [skillsLoading, setSkillsLoading] = useState(false);
@@ -1048,12 +1171,15 @@ export function ChatShell() {
   const streamingSessionsRef = useRef<Set<string>>(streamingSessions);
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
+  const programmaticScrollRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const lastTouchYRef = useRef<number | null>(null);
 
   streamingSessionsRef.current = streamingSessions;
 
   const messages = currentSessionId ? messagesBySession[currentSessionId] ?? [] : [];
   const streaming = currentSessionId ? streamingSessions.has(currentSessionId) : false;
-  const currentRunId = currentSessionId ? runIdBySession[currentSessionId] ?? null : null;
+  const currentPendingHitl = currentSessionId ? pendingHitlBySession[currentSessionId] ?? null : null;
 
   const setSessionMessages = useCallback(
     (sessionId: string, updater: (prev: ChatMessage[]) => ChatMessage[]) => {
@@ -1078,20 +1204,25 @@ export function ChatShell() {
     });
   }, []);
 
-  const setSessionRunId = useCallback((sessionId: string, runId: string | null) => {
-    setRunIdBySession((prev) => {
-      if (runId) {
-        if (prev[sessionId] === runId) {
+  const setSessionPendingHitl = useCallback((sessionId: string, pending: PendingHitl | null) => {
+    setPendingHitlBySession((prev) => {
+      if (!pending) {
+        if (!(sessionId in prev) || prev[sessionId] === null) {
+          if (prev[sessionId] === null) {
+            return prev;
+          }
+        }
+        if (!(sessionId in prev)) {
           return prev;
         }
-        return { ...prev, [sessionId]: runId };
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
       }
-      if (!(sessionId in prev)) {
+      if (prev[sessionId] && prev[sessionId]?.call_id === pending.call_id && prev[sessionId]?.response_id === pending.response_id) {
         return prev;
       }
-      const next = { ...prev };
-      delete next[sessionId];
-      return next;
+      return { ...prev, [sessionId]: pending };
     });
   }, []);
 
@@ -1116,6 +1247,7 @@ export function ChatShell() {
   const loadSession = useCallback(
     async (sessionId: string) => {
       shouldStickToBottomRef.current = true;
+      setShowScrollToBottom(false);
       setCurrentSessionId(sessionId);
       // Streaming sessions hold a fresher in-memory transcript than the
       // server snapshot (which is debounced up to ~750ms behind). Don't
@@ -1125,13 +1257,14 @@ export function ChatShell() {
         return;
       }
       const detail = await getSession(sessionId);
-      setSessionMessages(detail.session_id, () => detail.messages ?? []);
+      setSessionMessages(detail.session_id, () => mergeDetailMessages(detail));
+      setSessionPendingHitl(detail.session_id, detail.pending_hitl ?? null);
       if (detail.session_id !== sessionId) {
         setCurrentSessionId(detail.session_id);
       }
       await refreshSessions();
     },
-    [refreshSessions, setSessionMessages],
+    [refreshSessions, setSessionMessages, setSessionPendingHitl],
   );
 
   const loadInitialSession = useCallback(async () => {
@@ -1141,6 +1274,7 @@ export function ChatShell() {
     } else {
       const created = await createSession();
       shouldStickToBottomRef.current = true;
+      setShowScrollToBottom(false);
       setCurrentSessionId(created.session_id);
       setSessionMessages(created.session_id, () => created.messages ?? []);
       await refreshSessions();
@@ -1189,6 +1323,27 @@ export function ChatShell() {
     };
   }, []);
 
+  const scrollViewportToBottom = useCallback((viewport: HTMLDivElement, behavior: ScrollBehavior = "auto") => {
+    programmaticScrollRef.current = true;
+    viewport.scrollTo({
+      top: viewport.scrollHeight,
+      behavior,
+    });
+    window.setTimeout(() => {
+      programmaticScrollRef.current = false;
+      lastScrollTopRef.current = viewport.scrollTop;
+    }, 0);
+  }, []);
+
+  const maybeResumeSticky = useCallback((viewport: HTMLDivElement) => {
+    const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    if (distanceToBottom <= Math.max(RESUME_STICKY_PX, viewport.clientHeight)) {
+      shouldStickToBottomRef.current = true;
+      setShowScrollToBottom(false);
+      scrollViewportToBottom(viewport);
+    }
+  }, [scrollViewportToBottom]);
+
   useEffect(() => {
     if (!shouldStickToBottomRef.current) {
       return;
@@ -1197,21 +1352,23 @@ export function ChatShell() {
     if (!viewport) {
       return;
     }
-    requestAnimationFrame(() => {
-      viewport.scrollTo({
-        top: viewport.scrollHeight,
-        behavior: streaming ? "auto" : "smooth",
-      });
+    const frame = requestAnimationFrame(() => {
+      if (!shouldStickToBottomRef.current) {
+        return;
+      }
+      scrollViewportToBottom(viewport, streaming ? "auto" : "smooth");
     });
-  }, [messages, streaming]);
+    return () => cancelAnimationFrame(frame);
+  }, [messages, scrollViewportToBottom, streaming]);
 
   const activeSession = sessions.find((session) => session.session_id === currentSessionId);
-  const isAnsweringAsk = activeSession?.status === "waiting_user" && Boolean(latestAsk(messages));
+  const isAnsweringAsk = Boolean(currentPendingHitl) && Boolean(latestAsk(messages));
   const activeSessionTitle = activeSession ? sessionTitle(activeSession) : titleFromMessages(messages);
 
   async function handleNewSession() {
     const created = await createSession();
     shouldStickToBottomRef.current = true;
+    setShowScrollToBottom(false);
     setSessionMessages(created.session_id, () => created.messages ?? []);
     setCurrentSessionId(created.session_id);
     await refreshSessions();
@@ -1226,7 +1383,7 @@ export function ChatShell() {
     abortControllers.current.get(sessionId)?.abort();
     abortControllers.current.delete(sessionId);
     markStreaming(sessionId, false);
-    setSessionRunId(sessionId, null);
+    setSessionPendingHitl(sessionId, null);
     setMessagesBySession((prev) => {
       if (!(sessionId in prev)) {
         return prev;
@@ -1248,21 +1405,15 @@ export function ChatShell() {
 
   async function handleStop() {
     const targetSessionId = currentSessionId;
-    const targetRunId = currentRunId;
+    if (!targetSessionId) {
+      return;
+    }
     try {
-      if (targetRunId) {
-        await stopRun(targetRunId);
-      } else if (targetSessionId) {
-        await cancelSession(targetSessionId);
-      }
+      await cancelSession(targetSessionId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      if (targetSessionId) {
-        abortControllers.current.get(targetSessionId)?.abort();
-        // Streaming flag and run id are cleared by the in-flight submitText/
-        // regenerate finally block — don't race them here.
-      }
+      abortControllers.current.get(targetSessionId)?.abort();
     }
   }
 
@@ -1277,6 +1428,7 @@ export function ChatShell() {
     const controller = new AbortController();
 
     let activeSessionId = currentSessionId;
+    let pendingBefore: PendingHitl | null = null;
 
     try {
       if (!activeSessionId) {
@@ -1289,8 +1441,10 @@ export function ChatShell() {
       const sessionId = activeSessionId;
       abortControllers.current.set(sessionId, controller);
       markStreaming(sessionId, true);
+      pendingBefore = pendingHitlBySession[sessionId] ?? null;
 
       shouldStickToBottomRef.current = true;
+      setShowScrollToBottom(false);
       setSessionMessages(sessionId, (prev) => [
         ...prev,
         { role: "user", content: text },
@@ -1330,60 +1484,52 @@ export function ChatShell() {
         ];
       });
 
-      const run = await createRun(sessionId, text, controller.signal);
-      const runSessionId = run.session_id || sessionId;
-      setSessionRunId(runSessionId, run.run_id);
-      if (runSessionId !== sessionId) {
-        // Backend reassigned the session — migrate buckets so the stream
-        // keeps writing to a stable id and the user's view follows.
-        setMessagesBySession((prev) => {
-          if (!(sessionId in prev) || runSessionId in prev) {
-            return prev;
-          }
-          const next = { ...prev, [runSessionId]: prev[sessionId] };
-          delete next[sessionId];
-          return next;
-        });
-        markStreaming(sessionId, false);
-        markStreaming(runSessionId, true);
-        abortControllers.current.set(runSessionId, controller);
-        abortControllers.current.delete(sessionId);
-        if (currentSessionId === sessionId) {
-          setCurrentSessionId(runSessionId);
-        }
-        activeSessionId = runSessionId;
-      }
-      setSessions((prev) =>
-        prev.map((session) =>
-          session.session_id === activeSessionId
-            ? { ...session, active_run_id: run.run_id, status: run.status || "running", running: true }
-            : session,
-        ),
-      );
+      const streamInput = pendingBefore
+        ? [
+            {
+              type: "function_call_output",
+              call_id: pendingBefore.call_id,
+              output: text,
+            } as Record<string, unknown>,
+          ]
+        : text;
+      const previousResponseId = pendingBefore?.response_id;
 
-      const returnedSessionId = await streamRunEvents(
-        run.run_id,
-        activeSessionId,
-        ({ sessionId: eventSessionId, update }) => {
-          // Route every event by its own session id, regardless of which
-          // session the user is currently viewing. Don't yank the sidebar
-          // selection back — that's the user's choice.
-          setSessionMessages(eventSessionId, (prev) => applyAssistantUpdate(prev, update));
+      // Optimistically clear the pending HITL — onTerminal/onRequiresAction
+      // will reinstate or finalize it as the SSE drains.
+      if (pendingBefore) {
+        setSessionPendingHitl(sessionId, null);
+      }
+
+      await streamResponses(
+        {
+          sessionId,
+          input: streamInput,
+          previousResponseId,
+          signal: controller.signal,
         },
-        controller.signal,
+        {
+          onUpdate: ({ sessionId: eventSessionId, update }) => {
+            setSessionMessages(eventSessionId, (prev) => applyAssistantUpdate(prev, update));
+          },
+          onRequiresAction: (pending) => {
+            setSessionPendingHitl(sessionId, pending);
+          },
+        },
       );
 
-      const finalSessionId = returnedSessionId || activeSessionId;
-      if (finalSessionId) {
-        const detail = await getSession(finalSessionId);
-        setSessionMessages(detail.session_id, () => detail.messages ?? []);
-      }
+      const detail = await getSession(sessionId);
+      setSessionMessages(detail.session_id, (prev) => mergePostStreamMessages(prev, detail));
+      setSessionPendingHitl(detail.session_id, detail.pending_hitl ?? null);
       await refreshSessions();
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         if (activeSessionId) {
+          if (pendingBefore) {
+            setSessionPendingHitl(activeSessionId, pendingBefore);
+          }
           setSessionMessages(activeSessionId, (prev) =>
             applyAssistantUpdate(prev, {
               sessionUpdate: "agent_message_chunk",
@@ -1395,7 +1541,6 @@ export function ChatShell() {
     } finally {
       if (activeSessionId) {
         markStreaming(activeSessionId, false);
-        setSessionRunId(activeSessionId, null);
         if (abortControllers.current.get(activeSessionId) === controller) {
           abortControllers.current.delete(activeSessionId);
         }
@@ -1410,12 +1555,13 @@ export function ChatShell() {
 
     setError(null);
     const controller = new AbortController();
-    let activeSessionId = currentSessionId;
+    const activeSessionId = currentSessionId;
     abortControllers.current.set(activeSessionId, controller);
     markStreaming(activeSessionId, true);
 
     try {
       shouldStickToBottomRef.current = true;
+      setShowScrollToBottom(false);
       setSessionMessages(activeSessionId, (prev) => {
         if (!canRegenerateLastAssistant(prev)) {
           return prev;
@@ -1430,52 +1576,22 @@ export function ChatShell() {
         ),
       );
 
-      const run = await regenerateLastAnswer(activeSessionId, controller.signal);
-      const runSessionId = run.session_id || activeSessionId;
-      setSessionRunId(runSessionId, run.run_id);
-      if (runSessionId !== activeSessionId) {
-        setMessagesBySession((prev) => {
-          if (!(activeSessionId in prev) || runSessionId in prev) {
-            return prev;
-          }
-          const next = { ...prev, [runSessionId]: prev[activeSessionId] };
-          delete next[activeSessionId];
-          return next;
-        });
-        markStreaming(activeSessionId, false);
-        markStreaming(runSessionId, true);
-        abortControllers.current.set(runSessionId, controller);
-        abortControllers.current.delete(activeSessionId);
-        if (currentSessionId === activeSessionId) {
-          setCurrentSessionId(runSessionId);
-        }
-        activeSessionId = runSessionId;
-      }
-      setSessions((prev) =>
-        prev.map((session) =>
-          session.session_id === activeSessionId
-            ? { ...session, active_run_id: run.run_id, status: run.status || "running", running: true }
-            : session,
-        ),
-      );
-
-      const prepared = await getSession(activeSessionId);
-      setSessionMessages(prepared.session_id, () => prepared.messages ?? []);
-
-      const returnedSessionId = await streamRunEvents(
-        run.run_id,
+      await streamRegenerate(
         activeSessionId,
-        ({ sessionId: eventSessionId, update }) => {
-          setSessionMessages(eventSessionId, (prev) => applyAssistantUpdate(prev, update));
+        {
+          onUpdate: ({ sessionId: eventSessionId, update }) => {
+            setSessionMessages(eventSessionId, (prev) => applyAssistantUpdate(prev, update));
+          },
+          onRequiresAction: (pending) => {
+            setSessionPendingHitl(activeSessionId, pending);
+          },
         },
         controller.signal,
       );
 
-      const finalSessionId = returnedSessionId || activeSessionId;
-      if (finalSessionId) {
-        const detail = await getSession(finalSessionId);
-        setSessionMessages(detail.session_id, () => detail.messages ?? []);
-      }
+      const detail = await getSession(activeSessionId);
+      setSessionMessages(detail.session_id, (prev) => mergePostStreamMessages(prev, detail));
+      setSessionPendingHitl(detail.session_id, detail.pending_hitl ?? null);
       await refreshSessions();
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -1483,7 +1599,8 @@ export function ChatShell() {
         setError(message);
         try {
           const detail = await getSession(activeSessionId);
-          setSessionMessages(detail.session_id, () => detail.messages ?? []);
+          setSessionMessages(detail.session_id, (prev) => mergePostStreamMessages(prev, detail));
+          setSessionPendingHitl(detail.session_id, detail.pending_hitl ?? null);
         } catch {
           setSessionMessages(activeSessionId, (prev) =>
             applyAssistantUpdate(prev, {
@@ -1495,7 +1612,6 @@ export function ChatShell() {
       }
     } finally {
       markStreaming(activeSessionId, false);
-      setSessionRunId(activeSessionId, null);
       if (abortControllers.current.get(activeSessionId) === controller) {
         abortControllers.current.delete(activeSessionId);
       }
@@ -1576,7 +1692,7 @@ export function ChatShell() {
         </div>
       </aside>
 
-      <main className="flex h-[100dvh] min-h-0 min-w-0 flex-col overflow-hidden">
+      <main className="relative flex h-[100dvh] min-h-0 min-w-0 flex-col overflow-hidden">
         <header className="shrink-0 border-b border-slate-200/80 bg-white/75 px-5 py-4 backdrop-blur lg:px-8">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -1616,10 +1732,47 @@ export function ChatShell() {
         <div
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
           ref={messagesViewportRef}
+          onWheel={(event) => {
+            if (event.deltaY < 0) {
+              shouldStickToBottomRef.current = false;
+              setShowScrollToBottom(true);
+            } else if (event.deltaY > 0) {
+              maybeResumeSticky(event.currentTarget);
+            }
+          }}
+          onTouchStart={(event) => {
+            lastTouchYRef.current = event.touches[0]?.clientY ?? null;
+          }}
+          onTouchMove={(event) => {
+            const currentY = event.touches[0]?.clientY ?? null;
+            const previousY = lastTouchYRef.current;
+            if (currentY !== null && previousY !== null && currentY > previousY + 2) {
+              shouldStickToBottomRef.current = false;
+              setShowScrollToBottom(true);
+            } else if (currentY !== null && previousY !== null && currentY < previousY - 2) {
+              maybeResumeSticky(event.currentTarget);
+            }
+            lastTouchYRef.current = currentY;
+          }}
           onScroll={(event) => {
             const target = event.currentTarget;
+            if (programmaticScrollRef.current) {
+              lastScrollTopRef.current = target.scrollTop;
+              return;
+            }
             const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-            shouldStickToBottomRef.current = distanceToBottom < 80;
+            const scrollingUp = target.scrollTop < lastScrollTopRef.current - 2;
+            const scrollingDown = target.scrollTop > lastScrollTopRef.current + 2;
+            if (scrollingUp) {
+              shouldStickToBottomRef.current = false;
+              setShowScrollToBottom(true);
+            } else if (distanceToBottom < STICKY_BOTTOM_PX) {
+              shouldStickToBottomRef.current = true;
+              setShowScrollToBottom(false);
+            } else if (scrollingDown) {
+              maybeResumeSticky(target);
+            }
+            lastScrollTopRef.current = target.scrollTop;
           }}
         >
           <section className="flex w-full min-w-0 flex-col gap-4 px-4 py-4 lg:px-8">
@@ -1710,6 +1863,27 @@ export function ChatShell() {
             ) : null}
           </section>
         </div>
+
+        {showScrollToBottom ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center">
+            <Button
+              className="pointer-events-auto h-9 gap-1.5 rounded-full border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-panel hover:bg-slate-50"
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const viewport = messagesViewportRef.current;
+                shouldStickToBottomRef.current = true;
+                setShowScrollToBottom(false);
+                if (viewport) {
+                  scrollViewportToBottom(viewport);
+                }
+              }}
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+              Latest
+            </Button>
+          </div>
+        ) : null}
 
         <div className="shrink-0 border-t border-slate-200/80 bg-white/80 px-4 py-4 backdrop-blur lg:px-8">
           <form className="flex w-full min-w-0 items-end gap-3" onSubmit={(event) => void handleSubmit(event)}>

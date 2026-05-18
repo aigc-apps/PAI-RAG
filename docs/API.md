@@ -3,35 +3,40 @@
 本文档面向服务部署后的调用方，说明如何通过 HTTP API 调用 Agent。示例中的 `BASE_URL` 请替换为实际部署地址。
 
 ```bash
-export BASE_URL="http://127.0.0.1:8000"
+# 本地默认（scripts/start.sh 启动）：后端 8683
+export BASE_URL="http://127.0.0.1:8683"
 ```
 
 如果部署平台在网关层要求鉴权，请按平台要求附加 `Authorization` 等请求头。当前后端服务本身不校验鉴权头。
+
+> **重要**：`/v1/responses` 与 `/v1/chat/completions` **只支持流式**（`stream=true`）。传 `stream=false` 会得到 `400 unsupported_mode`。下文示例统一以 SSE 形式给出。
+>
+> **HITL 默认关闭**：新请求默认 `allow_hitl=false`，Agent 会自主继续执行；只有显式传 `allow_hitl=true` 时，`ask_user` 或需要人工审批的工具才会把本轮流终结为 `requires_action`。已经暂停的 HITL resume 请求会默认保持可中断。
 
 ## 目录
 
 1. [Chat Completions](#1-chat-completions)
 2. [Responses API](#2-responses-api)
-3. [Runs API](#3-runs-api)
-4. [Sessions API](#4-sessions-api)
-5. [其他接口](#5-其他接口)
-6. [部署后 Smoke Test](#6-部署后-smoke-test)
-7. [常见问题](#7-常见问题)
+3. [Sessions API](#3-sessions-api)
+4. [其他接口](#4-其他接口)
+5. [部署后 Smoke Test](#5-部署后-smoke-test)
+6. [常见问题](#6-常见问题)
 
 ## 通用约定
 
 - 请求体一律 JSON：`Content-Type: application/json`。
 - 流式接口使用 SSE：`Content-Type: text/event-stream`，行末 `data: [DONE]` 结束流。
+- 流式接口在长时间无新事件（默认 15 秒）时会发出 SSE 注释行 `: keepalive`（无 `event:` / `data:`，按 SSE 规范是注释），用于穿透中间代理的空闲连接探测。客户端**必须**忽略以 `:` 开头的行；几乎所有标准 SSE 解析器（含 OpenAI Python SDK、`fetch` + `EventSource`）会自动丢弃。
 - 响应头中会带上：
   - `X-Session-Id`：当前会话 ID
   - `X-Run-Id`：当前运行 ID（仅在创建或订阅 Run 的接口里返回）
   - `Cache-Control: no-cache, no-transform`、`X-Accel-Buffering: no`（流式接口）
 - `cwd` 字段可选，用于指定任务执行目录。开启 `ENFORCE_WORKSPACE_FOR_SERVER` 后，`cwd` 不能逃逸出每个 session 的 workspace。
-- 所有 LLM 调用会按真实 token 数返回 `usage`（多轮内部调用会累加）；只有当上游 LLM 没有返回 usage 时才会缺省。
+- 所有 LLM 调用会按真实 token 数返回 `usage`（多轮内部调用会累加）。后端在 Agent 构造时强制 `model_settings.include_usage=true`，因此即便上游 provider（如 dashscope/qwen-plus）默认不返回 usage，本服务也会显式开启使其回流；只有当上游 LLM 完全不支持 `stream_options.include_usage` 时才会缺省。
 
 ### 错误格式
 
-错误分两层：**HTTP 层**（接口本身被拒）走 `error` 字段；**Run 终止层**（接口接受了请求但 Agent 跑错了）走 SSE `done.stop_reason` 与 `GET /v1/runs/{id}.error` 字段。
+错误分两层：**HTTP 层**（接口本身被拒）走 `error` 字段；**Run 终止层**（接口接受了请求但 Agent 跑错了）由 Responses 终止事件 (`response.completed` 或 `response.failed`) 与 `GET /v1/responses/{id}` 的 `status`/`error` 字段表达。
 
 #### HTTP 错误（请求层）
 
@@ -53,51 +58,50 @@ export BASE_URL="http://127.0.0.1:8000"
 | --- | --- | --- | --- |
 | 400 | `invalid_request_error` | 请求体非法 / 缺字段（含 `model` 字段不合法） | — |
 | 400 | `workspace_violation` | `cwd` 逃出允许范围 | — |
-| 404 | `run_not_found` | run id 不存在或不属于当前用户 | — |
+| 400 | `unsupported_mode` | `/v1/responses` 与 `/v1/chat/completions` 仅支持 `stream=true` | — |
+| 400 | `invalid_resume` | 对暂停中的 response 未提交有效的 HITL resume 输入 | — |
 | 404 | `response_not_found` | response id 不存在或不属于当前用户 | — |
 | 404 | `""`（空 code） | 通用 not found（典型为 `session not found`） | — |
 | 409 | `session_busy` | 该 session 上一轮还在运行 | `status`（session 当前状态） |
+| 409 | `not_resumable` | `function_call_output` 指向的 response 当前不在 `requires_action` | — |
 | 409 | `no_regeneratable_answer` | 该 session 没有可重生成的答案 | — |
 | 413 | `request_too_large` | 请求体超过 `MAX_REQUEST_BODY_BYTES` | — |
 | 422 | `validation_error` | FastAPI 路径 / 查询参数校验失败 | — |
 | 429 | `capacity_exceeded` | 全局或单用户并发 run 超额 | `scope`、`limit` |
-| 500 | `""` | Celery runner 未启用却调了 celery-only 接口 / 其他未捕获异常 | — |
+| 500 | `""` | 其他未捕获异常 | — |
 
-#### Run 退出码（执行层）
+#### Run 终态（执行层）
 
-Run 终止后，`exit_reason.result` 决定 run 的最终 `status` 与 SSE `done.stop_reason`，并写入 `GET /v1/runs/{id}` 的 `error` 字段（仅 failed 时非空）。完整枚举：
+Run 由 OpenAI Agents SDK runner 驱动，每个 run 在 `agent_run_states` 表里有一行带 `status`、`run_state_blob`、`expires_at` 的记录。`/v1/responses`（以及共用同一 SSE 协议的 `/v1/chat/completions`）的终止事件就是该 run 的终态：
 
-| `result` | 触发条件 | 终态 status | `done.stop_reason` |
+| 终态 status | 触发条件 | SSE 终止事件 | `error` 是否携带 |
 | --- | --- | --- | --- |
-| `CURRENT_TASK_DONE` | LLM 调了 `current_task_done` 工具，正常结束本轮 | `completed` | `end_turn` |
-| `EXITED` | LLM 调了 `exit` 工具，主动放弃本轮 | `completed` | `end_turn` |
-| `NO_TOOL_CALL` | 一轮 LLM 输出里没有任何 tool_call，被视为最终回答 | `completed` | `end_turn` |
-| `MAX_TURNS_EXCEEDED` | LLM 多轮交互未触达终态（默认 40 轮） | `failed` | `max_turns` |
-| `WORKSPACE_VIOLATION` | 工具调用试图写出 workspace 边界 | `failed` | `error` |
-| `ASK_USER_TIMEOUT` | `ask_user` 后用户在 `ASK_USER_TIMEOUT_SECONDS`（默认 30 分钟）内未回答 | `failed` | `error` |
-| `ERROR` | 其他未捕获异常（上游 LLM 报错、工具异常等） | `failed` | `error` |
-| `INTERRUPTED` | `POST /v1/runs/{id}/stop` 或 `POST /v1/sessions/{sid}/cancel` 主动取消 | `cancelled` | `cancelled` |
+| `completed` | Agent 正常返回最终消息 | `response.completed` | 否 |
+| `requires_action` | 请求显式 `allow_hitl=true`，且 Agent 触发 `ask_user` 或带 `needs_approval` 的工具 | `response.requires_action` 中 `status: "requires_action"` + `required_action.submit_tool_outputs` | 否 |
+| `failed` | 上游 LLM / 工具异常、`max_turns` 超限、workspace 越界等 | `response.failed` | 是（`error.message`） |
+| `cancelled` | `POST /v1/sessions/{sid}/cancel` 主动取消 | `response.failed` 或客户端连接断开 | 否 |
+| `expired` | `requires_action` 状态超过 7 天未恢复 | 后续 resume 请求返回 `409 not_resumable`；若 GC 已删除记录则返回 `404 response_not_found` | — |
 
 **用法**：
-- 只关心成功/失败 → 看 status：`completed` 都算成功，其他都算需要人工或重试介入。
-- 想区分"超时 vs 上游错误 vs 用户取消" → 看 `done.stop_reason` 或 `GET /v1/runs/{id}` 返回里的 `error`。
-- `error` 字段语义：仅在 status=`failed` 时携带具体异常 message；其他终态（completed/cancelled）该字段为空字符串。
+- 只关心成功/失败 → 终止事件是 `response.completed` 即成功；`response.failed` 即失败。
+- 普通多轮 → `POST /v1/responses` 带上一轮 `id` 作为 `previous_response_id`，`input` 继续传普通文本；服务端会基于上一轮 response 的历史启动一个新的 response。
+- HITL 暂停 → 先在启动请求里传 `allow_hitl:true`；终止事件 status 为 `requires_action` 时，从 `required_action.submit_tool_outputs.tool_calls[]` 读 `call_id` + `function.arguments`，然后 `POST /v1/responses` 带 `previous_response_id` + `input=[{type:"function_call_output", call_id, output:"<answer>"}]` 续传同一个暂停 run。
+- 想知道为什么失败 → `GET /v1/responses/{id}` 看 `status` + `error` 字段，或同一 run 的 audit 日志。
 
 ### 状态机
 
 #### Session 状态
 
 ```
-                    ┌───────── POST /v1/runs（新一轮）─────┐
+                    ┌───────── POST /v1/responses（新一轮）┐
                     │                                       │
                     ▼                                       │
-          ┌────────────────┐  ask_user ┌──────────────────┐ │
-   ──────▶│  idle / 终态  │──────────▶│  waiting_user    │─┘
-   create └────────────────┘           └──────────────────┘
-                  ▲                            │ POST /v1/runs（带回答）
-                  │                            ▼
-                  │                    ┌──────────────────┐
-                  │                    │     running      │
+          ┌────────────────┐                                │
+   ──────▶│  idle / 终态  │                                │
+   create └────────────────┘                                │
+                  ▲                                         │
+                  │                    ┌──────────────────┐ │
+                  │                    │     running      │─┘
                   │   run 收尾         └──────────────────┘
                   └─────────────────────────────┘
                        (completed / failed /
@@ -105,39 +109,46 @@ Run 终止后，`exit_reason.result` 决定 run 的最终 `status` 与 SSE `done
                         作为新一轮的起点)
 ```
 
-可观察值：`idle` / `running` / `waiting_user` / `completed` / `failed` / `cancelled`。
+可观察值：`idle` / `running` / `completed` / `failed` / `cancelled`。
 
 合法转移：
-- `idle` → `running`：`POST /v1/runs` 启动新 run
-- `running` → `waiting_user`：Agent 调 ask_user 工具
+- `idle` → `running`：`POST /v1/responses` 或 `/v1/chat/completions` 启动新 run
 - `running` → `completed` / `failed` / `cancelled`：run 结束（详见上表）
-- `waiting_user` → `running`：用户再 `POST /v1/runs` 带回答
-- `waiting_user` → `failed`：`ASK_USER_TIMEOUT` 触发
-- `waiting_user` → `cancelled`：`POST /v1/sessions/{sid}/cancel`
 - `completed` / `failed` / `cancelled` → `running`：同一 session 启动新一轮 run（终态都可作为新一轮起点）
 
-非法转移：`running` 状态下再 `POST /v1/runs` 同 session 会得到 `409 session_busy`；只有 `waiting_user` 是例外（被解释为 ask_user 续答）。
+> HITL 暂停不再表现为 session 状态。仅当请求显式 `allow_hitl=true`，且 Agent 触发 `ask_user`（或带 `needs_approval=True` 的工具）时，**Run** 才进入 `requires_action`，但 session 仍保持 `idle` —— 后续 resume 通过 `previous_response_id` + `function_call_output`（Responses 线）或 `role:"tool"` 消息（Chat 线）发起，无须独占 session。
 
-#### Run 状态
+#### Run 状态（SDK runner 生命周期）
 
 ```
-   ┌──────────┐       ┌──────────┐       ┌──────────────────┐
-   │ started  │──────▶│ running  │──────▶│  waiting_user    │──┐
-   └──────────┘       └──────────┘       └──────────────────┘  │
-                            │                    │             │
-                            │                    │ 用户回答     │
-                            │                    └────────────▶┘
-                            │                                  │
-                            ▼                                  ▼
-                     ┌──────────────────────────────────────────────┐
-                     │ completed │ failed │ cancelled               │
-                     │           │        │  (终态：不再有事件流)      │
-                     └──────────────────────────────────────────────┘
+   ┌──────────┐       ┌─────────────────────┐
+   │ running  │──────▶│  requires_action    │──┐
+   └──────────┘       └─────────────────────┘  │
+        │                       │              │ resume：
+        │                       │ 7d 未续答       │ previous_response_id +
+        │                       ▼              │ function_call_output
+        │                    expired           │  (or role:"tool")
+        │                       │              ▼
+        ▼                       │         ┌──────────┐
+  ┌────────────────────────┐    │         │ running  │
+  │ completed │ failed │   │    │         └──────────┘
+  │ cancelled │ expired  │◀──┘                │
+  └────────────────────────┘                  │
+            ▲────────────────────────────────┘
 ```
 
-可观察值：`started`（已入队待执行）/ `running` / `waiting_user` / `completed` / `failed` / `cancelled`。
+可观察值：`running` / `requires_action` / `completed` / `failed` / `cancelled` / `expired`。
 
-`status` 与 `exit_reason.result` 的对应关系见上一节"Run 退出码"。客户端轮询时遇到上述 3 个终态即可结束等待。
+- `agent_run_states.status` 持久化上述值；`/v1/responses/{id}` 从这里取。
+- `expired` 由后台 GC 在超过 `RUN_STATE_TTL_SECONDS`（默认 7 天）时自动写入；在此之后 resume 会得到 `409 not_resumable`，若记录已被硬删除则得到 `404 response_not_found`。
+- `cancelled` 由 `POST /v1/sessions/{sid}/cancel`（取消其上最新 run）或客户端断流触发。
+
+### 执行记录与后台 review
+
+- `store=true`（Responses 默认）时，response 会写入 SQLite，供 `GET /v1/responses/{id}`、`previous_response_id` 多轮和 HITL resume 使用。
+- 每轮会同步写入 session 的 `messages`，并把可回溯的 Markdown 副本保存到 `memory/L4_raw_sessions/`。
+- 只有 `completed` 终态会在归档成功后触发后台 memory review；`requires_action`、`failed`、`cancelled` 不触发。
+- 默认自主处理 HITL 的路径会记录 `hitl_auto_continue` 审计事件，便于回溯模型为什么没有中断等待用户。
 
 ## 推荐调用方式
 
@@ -146,31 +157,27 @@ Run 终止后，`exit_reason.result` 决定 run 的最终 `status` 与 SSE `done
 | 场景 | 推荐接口 |
 | --- | --- |
 | 只需要类似 OpenAI Chat Completions 的对话返回 | `/v1/chat/completions` |
-| 需要结构化输出，包含工具调用和工具结果 | `/v1/responses` |
-| 需要完整 Agent 生命周期事件，用于自定义前端展示 | `/v1/runs` + `/v1/runs/{run_id}/events` |
+| 需要结构化输出（工具调用、工具结果、显式开启的 HITL 暂停） | `/v1/responses` |
 
-### Responses vs Runs
+### 两个端点的关系
 
-三套接口背后跑的是同一个 Agent，区别在于"暴露什么 + 怎么塑形"：
+两个端点背后跑的是同一个 SDK Agent，区别只在 wire 形态：
 
-| 维度 | `/v1/responses` | `/v1/runs` |
+| 维度 | `/v1/chat/completions` | `/v1/responses` |
 | --- | --- | --- |
-| 协议定位 | 模仿 OpenAI Responses API | 自定义 Agent 生命周期 |
-| 流式事件粒度 | `response.output_text.delta` / `response.output_item.added` / `response.completed` | `reasoning.*` / `tool.delta` / `tool.started` / `tool.updated` / `tool.completed` / `message.delta` / `ask_user` / `run.completed` |
-| Agent 思考步骤 | 不暴露 | `reasoning.*` 把每个 LLM 步骤拆出来，`step_id` 把工具调用挂到对应步骤 |
-| 工具调用呈现 | 粗：`function_call` + `function_call_output` 两个 item | 细：参数边产生边推、`in_progress`/`updated`/`completed` 状态 |
-| `ask_user` 中断 | 不支持 | 支持；下一轮 `POST /v1/runs` 的 `input` 自动作为回答 |
-| 断点续传 | 流断了重发 | `cursor` / `Last-Event-ID` 从中间恢复 |
-| 多轮串联方式 | `previous_response_id` / `conversation` / `session_id` / `conversation_history` 四选一 | `session_id` 一种 |
-| 历史制品 | `store=true` 默认保存，可 `GET /v1/responses/{id}` 取回 / `DELETE` 删除 | 不作为可查阅制品（只能 `GET /v1/runs/{id}` 查状态） |
-| 客户端兼容性 | OpenAI Responses SDK 直接可用 | 需要自己写事件解析 |
+| 协议定位 | OpenAI Chat Completions 兼容 | OpenAI Responses 兼容 |
+| 流式 chunk 形态 | 默认 `chat.completion.chunk.delta.content`；`allow_hitl=true` 暂停时可能出现 `tool_calls` | `response.output_text.delta` / `response.output_item.added` / `response.completed` |
+| HITL 暂停表达 | `allow_hitl=true` 时：`finish_reason="tool_calls"` + 保留名 `__ask_user__` | `allow_hitl=true` 时：`response.requires_action` 内 `status="requires_action"` + `required_action.submit_tool_outputs` |
+| HITL resume 方式 | 追加 `role:"tool"` 消息，同 `X-Session-Id` 重发 messages | `previous_response_id` + `function_call_output` 输入项 |
+| 历史制品 | 仅靠 `X-Session-Id` 维持上下文 | `store=true` 默认开，`GET /v1/responses/{id}` 取回 / `DELETE` 删除 |
+| 跨设备恢复 | 需要客户端自己回放最近 assistant 消息（含 `__ask_user__` tool_call） | `previous_response_id` 一手指针，跨设备/跨进程 |
 
 怎么选：
 
-- **`/v1/responses`**：客户端已经在用 OpenAI SDK；只关心最终结果不要中间过程；想拿历史 response 作可寻址资源；业务侧已有 conversation 标识想直接串轮次。
-- **`/v1/runs`**：在做 Agent 展示型 UI，要画"思考 → 调工具 → 工具结果 → 继续思考"的过程条；需要 `ask_user` 这种等用户补充输入的语义；要稳健的断点续传；要把工具参数实时 stream 出来。
+- **`/v1/responses`**：首选。OpenAI Python SDK 直接 `responses.create(...)` 即可用；结构化事件完整；跨端恢复靠 `previous_response_id`。
+- **`/v1/chat/completions`**：兼容只懂 Chat 协议的客户端。显式开启 `allow_hitl=true` 后，HITL 用保留名 `__ask_user__` 伪装成 tool_call，下一轮以 `role:"tool"` 续答。
 
-一句话总结：**Responses = 最终制品 + OpenAI 兼容**；**Runs = 全过程事件流 + Agent UI 友好**。
+> 之前曾对外暴露的 `/v1/runs` 一族（`POST /v1/runs`、`GET /v1/runs/{id}`、`/events`、`/stop`）已在 SDK 迁移收敛过程中整体删除；现存路径全部返回 404。前端改为直接订阅 `/v1/responses` 的 SSE。
 
 ## 1. Chat Completions
 
@@ -180,47 +187,7 @@ Run 终止后，`exit_reason.result` 决定 run 的最终 `status` 与 SSE `done
 POST /v1/chat/completions
 ```
 
-### 非流式请求
-
-```bash
-curl --location "$BASE_URL/v1/chat/completions" \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "messages": [
-      {"role": "user", "content": "你好，请用一句话介绍你自己"}
-    ],
-    "stream": false
-  }'
-```
-
-返回 OpenAI Chat Completions 兼容结构：
-
-```json
-{
-  "id": "chatcmpl-xxx",
-  "object": "chat.completion",
-  "created": 1778560000,
-  "model": "pairag-agent",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "你好，我是一个可以使用工具完成任务的 Agent。"
-      },
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {"prompt_tokens": 123, "completion_tokens": 45, "total_tokens": 168},
-  "metadata": {"session_id": "session_xxx"}
-}
-```
-
-字段说明：
-
-- `usage` 是本次请求里 Agent 所有内部 LLM 调用累加出来的真实 token 数；调用上游失败或上游 LLM 没返回 usage 时各字段为 0。
-- `metadata.session_id` 是本次实际写入历史的 session；客户端透传 `X-Session-Id` 时会一致返回，未传则是服务端新建的 session。
+> ⚠️ 仅支持流式（`stream=true`）。`stream=false` 会返回 `400 unsupported_mode`。
 
 ### 流式请求
 
@@ -229,7 +196,6 @@ curl --no-buffer --location "$BASE_URL/v1/chat/completions" \
   --header 'Content-Type: application/json' \
   --header 'X-Session-Id: demo-session-001' \
   --data '{
-    "model": "pairag-agent",
     "messages": [
       {"role": "user", "content": "检查当前目录有哪些文件，并简单总结"}
     ],
@@ -237,14 +203,16 @@ curl --no-buffer --location "$BASE_URL/v1/chat/completions" \
   }'
 ```
 
-流式返回遵循 OpenAI Chat Completions SSE 的文本增量格式：
+流式返回遵循 OpenAI Chat Completions SSE 的文本增量格式（实测自 8683 后端）：
 
 ```text
-data: {"object":"chat.completion.chunk","choices":[{"delta":{"role":"assistant"},"index":0,"finish_reason":null}]}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1779098260,"model":"qwen-plus","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
 
-data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"你好"},"index":0,"finish_reason":null}]}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1779098261,"model":"qwen-plus","choices":[{"index":0,"delta":{"content":"我是"},"finish_reason":null}]}
 
-data: {"object":"chat.completion.chunk","choices":[{"delta":{},"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":123,"completion_tokens":45,"total_tokens":168}}
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1779098261,"model":"qwen-plus","choices":[{"index":0,"delta":{"content":"通用执行 Agent"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1779098263,"model":"qwen-plus","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
 
 data: [DONE]
 ```
@@ -252,9 +220,10 @@ data: [DONE]
 说明：
 
 - `/v1/chat/completions` 是面向通用 OpenAI 客户端的纯文本兼容入口：流式只输出 `delta.content`，不输出 `delta.tool_calls`，也不夹带任何自定义 SSE event。
-- 最后一条 `chat.completion.chunk` 会在 chunk 顶层带上 `usage`（行为对齐 OpenAI `stream_options.include_usage=true`）。
-- 需要在客户端看到工具调用、工具结果或 Agent 思考步骤，请改用 `/v1/responses`（结构化）或 `/v1/runs/{run_id}/events`（完整生命周期事件）。
-- `model` 字段：传入则**仅本次请求**透传给上游；不写入全局生效模型，下一次不传就回到 `/v1/models/active` 的值。具体路由到哪个上游 provider，由 `memory/runtime.json` 的前缀规则决定（详见下文"多 Provider / Key 池"）。
+- 末尾 chunk 的 `delta` 为空、`finish_reason="stop"`；Chat Completions 协议下 `usage` 不内嵌在末尾 chunk 里（不论上游是否返回）。如需 token 数请改用 Responses API 流末 `response.completed.usage`，那条**总会**带聚合后的真实 token（后端服务端强制开启 `include_usage`）。
+- 需要在客户端看到工具调用、工具结果或 HITL `requires_action`，请改用 `/v1/responses`（结构化 SSE）。Chat 线只有在显式 `allow_hitl=true` 且实际暂停时，才会用 `__ask_user__` tool call 表达 HITL。
+- `model` 字段：可省略；省略时使用 `/v1/models/active` 的当前值（本地默认 `qwen-plus`）。传入则**仅本次请求**透传给上游，不写入全局生效模型。具体路由到哪个上游 provider 由 `memory/runtime.json` 的前缀规则决定（详见下文"多 Provider / Key 池"）。
+- `allow_hitl` 字段：可省略，默认 `false`。普通请求保持自主执行；只有显式 `true` 才允许流末 `finish_reason="tool_calls"` 暂停。以 `role:"tool"` 消息续答已暂停 run 时，服务端默认按 `allow_hitl=true` 处理。
 
 ## 2. Responses API
 
@@ -264,71 +233,12 @@ data: [DONE]
 POST /v1/responses
 GET /v1/responses/{response_id}
 DELETE /v1/responses/{response_id}
+POST /v1/responses/{response_id}/cancel
 ```
 
-适合需要结构化结果的调用方。返回中会包含最终消息、工具调用、工具输出。
+适合需要结构化结果的调用方。流末 `response.completed`（或显式 `allow_hitl=true` 后可能出现的 `response.requires_action` / 出错时的 `response.failed`）的 payload 里会包含最终消息、工具调用、工具输出。
 
-### 非流式请求
-
-```bash
-curl --location "$BASE_URL/v1/responses" \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "input": "你好，请用一句话介绍你自己",
-    "stream": false
-  }'
-```
-
-返回示例：
-
-```json
-{
-  "id": "resp_xxx",
-  "object": "response",
-  "created_at": 1778560000,
-  "status": "completed",
-  "model": "pairag-agent",
-  "output": [
-    {
-      "type": "message",
-      "role": "assistant",
-      "content": [
-        {
-          "type": "output_text",
-          "text": "你好，我是一个可以使用工具完成任务的 Agent。"
-        }
-      ]
-    }
-  ],
-  "usage": {"prompt_tokens": 123, "completion_tokens": 45, "total_tokens": 168}
-}
-```
-
-`usage` 是本次 response 内 Agent 所有 LLM 调用累加得到的真实 token 数；如果调用最终失败、被取消，或调用上游 LLM 没有返回 usage，则可能为 `null`。
-
-包含工具调用时，`output` 可能包含：
-
-```json
-[
-  {
-    "type": "function_call",
-    "call_id": "call_1_0",
-    "name": "exec_command",
-    "arguments": "{\"cmd\":\"ls\"}"
-  },
-  {
-    "type": "function_call_output",
-    "call_id": "call_1_0",
-    "output": "README.md\nbackend\nfrontends\n"
-  },
-  {
-    "type": "message",
-    "role": "assistant",
-    "content": [{"type": "output_text", "text": "当前目录包含 README、后端和前端代码。"}]
-  }
-]
-```
+> ⚠️ 仅支持流式（`stream=true`）。`stream=false` 会返回 `400 unsupported_mode`。`output` 在流式过程中通过 `response.output_item.added/done` 增量出现，最终 payload 只在终止事件中给出完整列表。
 
 ### 流式请求
 
@@ -336,55 +246,118 @@ curl --location "$BASE_URL/v1/responses" \
 curl --no-buffer --location "$BASE_URL/v1/responses" \
   --header 'Content-Type: application/json' \
   --data '{
-    "model": "pairag-agent",
     "input": "检查当前目录有哪些文件，并简单总结",
     "stream": true
   }'
 ```
 
-流式事件包括：
+流式事件（实测自 8683 后端，每个 event 都带 `sequence_number` 单调递增）：
 
 | 事件 | 含义 |
 | --- | --- |
-| `response.created` | Response 已创建 |
-| `response.output_item.added` | 新增输出项，例如工具调用或消息 |
-| `response.output_text.delta` | 最终文本增量 |
-| `response.output_text.done` | 最终文本结束 |
-| `response.output_item.done` | 某个输出项结束 |
-| `response.completed` | Response 完成 |
-| `response.failed` | Response 失败 |
+| `response.created` | Response 已创建（顶层 `id`、`status:"in_progress"`、`model`） |
+| `response.reasoning_step.started` | 合成的"思考"段开始；`step_id` 形如 `rs_synth_<resp_id>_<n>`，带 `synthetic:true`。**仅本服务端合成**，OpenAI 原生 Responses 协议没有此事件 |
+| `response.output_item.added` | 新增输出项 —— 可能是 assistant `message`，也可能是 `function_call` |
+| `response.output_text.delta` | 最终消息文本增量（`delta` 是当次新增 token） |
+| `response.function_call_arguments.delta` | 工具调用 `arguments` 字段增量（按 `item_id` 关联到 `output_item.added` 的 `function_call`） |
+| `response.function_call_arguments.done` | 工具调用 `arguments` 累计完成 |
+| `response.output_text.done` | 最终消息文本完成（顶层 `text` 是完整内容） |
+| `response.output_item.done` | 某个输出项结束（`item.status:"completed"`） |
+| `response.reasoning_step.completed` | "思考"段结束 |
+| `response.requires_action` | **PAI-RAG 扩展事件**：仅显式 `allow_hitl=true` 后可能出现的 HITL 暂停（payload `status:"requires_action"` + `required_action.submit_tool_outputs`，仿 Assistants v1）。`GET /v1/responses/{id}` 也会以 `status:"requires_action"` 返回相同 payload，可作为跨设备兜底 |
+| `response.incomplete` | **OpenAI 标准终止事件**：紧跟在 `response.requires_action` 之后再发一次（payload 同上，但 `status="incomplete"` + `incomplete_details:{reason:"requires_action"}`）。OpenAI 官方 SDK 默认只监听 `response.completed/failed/incomplete` 三个终态 event，所以**纯 OpenAI SDK 客户端可以靠 `response.incomplete` 关闭连接**，再用 `GET /v1/responses/{id}` 或上一条 `response.requires_action` 拿到 `required_action` 字段。重度依赖 HITL 的客户端建议直接 hook `response.requires_action` |
+| `response.completed` | Response 正常完成（流末，包含完整 `output` 与 `usage`） |
+| `response.failed` | Response 失败（流末，含 `error.message`） |
 
-示例：
+示例（最简文本回答，简化版）：
 
 ```text
 event: response.created
-data: {"type":"response.created","id":"resp_xxx","status":"in_progress"}
+data: {"type":"response.created","id":"resp_xxx","status":"in_progress","model":"qwen-plus","output":[],"usage":null,"sequence_number":1}
+
+event: response.reasoning_step.started
+data: {"type":"response.reasoning_step.started","response_id":"resp_xxx","step_id":"rs_synth_resp_xxx_1","synthetic":true,"sequence_number":2}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","response_id":"resp_xxx","output_index":0,"item":{"id":"msg_xxx","type":"message","status":"in_progress","role":"assistant","content":[]},"sequence_number":3}
 
 event: response.output_text.delta
-data: {"type":"response.output_text.delta","delta":"你好"}
+data: {"type":"response.output_text.delta","response_id":"resp_xxx","delta":"我是","output_index":0,"content_index":0,"sequence_number":5}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","response_id":"resp_xxx","text":"我是通用执行 Agent...","output_index":0,"content_index":0,"sequence_number":20}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","response_id":"resp_xxx","output_index":0,"item":{"id":"msg_xxx","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"我是通用执行 Agent..."}]},"sequence_number":21}
+
+event: response.reasoning_step.completed
+data: {"type":"response.reasoning_step.completed","response_id":"resp_xxx","step_id":"rs_synth_resp_xxx_1","synthetic":true,"sequence_number":22}
 
 event: response.completed
-data: {"type":"response.completed","id":"resp_xxx","status":"completed","output":[...]}
+data: {"type":"response.completed","id":"resp_xxx","status":"completed","model":"qwen-plus","output":[{"id":"msg_xxx","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"我是通用执行 Agent..."}]}],"usage":{"input_tokens":3150,"output_tokens":10,"total_tokens":3160,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}},"sequence_number":23}
 
 data: [DONE]
 ```
 
+工具调用流（实测：显式 `allow_hitl:true` 后触发 `ask_user`），关键节选：
+
+```text
+event: response.output_item.added
+data: {"type":"response.output_item.added","response_id":"resp_xxx","output_index":1,"item":{"arguments":"","call_id":"call_xxx","name":"ask_user","type":"function_call","id":"call_xxx"},"sequence_number":6}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","response_id":"resp_xxx","item_id":"call_xxx","output_index":1,"delta":"{\"question\": \"","sequence_number":9}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","response_id":"resp_xxx","item_id":"call_xxx","output_index":1,"delta":"请提供要操作的文件名？","sequence_number":11}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","response_id":"resp_xxx","output_index":1,"item":{"arguments":"{\"question\": \"请提供要操作的文件名？\"}","call_id":"call_xxx","name":"ask_user","type":"function_call","id":"call_xxx"},"sequence_number":16}
+
+event: response.requires_action
+data: {"type":"response.requires_action","id":"resp_xxx","status":"requires_action","required_action":{"type":"submit_tool_outputs","submit_tool_outputs":{"tool_calls":[{"id":"call_xxx","type":"function","function":{"name":"ask_user","arguments":"{\"question\": \"请提供要操作的文件名？\"}"}}]}},"sequence_number":23}
+
+event: response.incomplete
+data: {"type":"response.incomplete","id":"resp_xxx","status":"incomplete","incomplete_details":{"reason":"requires_action"},"required_action":{"type":"submit_tool_outputs","submit_tool_outputs":{"tool_calls":[{"id":"call_xxx","type":"function","function":{"name":"ask_user","arguments":"{\"question\": \"请提供要操作的文件名？\"}"}}]}},"sequence_number":24}
+
+data: [DONE]
+```
+
+> 兼容性提示：上游 provider（如 qwen-plus）会对 `function_call` 项发回固定占位 id `__fake_id__`。事件桥会把它**就地改写为以 `call_id` 派生的 `id`** 后再下发，因此客户端可以放心按 `item_id` / `item.id` 去重和聚合 arguments delta；终止事件 `response.completed.output` / `response.requires_action.output` 中的 `function_call` 条目都已带稳定 `id` 和 `call_id`，不会再出现 `__fake_id__`。
+
+> 工具结果消毒：服务端在把工具的 raw stdout / 内部状态打回到 `function_call_output` 项之前，会自动剥离内部脚手架（如 `### [WORKING MEMORY]` / `<history>` 块）。客户端拿到的 `output` 字段都是给用户看的最终内容，不需要再做二次清洗。
+>
+> 函数参数 JSON 校验：流式过程中 `response.function_call_arguments.delta` 拼接出来的 `arguments` 应当是合法 JSON。事件桥会在 `response.function_call_arguments.done` / 对应 `response.output_item.done` 时校验一次；若解析失败（典型场景：上游模型 truncate 或乱码），该 function_call item 会被标记成 `status: "incomplete"` + `arguments_status: "invalid_json"`，对应 `done` 事件载荷也会带上同样字段。客户端可据此跳过执行 / 触发兜底。`status="completed"` 且没有 `arguments_status` 字段即视为 valid。
+
 ### 多轮和会话关联
 
-Responses API 支持以下字段：
+> **业务集成建议**：对外只用两种方式串多轮：
+> - `previous_response_id`（OpenAI 标准；指向上一轮 response，复用其 session/历史/`conversation`/`instructions`）
+> - `conversation`（业务方自己的会话串号；服务端按其下"最新一条 response"作隐式 previous）
+>
+> 下方 §session_id / §conversation_history / `X-Session-Id` 头属于 PAI-RAG 内部 / 历史接口，仅为前端 / 老客户端保留，**不建议外部业务方继续依赖**——这两条路径未来可能合并到 `conversation` 一条线下。
+
+外部业务方推荐字段：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `input` | string / array | 当前输入，必填 |
 | `model` | string | 模型 id：仅本次请求覆盖上游 LLM；不写入全局生效模型，下一次不传则回到服务端当前生效模型（`/v1/models/active` 的值，回退顺序：运行时值 > 环境变量 `MODEL` > `qwen-plus`）。具体路由到哪个 provider 由 `memory/runtime.json` 的前缀规则决定（详见下文"多 Provider / Key 池"） |
 | `instructions` | string | 本轮系统级说明 |
-| `previous_response_id` | string | 继续某个历史 response |
-| `conversation` | string | 业务方自定义会话标识 |
-| `conversation_history` | array | 调用方显式传入的历史消息（无状态模式） |
-| `session_id` | string | 复用服务端会话 |
-| `stream` | boolean | 是否流式返回，默认 `false` |
+| `previous_response_id` | string | OpenAI 标准多轮指针：继续某个历史 response |
+| `conversation` | string | 业务方自定义会话标识；服务端按其下最新 response 作隐式 previous |
+| `stream` | boolean | 是否流式返回；**当前仅支持 `true`**，传 `false` 返回 `400 unsupported_mode` |
+| `allow_hitl` | boolean | 是否允许 Agent 暂停等待用户输入。默认 `false`；显式 `true` 后才会产生 `requires_action`。HITL resume 输入默认按 `true` 处理 |
 | `store` | boolean | 是否保存 response（用于后续 `GET` / `previous_response_id`），默认 `true` |
 | `cwd` | string | 任务执行目录 |
+
+**Legacy / 内部字段（不推荐外部业务方使用，保留是为了前端 / 老客户端兼容）**：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `session_id` | string | 服务端 session 行的引用（前端会话管理用）；外部业务方请改用 `conversation` 串号 |
+| `conversation_history` | array | 无状态模式下显式传入的历史消息；外部业务方请改用 `previous_response_id` 让服务端自己取上下文 |
+| `X-Session-Id`（HTTP 头） | string | 仅 `/v1/chat/completions` 路径上保留；Responses 路径不读取此头 |
 
 #### 方式一：使用 `previous_response_id`
 
@@ -393,43 +366,30 @@ Responses API 支持以下字段：
 第一轮：
 
 ```bash
-curl --location "$BASE_URL/v1/responses" \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "input": "你好，你是谁？",
-    "stream": false
-  }'
+curl --no-buffer "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d '{"input":"你好，你是谁？","stream":true}'
 ```
 
-从返回中记录 `id`：
+从流末 `response.created` / `response.completed` 事件里记录 `id`（也可监听 `response.created` 事件第一时间拿到）：
 
 ```json
-{
-  "id": "resp_xxx",
-  "object": "response",
-  "status": "completed"
-}
+{"id": "resp_xxx", "object": "response", "status": "completed"}
 ```
 
 第二轮带上 `previous_response_id`：
 
 ```bash
-curl --location "$BASE_URL/v1/responses" \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "previous_response_id": "resp_xxx",
-    "input": "那你能帮我做什么？",
-    "stream": false
-  }'
+curl --no-buffer "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d '{"previous_response_id":"resp_xxx","input":"那你能帮我做什么？","stream":true}'
 ```
 
 服务会复用上一轮 response 绑定的会话和历史上下文。
 
-#### 方式二：使用 `session_id`
+#### 方式二：使用 `session_id`（Legacy / 内部）
 
-适合调用方想明确控制服务端会话生命周期的场景。
+> **不推荐外部业务方使用**。该字段对应服务端 `sessions` 表的一行，主要服务于 PAI-RAG 自己的前端会话管理；外部业务方请改用方式三 `conversation` 串号。下面示例仅为兼容老客户端保留。
 
 先创建 session：
 
@@ -441,27 +401,17 @@ SESSION_ID=$(curl -s -X POST "$BASE_URL/v1/sessions" \
 第一轮：
 
 ```bash
-curl --location "$BASE_URL/v1/responses" \
-  --header 'Content-Type: application/json' \
-  --data "{
-    \"model\": \"pairag-agent\",
-    \"session_id\": \"${SESSION_ID}\",
-    \"input\": \"你好，你是谁？\",
-    \"stream\": false
-  }"
+curl --no-buffer "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"${SESSION_ID}\",\"input\":\"你好，你是谁？\",\"stream\":true}"
 ```
 
 第二轮继续传同一个 `session_id`：
 
 ```bash
-curl --location "$BASE_URL/v1/responses" \
-  --header 'Content-Type: application/json' \
-  --data "{
-    \"model\": \"pairag-agent\",
-    \"session_id\": \"${SESSION_ID}\",
-    \"input\": \"继续刚才的话题\",
-    \"stream\": false
-  }"
+curl --no-buffer "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"${SESSION_ID}\",\"input\":\"继续刚才的话题\",\"stream\":true}"
 ```
 
 #### 方式三：使用 `conversation`
@@ -471,45 +421,35 @@ curl --location "$BASE_URL/v1/responses" \
 第一轮：
 
 ```bash
-curl --location "$BASE_URL/v1/responses" \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "conversation": "user-123-ticket-456",
-    "input": "第一轮问题",
-    "stream": false
-  }'
+curl --no-buffer "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d '{"conversation":"user-123-ticket-456","input":"第一轮问题","stream":true}'
 ```
 
 第二轮继续传同一个 `conversation`：
 
 ```bash
-curl --location "$BASE_URL/v1/responses" \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "model": "pairag-agent",
-    "conversation": "user-123-ticket-456",
-    "input": "第二轮问题",
-    "stream": false
-  }'
+curl --no-buffer "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d '{"conversation":"user-123-ticket-456","input":"第二轮问题","stream":true}'
 ```
 
 推荐选择：
 
 | 场景 | 推荐方式 |
 | --- | --- |
-| 后端集成，想最少维护状态 | `previous_response_id` |
-| 调用方已有自己的业务会话 ID | `conversation` |
-| 调用方要明确创建、查询、删除服务端会话 | `session_id` |
+| 后端集成，想最少维护状态 | `previous_response_id`（OpenAI 标准） |
+| 调用方已有自己的业务会话 ID，想串多轮 | `conversation` |
+| 前端 / 老客户端要明确创建、查询、删除服务端会话 | `session_id`（Legacy / 内部） |
 
 #### 优先级与互斥关系
 
 一次请求可以同时携带多个上下文字段，服务端按下面的顺序解析：
 
-1. **`previous_response_id`**：若给出，必须能加载到对应 response，否则返回 404 `response_not_found`。该 response 的 session、对话历史、`instructions`、`conversation` 会作为本轮默认值。
-2. **`conversation`**（仅在没有 `previous_response_id` 时生效）：查找该 `conversation` 标识下最新一条 response 作为隐式 previous。
-3. **`session_id`**：始终是显式优先；若没传，则继承自第 1/2 步推导出的 previous response。
-4. **`conversation_history`**：无状态模式。若传了，直接覆盖从 1/2 推出的历史；适合调用方完全在客户端维护对话上下文，不想依赖服务端 session。
+1. **`previous_response_id`**（OpenAI 标准）：若给出，默认是普通多轮 continuation；服务端会加载该 response 的 session、对话历史、`instructions`、`conversation` 作为本轮默认值，并为本轮生成新的 response id。只有当 `input` 是 `function_call_output` / `mcp_approval_response` 时，才按 HITL resume 处理，恢复同一个暂停 run。
+2. **`conversation`**（业务串号，仅在没有 `previous_response_id` 时生效）：查找该 `conversation` 标识下最新一条 response 作为隐式 previous。
+3. **`session_id`**（Legacy / 内部）：始终是显式优先；若没传，则继承自第 1/2 步推导出的 previous response。外部业务方不要主动传。
+4. **`conversation_history`**（Legacy / 内部，无状态模式）：若传了，直接覆盖从 1/2 推出的历史。外部业务方请改用 `previous_response_id`，让服务端自己取上下文，避免每轮都把整段历史重传。
 5. **`instructions`**：本轮显式 `instructions` 覆盖 previous response 上的 `instructions`。
 
 读取 response：
@@ -524,240 +464,107 @@ curl --location "$BASE_URL/v1/responses/resp_xxx"
 curl --request DELETE --location "$BASE_URL/v1/responses/resp_xxx"
 ```
 
-## 3. Runs API
-
-Runs API 是完整结构化事件接口，适合自定义前端或需要展示 Agent 思考步骤、工具状态、最终输出的调用方。
-
-### 创建 Run
+### 按 response_id 取消 run
 
 ```bash
-curl --location "$BASE_URL/v1/runs" \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "input": "检查当前目录有哪些文件，并简单总结"
-  }'
+curl --request POST --location "$BASE_URL/v1/responses/resp_xxx/cancel"
 ```
 
-返回：
+成功返回：
 
 ```json
-{
-  "id": "run_xxx",
-  "object": "agent.run",
-  "run_id": "run_xxx",
-  "session_id": "session_xxx",
-  "status": "started",
-  "cursor": "0-0"
-}
+{"id": "resp_xxx", "object": "response", "status": "cancelled"}
 ```
 
-`cursor` 是订阅事件用的位置标识。后续调用 `GET /v1/runs/{run_id}/events?last_event_id=<cursor>`（或带头 `Last-Event-ID`）可从该位置断点续传。
+行为：
 
-如果不想走两段式（POST 创建 → GET 订阅），可以传 `stream=true` 一次性拿到 SSE 流，事件 schema 与 `GET /v1/runs/{run_id}/events` 完全一致：
+- **正在运行**：服务端通过内存中的 in-flight 注册表把 `resp_xxx` 映射到所属 session，再转发到 `service.cancel_session(...)`；此时连接到该 response 的 SSE 流会立刻收到 `response.failed`（或客户端断流）。
+- **已落库的终态 response**（completed/failed/cancelled）：通过 `agent_run_states` 取出 session id 再 cancel；如该 session 当前没有活动 run，本调用是 idempotent 的，仍返回 `status:"cancelled"`。
+- **不存在 / 不属于本用户**：返回 `404 response_not_found`。
+
+与 `POST /v1/sessions/{sid}/cancel` 的区别：cancel-by-session 适合调用方手里只有 session id 的情况；cancel-by-response 是 OpenAI Responses 标准入口，适合直接在 Responses API 流的 `response_id` 上做超时/中断。两者底层走同一个 `cancel_session` 路径，因此对同一活动 run 来说是等价的。
+
+### HITL：暂停 → 询问用户 → 恢复
+
+默认新请求不会暂停等待用户：`allow_hitl=false` 时，`ask_user` 会按工具参数里的 `default_action` 或安全兜底指令继续执行；其他需要审批的工具会被保守拒绝并要求模型给出可读报告。该自动处理路径会写入 `hitl_auto_continue` 审计事件。
+
+需要产品形态上弹出用户确认/补充输入时，在启动请求里显式传 `allow_hitl:true`：
 
 ```bash
-curl --no-buffer --location "$BASE_URL/v1/runs" \
+curl --no-buffer --location "$BASE_URL/v1/responses" \
   --header 'Content-Type: application/json' \
   --data '{
-    "input": "检查当前目录有哪些文件，并简单总结",
+    "input": "执行前如缺少关键信息，请暂停询问我",
+    "allow_hitl": true,
     "stream": true
   }'
 ```
 
-也可以先创建 session，再创建 run：
+当 Agent 调用 `ask_user`（或任何带 `needs_approval=True` 的工具）时，本轮 response 在流末连发两条事件 —— 业务自有事件 `response.requires_action` + OpenAI 标准事件 `response.incomplete`，然后 `data: [DONE]`：
 
-```bash
-SESSION_ID=$(curl -s -X POST "$BASE_URL/v1/sessions" | python -c "import sys,json; print(json.load(sys.stdin)['session_id'])")
+```text
+event: response.requires_action
+data: {"type":"response.requires_action",
+       "id":"resp_pause",
+       "status":"requires_action",
+       "required_action":{
+         "type":"submit_tool_outputs",
+         "submit_tool_outputs":{
+           "tool_calls":[{
+             "id":"call_ask_001",
+             "type":"function",
+             "function":{
+               "name":"ask_user",
+               "arguments":"{\"question\":\"请选择 A 或 B？\"}"
+             }
+           }]
+         }
+       }}
 
-curl --location "$BASE_URL/v1/runs" \
-  --header 'Content-Type: application/json' \
-  --data "{\"session_id\":\"${SESSION_ID}\",\"input\":\"你好\"}"
+event: response.incomplete
+data: {"type":"response.incomplete",
+       "id":"resp_pause",
+       "status":"incomplete",
+       "incomplete_details":{"reason":"requires_action"},
+       "required_action":{...同上...}}
+
+data: [DONE]
 ```
 
-请求体字段：
+- 服务端把此时的 SDK `RunState.to_string()` blob 持久化到 `agent_run_states`，`status='requires_action'`，TTL 默认 7 天。
+- `GET /v1/responses/resp_pause` 任何时间都能读到 `status:'requires_action'` + 上述 `required_action`，跨设备/跨进程都可见。
+- 关于双终止事件：`response.requires_action` 是 PAI-RAG 扩展，业务客户端可以直接消费它拿到 `required_action`；`response.incomplete` 是 OpenAI Responses 标准终止事件，纯 OpenAI SDK 默认只监听 completed/failed/incomplete，所以这条让纯 SDK 客户端能正常关闭流。客户端只需挑一条消费即可，不要把它们当作两次独立终止。
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `input` | string | 当前轮用户输入，必填；session 处于 `waiting_user` 时作为对 `ask_user` 的回答 |
-| `session_id` | string | 复用服务端会话；不传则自动新建（也可通过 `X-Session-Id` 头传入） |
-| `stream` | boolean | 是否同一连接直接返回 SSE 流，默认 `false`（两段式：先 POST 拿 cursor，再 GET 订阅） |
-| `cwd` | string | 任务执行目录（受 workspace 沙箱约束） |
-| `model` | string | 仅本轮覆盖上游 LLM 模型；不传则使用全局生效模型（`/v1/models/active`）。**不写入 session 默认值**，下一轮不带就回到全局值。校验规则同 `/v1/models/active`（非空、无空白、≤200）；不预校验上游是否支持，错了就由上游返错透传。配合 `memory/runtime.json` 的多 provider/多 key 池，按模型名前缀路由到对应 provider。详见下文"多 Provider / Key 池"。 |
-
-例：仅本轮使用 `qwen-max`：
+恢复 —— 客户端再发一次 `POST /v1/responses`，带上 `previous_response_id` 与 `function_call_output`：
 
 ```bash
-curl --location "$BASE_URL/v1/runs" \
+curl --no-buffer --location "$BASE_URL/v1/responses" \
   --header 'Content-Type: application/json' \
   --data '{
-    "session_id": "session_xxx",
-    "input": "请总结一下当前目录",
-    "model": "qwen-max"
+    "previous_response_id": "resp_pause",
+    "input": [{
+      "type": "function_call_output",
+      "call_id": "call_ask_001",
+      "output": "A"
+    }],
+    "stream": true
   }'
 ```
 
-### 多轮和会话关联
+服务端按 `previous_response_id` 取出 RunState、`approve()` 对应的 `ToolApprovalItem`，然后用同一个 SDK runner `Runner.run_streamed(state, ...)` 续跑；从客户端视角，这就是 OpenAI Responses API 的标准 `submit_tool_outputs` 续传。
 
-Runs API 通过 `session_id` 维持多轮上下文。每一轮用户输入都会创建一个新的 `run_id`，但只要使用同一个 `session_id`，Agent 就会复用该 session 内的历史消息和状态。
+错误码：
 
-推荐流程：
+- 同一 `previous_response_id` 已被其它客户端续过，或该 response 已不在 `requires_action` → `409 not_resumable`。
+- 暂停超过 `RUN_STATE_TTL_SECONDS`（默认 7 天）且 RunState 已被清理 → `404 response_not_found`。
+- 对仍处于 `requires_action` 的 response 发送普通文本，而不是 `function_call_output` / `mcp_approval_response` → `400 invalid_resume`。
+- `previous_response_id` 不属于当前 `user_id` → `404 response_not_found`。
 
-1. 先创建 session。
-2. 每一轮调用 `/v1/runs` 时传同一个 `session_id`。
-3. 每一轮根据返回的新 `run_id` 订阅 `/v1/runs/{run_id}/events`。
+`/v1/chat/completions` 的等价形态：启动请求同样需要 `allow_hitl:true`。暂停时流末返回 `finish_reason="tool_calls"` + 一个保留名 `__ask_user__` 的 tool_call（`tool_call_id` 与 Responses 线路一致）；恢复时追加 `{"role":"tool","tool_call_id":"call_ask_001","content":"A"}`，带同 `X-Session-Id` 重发 messages 即可。两条线路共享同一份 `agent_run_states` 行，因此可以一端暂停、另一端恢复。
 
-创建 session：
+## 3. Sessions API
 
-```bash
-SESSION_ID=$(curl -s -X POST "$BASE_URL/v1/sessions" \
-  | python -c "import sys,json; print(json.load(sys.stdin)['session_id'])")
-```
-
-第一轮创建 run：
-
-```bash
-RUN_ID_1=$(curl -s --location "$BASE_URL/v1/runs" \
-  --header 'Content-Type: application/json' \
-  --data "{
-    \"session_id\": \"${SESSION_ID}\",
-    \"input\": \"你好，你是谁？\"
-  }" | python -c "import sys,json; print(json.load(sys.stdin)['run_id'])")
-```
-
-订阅第一轮事件：
-
-```bash
-curl --no-buffer --location "$BASE_URL/v1/runs/${RUN_ID_1}/events"
-```
-
-第二轮继续使用同一个 `session_id` 创建新的 run：
-
-```bash
-RUN_ID_2=$(curl -s --location "$BASE_URL/v1/runs" \
-  --header 'Content-Type: application/json' \
-  --data "{
-    \"session_id\": \"${SESSION_ID}\",
-    \"input\": \"那你能帮我做什么？\"
-  }" | python -c "import sys,json; print(json.load(sys.stdin)['run_id'])")
-```
-
-订阅第二轮事件：
-
-```bash
-curl --no-buffer --location "$BASE_URL/v1/runs/${RUN_ID_2}/events"
-```
-
-说明：
-
-- `session_id` 表示长期会话，负责串起多轮上下文。
-- `run_id` 表示某一轮任务执行，每轮输入都会生成新的 `run_id`。
-- 如果上一轮还在运行，继续向同一个 `session_id` 创建 run 可能返回 `session_busy`。
-- 如果事件中出现 `ask_user`，表示当前 run 正在等待用户补充信息；此时继续向同一个 `session_id` 调用 `/v1/runs`，请求体中的 `input` 会作为用户补充答案提交给当前 run。
-
-### 订阅 Run 事件
-
-```bash
-curl --no-buffer --location "$BASE_URL/v1/runs/run_xxx/events"
-```
-
-事件通过 SSE 输出：每条事件前带一行 `id: <13 位毫秒>-<序号>`，紧跟一行 `data: <JSON>`。该 `id` 等价于 `last_event_id` cursor，celery 模式由 Redis Stream 生成、thread 模式由服务端合成同样格式。浏览器 `EventSource` 自动维护 `lastEventId` 并在重连时回填 `Last-Event-ID:` 头，无需客户端手工管理。
-
-JSON 内的 `event` 字段表示事件类型。所有事件都带 `run_id` 和 `timestamp`（float 秒）；多数事件还会带 `step_id`（如 `model-1`）把工具调用挂到对应的 Agent 步骤：
-
-| `event` | 含义 | 关键字段 |
-| --- | --- | --- |
-| `message.delta` | 最终回答文本增量 | `delta` |
-| `reasoning.started` | Agent 步骤开始 | `step_id`、`title`、`status` |
-| `reasoning.available` | Agent 步骤内容更新 | `step_id`、`text` |
-| `reasoning.completed` | Agent 步骤结束 | `step_id`、`status`、`text` |
-| `tool.delta` | 工具调用参数增量（流式 tool args） | `tool_call_id`、`tool`、`arguments_delta`、`arguments_text` |
-| `tool.started` | 工具开始执行 | `tool_call_id`、`tool`、`input` |
-| `tool.updated` | 工具状态更新（运行中） | `tool_call_id`、`status`、`content`、`data` |
-| `tool.completed` | 工具执行结束 | `tool_call_id`、`status`（`completed` / `failed`）、`content`、`data` |
-| `ask_user` | Agent 需要用户补充信息 | `question`、`candidates` |
-| `run.completed` | Run 完成 | `output`、`usage` |
-| `run.failed` | Run 失败 | `error` |
-
-**可选字段**（仅在有值时下发，没看到字段就当未设置）：
-
-- `reasoning.started.hidden` / `reasoning.completed.hidden` / `tool.delta.hidden` / `tool.started.hidden`：boolean，true 表示前端可隐藏（如内部步骤、ask_user 工具调用）。
-- `reasoning.available.replace`：boolean，true 表示用 `text` 整体替换之前累计的内容（用于流式预览的非单调修订），false 即追加。
-- `tool.delta.kind` / `tool.started.kind`：工具分类提示（`read` / `edit` / `execute` / `ask` / `think` / `other`），客户端可据此选择图标或样式。
-
-`tool_call_id` 格式：`call_{turn}_{index}`（OpenAI 风格 `call_` 前缀）。
-
-示例：
-
-```text
-id: 1778640000100-0
-data: {"event":"reasoning.started","run_id":"run_xxx","timestamp":1778640000.1,"step_id":"model-1","title":"Agent step","status":"in_progress"}
-
-id: 1778640000500-0
-data: {"event":"tool.delta","run_id":"run_xxx","timestamp":1778640000.5,"tool_call_id":"call_1_0","step_id":"model-1","tool":"exec_command","arguments_delta":"{\"cm","arguments_text":"{\"cm"}
-
-id: 1778640000700-0
-data: {"event":"tool.started","run_id":"run_xxx","timestamp":1778640000.7,"tool_call_id":"call_1_0","step_id":"model-1","tool":"exec_command","input":{"cmd":"ls"}}
-
-id: 1778640001200-0
-data: {"event":"tool.completed","run_id":"run_xxx","timestamp":1778640001.2,"tool_call_id":"call_1_0","tool":"exec_command","status":"completed","content":"README.md\nbackend\n"}
-
-id: 1778640001500-0
-data: {"event":"message.delta","run_id":"run_xxx","timestamp":1778640001.5,"delta":"当前目录包含 README 和 backend。"}
-
-id: 1778640001800-0
-data: {"event":"run.completed","run_id":"run_xxx","timestamp":1778640001.8,"output":"当前目录包含 README 和 backend。","usage":{"prompt_tokens":80,"completion_tokens":25,"total_tokens":105}}
-```
-
-断线重连时可传入上次事件 ID：
-
-```bash
-curl --no-buffer --location "$BASE_URL/v1/runs/run_xxx/events?last_event_id=1700000000000-0"
-```
-
-也可使用请求头：
-
-```http
-Last-Event-ID: 1700000000000-0
-```
-
-### 查询 Run 状态
-
-```bash
-curl --location "$BASE_URL/v1/runs/run_xxx"
-```
-
-返回：
-
-```json
-{
-  "id": "run_xxx",
-  "object": "agent.run",
-  "run_id": "run_xxx",
-  "session_id": "session_xxx",
-  "status": "completed",
-  "mode": "events",
-  "error": "",
-  "created_at": "2026-05-13T10:56:54.056735",
-  "updated_at": "2026-05-13T10:56:55.780018",
-  "started_at": "2026-05-13T10:56:54.056735",
-  "finished_at": "2026-05-13T10:56:55.780018",
-  "last_event_id": "1778640002000-0"
-}
-```
-
-`status` 取值：`started` / `running` / `completed` / `failed` / `cancelled` / `waiting_user`，状态转移见 §通用约定 → §状态机；`error` 字段仅在 `failed` 时携带异常 message，对应的退出码语义见 §错误格式 → §Run 退出码。时间字段是 ISO-8601 字符串；`last_event_id` 是 Redis Stream cursor 形式，可作为 `Last-Event-ID` 用于断点续传。
-
-### 停止 Run
-
-```bash
-curl --request POST --location "$BASE_URL/v1/runs/run_xxx/stop"
-```
-
-返回 `{"run_id": "run_xxx", "status": "stopping"}`。等价于 `POST /v1/sessions/{session_id}/cancel`（取消整条 session）；当前同一 session 只有一个 active run，二者效果一致。
-
-## 4. Sessions API
-
-Sessions 用于服务端多轮会话管理。Chat Completions 通过 `X-Session-Id` 复用会话；Runs 和 Responses 通过请求体里的 `session_id` 复用会话。
+Sessions 用于服务端多轮会话管理。Chat Completions 通过 `X-Session-Id` 复用会话；Responses 通过请求体里的 `session_id` 复用会话。
 
 > ⚠️ 服务端目前不校验调用方对 session 的所有权——任何持有 `session_id` 的请求都可读/写/删除它。需要多租户隔离时，应在网关层加签名或鉴权头。
 
@@ -783,7 +590,7 @@ curl --request POST --location "$BASE_URL/v1/sessions" \
 }
 ```
 
-时间字段是 ISO-8601 字符串；`status` 取值 `idle` / `running` / `waiting_user` / `completed` / `failed` / `cancelled`，状态转移见 §通用约定 → §状态机。
+时间字段是 ISO-8601 字符串；`status` 取值 `idle` / `running` / `completed` / `failed` / `cancelled`，状态转移见 §通用约定 → §状态机。HITL 暂停不再表现在 session 状态上 —— 该层语义迁移到 run 状态 `requires_action`。
 
 ### 列表与查询
 
@@ -809,21 +616,17 @@ curl --request DELETE --location "$BASE_URL/v1/sessions/session_xxx"
 ```bash
 curl --request POST --location "$BASE_URL/v1/sessions/session_xxx/cancel"
 ```
-返回 `{"cancelled":true,"session_id":"session_xxx"}`。与 `POST /v1/runs/{run_id}/stop` 等价。
+返回 `{"cancelled":true,"session_id":"session_xxx"}`。
 
 ### 重新生成上一轮答案
 
 ```bash
-curl --request POST --location "$BASE_URL/v1/sessions/session_xxx/regenerate" \
+curl --no-buffer --request POST --location "$BASE_URL/v1/sessions/session_xxx/regenerate" \
   --header 'Content-Type: application/json' \
   --data '{}'
 ```
 
-返回新的 run（与 `POST /v1/runs` 同结构，多 `regenerated_from_run_id` 字段），需要继续订阅：
-
-```bash
-curl --no-buffer --location "$BASE_URL/v1/runs/run_xxx/events"
-```
+返回 `text/event-stream` —— 即与 `POST /v1/responses` 完全一致的 SSE 流（最后一行 `data: [DONE]`）。服务端会先把 session 内最后一条 assistant 消息修剪掉，然后用上一条 user 消息重发一次 SDK run。
 
 若该 session 没有可重生成的答案，返回 409 `no_regeneratable_answer`。
 
@@ -838,7 +641,7 @@ curl --no-buffer --location "$BASE_URL/v1/runs/run_xxx/events"
 | 409 | `no_regeneratable_answer` | 该 session 没有可重生成的答案 |
 | 429 | `capacity_exceeded` | 全局或单用户并发 run 超 `MAX_GLOBAL_RUNS` / `MAX_USER_RUNS` |
 
-## 5. 其他接口
+## 4. 其他接口
 
 ### 健康检查
 
@@ -852,13 +655,13 @@ curl --location "$BASE_URL/health/detailed" # 见下方示例
 ```json
 {
   "status": "ok",
-  "runner_backend": "thread",
+  "runner_backend": "sdk",
   "model": "qwen-plus",
   "checks": {
     "api": "ok",
     "sqlite": "ok",
     "redis": "disabled",
-    "runner": "thread"
+    "runner": "sdk"
   }
 }
 ```
@@ -1001,13 +804,14 @@ curl --location "$BASE_URL/v1/skills"
 ```
 列出 `skills/` 目录下可被 `use_skill` 工具调用的技能。
 
-## 6. 部署后 Smoke Test
+## 5. 部署后 Smoke Test
 
-仓库提供了一个纯 Python 标准库脚本，用来验证部署后的三类 API 是否可用：
+仓库提供了一个纯 Python 标准库脚本（`scripts/api_smoke.py`），用来验证部署后的两类 API 是否可用：
 
-- `/v1/chat/completions`
-- `/v1/responses`
-- `/v1/runs` + `/v1/runs/{run_id}/events`
+- `/v1/chat/completions`（流式）
+- `/v1/responses`（流式）
+
+> 当前两个端点都只接受 `stream=true`，所以脚本内部统一走 SSE 消费；`--base-url` 默认指向本地 `http://127.0.0.1:8683`。
 
 默认 sample query：
 
@@ -1015,30 +819,25 @@ curl --location "$BASE_URL/v1/skills"
 你好，请用一句话介绍你自己，并说明你可以通过 API 被调用。
 ```
 
-Runs API 默认 sample query：
-
-```text
-请确认 /v1/runs 接口可以正常执行，并用一句话说明 Runs API 的作用。
-```
-
-运行方式：
+最简跑法（直接打本地 8683）：
 
 ```bash
-python scripts/api_smoke.py \
-  --base-url "$BASE_URL" \
-  --model "pairag-agent"
+python scripts/api_smoke.py
+```
+
+打到其它部署：
+
+```bash
+python scripts/api_smoke.py --base-url "$BASE_URL"
 ```
 
 如果部署网关需要鉴权：
 
 ```bash
-python scripts/api_smoke.py \
-  --base-url "$BASE_URL" \
-  --model "pairag-agent" \
-  --auth "Bearer xxx"
+python scripts/api_smoke.py --base-url "$BASE_URL" --auth "Bearer xxx"
 ```
 
-如果鉴权头不是 `Authorization`，可以使用自定义 header：
+如果鉴权头不是 `Authorization`，可以使用自定义 header（可重复传）：
 
 ```bash
 python scripts/api_smoke.py \
@@ -1050,36 +849,47 @@ python scripts/api_smoke.py \
 只测试某一类 API：
 
 ```bash
-python scripts/api_smoke.py --base-url "$BASE_URL" --only chat
-python scripts/api_smoke.py --base-url "$BASE_URL" --only responses
-python scripts/api_smoke.py --base-url "$BASE_URL" --only runs
+python scripts/api_smoke.py --only chat
+python scripts/api_smoke.py --only responses
 ```
 
 自定义 sample query：
 
 ```bash
-python scripts/api_smoke.py \
-  --base-url "$BASE_URL" \
-  --query "你好，请说明你是什么服务" \
-  --run-query "请确认 Runs API 可以正常返回事件"
+python scripts/api_smoke.py --query "你好，请说明你是什么服务"
+```
+
+显式指定模型（默认不传，由后端使用 `/v1/models/active` 的当前值）：
+
+```bash
+python scripts/api_smoke.py --model qwen-max
 ```
 
 测试 Responses API 的 `previous_response_id` 多轮：
 
 ```bash
+python scripts/api_smoke.py --only responses --multi-turn
+```
+
+脚本成功时会打印每类 API 的事件总数、`response_id` 以及解析出的最终答案文本。
+
+业务配置校验类请求也可以用同一个脚本验证调用链是否通。示例：
+
+```bash
 python scripts/api_smoke.py \
   --base-url "$BASE_URL" \
   --only responses \
-  --multi-turn
+  --timeout 600 \
+  --query "请校验 PAI-REC 引擎配置：名称 embedding_config，instanceId pairec-cn-inner-khhjd7wnn1geomcirl，region/cluster_id cn-beijing，环境 生产（Prod），status Released。请列出匹配配置版本，获取 Released 配置并运行配置校验；最终只说明是否校验成功、错误数量和关键错误类型，不要输出完整配置或任何凭证字段值。"
 ```
 
-脚本成功时会打印每类 API 的状态码、`session_id`、`run_id` 或 `response_id`，以及解析出的最终答案。
+注意：HTTP/API 层成功表示 Agent run 正常完成；业务配置是否校验通过要看最终答案。配置存在错误时，流末仍可能是 `response.completed`，最终文本会报告“校验失败”和错误摘要。
 
-## 7. 常见问题
+## 6. 常见问题
 
 ### 为什么 Chat Completions 流式没有 `delta.tool_calls`？
 
-Agent 的工具调用是服务端自动完成的，不要求客户端回传工具结果。`/v1/chat/completions` 定位是给通用 OpenAI 客户端使用的纯文本兼容入口，所以不输出 `delta.tool_calls`，也不带任何自定义事件。需要看到工具调用、工具结果或 Agent 思考步骤，请改用 `/v1/responses` 或 `/v1/runs/{run_id}/events`。
+Agent 的工具调用是服务端自动完成的，不要求客户端回传工具结果。`/v1/chat/completions` 定位是给通用 OpenAI 客户端使用的纯文本兼容入口，所以默认不输出 `delta.tool_calls`，也不带任何自定义事件。需要看到工具调用、工具结果或 HITL `requires_action`，请改用 `/v1/responses`。唯一例外是显式 `allow_hitl=true` 且确实暂停时，Chat 流末会带保留名 `__ask_user__` 的 tool_call。
 
 ### 什么时候用 `session_id`？
 
@@ -1087,32 +897,28 @@ Agent 的工具调用是服务端自动完成的，不要求客户端回传工�
 
 - Chat Completions：传 `X-Session-Id`
 - Responses：传 `session_id` 或 `previous_response_id`
-- Runs：创建 run 时传 `session_id`
 
-### 非流式接口会等多久？
+### 为什么传 `stream=false` 会被拒绝？
 
-非流式接口会等待本次 Agent 任务完成后再返回。复杂任务建议使用流式接口，避免网关或客户端超时。
+`/v1/responses` 与 `/v1/chat/completions` 当前**只支持流式**。早期文档曾给出非流式示例，已不再可用：服务端会返回 `400 unsupported_mode`。原因是后端把 SDK runner 输出的事件流（工具调用、HITL 暂停、token 增量）作为一等公民暴露，非流式聚合视图维护成本高且不符合实际使用形态；客户端只需消费 SSE 的最终 `response.completed` 事件即可拿到与历史"非流式"等价的完整 payload。
 
 ### SSE 中的 keepalive 是什么？
 
-长时间没有新事件时，服务可能发送注释行：
+流式接口在 15 秒无新 event 时会发送一行 SSE 注释：
 
 ```text
 : keepalive
 ```
 
-客户端应忽略这类注释行。
+按 SSE 规范，以 `:` 开头的行属于注释，标准 SSE 解析器（OpenAI Python SDK、浏览器 `EventSource`、`sseclient` 等）会自动丢弃。如果调用方是手写的逐行解析（split by `\n\n`），需要在每行前判断 `if line.startswith(':'): continue`。这条注释只为穿透中间代理的空闲超时（典型 60s），并不代表流出错或卡住，也不会重置事件序号。
 
 ### 怎么拿到真实 token 使用量？
 
-- Chat Completions（非流式）：响应顶层 `usage`。
-- Chat Completions（流式）：最后一条 `chat.completion.chunk` 顶层 `usage`。
-- Responses（非流式）：响应顶层 `usage`。
-- Responses（流式）：最后一条 `response.completed` 事件里的 `usage`。
-- Runs：`run.completed` 事件里的 `usage`。
+- Responses（流式，推荐）：最后一条 `response.completed` 事件里的 `usage`。
+- Chat Completions（流式）：当前**未在末尾 chunk 里内嵌** `usage`；如需 token 数请改用 Responses 流。
 
-`usage` 是本次请求 Agent 所有内部 LLM 调用的累加值。任务失败、被取消，或上游 LLM 没回 usage 时，各字段为 0；Responses 非流式且无任何 token 数据时 `usage` 可能为 `null`。
+`usage` 是本次请求 Agent 所有内部 LLM 调用的累加值。后端会强制对所有 chat-completions 兼容上游开启 `stream_options.include_usage=true`（包括 dashscope/qwen-plus 这类 SDK 默认不开的 provider），因此 `response.completed.usage` 在正常完成时**总会**有真实 token。仅当任务失败、被取消，或上游 LLM 完全不支持 usage 时才可能为 `null`。
 
 ### 单一 session 能并发跑多个 run 吗？
 
-不能。同一 `session_id` 同一时刻只允许一个 active run；上一轮还在跑时再发 `POST /v1/runs` 会返回 409 `session_busy`。需要并发请走不同的 session。
+不能。同一 `session_id` 同一时刻只允许一个 active run；上一轮还在跑时再发 `POST /v1/responses` 会返回 409 `session_busy`。需要并发请走不同的 session。

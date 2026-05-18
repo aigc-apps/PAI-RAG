@@ -21,9 +21,8 @@
   - [LLM 客户端 llm_client.py](#3-llm-客户端-llm_clientpy)
   - [会话持久化 session_store.py](#4-会话持久化-session_storepy)
   - [技能动态加载 skill_manager.py](#5-技能动态加载-skill_managerpy)
-- [两个入口](#两个入口)
+- [入口](#入口)
   - [React `frontends/react`](#react-frontendsreact)
-  - [ACP `frontends/acp`](#acp-frontendsacp)
 - [记忆架构：四层自进化系统](#记忆架构四层自进化系统)
 - [关键设计决策](#关键设计决策)
 - [扩展指南](#扩展指南)
@@ -35,8 +34,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  入口层（二选一，复用同一份 core）                                      │
-│   Next.js(frontends/react)              ACP(frontends/acp)          │
+│  入口层                                                              │
+│   Next.js(frontends/react) → OpenAI 兼容 API                        │
 └────────────────────────────┬────────────────────────────────────────┘
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -59,7 +58,7 @@
 │   ├ global_index.txt   (L1, 注入 system prompt)                     │
 │   ├ global_facts.txt   (L2, agent 按需 file_read)                   │
 │   ├ *_sop.md           (L3, agent 按需 file_read/write)             │
-│   ├ L4_raw_sessions/   (L4, 前端归档)                                 │
+│   ├ L4_raw_sessions/   (L4, 后端自动归档)                              │
 │   ├ users/<user_id>/   (普通用户私有长期记忆)                           │
 │   ├ sessions_v2.sqlite3 (跨进程会话恢复)                               │
 │   └ sessions/          (.gitkeep，占位目录)                            │
@@ -77,8 +76,6 @@
 | Core | `session_store.py` | SQLite 会话持久化 | 90 |
 | Core | `skill_manager.py` | 技能动态加载 + 斜杠命令分发 | 140 |
 | Frontend | `frontends/react/` | Next.js Web UI | - |
-| Frontend | `frontends/acp/server.py` | ACP（JSON-RPC over stdio） | 533 |
-| Frontend | `frontends/acp/jsonrpc.py` | 双向 JSON-RPC 框架 | 97 |
 
 ---
 
@@ -107,8 +104,8 @@
 │   ⑥ 拼装下轮 new_messages = tool_results + next_prompt         │
 └────────────────────┬──────────────────────────────────────────┘
                      ▼
-┌─ 前端（收尾）─────────────────────────────────────────────────┐
-│ 4. archive_session → dump 到 L4_raw_sessions/                 │
+┌─ 后端（收尾）─────────────────────────────────────────────────┐
+│ 4. 后端 archive_session → dump 到 L4_raw_sessions/             │
 │ 5. store.save → 持久化到 sessions_v2.sqlite3                   │
 │ 6. prev_handler = handler（传递给下一任务）                     │
 └───────────────────────────────────────────────────────────────┘
@@ -288,25 +285,10 @@ Web 前端基于 Next.js App Router、Tailwind CSS 和 shadcn/ui。浏览器请�
 
 - 免登录：浏览器请求不携带 bearer token，后端统一使用服务用户会话
 - 会话列表：`GET/POST/DELETE /api/sessions` -> 代理到 `/v1/sessions`
-- 对话：`POST /api/runs` 创建 run，`GET /api/runs/{run_id}/events` 消费结构化 SSE
+- 对话：`POST /api/responses` 直接消费 OpenAI Responses 风格 SSE（`response.output_text.delta` / `response.output_item.*` / `response.requires_action` / `response.completed`）
 - OpenAI 兼容：`POST /api/chat/completions`，保留给外部兼容客户端
 - 暂停：`POST /api/sessions/{session_id}/cancel`
 - 持久化：由后端统一写入 `SessionStore`，前端刷新后可恢复新格式消息和事件
-
-### ACP `frontends/acp`
-
-**[Agent Client Protocol](https://agentclientprotocol.com)** 适配器：JSON-RPC 2.0 over stdio。Zed / VSCode 等 IDE 启动 agent 进程后通过这条协议双向通信。
-
-`frontends/acp/jsonrpc.py`（~80 行）实现 ndjson 双向 RPC：既响应入站 `session/prompt`，又能主动向 client 发 `fs/read_text_file` 让 IDE 代读文件。
-
-**关键设计：**
-
-- **挂起式 ask_user**：worker 线程跨 `session/prompt` RPC **存活**——`ask_user` 时 set `turn_done_evt`，本轮 RPC 返回 `stopReason=end_turn`；下次 `session/prompt` 到达时识别到 worker 还活着，把文本喂进 `ask_q` 唤醒，而不是新启 worker
-- **文件操作委托**：声明 `clientCapabilities.fs` 的 client 会接管 file_read/write/patch；缺失能力时降级回本地 IO
-- **结构化事件**：core 输出 `AgentEvent`，ACP 入口映射为 `session/update`；`sys.__stdout__` 只用于 JSON-RPC 报文，工具 `print()` 只进 stderr 调试日志
-- **session 恢复**：声明 `loadSession` 能力，复用 `SessionStore` 还原历史
-
-启动方式：`/frontends/acp/run.sh`（Zed 配置里指向它）。烟雾测试见 `tests/acp_smoke.py`。
 
 ---
 
@@ -331,7 +313,7 @@ mini-agent 最核心的设计。agent 不仅执行任务，还能从执行中学
               (异步调用 start_long_term_update)
 
                   ┌──────────────────────────────────┐
-                  │  L4 原始会话归档（前端自动写入）     │
+                  │  L4 原始会话归档（后端自动写入）     │
                   │  memory/L4_raw_sessions/{ts}.md   │
                   └──────────────────────────────────┘
 ```
@@ -456,11 +438,11 @@ usage: /deploy_eas <service_name>
 
 ### 加新前端
 
-参考 `backend/agent_service.py` 或 `frontends/acp/server.py`：
+参考 `backend/agent_service.py` + `backend/agents_sdk/runner.py`：
 
-- 继承 `GenericHandler` 覆盖 `do_ask_user`（queue 阻塞 / 网络 RPC / etc.）
-- 用 `on_event` 回调消费结构化 AgentEvent
-- 跨任务/多会话可复用 `SessionStore` 和独立 handler 上下文的组合模式
+- 注册新的 `@function_tool` 包装到 `backend/tools/wrappers.py`
+- 通过 `event_bridge` 将 SDK 流事件映射到目标线路（OpenAI Responses / Chat / 自定义）
+- 跨任务/多会话复用 `SessionStore` 与 `agent_run_states` 行
 
 ### 加可观测性
 

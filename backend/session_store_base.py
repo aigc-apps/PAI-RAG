@@ -1,10 +1,10 @@
 """Backend-agnostic session-store interface.
 
 `BaseSessionStore` declares the public contract that the rest of the codebase
-talks to (`backend.agent_service`, `backend.worker`, `backend.celery_runner`,
-`frontends.acp.server`, tests). The current concrete implementation is
-`backend.session_store_sqlite.SQLiteSessionStore`; future Postgres / Tablestore
-backends should subclass `BaseSessionStore` so call sites stay identical.
+talks to (`backend.agent_service`, the SDK runner, tests). The current concrete
+implementation is `backend.session_store_sqlite.SQLiteSessionStore`; future
+Postgres / Tablestore backends should subclass `BaseSessionStore` so call
+sites stay identical.
 
 Constants and the `session_title_from_messages` helper live here too because
 they are part of the public contract — independent of the storage engine.

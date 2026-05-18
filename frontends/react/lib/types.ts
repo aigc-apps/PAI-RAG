@@ -85,7 +85,14 @@ export interface SessionSummary {
   message_count?: number;
   running?: boolean;
   status?: string;
-  active_run_id?: string;
+}
+
+export interface PendingHitl {
+  response_id: string;
+  call_id: string;
+  tool_name: string;
+  question?: string;
+  candidates?: string[];
 }
 
 export interface SessionDetail {
@@ -94,8 +101,8 @@ export interface SessionDetail {
   created_at: string;
   updated_at: string;
   status?: string;
-  active_run_id?: string;
   messages: ChatMessage[];
+  pending_hitl?: PendingHitl | null;
 }
 
 export interface AskUserPayload {
@@ -106,17 +113,6 @@ export interface AskUserPayload {
 export interface StreamEvent {
   sessionId: string;
   update: AgentUpdate;
-}
-
-export interface RunCreateResponse {
-  id?: string;
-  object?: "agent.run";
-  run_id: string;
-  session_id?: string;
-  status: string;
-  cursor?: string;
-  regenerated_from_run_id?: string;
-  created_at?: number;
 }
 
 export interface OfficialSkill {
@@ -139,34 +135,14 @@ export interface SkillInventory {
   evolved: EvolvedSkill[];
 }
 
-export interface RunStreamEnvelope {
-  event: string;
-  run_id: string;
-  session_id?: string;
-  sequence?: string;
-  created_at?: number;
-  timestamp?: number;
-  output?: string;
-  usage?: unknown;
-  step_id?: string;
-  tool_call_id?: string;
-  title?: string;
-  status?: "pending" | "in_progress" | "completed" | "failed";
-  hidden?: boolean;
-  delta?: string;
-  text?: string;
-  replace?: boolean;
-  tool?: string;
-  preview?: string;
-  kind?: string;
-  input?: Record<string, unknown>;
-  arguments_delta?: string;
-  arguments_text?: string;
-  content?: string;
-  duration?: number;
-  error?: boolean | string;
-  question?: string;
-  candidates?: string[];
-  data?: unknown;
-  update?: AgentUpdate;
+export interface ResponsesSseEvent {
+  type: string;
+  data: Record<string, unknown>;
+}
+
+export interface ResponsesStreamHandlers {
+  onEvent?: (event: ResponsesSseEvent) => void;
+  onUpdate?: (event: StreamEvent) => void;
+  onRequiresAction?: (pending: PendingHitl & { sessionId?: string }) => void;
+  onTerminal?: (kind: "completed" | "failed", payload: Record<string, unknown>) => void;
 }

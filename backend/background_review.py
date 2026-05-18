@@ -83,12 +83,20 @@ def build_background_review_system_prompt(memory_root, user_id=SERVER_USER_ID):
     )
 
 
-def build_background_review_user_prompt(session_id='', run_id='', task_text=''):
+def build_background_review_user_prompt(session_id='', run_id='', task_text='', archive_path=''):
+    archive_hint = ''
+    if archive_path:
+        archive_hint = (
+            f'- l4_archive_path: {archive_path}\n\n'
+            f'请先使用 `file_read` 读取 `{archive_path}`，以 L4 归档中的完整 transcript、工具调用和最终输出作为行动验证证据。'
+            '只有归档证据支持且值得跨会话复用的信息，才允许进入长期记忆沉淀。\n'
+        )
     return (
         '请审查上方完整会话快照，执行一次长期记忆沉淀评估。\n'
         f'- session_id: {session_id}\n'
         f'- run_id: {run_id}\n'
-        f'- task: {str(task_text or "")[:1000]}\n\n'
+        f'- task: {str(task_text or "")[:1000]}\n'
+        f'{archive_hint}\n'
         '先从严判断是否有值得跨会话复用的经验。若有，调用 `start_long_term_update` 并完成必要的最小化记忆更新；'
         '若没有，直接 `<summary>无需沉淀</summary>`。'
     )
@@ -147,6 +155,7 @@ def run_background_memory_review(
     llm_history=None,
     memory_root='',
     active_skill='',
+    archive_path='',
 ):
     if not memory_root:
         return {'status': 'skipped', 'reason': 'missing_memory_root'}
@@ -156,7 +165,9 @@ def run_background_memory_review(
         client = _new_review_client(llm_history)
         handler = _new_review_handler(memory_root, active_skill=active_skill)
         system_prompt = build_background_review_system_prompt(memory_root, user_id=user_id)
-        user_prompt = build_background_review_user_prompt(session_id, run_id, task_text)
+        user_prompt = build_background_review_user_prompt(
+            session_id, run_id, task_text, archive_path=archive_path,
+        )
         max_turns = int(getattr(config, 'BACKGROUND_MEMORY_REVIEW_MAX_TURNS', 8) or 8)
         logger.info('Starting background memory review: session=%s run=%s', session_id, run_id)
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -197,6 +208,7 @@ def schedule_background_memory_review(
     final_status='completed',
     long_term_enabled=False,
     use_celery=False,
+    archive_path='',
 ):
     if not background_review_enabled():
         logger.info(
@@ -235,6 +247,7 @@ def schedule_background_memory_review(
         'llm_history': copy.deepcopy(llm_history or []),
         'memory_root': memory_root,
         'active_skill': active_skill or '',
+        'archive_path': archive_path or '',
     }
     if use_celery:
         try:

@@ -1,34 +1,21 @@
-import datetime
-import json
 import os
-import queue
-import re
 import sys
 import threading
-import time
 import uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from agent_events import agent_message_chunk, ask_user, done, stop_reason  # noqa: E402
-from backend.background_review import schedule_background_memory_review  # noqa: E402
-from backend.memory_scope import ensure_memory_scope, memory_scope_for, read_index  # noqa: E402
+from backend.memory_scope import memory_scope_for, read_index  # noqa: E402
 from backend.tool_schemas import main_tools_schema  # noqa: E402
-from backend.workspace import WorkspaceManager, WorkspaceViolation  # noqa: E402
-from agent_loop import StepOutcome, agent_runner_loop, sanitize_for_archive  # noqa: E402
-from llm_client import LLMClient, make_llm_client  # noqa: E402
+from backend.workspace import WorkspaceManager  # noqa: E402
 from session_store import SERVER_USER_ID, SessionStore  # noqa: E402
 from skill_manager import (  # noqa: E402
-    build_skill_user_input,
     get_skills_prompt,
     get_use_skill_schema,
-    match_skill,
     scan_skills,
 )
-from tools import GenericHandler, WorkspaceViolation as ToolWorkspaceViolation  # noqa: E402
 import settings as config  # noqa: E402
-import runtime_config  # noqa: E402
 
 
 TOOLS_SCHEMA = main_tools_schema()
@@ -38,26 +25,11 @@ if SKILLS:
     TOOLS_SCHEMA.append(get_use_skill_schema())
 
 
-SESSION_IDLE = 'idle'
-SESSION_RUNNING = 'running'
-SESSION_WAITING_USER = 'waiting_user'
-SESSION_COMPLETED = 'completed'
-SESSION_FAILED = 'failed'
-SESSION_CANCELLED = 'cancelled'
-ACTIVE_SESSION_STATUSES = {SESSION_RUNNING, SESSION_WAITING_USER}
-FAILED_EXIT_RESULTS = {
-    'MAX_TURNS_EXCEEDED',
-    'ERROR',
-    'WORKSPACE_VIOLATION',
-    'ASK_USER_TIMEOUT',
-}
-
-
-class AskUserTimeoutError(RuntimeError):
-    """Raised when the user does not answer an ask_user prompt within
-    ``ASK_USER_TIMEOUT_SECONDS``. Treated as a terminal failure: the run is
-    finalized as ``failed`` and the session returns to a free state so a new
-    run can start."""
+from backend.agents_sdk.lifecycle import (  # noqa: E402
+    ACTIVE_SESSION_STATUSES,
+    SESSION_CANCELLED,
+    SESSION_IDLE,
+)
 
 
 class SessionBusyError(RuntimeError):
@@ -78,22 +50,6 @@ class ServiceCapacityError(RuntimeError):
         self.scope = scope
         self.limit = limit
         super().__init__(f'capacity_exceeded: {scope} active run limit {limit} reached')
-
-
-def final_status_for_exit_reason(exit_reason):
-    result = (exit_reason or {}).get('result')
-    if result in FAILED_EXIT_RESULTS:
-        return SESSION_FAILED
-    return SESSION_COMPLETED
-
-
-def exit_reason_error(exit_reason):
-    exit_reason = exit_reason or {}
-    if exit_reason.get('msg'):
-        return exit_reason.get('msg', '')
-    if exit_reason.get('result') == 'MAX_TURNS_EXCEEDED':
-        return 'MAX_TURNS_EXCEEDED'
-    return ''
 
 
 def long_term_memory_enabled(user_id=SERVER_USER_ID):
@@ -130,22 +86,6 @@ def build_system_prompt(user_id=SERVER_USER_ID):
     return SYS_PROMPT_BASE + notice + '\n' + idx + get_skills_prompt(SKILLS)
 
 
-def archive_session(client, task, exit_reason, user_id=SERVER_USER_ID):
-    scope = memory_scope_for(ROOT, user_id)
-    ensure_memory_scope(scope)
-    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = os.path.join(scope.archive_dir, f'{ts}_{uuid.uuid4().hex[:8]}.md')
-    archived_task = sanitize_for_archive(task)
-    archived_exit = sanitize_for_archive(exit_reason)
-    archived_history = sanitize_for_archive(client.history)
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(f'# Task ({ts})\n{archived_task}\n\n')
-        f.write(f'## Exit\n```json\n{json.dumps(archived_exit, ensure_ascii=False, default=str, indent=2)}\n```\n\n')
-        f.write('## History\n```json\n')
-        json.dump(archived_history, f, ensure_ascii=False, default=str, indent=2)
-        f.write('\n```\n')
-
-
 def flatten_message_content(content):
     if isinstance(content, str):
         return content
@@ -167,66 +107,13 @@ def last_user_text(messages):
     return ''
 
 
-class HttpHandler(GenericHandler):
-    def __init__(
-        self,
-        cwd,
-        mini_agent_root,
-        display_q,
-        ask_q,
-        session,
-        workspace_root=None,
-        readonly_roots=None,
-        writable_roots=None,
-        memory_root=None,
-        long_term_memory_enabled=True,
-    ):
-        super().__init__(
-            cwd,
-            mini_agent_root,
-            workspace_root=workspace_root,
-            readonly_roots=readonly_roots,
-            writable_roots=writable_roots,
-            memory_root=memory_root,
-            long_term_memory_enabled=long_term_memory_enabled,
-        )
-        self._dq = display_q
-        self._aq = ask_q
-        self._session = session
-
-    def do_ask_user(self, args, response):
-        question = args.get('question', '请提供输入：')
-        candidates = args.get('candidates') or []
-        # 必须先把 session 状态切到 waiting_user，再发 ask_user/done 事件：客户端一旦
-        # 收到 ask_user 就可能立刻发回答，server 这边要确保状态已经是 waiting_user，
-        # 否则会误命中 session_busy。
-        self._session.mark_waiting_for_user()
-        if getattr(self._session, 'output_mode', 'events') == 'text':
-            text = f'\n[Agent asks] {question}\n'
-            if candidates:
-                text += ''.join(f'{i}. {c}\n' for i, c in enumerate(candidates, 1))
-            self._session._on_text_chunk(text, check_cancel=False)
-        else:
-            self._session.emit_event(ask_user(question, candidates), check_cancel=False)
-            self._session.emit_event(done('end_turn'), check_cancel=False)
-        self._session.turn_done_evt.set()
-        timeout = max(1, int(getattr(config, 'ASK_USER_TIMEOUT_SECONDS', 30 * 60)))
-        try:
-            answer = self._aq.get(timeout=timeout)
-        except queue.Empty:
-            raise AskUserTimeoutError(
-                f'ask_user timed out after {timeout}s waiting for user answer'
-            )
-        # 防止 run_or_answer.clear() 和 do_ask_user.set() 因 _lock 竞争导致 set 后于 clear，
-        # 让下一轮 SSE consumer 看到陈旧的 turn_done=True 误判流结束。
-        self._session.turn_done_evt.clear()
-        if answer.strip().isdigit() and candidates and 1 <= int(answer) <= len(candidates):
-            answer = candidates[int(answer) - 1]
-        return StepOutcome({'status': 'answered', 'answer': answer},
-                           next_prompt=f'用户回答：{answer}\n根据答案继续推进任务。')
-
-
 class AgentSession:
+    """Slim data record around a session_id. The agent loop itself runs
+    inside the SDK runner (``backend.agents_sdk``); this class only
+    persists workspace + status metadata so HTTP handlers can look up the
+    session by id and the SQLite session row stays in sync.
+    """
+
     def __init__(self, service, sid, user_id=SERVER_USER_ID, cwd=None):
         self.service = service
         self.sid = sid
@@ -234,48 +121,15 @@ class AgentSession:
         self.cwd, self.workspace_root, self.readonly_roots = self.service.prepare_workspace(user_id, sid, cwd)
         self.workspace_path = self.workspace_root or self.cwd
         self.memory_scope = handler_memory_scope(user_id)
-        self.client = self._create_client()
-        self.client.history_changed = self.save
-        self.handler = None
         self.ui_msgs = []
-        self.display_q = queue.Queue()
-        self.ask_q = queue.Queue()
-        self.turn_done_evt = threading.Event()
-        self.cancel_evt = threading.Event()
-        self.worker = None
-        self.exit_reason = None
-        self.output_mode = 'events'
         self.status = SESSION_IDLE
         self.active_run_id = ''
+        self.exit_reason = None
         self._lock = threading.RLock()
-
-    def _create_client(self, model_override=None):
-        return make_llm_client(model_override=model_override, history_changed=self.save)
-
-    def _refresh_client_for_run(self, model_override):
-        """Rebuild the LLMClient at the start of each fresh turn.
-
-        Two reasons to always reconstruct:
-          1. ``model_override`` may differ from the previous turn (a session
-             can fan out across providers — qwen on one turn, deepseek on
-             the next), and that means a different ``api_base`` and a
-             different key from the pool.
-          2. Even when the model doesn't change, a key the previous turn
-             used may have been evicted between turns; ``provider_pool.acquire``
-             gives us a fresh live key.
-
-        History on the client is preserved across the swap so the new turn
-        has the same conversation context.
-        """
-        history = self.client.history if self.client else []
-        new_client = self._create_client(model_override=model_override)
-        new_client.history = history
-        self.client = new_client
 
     def restore_from(self, loaded):
         if not loaded:
             return
-        self.client.history = loaded.get('llm_history', []) or []
         self.ui_msgs = loaded.get('ui_messages', []) or []
         loaded_status = loaded.get('status') or SESSION_IDLE
         self.status = SESSION_IDLE if loaded_status in ACTIVE_SESSION_STATUSES else loaded_status
@@ -285,431 +139,36 @@ class AgentSession:
             self.workspace_root = self.workspace_path
             self.cwd = self.workspace_path
             os.makedirs(self.workspace_path, exist_ok=True)
-        state = loaded.get('handler_state') or {}
-        self.handler = self._handler_from_state(state) if state else None
-
-    def _handler_from_state(self, state):
-        if not state:
-            return None
-        handler = self._new_handler()
-        handler.history_info = list(state.get('history_info', []) or [])
-        handler.working = dict(state.get('working', {}) or {})
-        handler.todos = list(state.get('todos', []) or [])
-        active_skill = handler.working.get('active_skill')
-        if active_skill in SKILLS:
-            handler.allow_readonly_root(os.path.dirname(SKILLS[active_skill].path))
-        return handler
-
-    def snapshot_handler_state(self):
-        if self.handler is None:
-            return None
-        return {
-            'history_info': list(self.handler.history_info),
-            'working': dict(self.handler.working),
-            'todos': list(getattr(self.handler, 'todos', []) or []),
-        }
 
     def save(self):
         with self._lock:
-            llm_history = list(self.client.history)
             ui_msgs = list(self.ui_msgs)
         self.service.store.save(
             session_id=self.sid,
             user_id=self.user_id,
-            llm_history=llm_history,
+            llm_history=[],
             ui_messages=ui_msgs,
-            handler_state=self.snapshot_handler_state(),
+            handler_state=None,
             status=self.status,
             active_run_id=self.active_run_id,
             workspace_path=self.workspace_path,
         )
 
-    def _new_handler(self):
-        allow_long_term = long_term_memory_enabled(self.user_id)
-        writable_roots = [self.memory_scope.root] if self.workspace_root and allow_long_term else []
-        readonly_roots = list(self.readonly_roots)
-        if (
-            self.workspace_root
-            and self.user_id != SERVER_USER_ID
-            and not allow_long_term
-            and getattr(config, 'ENABLE_SHARED_MEMORY_FOR_USERS', False)
-        ):
-            readonly_roots.append(self.memory_scope.root)
-        handler = HttpHandler(
-            self.cwd,
-            ROOT,
-            self.display_q,
-            self.ask_q,
-            self,
-            workspace_root=self.workspace_root,
-            readonly_roots=readonly_roots,
-            writable_roots=writable_roots,
-            memory_root=self.memory_scope.root,
-            long_term_memory_enabled=allow_long_term,
-        )
-        handler.cancel_evt = self.cancel_evt
-        return handler
-
-    def _append_ui_message_locked(self, role, content='', events=None):
-        msg = {'role': role, 'content': content}
-        if events:
-            msg['events'] = list(events)
-        self.ui_msgs.append(msg)
-        return msg
-
-    def append_ui_message(self, role, content='', events=None):
-        with self._lock:
-            self._append_ui_message_locked(role, content, events)
-        self.save()
-
-    def _ensure_assistant_message(self):
-        with self._lock:
-            if not self.ui_msgs or self.ui_msgs[-1].get('role') != 'assistant':
-                self.ui_msgs.append({'role': 'assistant', 'content': '', 'events': []})
-            else:
-                self.ui_msgs[-1].setdefault('events', [])
-
-    def _record_assistant_event(self, event):
-        self._ensure_assistant_message()
-        with self._lock:
-            msg = self.ui_msgs[-1]
-            if event.get('sessionUpdate') == 'agent_message_chunk':
-                text = ((event.get('content') or {}).get('text') or '')
-                msg['content'] = (msg.get('content') or '') + text
-            else:
-                msg.setdefault('events', []).append(event)
-        self.save()
-
-    def mark_waiting_for_user(self):
-        with self._lock:
-            self.status = SESSION_WAITING_USER
-            run_id = self.active_run_id
-        if run_id:
-            self.service.store.set_run_status(run_id, self.user_id, SESSION_WAITING_USER)
-        self.save()
-
-    def run_or_answer(self, text, mode='events', model_override=None):
-        with self._lock:
-            if self.worker is not None and self.worker.is_alive():
-                if self.status == SESSION_WAITING_USER:
-                    # Mid-run ask_user reply: don't switch model — the in-flight
-                    # worker is still bound to the LLMClient that was built when
-                    # *that* turn started.
-                    self._append_ui_message_locked('user', text)
-                    self.status = SESSION_RUNNING
-                    self.turn_done_evt.clear()
-                    self.ask_q.put(text)
-                    if self.active_run_id:
-                        self.service.store.set_run_status(self.active_run_id, self.user_id, SESSION_RUNNING)
-                    self.save()
-                    return self.active_run_id
-                raise SessionBusyError(self.sid, self.status)
-
-            if self.worker is not None and not self.worker.is_alive():
-                self.worker.join(timeout=0.1)
-                self.worker = None
-
-            self._refresh_client_for_run(model_override)
-            return self._spawn_worker_locked(text, mode=mode)
-
-    def _spawn_worker_locked(
-        self,
-        text,
-        mode='events',
-        append_ui=True,
-        run_id=None,
-        persist_run_record=True,
-        pre_run_snapshot=None,
-        check_capacity=True,
-    ):
-        if check_capacity:
-            self.service.ensure_capacity(self.user_id, exclude_sid=self.sid)
-        self.output_mode = mode
-        pre_run_snapshot = pre_run_snapshot or {
-            'llm_history': list(self.client.history),
-            'handler_state': self.snapshot_handler_state(),
-            'ui_message_count': len(self.ui_msgs),
-            'workspace_path': self.workspace_path,
-            'input_text': text,
-        }
-        sk, sk_args = match_skill(text, SKILLS)
-        task_text = build_skill_user_input(sk, sk_args) if sk else text
-        prev = self.handler
-        handler = self._new_handler()
-        if sk:
-            handler.allow_readonly_root(os.path.dirname(sk.path))
-            handler.working['active_skill'] = sk.name
-            handler.working['related_sop'] = f'skills/{sk.name}/SKILL.md'
-        if prev:
-            handler.history_info = list(prev.history_info)
-            handler.todos = [
-                dict(todo)
-                for todo in getattr(prev, 'todos', []) or []
-                if todo.get('status') in ('pending', 'in_progress', 'blocked')
-            ]
-            if 'key_info' in prev.working:
-                ki = re.sub(r'\n\[SYSTEM\] 此为.*?工作记忆[。\n]*', '', prev.working['key_info'])
-                handler.working['key_info'] = ki
-                ps = prev.working.get('passed_sessions', 0) + 1
-                handler.working['passed_sessions'] = ps
-                handler.working['key_info'] += (
-                    f'\n[SYSTEM] 此为 {ps} 个对话前设置的key_info，'
-                    f'若已在新任务，先更新或清除工作记忆。\n'
-                )
-        handler.history_info.append(f"[USER]: {task_text[:200]}")
-        self.handler = handler
-
-        user_input = task_text
-        if prev:
-            user_input = handler._anchor_prompt() + f'\n\n### 用户当前消息\n{task_text}'
-
-        if append_ui:
-            self._append_ui_message_locked('user', text)
-        self._ensure_assistant_message()
-        self.turn_done_evt.clear()
-        self.cancel_evt.clear()
-        self.exit_reason = None
-        self.status = SESSION_RUNNING
-        self.active_run_id = run_id or f'run_{uuid.uuid4().hex}'
-        run_id = self.active_run_id
-        if persist_run_record:
-            self.service.store.create_run_record(
-                self.sid,
-                self.user_id,
-                run_id,
-                mode,
-                status=SESSION_RUNNING,
-                metadata={'pre_run_snapshot': pre_run_snapshot},
-            )
-        self.save()
-        self.worker = threading.Thread(target=self._run_loop, args=(user_input, task_text, mode, run_id), daemon=True)
-        self.worker.start()
-        return run_id
-
-    def regenerate_last_answer(self, mode='events'):
-        with self._lock:
-            if self.worker is not None and self.worker.is_alive():
-                raise SessionBusyError(self.sid, self.status)
-            if self.worker is not None and not self.worker.is_alive():
-                self.worker.join(timeout=0.1)
-                self.worker = None
-
-            run_id = f'run_{uuid.uuid4().hex}'
-            result = self.service.store.try_start_regenerate_run(
-                session_id=self.sid,
-                user_id=self.user_id,
-                run_id=run_id,
-                mode=mode,
-                workspace_path=self.workspace_path,
-                max_global_runs=int(getattr(config, 'MAX_GLOBAL_RUNS', 0) or 0),
-                max_user_runs=int(getattr(config, 'MAX_USER_RUNS', 0) or 0),
-            )
-            if result['status'] == 'not_found':
-                return None
-            if result['status'] == 'busy':
-                raise SessionBusyError(self.sid, result.get('session_status', 'running'))
-            if result['status'] == 'capacity':
-                raise ServiceCapacityError(result.get('scope', 'global'), result.get('limit', 0))
-            if result['status'] == 'no_regeneratable_answer':
-                raise NoRegeneratableAnswerError(self.sid)
-
-            self.client.history = list(result.get('llm_history') or [])
-            self.ui_msgs = list(result.get('ui_messages') or [])
-            self.workspace_path = result.get('workspace_path') or self.workspace_path
-            if self.workspace_root:
-                self.workspace_root = self.workspace_path
-                self.cwd = self.workspace_path
-                os.makedirs(self.workspace_path, exist_ok=True)
-            self.handler = self._handler_from_state(result.get('handler_state')) if result.get('handler_state') else None
-            started_run_id = self._spawn_worker_locked(
-                result['input_text'],
-                mode=mode,
-                append_ui=False,
-                run_id=run_id,
-                persist_run_record=False,
-                pre_run_snapshot={
-                    'llm_history': list(result.get('llm_history') or []),
-                    'handler_state': result.get('handler_state'),
-                    'ui_message_count': max(0, len(result.get('ui_messages') or []) - 2),
-                    'workspace_path': result.get('workspace_path') or self.workspace_path,
-                    'input_text': result['input_text'],
-                },
-                check_capacity=False,
-            )
-            return {
-                'session_id': self.sid,
-                'run_id': started_run_id,
-                'cursor': '0-0',
-                'regenerated_from_run_id': result.get('regenerated_from_run_id') or '',
-            }
-
-    def _run_loop(self, user_input, task_text, mode='events', run_id=''):
-        final_status = SESSION_COMPLETED
-        force_finalize = False
-        try:
-            kwargs = {
-                'client': self.client,
-                'system_prompt': build_system_prompt(self.user_id),
-                'user_input': user_input,
-                'handler': self.handler,
-                'tools_schema': TOOLS_SCHEMA,
-                'max_turns': getattr(config, 'MAX_TURNS', 40),
-            }
-            if mode == 'text':
-                kwargs['on_chunk'] = self._on_text_chunk
-            else:
-                kwargs['on_event'] = self._on_event
-            self.exit_reason = agent_runner_loop(**kwargs)
-            final_status = final_status_for_exit_reason(self.exit_reason)
-        except KeyboardInterrupt:
-            self.exit_reason = {'result': 'INTERRUPTED'}
-            final_status = SESSION_CANCELLED
-            if mode == 'text':
-                pass
-            else:
-                self.emit_event(done('cancelled'), check_cancel=False)
-        except (WorkspaceViolation, ToolWorkspaceViolation) as e:
-            self.exit_reason = {'result': 'WORKSPACE_VIOLATION', 'msg': str(e)}
-            final_status = SESSION_FAILED
-            if mode == 'text':
-                self._on_text_chunk(f'\n**[Workspace violation]** {e}\n', check_cancel=False)
-            else:
-                self.emit_event(agent_message_chunk(f'**[Workspace violation]** {e}'), check_cancel=False)
-                self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
-        except AskUserTimeoutError as e:
-            # ask_user 超时是终态：session 还停在 waiting_user，但用户没回答 → 把 run
-            # 标 failed 并强制 finalize，让 finally 里的 waiting_user 守卫放行，否则
-            # session 会卡住、新一轮无法启动。
-            self.exit_reason = {'result': 'ASK_USER_TIMEOUT', 'msg': str(e)}
-            final_status = SESSION_FAILED
-            force_finalize = True
-            if mode == 'text':
-                self._on_text_chunk(f'\n**[ask_user timeout]** {e}\n', check_cancel=False)
-            else:
-                self.emit_event(agent_message_chunk(f'**[ask_user timeout]** {e}'), check_cancel=False)
-                self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.exit_reason = {'result': 'ERROR', 'msg': str(e)}
-            final_status = SESSION_FAILED
-            if mode == 'text':
-                self._on_text_chunk(f'\n**[Error]** {e}\n', check_cancel=False)
-            else:
-                self.emit_event(agent_message_chunk(f'**[Error]** {e}'), check_cancel=False)
-                self.emit_event(done(stop_reason(self.exit_reason)), check_cancel=False)
-        finally:
-            review_history = list(getattr(self.client, 'history', []) or [])
-            review_active_skill = ''
-            handler = getattr(self, 'handler', None)
-            working = getattr(handler, 'working', {}) or {}
-            review_active_skill = working.get('active_skill') or ''
-            memory_scope = getattr(self, 'memory_scope', None)
-            review_memory_root = getattr(memory_scope, 'root', '') or ''
-            review_long_term_enabled = long_term_memory_enabled(self.user_id)
-            try:
-                archive_session(self.client, task_text, self.exit_reason, user_id=self.user_id)
-            except Exception:
-                pass
-            should_finish_run = False
-            with self._lock:
-                still_waiting = self.status == SESSION_WAITING_USER
-                if self.active_run_id == run_id and (force_finalize or not still_waiting):
-                    if self.status == SESSION_CANCELLED:
-                        final_status = SESSION_CANCELLED
-                    self.status = final_status
-                    self.active_run_id = ''
-                    self.worker = None
-                    should_finish_run = True
-            self.save()
-            if should_finish_run:
-                self.service.store.finish_run(
-                    self.sid,
-                    self.user_id,
-                    run_id,
-                    final_status,
-                    error=exit_reason_error(self.exit_reason),
-                )
-            self.turn_done_evt.set()
-            if should_finish_run and final_status == SESSION_COMPLETED:
-                try:
-                    schedule_background_memory_review(
-                        user_id=self.user_id,
-                        session_id=self.sid,
-                        run_id=run_id,
-                        task_text=task_text,
-                        llm_history=review_history,
-                        memory_root=review_memory_root,
-                        active_skill=review_active_skill,
-                        final_status=final_status,
-                        long_term_enabled=review_long_term_enabled,
-                        use_celery=False,
-                    )
-                except Exception:
-                    pass
-
-    def emit_event(self, event, check_cancel=True):
-        if check_cancel and self.cancel_evt.is_set():
-            raise KeyboardInterrupt('User cancelled')
-        self.display_q.put({'event': event})
-        self._record_assistant_event(event)
-
-    def _on_event(self, event):
-        self.emit_event(event)
-
-    def _on_text_chunk(self, chunk, check_cancel=True):
-        if check_cancel and self.cancel_evt.is_set():
-            raise KeyboardInterrupt('User cancelled')
-        if not chunk:
-            return
-        self.display_q.put({'text': chunk})
-        self._ensure_assistant_message()
-        with self._lock:
-            msg = self.ui_msgs[-1]
-            msg['content'] = (msg.get('content') or '') + chunk
-        self.save()
-
     def cancel(self):
+        # Best-effort: flip the session row to cancelled. The actual run is
+        # owned by the SDK runner, which has its own cancellation path via
+        # ``RunState`` cleanup; there's nothing in-process here to interrupt.
         with self._lock:
             if self.status in ACTIVE_SESSION_STATUSES:
                 self.status = SESSION_CANCELLED
-            self.cancel_evt.set()
-        try:
-            self.ask_q.put_nowait('[Cancelled]')
-        except queue.Full:
-            pass
         self.save()
 
-    def iter_events(self):
-        while True:
-            try:
-                item = self.display_q.get(timeout=0.1)
-            except queue.Empty:
-                if self.turn_done_evt.is_set():
-                    break
-                continue
-            if 'event' in item:
-                yield item['event']
-            if self.turn_done_evt.is_set() and self.display_q.empty():
-                break
-
-    def iter_text(self):
-        while True:
-            try:
-                item = self.display_q.get(timeout=0.1)
-            except queue.Empty:
-                if self.turn_done_evt.is_set():
-                    break
-                continue
-            if 'text' in item:
-                yield item['text']
-            elif 'event' in item and item['event'].get('sessionUpdate') == 'agent_message_chunk':
-                yield ((item['event'].get('content') or {}).get('text') or '')
-            if self.turn_done_evt.is_set() and self.display_q.empty():
-                break
-
     def is_running(self):
-        return self.status in ACTIVE_SESSION_STATUSES or (self.worker is not None and self.worker.is_alive())
+        # The SDK runner owns run lifetime now; the session row only reports
+        # the last persisted status, so an in-flight SDK run will *not*
+        # appear as running here. Callers that need live run state should
+        # query ``backend.agents_sdk.run_state_store``.
+        return False
 
 
 class AgentService:
@@ -731,23 +190,6 @@ class AgentService:
             return os.path.abspath(cwd or ROOT), None, []
         workspace_cwd = self.workspace_manager.prepare_session(user_id, sid, cwd=cwd)
         return workspace_cwd, self.workspace_manager.session_root(user_id, sid), []
-
-    def ensure_capacity(self, user_id, exclude_sid=None):
-        max_global = int(getattr(config, 'MAX_GLOBAL_RUNS', 0) or 0)
-        max_user = int(getattr(config, 'MAX_USER_RUNS', 0) or 0)
-        if not max_global and not max_user:
-            return
-        with self._lock:
-            active = [
-                sess for (owner_id, sid), sess in self._sessions.items()
-                if sid != exclude_sid and sess.status in ACTIVE_SESSION_STATUSES
-            ]
-            if max_global and len(active) >= max_global:
-                raise ServiceCapacityError('global', max_global)
-            if max_user:
-                user_active = [sess for sess in active if sess.user_id == user_id]
-                if len(user_active) >= max_user:
-                    raise ServiceCapacityError('user', max_user)
 
     def create_session(self, user_id=SERVER_USER_ID, cwd=None):
         sid = str(uuid.uuid4())
@@ -824,88 +266,81 @@ class AgentService:
         sess.cancel()
         return True
 
-    def chat_text(self, sid, messages, user_id=SERVER_USER_ID, cwd=None, model_override=None):
-        sess = self.get_session(sid, user_id=user_id, cwd=cwd)
-        if sess is None:
-            return None, iter(())
-        text = last_user_text(messages)
-        sess.run_or_answer(text, mode='text', model_override=model_override)
-        return sess, sess.iter_text()
-
-    def chat_events(self, sid, text, user_id=SERVER_USER_ID, cwd=None, model_override=None):
-        sess = self.get_session(sid, user_id=user_id, cwd=cwd)
-        if sess is None:
-            return None, iter(())
-        sess.run_or_answer(text, mode='events', model_override=model_override)
-        return sess, sess.iter_events()
-
     def regenerate_session(self, sid, user_id=SERVER_USER_ID):
+        """Trim the trailing assistant turn off ``ui_messages`` and return the
+        last user prompt so callers can re-issue it through the SDK runner.
+
+        Returns ``{'session_id', 'user_text'}`` on success, ``None`` if the
+        session doesn't exist, and raises :class:`NoRegeneratableAnswerError`
+        when the tail isn't a ``user → assistant`` pair to regenerate.
+        """
+        user_id = user_id or SERVER_USER_ID
         sess = self.load_session(sid, user_id=user_id)
         if sess is None:
             return None
-        return sess.regenerate_last_answer(mode='events')
+        with sess._lock:
+            ui_msgs = list(sess.ui_msgs)
+        if len(ui_msgs) < 2 or ui_msgs[-1].get('role') != 'assistant':
+            raise NoRegeneratableAnswerError(sid)
+        user_index = len(ui_msgs) - 2
+        if ui_msgs[user_index].get('role') != 'user':
+            raise NoRegeneratableAnswerError(sid)
+        user_text = (ui_msgs[user_index].get('content') or '').strip()
+        if not user_text:
+            raise NoRegeneratableAnswerError(sid)
+        # Drop the trailing assistant turn so the next /v1/responses run
+        # rebuilds it. Don't drop the user message — the SDK runner needs
+        # the same prompt as input and will re-append the user turn itself
+        # via its normal save path.
+        with sess._lock:
+            sess.ui_msgs = ui_msgs[:user_index]
+        sess.save()
+        return {'session_id': sid, 'user_text': user_text}
 
+    def pending_hitl_for_session(self, sid, user_id=SERVER_USER_ID):
+        """Return ``{response_id, call_id, tool_name, question, ...}`` if the
+        session has a paused SDK run awaiting input, else ``None``.
 
-def openai_chat_completion(model, content, session_id, usage=None):
-    now = int(time.time())
-    return {
-        'id': f'chatcmpl-{uuid.uuid4().hex}',
-        'object': 'chat.completion',
-        'created': now,
-        'model': model,
-        'choices': [{
-            'index': 0,
-            'message': {'role': 'assistant', 'content': content},
-            'finish_reason': 'stop',
-        }],
-        'usage': dict(usage) if usage else {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
-        'metadata': {'session_id': session_id},
-    }
+        Lets the frontend recover HITL state across page reloads — without
+        this, a refresh during ``ask_user`` orphans the answer flow.
+        """
+        import json as _json
 
-
-def openai_chat_chunk(model, content):
-    now = int(time.time())
-    return {
-        'id': f'chatcmpl-{uuid.uuid4().hex}',
-        'object': 'chat.completion.chunk',
-        'created': now,
-        'model': model,
-        'choices': [{
-            'index': 0,
-            'delta': {'content': content},
-            'finish_reason': None,
-        }],
-    }
-
-
-def openai_role_chunk(model):
-    now = int(time.time())
-    return {
-        'id': f'chatcmpl-{uuid.uuid4().hex}',
-        'object': 'chat.completion.chunk',
-        'created': now,
-        'model': model,
-        'choices': [{
-            'index': 0,
-            'delta': {'role': 'assistant'},
-            'finish_reason': None,
-        }],
-    }
-
-
-def openai_done_chunk(model, usage=None):
-    now = int(time.time())
-    chunk = {
-        'id': f'chatcmpl-{uuid.uuid4().hex}',
-        'object': 'chat.completion.chunk',
-        'created': now,
-        'model': model,
-        'choices': [{
-            'index': 0,
-            'delta': {},
-            'finish_reason': 'stop',
-        }],
-    }
-    if usage:
-        chunk['usage'] = dict(usage)
-    return chunk
+        user_id = user_id or SERVER_USER_ID
+        try:
+            with self.store._connect() as conn:
+                row = conn.execute(
+                    """
+                    SELECT response_id, run_id, pending_interruption_json
+                    FROM agent_run_states
+                    WHERE session_id = ? AND user_id = ? AND status = ?
+                    ORDER BY last_active_at DESC
+                    LIMIT 1
+                    """,
+                    (sid, user_id, 'requires_action'),
+                ).fetchone()
+        except Exception:
+            return None
+        if row is None:
+            return None
+        try:
+            interruptions = _json.loads(row['pending_interruption_json'] or '[]')
+        except (ValueError, TypeError):
+            interruptions = []
+        if not interruptions:
+            return None
+        first = interruptions[0]
+        args = first.get('arguments') or {}
+        if isinstance(args, str):
+            try:
+                args = _json.loads(args)
+            except (ValueError, TypeError):
+                args = {}
+        return {
+            'response_id': row['response_id'],
+            'run_id': row['run_id'],
+            'call_id': first.get('call_id', ''),
+            'tool_name': first.get('tool_name', ''),
+            'question': args.get('question'),
+            'candidates': args.get('candidates'),
+        }

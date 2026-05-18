@@ -48,6 +48,7 @@ class BackgroundReviewTests(unittest.TestCase):
                     llm_history=[{"role": "user", "content": "question"}],
                     memory_root=memory_root,
                     active_skill="diagnosis",
+                    archive_path=os.path.join(memory_root, "L4_raw_sessions", "session.md"),
                 )
             finally:
                 background_review.agent_runner_loop = original_runner
@@ -57,6 +58,8 @@ class BackgroundReviewTests(unittest.TestCase):
         self.assertEqual(tool_names(calls["tools_schema"]), tool_names(background_memory_review_tools_schema()))
         self.assertIn("后台长期记忆审查 Agent", calls["system_prompt"])
         self.assertIn("start_long_term_update", calls["user_input"])
+        self.assertIn("l4_archive_path", calls["user_input"])
+        self.assertIn("file_read", calls["user_input"])
 
     def test_schedule_logs_skip_reasons(self):
         with self.assertLogs("backend.background_review", level="INFO") as logs:
@@ -94,10 +97,15 @@ class BackgroundReviewTests(unittest.TestCase):
                         memory_root=tmp,
                         final_status="completed",
                         long_term_enabled=True,
+                        archive_path=os.path.join(tmp, "L4_raw_sessions", "session.md"),
                     )
 
         self.assertTrue(scheduled)
         thread.start.assert_called_once()
+        self.assertEqual(
+            thread_cls.call_args.kwargs["args"][0]["archive_path"],
+            os.path.join(tmp, "L4_raw_sessions", "session.md"),
+        )
         self.assertIn("Background memory review scheduled: backend=thread", "\n".join(logs.output))
 
     def test_schedule_logs_celery_enqueue(self):

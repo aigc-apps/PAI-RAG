@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Smoke test deployed MiniAgent HTTP APIs.
 
-This script covers the three public API families:
+This script covers the two public API families:
 
 1. /v1/chat/completions
 2. /v1/responses
-3. /v1/runs + /v1/runs/{run_id}/events
 
 Example:
-    python scripts/api_smoke.py --base-url http://127.0.0.1:8000
+    python scripts/api_smoke.py
+    python scripts/api_smoke.py --base-url http://127.0.0.1:8683
 
 With a gateway authorization header:
     python scripts/api_smoke.py \
@@ -24,9 +24,7 @@ import urllib.error
 import urllib.request
 
 
-DEFAULT_MODEL = "pairag-agent"
 DEFAULT_QUERY = "你好，请用一句话介绍你自己，并说明你可以通过 API 被调用。"
-DEFAULT_RUN_QUERY = "请确认 /v1/runs 接口可以正常执行，并用一句话说明 Runs API 的作用。"
 
 
 def compact_json(value):
@@ -126,127 +124,89 @@ def require_ok(name, status, payload):
 def run_chat_completions(args, headers):
     print("\n== /v1/chat/completions ==")
     payload = {
-        "model": args.model,
         "messages": [{"role": "user", "content": args.query}],
-        "stream": False,
+        "stream": True,
     }
-    status, resp_headers, data = request_json(
-        args.base_url,
-        "POST",
-        "/v1/chat/completions",
-        payload=payload,
-        headers=headers,
-        timeout=args.timeout,
-    )
-    require_ok("chat completions", status, data)
-    print(f"status={status} session={resp_headers.get('X-Session-Id', '')} run={resp_headers.get('X-Run-Id', '')}")
+    if args.model:
+        payload["model"] = args.model
+    parts = []
+    final = None
+    event_count = 0
+    for event in iter_sse(
+        args.base_url, "POST", "/v1/chat/completions",
+        payload=payload, headers=headers, timeout=args.timeout,
+    ):
+        event_count += 1
+        data = parse_sse_data(event)
+        if data == "[DONE]" or not isinstance(data, dict):
+            continue
+        final = data
+        try:
+            delta = data["choices"][0].get("delta") or {}
+            if delta.get("content"):
+                parts.append(delta["content"])
+        except (KeyError, IndexError, TypeError):
+            pass
+    print(f"events={event_count}")
     print("sample_query:", args.query)
-    print("answer:", chat_text(data) or compact_json(data))
+    answer = "".join(parts)
+    print("answer:", answer or (compact_json(final) if final else "(no content)"))
+
+
+def _stream_responses(args, headers, payload):
+    """Drive /v1/responses SSE; return (response_id, full_text, completed_payload)."""
+    parts = []
+    response_id = ""
+    completed = None
+    event_count = 0
+    for event in iter_sse(
+        args.base_url, "POST", "/v1/responses",
+        payload=payload, headers=headers, timeout=args.timeout,
+    ):
+        event_count += 1
+        data = parse_sse_data(event)
+        if data == "[DONE]" or not isinstance(data, dict):
+            continue
+        etype = data.get("type") or ""
+        if etype == "response.created":
+            response_id = data.get("id") or response_id
+        elif etype == "response.output_text.delta":
+            if data.get("delta"):
+                parts.append(data["delta"])
+        elif etype == "response.completed":
+            completed = data.get("response") or data
+            response_id = (completed.get("id") if isinstance(completed, dict) else None) or response_id
+    return response_id, "".join(parts), completed, event_count
 
 
 def run_responses(args, headers):
     print("\n== /v1/responses ==")
-    payload = {
-        "model": args.model,
-        "input": args.query,
-        "stream": False,
-    }
-    status, resp_headers, data = request_json(
-        args.base_url,
-        "POST",
-        "/v1/responses",
-        payload=payload,
-        headers=headers,
-        timeout=args.timeout,
-    )
-    require_ok("responses", status, data)
-    print(f"status={status} response_id={data.get('id', '')} session={resp_headers.get('X-Session-Id', '')} run={resp_headers.get('X-Run-Id', '')}")
+    payload = {"input": args.query, "stream": True}
+    if args.model:
+        payload["model"] = args.model
+    response_id, answer, completed, event_count = _stream_responses(args, headers, payload)
+    print(f"events={event_count} response_id={response_id}")
     print("sample_query:", args.query)
-    print("answer:", response_text(data) or compact_json(data))
-    print("output_types:", [item.get("type") for item in data.get("output") or []])
+    if not answer and isinstance(completed, dict):
+        answer = response_text(completed)
+    print("answer:", answer or "(no content)")
+    if isinstance(completed, dict):
+        print("output_types:", [item.get("type") for item in completed.get("output") or []])
 
-    if args.multi_turn and data.get("id"):
+    if args.multi_turn and response_id:
         follow_up = "继续上一轮，用一句话说明 previous_response_id 如何用于多轮对话。"
         follow_payload = {
-            "model": args.model,
-            "previous_response_id": data["id"],
+            "previous_response_id": response_id,
             "input": follow_up,
-            "stream": False,
+            "stream": True,
         }
-        status, _, follow_data = request_json(
-            args.base_url,
-            "POST",
-            "/v1/responses",
-            payload=follow_payload,
-            headers=headers,
-            timeout=args.timeout,
-        )
-        require_ok("responses follow-up", status, follow_data)
+        if args.model:
+            follow_payload["model"] = args.model
+        _, follow_answer, follow_completed, _ = _stream_responses(args, headers, follow_payload)
+        if not follow_answer and isinstance(follow_completed, dict):
+            follow_answer = response_text(follow_completed)
         print("follow_up_query:", follow_up)
-        print("follow_up_answer:", response_text(follow_data) or compact_json(follow_data))
-
-
-def run_runs(args, headers):
-    print("\n== /v1/runs + /v1/runs/{run_id}/events ==")
-    create_payload = {"input": args.run_query}
-    status, resp_headers, run = request_json(
-        args.base_url,
-        "POST",
-        "/v1/runs",
-        payload=create_payload,
-        headers=headers,
-        timeout=args.timeout,
-    )
-    require_ok("create run", status, run)
-    run_id = run.get("run_id")
-    session_id = run.get("session_id")
-    if not run_id:
-        raise RuntimeError(f"create run did not return run_id: {compact_json(run)}")
-    print(f"status={status} session={session_id} run={run_id}")
-    print("sample_query:", args.run_query)
-
-    output_parts = []
-    tool_events = []
-    event_count = 0
-    started = time.time()
-    for event in iter_sse(
-        args.base_url,
-        "GET",
-        f"/v1/runs/{run_id}/events",
-        headers=headers,
-        timeout=args.timeout,
-    ):
-        event_count += 1
-        data = parse_sse_data(event)
-        if isinstance(data, str):
-            continue
-        event_type = data.get("event")
-        if event_type == "message.delta":
-            output_parts.append(data.get("delta") or "")
-        elif event_type and event_type.startswith("tool."):
-            tool_events.append(event_type)
-        elif event_type == "ask_user":
-            print("ask_user:", compact_json(data))
-        elif event_type == "run.completed":
-            if data.get("output"):
-                output_parts = [data.get("output")]
-            print(f"events={event_count} elapsed={time.time() - started:.1f}s tools={tool_events}")
-            print("answer:", "".join(output_parts) or compact_json(data))
-            break
-        elif event_type == "run.failed":
-            raise RuntimeError(f"run failed: {compact_json(data)}")
-    else:
-        raise RuntimeError("run event stream ended before run.completed")
-
-    status, _, status_payload = request_json(
-        args.base_url,
-        "GET",
-        f"/v1/runs/{run_id}",
-        headers=headers,
-        timeout=args.timeout,
-    )
-    require_ok("get run", status, status_payload)
-    print("run_status:", status_payload.get("status", ""))
+        print("follow_up_answer:", follow_answer or "(no content)")
 
 
 def build_headers(args):
@@ -263,17 +223,24 @@ def build_headers(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Smoke test deployed MiniAgent APIs.")
-    parser.add_argument("--base-url", required=True, help="Service base URL, for example http://127.0.0.1:8000")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Model name, default: {DEFAULT_MODEL}")
+    parser.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:8683",
+        help="Service base URL, default: http://127.0.0.1:8683",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model name; omit to let the backend use its configured default (e.g. qwen-plus locally, pairag-agent via gateway)",
+    )
     parser.add_argument("--query", default=DEFAULT_QUERY, help="Sample query for Chat Completions and Responses")
-    parser.add_argument("--run-query", default=DEFAULT_RUN_QUERY, help="Sample query for Runs API")
     parser.add_argument("--auth", default="", help="Authorization header value, for example 'Bearer xxx'")
     parser.add_argument("--header", action="append", help="Extra header, format: 'Name: value'. Can be repeated.")
     parser.add_argument("--timeout", type=int, default=300, help="HTTP timeout seconds")
     parser.add_argument("--multi-turn", action="store_true", help="Also test /v1/responses previous_response_id follow-up")
     parser.add_argument(
         "--only",
-        choices=("all", "chat", "responses", "runs"),
+        choices=("all", "chat", "responses"),
         default="all",
         help="Run only one API family",
     )
@@ -281,14 +248,12 @@ def main(argv=None):
 
     headers = build_headers(args)
     print("base_url:", args.base_url.rstrip("/"))
-    print("model:", args.model)
+    print("model:", args.model or "(backend default)")
 
     if args.only in ("all", "chat"):
         run_chat_completions(args, headers)
     if args.only in ("all", "responses"):
         run_responses(args, headers)
-    if args.only in ("all", "runs"):
-        run_runs(args, headers)
 
     print("\nOK: API smoke test completed")
 

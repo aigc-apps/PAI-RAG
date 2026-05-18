@@ -42,12 +42,20 @@ PORT="${PORT:-8680}"
 FRONTEND_PORT="${FRONTEND_PORT:-8681}"
 BACKEND_PORT="${BACKEND_PORT:-8682}"
 API_INSTANCE_COUNT="${API_INSTANCE_COUNT:-1}"
-WORKER_INSTANCE_COUNT="${WORKER_INSTANCE_COUNT:-2}"
-DEV_MODE="${DEV_MODE:-false}"
+# Default to dev mode (no nginx, no celery worker) so `sh scripts/start.sh`
+# works without root or external services. Use --no-dev for production.
+WORKER_INSTANCE_COUNT="${WORKER_INSTANCE_COUNT:-0}"
+DEV_MODE="${DEV_MODE:-true}"
 REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379/0}"
 START_REDIS="${START_REDIS:-auto}"
 RUNNER_BACKEND="${RUNNER_BACKEND:-}"
 HOST="${HOST:-0.0.0.0}"
+# Use conda's python (which has uvicorn installed) by default. PYTHON env
+# var can override (e.g. to a venv binary).
+PYTHON="${PYTHON:-/mnt/llm/xiaowen/miniconda3/bin/python}"
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON="$(command -v python3 || command -v python || true)"
+fi
 
 API_PID=""
 FRONTEND_PID=""
@@ -64,8 +72,9 @@ Options:
   --frontend-port PORT       Frontend service port in production mode. Default: 8681
   --backend-port PORT        Backend service port. Default: 8682
   --api-instances N          Number of Uvicorn workers. Default: 1
-  --worker-instances N, -w   Celery worker concurrency. 0 disables local worker. Default: 2
-  --dev                      Start without nginx and expose Next.js directly.
+  --worker-instances N, -w   Celery worker concurrency. 0 disables local worker. Default: 0
+  --dev                      Start without nginx and expose Next.js directly (default).
+  --no-dev, --prod           Run behind nginx with built frontend.
   --help, -h                 Show this help.
 
 Environment:
@@ -128,6 +137,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dev)
       DEV_MODE=true
+      shift
+      ;;
+    --no-dev|--prod)
+      DEV_MODE=false
       shift
       ;;
     --help|-h)
@@ -311,13 +324,20 @@ start_frontend() {
 }
 
 start_api() {
-  require_command uvicorn "Install Python dependencies with: pip install -r requirements.txt"
+  if [[ -z "$PYTHON" || ! -x "$PYTHON" ]]; then
+    echo "Error: no python interpreter found. Set PYTHON=/path/to/python." >&2
+    exit 1
+  fi
+  if ! "$PYTHON" -c 'import uvicorn' >/dev/null 2>&1; then
+    echo "Error: uvicorn not installed for $PYTHON. Run: $PYTHON -m pip install -r requirements.txt" >&2
+    exit 1
+  fi
 
   echo "Starting FastAPI on port $BACKEND_PORT with $API_INSTANCE_COUNT worker(s)..."
   (
     cd "$ROOT_DIR"
     RUNNER_BACKEND="$RUNNER_BACKEND" REDIS_URL="$REDIS_URL" \
-      uvicorn backend.server:app --host "$HOST" --port "$BACKEND_PORT" --workers "$API_INSTANCE_COUNT"
+      "$PYTHON" -m uvicorn backend.server:app --host "$HOST" --port "$BACKEND_PORT" --workers "$API_INSTANCE_COUNT"
   ) &
   API_PID=$!
 }
@@ -327,12 +347,15 @@ start_worker() {
     return
   fi
 
-  require_command celery "Install Python dependencies with: pip install -r requirements.txt"
+  if ! "$PYTHON" -c 'import celery' >/dev/null 2>&1; then
+    echo "Error: celery not installed for $PYTHON. Run: $PYTHON -m pip install -r requirements.txt" >&2
+    exit 1
+  fi
   echo "Starting Celery worker with concurrency $WORKER_INSTANCE_COUNT..."
   (
     cd "$ROOT_DIR"
     RUNNER_BACKEND="$RUNNER_BACKEND" REDIS_URL="$REDIS_URL" \
-      celery -A backend.celery_app worker --loglevel=info --concurrency="$WORKER_INSTANCE_COUNT"
+      "$PYTHON" -m celery -A backend.celery_app worker --loglevel=info --concurrency="$WORKER_INSTANCE_COUNT"
   ) &
   WORKER_PID=$!
 }

@@ -1,4 +1,5 @@
 openai
+openai-agents>=0.17,<1
 requests
 fastapi
 uvicorn

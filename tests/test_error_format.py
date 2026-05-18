@@ -18,13 +18,10 @@ class FakeRegenerateService:
 class ErrorFormatTests(unittest.TestCase):
     def setUp(self):
         self.original_service = server.service
-        self.original_celery_service = server.celery_service
-        server.celery_service = None
         self.client = TestClient(server.app)
 
     def tearDown(self):
         server.service = self.original_service
-        server.celery_service = self.original_celery_service
 
     def _assert_error_shape(self, body, code=None):
         self.assertIn("error", body, body)

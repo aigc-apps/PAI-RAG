@@ -1,16 +1,15 @@
 """MiniAgent API 客户端调用示例（纯标准库，零依赖）
 
-覆盖 4 类接口：
+覆盖 3 类接口：
   1. /v1/chat/completions   —— OpenAI Chat Completions 兼容（纯文本）
-  2. /v1/responses          —— OpenAI Responses 兼容（结构化输出）
-  3. /v1/runs               —— 自定义 Agent 生命周期（重点演示）
-  4. /v1/sessions           —— 会话管理
+  2. /v1/responses          —— OpenAI Responses 兼容（结构化 + HITL，重点演示）
+  3. /v1/sessions           —— 会话管理（含 cancel / pending_hitl）
 
 运行：
-    python scripts/client_examples.py --base-url http://127.0.0.1:8765
+    python scripts/client_examples.py --base-url http://127.0.0.1:8000
 可单独跑某节：
-    python scripts/client_examples.py --only runs
-    python scripts/client_examples.py --only chat --stream
+    python scripts/client_examples.py --only responses-stream
+    python scripts/client_examples.py --only responses-ask-user
 """
 
 import argparse
@@ -58,8 +57,6 @@ def http_request(
             body = raw
         raise APIError(e.code, body) from None
 
-    # urllib 给的 HTTPMessage 已经 case-insensitive，但 dict() 后丢失这个能力。
-    # 我们包成 lowercase dict，调用方一律用小写键访问。
     norm_headers = {k.lower(): v for k, v in resp.headers.items()}
     if stream:
         return resp.status, norm_headers, resp
@@ -70,14 +67,7 @@ def http_request(
 
 
 def iter_sse(resp) -> Iterator[tuple[str, str]]:
-    """从 SSE 响应里迭代出 (event_name, data_text) 元组。
-
-    服务端可能发送：
-      - 注释行 `: keepalive`（忽略）
-      - `event: X` + `data: Y` 配对
-      - 仅 `data: Y`（默认事件，event 为空串）
-      - `data: [DONE]` 表示流结束
-    """
+    """从 SSE 响应里迭代出 (event_name, data_text) 元组。"""
     event_name = ''
     data_buf: list[str] = []
 
@@ -96,7 +86,7 @@ def iter_sse(resp) -> Iterator[tuple[str, str]]:
                 yield from flush()
                 continue
             if line.startswith(':'):
-                continue  # comment / keepalive
+                continue
             if line.startswith('event:'):
                 event_name = line[len('event:'):].strip()
                 continue
@@ -120,7 +110,6 @@ def demo_chat_nonstream(base_url: str, model: str) -> None:
     print(f'status: {status}')
     print(f'message: {body["choices"][0]["message"]["content"]}')
     print(f'usage:   {body["usage"]}')
-    print(f'session: {body["metadata"]["session_id"]}')
 
 
 def demo_chat_stream(base_url: str, model: str) -> None:
@@ -142,7 +131,6 @@ def demo_chat_stream(base_url: str, model: str) -> None:
         if data == '[DONE]':
             break
         chunk = json.loads(data)
-        # 每条 chat.completion.chunk
         for choice in chunk.get('choices', []):
             delta = choice.get('delta') or {}
             if delta.get('content'):
@@ -155,6 +143,85 @@ def demo_chat_stream(base_url: str, model: str) -> None:
 
 
 # ──────────────────────────── 2. Responses API ──────────────────────────── #
+
+def render_response_event(event_name: str, payload: dict, state: dict) -> None:
+    """把 /v1/responses SSE 事件按类型漂亮打印。"""
+    et = payload.get('type', event_name)
+
+    if et == 'response.created':
+        state['response_id'] = payload.get('id', '')
+        print(f'[resp] created id={state["response_id"]} model={payload.get("model")}')
+
+    elif et == 'response.output_item.added':
+        item = payload.get('item') or {}
+        if item.get('type') == 'function_call':
+            name = item.get('name', '?')
+            call_id = item.get('call_id', '?')
+            print(f'[resp] tool.start call_id={call_id} name={name}')
+            state.setdefault('tools', {})[call_id] = {'name': name, 'args': ''}
+        elif item.get('type') == 'function_call_output':
+            call_id = item.get('call_id', '?')
+            out = (item.get('output') or '')[:120]
+            print(f'[resp] tool.output call_id={call_id} output={out!r}')
+
+    elif et == 'response.function_call_arguments.delta':
+        # 工具参数增量；演示里不打印每片，只累计
+        item_id = payload.get('item_id', '')
+        state.setdefault('args_buf', {}).setdefault(item_id, '')
+        state['args_buf'][item_id] += payload.get('delta', '')
+
+    elif et == 'response.function_call_arguments.done':
+        item_id = payload.get('item_id', '')
+        args = payload.get('arguments') or state.get('args_buf', {}).get(item_id, '')
+        print(f'[resp] tool.args  item_id={item_id} args={args!r}')
+
+    elif et == 'response.output_text.delta':
+        sys.stdout.write(payload.get('delta', ''))
+        sys.stdout.flush()
+        state.setdefault('final_text_parts', []).append(payload.get('delta', ''))
+
+    elif et == 'response.reasoning_step.started':
+        # 合成的思考步骤边界（前缀 rs_synth_）
+        pass
+
+    elif et == 'response.reasoning_step.completed':
+        pass
+
+    elif et == 'response.requires_action':
+        # HITL 中断点：把 ask_user 信息存下来交给上层
+        ra = payload.get('required_action') or {}
+        sub = ra.get('submit_tool_outputs') or {}
+        calls = sub.get('tool_calls') or []
+        if calls:
+            tc = calls[0]
+            fn = tc.get('function') or {}
+            args = {}
+            try:
+                args = json.loads(fn.get('arguments') or '{}')
+            except Exception:
+                pass
+            state['pending_hitl'] = {
+                'response_id': payload.get('id', ''),
+                'call_id': tc.get('id', ''),
+                'tool_name': fn.get('name', ''),
+                'question': args.get('question'),
+                'candidates': args.get('candidates'),
+            }
+            print(f'\n[resp] requires_action  response_id={payload.get("id")} '
+                  f'tool={fn.get("name")} question={args.get("question")!r}')
+
+    elif et == 'response.completed':
+        if state.get('final_text_parts'):
+            sys.stdout.write('\n')
+        usage = payload.get('usage')
+        print(f'[resp] completed  status={payload.get("status")} usage={usage}')
+        state['terminal'] = True
+
+    elif et == 'response.failed':
+        err = payload.get('error') or {}
+        print(f'[resp] failed     {err}')
+        state['terminal'] = True
+
 
 def demo_responses_nonstream(base_url: str, model: str) -> None:
     print('--- /v1/responses (stream=false) ---')
@@ -181,296 +248,141 @@ def demo_responses_nonstream(base_url: str, model: str) -> None:
 
 
 def demo_responses_stream_multi_turn(base_url: str, model: str) -> None:
-    print('--- /v1/responses (stream=true) + previous_response_id 多轮 ---')
+    """单一 session_id 多轮：每轮独立 POST /v1/responses，复用同一个 session_id。"""
+    print('--- /v1/responses (stream=true) 多轮，复用 session_id ---')
 
-    def stream_one(req_body: dict, label: str) -> str:
+    _, _, sess = http_request('POST', f'{base_url}/v1/sessions', body={})
+    sid = sess['session_id']
+    print(f'session_id: {sid}')
+
+    def stream_one(req_body: dict, label: str) -> dict:
         print(f'\n[{label}] request: {req_body["input"]!r}')
         _, _, resp = http_request(
             'POST', f'{base_url}/v1/responses',
             body=req_body, stream=True,
         )
-        text_parts, resp_id = [], ''
+        state: dict = {}
         for event_name, data in iter_sse(resp):
             if data == '[DONE]':
                 break
             payload = json.loads(data)
-            t = payload.get('type', event_name)
-            if t == 'response.created':
-                resp_id = payload['id']
-                print(f'[{label}] resp_id: {resp_id}')
-            elif t == 'response.output_text.delta':
-                text_parts.append(payload.get('delta', ''))
-            elif t == 'response.completed':
-                print(f'[{label}] status: {payload["status"]}, usage: {payload.get("usage")}')
-        print(f'[{label}] text: {"".join(text_parts)}')
-        return resp_id
-
-    rid = stream_one({'model': model, 'input': '记住一个数字：7。然后回复"好的"', 'stream': True}, 'turn-1')
-    # SSE 流刚结束时，服务端 session 状态可能还没标记 idle，下一轮可能会 409 session_busy。
-    # 简单做法是带重试：碰到 session_busy 时退避后再试。
-    body = {'model': model, 'previous_response_id': rid, 'input': '我刚才让你记的数字是什么？', 'stream': True}
-    for attempt in range(6):
-        try:
-            stream_one(body, 'turn-2')
-            break
-        except APIError as e:
-            if e.status == 409:
-                time.sleep(0.5)
-                continue
-            raise
-
-
-# ───────────────────────────── 3. Runs API（重点）───────────────────────── #
-
-def render_run_event(event: dict, state: dict) -> None:
-    """按事件类型把 SSE event 漂亮打印到 stdout。
-
-    state 是调用方持有的累计上下文（拼最终文本、记录工具状态等）。
-    """
-    et = event.get('event')
-    rid = event.get('run_id', '')
-    short = rid[-6:] if rid else ''
-    ts = event.get('timestamp')
-    prefix = f'[{short}]'
-
-    if et == 'reasoning.started':
-        print(f'{prefix} reasoning.started   step={event["step_id"]} title={event.get("title")!r}')
-
-    elif et == 'reasoning.available':
-        text = event.get('text', '')
-        replace = event.get('replace')
-        marker = 'REPLACE' if replace else 'append'
-        print(f'{prefix} reasoning.available step={event["step_id"]} [{marker}] {text!r}')
-
-    elif et == 'reasoning.completed':
-        print(f'{prefix} reasoning.completed step={event["step_id"]} status={event.get("status")}')
-
-    elif et == 'tool.delta':
-        # 工具参数流式增量。一般 UI 只展示 arguments_text 累计快照
-        print(f'{prefix} tool.delta          call={event["tool_call_id"]} tool={event["tool"]} '
-              f'args_so_far={event.get("arguments_text", "")!r}')
-
-    elif et == 'tool.started':
-        state.setdefault('tools', {})[event['tool_call_id']] = {
-            'tool': event['tool'], 'input': event.get('input'), 'started_at': ts,
-        }
-        print(f'{prefix} tool.started        call={event["tool_call_id"]} tool={event["tool"]} '
-              f'input={event.get("input")}')
-
-    elif et == 'tool.updated':
-        print(f'{prefix} tool.updated        call={event["tool_call_id"]} status={event.get("status")}')
-
-    elif et == 'tool.completed':
-        meta = state.get('tools', {}).get(event['tool_call_id'], {})
-        elapsed = (ts - meta['started_at']) if meta.get('started_at') and ts else None
-        content = (event.get('content') or '')[:120]
-        print(f'{prefix} tool.completed      call={event["tool_call_id"]} status={event.get("status")} '
-              f'elapsed={elapsed:.2f}s content={content!r}' if elapsed else
-              f'{prefix} tool.completed      call={event["tool_call_id"]} status={event.get("status")} '
-              f'content={content!r}')
-
-    elif et == 'message.delta':
-        state.setdefault('final_text_parts', []).append(event.get('delta', ''))
-        # 流式渲染：把每个 delta 直接打到 stdout（实际 UI 里就是逐字打字效果）
-        sys.stdout.write(event.get('delta', ''))
-        sys.stdout.flush()
-
-    elif et == 'ask_user':
-        # Agent 中断等待用户输入
-        state['ask_user'] = event
-        print(f'\n{prefix} ask_user            question={event.get("question")!r} '
-              f'candidates={event.get("candidates")}')
-
-    elif et == 'run.completed':
-        if state.get('final_text_parts'):
-            sys.stdout.write('\n')
-        print(f'{prefix} run.completed       output_len={len(event.get("output", ""))} '
-              f'usage={event.get("usage")}')
-        state['completed'] = True
-
-    elif et == 'run.failed':
-        print(f'{prefix} run.failed          error={event.get("error")!r}')
-        state['completed'] = True
-
-    else:
-        print(f'{prefix} {et}  {event}')
-
-
-def demo_runs_two_stage(base_url: str) -> None:
-    """两段式：POST 创建 → GET 订阅事件。适合需要异步执行、断点续传的场景。"""
-    print('--- /v1/runs (两段式：POST 创建 → GET events) ---')
-
-    # 第 1 步：先创建 session（可选；不传 session_id 时服务端会自动新建一个）
-    _, _, sess = http_request('POST', f'{base_url}/v1/sessions', body={})
-    sid = sess['session_id']
-    print(f'session_id: {sid}')
-
-    # 第 2 步：创建 run
-    _, _, run = http_request(
-        'POST', f'{base_url}/v1/runs',
-        body={'session_id': sid, 'input': '用 ls 列一下当前目录前 2 个文件，然后用一句话总结'},
-    )
-    run_id = run['run_id']
-    cursor = run['cursor']
-    print(f'run_id: {run_id}, cursor: {cursor}, status: {run["status"]}')
-
-    # 第 3 步：订阅事件（可用 ?last_event_id=<cursor> 从断点续传；首次传 "0-0" 或省略表示从头）
-    _, _, resp = http_request(
-        'GET', f'{base_url}/v1/runs/{run_id}/events',
-        stream=True,
-    )
-    state: dict = {}
-    last_event_id = cursor
-    for event_name, data in iter_sse(resp):
-        if data == '[DONE]':
-            break
-        event = json.loads(data)
-        render_run_event(event, state)
-        # 实际重连场景：每条事件其实有自己的 SSE id（服务端通过 id: 行下发），
-        # 这里演示用 timestamp 模拟；生产里直接读 SSE 的 Last-Event-ID。
-        if state.get('completed'):
-            break
-
-    # 第 4 步：查询 run 终态。SSE 流结束和服务端把 run 标记为 completed/failed 之间有一个小窗口，
-    # 所以做几次轮询直到拿到终态。
-    for _ in range(20):
-        _, _, status_obj = http_request('GET', f'{base_url}/v1/runs/{run_id}')
-        if status_obj['status'] in ('completed', 'failed', 'cancelled'):
-            break
-        time.sleep(0.3)
-    print(f'final run state: status={status_obj["status"]} finished_at={status_obj["finished_at"]}')
-
-
-def demo_runs_one_shot_stream(base_url: str) -> None:
-    """一段式：POST stream=true 直接拿 SSE 流。最常用、最低延迟。"""
-    print('\n--- /v1/runs (一段式：POST stream=true) ---')
-    _, headers, resp = http_request(
-        'POST', f'{base_url}/v1/runs',
-        body={'input': '用一句话介绍 README.md 是干什么的（用 file_read 读一下）', 'stream': True},
-        stream=True,
-    )
-    print(f'session: {headers.get("x-session-id")}, run: {headers.get("x-run-id")}')
-    state: dict = {}
-    for event_name, data in iter_sse(resp):
-        if data == '[DONE]':
-            break
-        event = json.loads(data)
-        render_run_event(event, state)
-        if state.get('completed'):
-            break
-
-
-def demo_runs_multi_turn(base_url: str) -> None:
-    """多轮：复用同一个 session_id，每轮一个 run。Agent 看得到上轮历史。"""
-    print('\n--- /v1/runs 多轮（同 session_id） ---')
-    _, _, sess = http_request('POST', f'{base_url}/v1/sessions', body={})
-    sid = sess['session_id']
-
-    def run_once(text: str, label: str) -> None:
-        print(f'\n[{label}] input={text!r}')
-        _, _, resp = http_request(
-            'POST', f'{base_url}/v1/runs',
-            body={'session_id': sid, 'input': text, 'stream': True},
-            stream=True,
-        )
-        for _, data in iter_sse(resp):
-            if data == '[DONE]':
+            render_response_event(event_name, payload, state)
+            if state.get('terminal'):
                 break
-            event = json.loads(data)
-            if event.get('event') == 'message.delta':
-                sys.stdout.write(event.get('delta', ''))
-                sys.stdout.flush()
-            elif event.get('event') == 'run.completed':
-                print(f'\n[{label}] usage={event.get("usage")}')
-                break
-            elif event.get('event') == 'run.failed':
-                print(f'\n[{label}] FAILED {event.get("error")}')
-                break
+        return state
 
-    def run_with_retry(text: str, label: str) -> None:
-        # session 上一轮 SSE 刚结束时可能还没 idle，409 后退避重试
+    def with_retry(req_body: dict, label: str) -> dict:
+        # 上一轮 SSE 刚结束时，session 可能还没 idle；遇到 409 退避
         for attempt in range(6):
             try:
-                run_once(text, label)
-                return
+                return stream_one(req_body, label)
             except APIError as e:
                 if e.status == 409:
                     time.sleep(0.5)
                     continue
                 raise
+        return {}
 
-    run_with_retry('记住一个数字：42。然后只回复"好的"。', 'turn-1')
-    run_with_retry('我刚才让你记的数字是什么？只说数字。', 'turn-2')
+    with_retry(
+        {'session_id': sid, 'model': model, 'input': '记住一个数字：7。然后回复"好的"', 'stream': True},
+        'turn-1',
+    )
+    with_retry(
+        {'session_id': sid, 'model': model, 'input': '我刚才让你记的数字是什么？', 'stream': True},
+        'turn-2',
+    )
 
 
-def demo_runs_ask_user(base_url: str) -> None:
-    """演示 ask_user 中断 + 用户补充输入恢复。
-
-    关键客户端模式：收到 `ask_user` 事件不要立刻断开。继续读到 `run.completed`，
-    此时 server 才把 session 状态正式切到 `waiting_user`，下一轮 POST 才能稳定走
-    "answer 当前 run" 而不是 "新建 run"。如果你提前断开，server 端 session 可能还在
-    `running`，紧接着发回答会触发 409 session_busy。
-    """
-    print('\n--- /v1/runs ask_user 中断/恢复 ---')
+def demo_responses_ask_user(base_url: str, model: str) -> None:
+    """演示 HITL：requires_action → 客户端用 previous_response_id + function_call_output 续传。"""
+    print('--- /v1/responses ask_user 中断/恢复 ---')
     _, _, sess = http_request('POST', f'{base_url}/v1/sessions', body={})
     sid = sess['session_id']
 
-    def consume(input_text: str, label: str) -> dict:
+    def consume(req_body: dict, label: str) -> dict:
+        print(f'\n[{label}] body: {req_body}')
         _, _, resp = http_request(
-            'POST', f'{base_url}/v1/runs',
-            body={'session_id': sid, 'input': input_text, 'stream': True},
-            stream=True,
+            'POST', f'{base_url}/v1/responses', body=req_body, stream=True,
         )
         state: dict = {}
-        print(f'[{label}] input={input_text!r}')
-        for _, data in iter_sse(resp):
+        for event_name, data in iter_sse(resp):
             if data == '[DONE]':
                 break
-            event = json.loads(data)
-            render_run_event(event, state)
-            # 重要：即使收到 ask_user，也继续读到 run.completed 再退出循环
-            if state.get('completed'):
+            payload = json.loads(data)
+            render_response_event(event_name, payload, state)
+            if state.get('terminal'):
                 break
         return state
 
-    # 这条 prompt 故意制造歧义 + 显式要求用 ask_user 工具问清楚，可靠触发中断。
     prompt = (
         '请帮我新建一个文本文件，文件名我没告诉你。'
         '在确定文件名之前先用 ask_user 工具问我"想叫什么名字"，'
         '拿到回答后再继续写入。'
     )
-    state = consume(prompt, 'turn-1')
-    if state.get('ask_user'):
-        question = state['ask_user'].get('question', '')
-        print(f'\n[client] Agent 问了："{question}"，向同一个 session 发回答')
-        consume('就叫 hello.txt 吧，内容写 hello world', 'turn-1-answer')
-    else:
-        print('[client] Agent 这次没问问题，正常结束')
-
-
-def demo_runs_stop(base_url: str) -> None:
-    """演示 stop：发起一个长 run 立刻 stop 掉。"""
-    print('\n--- /v1/runs stop ---')
-    _, _, run = http_request(
-        'POST', f'{base_url}/v1/runs',
-        body={'input': '请详细分析一下 backend/server.py 的所有路由，每条都给出文件读出的代码片段'},
+    state = consume(
+        {'session_id': sid, 'model': model, 'input': prompt, 'stream': True},
+        'turn-1',
     )
-    run_id = run['run_id']
-    print(f'started run_id={run_id}, sleeping 1s then stop')
-    time.sleep(1)
-    _, _, stop_resp = http_request('POST', f'{base_url}/v1/runs/{run_id}/stop')
-    print(f'stop response: {stop_resp}')
-    # 终态等待几秒
-    for _ in range(10):
-        _, _, st = http_request('GET', f'{base_url}/v1/runs/{run_id}')
-        if st['status'] in ('completed', 'failed', 'cancelled'):
-            print(f'final status: {st["status"]}')
-            return
-        time.sleep(0.5)
-    print('still running after 5s, gave up checking')
+
+    pending = state.get('pending_hitl')
+    if not pending:
+        print('[client] Agent 这次没问问题，正常结束')
+        return
+
+    print(f'\n[client] Agent 问："{pending["question"]}" → 续传答复')
+    consume(
+        {
+            'previous_response_id': pending['response_id'],
+            'input': [{
+                'type': 'function_call_output',
+                'call_id': pending['call_id'],
+                'output': '就叫 hello.txt 吧，内容写 hello world',
+            }],
+            'stream': True,
+        },
+        'turn-1-answer',
+    )
 
 
-# ──────────────────────────── 4. Sessions API ──────────────────────────── #
+def demo_responses_cancel(base_url: str, model: str) -> None:
+    """演示 cancel：发起一个长 response，立即调用 /v1/sessions/{id}/cancel。"""
+    print('--- /v1/responses cancel ---')
+    _, _, sess = http_request('POST', f'{base_url}/v1/sessions', body={})
+    sid = sess['session_id']
+
+    # 1) 起一个流；用 thread 跑，主线程 sleep 后 cancel
+    import threading
+
+    def runner():
+        try:
+            _, _, resp = http_request(
+                'POST', f'{base_url}/v1/responses',
+                body={
+                    'session_id': sid, 'model': model,
+                    'input': '请详细分析一下 backend/server.py 的所有路由，每条都给出文件读出的代码片段',
+                    'stream': True,
+                },
+                stream=True,
+            )
+            for event_name, data in iter_sse(resp):
+                if data == '[DONE]':
+                    break
+                payload = json.loads(data)
+                render_response_event(event_name, payload, {})
+        except APIError as e:
+            print(f'[runner] APIError {e}')
+
+    t = threading.Thread(target=runner, daemon=True)
+    t.start()
+    time.sleep(1.5)
+    print('\n[client] firing cancel')
+    _, _, _ = http_request('POST', f'{base_url}/v1/sessions/{sid}/cancel')
+    t.join(timeout=10)
+    _, _, sess_now = http_request('GET', f'{base_url}/v1/sessions/{sid}')
+    print(f'[client] session status after cancel: {sess_now.get("status")}')
+
+
+# ──────────────────────────── 3. Sessions API ──────────────────────────── #
 
 def demo_sessions(base_url: str) -> None:
     print('--- /v1/sessions ---')
@@ -482,7 +394,7 @@ def demo_sessions(base_url: str) -> None:
     print(f'list count: {len(listed["data"])}')
 
     _, _, got = http_request('GET', f'{base_url}/v1/sessions/{sid}')
-    print(f'get: status={got["status"]} active_run_id={got["active_run_id"]!r}')
+    print(f'get: status={got["status"]} pending_hitl={got.get("pending_hitl")!r}')
 
     _, _, deleted = http_request('DELETE', f'{base_url}/v1/sessions/{sid}')
     print(f'deleted: {deleted}')
@@ -491,17 +403,14 @@ def demo_sessions(base_url: str) -> None:
 # ──────────────────────────────── main ──────────────────────────────── #
 
 DEMOS: dict[str, Callable[..., None]] = {
-    'models':      lambda url, model: _show_models(url),
-    'chat':        lambda url, model: demo_chat_nonstream(url, model),
-    'chat-stream': lambda url, model: demo_chat_stream(url, model),
-    'responses':   lambda url, model: demo_responses_nonstream(url, model),
-    'responses-stream': lambda url, model: demo_responses_stream_multi_turn(url, model),
-    'runs':            lambda url, model: demo_runs_two_stage(url),
-    'runs-stream':     lambda url, model: demo_runs_one_shot_stream(url),
-    'runs-multi-turn': lambda url, model: demo_runs_multi_turn(url),
-    'runs-ask-user':   lambda url, model: demo_runs_ask_user(url),
-    'runs-stop':       lambda url, model: demo_runs_stop(url),
-    'sessions':        lambda url, model: demo_sessions(url),
+    'models':              lambda url, model: _show_models(url),
+    'chat':                lambda url, model: demo_chat_nonstream(url, model),
+    'chat-stream':         lambda url, model: demo_chat_stream(url, model),
+    'responses':           lambda url, model: demo_responses_nonstream(url, model),
+    'responses-stream':    lambda url, model: demo_responses_stream_multi_turn(url, model),
+    'responses-ask-user':  lambda url, model: demo_responses_ask_user(url, model),
+    'responses-cancel':    lambda url, model: demo_responses_cancel(url, model),
+    'sessions':            lambda url, model: demo_sessions(url),
 }
 
 
@@ -514,7 +423,7 @@ def _show_models(base_url: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description='MiniAgent API 调用示例')
-    parser.add_argument('--base-url', default='http://127.0.0.1:8765')
+    parser.add_argument('--base-url', default='http://127.0.0.1:8000')
     parser.add_argument('--model', default='qwen-plus')
     parser.add_argument('--only', choices=list(DEMOS), help='只跑指定的一节')
     args = parser.parse_args()
@@ -523,8 +432,10 @@ def main():
         DEMOS[args.only](args.base_url, args.model)
         return
 
-    # 默认按顺序跑一遍
-    for name in ['models', 'chat', 'chat-stream', 'responses', 'runs-stream', 'runs', 'runs-ask-user', 'sessions']:
+    for name in [
+        'models', 'chat', 'chat-stream', 'responses',
+        'responses-stream', 'responses-ask-user', 'sessions',
+    ]:
         print()
         print('=' * 70)
         print(f'  {name}')
