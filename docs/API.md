@@ -1,6 +1,6 @@
 # PAI-RAG API
 
-本文面向业务调用方。推荐使用 `/v1/responses`，它返回 SSE 流，既能拿最终回答，也能拿中间思考、工具调用和工具结果。
+推荐使用 `/v1/responses`，它返回 SSE 流，既能拿最终回答，也能拿中间思考、工具调用和工具结果。
 
 ## 基础约定
 
@@ -9,8 +9,8 @@
 - `/v1/responses` 只支持流式：必须传 `"stream": true`
 - 最终成功终态：`response.completed`
 - 失败终态：`response.failed`
-- 需要人工续答：`response.requires_action`
-- 应用层本身不解析 `Authorization`；如有鉴权，由前置网关处理
+- 需要人工续答：`response.requires_action`（已实现，暂不需要）
+- EAS服务需要鉴权，请在header中传入 `Authorization`
 
 ## 最小调用
 
@@ -56,16 +56,90 @@ Aliyun 凭证格式：
 
 如果工具执行时发现请求传入的 AK/SK 无效，Agent 会停止任务，并在最终结果中说明 AK/SK 无效；不会改用机器默认凭证继续执行。
 
-## 只拿最终结果
+## 多轮对话
 
-如果业务方只关心最终回答：
+多轮对话仍然是流式调用。推荐使用 `conversation` 作为业务会话 ID；同一个 `conversation` 会自动接上上一轮上下文。多轮依赖服务端保存上一轮 response，请保持 `store=true`，也就是默认值。
 
-1. 忽略中间事件。
-2. 等待 `event: response.completed`。
-3. 从 `data.output` 中只读取 `type="message"` 的 `output_text.text`。
-4. 忽略 `type="reasoning"`，它只是过程思考。
+第一轮：
 
-Python 流式示例：按 SSE 读取，但只保存最终 `response.completed`。
+```bash
+curl --no-buffer --location "$BASE_URL/v1/responses" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "conversation": "biz-conv-001",
+    "input": "记住：订单号是 A1001",
+    "stream": true
+  }'
+```
+
+第二轮：
+
+```bash
+curl --no-buffer --location "$BASE_URL/v1/responses" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "conversation": "biz-conv-001",
+    "input": "我刚才说的订单号是什么？",
+    "stream": true
+  }'
+```
+
+也可以不用 `conversation`，而是在上一轮 `response.completed` 的 `id` 里拿到 `resp_xxx`，下一轮传 `previous_response_id`：
+
+```bash
+curl --no-buffer --location "$BASE_URL/v1/responses" \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "previous_response_id": "resp_xxx",
+    "input": "继续上一个问题，再补充说明风险点",
+    "stream": true
+  }'
+```
+
+两种方式二选一即可。客户端已有自己的会话 ID 时，建议用 `conversation`。若没有，可以直接用`previous_response_id`。
+
+## 读取 SSE 结果
+
+`/v1/responses` 只有流式返回。客户端读取 SSE 时，每个业务事件由两部分组成：
+
+```text
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta":"文件","sequence_number":8}
+```
+
+常用字段：
+
+| 字段 | 出现位置 | 说明 |
+| --- | --- | --- |
+| `event` | SSE 行 | 事件名，例如 `response.output_text.delta`。 |
+| `data.type` | JSON | 通常等于 `event`，便于只解析 JSON 的客户端判断事件类型。 |
+| `data.sequence_number` | JSON | 事件序号，按服务端发送顺序递增。 |
+| `data.response_id` / `data.id` | JSON | response ID。`response.completed.id` 可用于下一轮 `previous_response_id`。 |
+| `data.delta` | JSON | 增量文本，常见于正文、思考、工具参数流式事件。 |
+| `data.text` | JSON | 某段文本的完整内容，常见于 `response.output_text.done`。 |
+| `data.item` | JSON | 输出项，可能是 `message`、`reasoning`、`function_call`、`function_call_output`。 |
+| `data.output` | JSON | 终态完整输出数组，只在 `response.completed`、`response.requires_action` 等终态事件里读取。 |
+| `data.error` | JSON | 失败信息，常见于 `response.failed`。 |
+
+按需求读取即可：
+
+| 业务需求 | 读取方式 |
+| --- | --- |
+| 只拿最终结果 | 忽略中间事件，等待 `response.completed`，从 `data.output` 提取最终正文。 |
+| 实时展示正文 | 拼接所有 `response.output_text.delta` 的 `delta`。 |
+| 展示思考过程 | 按 `step_id` 拼接 `response.reasoning_text.delta` 的 `delta`。 |
+| 展示工具调用 | 读取 `response.output_item.added/done`，当 `item.type="function_call"` 时展示 `item.name`、`item.arguments`。 |
+| 展示工具结果 | 读取 `response.output_item.added/done`，当 `item.type="function_call_output"` 时展示 `item.output`。 |
+| 判断任务结束 | 看 `response.completed`、`response.failed`、`response.requires_action` 或 `response.incomplete`。不要把 `response.output_text.done` 当作整次请求结束。 |
+
+最终正文提取规则：
+
+1. 优先取 `message.metadata.pai_final_report=true` 的 `output_text`。
+2. 如果有工具结果，优先取最后一个 `function_call_output` 后面的 `message`。
+3. 否则取普通 `message`。
+4. 忽略 `reasoning`，它是过程思考，不是最终正文。
+
+Python 流式示例：
 
 ```python
 import json
@@ -85,11 +159,11 @@ def final_text(response):
     for i, item in enumerate(output):
         if item.get("type") != "message":
             continue
-        text_parts = []
-        for block in item.get("content", []):
-            if block.get("type") in ("output_text", "text"):
-                text_parts.append(block.get("text", ""))
-        text = "".join(text_parts)
+        text = "".join(
+            block.get("text", "")
+            for block in item.get("content", [])
+            if block.get("type") in ("output_text", "text")
+        )
         if not text:
             continue
         if (item.get("metadata") or {}).get("pai_final_report"):
@@ -102,63 +176,8 @@ def final_text(response):
     return "".join(reports or after_tools or fallback)
 
 
+answer, reasoning, tools = [], {}, []
 completed = None
-with requests.post(
-    f"{BASE_URL}/v1/responses",
-    json={"input": "请帮我创建一个文件，a.txt", "stream": True},
-    stream=True,
-    timeout=300,
-) as resp:
-    resp.raise_for_status()
-    event = ""
-    for line in resp.iter_lines(decode_unicode=True):
-        if not line or line.startswith(":"):
-            continue
-        if line.startswith("event:"):
-            event = line[len("event:"):].strip()
-            continue
-        if not line.startswith("data:"):
-            continue
-
-        data = line[len("data:"):].strip()
-        if data == "[DONE]":
-            break
-
-        payload = json.loads(data)
-        if event == "response.failed":
-            raise RuntimeError(payload.get("error", {}).get("message", "run failed"))
-        if event == "response.requires_action":
-            raise RuntimeError("requires_action")
-        if event == "response.completed":
-            completed = payload
-
-print(final_text(completed or {}))
-```
-
-## 拿中间过程和最终结果
-
-如果业务方要展示过程，按事件分类处理即可：
-
-| 目标 | 读取事件 | 处理方式 |
-| --- | --- | --- |
-| 实时最终回答 | `response.output_text.delta` | 拼接 `delta`。 |
-| 过程思考 | `response.reasoning_text.delta` | 按 `step_id` 拼接 `delta`。 |
-| 工具调用 | `response.output_item.added/done` 且 `item.type=function_call` | 展示 `item.name` 和 `item.arguments`。 |
-| 工具结果 | `response.output_item.added/done` 且 `item.type=function_call_output` | 展示 `item.output`。 |
-| 完整最终结果 | `response.completed` | 从 `output` 提取 `message/output_text`。 |
-
-Python 流式示例：边读 SSE，边更新正文、过程和工具信息。
-
-```python
-import json
-import requests
-
-BASE_URL = "http://127.0.0.1:8683"
-
-answer = []
-steps = {}
-tools = []
-final_response = None
 
 with requests.post(
     f"{BASE_URL}/v1/responses",
@@ -177,41 +196,32 @@ with requests.post(
         if not line.startswith("data:"):
             continue
 
-        data = line[len("data:"):].strip()
-        if data == "[DONE]":
+        raw = line[len("data:"):].strip()
+        if raw == "[DONE]":
             break
-
-        payload = json.loads(data)
+        data = json.loads(raw)
 
         if event == "response.output_text.delta":
-            text = payload.get("delta", "")
-            answer.append(text)
-            print(text, end="", flush=True)
-
+            answer.append(data.get("delta", ""))
         elif event == "response.reasoning_text.delta":
-            step_id = payload.get("step_id", "")
-            steps[step_id] = steps.get(step_id, "") + payload.get("delta", "")
-
+            step_id = data.get("step_id", "")
+            reasoning[step_id] = reasoning.get(step_id, "") + data.get("delta", "")
         elif event in ("response.output_item.added", "response.output_item.done"):
-            item = payload.get("item") or {}
+            item = data.get("item") or {}
             if item.get("type") in ("function_call", "function_call_output"):
                 tools.append(item)
-
         elif event == "response.failed":
-            raise RuntimeError(payload.get("error", {}).get("message", "run failed"))
-
+            raise RuntimeError((data.get("error") or {}).get("message", "run failed"))
         elif event == "response.requires_action":
             raise RuntimeError("requires_action")
-
         elif event == "response.completed":
-            final_response = payload
+            completed = data
 
-print("\n\n最终正文：", "".join(answer))
-print("过程步骤数：", len(steps))
+print("实时正文：", "".join(answer))
+print("最终正文：", final_text(completed or {}))
+print("思考步骤数：", len(reasoning))
 print("工具事件数：", len(tools))
 ```
-
-实时展示正文用 `"".join(answer)`；最终入库建议仍以 `response.completed.output` 为准。
 
 ## SSE 事件
 
@@ -345,7 +355,7 @@ curl -X POST "$BASE_URL/v1/responses/resp_xxx/cancel"
 {"id": "resp_xxx", "object": "response.deleted", "deleted": true}
 ```
 
-## 错误
+## 错误码
 
 ### HTTP JSON 错误
 
