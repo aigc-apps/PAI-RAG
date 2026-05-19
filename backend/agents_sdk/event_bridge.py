@@ -105,22 +105,15 @@ def _is_placeholder_fc_id(value: str) -> bool:
 
 
 # Internal protocol tags emitted by the model that must NOT leak to clients.
-# Mirrors ``_PRIVATE_BLOCK_RE`` and ``_SUMMARY_BLOCK_RE`` in
-# ``backend/agents_sdk/runner.py`` but applied at the wire layer so the
-# client-facing SSE stream and final ``response.output`` text are clean.
-_HIDDEN_TAG_NAMES: tuple[str, ...] = (
-    'summary',
-    'thinking',
-    'checking',
-    'taking',
-    'working',
-    'clinical-thinking',
-    'clinical_thinking',
-    'taking-action',
-    'taking_action',
-    'skill-context',
-    'skill_context',
-)
+# Only ``<summary>`` is stripped at the wire layer — it is pure metadata used
+# by the runner for history-summarisation retries and has no user-facing
+# meaning. The reasoning-style tags (``<thinking>``, ``<checking>``,
+# ``<taking>``, ``<working>``, ``<clinical-thinking>``, ``<taking-action>``,
+# ``<skill-context>``) are intentionally passed through: the React frontend's
+# ``consumeTextDelta`` parser converts them into ``thought_delta`` updates
+# that render as the "Thinking…" panel. Stripping them here would leave that
+# panel empty.
+_HIDDEN_TAG_NAMES: tuple[str, ...] = ('summary',)
 # Worst case lookahead: longest "<tagname" + 1 char of attr-or-close lookahead.
 _HIDDEN_TAG_LOOKAHEAD = max(len(t) for t in _HIDDEN_TAG_NAMES) + 2
 
