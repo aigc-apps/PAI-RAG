@@ -166,6 +166,18 @@ grep -Eq '"finish_reason":[[:space:]]*"stop"'           "$OUT" || { echo "Last 3
 grep -q 'data: \[DONE\]'                                "$OUT" || fail "no [DONE] sentinel"
 ok "chat completions streamed and completed"
 
+# ── test 5: deleted compatibility endpoint ────────────────────────────────
+echo
+echo "── test 5: removed /v1/runs returns 404 ──"
+
+OUT="$TMP_DIR/runs_removed.json"
+STATUS="$(curl -sS -o "$OUT" -w '%{http_code}' -X POST "http://127.0.0.1:$PORT/v1/runs" \
+  -H 'Content-Type: application/json' \
+  -d '{"input":"ping"}' \
+  --max-time 60 || true)"
+[[ "$STATUS" == "404" ]] || { cat "$OUT"; fail "/v1/runs expected 404, got $STATUS"; }
+ok "legacy /v1/runs endpoint is removed"
+
 echo
 echo "All smoke tests passed. AGENT_RUNTIME=sdk is live-verified."
 echo "Logs: $TMP_DIR (auto-removed unless --keep-server was passed)."

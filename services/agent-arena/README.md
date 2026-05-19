@@ -1,15 +1,15 @@
 # AgentArena
 
-PAI-RAG 的独立 Agent 竞技场子服务：把同一条输入同时发送给两个 OpenAI-compatible Agent API，并并排展示输出、耗时和错误。
+PAI-RAG 的独立 Agent 竞技场子服务：把同一条输入同时发送给两个 Agent API，并并排展示输出、耗时和错误。
 
 ## 功能
 
 - 后端隐藏两个 Agent 的 API key。
-- 支持两个 `/v1/chat/completions` endpoint 并发调用。
+- 默认使用 `/v1/responses` 并发调用 PAI-RAG Agent。
 - 前端基于 React、Tailwind 和 shadcn/ui 风格组件。
 - 支持 system prompt、temperature、max tokens。
 - 一个 Agent 失败时，另一个 Agent 的结果仍会展示。
-- 可选展示外部 Hermes 风格 Agent 的 `/v1/runs` 中间过程事件（仅用于消费外部 Agent；PAI-RAG 主服务已不暴露 `/v1/runs`，对接 PAI-RAG 时请使用 `chat` 模式）。
+- 可选展示外部 Hermes 风格 Agent 的 `/v1/runs` 中间过程事件（仅用于消费外部 Agent；PAI-RAG 主服务已不暴露 `/v1/runs`，对接 PAI-RAG 时请使用 `responses` 模式）。
 - 可配置 OpenAI Judge 模型，从答案和公开过程事件两个层面对结果打分。
 - 自动保存每次 PK 和每次 Judge 评估到 SQLite，并提供历史对比页面。
 
@@ -28,13 +28,13 @@ AGENT_A_NAME=Hermes Agent
 AGENT_A_BASE_URL=http://127.0.0.1:8642
 AGENT_A_API_KEY=your-agent-a-key
 AGENT_A_MODEL=hermes-agent
-AGENT_A_TRACE_MODE=runs
+AGENT_A_TRACE_MODE=responses
 
 AGENT_B_NAME=Another Agent
 AGENT_B_BASE_URL=http://127.0.0.1:8000
 AGENT_B_API_KEY=your-agent-b-key
 AGENT_B_MODEL=mini-agent
-AGENT_B_TRACE_MODE=chat
+AGENT_B_TRACE_MODE=responses
 
 JUDGE_BASE_URL=https://api.openai.com/v1
 JUDGE_OPENAI_API_KEY=your-openai-key
@@ -54,7 +54,7 @@ Authorization: Bearer <ARENA_API_KEY>
 
 - `http://127.0.0.1:8642`
 - `http://127.0.0.1:8642/v1`
-- `http://127.0.0.1:8642/v1/chat/completions`
+- `http://127.0.0.1:8642/v1/responses`
 
 如果某个 Agent 不需要 key，对应的 `AGENT_*_API_KEY` 留空即可。
 
@@ -63,10 +63,18 @@ Authorization: Bearer <ARENA_API_KEY>
 默认：
 
 ```bash
+AGENT_A_TRACE_MODE=responses
+```
+
+这会调用 `/v1/responses` 并展示 Responses SSE 中的公开过程事件。
+
+如果对接的是外部 OpenAI-compatible Chat Agent，可以显式开启：
+
+```bash
 AGENT_A_TRACE_MODE=chat
 ```
 
-这只调用 `/v1/chat/completions`，只能展示最终答案。
+这只调用外部 `/v1/chat/completions`，只能展示最终答案。
 
 如果对接的是外部 Hermes API Server 风格的 Agent（PAI-RAG 主服务不属于此类，已转向 OpenAI Responses 风格），可以开启：
 
@@ -94,7 +102,7 @@ GET  /v1/runs/{run_id}/events
 
 ### Judge 裁判员
 
-Judge 使用 OpenAI-compatible `/v1/chat/completions`：
+Judge 仍使用外部 OpenAI-compatible `/v1/chat/completions`：
 
 ```bash
 JUDGE_BASE_URL=https://api.openai.com/v1

@@ -3,8 +3,6 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
-
 import backend.server as server
 from backend.skills_inventory import skills_inventory
 
@@ -72,10 +70,7 @@ class SkillsInventoryTests(unittest.TestCase):
                 server.ROOT = root
                 server.handler_memory_scope = lambda user_id: SimpleNamespace(root=memory_root)
 
-                response = TestClient(server.app).get("/v1/skills")
-
-                self.assertEqual(response.status_code, 200)
-                payload = response.json()
+                payload = server.skills()
                 self.assertEqual(payload["official"][0]["name"], "official-one")
                 self.assertEqual(
                     {item["source"] for item in payload["evolved"]},

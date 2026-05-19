@@ -1,11 +1,10 @@
-"""Map SDK stream events → OpenAI wire chunks (Responses + Chat) + audit rows.
+"""Map SDK stream events to public API wire chunks and audit rows.
 
-Three output channels per event:
+Output channels per event:
 
 - :func:`to_responses_chunk` — SSE payload for ``/v1/responses`` matching the
   existing wire format used by ``backend/server.py:953-1042``.
-- :func:`to_chat_chunk` — SSE payload for ``/v1/chat/completions``
-  (Phase 3).
+- Chat Completions helper chunks for the public ``/v1/chat/completions`` API.
 - :func:`to_audit` — sanitized internal event for ``audit_events``.
 """
 from __future__ import annotations
@@ -105,6 +104,139 @@ def _is_placeholder_fc_id(value: str) -> bool:
     return not value or bool(_PLACEHOLDER_FC_ID_RE.match(value))
 
 
+# Internal protocol tags emitted by the model that must NOT leak to clients.
+# Mirrors ``_PRIVATE_BLOCK_RE`` and ``_SUMMARY_BLOCK_RE`` in
+# ``backend/agents_sdk/runner.py`` but applied at the wire layer so the
+# client-facing SSE stream and final ``response.output`` text are clean.
+_HIDDEN_TAG_NAMES: tuple[str, ...] = (
+    'summary',
+    'thinking',
+    'checking',
+    'taking',
+    'working',
+    'clinical-thinking',
+    'clinical_thinking',
+    'taking-action',
+    'taking_action',
+    'skill-context',
+    'skill_context',
+)
+# Worst case lookahead: longest "<tagname" + 1 char of attr-or-close lookahead.
+_HIDDEN_TAG_LOOKAHEAD = max(len(t) for t in _HIDDEN_TAG_NAMES) + 2
+
+
+class StreamProtocolFilter:
+    """Stateful filter that drops ``<summary>...</summary>`` and similar
+    internal protocol blocks from streamed assistant text.
+
+    Tag boundaries can split across SSE deltas (``"<sum"`` / ``"mary>"``), so
+    the filter buffers ambiguous prefixes until it has enough lookahead to
+    decide whether a ``<`` opens a hidden tag or is just literal text.
+
+    Behavior:
+    - When inside a hidden tag, all bytes are dropped until the matching
+      ``</tag>`` is seen (case-insensitive).
+    - When not inside a hidden tag, text up to the next ``<`` is forwarded
+      immediately; the ``<`` itself is held until either it can be confirmed
+      as a hidden-tag opener (then dropped through the closing tag) or as
+      literal text (then forwarded).
+    - ``flush()`` drains any remaining buffer at end-of-message. An unclosed
+      hidden tag is dropped silently — better than leaking a half-tag.
+    """
+
+    __slots__ = ('_buffer', '_in_tag')
+
+    def __init__(self) -> None:
+        self._buffer: str = ''
+        self._in_tag: str | None = None
+
+    def feed(self, delta: str) -> str:
+        if not delta:
+            return ''
+        self._buffer += delta
+        out: list[str] = []
+        while self._buffer:
+            if self._in_tag is not None:
+                close = f'</{self._in_tag}>'
+                buf_lower = self._buffer.lower()
+                close_lower = close.lower()
+                idx = buf_lower.find(close_lower)
+                if idx < 0:
+                    # Closing tag not yet present. Retain the longest tail of
+                    # the buffer that could be the start of ``</tag>`` so the
+                    # split close-tag is recognized once the rest arrives.
+                    keep = 0
+                    max_keep = min(len(self._buffer), len(close) - 1)
+                    for k in range(max_keep, 0, -1):
+                        if buf_lower.endswith(close_lower[:k]):
+                            keep = k
+                            break
+                    self._buffer = self._buffer[len(self._buffer) - keep:] if keep else ''
+                    return ''.join(out)
+                self._buffer = self._buffer[idx + len(close):]
+                self._in_tag = None
+                continue
+            lt = self._buffer.find('<')
+            if lt < 0:
+                out.append(self._buffer)
+                self._buffer = ''
+                break
+            if lt > 0:
+                out.append(self._buffer[:lt])
+                self._buffer = self._buffer[lt:]
+            # Buffer now starts with '<'. Decide if it's a hidden tag.
+            matched_tag: str | None = None
+            for tag in _HIDDEN_TAG_NAMES:
+                opener = f'<{tag}'
+                if self._buffer.lower().startswith(opener.lower()):
+                    nxt = self._buffer[len(opener):len(opener) + 1]
+                    if nxt and nxt not in (' ', '>', '\t', '\n', '\r', '/'):
+                        # Looks like ``<thinking-extra>`` — not our tag.
+                        continue
+                    matched_tag = tag
+                    break
+            if matched_tag is not None:
+                close_open = self._buffer.find('>')
+                if close_open < 0:
+                    # Opening tag not yet complete — wait for more data.
+                    return ''.join(out)
+                self._in_tag = matched_tag
+                self._buffer = self._buffer[close_open + 1:]
+                continue
+            # '<' is not a confirmed hidden-tag opener. If the buffer is too
+            # short to rule one out, hold and wait for more bytes.
+            if len(self._buffer) < _HIDDEN_TAG_LOOKAHEAD:
+                possible = False
+                lower = self._buffer.lower()
+                for tag in _HIDDEN_TAG_NAMES:
+                    opener = f'<{tag}'
+                    if opener.lower().startswith(lower):
+                        possible = True
+                        break
+                if possible:
+                    return ''.join(out)
+            out.append('<')
+            self._buffer = self._buffer[1:]
+        return ''.join(out)
+
+    def flush(self) -> str:
+        if self._in_tag is not None:
+            self._buffer = ''
+            self._in_tag = None
+            return ''
+        out = self._buffer
+        self._buffer = ''
+        # If the leftover is a strict prefix of any hidden-tag opener
+        # (``<sum`` / ``<summary`` / ``<thinking``), we never received the
+        # rest. Drop conservatively so a half-tag doesn't leak.
+        lower = out.lower()
+        for tag in _HIDDEN_TAG_NAMES:
+            opener = f'<{tag}'.lower()
+            if lower and len(lower) <= len(opener) and opener.startswith(lower):
+                return ''
+        return out
+
+
 @dataclass
 class ResponsesStreamState:
     """Tracks output index + accumulated text across a single response stream.
@@ -152,6 +284,7 @@ class ResponsesStreamState:
     final_report_message_id: str | None = None
     final_report_args_text: str = ''
     final_report_streamed_text: str = ''
+    protocol_filter: StreamProtocolFilter = field(default_factory=StreamProtocolFilter)
 
 
 def _open_step_if_needed(state: ResponsesStreamState, *, response_id: str) -> list[dict]:
@@ -407,6 +540,13 @@ def _raw_to_responses(data: Any, state: ResponsesStreamState, *, response_id: st
         # treat that as an empty assistant turn.
         if not delta:
             return []
+        # Strip internal protocol blocks (``<summary>...</summary>`` etc.) at
+        # the wire layer so streaming clients never see meta-tags. The filter
+        # is stateful — partial tags split across deltas are buffered until
+        # they can be classified.
+        visible_delta = state.protocol_filter.feed(delta)
+        if not visible_delta:
+            return []
         chunks: list[dict] = []
         chunks.extend(_open_step_if_needed(state, response_id=response_id))
         if not state.message_started:
@@ -426,11 +566,11 @@ def _raw_to_responses(data: Any, state: ResponsesStreamState, *, response_id: st
                 'output_index': state.message_index,
                 'item': dict(state.output[state.message_index]),
             })
-        state.accumulated_text.append(delta)
+        state.accumulated_text.append(visible_delta)
         chunks.append({
             'type': 'response.output_text.delta',
             'response_id': response_id,
-            'delta': delta,
+            'delta': visible_delta,
             'output_index': state.message_index,
             'content_index': 0,
         })
@@ -642,6 +782,20 @@ def _item_to_responses(item: Any, name: str, state: ResponsesStreamState, *, res
         # signal for the assistant message. Mark it completed and close any
         # open reasoning step (text is the visible answer, not internal
         # thinking — the step ends here).
+        # Drain any bytes the protocol filter is still holding (e.g. a
+        # trailing literal '<' that hadn't been disambiguated against an
+        # incomplete hidden-tag prefix) before finalizing the message.
+        tail = state.protocol_filter.flush()
+        tail_chunks: list[dict] = []
+        if tail and state.message_started and state.message_index is not None:
+            state.accumulated_text.append(tail)
+            tail_chunks.append({
+                'type': 'response.output_text.delta',
+                'response_id': response_id,
+                'delta': tail,
+                'output_index': state.message_index,
+                'content_index': 0,
+            })
         if state.message_started and state.message_index is not None:
             done_text = ''.join(state.accumulated_text)
             # Defensive: if the run only emitted whitespace, remove the message
@@ -662,7 +816,8 @@ def _item_to_responses(item: Any, name: str, state: ResponsesStreamState, *, res
                 'role': 'assistant',
                 'content': [{'type': 'output_text', 'text': done_text}],
             }
-            chunks = [
+            chunks = list(tail_chunks)
+            chunks.extend([
                 {
                     'type': 'response.output_text.done',
                     'response_id': response_id,
@@ -676,7 +831,7 @@ def _item_to_responses(item: Any, name: str, state: ResponsesStreamState, *, res
                     'output_index': state.message_index,
                     'item': dict(state.output[state.message_index]),
                 },
-            ]
+            ])
             chunks.extend(_close_step_if_open(state, response_id=response_id))
             # Reset for any subsequent assistant message in the same response.
             state.message_started = False
@@ -747,11 +902,11 @@ def _tool_output_payload(item: Any) -> dict:
 
 
 def to_chat_chunk(sdk_event: Any, *, model: str, completion_id: str) -> dict | None:
-    """Translate one SDK ``StreamEvent`` to a Chat-Completions wire chunk.
+    """Translate one SDK ``StreamEvent`` to a Chat Completions stream chunk.
 
-    Only text deltas reach the chat client; mid-run tool calls (file_read,
-    code_run, …) are server-side. HITL pause is surfaced separately by the
-    HTTP layer using :func:`chat_pause_chunk` — see ``hitl.py``.
+    Only assistant text deltas are surfaced on the Chat wire. Server-side tool
+    calls stay internal; HITL pauses are surfaced separately with
+    ``chat_pause_chunk``.
     """
     import time as _t
     if _event_kind(sdk_event) != 'raw':
@@ -774,8 +929,10 @@ def to_chat_chunk(sdk_event: Any, *, model: str, completion_id: str) -> dict | N
 def chat_role_chunk(*, model: str, completion_id: str) -> dict:
     import time as _t
     return {
-        'id': completion_id, 'object': 'chat.completion.chunk',
-        'created': int(_t.time()), 'model': model,
+        'id': completion_id,
+        'object': 'chat.completion.chunk',
+        'created': int(_t.time()),
+        'model': model,
         'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}],
     }
 
@@ -783,8 +940,10 @@ def chat_role_chunk(*, model: str, completion_id: str) -> dict:
 def chat_done_chunk(*, model: str, completion_id: str, usage: dict | None = None) -> dict:
     import time as _t
     chunk = {
-        'id': completion_id, 'object': 'chat.completion.chunk',
-        'created': int(_t.time()), 'model': model,
+        'id': completion_id,
+        'object': 'chat.completion.chunk',
+        'created': int(_t.time()),
+        'model': model,
         'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}],
     }
     if usage:
@@ -793,16 +952,13 @@ def chat_done_chunk(*, model: str, completion_id: str, usage: dict | None = None
 
 
 def chat_pause_chunk(envelope: 'InterruptionEnvelope', *, model: str, completion_id: str) -> dict:
-    """Final assistant chunk that signals a HITL pause on the chat wire.
-
-    Uses ``finish_reason='tool_calls'`` with one reserved-name ``tool_call``;
-    clients echo the ``tool_call_id`` back in a ``role:'tool'`` message
-    (see :meth:`ResumePayload.from_chat_message`).
-    """
+    """Final assistant chunk that signals a HITL pause on the Chat wire."""
     import time as _t
     return {
-        'id': completion_id, 'object': 'chat.completion.chunk',
-        'created': int(_t.time()), 'model': model,
+        'id': completion_id,
+        'object': 'chat.completion.chunk',
+        'created': int(_t.time()),
+        'model': model,
         'choices': [{
             'index': 0,
             'delta': {'tool_calls': [envelope.serialize('chat')]},

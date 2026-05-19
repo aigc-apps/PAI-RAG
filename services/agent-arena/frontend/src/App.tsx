@@ -362,7 +362,7 @@ function TraceTimeline({ result, loading }: { result?: AgentResult; loading: boo
         <Activity className="size-4" />
         <AlertTitle>未提供过程事件</AlertTitle>
         <AlertDescription>
-          当前 Agent 使用 `/v1/chat/completions`，只能展示最终答案。若该 Agent 支持 Hermes 风格 `/v1/runs`，可在 `.env` 设置 `TRACE_MODE=runs`。
+          当前 Agent 未启用过程事件。PAI-RAG 可使用 `TRACE_MODE=responses`，外部 Hermes 风格 Agent 可使用 `TRACE_MODE=runs`。
         </AlertDescription>
       </Alert>
     )

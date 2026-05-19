@@ -206,7 +206,6 @@ class EventBridgeTests(unittest.TestCase):
         self.assertEqual(msg['content'][0]['text'], 'done')
 
     def test_to_chat_chunk_only_emits_text_deltas(self):
-        # text delta → chat.completion.chunk
         chunk = event_bridge.to_chat_chunk(
             _delta('hi'), model='qwen-test', completion_id='chatcmpl-1',
         )
@@ -214,7 +213,6 @@ class EventBridgeTests(unittest.TestCase):
         self.assertEqual(chunk['object'], 'chat.completion.chunk')
         self.assertEqual(chunk['choices'][0]['delta']['content'], 'hi')
         self.assertIsNone(chunk['choices'][0]['finish_reason'])
-        # Tool call items are server-side; chat client must not see them.
         self.assertIsNone(event_bridge.to_chat_chunk(
             _ItemEvent(_tool_call_item()),
             model='qwen-test', completion_id='chatcmpl-1',

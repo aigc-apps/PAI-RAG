@@ -1,19 +1,4 @@
-"""Map SDK interruptions ↔ OpenAI wire formats.
-
-Two wires:
-
-- **responses** (``/v1/responses``): native ``requires_action`` with a
-  ``function_call`` output item the client resolves by posting back a
-  ``function_call_output`` input item.
-- **chat** (``/v1/chat/completions``): synthetic ``tool_calls`` with a
-  reserved name; client resolves by appending a ``role:"tool"`` message.
-
-Reserved tool names on the chat wire:
-
-- ``__ask_user__`` — pause to ask the user a clarifying question.
-- ``__request_approval__`` — pause to get approval before calling a sensitive
-  tool (file_write, code_run, …) gated by ``needs_approval=True``.
-"""
+"""Map SDK interruptions to public OpenAI wire formats."""
 from __future__ import annotations
 
 import json
@@ -65,7 +50,7 @@ class InterruptionEnvelope:
 
 @dataclass
 class ResumePayload:
-    """Parsed resume input from either wire."""
+    """Parsed HITL resume input from Responses or Chat Completions."""
     call_id: str
     answer: str
     approve: bool  # always True for ask_user; can be False for explicit reject

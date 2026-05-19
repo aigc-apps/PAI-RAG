@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """Smoke test deployed MiniAgent HTTP APIs.
 
-This script covers the two public API families:
-
-1. /v1/chat/completions
-2. /v1/responses
+This script covers the public /v1/responses and /v1/chat/completions APIs.
 
 Example:
     python scripts/api_smoke.py
@@ -97,13 +94,6 @@ def parse_sse_data(event):
         return raw
 
 
-def chat_text(payload):
-    try:
-        return payload["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
-        return ""
-
-
 def response_text(payload):
     parts = []
     for item in payload.get("output") or []:
@@ -152,6 +142,19 @@ def run_chat_completions(args, headers):
     answer = "".join(parts)
     print("answer:", answer or (compact_json(final) if final else "(no content)"))
 
+    status, _resp_headers, payload = request_json(
+        args.base_url, "POST", "/v1/chat/completions",
+        payload={
+            "messages": [{"role": "user", "content": args.query}],
+            "stream": False,
+            **({"model": args.model} if args.model else {}),
+        },
+        headers=headers,
+        timeout=args.timeout,
+    )
+    require_ok("/v1/chat/completions non-stream", status, payload)
+    print("non_stream_answer:", payload.get("choices", [{}])[0].get("message", {}).get("content", "") or "(no content)")
+
 
 def _stream_responses(args, headers, payload):
     """Drive /v1/responses SSE; return (response_id, full_text, completed_payload)."""
@@ -182,6 +185,8 @@ def _stream_responses(args, headers, payload):
 def run_responses(args, headers):
     print("\n== /v1/responses ==")
     payload = {"input": args.query, "stream": True}
+    if args.conversation:
+        payload["conversation"] = args.conversation
     if args.model:
         payload["model"] = args.model
     response_id, answer, completed, event_count = _stream_responses(args, headers, payload)
@@ -209,6 +214,19 @@ def run_responses(args, headers):
         print("follow_up_answer:", follow_answer or "(no content)")
 
 
+def run_deleted_compat_checks(args, headers):
+    print("\n== deleted compatibility endpoints ==")
+    status, _resp_headers, payload = request_json(
+        args.base_url, "POST", "/v1/runs",
+        payload={"input": "ping"},
+        headers=headers,
+        timeout=args.timeout,
+    )
+    if status != 404:
+        raise RuntimeError(f"/v1/runs expected 404, got HTTP {status} {compact_json(payload)}")
+    print("/v1/runs: 404")
+
+
 def build_headers(args):
     headers = {}
     if args.auth:
@@ -233,27 +251,21 @@ def main(argv=None):
         default=None,
         help="Model name; omit to let the backend use its configured default (e.g. qwen-plus locally, pairag-agent via gateway)",
     )
-    parser.add_argument("--query", default=DEFAULT_QUERY, help="Sample query for Chat Completions and Responses")
+    parser.add_argument("--query", default=DEFAULT_QUERY, help="Sample query for Responses")
+    parser.add_argument("--conversation", default="", help="Optional Responses conversation id for multi-turn state")
     parser.add_argument("--auth", default="", help="Authorization header value, for example 'Bearer xxx'")
     parser.add_argument("--header", action="append", help="Extra header, format: 'Name: value'. Can be repeated.")
     parser.add_argument("--timeout", type=int, default=300, help="HTTP timeout seconds")
     parser.add_argument("--multi-turn", action="store_true", help="Also test /v1/responses previous_response_id follow-up")
-    parser.add_argument(
-        "--only",
-        choices=("all", "chat", "responses"),
-        default="all",
-        help="Run only one API family",
-    )
     args = parser.parse_args(argv)
 
     headers = build_headers(args)
     print("base_url:", args.base_url.rstrip("/"))
     print("model:", args.model or "(backend default)")
 
-    if args.only in ("all", "chat"):
-        run_chat_completions(args, headers)
-    if args.only in ("all", "responses"):
-        run_responses(args, headers)
+    run_chat_completions(args, headers)
+    run_responses(args, headers)
+    run_deleted_compat_checks(args, headers)
 
     print("\nOK: API smoke test completed")
 

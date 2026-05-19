@@ -1,6 +1,6 @@
 """End-to-end smoke test against a running PAI-RAG backend.
 
-Drives all four public surfaces to make sure the SDK runtime is actually
+Drives the public Responses and Chat Completions surfaces to make sure the SDK runtime is actually
 serving requests after the agent_loop → OpenAI Agents SDK rewrite:
 
 - ``/health`` + ``/health/detailed`` (verifies the SDK runner is selected)
@@ -166,7 +166,7 @@ class ApiSmokeTests(unittest.TestCase):
         # against a future regression that might silently re-enable a
         # buffered code path with stale semantics.
         status, _h, body = _request('POST', '/v1/responses', body={
-            'session_id': self.session_id,
+            'conversation': self.session_id,
             'input': 'hi',
             'stream': False,
         })
@@ -178,7 +178,7 @@ class ApiSmokeTests(unittest.TestCase):
         # Stream a response, then confirm the saved artifact is fetchable.
         # ``store=true`` is the default — no need to opt in.
         lines = _stream_lines('POST', '/v1/responses', body={
-            'session_id': self.session_id,
+            'conversation': self.session_id,
             'input': 'Reply with the single word: ok',
             'stream': True,
         })
@@ -195,7 +195,7 @@ class ApiSmokeTests(unittest.TestCase):
 
     def test_responses_stream(self):
         lines = _stream_lines('POST', '/v1/responses', body={
-            'session_id': self.session_id,
+            'conversation': self.session_id,
             'input': 'Reply with the single word: ok',
             'stream': True,
         })
@@ -217,13 +217,13 @@ class ApiSmokeTests(unittest.TestCase):
                 payload = json.loads(data)
                 self.assertEqual(payload.get('type'), ev)
 
-    def test_responses_session_id_chains_multi_turn(self):
-        # The React client uses this path for ordinary chat turns: it sends
-        # the same session_id and plain text input, without previous_response_id.
+    def test_responses_conversation_chains_multi_turn(self):
+        # The React client sends its session id as the Responses conversation
+        # id, without using the removed legacy session_id request field.
         for prompt in ('Reply with the word: alpha',
                        'Reply with the word: beta'):
             lines = _stream_lines('POST', '/v1/responses', body={
-                'session_id': self.session_id,
+                'conversation': self.session_id,
                 'input': prompt,
                 'stream': True,
             })
@@ -238,7 +238,7 @@ class ApiSmokeTests(unittest.TestCase):
         # continuation. It must start a new response rather than being
         # interpreted as HITL resume.
         lines = _stream_lines('POST', '/v1/responses', body={
-            'session_id': self.session_id,
+            'conversation': self.session_id,
             'input': 'Reply with the word: ok',
             'stream': True,
         })
@@ -267,13 +267,15 @@ class ApiSmokeTests(unittest.TestCase):
             'model': 'pairag-agent',
             'messages': [{'role': 'user', 'content': 'Reply with the word ok'}],
             'stream': True,
-        }, headers={'X-Session-Id': self.session_id})
-        # Last data line must be the OpenAI sentinel.
+        })
         self.assertEqual(lines[-1], 'data: [DONE]')
-        # At least one chunk should be a chat.completion.chunk.
         chunks = [json.loads(l[len('data: '):]) for l in lines
                   if l.startswith('data: ') and l != 'data: [DONE]']
         self.assertTrue(any(c.get('object') == 'chat.completion.chunk' for c in chunks))
+        self.assertTrue(any(
+            (c.get('choices') or [{}])[0].get('finish_reason') == 'stop'
+            for c in chunks
+        ), chunks)
 
     # ─── runs (deleted) ────────────────────────────────────────────────
 
@@ -300,7 +302,7 @@ class ApiSmokeTests(unittest.TestCase):
         # Set the session up with a completed turn so regenerate has
         # something to trim.
         lines = _stream_lines('POST', '/v1/responses', body={
-            'session_id': self.session_id,
+            'conversation': self.session_id,
             'input': 'Reply with the word: ok',
             'stream': True,
         })

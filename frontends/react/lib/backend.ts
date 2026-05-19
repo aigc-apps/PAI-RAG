@@ -17,18 +17,10 @@ export async function proxyToBackend(path: string, init: RequestInit = {}) {
 
   const headers = new Headers();
   const contentType = response.headers.get("content-type");
-  const sessionId = response.headers.get("X-Session-Id");
-  const runId = response.headers.get("X-Run-Id");
   const cacheControl = response.headers.get("cache-control");
   const buffering = response.headers.get("x-accel-buffering");
   if (contentType) {
     headers.set("content-type", contentType);
-  }
-  if (sessionId) {
-    headers.set("X-Session-Id", sessionId);
-  }
-  if (runId) {
-    headers.set("X-Run-Id", runId);
   }
   if (cacheControl) {
     headers.set("cache-control", cacheControl);

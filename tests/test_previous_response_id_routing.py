@@ -14,8 +14,9 @@ from session_store import SERVER_USER_ID, SessionStore
 
 
 class _Request:
-    def __init__(self, body):
+    def __init__(self, body, headers=None):
         self.body = body
+        self.headers = headers or {}
 
     async def json(self):
         return self.body
@@ -37,6 +38,13 @@ def _response(text):
 def _minimal_sse(**_kwargs):
     yield 'event: response.created\ndata: {"type":"response.created","id":"resp_new"}\n\n'
     yield 'event: response.completed\ndata: {"type":"response.completed","id":"resp_new","status":"completed"}\n\n'
+    yield 'data: [DONE]\n\n'
+
+
+async def _minimal_chat_sse(**_kwargs):
+    yield 'data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"qwen-test","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
+    yield 'data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"qwen-test","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}\n\n'
+    yield 'data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"qwen-test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
     yield 'data: [DONE]\n\n'
 
 
@@ -100,6 +108,39 @@ class PreviousResponseIdHttpRoutingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(fake.call_args.kwargs['allow_hitl'])
+
+    async def test_conversation_uses_existing_session_for_plain_turn(self):
+        self.store.save(
+            session_id='sess_frontend',
+            user_id=SERVER_USER_ID,
+            llm_history=[],
+            ui_messages=[],
+        )
+
+        with patch.object(server, '_sdk_response_stream', side_effect=_minimal_sse) as fake:
+            response = await server.create_response(_Request({
+                'conversation': 'sess_frontend',
+                'input': 'hello',
+                'stream': True,
+            }))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(fake.call_args.kwargs['session_id'], 'sess_frontend')
+        self.assertEqual(fake.call_args.kwargs['conversation'], 'sess_frontend')
+
+    async def test_legacy_responses_fields_are_rejected(self):
+        for field, value in (
+            ('session_id', 'sess_legacy'),
+            ('conversation_history', [{'role': 'user', 'content': 'old'}]),
+            ('messages', [{'role': 'user', 'content': 'old'}]),
+        ):
+            response = await server.create_response(_Request({
+                field: value,
+                'input': 'hello',
+                'stream': True,
+            }))
+            self.assertEqual(response.status_code, 400, field)
+            self.assertEqual(json.loads(response.body)['error']['code'], 'unsupported_legacy_field')
 
     async def test_resume_input_defaults_to_allow_hitl(self):
         self.run_state_store.upsert(
@@ -180,6 +221,26 @@ class PreviousResponseIdHttpRoutingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(json.loads(response.body)['error']['code'], 'invalid_resume')
+
+    async def test_chat_completions_non_stream_is_public_api(self):
+        with patch.object(server, '_sdk_chat_stream', side_effect=_minimal_chat_sse) as fake:
+            response = await server.chat_completions(_Request({
+                'messages': [{'role': 'user', 'content': 'hi'}],
+                'stream': False,
+            }))
+
+        self.assertEqual(response['object'], 'chat.completion')
+        self.assertEqual(response['choices'][0]['message']['content'], 'ok')
+        self.assertEqual(fake.call_args.kwargs['cwd'], None)
+
+    async def test_chat_completions_rejects_legacy_session_header(self):
+        response = await server.chat_completions(_Request({
+            'messages': [{'role': 'user', 'content': 'hi'}],
+            'stream': False,
+        }, headers={'x-session-id': 'legacy'}))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json.loads(response.body)['error']['code'], 'unsupported_legacy_header')
 
 
 class PreviousResponseIdStreamRoutingTests(unittest.IsolatedAsyncioTestCase):

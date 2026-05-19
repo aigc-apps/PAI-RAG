@@ -243,60 +243,6 @@ class LLMClient:
         except Exception:
             pass
 
-
-def make_llm_client(model_override=None, history_changed=None):
-    """One-stop factory for an LLMClient that's wired into the provider pool.
-
-    All four production construction sites (worker, agent_service, ACP server,
-    background memory review) used to inline the same six-arg ``LLMClient(...)``
-    call reading from ``settings`` + ``runtime_config``. Centralising here means
-    adding a new credential rule (e.g. per-region routing) is a one-place change
-    and the four call sites stay tiny.
-
-    ``model_override`` wins over ``runtime_config.get_active_model()`` for the
-    one chat session this client serves; the global active model is untouched.
-
-    On total pool exhaustion (every key for the resolved provider is dead) we
-    still hand back a client backed by the env-configured key — degraded mode
-    is more useful than a 500 on every request, and the client's own retry
-    loop will surface a clean error if even that key fails.
-    """
-    # Imports inside the function avoid the runtime_config → settings →
-    # llm_client import cycle on module load.
-    import runtime_config
-    import settings as config
-
-    model = model_override or runtime_config.get_active_model()
-    provider = provider_pool.resolve_provider(model)
-    bundle = None
-    try:
-        bundle = provider_pool.acquire(provider)
-    except (provider_pool.NoLiveKeyError, provider_pool.UnknownProviderError):
-        bundle = None
-
-    if bundle is not None:
-        api_key = bundle.api_key
-        api_base = bundle.api_base
-        provider_name = bundle.provider
-        key_id = bundle.key_id
-    else:
-        api_key = getattr(config, 'API_KEY', '') or ''
-        api_base = getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
-        provider_name = None
-        key_id = None
-
-    return LLMClient(
-        api_key=api_key,
-        api_base=api_base,
-        model=model,
-        max_tokens=getattr(config, 'MAX_TOKENS', 8192),
-        history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
-        timeout=getattr(config, 'TIMEOUT', 300),
-        history_changed=history_changed,
-        provider_name=provider_name,
-        key_id=key_id,
-    )
-
     def reset(self):
         self.history = []
         self._notify_history_changed()
@@ -456,3 +402,57 @@ def make_llm_client(model_override=None, history_changed=None):
                     inp = {'_raw_args': raw}
             resp.tool_calls.append(ToolCall(id=slot['id'], name=slot['name'], input=inp))
         return resp
+
+
+def make_llm_client(model_override=None, history_changed=None):
+    """One-stop factory for an LLMClient that's wired into the provider pool.
+
+    All four production construction sites (worker, agent_service, ACP server,
+    background memory review) used to inline the same six-arg ``LLMClient(...)``
+    call reading from ``settings`` + ``runtime_config``. Centralising here means
+    adding a new credential rule (e.g. per-region routing) is a one-place change
+    and the four call sites stay tiny.
+
+    ``model_override`` wins over ``runtime_config.get_active_model()`` for the
+    one chat session this client serves; the global active model is untouched.
+
+    On total pool exhaustion (every key for the resolved provider is dead) we
+    still hand back a client backed by the env-configured key — degraded mode
+    is more useful than a 500 on every request, and the client's own retry
+    loop will surface a clean error if even that key fails.
+    """
+    # Imports inside the function avoid the runtime_config → settings →
+    # llm_client import cycle on module load.
+    import runtime_config
+    import settings as config
+
+    model = model_override or runtime_config.get_active_model()
+    provider = provider_pool.resolve_provider(model)
+    bundle = None
+    try:
+        bundle = provider_pool.acquire(provider)
+    except (provider_pool.NoLiveKeyError, provider_pool.UnknownProviderError):
+        bundle = None
+
+    if bundle is not None:
+        api_key = bundle.api_key
+        api_base = bundle.api_base
+        provider_name = bundle.provider
+        key_id = bundle.key_id
+    else:
+        api_key = getattr(config, 'API_KEY', '') or ''
+        api_base = getattr(config, 'API_BASE', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
+        provider_name = None
+        key_id = None
+
+    return LLMClient(
+        api_key=api_key,
+        api_base=api_base,
+        model=model,
+        max_tokens=getattr(config, 'MAX_TOKENS', 8192),
+        history_trim_tokens=getattr(config, 'HISTORY_TRIM_TOKENS', 80000),
+        timeout=getattr(config, 'TIMEOUT', 300),
+        history_changed=history_changed,
+        provider_name=provider_name,
+        key_id=key_id,
+    )

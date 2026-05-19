@@ -1,17 +1,4 @@
-"""Cross-wire HITL equivalence + cross-device resume safety.
-
-The same paused run must be resolvable from either OpenAI wire:
-
-- ``/v1/responses`` resume = ``function_call_output`` input item carrying
-  ``call_id`` + ``output``.
-- ``/v1/chat/completions`` resume = ``role:'tool'`` message with the
-  matching ``tool_call_id``.
-
-Both paths land in the same ``agent_run_states`` row and produce the same
-``ResumePayload``. Cross-device resume = device A pauses, device B resumes
-via ``previous_response_id``, A's retry sees the row in a non-resumable
-state.
-"""
+"""Responses HITL resume and cross-device safety."""
 import json
 import os
 import tempfile
@@ -20,7 +7,7 @@ from datetime import datetime, timezone
 
 from session_store import SERVER_USER_ID, SessionStore
 from backend.agents_sdk.hitl import (
-    InterruptionEnvelope, RESERVED_ASK_USER,
+    InterruptionEnvelope,
     ResumePayload, interruption_from_sdk_item,
 )
 from backend.agents_sdk.lifecycle import (
@@ -73,7 +60,7 @@ class _PausedRun:
         )
 
 
-class DualFormatHitlTests(unittest.TestCase):
+class ResponsesHitlTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.session_store = SessionStore(os.path.join(self._tmp.name, 'sessions'))
@@ -82,21 +69,13 @@ class DualFormatHitlTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_envelope_serializes_consistently_across_wires(self):
-        # Same SDK item → same call_id / tool / args on either wire.
+    def test_envelope_serializes_to_responses_wire(self):
         env = interruption_from_sdk_item(_approval_item('abc'))
         responses_wire = env.serialize('responses')
-        chat_wire = env.serialize('chat')
         self.assertEqual(responses_wire['call_id'], 'abc')
-        self.assertEqual(chat_wire['id'], 'abc')
         self.assertEqual(responses_wire['name'], 'ask_user')
-        self.assertEqual(chat_wire['function']['name'], RESERVED_ASK_USER)
-        # Argument JSON parses back to the same dict either way.
         self.assertEqual(json.loads(responses_wire['arguments']),
                          {'question': env.arguments['question']})
-        chat_args = json.loads(chat_wire['function']['arguments'])
-        self.assertEqual(chat_args['tool'], 'ask_user')
-        self.assertEqual(chat_args['question'], env.arguments['question'])
 
     def test_responses_resume_locates_and_carries_answer(self):
         paused = _PausedRun(self.run_state_store)
@@ -114,54 +93,6 @@ class DualFormatHitlTests(unittest.TestCase):
         row = self.run_state_store.get(paused.response_id)
         self.assertIsNotNone(row)
         self.assertEqual(row['status'], RUN_STATE_REQUIRES_ACTION)
-
-    def test_chat_resume_locates_same_row_via_pending_call_id(self):
-        paused = _PausedRun(self.run_state_store)
-        # Mimic ``role:"tool"`` reply with tool_call_id.
-        msg = {'role': 'tool', 'tool_call_id': paused.call_id, 'content': 'A'}
-        rp = ResumePayload.from_chat_message(msg)
-        self.assertEqual(rp.call_id, paused.call_id)
-        self.assertEqual(rp.answer, 'A')
-        # Chat wire has no response_id — find the row by pending call_id.
-        row = self.run_state_store.find_by_pending_call_id(
-            paused.call_id, session_id=paused.session_id,
-        )
-        self.assertIsNotNone(row)
-        self.assertEqual(row['id'], paused.response_id)
-
-    def test_pause_on_responses_resume_on_chat_yields_same_answer(self):
-        # Run paused via /v1/responses; user resumes from a chat client. Both
-        # wires must produce the same ``(call_id, answer)`` so the runner can
-        # ``state.approve(item)`` against the original interruption blob.
-        paused = _PausedRun(self.run_state_store, call_id='cross_1')
-        # Wire A: responses → produces InterruptionEnvelope.
-        responses_wire = paused.envelope.serialize('responses')
-        # Wire B: same pause re-emitted as chat tool_call shape.
-        chat_wire = paused.envelope.serialize('chat')
-        # Wire A resume:
-        rp_a = ResumePayload.from_responses_input([
-            {'type': 'function_call_output',
-             'call_id': responses_wire['call_id'], 'output': 'B'},
-        ])
-        # Wire B resume (same answer, different transport):
-        rp_b = ResumePayload.from_chat_message({
-            'role': 'tool', 'tool_call_id': chat_wire['id'], 'content': 'B',
-        })
-        self.assertEqual((rp_a.call_id, rp_a.answer), (rp_b.call_id, rp_b.answer))
-
-    def test_pause_on_chat_resume_on_responses_yields_same_answer(self):
-        # Reverse direction: chat client paused, responses client resolves.
-        paused = _PausedRun(self.run_state_store, call_id='cross_2')
-        chat_wire = paused.envelope.serialize('chat')
-        responses_wire = paused.envelope.serialize('responses')
-        rp_a = ResumePayload.from_chat_message({
-            'role': 'tool', 'tool_call_id': chat_wire['id'], 'content': 'C',
-        })
-        rp_b = ResumePayload.from_responses_input([
-            {'type': 'function_call_output',
-             'call_id': responses_wire['call_id'], 'output': 'C'},
-        ])
-        self.assertEqual((rp_a.call_id, rp_a.answer), (rp_b.call_id, rp_b.answer))
 
 
 class CrossDeviceResumeTests(unittest.TestCase):

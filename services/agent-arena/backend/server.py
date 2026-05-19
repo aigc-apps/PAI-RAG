@@ -91,6 +91,10 @@ class AgentConfig:
         return normalize_completion_url(self.base_url)
 
     @property
+    def responses_url(self) -> str:
+        return normalize_responses_url(self.base_url)
+
+    @property
     def runs_url(self) -> str:
         return normalize_runs_url(self.runs_base_url or self.base_url)
 
@@ -541,6 +545,21 @@ def normalize_completion_url(base_url: str) -> str:
     return f"{clean}/v1/chat/completions"
 
 
+def normalize_responses_url(base_url: str) -> str:
+    clean = (base_url or "").strip().rstrip("/")
+    if not clean:
+        return ""
+    if clean.endswith("/v1/responses"):
+        return clean
+    if clean.endswith("/v1/chat/completions"):
+        return clean.rsplit("/chat/completions", 1)[0] + "/responses"
+    if clean.endswith("/v1/runs"):
+        return clean.rsplit("/runs", 1)[0] + "/responses"
+    if clean.endswith("/v1"):
+        return f"{clean}/responses"
+    return f"{clean}/v1/responses"
+
+
 def normalize_runs_url(base_url: str) -> str:
     clean = (base_url or "").strip().rstrip("/")
     if not clean:
@@ -557,9 +576,9 @@ def normalize_runs_url(base_url: str) -> str:
 
 
 def get_agent_config(prefix: str, fallback_name: str) -> AgentConfig:
-    trace_mode = os.getenv(f"{prefix}_TRACE_MODE", "chat").strip().lower()
-    if trace_mode not in {"chat", "runs"}:
-        trace_mode = "chat"
+    trace_mode = os.getenv(f"{prefix}_TRACE_MODE", "responses").strip().lower()
+    if trace_mode not in {"responses", "chat", "runs"}:
+        trace_mode = "responses"
     return AgentConfig(
         name=os.getenv(f"{prefix}_NAME", fallback_name).strip() or fallback_name,
         base_url=os.getenv(f"{prefix}_BASE_URL", "").strip(),
@@ -607,6 +626,7 @@ def public_agent_config(agent: AgentConfig) -> dict[str, Any]:
         "configured": agent.configured,
         "has_api_key": bool(agent.api_key),
         "completion_path": agent.completion_url,
+        "responses_path": agent.responses_url,
         "trace_mode": agent.trace_mode,
         "runs_path": agent.runs_url,
     }
@@ -643,6 +663,17 @@ def extract_content(payload: dict[str, Any]) -> tuple[str, str | None]:
                     parts.append(str(text))
         return "\n".join(parts), finish_reason
     return str(content), finish_reason
+
+
+def extract_response_content(payload: dict[str, Any]) -> tuple[str, str | None]:
+    parts: list[str] = []
+    for item in payload.get("output") or []:
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        for content in item.get("content") or []:
+            if isinstance(content, dict) and content.get("type") in {"output_text", "text"}:
+                parts.append(str(content.get("text") or ""))
+    return "".join(parts), payload.get("status")
 
 
 def truncate_text(value: Any, limit: int = MAX_EVENT_TEXT) -> str:
@@ -817,6 +848,127 @@ async def call_agent_chat(
         )
 
 
+async def call_agent_responses(
+    client: httpx.AsyncClient,
+    agent: AgentConfig,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: int | None,
+) -> AgentResult:
+    started = time.perf_counter()
+    system = "\n".join(msg["content"] for msg in messages if msg.get("role") == "system")
+    user_messages = [msg for msg in messages if msg.get("role") != "system"]
+    input_payload: Any
+    if len(user_messages) > 1:
+        input_payload = user_messages
+    elif user_messages:
+        input_payload = user_messages[-1]["content"]
+    else:
+        input_payload = ""
+
+    payload: dict[str, Any] = {
+        "model": agent.model,
+        "input": input_payload,
+        "stream": True,
+    }
+    if system:
+        payload["instructions"] = system
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if max_tokens is not None:
+        payload["max_output_tokens"] = max_tokens
+
+    parts: list[str] = []
+    events: list[AgentTraceEvent] = []
+    terminal: dict[str, Any] | None = None
+    final_error: str | None = None
+    try:
+        async with client.stream(
+            "POST",
+            agent.responses_url,
+            json=payload,
+            headers={**build_headers(agent.api_key), "Accept": "text/event-stream"},
+        ) as response:
+            if response.status_code >= 400:
+                body = await response.aread()
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                return AgentResult(
+                    ok=False,
+                    name=agent.name,
+                    model=agent.model,
+                    latency_ms=latency_ms,
+                    error=f"responses HTTP {response.status_code}: {body.decode(errors='replace')[:1000]}",
+                    trace_supported=True,
+                    trace_summary=summarize_trace([], True),
+                )
+            event_name = ""
+            data_lines: list[str] = []
+            async for line in response.aiter_lines():
+                if not line:
+                    if not data_lines:
+                        event_name = ""
+                        continue
+                    raw_data = "\n".join(data_lines)
+                    data_lines = []
+                    if raw_data == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(raw_data)
+                    except json.JSONDecodeError:
+                        event_name = ""
+                        continue
+                    event_type = str(data.get("type") or event_name or "unknown")
+                    if event_type == "response.output_text.delta" and data.get("delta"):
+                        parts.append(str(data["delta"]))
+                    elif event_type in {"response.completed", "response.failed", "response.incomplete"}:
+                        terminal = data.get("response") if isinstance(data.get("response"), dict) else data
+                        if event_type == "response.failed":
+                            err = terminal.get("error") if isinstance(terminal, dict) else {}
+                            final_error = str((err or {}).get("message") or "response failed")
+                    trace_event = normalize_trace_event({"event": event_type, "data": data})
+                    if trace_event.event not in SUPPRESSED_TRACE_EVENTS and len(events) < MAX_TRACE_EVENTS:
+                        events.append(trace_event)
+                    event_name = ""
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("event:"):
+                    event_name = line.removeprefix("event:").strip()
+                elif line.startswith("data:"):
+                    data_lines.append(line.removeprefix("data:").strip())
+    except Exception as exc:  # noqa: BLE001
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return AgentResult(
+            ok=False,
+            name=agent.name,
+            model=agent.model,
+            latency_ms=latency_ms,
+            error=format_request_error("responses failed", agent.responses_url, exc),
+            trace_supported=True,
+            trace_events=events,
+            trace_summary=summarize_trace(events, True),
+        )
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    content = "".join(parts)
+    status = None
+    if terminal:
+        fallback, status = extract_response_content(terminal)
+        content = content or fallback
+    return AgentResult(
+        ok=final_error is None,
+        name=agent.name,
+        model=str((terminal or {}).get("model") or agent.model),
+        content=content,
+        latency_ms=latency_ms,
+        error=final_error,
+        raw_finish_reason=status,
+        trace_supported=True,
+        trace_events=events,
+        trace_summary=summarize_trace(events, True),
+    )
+
+
 async def collect_sse_events(
     client: httpx.AsyncClient,
     url: str,
@@ -979,6 +1131,8 @@ async def call_agent(
         )
     if agent.trace_mode == "runs":
         return await call_agent_runs(client, agent, messages, temperature, max_tokens)
+    if agent.trace_mode == "responses":
+        return await call_agent_responses(client, agent, messages, temperature, max_tokens)
     return await call_agent_chat(client, agent, messages, temperature, max_tokens)
 
 

@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -241,10 +241,8 @@ def openai_error(message, code='invalid_request_error'):
     return {'error': {'message': message, 'type': 'invalid_request_error', 'code': code}}
 
 
-def stream_headers(session_id, run_id=''):
+def stream_headers():
     return {
-        'X-Session-Id': session_id,
-        'X-Run-Id': run_id or '',
         'Cache-Control': 'no-cache, no-transform',
         'X-Accel-Buffering': 'no',
     }
@@ -402,14 +400,6 @@ def content_text(value):
     return str(value)
 
 
-def prompt_text_from_body(body):
-    for key in ('message', 'text', 'prompt', 'input'):
-        text = content_text(body.get(key))
-        if text.strip():
-            return text
-    return content_text(body.get('messages') or [])
-
-
 def ensure_session(session_id=None, cwd=None):
     if session_id:
         sess = service.get_session(session_id, user_id=SERVER_USER_ID, cwd=cwd)
@@ -441,25 +431,6 @@ def response_messages_from_input(raw_input):
                     messages.append({'role': 'user', 'content': text})
         return messages
     return [{'role': 'user', 'content': str(raw_input)}]
-
-
-def response_prompt_from_messages(messages, instructions='', include_history=False):
-    user_text = next(
-        ((message.get('content') or '').strip() for message in reversed(messages) if message.get('role') == 'user'),
-        '',
-    )
-    if not user_text:
-        user_text = '\n'.join((message.get('content') or '').strip() for message in messages if message.get('content')).strip()
-    if not include_history:
-        return user_text
-    parts = []
-    if instructions:
-        parts.append(f'Instructions:\n{instructions.strip()}')
-    history = [message for message in messages[:-1] if message.get('content')]
-    if history:
-        parts.append('Conversation history:\n' + json.dumps(history, ensure_ascii=False, default=str))
-    parts.append(user_text)
-    return '\n\n'.join(part for part in parts if part)
 
 
 _RESPONSES_RESUME_ITEM_TYPES = {'function_call_output', 'mcp_approval_response'}
@@ -1020,8 +991,6 @@ async def _sdk_response_stream(*, body, model, model_override, instructions, con
 
     if resume_payload is None:
         input_messages = response_messages_from_input(raw_input)
-        if not input_messages:
-            input_messages = response_messages_from_input(body.get('messages'))
         current_messages = _normalize_history_messages(input_messages)
         user_text_for_persist = _last_user_content(current_messages)
         if not user_text_for_persist:
@@ -1037,10 +1006,7 @@ async def _sdk_response_stream(*, body, model, model_override, instructions, con
         raise backend_error(e) from e
 
     if resume_payload is None:
-        explicit_history = body.get('conversation_history')
-        if isinstance(explicit_history, list):
-            history_messages = _normalize_history_messages(response_messages_from_input(explicit_history))
-        elif previous_response_record is not None:
+        if previous_response_record is not None:
             history_messages = _history_messages_from_response_record(previous_response_record)
             if not history_messages:
                 history_messages = _session_history_messages(sess)
@@ -1184,6 +1150,18 @@ async def create_response(request: Request):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
     if not isinstance(body, dict):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+    legacy_fields = [key for key in ('session_id', 'conversation_history', 'messages') if key in body]
+    if legacy_fields:
+        joined = ', '.join(legacy_fields)
+        return JSONResponse(openai_error(
+            f'Unsupported legacy field(s): {joined}; use input with conversation or previous_response_id',
+            code='unsupported_legacy_field',
+        ), status_code=400)
+    if request.headers.get('x-session-id'):
+        return JSONResponse(openai_error(
+            'X-Session-Id is no longer supported; use the conversation request field',
+            code='unsupported_legacy_header',
+        ), status_code=400)
 
     raw_model = body.get('model')
     model_override = None
@@ -1201,10 +1179,17 @@ async def create_response(request: Request):
     conversation = body.get('conversation') or ''
     store = bool(body.get('store', True))
     previous_response_id = body.get('previous_response_id') or ''
-    if not previous_response_id and conversation and not isinstance(body.get('conversation_history'), list):
+    session_id_for_sdk = ''
+    if not previous_response_id and conversation:
         previous_response_id = service.store.latest_response_for_conversation(
             conversation, user_id=SERVER_USER_ID,
         ) or ''
+        if not previous_response_id:
+            try:
+                if service.store.session_exists(conversation):
+                    session_id_for_sdk = conversation
+            except ValueError:
+                session_id_for_sdk = ''
 
     run_state_store, _ = _sdk_stores()
     resume_input_for_hitl_default = False
@@ -1232,9 +1217,7 @@ async def create_response(request: Request):
                 return JSONResponse(openai_error(
                     f'Response not found: {previous_response_id}',
                     code='response_not_found'), status_code=404)
-            session_id_for_sdk = body.get('session_id') or record.get('session_id') or ''
-    else:
-        session_id_for_sdk = body.get('session_id') or ''
+            session_id_for_sdk = record.get('session_id') or ''
     if not stream:
         return JSONResponse(openai_error(
             'Non-streaming /v1/responses is not supported; pass stream=true',
@@ -1247,7 +1230,7 @@ async def create_response(request: Request):
         allow_hitl=bool(body.get('allow_hitl', resume_input_for_hitl_default)),
     )
     return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
-                             headers=stream_headers(session_id_for_sdk or '', ''))
+                             headers=stream_headers())
 
 
 @app.get('/v1/responses/{resp_id}')
@@ -1303,13 +1286,8 @@ def cancel_response(resp_id: str):
     return response_obj
 
 
-async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
-    """Drive the SDK runner and emit Chat-Completions SSE chunks. HITL
-    pauses are surfaced as a final ``finish_reason='tool_calls'`` chunk
-    carrying a ``__ask_user__`` (or ``__request_approval__``) tool_call;
-    the client resumes by reposting ``messages`` with a trailing
-    ``role:'tool'`` entry whose ``tool_call_id`` echoes our envelope.
-    """
+async def _sdk_chat_stream(*, body, model, cwd, allow_hitl=False):
+    """Drive the SDK runner and emit public Chat Completions SSE chunks."""
     from backend.agents_sdk import event_bridge as _bridge
     from backend.agents_sdk import runner as sdk_runner
     from backend.agents_sdk.hitl import ResumePayload
@@ -1323,8 +1301,6 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
     completion_id = f'chatcmpl-{uuid.uuid4().hex}'
     messages = body.get('messages') or []
 
-    # Detect resume: the last message is role:'tool' with a tool_call_id we
-    # previously emitted on a HITL pause.
     resume_payload = None
     resume_row = None
     if messages and isinstance(messages[-1], dict) and messages[-1].get('role') == 'tool':
@@ -1334,9 +1310,7 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
             yield sse_encode({'error': {'message': str(exc), 'code': 'invalid_resume'}})
             yield 'data: [DONE]\n\n'
             return
-        resume_row = run_state_store.find_by_pending_call_id(
-            resume_payload.call_id, session_id=x_session_id or None,
-        )
+        resume_row = run_state_store.find_by_pending_call_id(resume_payload.call_id)
         if resume_row is None:
             yield sse_encode({'error': {
                 'message': f'No paused run found for tool_call_id={resume_payload.call_id!r}',
@@ -1353,34 +1327,26 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
             yield 'data: [DONE]\n\n'
             return
         try:
-            sess = ensure_session(x_session_id, cwd=cwd)
+            sess = ensure_session(None, cwd=cwd)
         except WorkspaceViolation as e:
             raise backend_error(e) from e
         session_id = sess.sid
         cwd_resolved = sess.workspace_path or sess.cwd
         readonly = sess.readonly_roots
         workspace_root = sess.workspace_root
+        chat_messages = _normalize_history_messages(response_messages_from_input(messages))
+        runner_input = _compose_runner_input([], chat_messages)
+        input_items = runner_input if isinstance(runner_input, list) else None
+        input_text = None if isinstance(runner_input, list) else runner_input
+        sess_for_persist = sess
     else:
         session_id = resume_row['session_id']
-        # On resume we don't have a fresh AgentSession; reuse legacy lookup
-        # only to recover cwd/workspace metadata for the GenericHandler.
         loaded = service.store.load(session_id, user_id=SERVER_USER_ID) or {}
         cwd_resolved = loaded.get('workspace_path') or cwd or os.getcwd()
         readonly = []
         workspace_root = loaded.get('workspace_path') or None
-
-    handler = GenericHandler(
-        cwd=cwd_resolved, mini_agent_root=ROOT,
-        workspace_root=workspace_root, readonly_roots=readonly,
-    )
-    extras = {'handler': handler}
-
-    yield sse_encode(_bridge.chat_role_chunk(model=model, completion_id=completion_id))
-
-    captured_usage: dict = {}
-    if resume_payload is None:
-        sess_for_persist = sess
-    else:
+        input_items = None
+        input_text = None
         try:
             sess_for_persist = ensure_session(session_id, cwd=cwd_resolved)
         except Exception as exc:
@@ -1392,6 +1358,17 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
             )
             sess_for_persist = None
 
+    handler = GenericHandler(
+        cwd=cwd_resolved, mini_agent_root=ROOT,
+        workspace_root=workspace_root, readonly_roots=readonly,
+    )
+    extras = {'handler': handler}
+    if sess_for_persist is not None:
+        extras['session'] = sess_for_persist
+
+    yield sse_encode(_bridge.chat_role_chunk(model=model, completion_id=completion_id))
+
+    captured_usage: dict = {}
     try:
         async for frame in sdk_runner.stream_responses_run(
             state_store=run_state_store,
@@ -1401,7 +1378,8 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
             model=model,
             cwd=cwd_resolved,
             tools=build_tool_list(scope='main'),
-            input_text=None if resume_payload else user_text,
+            input_text=input_text,
+            input_items=input_items,
             previous_response_id=resume_row['id'] if resume_row else None,
             resume=resume_payload,
             instructions_override=None,
@@ -1409,18 +1387,16 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
             extras=extras,
             allow_hitl=allow_hitl,
         ):
-            if frame.chunk is not None:
-                # The runner emits Responses-wire chunks; for the chat path
-                # we forward text deltas as ``chat.completion.chunk`` and
-                # drop server-side tool-call envelopes (file_read et al.).
-                if frame.chunk.get('type') == 'response.output_text.delta':
-                    delta = frame.chunk.get('delta') or ''
-                    if delta:
-                        yield sse_encode({
-                            'id': completion_id, 'object': 'chat.completion.chunk',
-                            'created': int(time.time()), 'model': model,
-                            'choices': [{'index': 0, 'delta': {'content': delta}, 'finish_reason': None}],
-                        })
+            if frame.chunk is not None and frame.chunk.get('type') == 'response.output_text.delta':
+                delta = frame.chunk.get('delta') or ''
+                if delta:
+                    yield sse_encode({
+                        'id': completion_id,
+                        'object': 'chat.completion.chunk',
+                        'created': int(time.time()),
+                        'model': model,
+                        'choices': [{'index': 0, 'delta': {'content': delta}, 'finish_reason': None}],
+                    })
             if frame.terminal:
                 final = frame.response_object or {}
                 if final.get('status') == 'requires_action' and frame.interruption is not None:
@@ -1458,7 +1434,9 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
                         if final_status == 'requires_action':
                             assistant_events = _agent_updates_from_output(output_list) or None
                     _append_turn_to_session(
-                        sess_for_persist, user_text=user_msg, assistant_text=assistant_msg,
+                        sess_for_persist,
+                        user_text=user_msg,
+                        assistant_text=assistant_msg,
                         assistant_events=assistant_events,
                         final_status=final_status,
                         run_id=final.get('id') or completion_id,
@@ -1473,17 +1451,86 @@ async def _sdk_chat_stream(*, body, model, x_session_id, cwd, allow_hitl=False):
         yield 'data: [DONE]\n\n'
 
 
+def _sse_data_values(chunk):
+    values = []
+    for line in str(chunk).splitlines():
+        if line.startswith('data: '):
+            values.append(line[len('data: '):])
+    return values
+
+
+async def _collect_chat_completion(gen, *, model):
+    completion_id = ''
+    created = int(time.time())
+    content_parts = []
+    tool_calls = []
+    finish_reason = None
+    usage = None
+    async for chunk in gen:
+        for raw in _sse_data_values(chunk):
+            if raw == '[DONE]':
+                continue
+            try:
+                payload = json.loads(raw)
+            except Exception:
+                continue
+            if payload.get('error'):
+                err = payload.get('error') or {}
+                code = err.get('code') or 'invalid_request_error'
+                status = 500 if code in ('internal_error', 'run_failed') else 400
+                if code in ('resume_not_found', 'response_not_found'):
+                    status = 404
+                return JSONResponse(
+                    {'error': {
+                        'message': err.get('message') or 'Chat completion failed',
+                        'type': err.get('type') or 'invalid_request_error',
+                        'code': code,
+                    }},
+                    status_code=status,
+                )
+            completion_id = payload.get('id') or completion_id
+            created = payload.get('created') or created
+            usage = payload.get('usage') or usage
+            for choice in payload.get('choices') or []:
+                delta = choice.get('delta') or {}
+                if delta.get('content'):
+                    content_parts.append(delta.get('content') or '')
+                if delta.get('tool_calls'):
+                    tool_calls.extend(delta.get('tool_calls') or [])
+                if choice.get('finish_reason'):
+                    finish_reason = choice.get('finish_reason')
+    message = {'role': 'assistant', 'content': ''.join(content_parts)}
+    if tool_calls:
+        message['tool_calls'] = tool_calls
+        if not message['content']:
+            message['content'] = None
+    return {
+        'id': completion_id or f'chatcmpl-{uuid.uuid4().hex}',
+        'object': 'chat.completion',
+        'created': created,
+        'model': model,
+        'choices': [{
+            'index': 0,
+            'message': message,
+            'finish_reason': finish_reason or 'stop',
+        }],
+        'usage': usage,
+    }
+
+
 @app.post('/v1/chat/completions')
-async def chat_completions(
-    request: Request,
-    x_session_id: str | None = Header(default=None),
-):
+async def chat_completions(request: Request):
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
     if not isinstance(body, dict):
         return JSONResponse(openai_error('Invalid JSON'), status_code=400)
+    if request.headers.get('x-session-id'):
+        return JSONResponse(openai_error(
+            'X-Session-Id is no longer supported on Chat Completions; include conversation history in messages',
+            code='unsupported_legacy_header',
+        ), status_code=400)
     raw_model = body.get('model')
     model_override = None
     if raw_model:
@@ -1494,18 +1541,17 @@ async def chat_completions(
         except ValueError as exc:
             return JSONResponse(openai_error(str(exc)), status_code=400)
     model = model_override or runtime_config.get_active_model()
-    messages = body.get('messages') or []
-    stream = bool(body.get('stream'))
+    messages = body.get('messages')
+    if not isinstance(messages, list):
+        return JSONResponse(openai_error("'messages' must be an array"), status_code=400)
     cwd = body.get('cwd')
+    stream = bool(body.get('stream', False))
     allow_hitl = bool(body.get('allow_hitl', bool(messages and isinstance(messages[-1], dict) and messages[-1].get('role') == 'tool')))
-
-    if not stream:
-        return JSONResponse(openai_error(
-            'Non-streaming /v1/chat/completions is not supported; pass stream=true',
-            code='unsupported_mode'), status_code=400)
-    gen = _sdk_chat_stream(body=body, model=model, x_session_id=x_session_id, cwd=cwd, allow_hitl=allow_hitl)
-    return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
-                             headers=stream_headers(x_session_id or '', ''))
+    gen = _sdk_chat_stream(body=body, model=model, cwd=cwd, allow_hitl=allow_hitl)
+    if stream:
+        return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
+                                 headers=stream_headers())
+    return await _collect_chat_completion(gen, model=model)
 
 
 @app.get('/v1/sessions')
@@ -1589,7 +1635,7 @@ async def regenerate_session_answer(session_id: str, request: Request):
         session_id=result['session_id'], cwd=cwd, store=True, previous_response_id='',
     )
     return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
-                             headers=stream_headers(result['session_id'], ''))
+                             headers=stream_headers())
 
 
 @app.delete('/v1/sessions/{session_id}')

@@ -8,9 +8,10 @@ contract: 200 + ``text/event-stream`` body + ``[DONE]`` sentinel on
 success, and 409 when the session has no answer to regenerate.
 """
 import unittest
+import asyncio
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
+from fastapi import HTTPException
 
 from backend.agent_service import NoRegeneratableAnswerError
 import backend.server as server
@@ -39,10 +40,26 @@ async def _fake_stream(**kwargs):
     yield 'data: [DONE]\n\n'
 
 
+class _Request:
+    headers = {'content-length': '2'}
+
+    async def json(self):
+        return {}
+
+
+async def _read_streaming_response(response):
+    chunks = []
+    async for chunk in response.body_iterator:
+        if isinstance(chunk, bytes):
+            chunks.append(chunk.decode('utf-8'))
+        else:
+            chunks.append(str(chunk))
+    return ''.join(chunks)
+
+
 class RegenerateApiTests(unittest.TestCase):
     def setUp(self):
         self.original_service = server.service
-        self.client = TestClient(server.app)
 
     def tearDown(self):
         server.service = self.original_service
@@ -51,12 +68,12 @@ class RegenerateApiTests(unittest.TestCase):
         server.service = _FakeService({'session_id': 'session-1', 'user_text': 'hi'})
 
         with patch.object(server, '_sdk_response_stream', side_effect=_fake_stream):
-            response = self.client.post('/v1/sessions/session-1/regenerate', json={})
+            response = asyncio.run(server.regenerate_session_answer('session-1', _Request()))
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.headers['content-type'].startswith('text/event-stream'))
-        self.assertEqual(response.headers['X-Session-Id'], 'session-1')
-        body = response.text
+        self.assertEqual(response.media_type, 'text/event-stream')
+        self.assertNotIn('X-Session-Id', response.headers)
+        body = asyncio.run(_read_streaming_response(response))
         self.assertIn('event: response.created', body)
         self.assertIn('event: response.completed', body)
         self.assertTrue(body.rstrip().endswith('data: [DONE]'))
@@ -65,17 +82,17 @@ class RegenerateApiTests(unittest.TestCase):
     def test_regenerate_returns_409_when_no_answer_exists(self):
         server.service = _FakeService(error=NoRegeneratableAnswerError('session-1'))
 
-        response = self.client.post('/v1/sessions/session-1/regenerate', json={})
-
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()['error']['code'], 'no_regeneratable_answer')
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(server.regenerate_session_answer('session-1', _Request()))
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail['code'], 'no_regeneratable_answer')
 
     def test_regenerate_returns_404_when_session_missing(self):
         server.service = _FakeService(result=None)
 
-        response = self.client.post('/v1/sessions/missing/regenerate', json={})
-
-        self.assertEqual(response.status_code, 404)
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(server.regenerate_session_answer('missing', _Request()))
+        self.assertEqual(ctx.exception.status_code, 404)
 
 
 if __name__ == '__main__':

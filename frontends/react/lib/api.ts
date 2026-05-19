@@ -105,7 +105,7 @@ export async function streamResponses(
   handlers: ResponsesStreamHandlers,
 ): Promise<string | undefined> {
   const body: Record<string, unknown> = {
-    session_id: opts.sessionId,
+    conversation: opts.sessionId,
     input: opts.input,
     stream: true,
   };
@@ -126,15 +126,13 @@ export async function streamResponses(
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-      "X-Session-Id": opts.sessionId,
     },
     body: JSON.stringify(body),
     signal: opts.signal,
   });
   await assertOk(response);
-  const sessionId = response.headers.get("X-Session-Id") || opts.sessionId;
-  await consumeResponsesSse(response, sessionId, handlers);
-  return sessionId;
+  await consumeResponsesSse(response, opts.sessionId, handlers);
+  return opts.sessionId;
 }
 
 export async function streamRegenerate(
@@ -152,9 +150,8 @@ export async function streamRegenerate(
     signal,
   });
   await assertOk(response);
-  const finalSessionId = response.headers.get("X-Session-Id") || sessionId;
-  await consumeResponsesSse(response, finalSessionId, handlers);
-  return finalSessionId;
+  await consumeResponsesSse(response, sessionId, handlers);
+  return sessionId;
 }
 
 async function consumeResponsesSse(
