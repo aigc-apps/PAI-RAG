@@ -220,7 +220,8 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
     def test_text_then_tool_brackets_one_synthetic_step(self):
         state = ResponsesStreamState()
         chunks: list[dict] = []
-        # First text delta opens a step.
+        # Plain text is buffered until we know whether it is final answer text
+        # or process reasoning before a tool call.
         chunks += to_responses_chunk(_raw_event(_output_text_delta('Let me')),
                                      state, response_id='resp_x')
         chunks += to_responses_chunk(_raw_event(_output_text_delta(' check.')),
@@ -240,8 +241,19 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
         self.assertEqual(opens[0]['step_id'], closes[0]['step_id'])
         self.assertTrue(opens[0]['step_id'].startswith('rs_synth_'))
         self.assertTrue(opens[0]['synthetic'])
+        self.assertEqual(
+            ''.join(c['delta'] for c in chunks if c['type'] == 'response.output_text.delta'),
+            '',
+        )
+        self.assertEqual(
+            ''.join(c['delta'] for c in chunks if c['type'] == 'response.reasoning_text.delta'),
+            'Let me check.',
+        )
+        self.assertEqual([item['type'] for item in state.output], ['reasoning', 'function_call'])
+        self.assertTrue(state.output[0]['metadata']['pai_process_reasoning'])
+        self.assertEqual(state.output[0]['content'][0]['text'], 'Let me check.')
 
-    def test_text_to_message_done_closes_step(self):
+    def test_text_to_message_done_becomes_visible_answer(self):
         state = ResponsesStreamState()
         chunks: list[dict] = []
         chunks += to_responses_chunk(_raw_event(_output_text_delta('hello')),
@@ -251,9 +263,47 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
                                      state, response_id='resp_x')
         opens = [c for c in chunks if c['type'] == 'response.reasoning_step.started']
         closes = [c for c in chunks if c['type'] == 'response.reasoning_step.completed']
-        self.assertEqual(len(opens), 1)
-        self.assertEqual(len(closes), 1)
-        self.assertEqual(opens[0]['step_id'], closes[0]['step_id'])
+        self.assertEqual(len(opens), 0)
+        self.assertEqual(len(closes), 0)
+        self.assertEqual(
+            [c['type'] for c in chunks],
+            [
+                'response.output_item.added',
+                'response.output_text.delta',
+                'response.output_text.done',
+                'response.output_item.done',
+            ],
+        )
+        self.assertEqual(chunks[1]['delta'], 'hello')
+        self.assertEqual(state.output[0]['content'][0]['text'], 'hello')
+
+    def test_thinking_tags_stream_as_reasoning_not_output_text(self):
+        state = ResponsesStreamState()
+        chunks: list[dict] = []
+        chunks += to_responses_chunk(_raw_event(_output_text_delta('<think')),
+                                     state, response_id='resp_x')
+        chunks += to_responses_chunk(_raw_event(_output_text_delta('ing>private</thinking>\nAnswer')),
+                                     state, response_id='resp_x')
+        msg = _make_message_output_item()
+        chunks += to_responses_chunk(_item_event(msg), state, response_id='resp_x')
+
+        self.assertEqual(
+            ''.join(c['delta'] for c in chunks if c['type'] == 'response.reasoning_text.delta'),
+            'private',
+        )
+        self.assertEqual(
+            ''.join(c['delta'] for c in chunks if c['type'] == 'response.output_text.delta'),
+            '\nAnswer',
+        )
+        self.assertNotIn(
+            '<thinking>',
+            ''.join(c.get('delta', '') for c in chunks),
+        )
+        self.assertEqual([item['type'] for item in state.output], ['reasoning', 'message'])
+        self.assertTrue(state.output[0]['metadata']['pai_process_reasoning'])
+        self.assertEqual(state.output[0]['content'][0]['type'], 'reasoning_text')
+        self.assertEqual(state.output[0]['content'][0]['text'], 'private')
+        self.assertEqual(state.output[1]['content'][0]['text'], '\nAnswer')
 
     def test_two_thinking_segments_separated_by_tool_have_distinct_step_ids(self):
         state = ResponsesStreamState()
@@ -278,10 +328,10 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
                  if c['type'] == 'response.reasoning_step.started']
         closes = [c['step_id'] for c in all_chunks
                   if c['type'] == 'response.reasoning_step.completed']
-        self.assertEqual(len(opens), 2)
-        self.assertEqual(len(closes), 2)
+        self.assertEqual(len(opens), 1)
+        self.assertEqual(len(closes), 1)
         self.assertEqual(opens, closes, 'open/close ids must pair in order')
-        self.assertEqual(len(set(opens)), 2, 'each segment needs a fresh id')
+        self.assertEqual(len(set(opens)), 1)
 
 
 class PlaceholderItemIdRewriteTests(unittest.TestCase):

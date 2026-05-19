@@ -301,6 +301,10 @@ interface ResponsesParseState {
   toolCallByItemId: Map<string, ToolCallEntry>;
   toolCallByCallId: Map<string, ToolCallEntry>;
   reasoningStarted: Set<string>;
+  activeReasoningStepId: string;
+  activeReasoningSynthetic: boolean;
+  syntheticReasoningText: string;
+  syntheticReasoningTextDone: boolean;
   toolCounter: number;
   // Inline private reasoning block tracking. The model emits these
   // tags inside `output_text.delta` chunks; we re-route the inner text to
@@ -332,6 +336,10 @@ function createParseState(): ResponsesParseState {
     toolCallByItemId: new Map(),
     toolCallByCallId: new Map(),
     reasoningStarted: new Set(),
+    activeReasoningStepId: "",
+    activeReasoningSynthetic: false,
+    syntheticReasoningText: "",
+    syntheticReasoningTextDone: false,
     toolCounter: 0,
     thinkBuffer: "",
     thinkId: "",
@@ -358,6 +366,7 @@ const THINK_TAGS = [
 
 const PRIVATE_TEXT_TAGS: ReadonlyArray<{ openTag: string; closeTag: string; mode: PrivateTextMode }> = [
   { openTag: "<summary>", closeTag: "</summary>", mode: "discard" },
+  { openTag: "<forcing_skill_activation>", closeTag: "</forcing_skill_activation>", mode: "discard" },
   ...THINK_TAGS.map(([openTag, closeTag]) => ({ openTag, closeTag, mode: "thought" as const })),
 ];
 
@@ -531,16 +540,66 @@ function toolKind(name: string) {
   return "tool";
 }
 
+function consumeTextAsThought(
+  state: ResponsesParseState,
+  thoughtId: string,
+  text: string,
+): AgentUpdate[] {
+  if (!text) return [];
+  return consumeTextDelta(state, text).flatMap((update): AgentUpdate[] => {
+    if (update.sessionUpdate === "agent_message_chunk" || update.sessionUpdate === "thought_delta") {
+      const content = update.content.text;
+      return content ? [{ sessionUpdate: "thought_delta", thoughtId, content: { type: "text", text: content } }] : [];
+    }
+    return [];
+  });
+}
+
+function resetInlineTextParser(state: ResponsesParseState) {
+  state.thinkBuffer = "";
+  state.thinkId = "";
+  state.thinkOpen = false;
+  state.thinkCloseTag = "";
+  state.thinkMode = "thought";
+}
+
 export function responsesEventToUpdates(
   event: ResponsesSseEvent,
   state: ResponsesParseState,
 ): AgentUpdate[] {
   const data = event.data;
 
+  if (event.type === "response.reasoning_text.delta") {
+    const delta = stringField(data, "delta");
+    if (!delta) return [];
+    const stepId = stringField(data, "step_id") || state.activeReasoningStepId;
+    if (!stepId) return [];
+    return consumeTextAsThought(state, stepId, delta);
+  }
+
   if (event.type === "response.output_text.delta") {
     const delta = stringField(data, "delta");
     if (!delta) return [];
+    if (state.activeReasoningSynthetic && state.activeReasoningStepId) {
+      state.syntheticReasoningText += delta;
+      return consumeTextAsThought(state, state.activeReasoningStepId, delta);
+    }
     return consumeTextDelta(state, delta);
+  }
+
+  if (event.type === "response.output_text.done") {
+    if (state.activeReasoningSynthetic && state.activeReasoningStepId) {
+      const stepId = state.activeReasoningStepId;
+      const text = stringField(data, "text") || state.syntheticReasoningText;
+      state.syntheticReasoningText = "";
+      state.syntheticReasoningTextDone = true;
+      resetInlineTextParser(state);
+      return [
+        { sessionUpdate: "thought_done", thoughtId: stepId, status: "completed", hidden: true },
+        ...consumeTextDelta(state, text),
+      ];
+    }
+    return [];
   }
 
   if (event.type === "response.output_item.added") {
@@ -677,6 +736,10 @@ export function responsesEventToUpdates(
       return [];
     }
     state.reasoningStarted.add(stepId);
+    state.activeReasoningStepId = stepId;
+    state.activeReasoningSynthetic = Boolean(data.synthetic);
+    state.syntheticReasoningText = "";
+    state.syntheticReasoningTextDone = false;
     return [
       {
         sessionUpdate: "thought_start",
@@ -690,13 +753,33 @@ export function responsesEventToUpdates(
   if (event.type === "response.reasoning_step.completed") {
     const stepId = stringField(data, "step_id");
     if (!stepId) return [];
-    return [
-      {
-        sessionUpdate: "thought_done",
+    const updates: AgentUpdate[] = [];
+    if (
+      state.activeReasoningSynthetic &&
+      state.activeReasoningStepId === stepId &&
+      state.thinkBuffer &&
+      !state.syntheticReasoningTextDone
+    ) {
+      updates.push({
+        sessionUpdate: "thought_delta",
         thoughtId: stepId,
-        status: "completed",
-      },
-    ];
+        content: { type: "text", text: state.thinkBuffer },
+      });
+      resetInlineTextParser(state);
+    }
+    if (state.activeReasoningStepId === stepId) {
+      state.activeReasoningStepId = "";
+      state.activeReasoningSynthetic = false;
+      state.syntheticReasoningText = "";
+      state.syntheticReasoningTextDone = false;
+    }
+    updates.push({
+      sessionUpdate: "thought_done",
+      thoughtId: stepId,
+      status: "completed",
+      hidden: Boolean(data.hidden),
+    });
+    return updates;
   }
 
   return [];
@@ -762,6 +845,9 @@ function responseOutputText(data: Record<string, unknown>): string {
     if (stringField(record, "type") !== "message") {
       continue;
     }
+    if (isProcessReasoningMessage(record)) {
+      continue;
+    }
     for (const block of arrayField(record, "content")) {
       if (!block || typeof block !== "object" || Array.isArray(block)) {
         continue;
@@ -787,6 +873,11 @@ function responseOutputText(data: Record<string, unknown>): string {
 function isFinalReportMessage(record: Record<string, unknown>): boolean {
   const metadata = recordField(record, "metadata");
   return Boolean(metadata?.pai_final_report);
+}
+
+function isProcessReasoningMessage(record: Record<string, unknown>): boolean {
+  const metadata = recordField(record, "metadata");
+  return Boolean(metadata?.pai_process_reasoning);
 }
 
 // Some upstream providers (e.g. qwen-plus) emit a placeholder `id` like

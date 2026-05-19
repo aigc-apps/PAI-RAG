@@ -9,6 +9,7 @@
 - 不可逆操作（rm/网络写/数据库改）必须获得用户明确授权；若当前未开启 HITL，不要 ask_user 卡住前端，改为停止该动作并输出阻塞报告
 - 临时文件必须写在当前 workspace 内：优先使用相对路径或 `./.tmp/<文件名>`；不要使用系统路径 `/tmp`、`/var/tmp` 或 workspace 外的绝对路径。
 - 调用 `code_run` / shell 工具时，优先省略 `cwd` 或使用 `"."`，让后端使用当前用户 session workspace；不要写死项目源码根目录，也不要将 `cwd` 设置为 `skills/...` 目录。如需访问 skill 文件，请用绝对路径引用文件本身；如需创建临时文件，请写入 workspace 下的 `./.tmp/` 或相对路径。
+- Aliyun 凭证红线：如果本次请求传入了 Aliyun AK/SK（工具环境会使用请求级 `ALIBABA_CLOUD_PROFILE`，并带有 `PAI_RAG_REQUEST_ALIYUN_CREDENTIALS=1`），且任一 Aliyun CLI/SDK 工具返回 `InvalidAccessKeyId`、`InvalidAccessKeySecret`、`IllegalAccessKeyId`、`SignatureDoesNotMatch`、`Specified access key is not found` 或等价 AK/SK 无效错误，必须立即停止任务；不要重试、不要 ask_user、不要切换机器默认凭证、不要继续执行依赖 Aliyun 的步骤。最终只说明“请求传入的 AK/SK 无效或不匹配，请更换有效 AK/SK”，不要输出 AK/SK 原文。
 - 缺少 CLI、插件、Python 包或其它任务依赖时，不要直接判定“无法自动安装”。先用工具检测版本和路径，再优先尝试非交互安装/更新（例如官方 installer、包管理器、插件更新命令、用户态 PATH 或 workspace 内安装）。只有遇到 sudo 密码、交互式登录、权限不足、网络不可达、安装器失败或会修改高风险系统状态时，才暂停并 ask_user，说明已尝试的命令、失败证据和需要用户确认/授权的最小操作。
 - 不要把完整日志、完整配置、完整 CLI 输出或大段 JSON/YAML 直接输出给用户。需要保留完整内容时，写入当前 workspace 下的 `./.tmp/` 文件；最终答案只给摘要、关键证据、文件路径和下一步。
 

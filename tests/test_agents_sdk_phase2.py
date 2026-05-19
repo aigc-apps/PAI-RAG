@@ -39,6 +39,7 @@ from backend.agents_sdk.runner import (
     _final_report_retry_input,
     _final_text_from_output,
     _needs_final_report_retry,
+    _needs_tool_intent_retry,
 )
 from backend.tools.wrappers import build_tool_list
 
@@ -146,21 +147,16 @@ def _approval_item(call_id='approve_1', tool_name='ask_user', args='{"question":
 # ─── event_bridge ─────────────────────────────────────────────────────────
 
 class EventBridgeTests(unittest.TestCase):
-    def test_text_delta_emits_message_added_then_delta(self):
+    def test_text_delta_is_buffered_until_message_or_tool_boundary(self):
         state = ResponsesStreamState()
         chunks = event_bridge.to_responses_chunk(_delta('hello'), state, response_id='resp_1')
-        # First text delta of a turn opens a synthetic reasoning step before
-        # the message card is added — see ``ResponsesStreamState`` docstring.
-        self.assertEqual([c['type'] for c in chunks], [
-            'response.reasoning_step.started',
-            'response.output_item.added',
-            'response.output_text.delta',
-        ])
-        self.assertEqual(chunks[2]['delta'], 'hello')
-        self.assertTrue(state.message_started)
-        # Second delta on the same stream: no new added, just delta.
+        self.assertEqual(chunks, [])
+        self.assertFalse(state.message_started)
+        self.assertEqual(''.join(state.accumulated_text), 'hello')
+        # Second delta on the same stream is still buffered; it is not
+        # user-visible output_text until the SDK reports MessageOutputItem.
         chunks2 = event_bridge.to_responses_chunk(_delta(' world'), state, response_id='resp_1')
-        self.assertEqual([c['type'] for c in chunks2], ['response.output_text.delta'])
+        self.assertEqual(chunks2, [])
         self.assertEqual(''.join(state.accumulated_text), 'hello world')
 
     def test_tool_call_item_emits_added_and_done(self):
@@ -188,20 +184,19 @@ class EventBridgeTests(unittest.TestCase):
 
     def test_message_output_item_closes_assistant_message(self):
         state = ResponsesStreamState()
-        # First a delta to start the message (also opens a reasoning step)
+        # First a delta buffers candidate visible answer text.
         event_bridge.to_responses_chunk(_delta('done'), state, response_id='resp_1')
-        message_index = state.message_index
-        # Then the closing MessageOutputItem — this also closes the synthetic
-        # reasoning step opened above.
+        # Then the closing MessageOutputItem classifies it as visible answer.
         ev = _ItemEvent(_message_output_item())
         chunks = event_bridge.to_responses_chunk(ev, state, response_id='resp_1')
         self.assertEqual([c['type'] for c in chunks], [
+            'response.output_item.added',
+            'response.output_text.delta',
             'response.output_text.done',
             'response.output_item.done',
-            'response.reasoning_step.completed',
         ])
         # Final message in output[] is completed
-        msg = state.output[message_index]
+        msg = state.output[0]
         self.assertEqual(msg['status'], 'completed')
         self.assertEqual(msg['content'][0]['text'], 'done')
 
@@ -371,6 +366,82 @@ class EventBridgeTests(unittest.TestCase):
         self.assertIn("[ERROR] A: 'x' is a required property", retry_input)
         self.assertNotIn('status=success', retry_input)
 
+    def test_pre_tool_text_does_not_satisfy_final_report(self):
+        output = [
+            {
+                'id': 'msg_plan',
+                'type': 'message',
+                'status': 'completed',
+                'role': 'assistant',
+                'content': [{
+                    'type': 'output_text',
+                    'text': 'I need to inspect the config before calling the diagnostic tool.',
+                }],
+            },
+            {
+                'id': 'fc_1',
+                'type': 'function_call',
+                'status': 'completed',
+                'call_id': 'call_1',
+                'name': 'use_skill',
+                'arguments': '{}',
+            },
+            {
+                'id': 'fco_1',
+                'type': 'function_call_output',
+                'status': 'completed',
+                'call_id': 'call_1',
+                'output': json.dumps({'status': 'skill_activated'}),
+            },
+        ]
+
+        self.assertTrue(_needs_final_report_retry(output))
+
+    def test_textual_skill_activation_without_tool_call_needs_retry(self):
+        output = [{
+            'id': 'msg_1',
+            'type': 'message',
+            'status': 'completed',
+            'role': 'assistant',
+            'content': [{
+                'type': 'output_text',
+                'text': (
+                    '<taking>应优先调用专用诊断 skill</taking>\n'
+                    '<summary>启动 PAI-Rec 配置诊断技能</summary>'
+                ),
+            }],
+        }]
+
+        self.assertTrue(_needs_tool_intent_retry(output))
+
+    def test_capability_description_does_not_trigger_tool_intent_retry(self):
+        output = [{
+            'id': 'msg_1',
+            'type': 'message',
+            'status': 'completed',
+            'role': 'assistant',
+            'content': [{
+                'type': 'output_text',
+                'text': '我是不确定时会优先调用工具获取真实信息的 AI 助手。',
+            }],
+        }]
+
+        self.assertFalse(_needs_tool_intent_retry(output))
+
+    def test_skill_capability_description_does_not_trigger_tool_intent_retry(self):
+        output = [{
+            'id': 'msg_1',
+            'type': 'message',
+            'status': 'completed',
+            'role': 'assistant',
+            'content': [{
+                'type': 'output_text',
+                'text': '我能够读写文件，并根据任务需要调用专业技能完成诊断。',
+            }],
+        }]
+
+        self.assertFalse(_needs_tool_intent_retry(output))
+
 
 class AgentFactoryTests(unittest.TestCase):
     def test_final_report_tool_is_terminal_contract(self):
@@ -455,6 +526,55 @@ class HitlEnvelopeTests(unittest.TestCase):
 
 
 class AutonomousHitlTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tool_intent_text_without_call_retries_with_real_tool_call(self):
+        from backend.agents_sdk import runner
+
+        initial_stream = _FakeStreaming(
+            events=[
+                _delta('<taking>应优先调用专用诊断 skill</taking>\n<summary>启动 PAI-Rec 配置诊断技能</summary>'),
+                _ItemEvent(_message_output_item()),
+            ],
+            state=_FakeRunState(),
+        )
+        retry_stream = _FakeStreaming(
+            events=[
+                _ItemEvent(_tool_call_item(call_id='call_skill', tool_name='use_skill', args='{"skill":"x"}')),
+                _ItemEvent(_tool_output_item(call_id='call_skill', output='{"status":"skill_activated"}')),
+                _delta('final answer'),
+                _ItemEvent(_message_output_item()),
+            ],
+            state=_FakeRunState(),
+        )
+        state_store = _FakeStateStore()
+        ctx = RunContext(
+            session_id='sess_1',
+            run_id='run_1',
+            response_id='resp_1',
+            user_id=SERVER_USER_ID,
+            cwd='/tmp',
+        )
+
+        with patch.object(runner.Runner, 'run_streamed', return_value=retry_stream) as run_streamed:
+            frames = []
+            async for frame in _drive_stream(
+                streaming=initial_stream,
+                agent=object(),
+                ctx=ctx,
+                state_store=state_store,
+                audit_store=None,
+                audit_log_id='audit_1',
+                model='qwen-test',
+                max_turns=40,
+                allow_hitl=False,
+                original_input='校验配置',
+            ):
+                frames.append(frame)
+
+        run_streamed.assert_called_once()
+        output = frames[-1].response_object['output']
+        self.assertTrue(any(item.get('type') == 'function_call' for item in output))
+        self.assertEqual(frames[-1].response_object['status'], 'completed')
+
     def test_ask_user_default_action_is_used_for_autonomous_resolution(self):
         env = InterruptionEnvelope(
             call_id='c1',

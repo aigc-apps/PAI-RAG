@@ -157,9 +157,10 @@ class StreamFrame:
 
 
 _FINAL_REPORT_METADATA_KEY = 'pai_final_report'
+_PROCESS_REASONING_METADATA_KEY = 'pai_process_reasoning'
 _SUMMARY_BLOCK_RE = re.compile(r'<summary\b[^>]*>(.*?)</summary>', re.IGNORECASE | re.DOTALL)
 _PRIVATE_BLOCK_RE = re.compile(
-    r'<(clinical[-_]thinking|taking[-_]action|skill[-_]context|thinking|checking|taking|working)\b[^>]*>'
+    r'<(forcing_skill_activation|clinical[-_]thinking|taking[-_]action|skill[-_]context|thinking|checking|taking|working)\b[^>]*>'
     r'.*?</\1>',
     re.IGNORECASE | re.DOTALL,
 )
@@ -168,6 +169,28 @@ _AUTO_HITL_MAX_CONTINUES = 3
 _AUTONOMOUS_ASK_USER_ANSWER = (
     '当前未开启用户打断。请不要等待用户输入；请基于已有证据选择最保守、可逆、低风险的默认方案继续。'
     '如果缺少用户独有信息或需要不可逆/高风险授权，请停止该动作，并在最终报告中说明阻塞原因、已验证证据和需要用户补充的信息。'
+)
+_TOOL_INTENT_WITHOUT_CALL_RETRY_PROMPT = (
+    '上一轮你在文本里声称要调用工具或激活 skill（例如「调用 ask_user」'
+    '「启动/激活 X 技能」「use_skill …」「我将暂停流程」或类似表述），'
+    '但本轮实际没有发起任何 tool_call，前端和执行器因此不会执行动作。\n'
+    '请基于原始任务继续，并二选一：\n'
+    '- 如果确实需要调用工具或激活 skill，立即真正发起对应 tool_call；\n'
+    '- 如果不需要再调用工具，直接输出用户可见的最终回答正文，不要再用“我将…”之类的预告口吻。'
+)
+_TOOL_INTENT_WITHOUT_CALL_RE = re.compile(
+    r'(?:'
+    r'(?:调用|使用)\s*(?:ask_user|tool_call|tool)'
+    r'|(?:向|跟|与)\s*用户\s*(?:发起|进行|做出)?\s*(?:明确)?\s*询问'
+    r'|我(?:将|会|准备|打算|要|需要)\s*(?:暂停|向用户|对用户|询问用户|发起询问|调用|使用)'
+    r'|因此[，,]\s*我(?:将|会|要|准备|打算)'
+    r'|(?:^|[。；;，,\n]|<summary>|<taking>)\s*(?:启动|激活|开启|进入)\s*[\w\-/. ]{0,80}?\s*(?:技能|skill)'
+    r'|(?:^|[。；;，,\n]|<summary>|<taking>)\s*(?:应(?:优先)?|应该|必须|立即|优先)?\s*(?:调用|使用)\s*[\w\-/. ]{0,80}?\s*(?:技能|skill)'
+    r'|我\s*(?:将|会|准备|打算|要|需要)\s*(?:调用|使用)\s*[\w\-/. ]{0,80}?\s*(?:技能|skill)'
+    r'|use_skill'
+    r"|I\s+(?:will|am\s+going\s+to|need\s+to|have\s+to)\s+(?:call|ask|invoke|use)"
+    r')',
+    re.IGNORECASE,
 )
 _AUTONOMOUS_REJECT_ANSWER = (
     '当前未开启用户打断或人工审批。不要执行该需要审批的动作；请改用安全替代方案，'
@@ -189,9 +212,31 @@ def _message_output_text(item: dict) -> str:
     return ''.join(parts)
 
 
+def _reasoning_output_text(item: dict) -> str:
+    parts: list[str] = []
+    if item.get('type') != 'reasoning':
+        return ''
+    for block in item.get('content') or []:
+        if not isinstance(block, dict):
+            continue
+        if block.get('type') in ('reasoning_text', 'summary_text', 'text'):
+            text = block.get('text') or ''
+            if text:
+                parts.append(text)
+    return ''.join(parts)
+
+
 def _is_final_report_message(item: dict) -> bool:
     metadata = item.get('metadata')
     return isinstance(metadata, dict) and bool(metadata.get(_FINAL_REPORT_METADATA_KEY))
+
+
+def _is_process_reasoning_message(item: dict) -> bool:
+    metadata = item.get('metadata')
+    return (
+        item.get('type') == 'reasoning'
+        or (isinstance(metadata, dict) and bool(metadata.get(_PROCESS_REASONING_METADATA_KEY)))
+    )
 
 
 def _final_text_from_output(output: list[dict]) -> str:
@@ -199,6 +244,8 @@ def _final_text_from_output(output: list[dict]) -> str:
     fallback_parts: list[str] = []
     for item in output or []:
         if not isinstance(item, dict):
+            continue
+        if _is_process_reasoning_message(item):
             continue
         text = _message_output_text(item)
         if not text:
@@ -208,6 +255,42 @@ def _final_text_from_output(output: list[dict]) -> str:
         else:
             fallback_parts.append(text)
     return ''.join(report_parts) if report_parts else ''.join(fallback_parts)
+
+
+def _final_text_after_last_tool_output(output: list[dict]) -> str:
+    last_tool_output = -1
+    for index, item in enumerate(output or []):
+        if isinstance(item, dict) and item.get('type') == 'function_call_output':
+            last_tool_output = index
+    if last_tool_output < 0:
+        return _final_text_from_output(output)
+
+    report_parts: list[str] = []
+    fallback_parts: list[str] = []
+    for item in (output or [])[last_tool_output + 1:]:
+        if not isinstance(item, dict):
+            continue
+        if _is_process_reasoning_message(item):
+            continue
+        text = _message_output_text(item)
+        if not text:
+            continue
+        if _is_final_report_message(item):
+            report_parts.append(text)
+        else:
+            fallback_parts.append(text)
+    return ''.join(report_parts) if report_parts else ''.join(fallback_parts)
+
+
+def _all_message_text_from_output(output: list[dict]) -> str:
+    parts: list[str] = []
+    for item in output or []:
+        if not isinstance(item, dict):
+            continue
+        text = _message_output_text(item) or _reasoning_output_text(item)
+        if text:
+            parts.append(text)
+    return ''.join(parts)
 
 
 def _final_report_from_extras(ctx: RunContext) -> str:
@@ -238,8 +321,32 @@ def _needs_final_report_retry(output: list[dict]) -> bool:
     )
     if not has_tool_output:
         return False
-    visible_text = _strip_model_protocol_blocks(_final_text_from_output(output)).strip()
+    visible_text = _strip_model_protocol_blocks(_final_text_after_last_tool_output(output)).strip()
     return not visible_text
+
+
+def _needs_tool_intent_retry(output: list[dict]) -> bool:
+    has_tool_call = any(
+        isinstance(item, dict) and item.get('type') in ('function_call', 'function_call_output')
+        for item in output or []
+    )
+    if has_tool_call:
+        return False
+    raw_text = _all_message_text_from_output(output)
+    if not raw_text:
+        return False
+    return bool(_TOOL_INTENT_WITHOUT_CALL_RE.search(raw_text))
+
+
+def _tool_intent_retry_input(output: list[dict], original_input: str = '') -> str:
+    previous = _redact_report_text(_all_message_text_from_output(output), max_chars=4000)
+    task = _redact_report_text(original_input, max_chars=2000)
+    sections = [_TOOL_INTENT_WITHOUT_CALL_RETRY_PROMPT]
+    if task:
+        sections.append(f'原始任务：\n{task}')
+    if previous:
+        sections.append(f'上一轮文本：\n{previous}')
+    return '\n\n'.join(sections)
 
 
 def _contains_cjk(text: str) -> bool:
@@ -459,36 +566,11 @@ def _finalize_open_message(
     *,
     response_id: str,
 ) -> list[dict]:
-    if not state.message_started or state.message_index is None:
-        return event_bridge._close_step_if_open(state, response_id=response_id)
-    done_text = ''.join(state.accumulated_text)
-    state.output[state.message_index] = {
-        'id': state.message_id,
-        'type': 'message',
-        'status': 'completed',
-        'role': 'assistant',
-        'content': [{'type': 'output_text', 'text': done_text}],
-    }
-    chunks = [
-        {
-            'type': 'response.output_text.done',
-            'response_id': response_id,
-            'text': done_text,
-            'output_index': state.message_index,
-            'content_index': 0,
-        },
-        {
-            'type': 'response.output_item.done',
-            'response_id': response_id,
-            'output_index': state.message_index,
-            'item': dict(state.output[state.message_index]),
-        },
-    ]
+    chunks = event_bridge._complete_open_message_as_process_reasoning(
+        state,
+        response_id=response_id,
+    )
     chunks.extend(event_bridge._close_step_if_open(state, response_id=response_id))
-    state.message_started = False
-    state.message_index = None
-    state.message_id = None
-    state.accumulated_text = []
     return chunks
 
 
@@ -672,6 +754,10 @@ async def stream_responses_run(
             model=model,
             max_turns=max_turns,
             allow_hitl=allow_hitl,
+            original_input=(
+                input_text if isinstance(input_text, str)
+                else json.dumps(input_items or '', ensure_ascii=False, default=str)
+            ),
         ):
             yield frame
     finally:
@@ -737,6 +823,7 @@ async def _resume_run(
             model=model,
             max_turns=max_turns,
             allow_hitl=allow_hitl,
+            original_input=resume.answer,
         ):
             yield frame
     finally:
@@ -755,6 +842,7 @@ async def _drive_stream(
     model: str,
     max_turns: int,
     allow_hitl: bool,
+    original_input: str = '',
 ) -> AsyncIterator[StreamFrame]:
     """Iterate ``streaming.stream_events()`` and yield wire chunks /
     terminal frame. Caller is responsible for surrounding ``response.created``
@@ -897,6 +985,28 @@ async def _drive_stream(
         }
         yield StreamFrame(terminal=True, response_object=response_obj, interruption=envelope)
         return
+
+    if _needs_tool_intent_retry(bridge_state.output):
+        retry_streaming = Runner.run_streamed(
+            agent,
+            input=_tool_intent_retry_input(bridge_state.output, original_input),
+            context=ctx,
+            max_turns=max(1, min(max_turns, 4)),
+        )
+        async for sdk_event in retry_streaming.stream_events():
+            chunks = event_bridge.to_responses_chunk(sdk_event, bridge_state, response_id=ctx.response_id)
+            for chunk in chunks:
+                yield StreamFrame(chunk=chunk)
+            if audit_store is not None:
+                row = event_bridge.to_audit(sdk_event)
+                if row is not None:
+                    audit_store.append(AuditEvent(
+                        audit_log_id=audit_log_id, run_id=ctx.run_id,
+                        session_id=ctx.session_id, response_id=ctx.response_id,
+                        category=row['category'], payload=row['payload'],
+                    ))
+        final_state = retry_streaming.to_state()
+        current_streaming = retry_streaming
 
     if not _final_report_from_extras(ctx) and _needs_final_report_retry(bridge_state.output):
         retry_streaming = Runner.run_streamed(

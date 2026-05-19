@@ -45,7 +45,7 @@ type ProcessGroup = {
 };
 
 const INTERNAL_TOOL_NAMES = new Set(["update_working_checkpoint", "update_todo", "start_long_term_update", "final_report"]);
-const MODEL_PROTOCOL_TAG_RE = /<\/?(?:summary|thinking|clinical[_-]thinking|checking|taking|taking[_-]action|skill[_-]context|working)\b[^>]*>/gi;
+const MODEL_PROTOCOL_TAG_RE = /<\/?(?:summary|forcing_skill_activation|thinking|clinical[_-]thinking|checking|taking|taking[_-]action|skill[_-]context|working)\b[^>]*>/gi;
 const STICKY_BOTTOM_PX = 96;
 const RESUME_STICKY_PX = 640;
 

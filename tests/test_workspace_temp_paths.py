@@ -20,6 +20,17 @@ class WorkspaceTemporaryPathTests(unittest.TestCase):
             memory_root=os.path.join(root, "memory"),
         ), workspace
 
+    def make_handler_with_env(self, root, run_env):
+        workspace = os.path.join(root, "workspace")
+        os.makedirs(workspace, exist_ok=True)
+        return GenericHandler(
+            cwd=workspace,
+            mini_agent_root=root,
+            workspace_root=workspace,
+            memory_root=os.path.join(root, "memory"),
+            run_env=run_env,
+        ), workspace
+
     def write_file(self, handler, path, content="ok"):
         response = SimpleNamespace(content=f"<file_content>{content}</file_content>")
         return handler.do_file_write({"path": path, "mode": "overwrite"}, response)
@@ -77,6 +88,46 @@ class WorkspaceTemporaryPathTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "success")
             self.assertIn(workspace, result["stdout"])
+
+    def test_code_run_receives_handler_run_env(self):
+        with tempfile.TemporaryDirectory() as root:
+            handler, _ = self.make_handler_with_env(root, {"ALIBABA_CLOUD_PROFILE": "profile-test"})
+
+            outcome = handler.do_code_run(
+                {
+                    "script": "import os\nprint(os.environ.get('ALIBABA_CLOUD_PROFILE', ''))",
+                    "type": "python",
+                },
+                SimpleNamespace(content=""),
+            )
+
+            self.assertEqual(outcome.data["status"], "success")
+            self.assertEqual(outcome.data["stdout"].strip(), "profile-test")
+
+    def test_request_aliyun_invalid_credentials_are_fatal(self):
+        with tempfile.TemporaryDirectory() as root:
+            handler, _ = self.make_handler_with_env(root, {
+                "ALIBABA_CLOUD_PROFILE": "pai-rag-runtime-test",
+                "PAI_RAG_REQUEST_ALIYUN_CREDENTIALS": "1",
+            })
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                outcome = handler.do_code_run(
+                    {
+                        "script": (
+                            "import sys\n"
+                            "print('InvalidAccessKeyId.NotFound: Specified access key is not found')\n"
+                            "sys.exit(1)"
+                        ),
+                        "type": "python",
+                    },
+                    SimpleNamespace(content=""),
+                )
+
+            self.assertEqual(outcome.data["status"], "error")
+            self.assertTrue(outcome.data["fatal"])
+            self.assertEqual(outcome.data["error_code"], "aliyun_invalid_request_credentials")
+            self.assertIn("AK/SK 无效", outcome.next_prompt)
 
     def test_code_run_project_root_cwd_maps_to_workspace(self):
         with tempfile.TemporaryDirectory() as root:

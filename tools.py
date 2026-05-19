@@ -32,6 +32,18 @@ MEMORY_INJECTION_PATTERNS = (
     re.compile(r'(?:泄露|透露)(?:系统提示词|开发者指令)'),
 )
 
+ALIYUN_REQUEST_CREDENTIALS_ENV = 'PAI_RAG_REQUEST_ALIYUN_CREDENTIALS'
+ALIYUN_INVALID_CREDENTIAL_RE = re.compile(
+    r'(?i)('
+    r'InvalidAccessKeyId'
+    r'|InvalidAccessKeySecret'
+    r'|IllegalAccessKeyId'
+    r'|SignatureDoesNotMatch'
+    r'|Specified access key is not found'
+    r'|access\s*key\s*(?:id|secret).{0,80}(?:invalid|not\s*found)'
+    r')'
+)
+
 
 # ──────────────────────────── 通用工具函数 ──────────────────────────── #
 
@@ -72,6 +84,32 @@ def _head_tail_preview(text, max_chars, marker='OUTPUT TRUNCATED', full_path=Non
     head_chars = max(1, int(keep_budget * 0.4))
     tail_chars = max(1, keep_budget - head_chars)
     return f'{text[:head_chars]}{notice}{text[-tail_chars:]}', True
+
+
+def _uses_request_aliyun_credentials(env):
+    env = dict(env or {})
+    return str(env.get(ALIYUN_REQUEST_CREDENTIALS_ENV) or '').strip() == '1'
+
+
+def _annotate_aliyun_credential_failure(result, env):
+    if not _uses_request_aliyun_credentials(env):
+        return result
+    if not isinstance(result, dict) or result.get('status') != 'error':
+        return result
+    text = '\n'.join(str(result.get(key) or '') for key in ('stdout', 'msg'))
+    if not ALIYUN_INVALID_CREDENTIAL_RE.search(text):
+        return result
+    result.update({
+        'fatal': True,
+        'error_code': 'aliyun_invalid_request_credentials',
+        'msg': '请求传入的 Aliyun AK/SK 无效或不匹配，必须停止任务并请业务方更换有效 AK/SK。',
+        'stop_instruction': (
+            '本次请求显式传入了 Aliyun AK/SK，工具返回了凭证无效错误。'
+            '不要重试、不要切换机器默认凭证、不要继续执行依赖 Aliyun 的步骤；'
+            '请直接给出最终答复，说明 AK/SK 无效。'
+        ),
+    })
+    return result
 
 
 class WorkspaceViolation(ValueError):
@@ -121,6 +159,7 @@ def code_run(
     output_ref_dir=None,
     output_id=None,
     stdout_preview_chars=CODE_RUN_STDOUT_PREVIEW_CHARS,
+    env=None,
 ):
     """同步执行 python 或 bash，流式打印 stdout。cancel_evt 触发即 kill 子进程。"""
     cwd = cwd or os.getcwd()
@@ -157,8 +196,12 @@ def code_run(
                 pass
 
     try:
+        child_env = None
+        if env:
+            child_env = os.environ.copy()
+            child_env.update({str(k): str(v) for k, v in dict(env).items() if v is not None})
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                bufsize=0, cwd=cwd)
+                                bufsize=0, cwd=cwd, env=child_env)
         t = threading.Thread(target=reader, args=(proc,), daemon=True)
         t.start()
         start = time.time()
@@ -331,6 +374,7 @@ class GenericHandler(BaseHandler):
         writable_roots=None,
         memory_root=None,
         long_term_memory_enabled=True,
+        run_env=None,
     ):
         self.cwd = os.path.abspath(cwd)
         self.root = mini_agent_root          # 用于定位 prompts/memory 目录
@@ -347,6 +391,7 @@ class GenericHandler(BaseHandler):
         self.cancel_evt = None               # 前端可注入 threading.Event 用于中止
         self._done_hooks = []                # legacy hook queue; normal memory review is async
         self._tool_event_emit = None
+        self.run_env = dict(run_env or {})
 
     # ── 路径与代码块抽取 ──
     def allow_readonly_root(self, path):
@@ -596,12 +641,21 @@ class GenericHandler(BaseHandler):
             output_dir=self._artifact_dir('code_run_outputs'),
             output_ref_dir=self._artifact_ref_dir('code_run_outputs'),
             output_id=args.get('_tool_call_id') or f'code-run-{self.current_turn}-{args.get("_index", 0)}',
+            env=self.run_env,
         )
+        result = _annotate_aliyun_credential_failure(result, self.run_env)
         icon = {'success': '✅', 'error': '❌'}.get(result.get('status'), '⏳')
         snippet = smart_format(result.get('stdout', ''), max_str_len=600,
                                omit_str='\n\n[output preview omitted]\n\n')
         print(f"[Status] {icon} exit={result.get('exit_code')}\n[Stdout]\n{snippet}")
-        return StepOutcome(result, next_prompt=self._anchor_prompt(skip=args.get('_index', 0) > 0))
+        next_prompt = self._anchor_prompt(skip=args.get('_index', 0) > 0)
+        if result.get('error_code') == 'aliyun_invalid_request_credentials':
+            next_prompt += (
+                '\n[STOP:ALIYUN_CREDENTIALS_INVALID] 本次请求传入的 Aliyun AK/SK 已被工具错误确认无效或不匹配。'
+                '立即停止任务，不要继续重试、不要 ask_user、不要切换机器默认凭证；'
+                '最终答复只说明 AK/SK 无效，并要求业务方更换有效 AK/SK。'
+            )
+        return StepOutcome(result, next_prompt=next_prompt)
 
     def do_file_read(self, args, response):
         path = self._abs(args.get('path', ''))

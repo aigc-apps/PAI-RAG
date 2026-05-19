@@ -25,6 +25,14 @@ from backend.agent_service import handler_memory_scope
 from backend.session_archive import archive_session_record
 from backend.skills_inventory import skills_inventory
 from backend.workspace import WorkspaceViolation
+from backend.aliyun_credentials import (
+    AliyunConfigError,
+    AliyunCredentialError,
+    AliyunCredentials,
+    AliyunProfileLease,
+    pop_aliyun_credentials,
+    write_temporary_profile,
+)
 from session_store import SERVER_USER_ID
 from tools import WorkspaceViolation as ToolWorkspaceViolation
 
@@ -239,6 +247,59 @@ def backend_error(exc):
 
 def openai_error(message, code='invalid_request_error'):
     return {'error': {'message': message, 'type': 'invalid_request_error', 'code': code}}
+
+
+def _pop_aliyun_credentials_response(body: dict):
+    try:
+        return pop_aliyun_credentials(body), None
+    except AliyunCredentialError as exc:
+        return None, JSONResponse(
+            openai_error(str(exc), code='invalid_aliyun_credentials'),
+            status_code=400,
+        )
+
+
+def _create_aliyun_profile_response(credentials: AliyunCredentials | None):
+    if credentials is None:
+        return None, None
+    try:
+        lease = write_temporary_profile(credentials)
+    except AliyunConfigError as exc:
+        logger.warning('Failed to prepare Aliyun runtime profile: %s', exc, exc_info=True)
+        return None, JSONResponse(
+            openai_error(str(exc), code='aliyun_config_error'),
+            status_code=500,
+        )
+    logger.info('Prepared Aliyun runtime profile: profile=%s', lease.profile_name)
+    return lease, None
+
+
+def _cleanup_aliyun_profile(lease: AliyunProfileLease | None) -> None:
+    if lease is None:
+        return
+    try:
+        lease.cleanup()
+    except Exception as exc:
+        logger.warning(
+            'Failed to cleanup Aliyun runtime profile: profile=%s error=%s',
+            lease.profile_name,
+            exc,
+            exc_info=True,
+        )
+
+
+async def _with_aliyun_profile_cleanup(gen, lease: AliyunProfileLease | None):
+    try:
+        async for chunk in gen:
+            yield chunk
+    finally:
+        aclose = getattr(gen, 'aclose', None)
+        if aclose is not None:
+            try:
+                await aclose()
+            except Exception:
+                logger.debug('Failed to close wrapped stream during Aliyun profile cleanup', exc_info=True)
+        _cleanup_aliyun_profile(lease)
 
 
 def stream_headers():
@@ -514,11 +575,33 @@ def _last_user_content(messages):
 
 
 _FINAL_REPORT_METADATA_KEY = 'pai_final_report'
+_PROCESS_REASONING_METADATA_KEY = 'pai_process_reasoning'
 
 
 def _is_final_report_output_item(item):
     metadata = item.get('metadata') if isinstance(item, dict) else None
     return isinstance(metadata, dict) and bool(metadata.get(_FINAL_REPORT_METADATA_KEY))
+
+
+def _is_process_reasoning_output_item(item):
+    metadata = item.get('metadata') if isinstance(item, dict) else None
+    return (
+        isinstance(item, dict) and item.get('type') == 'reasoning'
+    ) or (
+        isinstance(metadata, dict) and bool(metadata.get(_PROCESS_REASONING_METADATA_KEY))
+    )
+
+
+def _reasoning_output_text(item):
+    parts = []
+    for block in item.get('content') or []:
+        if not isinstance(block, dict):
+            continue
+        if block.get('type') in ('reasoning_text', 'summary_text', 'text', 'output_text'):
+            text = block.get('text') or ''
+            if text:
+                parts.append(text)
+    return ''.join(parts)
 
 
 def _final_assistant_text(output_list):
@@ -528,9 +611,16 @@ def _final_assistant_text(output_list):
     is authoritative and earlier protocol-only messages are ignored.
     """
     parts = []
+    after_tool_parts = []
     report_parts = []
-    for item in output_list or []:
+    last_tool_output = -1
+    for index, item in enumerate(output_list or []):
+        if isinstance(item, dict) and item.get('type') == 'function_call_output':
+            last_tool_output = index
+    for item_index, item in enumerate(output_list or []):
         if not isinstance(item, dict) or item.get('type') != 'message':
+            continue
+        if _is_process_reasoning_output_item(item):
             continue
         item_parts = []
         for block in item.get('content') or []:
@@ -547,10 +637,17 @@ def _final_assistant_text(output_list):
             report_parts.append(item_text)
         else:
             parts.append(item_text)
-    return ''.join(report_parts) if report_parts else ''.join(parts)
+            if last_tool_output >= 0 and item_index > last_tool_output:
+                after_tool_parts.append(item_text)
+    if report_parts:
+        return ''.join(report_parts)
+    if last_tool_output >= 0 and after_tool_parts:
+        return ''.join(after_tool_parts)
+    return ''.join(parts)
 
 
 _THINK_TAGS = (
+    ('<forcing_skill_activation>', '</forcing_skill_activation>'),
     ('<clinical-thinking>', '</clinical-thinking>'),
     ('<clinical_thinking>', '</clinical_thinking>'),
     ('<taking-action>', '</taking-action>'),
@@ -562,6 +659,7 @@ _THINK_TAGS = (
     ('<taking>', '</taking>'),
     ('<working>', '</working>'),
 )
+_DISCARD_THINK_OPEN_TAGS = {'<forcing_skill_activation>'}
 _INTERNAL_TOOL_NAMES = {'update_working_checkpoint', 'update_todo', 'start_long_term_update', 'final_report'}
 
 
@@ -606,6 +704,48 @@ def _find_next_think_tag(text, pos=0):
     return best
 
 
+def _thought_updates_from_text(text, thought_id):
+    updates = [{
+        'sessionUpdate': 'thought_start', 'thoughtId': thought_id,
+        'title': 'Thinking', 'status': 'in_progress',
+    }]
+    pos = 0
+    while pos < len(text):
+        found = _find_next_think_tag(text, pos)
+        if found is None:
+            chunk = text[pos:]
+            if chunk:
+                updates.append({
+                    'sessionUpdate': 'thought_delta', 'thoughtId': thought_id,
+                    'content': {'type': 'text', 'text': chunk},
+                })
+            break
+        i, open_tag, close_tag = found
+        if i > pos:
+            updates.append({
+                'sessionUpdate': 'thought_delta', 'thoughtId': thought_id,
+                'content': {'type': 'text', 'text': text[pos:i]},
+            })
+        j = text.find(close_tag, i + len(open_tag))
+        if j == -1:
+            inner = text[i + len(open_tag):]
+            end = len(text)
+        else:
+            inner = text[i + len(open_tag):j]
+            end = j + len(close_tag)
+        if open_tag not in _DISCARD_THINK_OPEN_TAGS and inner:
+            updates.append({
+                'sessionUpdate': 'thought_delta', 'thoughtId': thought_id,
+                'content': {'type': 'text', 'text': inner},
+            })
+        pos = end
+    updates.append({
+        'sessionUpdate': 'thought_done', 'thoughtId': thought_id,
+        'status': 'completed',
+    })
+    return updates
+
+
 def _agent_updates_from_output(output_list):
     """Build frontend-shaped ``AgentUpdate`` dicts from Responses API output.
 
@@ -624,6 +764,12 @@ def _agent_updates_from_output(output_list):
         if not isinstance(item, dict):
             continue
         t = item.get('type')
+        if t == 'reasoning':
+            text = _reasoning_output_text(item)
+            if text:
+                think_counter += 1
+                updates.extend(_thought_updates_from_text(text, f'persisted-process-think-{think_counter}'))
+            continue
         if t == 'message':
             for block in item.get('content') or []:
                 if not isinstance(block, dict):
@@ -632,6 +778,10 @@ def _agent_updates_from_output(output_list):
                     continue
                 text = block.get('text') or ''
                 if not text:
+                    continue
+                if _is_process_reasoning_output_item(item):
+                    think_counter += 1
+                    updates.extend(_thought_updates_from_text(text, f'persisted-process-think-{think_counter}'))
                     continue
                 pos = 0
                 while pos < len(text):
@@ -657,6 +807,9 @@ def _agent_updates_from_output(output_list):
                     else:
                         inner = text[i + len(open_tag):j]
                         end = j + len(close_tag)
+                    if open_tag in _DISCARD_THINK_OPEN_TAGS:
+                        pos = end
+                        continue
                     think_counter += 1
                     tid = f'persisted-think-{think_counter}'
                     updates.append({
@@ -935,7 +1088,8 @@ def skills():
 
 
 async def _sdk_response_stream(*, body, model, model_override, instructions, conversation,
-                               session_id, cwd, store, previous_response_id, allow_hitl=False):
+                               session_id, cwd, store, previous_response_id, allow_hitl=False,
+                               tool_env=None):
     """Drive the SDK runner and emit Responses-API SSE chunks."""
     from backend.agents_sdk import runner as sdk_runner
     from backend.agents_sdk.hitl import ResumePayload
@@ -1024,6 +1178,7 @@ async def _sdk_response_stream(*, body, model, model_override, instructions, con
         mini_agent_root=ROOT,
         workspace_root=sess.workspace_root,
         readonly_roots=sess.readonly_roots,
+        run_env=tool_env,
     )
     extras = {'handler': handler, 'session': sess}
 
@@ -1162,6 +1317,9 @@ async def create_response(request: Request):
             'X-Session-Id is no longer supported; use the conversation request field',
             code='unsupported_legacy_header',
         ), status_code=400)
+    aliyun_credentials, error_response = _pop_aliyun_credentials_response(body)
+    if error_response is not None:
+        return error_response
 
     raw_model = body.get('model')
     model_override = None
@@ -1222,13 +1380,18 @@ async def create_response(request: Request):
         return JSONResponse(openai_error(
             'Non-streaming /v1/responses is not supported; pass stream=true',
             code='unsupported_mode'), status_code=400)
+    aliyun_profile, error_response = _create_aliyun_profile_response(aliyun_credentials)
+    if error_response is not None:
+        return error_response
     gen = _sdk_response_stream(
         body=body, model=model, model_override=model_override,
         instructions=instructions, conversation=conversation,
         session_id=session_id_for_sdk, cwd=cwd, store=store,
         previous_response_id=previous_response_id,
         allow_hitl=bool(body.get('allow_hitl', resume_input_for_hitl_default)),
+        tool_env=aliyun_profile.env if aliyun_profile is not None else None,
     )
+    gen = _with_aliyun_profile_cleanup(gen, aliyun_profile)
     return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
                              headers=stream_headers())
 
@@ -1286,7 +1449,7 @@ def cancel_response(resp_id: str):
     return response_obj
 
 
-async def _sdk_chat_stream(*, body, model, cwd, allow_hitl=False):
+async def _sdk_chat_stream(*, body, model, cwd, allow_hitl=False, tool_env=None):
     """Drive the SDK runner and emit public Chat Completions SSE chunks."""
     from backend.agents_sdk import event_bridge as _bridge
     from backend.agents_sdk import runner as sdk_runner
@@ -1361,6 +1524,7 @@ async def _sdk_chat_stream(*, body, model, cwd, allow_hitl=False):
     handler = GenericHandler(
         cwd=cwd_resolved, mini_agent_root=ROOT,
         workspace_root=workspace_root, readonly_roots=readonly,
+        run_env=tool_env,
     )
     extras = {'handler': handler}
     if sess_for_persist is not None:
@@ -1531,6 +1695,9 @@ async def chat_completions(request: Request):
             'X-Session-Id is no longer supported on Chat Completions; include conversation history in messages',
             code='unsupported_legacy_header',
         ), status_code=400)
+    aliyun_credentials, error_response = _pop_aliyun_credentials_response(body)
+    if error_response is not None:
+        return error_response
     raw_model = body.get('model')
     model_override = None
     if raw_model:
@@ -1547,11 +1714,21 @@ async def chat_completions(request: Request):
     cwd = body.get('cwd')
     stream = bool(body.get('stream', False))
     allow_hitl = bool(body.get('allow_hitl', bool(messages and isinstance(messages[-1], dict) and messages[-1].get('role') == 'tool')))
-    gen = _sdk_chat_stream(body=body, model=model, cwd=cwd, allow_hitl=allow_hitl)
+    aliyun_profile, error_response = _create_aliyun_profile_response(aliyun_credentials)
+    if error_response is not None:
+        return error_response
+    gen = _sdk_chat_stream(
+        body=body, model=model, cwd=cwd, allow_hitl=allow_hitl,
+        tool_env=aliyun_profile.env if aliyun_profile is not None else None,
+    )
     if stream:
+        gen = _with_aliyun_profile_cleanup(gen, aliyun_profile)
         return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
                                  headers=stream_headers())
-    return await _collect_chat_completion(gen, model=model)
+    try:
+        return await _collect_chat_completion(gen, model=model)
+    finally:
+        _cleanup_aliyun_profile(aliyun_profile)
 
 
 @app.get('/v1/sessions')

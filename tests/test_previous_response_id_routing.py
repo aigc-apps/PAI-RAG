@@ -53,6 +53,18 @@ class _Service:
         self.store = store
 
 
+class _Lease:
+    profile_name = 'pai-rag-runtime-test'
+    env = {'ALIBABA_CLOUD_PROFILE': profile_name}
+
+    def __init__(self):
+        self.cleaned = False
+
+    def cleanup(self):
+        self.cleaned = True
+        return True
+
+
 class PreviousResponseIdHttpRoutingTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -108,6 +120,38 @@ class PreviousResponseIdHttpRoutingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(fake.call_args.kwargs['allow_hitl'])
+
+    async def test_responses_aliyun_credentials_create_profile_and_are_stripped(self):
+        lease = _Lease()
+        with patch.object(server, 'write_temporary_profile', return_value=lease) as write_profile, \
+             patch.object(server, '_sdk_response_stream', side_effect=_minimal_sse) as fake:
+            response = await server.create_response(_Request({
+                'input': 'hello',
+                'stream': True,
+                'aliyun_credentials': {
+                    'access_key_id': 'request-ak',
+                    'access_key_secret': 'request-secret',
+                    'region_id': 'cn-beijing',
+                },
+            }))
+
+        self.assertEqual(response.status_code, 200)
+        write_profile.assert_called_once()
+        self.assertEqual(write_profile.call_args.args[0].access_key_id, 'request-ak')
+        self.assertNotIn('aliyun_credentials', fake.call_args.kwargs['body'])
+        self.assertEqual(fake.call_args.kwargs['tool_env'], lease.env)
+
+    async def test_invalid_aliyun_credentials_are_rejected_before_profile_write(self):
+        with patch.object(server, 'write_temporary_profile') as write_profile:
+            response = await server.create_response(_Request({
+                'input': 'hello',
+                'stream': True,
+                'aliyun_credentials': {'access_key_id': 'request-ak'},
+            }))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json.loads(response.body)['error']['code'], 'invalid_aliyun_credentials')
+        write_profile.assert_not_called()
 
     async def test_conversation_uses_existing_session_for_plain_turn(self):
         self.store.save(
@@ -232,6 +276,26 @@ class PreviousResponseIdHttpRoutingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response['object'], 'chat.completion')
         self.assertEqual(response['choices'][0]['message']['content'], 'ok')
         self.assertEqual(fake.call_args.kwargs['cwd'], None)
+
+    async def test_chat_completions_aliyun_credentials_create_profile_and_cleanup(self):
+        lease = _Lease()
+        with patch.object(server, 'write_temporary_profile', return_value=lease) as write_profile, \
+             patch.object(server, '_sdk_chat_stream', side_effect=_minimal_chat_sse) as fake:
+            response = await server.chat_completions(_Request({
+                'messages': [{'role': 'user', 'content': 'hi'}],
+                'stream': False,
+                'aliyun_credentials': {
+                    'access_key_id': 'request-ak',
+                    'access_key_secret': 'request-secret',
+                    'region_id': 'cn-beijing',
+                },
+            }))
+
+        self.assertEqual(response['object'], 'chat.completion')
+        write_profile.assert_called_once()
+        self.assertNotIn('aliyun_credentials', fake.call_args.kwargs['body'])
+        self.assertEqual(fake.call_args.kwargs['tool_env'], lease.env)
+        self.assertTrue(lease.cleaned)
 
     async def test_chat_completions_rejects_legacy_session_header(self):
         response = await server.chat_completions(_Request({

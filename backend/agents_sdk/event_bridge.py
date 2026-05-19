@@ -32,6 +32,7 @@ _PLACEHOLDER_FC_ID_RE = re.compile(
 _FINAL_REPORT_TOOL_NAME = 'final_report'
 _FINAL_REPORT_FIELD = 'report_markdown'
 _FINAL_REPORT_METADATA_KEY = 'pai_final_report'
+_PROCESS_REASONING_METADATA_KEY = 'pai_process_reasoning'
 _FINAL_REPORT_FIELD_RE = re.compile(r'"report_markdown"\s*:\s*"')
 
 # ``GenericHandler.do_*`` returns a ``StepOutcome`` whose ``next_prompt`` carries
@@ -104,50 +105,63 @@ def _is_placeholder_fc_id(value: str) -> bool:
     return not value or bool(_PLACEHOLDER_FC_ID_RE.match(value))
 
 
-# Internal protocol tags emitted by the model that must NOT leak to clients.
-# Only ``<summary>`` is stripped at the wire layer — it is pure metadata used
-# by the runner for history-summarisation retries and has no user-facing
-# meaning. The reasoning-style tags (``<thinking>``, ``<checking>``,
-# ``<taking>``, ``<working>``, ``<clinical-thinking>``, ``<taking-action>``,
-# ``<skill-context>``) are intentionally passed through: the React frontend's
-# ``consumeTextDelta`` parser converts them into ``thought_delta`` updates
-# that render as the "Thinking…" panel. Stripping them here would leave that
-# panel empty.
-_HIDDEN_TAG_NAMES: tuple[str, ...] = ('summary',)
+# Internal protocol tags emitted by the model that must NOT leak through
+# ``response.output_text``. Reasoning-style tags are surfaced as
+# ``response.reasoning_text.delta``; metadata-only blocks are discarded.
+_THOUGHT_TAG_NAMES: tuple[str, ...] = (
+    'clinical-thinking',
+    'clinical_thinking',
+    'taking-action',
+    'taking_action',
+    'skill-context',
+    'skill_context',
+    'thinking',
+    'checking',
+    'taking',
+    'working',
+)
+_DISCARD_TAG_NAMES: tuple[str, ...] = ('summary', 'forcing_skill_activation')
+_PRIVATE_TAG_MODES: dict[str, str] = {
+    **{name: 'thought' for name in _THOUGHT_TAG_NAMES},
+    **{name: 'discard' for name in _DISCARD_TAG_NAMES},
+}
+_PRIVATE_TAG_NAMES: tuple[str, ...] = tuple(_PRIVATE_TAG_MODES)
 # Worst case lookahead: longest "<tagname" + 1 char of attr-or-close lookahead.
-_HIDDEN_TAG_LOOKAHEAD = max(len(t) for t in _HIDDEN_TAG_NAMES) + 2
+_PRIVATE_TAG_LOOKAHEAD = max(len(t) for t in _PRIVATE_TAG_NAMES) + 2
 
 
 class StreamProtocolFilter:
-    """Stateful filter that drops ``<summary>...</summary>`` and similar
-    internal protocol blocks from streamed assistant text.
+    """Stateful splitter for streamed assistant text.
 
     Tag boundaries can split across SSE deltas (``"<sum"`` / ``"mary>"``), so
     the filter buffers ambiguous prefixes until it has enough lookahead to
-    decide whether a ``<`` opens a hidden tag or is just literal text.
+    decide whether a ``<`` opens a private tag or is just literal text.
 
     Behavior:
-    - When inside a hidden tag, all bytes are dropped until the matching
-      ``</tag>`` is seen (case-insensitive).
-    - When not inside a hidden tag, text up to the next ``<`` is forwarded
+    - Reasoning tags emit ``('thought', text)`` segments without the tags.
+    - Metadata-only tags emit nothing.
+    - Text outside private tags emits ``('visible', text)`` segments.
+    - When not inside a private tag, text up to the next ``<`` is forwarded
       immediately; the ``<`` itself is held until either it can be confirmed
-      as a hidden-tag opener (then dropped through the closing tag) or as
+      as a private-tag opener (then consumed through the opening tag) or as
       literal text (then forwarded).
-    - ``flush()`` drains any remaining buffer at end-of-message. An unclosed
-      hidden tag is dropped silently — better than leaking a half-tag.
+    - ``flush_segments()`` drains any remaining buffer at end-of-message. An
+      unclosed discard tag is dropped silently; an unclosed thought tag is
+      emitted as reasoning text.
     """
 
-    __slots__ = ('_buffer', '_in_tag')
+    __slots__ = ('_buffer', '_in_tag', '_in_mode')
 
     def __init__(self) -> None:
         self._buffer: str = ''
         self._in_tag: str | None = None
+        self._in_mode: str | None = None
 
-    def feed(self, delta: str) -> str:
+    def feed_segments(self, delta: str) -> list[tuple[str, str]]:
         if not delta:
-            return ''
+            return []
         self._buffer += delta
-        out: list[str] = []
+        out: list[tuple[str, str]] = []
         while self._buffer:
             if self._in_tag is not None:
                 close = f'</{self._in_tag}>'
@@ -164,70 +178,115 @@ class StreamProtocolFilter:
                         if buf_lower.endswith(close_lower[:k]):
                             keep = k
                             break
-                    self._buffer = self._buffer[len(self._buffer) - keep:] if keep else ''
-                    return ''.join(out)
+                    emit_len = len(self._buffer) - keep
+                    if emit_len > 0 and self._in_mode == 'thought':
+                        out.append(('thought', self._buffer[:emit_len]))
+                    self._buffer = self._buffer[emit_len:] if keep else ''
+                    return out
+                inner = self._buffer[:idx]
+                if inner and self._in_mode == 'thought':
+                    out.append(('thought', inner))
                 self._buffer = self._buffer[idx + len(close):]
                 self._in_tag = None
+                self._in_mode = None
                 continue
             lt = self._buffer.find('<')
             if lt < 0:
-                out.append(self._buffer)
-                self._buffer = ''
-                break
+                safe_up_to = self._safe_visible_prefix_len(self._buffer)
+                if safe_up_to > 0:
+                    out.append(('visible', self._buffer[:safe_up_to]))
+                self._buffer = self._buffer[safe_up_to:]
+                return out
             if lt > 0:
-                out.append(self._buffer[:lt])
+                out.append(('visible', self._buffer[:lt]))
                 self._buffer = self._buffer[lt:]
-            # Buffer now starts with '<'. Decide if it's a hidden tag.
-            matched_tag: str | None = None
-            for tag in _HIDDEN_TAG_NAMES:
-                opener = f'<{tag}'
-                if self._buffer.lower().startswith(opener.lower()):
-                    nxt = self._buffer[len(opener):len(opener) + 1]
-                    if nxt and nxt not in (' ', '>', '\t', '\n', '\r', '/'):
-                        # Looks like ``<thinking-extra>`` — not our tag.
-                        continue
-                    matched_tag = tag
-                    break
-            if matched_tag is not None:
-                close_open = self._buffer.find('>')
-                if close_open < 0:
-                    # Opening tag not yet complete — wait for more data.
-                    return ''.join(out)
-                self._in_tag = matched_tag
-                self._buffer = self._buffer[close_open + 1:]
+            # Buffer now starts with '<'. Decide if it's a private tag.
+            match = self._match_open_tag()
+            if match == 'pending':
+                return out
+            if match is not None:
+                tag, mode, open_end = match
+                self._in_tag = tag
+                self._in_mode = mode
+                self._buffer = self._buffer[open_end:]
                 continue
-            # '<' is not a confirmed hidden-tag opener. If the buffer is too
+            # '<' is not a confirmed private-tag opener. If the buffer is too
             # short to rule one out, hold and wait for more bytes.
-            if len(self._buffer) < _HIDDEN_TAG_LOOKAHEAD:
+            if len(self._buffer) < _PRIVATE_TAG_LOOKAHEAD:
                 possible = False
                 lower = self._buffer.lower()
-                for tag in _HIDDEN_TAG_NAMES:
+                for tag in _PRIVATE_TAG_NAMES:
                     opener = f'<{tag}'
                     if opener.lower().startswith(lower):
                         possible = True
                         break
                 if possible:
-                    return ''.join(out)
-            out.append('<')
+                    return out
+            out.append(('visible', '<'))
             self._buffer = self._buffer[1:]
-        return ''.join(out)
+        return out
 
-    def flush(self) -> str:
+    def flush_segments(self) -> list[tuple[str, str]]:
         if self._in_tag is not None:
+            out: list[tuple[str, str]] = []
+            if self._in_mode == 'thought' and self._buffer:
+                out.append(('thought', self._buffer))
             self._buffer = ''
             self._in_tag = None
-            return ''
+            self._in_mode = None
+            return out
         out = self._buffer
         self._buffer = ''
         # If the leftover is a strict prefix of any hidden-tag opener
         # (``<sum`` / ``<summary`` / ``<thinking``), we never received the
         # rest. Drop conservatively so a half-tag doesn't leak.
         lower = out.lower()
-        for tag in _HIDDEN_TAG_NAMES:
+        for tag in _PRIVATE_TAG_NAMES:
             opener = f'<{tag}'.lower()
             if lower and len(lower) <= len(opener) and opener.startswith(lower):
-                return ''
-        return out
+                return []
+        return [('visible', out)] if out else []
+
+    def feed(self, delta: str) -> str:
+        return ''.join(text for mode, text in self.feed_segments(delta) if mode == 'visible')
+
+    def flush(self) -> str:
+        return ''.join(text for mode, text in self.flush_segments() if mode == 'visible')
+
+    def _match_open_tag(self) -> tuple[str, str, int] | str | None:
+        lower = self._buffer.lower()
+        pending = False
+        for tag, mode in _PRIVATE_TAG_MODES.items():
+            opener = f'<{tag}'
+            opener_lower = opener.lower()
+            if lower.startswith(opener_lower):
+                nxt = self._buffer[len(opener):len(opener) + 1]
+                if not nxt:
+                    pending = True
+                    continue
+                if nxt not in (' ', '>', '\t', '\n', '\r', '/'):
+                    continue
+                open_end = self._buffer.find('>')
+                if open_end < 0:
+                    pending = True
+                    continue
+                return tag, mode, open_end + 1
+            if opener_lower.startswith(lower):
+                pending = True
+        return 'pending' if pending else None
+
+    @staticmethod
+    def _safe_visible_prefix_len(buffer: str) -> int:
+        safe_up_to = len(buffer)
+        lower = buffer.lower()
+        for tag in _PRIVATE_TAG_NAMES:
+            opener = f'<{tag}'.lower()
+            max_len = min(len(opener) - 1, len(lower))
+            for n in range(max_len, 0, -1):
+                if lower.endswith(opener[:n]):
+                    safe_up_to = min(safe_up_to, len(buffer) - n)
+                    break
+        return safe_up_to
 
 
 @dataclass
@@ -264,6 +323,7 @@ class ResponsesStreamState:
     """
     output: list[dict] = field(default_factory=list)
     accumulated_text: list[str] = field(default_factory=list)
+    pending_text_segments: list[tuple[str, str]] = field(default_factory=list)
     message_started: bool = False
     message_index: int | None = None
     message_id: str | None = None
@@ -304,6 +364,149 @@ def _close_step_if_open(state: ResponsesStreamState, *, response_id: str) -> lis
     }
     state.current_step_id = None
     return [chunk]
+
+
+def _stream_reasoning_text(
+    state: ResponsesStreamState,
+    text: str,
+    *,
+    response_id: str,
+) -> list[dict]:
+    if not text:
+        return []
+    chunks = _open_step_if_needed(state, response_id=response_id)
+    step_id = state.current_step_id
+    if not step_id:
+        return chunks
+    for piece in _stream_text_chunks(text):
+        if not piece:
+            continue
+        chunks.append({
+            'type': 'response.reasoning_text.delta',
+            'response_id': response_id,
+            'step_id': step_id,
+            'delta': piece,
+        })
+    return chunks
+
+
+def _append_text_segments(
+    state: ResponsesStreamState,
+    segments: list[tuple[str, str]],
+    *,
+    response_id: str,
+) -> list[dict]:
+    chunks: list[dict] = []
+    for mode, text in segments:
+        if not text:
+            continue
+        if mode == 'visible':
+            state.accumulated_text.append(text)
+            state.pending_text_segments.append((mode, text))
+            continue
+        if mode == 'thought':
+            state.pending_text_segments.append((mode, text))
+            chunks.extend(_stream_reasoning_text(state, text, response_id=response_id))
+    return chunks
+
+
+def _flush_text_segments(
+    state: ResponsesStreamState,
+    *,
+    response_id: str,
+) -> list[dict]:
+    return _append_text_segments(
+        state,
+        state.protocol_filter.flush_segments(),
+        response_id=response_id,
+    )
+
+
+def _pending_text(state: ResponsesStreamState, *, include_visible: bool) -> str:
+    parts: list[str] = []
+    for mode, text in state.pending_text_segments:
+        if mode == 'thought' or include_visible:
+            parts.append(text)
+    return ''.join(parts)
+
+
+def _stream_pending_visible_as_reasoning(
+    state: ResponsesStreamState,
+    *,
+    response_id: str,
+) -> list[dict]:
+    chunks: list[dict] = []
+    for mode, text in state.pending_text_segments:
+        if mode == 'visible':
+            chunks.extend(_stream_reasoning_text(state, text, response_id=response_id))
+    return chunks
+
+
+def _append_process_reasoning_output_item(
+    state: ResponsesStreamState,
+    *,
+    response_id: str,
+    text: str,
+) -> list[dict]:
+    if not text:
+        return []
+    idx = len(state.output)
+    item = {
+        'id': f'rs_process_{uuid.uuid4().hex}',
+        'type': 'reasoning',
+        'status': 'completed',
+        'content': [{'type': 'reasoning_text', 'text': text}],
+        'metadata': {_PROCESS_REASONING_METADATA_KEY: True},
+    }
+    state.output.append(item)
+    return [
+        {
+            'type': 'response.output_item.added',
+            'response_id': response_id,
+            'output_index': idx,
+            'item': dict(item),
+        },
+        {
+            'type': 'response.output_item.done',
+            'response_id': response_id,
+            'output_index': idx,
+            'item': dict(item),
+        },
+    ]
+
+
+def _reset_pending_message_text(state: ResponsesStreamState) -> None:
+    state.message_started = False
+    state.message_index = None
+    state.message_id = None
+    state.accumulated_text = []
+    state.pending_text_segments = []
+
+
+def _complete_open_message_as_process_reasoning(
+    state: ResponsesStreamState,
+    *,
+    response_id: str,
+) -> list[dict]:
+    """Finalize text emitted before a tool handoff as process-only reasoning.
+
+    Some providers stream planning prose as ``output_text.delta`` and then
+    issue a function call. The UI treats that segment as synthetic reasoning,
+    so the terminal ``response.output`` keeps it for UI replay but marks it as
+    non-final-answer text.
+    """
+    chunks: list[dict] = []
+    chunks.extend(_flush_text_segments(state, response_id=response_id))
+    done_text = _pending_text(state, include_visible=True)
+    if done_text:
+        chunks.extend(_stream_pending_visible_as_reasoning(state, response_id=response_id))
+        chunks.extend(_append_process_reasoning_output_item(
+            state,
+            response_id=response_id,
+            text=done_text,
+        ))
+    _reset_pending_message_text(state)
+    return chunks
 
 
 def _current_function_name(state: ResponsesStreamState) -> str:
@@ -528,51 +731,24 @@ def _raw_to_responses(data: Any, state: ResponsesStreamState, *, response_id: st
 
     if type_name == 'response.output_text.delta':
         delta = getattr(data, 'delta', '') or ''
-        # Skip noise: empty/whitespace deltas would otherwise create an empty
-        # leading ``message`` item in ``response.output``. Strict OpenAI clients
-        # treat that as an empty assistant turn.
         if not delta:
             return []
-        # Strip internal protocol blocks (``<summary>...</summary>`` etc.) at
-        # the wire layer so streaming clients never see meta-tags. The filter
-        # is stateful — partial tags split across deltas are buffered until
-        # they can be classified.
-        visible_delta = state.protocol_filter.feed(delta)
-        if not visible_delta:
-            return []
-        chunks: list[dict] = []
-        chunks.extend(_open_step_if_needed(state, response_id=response_id))
-        if not state.message_started:
-            state.message_started = True
-            state.message_id = f'msg_{uuid.uuid4().hex}'
-            state.message_index = len(state.output)
-            state.output.append({
-                'id': state.message_id,
-                'type': 'message',
-                'status': 'in_progress',
-                'role': 'assistant',
-                'content': [],
-            })
-            chunks.append({
-                'type': 'response.output_item.added',
-                'response_id': response_id,
-                'output_index': state.message_index,
-                'item': dict(state.output[state.message_index]),
-            })
-        state.accumulated_text.append(visible_delta)
-        chunks.append({
-            'type': 'response.output_text.delta',
-            'response_id': response_id,
-            'delta': visible_delta,
-            'output_index': state.message_index,
-            'content_index': 0,
-        })
-        return chunks
+        # Split private protocol text at the wire layer. Thought-tag contents
+        # are emitted as ``response.reasoning_text.delta``. Text outside those
+        # tags is buffered until we know whether this assistant message ends as
+        # a final answer or hands off to a tool; this prevents tool-planning
+        # prose from leaking as user-visible ``output_text``.
+        return _append_text_segments(
+            state,
+            state.protocol_filter.feed_segments(delta),
+            response_id=response_id,
+        )
 
     if type_name == 'response.output_item.added':
         item = _model_dump(getattr(data, 'item', None))
         if item.get('type') == 'function_call':
             chunks = []
+            chunks.extend(_complete_open_message_as_process_reasoning(state, response_id=response_id))
             chunks.extend(_close_step_if_open(state, response_id=response_id))
             raw_id = str(item.get('id') or '')
             call_id = str(item.get('call_id') or '')
@@ -732,6 +908,7 @@ def _item_to_responses(item: Any, name: str, state: ResponsesStreamState, *, res
         chunks = []
         # ToolCallItem appears at the end of an LLM "thinking" segment — close
         # any open reasoning step before emitting the tool card.
+        chunks.extend(_complete_open_message_as_process_reasoning(state, response_id=response_id))
         chunks.extend(_close_step_if_open(state, response_id=response_id))
         idx = len(state.output)
         state.output.append(call)
@@ -771,67 +948,71 @@ def _item_to_responses(item: Any, name: str, state: ResponsesStreamState, *, res
             },
         ]
     if kind == 'MessageOutputItem':
-        # The raw text deltas already streamed; this is the closing "done"
-        # signal for the assistant message. Mark it completed and close any
-        # open reasoning step (text is the visible answer, not internal
-        # thinking — the step ends here).
-        # Drain any bytes the protocol filter is still holding (e.g. a
-        # trailing literal '<' that hadn't been disambiguated against an
-        # incomplete hidden-tag prefix) before finalizing the message.
-        tail = state.protocol_filter.flush()
-        tail_chunks: list[dict] = []
-        if tail and state.message_started and state.message_index is not None:
-            state.accumulated_text.append(tail)
-            tail_chunks.append({
+        # The raw text deltas were split and buffered. At message close we can
+        # now classify outside-tag text as the visible answer, while any
+        # private thought-tag content remains process reasoning.
+        chunks = _flush_text_segments(state, response_id=response_id)
+        thought_text = _pending_text(state, include_visible=False)
+        if thought_text:
+            chunks.extend(_append_process_reasoning_output_item(
+                state,
+                response_id=response_id,
+                text=thought_text,
+            ))
+        chunks.extend(_close_step_if_open(state, response_id=response_id))
+
+        done_text = ''.join(state.accumulated_text)
+        if not done_text.strip():
+            _reset_pending_message_text(state)
+            return chunks
+
+        idx = len(state.output)
+        msg_id = f'msg_{uuid.uuid4().hex}'
+        in_progress = {
+            'id': msg_id,
+            'type': 'message',
+            'status': 'in_progress',
+            'role': 'assistant',
+            'content': [{'type': 'output_text', 'text': ''}],
+        }
+        completed = {
+            **in_progress,
+            'status': 'completed',
+            'content': [{'type': 'output_text', 'text': done_text}],
+        }
+        state.output.append(in_progress)
+        chunks.append({
+            'type': 'response.output_item.added',
+            'response_id': response_id,
+            'output_index': idx,
+            'item': dict(in_progress),
+        })
+        for piece in _stream_text_chunks(done_text):
+            chunks.append({
                 'type': 'response.output_text.delta',
                 'response_id': response_id,
-                'delta': tail,
-                'output_index': state.message_index,
+                'delta': piece,
+                'output_index': idx,
                 'content_index': 0,
             })
-        if state.message_started and state.message_index is not None:
-            done_text = ''.join(state.accumulated_text)
-            # Defensive: if the run only emitted whitespace, remove the message
-            # so ``response.output`` doesn't carry an empty assistant turn.
-            # Pair with the input-side guard above that drops empty deltas.
-            if not done_text.strip():
-                state.output.pop(state.message_index)
-                chunks = list(_close_step_if_open(state, response_id=response_id))
-                state.message_started = False
-                state.message_index = None
-                state.message_id = None
-                state.accumulated_text = []
-                return chunks
-            state.output[state.message_index] = {
-                'id': state.message_id,
-                'type': 'message',
-                'status': 'completed',
-                'role': 'assistant',
-                'content': [{'type': 'output_text', 'text': done_text}],
-            }
-            chunks = list(tail_chunks)
-            chunks.extend([
-                {
-                    'type': 'response.output_text.done',
-                    'response_id': response_id,
-                    'text': done_text,
-                    'output_index': state.message_index,
-                    'content_index': 0,
-                },
-                {
-                    'type': 'response.output_item.done',
-                    'response_id': response_id,
-                    'output_index': state.message_index,
-                    'item': dict(state.output[state.message_index]),
-                },
-            ])
-            chunks.extend(_close_step_if_open(state, response_id=response_id))
-            # Reset for any subsequent assistant message in the same response.
-            state.message_started = False
-            state.message_index = None
-            state.message_id = None
-            state.accumulated_text = []
-            return chunks
+        state.output[idx] = completed
+        chunks.extend([
+            {
+                'type': 'response.output_text.done',
+                'response_id': response_id,
+                'text': done_text,
+                'output_index': idx,
+                'content_index': 0,
+            },
+            {
+                'type': 'response.output_item.done',
+                'response_id': response_id,
+                'output_index': idx,
+                'item': dict(completed),
+            },
+        ])
+        _reset_pending_message_text(state)
+        return chunks
     return []
 
 

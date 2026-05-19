@@ -15,6 +15,7 @@ With a gateway authorization header:
 
 import argparse
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -111,12 +112,36 @@ def require_ok(name, status, payload):
     raise RuntimeError(f"{name} failed: HTTP {status} {compact_json(payload)}")
 
 
+def aliyun_credentials_from_env():
+    access_key_id = os.environ.get("PAI_RAG_ALIYUN_ACCESS_KEY_ID", "").strip()
+    access_key_secret = os.environ.get("PAI_RAG_ALIYUN_ACCESS_KEY_SECRET", "").strip()
+    region_id = os.environ.get("PAI_RAG_ALIYUN_REGION_ID", "cn-beijing").strip() or "cn-beijing"
+    if not access_key_id and not access_key_secret:
+        return None
+    if not access_key_id or not access_key_secret:
+        raise ValueError(
+            "Set both PAI_RAG_ALIYUN_ACCESS_KEY_ID and PAI_RAG_ALIYUN_ACCESS_KEY_SECRET, or neither."
+        )
+    return {
+        "access_key_id": access_key_id,
+        "access_key_secret": access_key_secret,
+        "region_id": region_id,
+    }
+
+
+def maybe_add_aliyun_credentials(payload, credentials):
+    if credentials:
+        payload["aliyun_credentials"] = dict(credentials)
+    return payload
+
+
 def run_chat_completions(args, headers):
     print("\n== /v1/chat/completions ==")
-    payload = {
+    credentials = aliyun_credentials_from_env()
+    payload = maybe_add_aliyun_credentials({
         "messages": [{"role": "user", "content": args.query}],
         "stream": True,
-    }
+    }, credentials)
     if args.model:
         payload["model"] = args.model
     parts = []
@@ -144,11 +169,11 @@ def run_chat_completions(args, headers):
 
     status, _resp_headers, payload = request_json(
         args.base_url, "POST", "/v1/chat/completions",
-        payload={
+        payload=maybe_add_aliyun_credentials({
             "messages": [{"role": "user", "content": args.query}],
             "stream": False,
             **({"model": args.model} if args.model else {}),
-        },
+        }, credentials),
         headers=headers,
         timeout=args.timeout,
     )
@@ -184,7 +209,8 @@ def _stream_responses(args, headers, payload):
 
 def run_responses(args, headers):
     print("\n== /v1/responses ==")
-    payload = {"input": args.query, "stream": True}
+    credentials = aliyun_credentials_from_env()
+    payload = maybe_add_aliyun_credentials({"input": args.query, "stream": True}, credentials)
     if args.conversation:
         payload["conversation"] = args.conversation
     if args.model:
@@ -205,6 +231,7 @@ def run_responses(args, headers):
             "input": follow_up,
             "stream": True,
         }
+        maybe_add_aliyun_credentials(follow_payload, credentials)
         if args.model:
             follow_payload["model"] = args.model
         _, follow_answer, follow_completed, _ = _stream_responses(args, headers, follow_payload)
@@ -262,6 +289,7 @@ def main(argv=None):
     headers = build_headers(args)
     print("base_url:", args.base_url.rstrip("/"))
     print("model:", args.model or "(backend default)")
+    print("aliyun_credentials:", "enabled" if aliyun_credentials_from_env() else "disabled")
 
     run_chat_completions(args, headers)
     run_responses(args, headers)

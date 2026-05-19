@@ -123,6 +123,71 @@ class ResponseThinkingTagTests(unittest.TestCase):
 
         self.assertEqual(text, "## Report\nReadable result.")
 
+    def test_process_reasoning_message_reconstructs_thought_not_answer(self):
+        updates = server._agent_updates_from_output([
+            {
+                "type": "message",
+                "metadata": {"pai_process_reasoning": True},
+                "content": [{"type": "output_text", "text": "Let me check.\n<taking>use tool</taking>"}],
+            },
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "code_run",
+                "arguments": "{}",
+            },
+        ])
+
+        self.assertEqual(updates[0]["sessionUpdate"], "thought_start")
+        thought_text = "".join(
+            update["content"]["text"]
+            for update in updates
+            if update["sessionUpdate"] == "thought_delta"
+        )
+        self.assertIn("Let me check.", thought_text)
+        self.assertIn("use tool", thought_text)
+        self.assertFalse(any(update["sessionUpdate"] == "agent_message_chunk" for update in updates))
+
+    def test_reasoning_output_item_reconstructs_thought_not_answer(self):
+        updates = server._agent_updates_from_output([
+            {
+                "type": "reasoning",
+                "content": [{"type": "reasoning_text", "text": "Let me check."}],
+                "metadata": {"pai_process_reasoning": True},
+            },
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Final answer."}],
+            },
+        ])
+
+        self.assertEqual(updates[0]["sessionUpdate"], "thought_start")
+        self.assertEqual(updates[1]["content"]["text"], "Let me check.")
+        self.assertTrue(any(
+            update["sessionUpdate"] == "agent_message_chunk"
+            and update["content"]["text"] == "Final answer."
+            for update in updates
+        ))
+
+    def test_process_reasoning_message_is_not_final_assistant_text(self):
+        text = server._final_assistant_text([
+            {
+                "type": "reasoning",
+                "content": [{"type": "reasoning_text", "text": "Reasoning."}],
+            },
+            {
+                "type": "message",
+                "metadata": {"pai_process_reasoning": True},
+                "content": [{"type": "output_text", "text": "Let me check."}],
+            },
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Final answer."}],
+            },
+        ])
+
+        self.assertEqual(text, "Final answer.")
+
 
 class BackgroundReviewSchedulingTests(unittest.TestCase):
     def _session(self, memory_root):
