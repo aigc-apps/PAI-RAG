@@ -156,8 +156,11 @@ class StreamFrame:
     interruption: InterruptionEnvelope | None = None
 
 
-_FINAL_REPORT_METADATA_KEY = 'pai_final_report'
-_PROCESS_REASONING_METADATA_KEY = 'pai_process_reasoning'
+_PAIRAG_NAMESPACE_KEY = event_bridge._PAIRAG_NAMESPACE_KEY
+_FINAL_REPORT_FLAG = event_bridge._FINAL_REPORT_FLAG
+_PROCESS_REASONING_FLAG = event_bridge._PROCESS_REASONING_FLAG
+_pairag_flag = event_bridge._pairag_flag
+_pairag_metadata = event_bridge._pairag_metadata
 _SUMMARY_BLOCK_RE = re.compile(r'<summary\b[^>]*>(.*?)</summary>', re.IGNORECASE | re.DOTALL)
 _PRIVATE_BLOCK_RE = re.compile(
     r'<(forcing_skill_activation|clinical[-_]thinking|taking[-_]action|skill[-_]context|thinking|checking|taking|working)\b[^>]*>'
@@ -227,16 +230,11 @@ def _reasoning_output_text(item: dict) -> str:
 
 
 def _is_final_report_message(item: dict) -> bool:
-    metadata = item.get('metadata')
-    return isinstance(metadata, dict) and bool(metadata.get(_FINAL_REPORT_METADATA_KEY))
+    return _pairag_flag(item, _FINAL_REPORT_FLAG)
 
 
 def _is_process_reasoning_message(item: dict) -> bool:
-    metadata = item.get('metadata')
-    return (
-        item.get('type') == 'reasoning'
-        or (isinstance(metadata, dict) and bool(metadata.get(_PROCESS_REASONING_METADATA_KEY)))
-    )
+    return item.get('type') == 'reasoning' or _pairag_flag(item, _PROCESS_REASONING_FLAG)
 
 
 def _final_text_from_output(output: list[dict]) -> str:
@@ -310,6 +308,78 @@ def _strip_model_protocol_blocks(text: str) -> str:
 
 def _has_final_report_output(output: list[dict]) -> bool:
     return any(isinstance(item, dict) and _is_final_report_message(item) for item in output or [])
+
+
+def _finalize_output_for_responses(state: ResponsesStreamState) -> None:
+    """Enforce the single-`message` invariant in ``response.completed.output``.
+
+    OpenAI SDK consumers compute ``response.output_text`` by concatenating every
+    ``type=message`` item's text — they cannot see our ``pairag.is_final_report``
+    flag. To make naive SDK usage just work, the terminal payload must contain
+    at most one assistant ``message``, and that one is the canonical answer.
+
+    Mutates ``state.output`` in place. Does not emit SSE events: streaming
+    clients reconcile against the terminal ``response.completed.output`` snapshot
+    (matches OpenAI's own behavior — same as plan decision in
+    ``/home/xiaowen/.claude/plans/zippy-cuddling-zebra.md``).
+    """
+    output = state.output
+    has_tool_call = any(
+        isinstance(item, dict)
+        and item.get('type') in ('function_call', 'function_call_output')
+        for item in output
+    )
+    flagged_indices = [
+        i for i, item in enumerate(output)
+        if isinstance(item, dict) and item.get('type') == 'message' and _is_final_report_message(item)
+    ]
+    plain_message_indices = [
+        i for i, item in enumerate(output)
+        if isinstance(item, dict) and item.get('type') == 'message' and not _is_final_report_message(item)
+    ]
+
+    if not flagged_indices and not has_tool_call and len(plain_message_indices) == 1:
+        idx = plain_message_indices[0]
+        item = dict(output[idx])
+        metadata = dict(item.get('metadata') or {})
+        namespace = dict(metadata.get(_PAIRAG_NAMESPACE_KEY) or {})
+        namespace[_FINAL_REPORT_FLAG] = True
+        metadata[_PAIRAG_NAMESPACE_KEY] = namespace
+        item['metadata'] = metadata
+        output[idx] = item
+        return
+
+    if not flagged_indices:
+        return
+
+    keep_idx = flagged_indices[-1]
+    for idx in plain_message_indices + flagged_indices[:-1]:
+        if idx == keep_idx:
+            continue
+        item = output[idx]
+        if not isinstance(item, dict):
+            continue
+        rewritten_content: list[dict] = []
+        for block in item.get('content') or []:
+            if not isinstance(block, dict):
+                continue
+            if block.get('type') in ('output_text', 'text'):
+                rewritten_content.append({'type': 'summary_text', 'text': block.get('text') or ''})
+            else:
+                rewritten_content.append(dict(block))
+        metadata = dict(item.get('metadata') or {})
+        namespace = dict(metadata.get(_PAIRAG_NAMESPACE_KEY) or {})
+        namespace.pop(_FINAL_REPORT_FLAG, None)
+        namespace[_PROCESS_REASONING_FLAG] = True
+        metadata[_PAIRAG_NAMESPACE_KEY] = namespace
+        rewritten = {
+            **{k: v for k, v in item.items() if k not in ('type', 'role', 'content', 'metadata')},
+            'type': 'reasoning',
+            'content': rewritten_content,
+            'metadata': metadata,
+        }
+        rewritten.pop('role', None)
+        output[idx] = rewritten
 
 
 def _needs_final_report_retry(output: list[dict]) -> bool:
@@ -631,7 +701,7 @@ def _apply_final_report_contract(
         'status': 'in_progress',
         'role': 'assistant',
         'content': [{'type': 'output_text', 'text': ''}],
-        'metadata': {_FINAL_REPORT_METADATA_KEY: True},
+        'metadata': _pairag_metadata(**{_FINAL_REPORT_FLAG: True}),
     }
     completed = {
         **in_progress,
@@ -1038,6 +1108,8 @@ async def _drive_stream(
         ):
             yield StreamFrame(chunk=chunk)
 
+    _finalize_output_for_responses(bridge_state)
+
     final_text = (
         final_report_text
         or _final_text_from_output(bridge_state.output)
@@ -1061,6 +1133,7 @@ async def _drive_stream(
     response_obj = {
         'id': ctx.response_id, 'object': 'response', 'status': 'completed',
         'model': model, 'output': bridge_state.output,
+        'output_text': final_text,
         'usage': usage,
     }
     yield StreamFrame(terminal=True, response_object=response_obj)

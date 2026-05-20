@@ -574,22 +574,31 @@ def _last_user_content(messages):
     )
 
 
-_FINAL_REPORT_METADATA_KEY = 'pai_final_report'
-_PROCESS_REASONING_METADATA_KEY = 'pai_process_reasoning'
+_PAIRAG_NAMESPACE_KEY = 'pairag'
+_FINAL_REPORT_FLAG = 'is_final_report'
+_PROCESS_REASONING_FLAG = 'is_process_reasoning'
+
+
+def _pairag_flag(item, flag):
+    if not isinstance(item, dict):
+        return False
+    metadata = item.get('metadata')
+    if not isinstance(metadata, dict):
+        return False
+    namespace = metadata.get(_PAIRAG_NAMESPACE_KEY)
+    if not isinstance(namespace, dict):
+        return False
+    return bool(namespace.get(flag))
 
 
 def _is_final_report_output_item(item):
-    metadata = item.get('metadata') if isinstance(item, dict) else None
-    return isinstance(metadata, dict) and bool(metadata.get(_FINAL_REPORT_METADATA_KEY))
+    return _pairag_flag(item, _FINAL_REPORT_FLAG)
 
 
 def _is_process_reasoning_output_item(item):
-    metadata = item.get('metadata') if isinstance(item, dict) else None
     return (
         isinstance(item, dict) and item.get('type') == 'reasoning'
-    ) or (
-        isinstance(metadata, dict) and bool(metadata.get(_PROCESS_REASONING_METADATA_KEY))
-    )
+    ) or _pairag_flag(item, _PROCESS_REASONING_FLAG)
 
 
 def _reasoning_output_text(item):
@@ -1376,10 +1385,6 @@ async def create_response(request: Request):
                     f'Response not found: {previous_response_id}',
                     code='response_not_found'), status_code=404)
             session_id_for_sdk = record.get('session_id') or ''
-    if not stream:
-        return JSONResponse(openai_error(
-            'Non-streaming /v1/responses is not supported; pass stream=true',
-            code='unsupported_mode'), status_code=400)
     aliyun_profile, error_response = _create_aliyun_profile_response(aliyun_credentials)
     if error_response is not None:
         return error_response
@@ -1391,9 +1396,14 @@ async def create_response(request: Request):
         allow_hitl=bool(body.get('allow_hitl', resume_input_for_hitl_default)),
         tool_env=aliyun_profile.env if aliyun_profile is not None else None,
     )
-    gen = _with_aliyun_profile_cleanup(gen, aliyun_profile)
-    return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
-                             headers=stream_headers())
+    if stream:
+        gen = _with_aliyun_profile_cleanup(gen, aliyun_profile)
+        return StreamingResponse(_with_sse_keepalive(gen), media_type='text/event-stream',
+                                 headers=stream_headers())
+    try:
+        return await _collect_responses_completion(gen)
+    finally:
+        _cleanup_aliyun_profile(aliyun_profile)
 
 
 @app.get('/v1/responses/{resp_id}')
@@ -1621,6 +1631,56 @@ def _sse_data_values(chunk):
         if line.startswith('data: '):
             values.append(line[len('data: '):])
     return values
+
+
+async def _collect_responses_completion(gen):
+    """Drain the ``/v1/responses`` SSE generator into a single JSON body.
+
+    Pre-flight error events (bad JSON / unknown previous_response_id /
+    invalid resume input) are emitted with ``error`` but no ``object`` key,
+    and arrive before the run starts — map them to HTTP 4xx mirroring the
+    OpenAI error envelope. Terminal run frames (``completed`` / ``failed``
+    / ``requires_action``) carry the full response object (``object="response"``)
+    and are returned verbatim with HTTP 200, after stripping the SSE-only
+    ``type`` and ``sequence_number`` keys ``response_sse`` injects.
+    """
+    final_payload = None
+    async for chunk in gen:
+        for raw in _sse_data_values(chunk):
+            if raw == '[DONE]':
+                continue
+            try:
+                payload = json.loads(raw)
+            except Exception:
+                continue
+            if payload.get('object') != 'response' and payload.get('error'):
+                err = payload.get('error') or {}
+                code = err.get('code') or 'invalid_request_error'
+                status = 500 if code in ('internal_error', 'run_failed') else 400
+                if code in ('resume_not_found', 'response_not_found'):
+                    status = 404
+                return JSONResponse(
+                    {'error': {
+                        'message': err.get('message') or 'Response run failed',
+                        'type': err.get('type') or 'invalid_request_error',
+                        'code': code,
+                    }},
+                    status_code=status,
+                )
+            if payload.get('type') in (
+                'response.completed', 'response.failed', 'response.requires_action',
+            ):
+                final_payload = payload
+    if final_payload is None:
+        return JSONResponse(
+            {'error': {
+                'message': 'Stream ended without a terminal response event',
+                'type': 'internal_error', 'code': 'internal_error',
+            }},
+            status_code=500,
+        )
+    return {k: v for k, v in final_payload.items()
+            if k not in ('type', 'sequence_number')}
 
 
 async def _collect_chat_completion(gen, *, model):

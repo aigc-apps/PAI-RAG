@@ -870,14 +870,21 @@ function responseOutputText(data: Record<string, unknown>): string {
   return reportParts.length ? reportParts.join("") : parts.join("");
 }
 
-function isFinalReportMessage(record: Record<string, unknown>): boolean {
+function pairagFlag(record: Record<string, unknown>, flag: string): boolean {
   const metadata = recordField(record, "metadata");
-  return Boolean(metadata?.pai_final_report);
+  if (!metadata) {
+    return false;
+  }
+  const namespace = recordField(metadata, "pairag");
+  return Boolean(namespace && namespace[flag]);
+}
+
+function isFinalReportMessage(record: Record<string, unknown>): boolean {
+  return pairagFlag(record, "is_final_report");
 }
 
 function isProcessReasoningMessage(record: Record<string, unknown>): boolean {
-  const metadata = recordField(record, "metadata");
-  return Boolean(metadata?.pai_process_reasoning);
+  return pairagFlag(record, "is_process_reasoning");
 }
 
 // Some upstream providers (e.g. qwen-plus) emit a placeholder `id` like

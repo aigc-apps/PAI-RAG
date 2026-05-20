@@ -1,3 +1,5 @@
+import asyncio
+import json
 import os
 import tempfile
 import threading
@@ -116,7 +118,7 @@ class ResponseThinkingTagTests(unittest.TestCase):
             },
             {
                 "type": "message",
-                "metadata": {"pai_final_report": True},
+                "metadata": {"pairag": {"is_final_report": True}},
                 "content": [{"type": "output_text", "text": "## Report\nReadable result."}],
             },
         ])
@@ -127,7 +129,7 @@ class ResponseThinkingTagTests(unittest.TestCase):
         updates = server._agent_updates_from_output([
             {
                 "type": "message",
-                "metadata": {"pai_process_reasoning": True},
+                "metadata": {"pairag": {"is_process_reasoning": True}},
                 "content": [{"type": "output_text", "text": "Let me check.\n<taking>use tool</taking>"}],
             },
             {
@@ -153,7 +155,7 @@ class ResponseThinkingTagTests(unittest.TestCase):
             {
                 "type": "reasoning",
                 "content": [{"type": "reasoning_text", "text": "Let me check."}],
-                "metadata": {"pai_process_reasoning": True},
+                "metadata": {"pairag": {"is_process_reasoning": True}},
             },
             {
                 "type": "message",
@@ -177,7 +179,7 @@ class ResponseThinkingTagTests(unittest.TestCase):
             },
             {
                 "type": "message",
-                "metadata": {"pai_process_reasoning": True},
+                "metadata": {"pairag": {"is_process_reasoning": True}},
                 "content": [{"type": "output_text", "text": "Let me check."}],
             },
             {
@@ -187,6 +189,103 @@ class ResponseThinkingTagTests(unittest.TestCase):
         ])
 
         self.assertEqual(text, "Final answer.")
+
+
+class FinalizeOutputForResponsesTests(unittest.TestCase):
+    """``_finalize_output_for_responses`` enforces the single-`message` invariant
+    so OpenAI SDK consumers' ``response.output_text`` accessor naturally yields
+    the final answer.
+    """
+
+    def _state(self, output):
+        return SimpleNamespace(output=list(output))
+
+    def test_lone_plain_message_no_tools_gets_flagged_as_final(self):
+        from backend.agents_sdk.runner import _finalize_output_for_responses
+
+        state = self._state([
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "你好"}],
+            },
+        ])
+        _finalize_output_for_responses(state)
+
+        self.assertEqual(len(state.output), 1)
+        self.assertEqual(state.output[0]["type"], "message")
+        self.assertTrue(state.output[0]["metadata"]["pairag"]["is_final_report"])
+
+    def test_final_report_present_other_message_becomes_reasoning(self):
+        from backend.agents_sdk.runner import _finalize_output_for_responses
+
+        state = self._state([
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "intermediate prose"}],
+            },
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "code_run",
+                "arguments": "{}",
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": "ok",
+            },
+            {
+                "type": "message",
+                "role": "assistant",
+                "metadata": {"pairag": {"is_final_report": True}},
+                "content": [{"type": "output_text", "text": "## Final report"}],
+            },
+        ])
+        _finalize_output_for_responses(state)
+
+        message_indices = [i for i, item in enumerate(state.output) if item.get("type") == "message"]
+        self.assertEqual(len(message_indices), 1)
+        self.assertEqual(state.output[message_indices[0]]["content"][0]["text"], "## Final report")
+
+        intermediate = state.output[0]
+        self.assertEqual(intermediate["type"], "reasoning")
+        self.assertTrue(intermediate["metadata"]["pairag"]["is_process_reasoning"])
+        self.assertEqual(intermediate["content"][0]["type"], "summary_text")
+        self.assertEqual(intermediate["content"][0]["text"], "intermediate prose")
+
+    def test_tool_calls_no_final_report_leaves_plain_message_untouched(self):
+        """When tools were used but the model didn't call ``final_report``, the
+        upstream ``_needs_final_report_retry`` is responsible for fixing it.
+        ``_finalize_output_for_responses`` must not auto-flag a plain message in
+        that case — that would short-circuit the retry contract.
+        """
+        from backend.agents_sdk.runner import _finalize_output_for_responses
+
+        state = self._state([
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "code_run",
+                "arguments": "{}",
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": "ok",
+            },
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "post-tool prose"}],
+            },
+        ])
+        _finalize_output_for_responses(state)
+
+        message = state.output[-1]
+        self.assertEqual(message["type"], "message")
+        self.assertNotIn("metadata", message)
 
 
 class BackgroundReviewSchedulingTests(unittest.TestCase):
@@ -283,6 +382,133 @@ class BackgroundReviewSchedulingTests(unittest.TestCase):
 
         self.assertEqual(result, archive_path)
         self.assertEqual(len(sess.ui_msgs), 2)
+
+
+class CollectResponsesCompletionTests(unittest.TestCase):
+    """``_collect_responses_completion`` drains the SSE generator the
+    streaming path uses, and returns the terminal response object as a
+    plain dict (FastAPI auto-serializes). Pre-flight error events become
+    HTTP 4xx so non-stream consumers see proper status codes.
+    """
+
+    def _sse(self, event_type, payload):
+        body = dict(payload)
+        body.setdefault('type', event_type)
+        return f'event: {event_type}\ndata: {json.dumps(body)}\n\n'
+
+    async def _drain(self, chunks):
+        async def gen():
+            for chunk in chunks:
+                yield chunk
+
+        return await server._collect_responses_completion(gen())
+
+    def test_completed_event_returns_response_object_without_sse_keys(self):
+        completed = {
+            'id': 'resp_1',
+            'object': 'response',
+            'status': 'completed',
+            'model': 'qwen-plus',
+            'output': [{'type': 'message', 'role': 'assistant',
+                        'content': [{'type': 'output_text', 'text': 'ok'}]}],
+            'output_text': 'ok',
+            'usage': {'total_tokens': 5},
+        }
+        chunks = [
+            self._sse('response.created', {'id': 'resp_1', 'status': 'in_progress'}),
+            self._sse('response.output_text.delta', {'delta': 'ok'}),
+            self._sse('response.completed', completed),
+            'data: [DONE]\n\n',
+        ]
+        result = asyncio.run(self._drain(chunks))
+        self.assertNotIsInstance(result, server.JSONResponse)
+        self.assertEqual(result['id'], 'resp_1')
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['output_text'], 'ok')
+        self.assertNotIn('type', result)
+        self.assertNotIn('sequence_number', result)
+
+    def test_preflight_response_not_found_returns_404(self):
+        chunks = [
+            self._sse('response.failed', {
+                'response_id': 'resp_missing',
+                'error': {'message': 'Response not found: resp_missing',
+                          'code': 'response_not_found'},
+            }),
+            'data: [DONE]\n\n',
+        ]
+        result = asyncio.run(self._drain(chunks))
+        self.assertIsInstance(result, server.JSONResponse)
+        self.assertEqual(result.status_code, 404)
+        body = json.loads(result.body)
+        self.assertEqual(body['error']['code'], 'response_not_found')
+
+    def test_preflight_invalid_input_returns_400(self):
+        chunks = [
+            self._sse('response.failed', {
+                'response_id': '',
+                'error': {'message': 'No user message in input',
+                          'code': 'invalid_input'},
+            }),
+            'data: [DONE]\n\n',
+        ]
+        result = asyncio.run(self._drain(chunks))
+        self.assertIsInstance(result, server.JSONResponse)
+        self.assertEqual(result.status_code, 400)
+
+    def test_terminal_failed_run_returns_200_with_response_body(self):
+        # Run-level failure: payload has object="response" so it's NOT
+        # the pre-flight branch — return 200 with the response object so
+        # the client can inspect status="failed" + error in the body,
+        # mirroring OpenAI's behavior.
+        failed = {
+            'id': 'resp_2',
+            'object': 'response',
+            'status': 'failed',
+            'model': 'qwen-plus',
+            'output': [],
+            'error': {'message': 'tool blew up'},
+        }
+        chunks = [
+            self._sse('response.failed', failed),
+            'data: [DONE]\n\n',
+        ]
+        result = asyncio.run(self._drain(chunks))
+        self.assertNotIsInstance(result, server.JSONResponse)
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['error']['message'], 'tool blew up')
+
+    def test_requires_action_returns_response_body(self):
+        ra = {
+            'id': 'resp_3',
+            'object': 'response',
+            'status': 'requires_action',
+            'model': 'qwen-plus',
+            'output': [],
+            'required_action': {'type': 'submit_tool_outputs',
+                                'submit_tool_outputs': {'tool_calls': []}},
+        }
+        chunks = [
+            self._sse('response.requires_action', ra),
+            self._sse('response.incomplete', dict(ra, status='incomplete')),
+            'data: [DONE]\n\n',
+        ]
+        result = asyncio.run(self._drain(chunks))
+        self.assertNotIsInstance(result, server.JSONResponse)
+        # ``response.requires_action`` arrives first; the incomplete duplicate
+        # for SDK strict-mode parity must not overwrite it.
+        self.assertEqual(result['status'], 'requires_action')
+
+    def test_no_terminal_event_returns_500(self):
+        # Defensive: if the generator finishes without ever emitting a
+        # terminal event, that's a server bug — surface as 500.
+        chunks = [
+            self._sse('response.created', {'id': 'resp_x'}),
+            'data: [DONE]\n\n',
+        ]
+        result = asyncio.run(self._drain(chunks))
+        self.assertIsInstance(result, server.JSONResponse)
+        self.assertEqual(result.status_code, 500)
 
 
 if __name__ == "__main__":

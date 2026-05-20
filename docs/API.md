@@ -1,18 +1,44 @@
 # PAI-RAG API
 
-推荐使用 `/v1/responses`，它返回 SSE 流，既能拿最终回答，也能拿中间思考、工具调用和工具结果。
+推荐使用 `/v1/responses`。默认非流式，返回单个 JSON；如果需要中间思考 / 工具调用过程，传 `"stream": true` 切到 SSE 流。
 
 ## 基础约定
 
 - Base URL 示例：`http://127.0.0.1:8683`
 - 请求体：JSON，需带 `Content-Type: application/json`
-- `/v1/responses` 只支持流式：必须传 `"stream": true`
-- 最终成功终态：`response.completed`
+- `/v1/responses` 默认非流式（`stream` 缺省为 `false`）；传 `"stream": true` 切到 SSE。
+- 非流式返回 `application/json`，body 与流式终态 `response.completed.data` 同结构（`id` / `output` / `output_text` / `usage`）。
+- 流式最终成功终态：`response.completed`
 - 失败终态：`response.failed`
 - 需要人工续答：`response.requires_action`（已实现，暂不需要）
 - EAS服务需要鉴权，请在header中传入 `Authorization`
 
+注意：非流式会阻塞到整次任务结束才返回。工具密集的请求耗时较长，如果链路上有反向代理 / EAS 默认 60s 超时，建议改用流式。
+
 ## 最小调用
+
+非流式（推荐用于"只关心最终回答"的场景）：
+
+```bash
+curl -X POST "$BASE_URL/v1/responses" \
+  -H 'Content-Type: application/json' \
+  -d '{"input":"请帮我创建一个文件，a.txt"}'
+```
+
+返回 `application/json`，直接读 `output_text` 字段：
+
+```json
+{
+  "id": "resp_xxx",
+  "object": "response",
+  "status": "completed",
+  "output_text": "文件 a.txt 已创建。",
+  "output": [...],
+  "usage": {...}
+}
+```
+
+流式（需要中间思考 / 工具调用过程）：
 
 ```bash
 curl --no-buffer --location "$BASE_URL/v1/responses" \
@@ -20,7 +46,7 @@ curl --no-buffer --location "$BASE_URL/v1/responses" \
   --data '{"input":"请帮我创建一个文件，a.txt","stream":true}'
 ```
 
-返回是 `text/event-stream`。业务方按 SSE 读取 `event:` 和 `data:`。
+返回 `text/event-stream`。业务方按 SSE 读取 `event:` 和 `data:`。
 
 ## 请求参数
 
@@ -100,7 +126,9 @@ curl --no-buffer --location "$BASE_URL/v1/responses" \
 
 ## 读取 SSE 结果
 
-`/v1/responses` 只有流式返回。客户端读取 SSE 时，每个业务事件由两部分组成：
+> 仅流式（`"stream": true`）需要读这一节。非流式直接读 JSON body 的 `output_text` 字段即可，无需解析事件流。
+
+客户端读取 SSE 时，每个业务事件由两部分组成：
 
 ```text
 event: response.output_text.delta
@@ -119,25 +147,20 @@ data: {"type":"response.output_text.delta","delta":"文件","sequence_number":8}
 | `data.text` | JSON | 某段文本的完整内容，常见于 `response.output_text.done`。 |
 | `data.item` | JSON | 输出项，可能是 `message`、`reasoning`、`function_call`、`function_call_output`。 |
 | `data.output` | JSON | 终态完整输出数组，只在 `response.completed`、`response.requires_action` 等终态事件里读取。 |
+| `data.output_text` | JSON | 服务端预计算的最终正文字符串，仅在 `response.completed` 出现。HTTP / curl 客户端首选读取该字段。 |
 | `data.error` | JSON | 失败信息，常见于 `response.failed`。 |
 
 按需求读取即可：
 
 | 业务需求 | 读取方式 |
 | --- | --- |
-| 只拿最终结果 | 忽略中间事件，等待 `response.completed`，从 `data.output` 提取最终正文。 |
+| 只拿最终结果 | 等待 `response.completed`，直接读取顶层 `data.output_text` 字段。 |
 | 实时展示正文 | 拼接所有 `response.output_text.delta` 的 `delta`。 |
 | 展示思考过程 | 按 `step_id` 拼接 `response.reasoning_text.delta` 的 `delta`。 |
 | 展示工具调用 | 读取 `response.output_item.added/done`，当 `item.type="function_call"` 时展示 `item.name`、`item.arguments`。 |
 | 展示工具结果 | 读取 `response.output_item.added/done`，当 `item.type="function_call_output"` 时展示 `item.output`。 |
 | 判断任务结束 | 看 `response.completed`、`response.failed`、`response.requires_action` 或 `response.incomplete`。不要把 `response.output_text.done` 当作整次请求结束。 |
 
-最终正文提取规则：
-
-1. 优先取 `message.metadata.pai_final_report=true` 的 `output_text`。
-2. 如果有工具结果，优先取最后一个 `function_call_output` 后面的 `message`。
-3. 否则取普通 `message`。
-4. 忽略 `reasoning`，它是过程思考，不是最终正文。
 
 Python 流式示例：
 
@@ -146,35 +169,6 @@ import json
 import requests
 
 BASE_URL = "http://127.0.0.1:8683"
-
-
-def final_text(response):
-    output = response.get("output", [])
-    last_tool = max(
-        (i for i, item in enumerate(output) if item.get("type") == "function_call_output"),
-        default=-1,
-    )
-    reports, after_tools, fallback = [], [], []
-
-    for i, item in enumerate(output):
-        if item.get("type") != "message":
-            continue
-        text = "".join(
-            block.get("text", "")
-            for block in item.get("content", [])
-            if block.get("type") in ("output_text", "text")
-        )
-        if not text:
-            continue
-        if (item.get("metadata") or {}).get("pai_final_report"):
-            reports.append(text)
-        elif last_tool >= 0 and i > last_tool:
-            after_tools.append(text)
-        else:
-            fallback.append(text)
-
-    return "".join(reports or after_tools or fallback)
-
 
 answer, reasoning, tools = [], {}, []
 completed = None
@@ -218,7 +212,7 @@ with requests.post(
             completed = data
 
 print("实时正文：", "".join(answer))
-print("最终正文：", final_text(completed or {}))
+print("最终正文：", (completed or {}).get("output_text", ""))
 print("思考步骤数：", len(reasoning))
 print("工具事件数：", len(tools))
 ```
@@ -235,7 +229,7 @@ event: response.output_text.delta
 data: {"type":"response.output_text.delta","delta":"文件 a.txt 已创建。","sequence_number":8}
 
 event: response.completed
-data: {"id":"resp_xxx","status":"completed","output":[...],"type":"response.completed","sequence_number":9}
+data: {"id":"resp_xxx","status":"completed","output":[...],"output_text":"文件 a.txt 已创建。","type":"response.completed","sequence_number":9}
 
 data: [DONE]
 ```
@@ -278,8 +272,8 @@ data: [DONE]
 
 | type | 说明 | 是否最终正文 |
 | --- | --- | --- |
-| `message` | 用户可见回答。内容在 `content[].text`。 | 是 |
-| `reasoning` | 过程思考。内容在 `content[].text`。 | 否 |
+| `message` | 用户可见回答。内容在 `content[].text`。**`output[]` 中至多一项**，且带 `metadata.pairag.is_final_report=true`。 | 是 |
+| `reasoning` | 过程思考。内容在 `content[].text` 或 `content[].summary_text`。 | 否 |
 | `function_call` | 工具调用。包含 `name`、`arguments`。 | 否 |
 | `function_call_output` | 工具结果。包含 `output`。 | 否 |
 
@@ -310,7 +304,12 @@ data: [DONE]
 
 模型内部标签，例如 `<thinking>`、`<taking>`、`<summary>`，不会作为最终正文输出。思考内容会通过 `response.reasoning_text.delta` 或 `output[].type="reasoning"` 表示。
 
-如果 `message.metadata.pai_final_report=true`，该 message 是服务端最终报告，优先作为最终正文。
+`metadata.pairag.*` 是 PAI-RAG 私有命名空间，业务方一般无需读取：
+
+- `metadata.pairag.is_final_report=true`：该 message 是最终正文。`output[]` 中至多有一项 message 带此标记。
+- `metadata.pairag.is_process_reasoning=true`：该 reasoning 项是工具调用前的过程铺垫，不是最终正文。
+
+业务方推荐直接使用顶层 `output_text` 或 SDK 的 `response.output_text`，不必依赖此命名空间。
 
 ## HITL 续答
 

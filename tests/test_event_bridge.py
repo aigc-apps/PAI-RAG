@@ -250,7 +250,7 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
             'Let me check.',
         )
         self.assertEqual([item['type'] for item in state.output], ['reasoning', 'function_call'])
-        self.assertTrue(state.output[0]['metadata']['pai_process_reasoning'])
+        self.assertTrue(state.output[0]['metadata']['pairag']['is_process_reasoning'])
         self.assertEqual(state.output[0]['content'][0]['text'], 'Let me check.')
 
     def test_text_to_message_done_becomes_visible_answer(self):
@@ -300,7 +300,7 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
             ''.join(c.get('delta', '') for c in chunks),
         )
         self.assertEqual([item['type'] for item in state.output], ['reasoning', 'message'])
-        self.assertTrue(state.output[0]['metadata']['pai_process_reasoning'])
+        self.assertTrue(state.output[0]['metadata']['pairag']['is_process_reasoning'])
         self.assertEqual(state.output[0]['content'][0]['type'], 'reasoning_text')
         self.assertEqual(state.output[0]['content'][0]['text'], 'private')
         self.assertEqual(state.output[1]['content'][0]['text'], '\nAnswer')

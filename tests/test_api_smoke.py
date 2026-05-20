@@ -160,19 +160,26 @@ class ApiSmokeTests(unittest.TestCase):
 
     # ─── responses ──────────────────────────────────────────────────────
 
-    def test_responses_non_stream_returns_400(self):
-        # SDK runner is stream-first; non-stream Responses is intentionally
-        # unsupported (documented as ``unsupported_mode``). This guards
-        # against a future regression that might silently re-enable a
-        # buffered code path with stale semantics.
-        status, _h, body = _request('POST', '/v1/responses', body={
+    def test_responses_non_stream_returns_json(self):
+        # /v1/responses defaults to non-streaming and returns the same
+        # response object the streaming path would assemble at terminal
+        # time — single message in output[], top-level output_text, and
+        # status=completed.
+        status, headers, body = _request('POST', '/v1/responses', body={
             'conversation': self.session_id,
-            'input': 'hi',
+            'input': 'Reply with the single word: ok',
             'stream': False,
         })
-        self.assertEqual(status, 400, body)
-        err = json.loads(body)['error']
-        self.assertEqual(err['code'], 'unsupported_mode')
+        self.assertEqual(status, 200, body)
+        ctype = (headers.get('Content-Type') or headers.get('content-type') or '').lower()
+        self.assertTrue(ctype.startswith('application/json'), ctype)
+        payload = json.loads(body)
+        self.assertEqual(payload.get('object'), 'response')
+        self.assertEqual(payload.get('status'), 'completed')
+        self.assertTrue(payload.get('output_text'))
+        messages = [item for item in (payload.get('output') or [])
+                    if item.get('type') == 'message']
+        self.assertEqual(len(messages), 1, payload.get('output'))
 
     def test_responses_get_after_stream(self):
         # Stream a response, then confirm the saved artifact is fetchable.

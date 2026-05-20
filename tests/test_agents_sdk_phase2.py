@@ -263,7 +263,7 @@ class EventBridgeTests(unittest.TestCase):
             'response.output_item.done',
         ])
         self.assertEqual(chunks[1]['delta'], '## Conclusion\nReadable report.')
-        self.assertTrue(state.output[-1]['metadata']['pai_final_report'])
+        self.assertTrue(state.output[-1]['metadata']['pairag']['is_final_report'])
         self.assertEqual(_final_text_from_output(state.output), '## Conclusion\nReadable report.')
 
     def test_final_report_arguments_stream_as_visible_text(self):
@@ -291,7 +291,7 @@ class EventBridgeTests(unittest.TestCase):
         text_deltas = [c['delta'] for c in chunks if c['type'] == 'response.output_text.delta']
 
         self.assertEqual(''.join(text_deltas), '## Result\nLine 1')
-        self.assertTrue(state.output[-1]['metadata']['pai_final_report'])
+        self.assertTrue(state.output[-1]['metadata']['pairag']['is_final_report'])
 
         done = _RawEvent(SimpleNamespace(
             type='response.function_call_arguments.done',

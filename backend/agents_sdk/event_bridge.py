@@ -31,9 +31,28 @@ _PLACEHOLDER_FC_ID_RE = re.compile(
 )
 _FINAL_REPORT_TOOL_NAME = 'final_report'
 _FINAL_REPORT_FIELD = 'report_markdown'
-_FINAL_REPORT_METADATA_KEY = 'pai_final_report'
-_PROCESS_REASONING_METADATA_KEY = 'pai_process_reasoning'
+# Private metadata flags live under metadata.pairag.* so they cannot collide
+# with caller-supplied metadata or with future OpenAI-reserved keys.
+_PAIRAG_NAMESPACE_KEY = 'pairag'
+_FINAL_REPORT_FLAG = 'is_final_report'
+_PROCESS_REASONING_FLAG = 'is_process_reasoning'
 _FINAL_REPORT_FIELD_RE = re.compile(r'"report_markdown"\s*:\s*"')
+
+
+def _pairag_metadata(**flags: bool) -> dict:
+    return {_PAIRAG_NAMESPACE_KEY: dict(flags)}
+
+
+def _pairag_flag(item: Any, flag: str) -> bool:
+    if not isinstance(item, dict):
+        return False
+    metadata = item.get('metadata')
+    if not isinstance(metadata, dict):
+        return False
+    namespace = metadata.get(_PAIRAG_NAMESPACE_KEY)
+    if not isinstance(namespace, dict):
+        return False
+    return bool(namespace.get(flag))
 
 # ``GenericHandler.do_*`` returns a ``StepOutcome`` whose ``next_prompt`` carries
 # the working-memory anchor (``### [WORKING MEMORY]`` / ``<history>``) the legacy
@@ -456,7 +475,7 @@ def _append_process_reasoning_output_item(
         'type': 'reasoning',
         'status': 'completed',
         'content': [{'type': 'reasoning_text', 'text': text}],
-        'metadata': {_PROCESS_REASONING_METADATA_KEY: True},
+        'metadata': _pairag_metadata(**{_PROCESS_REASONING_FLAG: True}),
     }
     state.output.append(item)
     return [
@@ -551,7 +570,7 @@ def _ensure_final_report_message(state: ResponsesStreamState, *, response_id: st
         'status': 'in_progress',
         'role': 'assistant',
         'content': [{'type': 'output_text', 'text': ''}],
-        'metadata': {_FINAL_REPORT_METADATA_KEY: True},
+        'metadata': _pairag_metadata(**{_FINAL_REPORT_FLAG: True}),
     })
     return [{
         'type': 'response.output_item.added',
@@ -608,7 +627,7 @@ def _complete_final_report_message(
         'status': 'completed',
         'role': 'assistant',
         'content': [{'type': 'output_text', 'text': final_text}],
-        'metadata': {_FINAL_REPORT_METADATA_KEY: True},
+        'metadata': _pairag_metadata(**{_FINAL_REPORT_FLAG: True}),
     }
     state.output[idx] = completed
     chunks.extend([
