@@ -7,7 +7,7 @@
 import re
 import sys
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, List, Optional, Protocol, runtime_checkable
 
 from agent_events import (
     agent_message_chunk,
@@ -105,8 +105,41 @@ class StepOutcome:
     should_exit: bool = False
 
 
+ToolEventEmit = Callable[..., None]
+
+
+@runtime_checkable
+class HandlerProtocol(Protocol):
+    """harness 与 handler 之间的完整契约。
+
+    GenericHandler / BackgroundReviewHandler 通过结构子类型自动满足此协议；
+    无需显式继承。harness 读写下面这些字段是约定，不再走 getattr/hasattr。
+    """
+
+    # harness 写入、handler 读取
+    current_turn: int
+    max_turns: int
+    cancel_evt: Optional[Any]
+
+    # handler 自己维护、harness 读写
+    done_hooks: List[str]
+    tool_event_emit: Optional[ToolEventEmit]
+
+    def dispatch(self, tool_name: str, args: dict, response: Any, index: int = 0) -> 'StepOutcome': ...
+
+    def turn_end_callback(self, response: Any, tool_calls: list, tool_results: list,
+                          turn: int, next_prompt: str, exit_reason: dict) -> str: ...
+
+    def persist_tool_result(self, content: str, tool_call_id: str,
+                            subdir: str = 'tool_results') -> Optional[str]: ...
+
+
 class BaseHandler:
-    """子类实现 do_<tool_name>(args, response) -> StepOutcome。"""
+    """子类实现 do_<tool_name>(args, response) -> StepOutcome。
+
+    满足 HandlerProtocol 所需的可变字段（done_hooks / tool_event_emit / 轮次状态）
+    应由具体子类在 __init__ 中初始化；BaseHandler 仅提供方法默认实现。
+    """
 
     def turn_end_callback(self, response, tool_calls, tool_results, turn,
                           next_prompt, exit_reason):
@@ -344,51 +377,144 @@ def sanitize_for_archive(value, max_text_chars=ARCHIVE_TEXT_MAX_CHARS):
     return value
 
 
+class StreamRenderer:
+    """单次模型 response 的流式 UX 渲染器。
+
+    把 LLM 的 raw chunk 翻译到三条 UX 线路之一：
+    - on_event：结构化事件（thought_start / thought_delta / thought_done / tool_call_delta）
+    - on_chunk：纯文本回调
+    - 都为空时回退到 sys.stdout
+
+    内部维护：累计 raw、处理后的 process_content（去内部思考标签）、12K 截断器。
+    单实例对应一次模型调用；不要跨轮复用。
+
+    `processed_chunks=True` 时 on_chunk 与 on_event 一样走 `stream_model_process_content`
+    过滤；`processed_chunks=False` 保留 max-turns fallback 路径的旧行为（直接 limiter 过滤
+    raw chunk），便于在不改外部行为的前提下完成 refactor。
+    """
+
+    def __init__(self, model_step_id, *, title='Agent step',
+                 on_event=None, on_chunk=None,
+                 processed_chunks=True, limiter=None):
+        self.model_step_id = model_step_id
+        self.title = title
+        self.on_event = on_event
+        self.on_chunk = on_chunk
+        self._processed_chunks = processed_chunks
+        self._limiter = limiter or _PlainStreamLimiter()
+        self._raw_content = ''
+        self._process_content = ''
+        self._plain_emitted = False
+        self._closed = False
+
+    @property
+    def plain_emitted(self):
+        return self._plain_emitted
+
+    def start(self):
+        if self.on_event:
+            self.on_event(thought_start(self.model_step_id, title=self.title))
+
+    def on_text_chunk(self, chunk):
+        if not chunk:
+            return
+        if self.on_event:
+            self._raw_content += chunk
+            next_process = _stream_preview_text(stream_model_process_content(self._raw_content))
+            if next_process.startswith(self._process_content):
+                delta = next_process[len(self._process_content):]
+                replace = False
+            else:
+                delta = next_process
+                replace = True
+            if delta or replace:
+                self.on_event(thought_delta(self.model_step_id, delta, replace=replace))
+            self._process_content = next_process
+            return
+        if self.on_chunk and self._processed_chunks:
+            self._raw_content += chunk
+            next_process = _stream_preview_text(stream_model_process_content(self._raw_content))
+            if next_process.startswith(self._process_content):
+                display = next_process[len(self._process_content):]
+            else:
+                display = next_process
+            self._process_content = next_process
+            display = self._limiter.filter(display)
+            if display:
+                self.on_chunk(display)
+                self._plain_emitted = True
+            return
+        if self.on_chunk:
+            display = self._limiter.filter(chunk)
+            if display:
+                self.on_chunk(display)
+                self._plain_emitted = True
+            return
+        display = self._limiter.filter(chunk)
+        if display:
+            sys.stdout.write(display)
+            sys.stdout.flush()
+
+    def on_tool_call_delta(self, delta, *, turn):
+        if not self.on_event:
+            return
+        self.on_event(tool_call_delta(
+            f'call_{turn}_{delta.index}',
+            index=delta.index,
+            name=delta.name,
+            name_delta=delta.name_delta,
+            arguments_delta=delta.arguments_delta,
+            arguments_text=delta.arguments_text,
+        ))
+
+    def end_stream(self):
+        """流结束时调用：仅在 stdout fallback 下补一个换行。
+
+        `thought_done` 事件由调用方在算出 hidden / content 之后单独发，
+        因为不同退出路径会传不同的 process_content。"""
+        if self._closed:
+            return
+        self._closed = True
+        if not self.on_event and not self.on_chunk:
+            print()
+
+    def emit_persist_replacement(self, replacement_text):
+        """`_persist_assistant_response_if_needed` 改写了 response.content 时，
+        把替换文本推给纯文本消费者；event 流不重发（持久化提示已在 process_content 里）。"""
+        if self.on_event:
+            return
+        if self.on_chunk:
+            self.on_chunk('\n\n' + replacement_text)
+            return
+        print(replacement_text)
+
+
 def _emit_model_response(client, system_prompt, new_messages, tools_schema, model_step_id,
                          title, handler=None, on_chunk=None, on_event=None):
     gen = client.chat(system=system_prompt, new_messages=new_messages, tools=tools_schema)
-    model_raw_content = ''
-    model_process_content = ''
-    plain_limiter = _PlainStreamLimiter()
-    if on_event:
-        on_event(thought_start(model_step_id, title=title))
+    # max-turns fallback 历史上 on_chunk 走的是 raw chunk → limiter，不经过
+    # stream_model_process_content；这里通过 processed_chunks=False 保留原行为。
+    renderer = StreamRenderer(
+        model_step_id,
+        title=title,
+        on_event=on_event,
+        on_chunk=on_chunk,
+        processed_chunks=False,
+    )
+    renderer.start()
     try:
         while True:
             chunk = next(gen)
             if isinstance(chunk, ToolCallDelta):
                 continue
-            if on_event:
-                model_raw_content += chunk
-                next_process_content = _stream_preview_text(stream_model_process_content(model_raw_content))
-                if next_process_content.startswith(model_process_content):
-                    delta = next_process_content[len(model_process_content):]
-                    replace = False
-                else:
-                    delta = next_process_content
-                    replace = True
-                if delta or replace:
-                    on_event(thought_delta(model_step_id, delta, replace=replace))
-                model_process_content = next_process_content
-            elif on_chunk:
-                display_chunk = plain_limiter.filter(chunk)
-                if display_chunk:
-                    on_chunk(display_chunk)
-            else:
-                display_chunk = plain_limiter.filter(chunk)
-                if display_chunk:
-                    sys.stdout.write(display_chunk)
-                    sys.stdout.flush()
+            renderer.on_text_chunk(chunk)
     except StopIteration as e:
         response = e.value
-    if not on_event and not on_chunk:
-        print()
+    renderer.end_stream()
     original_content = response.content
     _persist_assistant_response_if_needed(handler, client, response, model_step_id)
     if response.content != original_content:
-        if on_chunk:
-            on_chunk('\n\n' + response.content)
-        elif not on_event:
-            print(response.content)
+        renderer.emit_persist_replacement(response.content)
     return response
 
 
@@ -443,60 +569,26 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
         # 1) 调用 LLM
         gen = client.chat(system=system_prompt, new_messages=new_messages, tools=tools_schema)
         model_step_id = f'model-{turn}'
-        model_raw_content = ''
-        model_process_content = ''
-        plain_limiter = _PlainStreamLimiter()
-        plain_stream_emitted = False
-        if on_event:
-            on_event(thought_start(model_step_id, title='Agent step'))
+        renderer = StreamRenderer(
+            model_step_id,
+            title='Agent step',
+            on_event=on_event,
+            on_chunk=on_chunk,
+            processed_chunks=True,
+        )
+        renderer.start()
         try:
             while True:
                 chunk = next(gen)
                 if isinstance(chunk, ToolCallDelta):
-                    if on_event:
-                        on_event(tool_call_delta(
-                            f'call_{turn}_{chunk.index}',
-                            index=chunk.index,
-                            name=chunk.name,
-                            name_delta=chunk.name_delta,
-                            arguments_delta=chunk.arguments_delta,
-                            arguments_text=chunk.arguments_text,
-                        ))
+                    renderer.on_tool_call_delta(chunk, turn=turn)
                     continue
-                if on_event:
-                    model_raw_content += chunk
-                    next_process_content = _stream_preview_text(stream_model_process_content(model_raw_content))
-                    if next_process_content.startswith(model_process_content):
-                        delta = next_process_content[len(model_process_content):]
-                        replace = False
-                    else:
-                        delta = next_process_content
-                        replace = True
-                    if delta or replace:
-                        on_event(thought_delta(model_step_id, delta, replace=replace))
-                    model_process_content = next_process_content
-                elif on_chunk:
-                    model_raw_content += chunk
-                    next_process_content = _stream_preview_text(stream_model_process_content(model_raw_content))
-                    if next_process_content.startswith(model_process_content):
-                        display_chunk = next_process_content[len(model_process_content):]
-                    else:
-                        display_chunk = next_process_content
-                    model_process_content = next_process_content
-                    display_chunk = plain_limiter.filter(display_chunk)
-                    if display_chunk:
-                        on_chunk(display_chunk)
-                        plain_stream_emitted = True
-                else:
-                    display_chunk = plain_limiter.filter(chunk)
-                    if display_chunk:
-                        sys.stdout.write(display_chunk)
-                        sys.stdout.flush()
+                renderer.on_text_chunk(chunk)
         except StopIteration as e:
             response = e.value
         _accumulate(response)
-        if not on_event and not on_chunk:
-            print()
+        renderer.end_stream()
+        plain_stream_emitted = renderer.plain_emitted
 
         # 2) 解析 tool_calls
         tool_calls = [{'tool_name': tc.name, 'args': tc.input, 'id': tc.id}
@@ -537,10 +629,8 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 on_event(agent_message_chunk(visible_reply))
             elif on_chunk and visible_reply and not plain_stream_emitted:
                 on_chunk(visible_reply)
-            elif assistant_replaced and on_chunk:
-                on_chunk('\n\n' + response.content)
-            elif assistant_replaced and not on_event and not on_chunk:
-                print(response.content)
+            elif assistant_replaced:
+                renderer.emit_persist_replacement(response.content)
             exit_reason = {'result': 'NO_TOOL_CALL', 'data': response.content}
             handler.turn_end_callback(response, [], [], turn, '', exit_reason)
             exit_reason['usage'] = dict(total_usage)
@@ -569,7 +659,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                 print(f'\n[Tool] {name}')
             try:
                 if on_event and emit_tool_progress:
-                    handler._tool_event_emit = lambda status, content='', data=None: on_event(
+                    handler.tool_event_emit = lambda status, content='', data=None: on_event(
                         tool_call_update(tool_call_id, status, content, data=data)
                     )
                 dispatch_args = dict(args)
@@ -580,8 +670,7 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
                     on_event(tool_call_update(tool_call_id, 'failed', str(e)))
                 raise
             finally:
-                if hasattr(handler, '_tool_event_emit'):
-                    handler._tool_event_emit = None
+                handler.tool_event_emit = None
             result_text = stringify(outcome.data) or '(no output)'
             result_text = _persist_tool_result_if_needed(
                 handler,
@@ -615,11 +704,11 @@ def agent_runner_loop(client, system_prompt, user_input, handler, tools_schema,
 
         _persist_assistant_response_if_needed(handler, client, response, model_step_id)
 
-        # 3.5) 拦截任务完成出口：若 handler._done_hooks 还有待办，弹出注入下一轮
+        # 3.5) 拦截任务完成出口：若 handler.done_hooks 还有待办，弹出注入下一轮
         # 参考 GenericAgent agent_loop.py:91-93。仅在 CURRENT_TASK_DONE / 无 next_prompt 时拦截，
         # EXITED（用户取消等强制退出）跳过；hook 队列空也跳过。
         if (not next_prompts) or exit_reason:
-            hooks = getattr(handler, '_done_hooks', None) or []
+            hooks = handler.done_hooks or []
             if hooks and exit_reason.get('result') != 'EXITED':
                 next_prompts.add(hooks.pop(0))
                 exit_reason = {}

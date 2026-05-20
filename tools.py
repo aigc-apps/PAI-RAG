@@ -389,8 +389,8 @@ class GenericHandler(BaseHandler):
         self.current_turn = 0
         self.max_turns = 40
         self.cancel_evt = None               # 前端可注入 threading.Event 用于中止
-        self._done_hooks = []                # legacy hook queue; normal memory review is async
-        self._tool_event_emit = None
+        self.done_hooks = []                 # 任务结束时弹出的 next_prompt 队列；harness 在 CURRENT_TASK_DONE 时消费
+        self.tool_event_emit = None          # harness 注入的工具进度回调（HandlerProtocol 的一部分）
         self.run_env = dict(run_env or {})
 
     # ── 路径与代码块抽取 ──
@@ -617,8 +617,8 @@ class GenericHandler(BaseHandler):
         return out
 
     def emit_tool_output(self, text):
-        if self._tool_event_emit is not None and text:
-            self._tool_event_emit('in_progress', text)
+        if self.tool_event_emit is not None and text:
+            self.tool_event_emit('in_progress', text)
 
     # ── 7 个工具 ──
     def do_code_run(self, args, response):

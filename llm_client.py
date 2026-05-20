@@ -8,16 +8,23 @@ DeepSeek / vLLM / Ollama / OpenRouter / Azure 等。
 - history 走 OpenAI 原生消息格式（user/assistant/tool 三种 role）
 - tools 走 {type:'function', function:{name, description, parameters}} 格式
 - prompt cache 由服务端自动处理（Qwen/DeepSeek/OpenAI 都自动前缀缓存），客户端零配置
-- 当外层提供 provider_name/key_id (走 provider_pool 拿的 key) 时，create 失败会按
-  HTTP 状态码反馈给 key 池：401/403 永久 evict，429 冷却 5 min，其他状态透传。
-  401/403/429 还会自动尝试换一把 key 重试，最多 3 次。
+- history 压缩走 ``context_compressor.compress_history``：先按 token 预算从
+  中间删，再 sanitize tool_calls 配对，避免 byte-level 暴力截断把孤儿 tool
+  message 留下来导致下次 400
+- 失败处理走 ``error_classifier.classify_api_error``：按错误类型决定 retry /
+  rotate / compress 三个维度，不再只看 status code 把 401/403/429 绑成一回事；
+  退避用 ``retry_utils.jittered_backoff``，避免并发请求同步重试
 """
 import json
+import time
 from dataclasses import dataclass, field
 
 from openai import OpenAI
 
 import provider_pool
+from context_compressor import compress_history
+from error_classifier import classify_api_error
+from retry_utils import jittered_backoff
 
 
 @dataclass
@@ -144,55 +151,12 @@ def _repair_truncated_json(s):
         return None
 
 
-# ──────────────────────────── 历史裁剪 ──────────────────────────── #
-
-def _estimate_tokens(messages):
-    n = 0
-    for m in messages:
-        c = m.get('content') or ''
-        if isinstance(c, str):
-            n += len(c) // 4
-        elif isinstance(c, list):
-            for blk in c:
-                if isinstance(blk, dict):
-                    n += len(str(blk.get('text', ''))) // 4
-        for tc in m.get('tool_calls') or []:
-            fn = tc.get('function', {}) if isinstance(tc, dict) else {}
-            n += len(fn.get('arguments', '')) // 4
-    return n
-
-
-def trim_history(history, max_tokens):
-    """超阈值则从最早消息开始删；保证不切断 assistant→tool 的配对。"""
-    while _estimate_tokens(history) > max_tokens and len(history) > 2:
-        # Drop messages until next one is a fresh user turn (avoid orphan tool messages)
-        del history[0]
-        while history and history[0].get('role') in ('tool', 'assistant'):
-            del history[0]
-
-
 # ──────────────────────────── 客户端主类 ──────────────────────────── #
 
-_ROTATABLE_STATUS = frozenset({401, 403, 429})
-_MAX_KEY_ROTATIONS = 2          # initial attempt + up to 2 rotations = 3 tries
-
-
-def _status_of(exc):
-    """Best-effort extract HTTP status code from an OpenAI / requests exception.
-
-    OpenAI SDK puts it on ``.status_code``; some intermediate wrappers stash
-    it on ``.response.status_code``. Returns ``None`` if neither is present
-    or castable — caller treats that as a non-rotatable failure.
-    """
-    code = getattr(exc, 'status_code', None)
-    if code is None:
-        resp = getattr(exc, 'response', None)
-        if resp is not None:
-            code = getattr(resp, 'status_code', None)
-    try:
-        return int(code) if code is not None else None
-    except (TypeError, ValueError):
-        return None
+# 单次 chat() 的总尝试次数。1 次正常 + 最多 3 次重试。BAD_REQUEST /
+# AUTH_PERMANENT 类错误 classified.retryable=False 会立即退出，不会浪费
+# 这个上限。
+_MAX_ATTEMPTS = 4
 
 
 class LLMClient:
@@ -216,10 +180,10 @@ class LLMClient:
     def _rotate_key(self):
         """Swap to the next live key from the pool. Returns True on success.
 
-        Called only when the previous attempt's status is in
-        ``_ROTATABLE_STATUS`` and we still have rotations left. Pool
-        ``acquire`` may itself raise (every key dead) — that's a hard fail
-        and we let the caller fall through to error reporting.
+        Called when the classifier flags ``should_rotate_credential`` and we
+        still have attempts left. Pool ``acquire`` may itself raise (every
+        key dead) — that's a hard fail and we let the caller fall through
+        to error reporting.
         """
         if not self.provider_name:
             return False
@@ -266,17 +230,25 @@ class LLMClient:
                      可选 {'role':'user','content': next_prompt}]
         """
         self.history.extend(new_messages)
-        trim_history(self.history, self.history_trim_tokens)
+        self.history = compress_history(self.history, max_tokens=self.history_trim_tokens)
         self._notify_history_changed()
 
         messages = [{'role': 'system', 'content': system}] + list(self.history)
 
-        # Retry up to _MAX_KEY_ROTATIONS times on rotatable status codes
-        # (401/403/429). Other failures (bad request, network, 5xx) fall
-        # through without burning rotations — those keys are still good.
+        # Each attempt:
+        #   1. fire the request
+        #   2. on exception, classify it
+        #   3. let the classifier tell us whether to retry, rotate the key,
+        #      and/or shrink history; sleep with jittered backoff before the
+        #      next try
+        # BAD_REQUEST / AUTH_PERMANENT short-circuit (retryable=False);
+        # CONTEXT_OVERFLOW shrinks ``messages`` for THIS retry only — we
+        # don't permanently mutate ``self.history`` because the next chat()
+        # call will rebuild it.
         stream = None
         last_exc = None
-        for attempt in range(_MAX_KEY_ROTATIONS + 1):
+        last_classified = None
+        for attempt in range(_MAX_ATTEMPTS):
             try:
                 stream = self._client.chat.completions.create(
                     model=self.model,
@@ -289,14 +261,26 @@ class LLMClient:
                 break
             except Exception as e:
                 last_exc = e
-                status = _status_of(e)
-                self._feedback_failure(status)
-                if status not in _ROTATABLE_STATUS or attempt == _MAX_KEY_ROTATIONS:
+                last_classified = classify_api_error(e)
+                if last_classified.should_rotate_credential:
+                    self._feedback_failure(last_classified.status_code)
+                if not last_classified.retryable or attempt == _MAX_ATTEMPTS - 1:
                     break
-                if not self._rotate_key():
+                if last_classified.should_rotate_credential and not self._rotate_key():
                     break
+                if last_classified.should_compress:
+                    # Tighter budget for this retry only — give the model
+                    # half the room and see if it goes through.
+                    tighter = compress_history(
+                        self.history,
+                        max_tokens=max(self.history_trim_tokens // 2, 1),
+                    )
+                    messages = [{'role': 'system', 'content': system}] + list(tighter)
+                time.sleep(jittered_backoff(attempt + 1))
         if stream is None:
-            err = f'Request failed: {type(last_exc).__name__}: {last_exc}'
+            reason_label = last_classified.reason.value if last_classified else 'unknown'
+            err = (f'Request failed after {_MAX_ATTEMPTS} attempts ({reason_label}): '
+                   f'{type(last_exc).__name__}: {last_exc}')
             yield f'\n[Error] {err}\n'
             return Response(content=err, stop_reason='error')
 
@@ -356,7 +340,9 @@ class LLMClient:
             # Retrying mid-stream would corrupt partial output already yielded
             # to the caller, so just feed the status to the pool and let the
             # next chat() turn pick a fresh key if the current one is bad.
-            self._feedback_failure(_status_of(e))
+            mid_classified = classify_api_error(e)
+            if mid_classified.should_rotate_credential:
+                self._feedback_failure(mid_classified.status_code)
             warn = f'\n[!! 流异常中断: {type(e).__name__}: {e} !!]'
             yield warn
 
