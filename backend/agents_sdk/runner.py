@@ -310,6 +310,37 @@ def _has_final_report_output(output: list[dict]) -> bool:
     return any(isinstance(item, dict) and _is_final_report_message(item) for item in output or [])
 
 
+def _demote_plain_message_to_process_reasoning(item: dict) -> dict:
+    """Rewrite a ``type=message`` item as ``type=reasoning`` with the
+    ``is_process_reasoning`` flag set so naive SDK consumers (which concat
+    every ``type=message`` to compute ``response.output_text``) skip it.
+
+    Returns a new dict; caller should overwrite ``output[idx]`` with the
+    return value.
+    """
+    rewritten_content: list[dict] = []
+    for block in item.get('content') or []:
+        if not isinstance(block, dict):
+            continue
+        if block.get('type') in ('output_text', 'text'):
+            rewritten_content.append({'type': 'summary_text', 'text': block.get('text') or ''})
+        else:
+            rewritten_content.append(dict(block))
+    metadata = dict(item.get('metadata') or {})
+    namespace = dict(metadata.get(_PAIRAG_NAMESPACE_KEY) or {})
+    namespace.pop(_FINAL_REPORT_FLAG, None)
+    namespace[_PROCESS_REASONING_FLAG] = True
+    metadata[_PAIRAG_NAMESPACE_KEY] = namespace
+    rewritten = {
+        **{k: v for k, v in item.items() if k not in ('type', 'role', 'content', 'metadata')},
+        'type': 'reasoning',
+        'content': rewritten_content,
+        'metadata': metadata,
+    }
+    rewritten.pop('role', None)
+    return rewritten
+
+
 def _finalize_output_for_responses(state: ResponsesStreamState) -> None:
     """Enforce the single-`message` invariant in ``response.completed.output``.
 
@@ -318,10 +349,14 @@ def _finalize_output_for_responses(state: ResponsesStreamState) -> None:
     flag. To make naive SDK usage just work, the terminal payload must contain
     at most one assistant ``message``, and that one is the canonical answer.
 
+    With visible text now streaming live as ``output_text.delta`` (instead of
+    being buffered until the final flush), pre-tool prose surfaces as a real
+    ``message`` item during streaming. We demote any such message that sits
+    BEFORE the last tool boundary at terminal time so the SDK consumer's naive
+    concat returns only the post-tool answer.
+
     Mutates ``state.output`` in place. Does not emit SSE events: streaming
-    clients reconcile against the terminal ``response.completed.output`` snapshot
-    (matches OpenAI's own behavior — same as plan decision in
-    ``/home/xiaowen/.claude/plans/zippy-cuddling-zebra.md``).
+    clients reconcile against the terminal ``response.completed.output`` snapshot.
     """
     output = state.output
     has_tool_call = any(
@@ -350,6 +385,21 @@ def _finalize_output_for_responses(state: ResponsesStreamState) -> None:
         return
 
     if not flagged_indices:
+        if has_tool_call and plain_message_indices:
+            # Find the last function_call / function_call_output index. Any
+            # plain message strictly before it is pre-tool prose (we live-
+            # streamed it for UX), so demote to process reasoning. Messages
+            # after the last tool boundary are the model's final answer.
+            last_tool_idx = max(
+                i for i, item in enumerate(output)
+                if isinstance(item, dict)
+                and item.get('type') in ('function_call', 'function_call_output')
+            )
+            for idx in plain_message_indices:
+                if idx < last_tool_idx:
+                    item = output[idx]
+                    if isinstance(item, dict):
+                        output[idx] = _demote_plain_message_to_process_reasoning(item)
         return
 
     keep_idx = flagged_indices[-1]
@@ -359,27 +409,7 @@ def _finalize_output_for_responses(state: ResponsesStreamState) -> None:
         item = output[idx]
         if not isinstance(item, dict):
             continue
-        rewritten_content: list[dict] = []
-        for block in item.get('content') or []:
-            if not isinstance(block, dict):
-                continue
-            if block.get('type') in ('output_text', 'text'):
-                rewritten_content.append({'type': 'summary_text', 'text': block.get('text') or ''})
-            else:
-                rewritten_content.append(dict(block))
-        metadata = dict(item.get('metadata') or {})
-        namespace = dict(metadata.get(_PAIRAG_NAMESPACE_KEY) or {})
-        namespace.pop(_FINAL_REPORT_FLAG, None)
-        namespace[_PROCESS_REASONING_FLAG] = True
-        metadata[_PAIRAG_NAMESPACE_KEY] = namespace
-        rewritten = {
-            **{k: v for k, v in item.items() if k not in ('type', 'role', 'content', 'metadata')},
-            'type': 'reasoning',
-            'content': rewritten_content,
-            'metadata': metadata,
-        }
-        rewritten.pop('role', None)
-        output[idx] = rewritten
+        output[idx] = _demote_plain_message_to_process_reasoning(item)
 
 
 def _needs_final_report_retry(output: list[dict]) -> bool:

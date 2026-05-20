@@ -217,16 +217,52 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
     """A 'thinking' segment opens on first text delta and closes when the
     LLM hands off (tool call) or finishes the message."""
 
-    def test_text_then_tool_brackets_one_synthetic_step(self):
+    def test_visible_text_emits_live_before_message_close(self):
+        """Each visible delta becomes an immediate ``output_text.delta`` and
+        the first delta lazy-opens ``output_item.added(message)``. This is
+        the load-bearing TTFT property: a no-tool-call answer like "你是谁？"
+        starts streaming on the first byte rather than waiting for the
+        ``MessageOutputItem`` close to dump the whole thing at once."""
         state = ResponsesStreamState()
         chunks: list[dict] = []
-        # Plain text is buffered until we know whether it is final answer text
-        # or process reasoning before a tool call.
+        chunks += to_responses_chunk(_raw_event(_output_text_delta('he')),
+                                     state, response_id='resp_x')
+        chunks += to_responses_chunk(_raw_event(_output_text_delta('llo ')),
+                                     state, response_id='resp_x')
+        chunks += to_responses_chunk(_raw_event(_output_text_delta('world')),
+                                     state, response_id='resp_x')
+
+        types = [c['type'] for c in chunks]
+        self.assertEqual(types, [
+            'response.output_item.added',
+            'response.output_text.delta',
+            'response.output_text.delta',
+            'response.output_text.delta',
+        ])
+        # output_item.added must precede the first delta.
+        self.assertEqual(chunks[0]['item']['type'], 'message')
+        self.assertEqual(chunks[0]['item']['status'], 'in_progress')
+        # Each delta carries its own slice — no buffering / re-chunking.
+        deltas = [c['delta'] for c in chunks if c['type'] == 'response.output_text.delta']
+        self.assertEqual(deltas, ['he', 'llo ', 'world'])
+        # state.output reflects the open message; status flips to completed
+        # only on MessageOutputItem.
+        self.assertEqual(len(state.output), 1)
+        self.assertEqual(state.output[0]['status'], 'in_progress')
+
+    def test_text_then_tool_brackets_one_synthetic_step(self):
+        from backend.agents_sdk.runner import _finalize_output_for_responses
+
+        state = ResponsesStreamState()
+        chunks: list[dict] = []
+        # Visible text streams live (TTFT-friendly), then a tool call closes
+        # the open message; terminal normalization demotes that message to
+        # process reasoning so the SDK consumer's ``response.output_text``
+        # stays clean.
         chunks += to_responses_chunk(_raw_event(_output_text_delta('Let me')),
                                      state, response_id='resp_x')
         chunks += to_responses_chunk(_raw_event(_output_text_delta(' check.')),
                                      state, response_id='resp_x')
-        # Tool call closes the step before emitting tool card.
         sdk_item = _make_tool_call_item(
             item_id='fc_010', call_id='call_010',
             name='file_read', arguments='{}',
@@ -234,23 +270,41 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
         chunks += to_responses_chunk(_item_event(sdk_item),
                                      state, response_id='resp_x')
 
-        opens = [c for c in chunks if c['type'] == 'response.reasoning_step.started']
-        closes = [c for c in chunks if c['type'] == 'response.reasoning_step.completed']
-        self.assertEqual(len(opens), 1, chunks)
-        self.assertEqual(len(closes), 1, chunks)
-        self.assertEqual(opens[0]['step_id'], closes[0]['step_id'])
-        self.assertTrue(opens[0]['step_id'].startswith('rs_synth_'))
-        self.assertTrue(opens[0]['synthetic'])
+        # Visible deltas surface live, not as reasoning.
         self.assertEqual(
             ''.join(c['delta'] for c in chunks if c['type'] == 'response.output_text.delta'),
-            '',
+            'Let me check.',
         )
         self.assertEqual(
             ''.join(c['delta'] for c in chunks if c['type'] == 'response.reasoning_text.delta'),
-            'Let me check.',
+            '',
         )
-        self.assertEqual([item['type'] for item in state.output], ['reasoning', 'function_call'])
+        # No synthetic reasoning step is opened for visible-only text.
+        opens = [c for c in chunks if c['type'] == 'response.reasoning_step.started']
+        closes = [c for c in chunks if c['type'] == 'response.reasoning_step.completed']
+        self.assertEqual(len(opens), 0)
+        self.assertEqual(len(closes), 0)
+        # The handoff brackets the message: text.done + item.done before the
+        # tool card.
+        type_seq = [c['type'] for c in chunks]
+        self.assertIn('response.output_text.done', type_seq)
+        msg_done_idx = type_seq.index('response.output_item.done')
+        tool_added_idx = next(
+            i for i, c in enumerate(chunks)
+            if c['type'] == 'response.output_item.added'
+            and c['item']['type'] == 'function_call'
+        )
+        self.assertLess(msg_done_idx, tool_added_idx,
+                        'message must close before the tool card opens')
+        # Streaming output is [message, function_call].
+        self.assertEqual([item['type'] for item in state.output],
+                         ['message', 'function_call'])
+        # Terminal normalization demotes the pre-tool message to reasoning
+        # so naive SDK consumers don't surface "Let me check." as the answer.
+        _finalize_output_for_responses(state)
+        self.assertEqual(state.output[0]['type'], 'reasoning')
         self.assertTrue(state.output[0]['metadata']['pairag']['is_process_reasoning'])
+        self.assertEqual(state.output[0]['content'][0]['type'], 'summary_text')
         self.assertEqual(state.output[0]['content'][0]['text'], 'Let me check.')
 
     def test_text_to_message_done_becomes_visible_answer(self):
@@ -299,27 +353,33 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
             '<thinking>',
             ''.join(c.get('delta', '') for c in chunks),
         )
-        self.assertEqual([item['type'] for item in state.output], ['reasoning', 'message'])
-        self.assertTrue(state.output[0]['metadata']['pairag']['is_process_reasoning'])
-        self.assertEqual(state.output[0]['content'][0]['type'], 'reasoning_text')
-        self.assertEqual(state.output[0]['content'][0]['text'], 'private')
-        self.assertEqual(state.output[1]['content'][0]['text'], '\nAnswer')
+        # The message is lazy-opened on the first visible delta and so
+        # appears at index 0; the synthetic process-reasoning item for the
+        # thought-tag content is appended at message-close time.
+        self.assertEqual([item['type'] for item in state.output], ['message', 'reasoning'])
+        self.assertEqual(state.output[0]['content'][0]['type'], 'output_text')
+        self.assertEqual(state.output[0]['content'][0]['text'], '\nAnswer')
+        self.assertTrue(state.output[1]['metadata']['pairag']['is_process_reasoning'])
+        self.assertEqual(state.output[1]['content'][0]['type'], 'reasoning_text')
+        self.assertEqual(state.output[1]['content'][0]['text'], 'private')
 
     def test_two_thinking_segments_separated_by_tool_have_distinct_step_ids(self):
         state = ResponsesStreamState()
         all_chunks: list[dict] = []
-        # Segment 1: text → tool
-        all_chunks += to_responses_chunk(_raw_event(_output_text_delta('think1')),
-                                         state, response_id='resp_x')
+        # Segment 1: <thinking>think1</thinking> → tool
+        all_chunks += to_responses_chunk(
+            _raw_event(_output_text_delta('<thinking>think1</thinking>')),
+            state, response_id='resp_x')
         sdk_item = _make_tool_call_item(
             item_id='fc_020', call_id='call_020',
             name='file_read', arguments='{}',
         )
         all_chunks += to_responses_chunk(_item_event(sdk_item),
                                          state, response_id='resp_x')
-        # Segment 2: text → message done
-        all_chunks += to_responses_chunk(_raw_event(_output_text_delta('think2')),
-                                         state, response_id='resp_x')
+        # Segment 2: <thinking>think2</thinking> → message done
+        all_chunks += to_responses_chunk(
+            _raw_event(_output_text_delta('<thinking>think2</thinking>')),
+            state, response_id='resp_x')
         msg = _make_message_output_item()
         all_chunks += to_responses_chunk(_item_event(msg),
                                          state, response_id='resp_x')
@@ -328,10 +388,11 @@ class ReasoningStepBoundaryTests(unittest.TestCase):
                  if c['type'] == 'response.reasoning_step.started']
         closes = [c['step_id'] for c in all_chunks
                   if c['type'] == 'response.reasoning_step.completed']
-        self.assertEqual(len(opens), 1)
-        self.assertEqual(len(closes), 1)
+        self.assertEqual(len(opens), 2)
+        self.assertEqual(len(closes), 2)
         self.assertEqual(opens, closes, 'open/close ids must pair in order')
-        self.assertEqual(len(set(opens)), 1)
+        self.assertEqual(len(set(opens)), 2,
+                         'each thinking segment gets a unique step id')
 
 
 class PlaceholderItemIdRewriteTests(unittest.TestCase):

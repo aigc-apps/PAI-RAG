@@ -409,6 +409,38 @@ def _stream_reasoning_text(
     return chunks
 
 
+def _open_message_if_needed(
+    state: ResponsesStreamState,
+    *,
+    response_id: str,
+) -> tuple[list[dict], int]:
+    """Lazy-create the assistant message item on the first visible delta.
+
+    OpenAI's wire requires ``output_item.added(message)`` to precede any
+    ``output_text.delta`` for that item. We open lazily so a turn that
+    produces only thought + tool calls never emits a phantom empty message.
+    """
+    if state.message_started and state.message_index is not None:
+        return [], state.message_index
+    state.message_started = True
+    state.message_id = f'msg_{uuid.uuid4().hex}'
+    state.message_index = len(state.output)
+    in_progress = {
+        'id': state.message_id,
+        'type': 'message',
+        'status': 'in_progress',
+        'role': 'assistant',
+        'content': [{'type': 'output_text', 'text': ''}],
+    }
+    state.output.append(in_progress)
+    return [{
+        'type': 'response.output_item.added',
+        'response_id': response_id,
+        'output_index': state.message_index,
+        'item': dict(in_progress),
+    }], state.message_index
+
+
 def _append_text_segments(
     state: ResponsesStreamState,
     segments: list[tuple[str, str]],
@@ -420,8 +452,17 @@ def _append_text_segments(
         if not text:
             continue
         if mode == 'visible':
+            opened, idx = _open_message_if_needed(state, response_id=response_id)
+            chunks.extend(opened)
             state.accumulated_text.append(text)
             state.pending_text_segments.append((mode, text))
+            chunks.append({
+                'type': 'response.output_text.delta',
+                'response_id': response_id,
+                'delta': text,
+                'output_index': idx,
+                'content_index': 0,
+            })
             continue
         if mode == 'thought':
             state.pending_text_segments.append((mode, text))
@@ -502,30 +543,72 @@ def _reset_pending_message_text(state: ResponsesStreamState) -> None:
     state.pending_text_segments = []
 
 
-def _complete_open_message_as_process_reasoning(
+def _close_open_message(
     state: ResponsesStreamState,
     *,
     response_id: str,
 ) -> list[dict]:
-    """Finalize text emitted before a tool handoff as process-only reasoning.
+    """Emit the closing ``output_text.done`` + ``output_item.done`` pair for
+    an assistant message that was lazy-opened by ``_open_message_if_needed``.
 
-    Some providers stream planning prose as ``output_text.delta`` and then
-    issue a function call. The UI treats that segment as synthetic reasoning,
-    so the terminal ``response.output`` keeps it for UI replay but marks it as
-    non-final-answer text.
+    No-op if no message is open. Does not reset state — callers (handoff,
+    message-end) do that explicitly via ``_reset_pending_message_text`` so
+    stale state can't bleed into the next turn.
     """
-    chunks: list[dict] = []
-    chunks.extend(_flush_text_segments(state, response_id=response_id))
-    done_text = _pending_text(state, include_visible=True)
-    if done_text:
-        chunks.extend(_stream_pending_visible_as_reasoning(state, response_id=response_id))
-        chunks.extend(_append_process_reasoning_output_item(
-            state,
-            response_id=response_id,
-            text=done_text,
-        ))
+    if not (state.message_started and state.message_index is not None):
+        return []
+    idx = state.message_index
+    done_text = ''.join(state.accumulated_text)
+    completed = {
+        'id': state.message_id,
+        'type': 'message',
+        'status': 'completed',
+        'role': 'assistant',
+        'content': [{'type': 'output_text', 'text': done_text}],
+    }
+    state.output[idx] = completed
+    return [
+        {
+            'type': 'response.output_text.done',
+            'response_id': response_id,
+            'text': done_text,
+            'output_index': idx,
+            'content_index': 0,
+        },
+        {
+            'type': 'response.output_item.done',
+            'response_id': response_id,
+            'output_index': idx,
+            'item': dict(completed),
+        },
+    ]
+
+
+def _finalize_open_message_for_handoff(
+    state: ResponsesStreamState,
+    *,
+    response_id: str,
+) -> list[dict]:
+    """Close any open assistant message before a tool handoff.
+
+    Visible deltas have already been streamed live by ``_append_text_segments``;
+    this just flushes the protocol filter (its trailing buffer can carry one
+    more visible/thought slice that we live-emit) and emits the message-close
+    bracket so the SSE stream stays well-formed when the model interleaves
+    prose with a function_call. Terminal normalization
+    (``runner._finalize_output_for_responses``) demotes any pre-tool message
+    to ``reasoning(is_process_reasoning=True)`` so naive SDK consumers — which
+    concat all ``type=message`` items — see only the final answer.
+    """
+    chunks = _flush_text_segments(state, response_id=response_id)
+    chunks.extend(_close_open_message(state, response_id=response_id))
     _reset_pending_message_text(state)
     return chunks
+
+
+# Backward-compat alias kept for one PR cycle to avoid renaming churn at the
+# call sites (raw function_call handler, ToolCallItem handler). Drop next PR.
+_complete_open_message_as_process_reasoning = _finalize_open_message_for_handoff
 
 
 def _current_function_name(state: ResponsesStreamState) -> str:
@@ -967,9 +1050,11 @@ def _item_to_responses(item: Any, name: str, state: ResponsesStreamState, *, res
             },
         ]
     if kind == 'MessageOutputItem':
-        # The raw text deltas were split and buffered. At message close we can
-        # now classify outside-tag text as the visible answer, while any
-        # private thought-tag content remains process reasoning.
+        # Visible deltas have already been live-streamed by
+        # ``_append_text_segments``; here we just flush the filter (which can
+        # release a trailing visible/thought slice that was held pending more
+        # bytes), close any thought-only reasoning span, and bracket the open
+        # message item with its terminating events.
         chunks = _flush_text_segments(state, response_id=response_id)
         thought_text = _pending_text(state, include_visible=False)
         if thought_text:
@@ -979,57 +1064,7 @@ def _item_to_responses(item: Any, name: str, state: ResponsesStreamState, *, res
                 text=thought_text,
             ))
         chunks.extend(_close_step_if_open(state, response_id=response_id))
-
-        done_text = ''.join(state.accumulated_text)
-        if not done_text.strip():
-            _reset_pending_message_text(state)
-            return chunks
-
-        idx = len(state.output)
-        msg_id = f'msg_{uuid.uuid4().hex}'
-        in_progress = {
-            'id': msg_id,
-            'type': 'message',
-            'status': 'in_progress',
-            'role': 'assistant',
-            'content': [{'type': 'output_text', 'text': ''}],
-        }
-        completed = {
-            **in_progress,
-            'status': 'completed',
-            'content': [{'type': 'output_text', 'text': done_text}],
-        }
-        state.output.append(in_progress)
-        chunks.append({
-            'type': 'response.output_item.added',
-            'response_id': response_id,
-            'output_index': idx,
-            'item': dict(in_progress),
-        })
-        for piece in _stream_text_chunks(done_text):
-            chunks.append({
-                'type': 'response.output_text.delta',
-                'response_id': response_id,
-                'delta': piece,
-                'output_index': idx,
-                'content_index': 0,
-            })
-        state.output[idx] = completed
-        chunks.extend([
-            {
-                'type': 'response.output_text.done',
-                'response_id': response_id,
-                'text': done_text,
-                'output_index': idx,
-                'content_index': 0,
-            },
-            {
-                'type': 'response.output_item.done',
-                'response_id': response_id,
-                'output_index': idx,
-                'item': dict(completed),
-            },
-        ])
+        chunks.extend(_close_open_message(state, response_id=response_id))
         _reset_pending_message_text(state)
         return chunks
     return []

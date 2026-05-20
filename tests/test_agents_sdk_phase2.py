@@ -147,16 +147,24 @@ def _approval_item(call_id='approve_1', tool_name='ask_user', args='{"question":
 # ─── event_bridge ─────────────────────────────────────────────────────────
 
 class EventBridgeTests(unittest.TestCase):
-    def test_text_delta_is_buffered_until_message_or_tool_boundary(self):
+    def test_text_delta_streams_live_and_lazy_opens_message(self):
         state = ResponsesStreamState()
+        # First visible delta lazy-opens the message item AND emits the
+        # delta — required for live token-by-token UX.
         chunks = event_bridge.to_responses_chunk(_delta('hello'), state, response_id='resp_1')
-        self.assertEqual(chunks, [])
-        self.assertFalse(state.message_started)
+        self.assertEqual(
+            [c['type'] for c in chunks],
+            ['response.output_item.added', 'response.output_text.delta'],
+        )
+        self.assertEqual(chunks[0]['item']['type'], 'message')
+        self.assertEqual(chunks[1]['delta'], 'hello')
+        self.assertTrue(state.message_started)
         self.assertEqual(''.join(state.accumulated_text), 'hello')
-        # Second delta on the same stream is still buffered; it is not
-        # user-visible output_text until the SDK reports MessageOutputItem.
+        # Subsequent deltas only emit the delta — the message item is
+        # already open.
         chunks2 = event_bridge.to_responses_chunk(_delta(' world'), state, response_id='resp_1')
-        self.assertEqual(chunks2, [])
+        self.assertEqual([c['type'] for c in chunks2], ['response.output_text.delta'])
+        self.assertEqual(chunks2[0]['delta'], ' world')
         self.assertEqual(''.join(state.accumulated_text), 'hello world')
 
     def test_tool_call_item_emits_added_and_done(self):
@@ -184,12 +192,14 @@ class EventBridgeTests(unittest.TestCase):
 
     def test_message_output_item_closes_assistant_message(self):
         state = ResponsesStreamState()
-        # First a delta buffers candidate visible answer text.
-        event_bridge.to_responses_chunk(_delta('done'), state, response_id='resp_1')
-        # Then the closing MessageOutputItem classifies it as visible answer.
+        all_chunks: list[dict] = []
+        # First the delta lazy-opens the message and live-emits.
+        all_chunks += event_bridge.to_responses_chunk(_delta('done'), state, response_id='resp_1')
+        # Then the closing MessageOutputItem brackets it with text.done +
+        # item.done — no fresh added/delta pair (those already shipped live).
         ev = _ItemEvent(_message_output_item())
-        chunks = event_bridge.to_responses_chunk(ev, state, response_id='resp_1')
-        self.assertEqual([c['type'] for c in chunks], [
+        all_chunks += event_bridge.to_responses_chunk(ev, state, response_id='resp_1')
+        self.assertEqual([c['type'] for c in all_chunks], [
             'response.output_item.added',
             'response.output_text.delta',
             'response.output_text.done',
