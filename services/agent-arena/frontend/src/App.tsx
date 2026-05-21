@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock3,
   Eraser,
+  FlaskConical,
   Gavel,
   History,
   KeyRound,
@@ -47,8 +48,9 @@ import {
 } from "@/lib/api"
 import { normalizeError, reportFrontendLog } from "@/lib/frontendLogger"
 import { cn } from "@/lib/utils"
+import { BatchPage } from "@/BatchPage"
 
-type PublicAgentConfig = {
+export type PublicAgentConfig = {
   name: string
   base_url: string
   model: string
@@ -59,7 +61,7 @@ type PublicAgentConfig = {
   runs_path: string
 }
 
-type PublicJudgeConfig = {
+export type PublicJudgeConfig = {
   base_url: string
   model: string
   configured: boolean
@@ -67,7 +69,7 @@ type PublicJudgeConfig = {
   completion_path: string
 }
 
-type ConfigResponse = {
+export type ConfigResponse = {
   agents: {
     a: PublicAgentConfig
     b: PublicAgentConfig
@@ -179,7 +181,7 @@ type HistoryDetailResponse = {
   judges: HistoryJudgeRecord[]
 }
 
-type ViewMode = "arena" | "history"
+type ViewMode = "arena" | "batch" | "history"
 
 const samplePrompt =
   "请用三个要点说明：如果要给一个项目加入长期记忆能力，最重要的设计取舍是什么？"
@@ -1058,6 +1060,15 @@ function App() {
             </Button>
             <Button
               type="button"
+              variant={view === "batch" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setView("batch")}
+            >
+              <FlaskConical className="size-4" />
+              稳定性测试
+            </Button>
+            <Button
+              type="button"
               variant={view === "history" ? "default" : "outline"}
               size="sm"
               onClick={() => setView("history")}
@@ -1128,7 +1139,9 @@ function App() {
           </Alert>
         ) : null}
 
-        {view === "arena" ? (
+        {view === "batch" ? (
+          <BatchPage config={config} />
+        ) : view === "arena" ? (
         <section className="grid gap-5 xl:grid-cols-[420px_1fr]">
           <Card className="h-fit">
             <CardHeader>

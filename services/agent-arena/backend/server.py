@@ -1,25 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
 import secrets
 import sqlite3
+import statistics
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -228,6 +230,98 @@ class HistoryDetailResponse(BaseModel):
     judges: list[HistoryJudgeRecord] = Field(default_factory=list)
 
 
+BatchTarget = Literal["a", "b", "both"]
+BatchMode = Literal["form", "raw"]
+AssertionKind = Literal["substring", "regex"]
+BATCH_MAX_ITERATIONS = 200
+BATCH_MAX_CONCURRENCY = 8
+
+
+class BatchAssertion(BaseModel):
+    type: AssertionKind = "substring"
+    value: str = Field(..., min_length=1)
+    case_sensitive: bool = False
+
+
+class BatchFormPayload(BaseModel):
+    input: str = Field(..., min_length=1)
+    system: str = ""
+    temperature: float = Field(0.2, ge=0, le=2)
+    max_tokens: int | None = Field(None, ge=1, le=200000)
+
+
+class BatchRunRequest(BaseModel):
+    target: BatchTarget = "a"
+    mode: BatchMode = "form"
+    iterations: int = Field(10, ge=1, le=BATCH_MAX_ITERATIONS)
+    concurrency: int = Field(1, ge=1, le=BATCH_MAX_CONCURRENCY)
+    form: BatchFormPayload | None = None
+    raw_body: dict[str, Any] | None = None
+    assertion: BatchAssertion | None = None
+
+    @model_validator(mode="after")
+    def _check_payload(self) -> "BatchRunRequest":
+        if self.mode == "form" and self.form is None:
+            raise ValueError("form payload required when mode='form'")
+        if self.mode == "raw" and not self.raw_body:
+            raise ValueError("raw_body required when mode='raw'")
+        if self.assertion is not None and self.assertion.type == "regex":
+            try:
+                re.compile(self.assertion.value)
+            except re.error as exc:
+                raise ValueError(f"invalid regex: {exc}") from exc
+        return self
+
+
+class BatchRunItem(BaseModel):
+    index: int
+    agent_key: Literal["a", "b"]
+    agent_name: str
+    agent_model: str
+    ok: bool
+    latency_ms: int | None = None
+    content: str = ""
+    content_length: int = 0
+    content_hash: str = ""
+    finish_reason: str | None = None
+    error: str | None = None
+    assertion_passed: bool | None = None
+    trace_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class BatchAgentSummary(BaseModel):
+    agent_key: Literal["a", "b"]
+    agent_name: str
+    agent_model: str
+    total: int
+    success: int
+    success_rate: float
+    assertion_total: int = 0
+    assertion_passed: int = 0
+    assertion_rate: float | None = None
+    latency_min_ms: int | None = None
+    latency_p50_ms: int | None = None
+    latency_p90_ms: int | None = None
+    latency_max_ms: int | None = None
+    content_len_min: int | None = None
+    content_len_avg: float | None = None
+    content_len_max: int | None = None
+    tool_call_avg: float | None = None
+    failed_tool_total: int = 0
+    finish_reasons: dict[str, int] = Field(default_factory=dict)
+    cluster_count: int = 0
+    clusters: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class BatchRunResponse(BaseModel):
+    batch_id: str
+    created_at: str
+    request: BatchRunRequest
+    items: list[BatchRunItem]
+    summaries: dict[str, BatchAgentSummary]
+    cancelled: bool = False
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -300,6 +394,36 @@ def init_history_db() -> None:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_created_at ON arena_runs(created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_judge_results_run_id ON judge_results(run_id, created_at DESC)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS batch_runs (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                target TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                iterations INTEGER NOT NULL,
+                concurrency INTEGER NOT NULL,
+                cancelled INTEGER NOT NULL DEFAULT 0,
+                request_json TEXT NOT NULL,
+                summaries_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS batch_run_items (
+                batch_id TEXT NOT NULL,
+                idx INTEGER NOT NULL,
+                agent_key TEXT NOT NULL,
+                ok INTEGER NOT NULL,
+                latency_ms INTEGER,
+                item_json TEXT NOT NULL,
+                PRIMARY KEY (batch_id, idx, agent_key),
+                FOREIGN KEY (batch_id) REFERENCES batch_runs(id)
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_batch_runs_created_at ON batch_runs(created_at DESC)")
 
 
 def history_connect() -> sqlite3.Connection:
@@ -1136,6 +1260,445 @@ async def call_agent(
     return await call_agent_chat(client, agent, messages, temperature, max_tokens)
 
 
+async def call_agent_raw(
+    client: httpx.AsyncClient,
+    agent: AgentConfig,
+    raw_body: dict[str, Any],
+) -> AgentResult:
+    """POST a user-supplied JSON body verbatim to the agent's /v1/responses URL.
+
+    Forces stream=true so we can collect trace events; everything else is
+    forwarded as-is.
+    """
+    if not agent.configured:
+        return AgentResult(
+            ok=False,
+            name=agent.name,
+            model=agent.model,
+            error="Agent is not configured. Set base URL and model in .env.",
+            trace_supported=True,
+            trace_summary=summarize_trace([], True),
+        )
+
+    payload = dict(raw_body)
+    payload["stream"] = True
+    payload.setdefault("model", agent.model)
+
+    started = time.perf_counter()
+    parts: list[str] = []
+    events: list[AgentTraceEvent] = []
+    terminal: dict[str, Any] | None = None
+    final_error: str | None = None
+    try:
+        async with client.stream(
+            "POST",
+            agent.responses_url,
+            json=payload,
+            headers={**build_headers(agent.api_key), "Accept": "text/event-stream"},
+        ) as response:
+            if response.status_code >= 400:
+                body = await response.aread()
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                return AgentResult(
+                    ok=False,
+                    name=agent.name,
+                    model=str(payload.get("model") or agent.model),
+                    latency_ms=latency_ms,
+                    error=f"raw HTTP {response.status_code}: {body.decode(errors='replace')[:1000]}",
+                    trace_supported=True,
+                    trace_summary=summarize_trace([], True),
+                )
+            event_name = ""
+            data_lines: list[str] = []
+            async for line in response.aiter_lines():
+                if not line:
+                    if not data_lines:
+                        event_name = ""
+                        continue
+                    raw_data = "\n".join(data_lines)
+                    data_lines = []
+                    if raw_data == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(raw_data)
+                    except json.JSONDecodeError:
+                        event_name = ""
+                        continue
+                    event_type = str(data.get("type") or event_name or "unknown")
+                    if event_type == "response.output_text.delta" and data.get("delta"):
+                        parts.append(str(data["delta"]))
+                    elif event_type in {"response.completed", "response.failed", "response.incomplete"}:
+                        terminal = data.get("response") if isinstance(data.get("response"), dict) else data
+                        if event_type == "response.failed":
+                            err = terminal.get("error") if isinstance(terminal, dict) else {}
+                            final_error = str((err or {}).get("message") or "response failed")
+                    trace_event = normalize_trace_event({"event": event_type, "data": data})
+                    if trace_event.event not in SUPPRESSED_TRACE_EVENTS and len(events) < MAX_TRACE_EVENTS:
+                        events.append(trace_event)
+                    event_name = ""
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("event:"):
+                    event_name = line.removeprefix("event:").strip()
+                elif line.startswith("data:"):
+                    data_lines.append(line.removeprefix("data:").strip())
+    except Exception as exc:  # noqa: BLE001
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return AgentResult(
+            ok=False,
+            name=agent.name,
+            model=str(payload.get("model") or agent.model),
+            latency_ms=latency_ms,
+            error=format_request_error("raw failed", agent.responses_url, exc),
+            trace_supported=True,
+            trace_events=events,
+            trace_summary=summarize_trace(events, True),
+        )
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    content = "".join(parts)
+    status: str | None = None
+    if terminal:
+        fallback, status = extract_response_content(terminal)
+        content = content or fallback
+    return AgentResult(
+        ok=final_error is None,
+        name=agent.name,
+        model=str((terminal or {}).get("model") or payload.get("model") or agent.model),
+        content=content,
+        latency_ms=latency_ms,
+        error=final_error,
+        raw_finish_reason=status,
+        trace_supported=True,
+        trace_events=events,
+        trace_summary=summarize_trace(events, True),
+    )
+
+
+def _normalize_for_hash(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().lower()
+
+
+def content_fingerprint(text: str) -> str:
+    normalized = _normalize_for_hash(text)
+    if not normalized:
+        return ""
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8]
+
+
+def evaluate_assertion(content: str, assertion: BatchAssertion | None) -> bool | None:
+    if assertion is None:
+        return None
+    target = content if assertion.case_sensitive else content.lower()
+    needle = assertion.value if assertion.case_sensitive else assertion.value.lower()
+    if assertion.type == "substring":
+        return needle in target
+    flags = 0 if assertion.case_sensitive else re.IGNORECASE
+    try:
+        return re.search(assertion.value, content, flags) is not None
+    except re.error:
+        return False
+
+
+def _percentile(values: list[int], pct: float) -> int | None:
+    if not values:
+        return None
+    if len(values) == 1:
+        return values[0]
+    sorted_values = sorted(values)
+    rank = (pct / 100.0) * (len(sorted_values) - 1)
+    lower = int(rank)
+    upper = min(lower + 1, len(sorted_values) - 1)
+    weight = rank - lower
+    return int(round(sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight))
+
+
+def build_run_item(
+    index: int,
+    agent_key: Literal["a", "b"],
+    agent: AgentConfig,
+    result: AgentResult,
+    assertion: BatchAssertion | None,
+) -> BatchRunItem:
+    fingerprint = content_fingerprint(result.content) if result.ok else ""
+    return BatchRunItem(
+        index=index,
+        agent_key=agent_key,
+        agent_name=agent.name,
+        agent_model=result.model or agent.model,
+        ok=result.ok,
+        latency_ms=result.latency_ms,
+        content=result.content,
+        content_length=len(result.content or ""),
+        content_hash=fingerprint,
+        finish_reason=result.raw_finish_reason,
+        error=result.error,
+        assertion_passed=evaluate_assertion(result.content, assertion) if result.ok else (False if assertion else None),
+        trace_summary=result.trace_summary or {},
+    )
+
+
+def compute_batch_summary(
+    items: list[BatchRunItem],
+    agent_key: Literal["a", "b"],
+    agent: AgentConfig,
+    assertion: BatchAssertion | None,
+) -> BatchAgentSummary:
+    bucket = [item for item in items if item.agent_key == agent_key]
+    total = len(bucket)
+    success_items = [item for item in bucket if item.ok]
+    success = len(success_items)
+    latencies = [item.latency_ms for item in bucket if item.latency_ms is not None]
+    content_lens = [item.content_length for item in success_items]
+    tool_calls = [int((item.trace_summary or {}).get("tool_call_count") or 0) for item in success_items]
+    failed_tools = sum(int((item.trace_summary or {}).get("failed_tool_count") or 0) for item in bucket)
+
+    finish_reasons: dict[str, int] = {}
+    for item in bucket:
+        key = item.finish_reason or "<none>"
+        finish_reasons[key] = finish_reasons.get(key, 0) + 1
+
+    cluster_map: dict[str, dict[str, Any]] = {}
+    for item in success_items:
+        if not item.content_hash:
+            continue
+        bucket_entry = cluster_map.setdefault(
+            item.content_hash,
+            {"hash": item.content_hash, "count": 0, "sample": item.content, "indexes": []},
+        )
+        bucket_entry["count"] += 1
+        bucket_entry["indexes"].append(item.index)
+    clusters = sorted(cluster_map.values(), key=lambda c: c["count"], reverse=True)
+    for c in clusters:
+        c["sample"] = truncate_text(c["sample"], 400)
+
+    assertion_total = 0
+    assertion_passed = 0
+    if assertion is not None:
+        for item in bucket:
+            if item.assertion_passed is None:
+                continue
+            assertion_total += 1
+            if item.assertion_passed:
+                assertion_passed += 1
+
+    return BatchAgentSummary(
+        agent_key=agent_key,
+        agent_name=agent.name,
+        agent_model=agent.model,
+        total=total,
+        success=success,
+        success_rate=round(success / total, 4) if total else 0.0,
+        assertion_total=assertion_total,
+        assertion_passed=assertion_passed,
+        assertion_rate=(round(assertion_passed / assertion_total, 4) if assertion_total else None),
+        latency_min_ms=min(latencies) if latencies else None,
+        latency_p50_ms=_percentile(latencies, 50),
+        latency_p90_ms=_percentile(latencies, 90),
+        latency_max_ms=max(latencies) if latencies else None,
+        content_len_min=min(content_lens) if content_lens else None,
+        content_len_avg=round(statistics.fmean(content_lens), 1) if content_lens else None,
+        content_len_max=max(content_lens) if content_lens else None,
+        tool_call_avg=round(statistics.fmean(tool_calls), 2) if tool_calls else None,
+        failed_tool_total=failed_tools,
+        finish_reasons=finish_reasons,
+        cluster_count=len(clusters),
+        clusters=clusters[:10],
+    )
+
+
+def save_batch_history(response: BatchRunResponse) -> None:
+    with history_connect() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO batch_runs (
+                id, created_at, target, mode, iterations, concurrency, cancelled,
+                request_json, summaries_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                response.batch_id,
+                response.created_at,
+                response.request.target,
+                response.request.mode,
+                response.request.iterations,
+                response.request.concurrency,
+                int(response.cancelled),
+                json_dumps(response.request),
+                json_dumps(response.summaries),
+            ),
+        )
+        conn.executemany(
+            """
+            INSERT OR REPLACE INTO batch_run_items (batch_id, idx, agent_key, ok, latency_ms, item_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    response.batch_id,
+                    item.index,
+                    item.agent_key,
+                    int(item.ok),
+                    item.latency_ms,
+                    json_dumps(item),
+                )
+                for item in response.items
+            ],
+        )
+
+
+def _sse_event(payload: dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+
+def _agent_keys_for_target(target: BatchTarget) -> list[Literal["a", "b"]]:
+    if target == "both":
+        return ["a", "b"]
+    return [target]
+
+
+def _messages_for_form(form: BatchFormPayload) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    if form.system.strip():
+        messages.append({"role": "system", "content": form.system.strip()})
+    messages.append({"role": "user", "content": form.input.strip()})
+    return messages
+
+
+async def stream_batch(request: BatchRunRequest):
+    batch_id = new_id("batch")
+    created_at = utc_now()
+    keys = _agent_keys_for_target(request.target)
+    agents: dict[str, AgentConfig] = {
+        "a": get_agent_config("AGENT_A", "Agent A"),
+        "b": get_agent_config("AGENT_B", "Agent B"),
+    }
+    total_items = request.iterations * len(keys)
+    queue: asyncio.Queue[BatchRunItem | None] = asyncio.Queue()
+    semaphore = asyncio.Semaphore(request.concurrency)
+    cancelled = asyncio.Event()
+
+    timeout = httpx.Timeout(get_timeout_seconds())
+    client = httpx.AsyncClient(timeout=timeout)
+
+    async def run_one(index: int, agent_key: Literal["a", "b"]) -> None:
+        async with semaphore:
+            if cancelled.is_set():
+                return
+            agent = agents[agent_key]
+            if request.mode == "form":
+                assert request.form is not None
+                messages = _messages_for_form(request.form)
+                result = await call_agent(
+                    client,
+                    agent,
+                    messages,
+                    request.form.temperature,
+                    request.form.max_tokens,
+                )
+            else:
+                assert request.raw_body is not None
+                result = await call_agent_raw(client, agent, request.raw_body)
+            item = build_run_item(index, agent_key, agent, result, request.assertion)
+            await queue.put(item)
+
+    async def scheduler() -> None:
+        try:
+            tasks: list[asyncio.Task[None]] = []
+            for index in range(request.iterations):
+                for key in keys:
+                    tasks.append(asyncio.create_task(run_one(index, key)))
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            except asyncio.CancelledError:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                raise
+        finally:
+            await queue.put(None)
+
+    scheduler_task = asyncio.create_task(scheduler())
+
+    items: list[BatchRunItem] = []
+    try:
+        yield _sse_event(
+            {
+                "type": "batch.started",
+                "batch_id": batch_id,
+                "created_at": created_at,
+                "total": total_items,
+                "target": request.target,
+                "mode": request.mode,
+                "iterations": request.iterations,
+                "concurrency": request.concurrency,
+                "agents": {key: agents[key].name for key in keys},
+            }
+        )
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            items.append(item)
+            yield _sse_event({"type": "run.completed", "item": model_to_dict(item)})
+
+        summaries = {key: compute_batch_summary(items, key, agents[key], request.assertion) for key in keys}
+        response_obj = BatchRunResponse(
+            batch_id=batch_id,
+            created_at=created_at,
+            request=request,
+            items=items,
+            summaries=summaries,
+            cancelled=False,
+        )
+        try:
+            save_batch_history(response_obj)
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("save_batch_history failed: %s", exc)
+        yield _sse_event(
+            {
+                "type": "batch.completed",
+                "batch_id": batch_id,
+                "summaries": {k: model_to_dict(v) for k, v in summaries.items()},
+                "items_count": len(items),
+            }
+        )
+    except asyncio.CancelledError:
+        cancelled.set()
+        if not scheduler_task.done():
+            scheduler_task.cancel()
+        try:
+            summaries = {key: compute_batch_summary(items, key, agents[key], request.assertion) for key in keys}
+            partial = BatchRunResponse(
+                batch_id=batch_id,
+                created_at=created_at,
+                request=request,
+                items=items,
+                summaries=summaries,
+                cancelled=True,
+            )
+            save_batch_history(partial)
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("save_batch_history (cancelled) failed: %s", exc)
+        raise
+    except Exception as exc:  # noqa: BLE001
+        cancelled.set()
+        if not scheduler_task.done():
+            scheduler_task.cancel()
+        yield _sse_event({"type": "batch.error", "error": f"{type(exc).__name__}: {exc}"})
+    finally:
+        cancelled.set()
+        if not scheduler_task.done():
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+        await client.aclose()
+
+
 def compact_trace_for_judge(result: AgentResult) -> dict[str, Any]:
     events = []
     for event in result.trace_events:
@@ -1384,6 +1947,46 @@ async def api_compare(request: CompareRequest) -> CompareResponse:
     )
     save_compare_history(response, user_input, request.system.strip(), request.temperature, request.max_tokens)
     return response
+
+
+@app.post("/api/batch", dependencies=[ArenaAuth])
+async def api_batch(request: BatchRunRequest) -> StreamingResponse:
+    return StreamingResponse(
+        stream_batch(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/batch/{batch_id}", dependencies=[ArenaAuth])
+async def api_batch_detail(batch_id: str) -> dict[str, Any]:
+    with history_connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM batch_runs WHERE id = ?",
+            (batch_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="batch not found")
+        item_rows = conn.execute(
+            "SELECT item_json FROM batch_run_items WHERE batch_id = ? ORDER BY idx ASC, agent_key ASC",
+            (batch_id,),
+        ).fetchall()
+    items = [json.loads(r["item_json"]) for r in item_rows]
+    return {
+        "batch_id": row["id"],
+        "created_at": row["created_at"],
+        "target": row["target"],
+        "mode": row["mode"],
+        "iterations": row["iterations"],
+        "concurrency": row["concurrency"],
+        "cancelled": bool(row["cancelled"]),
+        "request": json.loads(row["request_json"]),
+        "summaries": json.loads(row["summaries_json"]),
+        "items": items,
+    }
 
 
 @app.post("/api/judge", response_model=JudgeResponse, dependencies=[ArenaAuth])

@@ -133,6 +133,45 @@ Judge 评估最终答案维度：
 
 有过程事件时综合分按“最终答案 75% + 过程表现 25%”理解；没有过程事件时只评估最终答案。
 
+### 稳定性测试（Batch）
+
+页面顶部点击「稳定性测试」可对单个 Agent（或两边同时）用同一条 query body 跑多次，看成功率、延迟分布、答案是否稳定。
+
+支持：
+
+- **目标 Agent**：A / B / A+B 并排
+- **请求体两种模式**
+  - **Form**：复用竞技场的 `input / system / temperature / max_tokens` 四字段
+  - **Raw**：粘贴完整 JSON body，直接 POST 到 Agent 的 `/v1/responses`（后端会自动加 `stream: true`）
+- **iterations**：1–200；**concurrency**：1–8（`asyncio.Semaphore` 控制）
+- **assertion**：substring 或 regex，每次输出独立判定 pass/fail
+- **答案指纹聚类**：对每次成功输出做 normalize + sha1[:8]，把相同/相近的答案归到同一簇
+- **导出 JSON**：把当前 batch 的 items + summary 下载为本地文件
+- **持久化**：每个 batch 写入 SQLite 的 `batch_runs` + `batch_run_items` 两张表，可通过 `GET /api/batch/{batch_id}` 取回
+
+API 示例：
+
+```bash
+curl -N http://127.0.0.1:8787/api/batch \
+  -H "Authorization: Bearer change-me-arena-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target": "a",
+    "mode": "form",
+    "iterations": 10,
+    "concurrency": 2,
+    "form": {
+      "input": "请用三句话介绍你自己",
+      "system": "你是一个严谨的助手",
+      "temperature": 0.2,
+      "max_tokens": 800
+    },
+    "assertion": {"type": "substring", "value": "助手"}
+  }'
+```
+
+返回 `text/event-stream`，事件类型：`batch.started`、`run.completed`（每个 run 一条）、`batch.completed`（含每个 Agent 的聚合 summary）、`batch.error`。前端断开连接会触发后端取消，已完成的 run 仍会写入 SQLite。
+
 ### 历史记录
 
 后端默认把历史记录写入：
