@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  GitBranch,
   Play,
   Square,
 } from "lucide-react"
@@ -25,8 +26,15 @@ import { Textarea } from "@/components/ui/textarea"
 import { AgentIdBadge } from "@/components/AgentIdBadge"
 import { StatCardRow, type StatItem } from "@/components/StatCard"
 import { StatusDot } from "@/components/StatusDot"
-import type { ConfigResponse } from "@/lib/types"
-import { apiHeaders, apiUrl } from "@/lib/api"
+import type {
+  AgentResult,
+  AgentTraceEvent,
+  ConfigResponse,
+  ConsistencyResponse,
+} from "@/lib/types"
+import { ConsistencyPanel } from "@/components/arena/ConsistencyPanel"
+import { TraceModal } from "@/components/arena/TraceModal"
+import { apiFetch, apiHeaders, apiUrl, readApiJson } from "@/lib/api"
 import { normalizeError, reportFrontendLog } from "@/lib/frontendLogger"
 import { cn } from "@/lib/utils"
 
@@ -55,18 +63,11 @@ type BatchRunItem = {
   latency_ms: number | null
   content: string
   content_length: number
-  content_hash: string
   finish_reason: string | null
   error: string | null
   assertion_passed: boolean | null
   trace_summary: TraceSummary
-}
-
-type BatchCluster = {
-  hash: string
-  count: number
-  sample: string
-  indexes: number[]
+  trace_events?: AgentTraceEvent[]
 }
 
 type BatchAgentSummary = {
@@ -89,8 +90,6 @@ type BatchAgentSummary = {
   tool_call_avg: number | null
   failed_tool_total: number
   finish_reasons: Record<string, number>
-  cluster_count: number
-  clusters: BatchCluster[]
 }
 
 type BatchStartedEvent = {
@@ -296,36 +295,12 @@ function SummaryCard({
       <CardContent className="bg-arena-bg-subtle p-[18px]">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px]">
           <KeyVal k="finish_reason" v={finishText} />
-          <KeyVal k="指纹簇" v={summary.cluster_count} />
           <KeyVal
             k="断言通过"
             v={hasAssertion ? `${summary.assertion_passed}/${summary.assertion_total}` : "—"}
           />
           <KeyVal k="失败工具" v={summary.failed_tool_total} />
         </div>
-        {summary.clusters.length ? (
-          <div className="mt-3 space-y-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
-              答案指纹簇
-            </div>
-            <div className="space-y-1.5">
-              {summary.clusters.map((cluster) => (
-                <div
-                  key={cluster.hash}
-                  className="rounded-arena border border-arena-border bg-white p-2.5 text-[12px]"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px] text-arena-text-secondary">{cluster.hash}</span>
-                    <Badge variant="neutral">{cluster.count} 次</Badge>
-                  </div>
-                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-arena-text-secondary">
-                    {cluster.sample}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </CardContent>
     </Card>
   )
@@ -344,10 +319,12 @@ function ItemRow({
   item,
   expanded,
   onToggle,
+  onOpenTrace,
 }: {
   item: BatchRunItem
   expanded: boolean
   onToggle: () => void
+  onOpenTrace: () => void
 }) {
   const statusKind = rowStatusKind(item)
   const statusLabel = rowStatusLabel(item)
@@ -357,12 +334,25 @@ function ItemRow({
         onClick={onToggle}
         className="cursor-pointer border-b border-arena-border bg-white last:border-b-0 hover:bg-arena-bg-hover"
       >
-        <td className="px-2 py-1.5 text-arena-text-tertiary">
-          {expanded ? (
-            <ChevronDown className="size-3.5" />
-          ) : (
-            <ChevronRight className="size-3.5" />
-          )}
+        <td className="px-1 py-1.5 text-arena-text-tertiary">
+          <div className="flex items-center gap-0.5">
+            {expanded ? (
+              <ChevronDown className="size-3.5" />
+            ) : (
+              <ChevronRight className="size-3.5" />
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenTrace()
+              }}
+              className="inline-grid size-5 place-items-center rounded text-arena-text-tertiary transition-colors hover:bg-arena-accent-soft hover:text-arena-accent"
+              title="查看 Trace"
+            >
+              <GitBranch className="size-3.5" />
+            </button>
+          </div>
         </td>
         <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
           {String(item.index).padStart(3, "0")}
@@ -384,9 +374,6 @@ function ItemRow({
         </td>
         <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
           {item.finish_reason || "—"}
-        </td>
-        <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
-          {item.content_hash || "—"}
         </td>
         <td className="px-2 py-1.5">
           {item.assertion_passed === null ? (
@@ -416,14 +403,6 @@ function ItemRow({
                   {item.content || "(空)"}
                 </pre>
               </ScrollArea>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
-                Trace summary
-              </div>
-              <ScrollArea className="h-[120px] rounded-arena border border-arena-border bg-arena-bg-code p-3">
-                <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-slate-100">
-                  {JSON.stringify(item.trace_summary || {}, null, 2)}
-                </pre>
-              </ScrollArea>
               {item.error ? (
                 <Alert variant="destructive">
                   <AlertTriangle className="size-4" />
@@ -431,6 +410,9 @@ function ItemRow({
                   <AlertDescription className="whitespace-pre-wrap break-words">{item.error}</AlertDescription>
                 </Alert>
               ) : null}
+              <div className="text-[11px] text-arena-text-tertiary">
+                点击行首 <GitBranch className="inline size-3" /> 图标查看完整 Trace 可视化
+              </div>
             </div>
           </td>
         </tr>
@@ -462,6 +444,8 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
   const [summaries, setSummaries] = useState<Partial<Record<AgentKey, BatchAgentSummary>>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [completedAt, setCompletedAt] = useState<string | null>(null)
+  const [traceItem, setTraceItem] = useState<BatchRunItem | null>(null)
+  const [consistencyResults, setConsistencyResults] = useState<ConsistencyResponse[]>([])
 
   const abortRef = useRef<AbortController | null>(null)
 
@@ -506,6 +490,17 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
     setSummaries({})
     setExpanded(new Set())
     setCompletedAt(null)
+    setConsistencyResults([])
+  }
+
+  async function runConsistencyEval() {
+    if (!batchId) return
+    const response = await apiFetch(
+      `/batch/${encodeURIComponent(batchId)}/consistency`,
+      { method: "POST" },
+    )
+    const result = await readApiJson<ConsistencyResponse>(response)
+    setConsistencyResults((prev) => [result, ...prev])
   }
 
   async function startBatch(event: FormEvent<HTMLFormElement>) {
@@ -896,6 +891,14 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
           ))}
         </div>
 
+        {batchId && !running && items.length > 0 ? (
+          <ConsistencyPanel
+            consistency={consistencyResults[0] ?? null}
+            history={consistencyResults}
+            onRun={runConsistencyEval}
+          />
+        ) : null}
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
@@ -909,14 +912,13 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
             <div className="overflow-x-auto">
               <table className="w-full table-fixed border-separate border-spacing-0 text-left">
                 <colgroup>
-                  <col className="w-[28px]" />
+                  <col className="w-[48px]" />
                   <col className="w-[56px]" />
                   <col className="w-[180px]" />
                   <col className="w-[96px]" />
                   <col className="w-[78px]" />
                   <col className="w-[64px]" />
                   <col className="w-[78px]" />
-                  <col className="w-[110px]" />
                   <col className="w-[74px]" />
                   <col />
                 </colgroup>
@@ -929,7 +931,6 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
                     <th className="border-b border-arena-border px-2 py-2 text-right">延迟</th>
                     <th className="border-b border-arena-border px-2 py-2 text-right">长度</th>
                     <th className="border-b border-arena-border px-2 py-2">finish</th>
-                    <th className="border-b border-arena-border px-2 py-2">fingerprint</th>
                     <th className="border-b border-arena-border px-2 py-2">断言</th>
                     <th className="border-b border-arena-border px-2 py-2">error</th>
                   </tr>
@@ -937,7 +938,7 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
                 <tbody>
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-2 py-10 text-center text-[13px] text-arena-text-tertiary">
+                      <td colSpan={9} className="px-2 py-10 text-center text-[13px] text-arena-text-tertiary">
                         尚未开始或无结果。
                       </td>
                     </tr>
@@ -948,6 +949,7 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
                         item={item}
                         expanded={expanded.has(rowKey(item))}
                         onToggle={() => toggleExpand(item)}
+                        onOpenTrace={() => setTraceItem(item)}
                       />
                     ))
                   )}
@@ -957,8 +959,34 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
           </CardContent>
         </Card>
       </div>
+
+      <TraceModal
+        open={traceItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setTraceItem(null)
+        }}
+        result={traceItem ? batchItemToAgentResult(traceItem) : null}
+        title={traceItem ? `Trace · #${String(traceItem.index).padStart(3, "0")} · ${traceItem.agent_name}` : "Trace"}
+        subtitle={traceItem ? traceItem.agent_model : ""}
+        input={mode === "form" ? formInput : undefined}
+      />
     </div>
   )
+}
+
+function batchItemToAgentResult(item: BatchRunItem): AgentResult {
+  return {
+    ok: item.ok,
+    name: item.agent_name,
+    model: item.agent_model,
+    content: item.content,
+    latency_ms: item.latency_ms,
+    error: item.error,
+    raw_finish_reason: item.finish_reason,
+    trace_supported: true,
+    trace_events: item.trace_events || [],
+    trace_summary: item.trace_summary,
+  }
 }
 
 function TargetButton({

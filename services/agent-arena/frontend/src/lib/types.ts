@@ -97,6 +97,7 @@ export type HistoryJudgeRecord = {
 }
 
 export type HistorySummary = {
+  kind: "arena"
   run_id: string
   created_at: string
   updated_at: string
@@ -110,8 +111,39 @@ export type HistorySummary = {
   latest_judge: HistoryJudgeRecord | null
 }
 
+export type BatchHistoryAgentSummary = {
+  agent_key: "a" | "b"
+  agent_name: string
+  agent_model: string
+  total: number
+  success: number
+  success_rate: number | null
+  latency_p50_ms: number | null
+  latency_p90_ms: number | null
+}
+
+export type BatchHistorySummary = {
+  kind: "batch"
+  batch_id: string
+  created_at: string
+  target: string
+  mode: string
+  iterations: number
+  concurrency: number
+  cancelled: boolean
+  input: string
+  item_count: number
+  success_count: number
+  success_rate: number | null
+  agent_summaries: BatchHistoryAgentSummary[]
+  consistency_count: number
+  latest_consistency: ConsistencyResponse | null
+}
+
+export type HistoryItem = HistorySummary | BatchHistorySummary
+
 export type HistoryListResponse = {
-  items: HistorySummary[]
+  items: HistoryItem[]
   total: number
   limit: number
   offset: number
@@ -127,6 +159,65 @@ export type HistoryDetailResponse = {
   max_tokens: number | null
   compare: CompareResponse
   judges: HistoryJudgeRecord[]
+}
+
+export type ConsistencyIssue = {
+  index: number
+  agent_key: "a" | "b"
+  problem: string
+  severity: "low" | "medium" | "high"
+}
+
+export type ConsistencyAgentReport = {
+  agent_key: "a" | "b"
+  agent_name: string
+  samples_evaluated: number
+  stable: boolean
+  consistency_score: number
+  summary: string
+  issues: ConsistencyIssue[]
+  suggestions: string[]
+}
+
+export type ConsistencyResponse = {
+  ok: boolean
+  batch_id: string
+  created_at: string
+  model: string
+  latency_ms: number | null
+  reports: ConsistencyAgentReport[]
+  error: string | null
+  raw: Record<string, unknown>
+}
+
+export type BatchDetailItem = {
+  index: number
+  agent_key: "a" | "b"
+  agent_name: string
+  agent_model: string
+  ok: boolean
+  latency_ms: number | null
+  content: string
+  content_length: number
+  finish_reason: string | null
+  error: string | null
+  assertion_passed: boolean | null
+  trace_summary: TraceSummary
+  trace_events: AgentTraceEvent[]
+}
+
+export type BatchDetailResponse = {
+  batch_id: string
+  created_at: string
+  target: string
+  mode: string
+  iterations: number
+  concurrency: number
+  cancelled: boolean
+  request: Record<string, unknown>
+  summaries: Record<string, Record<string, unknown>>
+  items: BatchDetailItem[]
+  consistency_results: ConsistencyResponse[]
 }
 
 export type ViewMode = "arena" | "batch" | "history"

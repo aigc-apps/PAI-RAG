@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, RefreshCcw } from "lucide-react"
+import { AlertTriangle, Loader2, RefreshCcw, ShieldCheck } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -14,18 +14,23 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AgentResultPanel, EmptyBox } from "@/components/arena/AgentResultPanel"
 import { CodeBlock } from "@/components/arena/CodeBlock"
+import { ConsistencyPanel } from "@/components/arena/ConsistencyPanel"
 import { JudgePanel } from "@/components/arena/JudgePanel"
 import { StatusDot } from "@/components/StatusDot"
 import {
   formatDateTime,
   formatLatency,
-  historyAgentName,
   historyAgentOk,
 } from "@/lib/formatters"
+import { apiFetch, readApiJson } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type {
+  BatchDetailResponse,
+  BatchHistorySummary,
   ConfigResponse,
+  ConsistencyResponse,
   HistoryDetailResponse,
+  HistoryItem,
   HistorySummary,
 } from "@/lib/types"
 
@@ -49,23 +54,29 @@ function agentLatencyMs(summary: Record<string, unknown>): number | null {
 export function HistoryPage({
   items,
   detail,
+  batchDetail,
   selectedRunId,
+  selectedKind,
   loading,
   detailLoading,
   error,
   config,
   onRefresh,
   onSelect,
+  onBatchRefresh,
 }: {
-  items: HistorySummary[]
+  items: HistoryItem[]
   detail: HistoryDetailResponse | null
+  batchDetail: BatchDetailResponse | null
   selectedRunId: string
+  selectedKind: "arena" | "batch"
   loading: boolean
   detailLoading: boolean
   error: string
   config: ConfigResponse | null
   onRefresh: () => void
-  onSelect: (runId: string) => void
+  onSelect: (runId: string, kind: "arena" | "batch") => void
+  onBatchRefresh: () => Promise<void>
 }) {
   return (
     <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
@@ -106,14 +117,23 @@ export function HistoryPage({
           ) : items.length ? (
             <ScrollArea className="h-[calc(100vh-theme(spacing.topbar)-200px)]">
               <div className="divide-y divide-arena-border">
-                {items.map((item) => (
-                  <HistoryListItem
-                    item={item}
-                    selected={item.run_id === selectedRunId}
-                    onClick={() => onSelect(item.run_id)}
-                    key={item.run_id}
-                  />
-                ))}
+                {items.map((item) =>
+                  item.kind === "arena" ? (
+                    <ArenaListItem
+                      item={item}
+                      selected={item.run_id === selectedRunId && selectedKind === "arena"}
+                      onClick={() => onSelect(item.run_id, "arena")}
+                      key={`arena-${item.run_id}`}
+                    />
+                  ) : (
+                    <BatchListItem
+                      item={item}
+                      selected={item.batch_id === selectedRunId && selectedKind === "batch"}
+                      onClick={() => onSelect(item.batch_id, "batch")}
+                      key={`batch-${item.batch_id}`}
+                    />
+                  ),
+                )}
               </div>
             </ScrollArea>
           ) : (
@@ -133,8 +153,10 @@ export function HistoryPage({
               <Skeleton className="h-[520px] w-full" />
             </div>
           </div>
-        ) : detail ? (
-          <HistoryDetail detail={detail} config={config} />
+        ) : selectedKind === "arena" && detail ? (
+          <ArenaDetail detail={detail} config={config} />
+        ) : selectedKind === "batch" && batchDetail ? (
+          <BatchDetail detail={batchDetail} onRefresh={onBatchRefresh} />
         ) : (
           <Card>
             <CardContent className="p-[18px]">
@@ -176,7 +198,22 @@ function WinnerBadge({
   return <Badge variant="neutral">未评估</Badge>
 }
 
-function HistoryListItem({
+function KindBadge({ kind }: { kind: "arena" | "batch" }) {
+  if (kind === "batch") {
+    return (
+      <span className="rounded-arena-sm bg-arena-info px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white">
+        BATCH
+      </span>
+    )
+  }
+  return (
+    <span className="rounded-arena-sm bg-arena-accent px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white">
+      ARENA
+    </span>
+  )
+}
+
+function ArenaListItem({
   item,
   selected,
   onClick,
@@ -200,6 +237,7 @@ function HistoryListItem({
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
+        <KindBadge kind="arena" />
         <WinnerBadge winner={latestJudge?.winner} />
         {item.judge_count ? (
           <Badge variant="neutral">Judge ×{item.judge_count}</Badge>
@@ -223,7 +261,69 @@ function HistoryListItem({
   )
 }
 
-function HistoryDetail({
+function BatchListItem({
+  item,
+  selected,
+  onClick,
+}: {
+  item: BatchHistorySummary
+  selected: boolean
+  onClick: () => void
+}) {
+  const successPct =
+    item.success_rate !== null && item.success_rate !== undefined
+      ? `${(item.success_rate * 100).toFixed(1)}%`
+      : "—"
+  const latestConsistency = item.latest_consistency
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "block w-full px-[18px] py-3 text-left transition-colors hover:bg-arena-bg-hover",
+        selected && "bg-arena-accent-soft hover:bg-arena-accent-soft",
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <KindBadge kind="batch" />
+        <Badge variant="neutral">×{item.iterations}</Badge>
+        <Badge variant="neutral">target {item.target}</Badge>
+        {item.cancelled ? <Badge variant="warning">已取消</Badge> : null}
+        {item.consistency_count > 0 ? (
+          <Badge variant="info">稳定性 ×{item.consistency_count}</Badge>
+        ) : null}
+        <span className="ml-auto font-mono text-[10.5px] text-arena-text-tertiary">
+          {relativeTime(item.created_at)}
+        </span>
+      </div>
+      <div className="mt-2 line-clamp-2 text-[13px] leading-snug text-arena-text-primary">
+        {item.input || "(无输入)"}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[11.5px] text-arena-text-tertiary">
+        <span className="font-mono">成功率 {successPct}</span>
+        <span className="font-mono">runs {item.item_count}</span>
+        {item.agent_summaries.map((s) => (
+          <span key={s.agent_key} className="font-mono">
+            {s.agent_key.toUpperCase()} P50 {formatLatency(s.latency_p50_ms)}
+          </span>
+        ))}
+        {latestConsistency?.ok && latestConsistency.reports.length ? (
+          <span className="inline-flex items-center gap-1 font-mono text-arena-info">
+            <ShieldCheck className="size-3" />
+            稳定 {Math.round(
+              latestConsistency.reports.reduce(
+                (sum, r) => sum + r.consistency_score,
+                0,
+              ) / latestConsistency.reports.length,
+            )}
+          </span>
+        ) : null}
+      </div>
+    </button>
+  )
+}
+
+function ArenaDetail({
   detail,
   config,
 }: {
@@ -241,6 +341,7 @@ function HistoryDetail({
         <CardContent className="space-y-3 p-[18px]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
+              <KindBadge kind="arena" />
               <Badge variant="accent" className="font-mono">{detail.run_id}</Badge>
               <span className="font-mono text-[11px] text-arena-text-tertiary">
                 {formatDateTime(detail.created_at)}
@@ -275,12 +376,14 @@ function HistoryDetail({
           title="Agent A"
           result={detail.compare.agents.a}
           loading={false}
+          input={detail.input}
         />
         <AgentResultPanel
           id="b"
           title="Agent B"
           result={detail.compare.agents.b}
           loading={false}
+          input={detail.input}
         />
       </div>
 
@@ -318,6 +421,255 @@ function HistoryDetail({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function BatchDetail({
+  detail,
+  onRefresh,
+}: {
+  detail: BatchDetailResponse
+  onRefresh: () => Promise<void>
+}) {
+  const latestConsistency = detail.consistency_results[0] ?? null
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="space-y-3 p-[18px]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <KindBadge kind="batch" />
+              <Badge variant="accent" className="font-mono">{detail.batch_id}</Badge>
+              <span className="font-mono text-[11px] text-arena-text-tertiary">
+                {formatDateTime(detail.created_at)}
+              </span>
+              <Badge variant="neutral">×{detail.iterations} runs</Badge>
+              <Badge variant="neutral">target {detail.target}</Badge>
+              <Badge variant="neutral">mode {detail.mode}</Badge>
+              {detail.cancelled ? <Badge variant="warning">已取消</Badge> : null}
+            </div>
+          </div>
+          {detail.items.length ? (
+            <div className="rounded-arena border border-arena-border bg-arena-bg-subtle p-3 text-[13px] leading-relaxed text-arena-text-primary">
+              {(() => {
+                const req = detail.request as Record<string, unknown>
+                const form = (req.form ?? {}) as { input?: string }
+                const raw = (req.raw_body ?? {}) as { input?: string }
+                return form.input || raw.input || "(无 input)"
+              })()}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <BatchSummariesCards detail={detail} />
+
+      <BatchConsistencyCard
+        batchId={detail.batch_id}
+        latest={latestConsistency}
+        history={detail.consistency_results}
+        onUpdated={onRefresh}
+      />
+
+      <BatchItemsTable detail={detail} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>原始数据</CardTitle>
+        </CardHeader>
+        <CardContent className="p-[18px]">
+          <Tabs defaultValue="summaries">
+            <TabsList>
+              <TabsTrigger value="summaries">Summaries</TabsTrigger>
+              <TabsTrigger value="request">Request</TabsTrigger>
+              <TabsTrigger value="consistency">Consistency</TabsTrigger>
+            </TabsList>
+            <TabsContent value="summaries" className="mt-3">
+              <CodeBlock value={JSON.stringify(detail.summaries, null, 2)} />
+            </TabsContent>
+            <TabsContent value="request" className="mt-3">
+              <CodeBlock value={JSON.stringify(detail.request, null, 2)} />
+            </TabsContent>
+            <TabsContent value="consistency" className="mt-3">
+              <CodeBlock
+                value={
+                  detail.consistency_results.length
+                    ? JSON.stringify(detail.consistency_results, null, 2)
+                    : "尚未运行稳定性评估"
+                }
+              />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function BatchSummariesCards({ detail }: { detail: BatchDetailResponse }) {
+  const entries = Object.entries(detail.summaries || {})
+  if (!entries.length) {
+    return null
+  }
+  return (
+    <div className={cn("grid gap-5", entries.length > 1 ? "xl:grid-cols-2" : "")}>
+      {entries.map(([key, raw]) => {
+        const s = raw as Record<string, unknown>
+        const total = (s.total as number) || 0
+        const success = (s.success as number) || 0
+        const successPct = total ? success / total : 0
+        const successRateBadge =
+          successPct >= 0.95 ? "success" : successPct >= 0.8 ? "warning" : "destructive"
+        return (
+          <Card key={key}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="font-mono text-xs uppercase tracking-wider text-arena-text-tertiary">
+                  {key.toUpperCase()}
+                </span>
+                <span className="truncate">{String(s.agent_name || "")}</span>
+                <Badge variant={successRateBadge} className="ml-auto">
+                  成功率 {(successPct * 100).toFixed(1)}%
+                </Badge>
+              </CardTitle>
+              <p className="mt-0.5 font-mono text-[11px] text-arena-text-tertiary">
+                {String(s.agent_model || "—")}
+              </p>
+            </CardHeader>
+            <CardContent className="p-[18px]">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-2 text-[12.5px]">
+                <KeyVal k="total" v={total} />
+                <KeyVal k="success" v={success} />
+                <KeyVal k="P50" v={formatLatency(s.latency_p50_ms as number | null)} />
+                <KeyVal k="P90" v={formatLatency(s.latency_p90_ms as number | null)} />
+                <KeyVal
+                  k="长度 avg"
+                  v={
+                    typeof s.content_len_avg === "number"
+                      ? Math.round(s.content_len_avg)
+                      : "—"
+                  }
+                />
+                <KeyVal k="失败工具" v={(s.failed_tool_total as number | undefined) ?? 0} />
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+function BatchConsistencyCard({
+  batchId,
+  latest,
+  history,
+  onUpdated,
+}: {
+  batchId: string
+  latest: ConsistencyResponse | null
+  history: ConsistencyResponse[]
+  onUpdated: () => Promise<void>
+}) {
+  async function runEval() {
+    const response = await apiFetch(`/batch/${encodeURIComponent(batchId)}/consistency`, {
+      method: "POST",
+    })
+    await readApiJson(response)
+    await onUpdated()
+  }
+  return (
+    <ConsistencyPanel
+      consistency={latest}
+      history={history}
+      onRun={runEval}
+    />
+  )
+}
+
+function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>执行明细 ({detail.items.length})</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full table-fixed border-separate border-spacing-0 text-left">
+            <colgroup>
+              <col className="w-[56px]" />
+              <col className="w-[160px]" />
+              <col className="w-[88px]" />
+              <col className="w-[78px]" />
+              <col className="w-[64px]" />
+              <col className="w-[88px]" />
+              <col />
+            </colgroup>
+            <thead className="bg-arena-bg-subtle text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
+              <tr>
+                <th className="border-b border-arena-border px-2 py-2">#</th>
+                <th className="border-b border-arena-border px-2 py-2">Agent</th>
+                <th className="border-b border-arena-border px-2 py-2">状态</th>
+                <th className="border-b border-arena-border px-2 py-2 text-right">延迟</th>
+                <th className="border-b border-arena-border px-2 py-2 text-right">长度</th>
+                <th className="border-b border-arena-border px-2 py-2">finish</th>
+                <th className="border-b border-arena-border px-2 py-2">预览</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.items.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-2 py-10 text-center text-[13px] text-arena-text-tertiary"
+                  >
+                    无执行记录
+                  </td>
+                </tr>
+              ) : (
+                detail.items.map((item) => (
+                  <tr
+                    key={`${item.agent_key}-${item.index}`}
+                    className="border-b border-arena-border bg-white last:border-b-0"
+                  >
+                    <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
+                      {String(item.index).padStart(3, "0")}
+                    </td>
+                    <td className="truncate px-2 py-1.5 text-[12px] text-arena-text-primary">
+                      <span className="font-mono text-arena-text-tertiary">{item.agent_key.toUpperCase()}</span>
+                      <span className="ml-1.5">{item.agent_name}</span>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <StatusDot kind={item.ok ? "ok" : "err"}>
+                        {item.ok ? "ok" : "failed"}
+                      </StatusDot>
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
+                      {formatLatency(item.latency_ms)}
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
+                      {item.content_length}
+                    </td>
+                    <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
+                      {item.finish_reason || "—"}
+                    </td>
+                    <td className="truncate px-2 py-1.5 text-[12.5px] text-arena-text-secondary">
+                      <span className="line-clamp-1">
+                        {item.error
+                          ? `⚠ ${item.error}`
+                          : item.content
+                            ? item.content.slice(0, 200)
+                            : "(空)"}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

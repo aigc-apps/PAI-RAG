@@ -1,24 +1,23 @@
+import { useState } from "react"
 import {
-  Activity,
   AlertTriangle,
-  Brain,
   CheckCircle2,
+  GitBranch,
   Loader2,
-  Wrench,
 } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AgentIdBadge } from "@/components/AgentIdBadge"
 import { MetricGrid } from "@/components/MetricGrid"
 import { StatusDot } from "@/components/StatusDot"
+import { TraceModal } from "@/components/arena/TraceModal"
 import { formatLatency, modelLabel } from "@/lib/formatters"
-import { cn } from "@/lib/utils"
-import type { AgentResult, AgentTraceEvent, PublicAgentConfig } from "@/lib/types"
+import type { AgentResult, PublicAgentConfig } from "@/lib/types"
 
 export function AgentStatusBadge({ agent }: { agent?: PublicAgentConfig }) {
   if (!agent) return <Badge variant="neutral">加载中</Badge>
@@ -88,112 +87,20 @@ export function EmptyBox({ text }: { text: string }) {
   )
 }
 
-function markerKindForEvent(event: AgentTraceEvent): {
-  kind: "tool" | "think" | "msg" | "err"
-  icon: React.ReactNode
-} {
-  const isError = Boolean(event.error) || event.event === "run.failed" || event.event.endsWith(".failed")
-  if (isError) return { kind: "err", icon: <span className="text-[10px]">!</span> }
-  if (event.event.startsWith("tool.")) return { kind: "tool", icon: <Wrench className="size-3" /> }
-  if (event.event.startsWith("reasoning.")) return { kind: "think", icon: <Brain className="size-3" /> }
-  return { kind: "msg", icon: <CheckCircle2 className="size-3" /> }
-}
-
-const MARKER_BG = {
-  tool: "bg-arena-info",
-  think: "bg-[#7C3AED]",
-  msg: "bg-arena-success",
-  err: "bg-arena-danger",
-} as const
-
-function TraceEventRow({ event, index }: { event: AgentTraceEvent; index: number }) {
-  const { kind, icon } = markerKindForEvent(event)
-  const time = typeof event.timestamp === "number" ? `+${event.timestamp.toFixed(2)}s` : `#${index + 1}`
-  return (
-    <div className="grid grid-cols-[24px_72px_1fr_auto] items-start gap-2.5 border-b border-dashed border-arena-border py-2 last:border-b-0">
-      <div
-        className={cn(
-          "mt-0.5 grid size-[18px] place-items-center rounded-full text-white",
-          MARKER_BG[kind],
-        )}
-      >
-        {icon}
-      </div>
-      <div className="pt-0.5 font-mono text-[11px] text-arena-text-tertiary">{time}</div>
-      <div className="min-w-0 text-[12.5px]">
-        <div className="flex flex-wrap items-center gap-1.5 font-semibold text-arena-text-primary">
-          <span>{event.event}</span>
-          {event.tool ? (
-            <code className="rounded bg-arena-neutral-soft px-1 py-px font-mono text-[11px] text-arena-text-primary">
-              {event.tool}
-            </code>
-          ) : null}
-        </div>
-        {event.preview || event.text || event.delta ? (
-          <pre className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-snug text-arena-text-secondary">
-            {event.preview || event.text || event.delta}
-          </pre>
-        ) : null}
-      </div>
-      <div className="pt-0.5">
-        {event.duration !== null && event.duration !== undefined ? (
-          <span className="rounded bg-arena-bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-arena-text-tertiary">
-            {event.duration}s
-          </span>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-export function TraceTimeline({ result, loading }: { result?: AgentResult; loading: boolean }) {
-  if (loading) {
-    return (
-      <div className="space-y-3 px-1 py-2">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-10/12" />
-      </div>
-    )
-  }
-  if (!result) return <EmptyBox text="等待过程事件" />
-  if (!result.trace_supported) {
-    return (
-      <Alert>
-        <Activity className="size-4" />
-        <AlertTitle>未提供过程事件</AlertTitle>
-        <AlertDescription>
-          当前 Agent 未启用过程事件。PAI-RAG 可使用 `TRACE_MODE=responses`，外部 Hermes 风格 Agent 可使用 `TRACE_MODE=runs`。
-        </AlertDescription>
-      </Alert>
-    )
-  }
-  if (!result.trace_events.length) {
-    return <EmptyBox text="已启用 runs trace，但没有收到过程事件" />
-  }
-  return (
-    <ScrollArea className="h-[320px]">
-      <div className="pr-1">
-        {result.trace_events.map((event, index) => (
-          <TraceEventRow event={event} index={index} key={`${event.event}-${index}`} />
-        ))}
-      </div>
-    </ScrollArea>
-  )
-}
-
 export function AgentResultPanel({
   id,
   title,
   config,
   result,
   loading,
+  input,
 }: {
   id?: "a" | "b"
   title: string
   config?: PublicAgentConfig
   result?: AgentResult
   loading: boolean
+  input?: string
 }) {
   const summary = result?.trace_summary || {}
   const displayName = config?.name || result?.name || title
@@ -205,6 +112,9 @@ export function AgentResultPanel({
   const eventCount = summary.event_count ?? result?.trace_events.length ?? 0
   const toolCount = summary.tool_call_count ?? 0
   const failedCount = summary.failed_tool_count ?? 0
+  const traceAvailable = Boolean(result && (result.trace_events?.length || result.content || result.error))
+
+  const [traceOpen, setTraceOpen] = useState(false)
 
   return (
     <Card className="flex flex-col">
@@ -244,49 +154,57 @@ export function AgentResultPanel({
       />
 
       <CardContent className="flex-1 p-0">
-        <Tabs defaultValue="answer">
-          <TabsList className="px-4">
-            <TabsTrigger value="answer">答案</TabsTrigger>
-            <TabsTrigger value="trace">
-              过程
-              <Badge variant="neutral" className="ml-1 px-1">
-                {eventCount}
-              </Badge>
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="answer" className="mt-0 px-[18px] py-3.5">
-            {loading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-11/12" />
-                <Skeleton className="h-4 w-10/12" />
-                <Skeleton className="h-4 w-9/12" />
-                <Skeleton className="h-32 w-full" />
-              </div>
-            ) : result?.error ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="size-4" />
-                <AlertTitle>请求失败</AlertTitle>
-                <AlertDescription>
-                  <pre className="mt-1 max-h-[260px] whitespace-pre-wrap break-words font-mono text-[12px]">
-                    {result.error}
-                  </pre>
-                </AlertDescription>
-              </Alert>
-            ) : result?.content ? (
-              <ScrollArea className="h-[280px] pr-2">
-                <pre className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-arena-text-primary">
-                  {result.content}
+        <div className="flex items-center justify-between border-b border-arena-border px-4 py-2">
+          <div className="text-[12px] font-semibold text-arena-text-primary">答案</div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!traceAvailable || loading}
+            onClick={() => setTraceOpen(true)}
+          >
+            <GitBranch className="size-3.5" />
+            查看 Trace
+          </Button>
+        </div>
+        <div className="px-[18px] py-3.5">
+          {loading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-10/12" />
+              <Skeleton className="h-4 w-9/12" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          ) : result?.error ? (
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertTitle>请求失败</AlertTitle>
+              <AlertDescription>
+                <pre className="mt-1 max-h-[260px] whitespace-pre-wrap break-words font-mono text-[12px]">
+                  {result.error}
                 </pre>
-              </ScrollArea>
-            ) : (
-              <EmptyBox text="等待输入并提交对比" />
-            )}
-          </TabsContent>
-          <TabsContent value="trace" className="mt-0 px-[18px] py-3.5">
-            <TraceTimeline result={result} loading={loading} />
-          </TabsContent>
-        </Tabs>
+              </AlertDescription>
+            </Alert>
+          ) : result?.content ? (
+            <ScrollArea className="h-[280px] pr-2">
+              <pre className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-arena-text-primary">
+                {result.content}
+              </pre>
+            </ScrollArea>
+          ) : (
+            <EmptyBox text="等待输入并提交对比" />
+          )}
+        </div>
       </CardContent>
+
+      <TraceModal
+        open={traceOpen}
+        onOpenChange={setTraceOpen}
+        result={result || null}
+        title={`Trace · ${displayName}`}
+        subtitle={result?.model || ""}
+        input={input}
+      />
     </Card>
   )
 }

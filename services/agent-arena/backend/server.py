@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -14,7 +13,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -47,7 +46,7 @@ FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 LOG_DIR = ROOT_DIR / "logs"
 FRONTEND_LOG_PATH = LOG_DIR / "frontend.log"
 DATA_DIR = ROOT_DIR / "data"
-HISTORY_DB_PATH = Path(os.getenv("HISTORY_DB_PATH", DATA_DIR / "arena_history.sqlite3"))
+HISTORY_DB_PATH = Path(os.getenv("HISTORY_DB_PATH") or (DATA_DIR / "arena_history.sqlite3"))
 MAX_TRACE_EVENTS = 240
 MAX_EVENT_TEXT = 1800
 SUPPRESSED_TRACE_EVENTS = {"tool.delta", "tool.updated", "tool_call_delta"}
@@ -198,6 +197,7 @@ class HistoryJudgeRecord(BaseModel):
 
 
 class HistorySummary(BaseModel):
+    kind: Literal["arena"] = "arena"
     run_id: str
     created_at: str
     updated_at: str
@@ -211,8 +211,32 @@ class HistorySummary(BaseModel):
     latest_judge: HistoryJudgeRecord | None = None
 
 
+class BatchHistorySummary(BaseModel):
+    kind: Literal["batch"] = "batch"
+    batch_id: str
+    created_at: str
+    target: str
+    mode: str
+    iterations: int
+    concurrency: int
+    cancelled: bool = False
+    input: str = ""
+    item_count: int = 0
+    success_count: int = 0
+    success_rate: float | None = None
+    agent_summaries: list[dict[str, Any]] = Field(default_factory=list)
+    consistency_count: int = 0
+    latest_consistency: dict[str, Any] | None = None
+
+
+HistoryItem = Annotated[
+    HistorySummary | BatchHistorySummary,
+    Field(discriminator="kind"),
+]
+
+
 class HistoryListResponse(BaseModel):
-    items: list[HistorySummary]
+    items: list[HistoryItem]
     total: int
     limit: int
     offset: int
@@ -282,11 +306,11 @@ class BatchRunItem(BaseModel):
     latency_ms: int | None = None
     content: str = ""
     content_length: int = 0
-    content_hash: str = ""
     finish_reason: str | None = None
     error: str | None = None
     assertion_passed: bool | None = None
     trace_summary: dict[str, Any] = Field(default_factory=dict)
+    trace_events: list[AgentTraceEvent] = Field(default_factory=list)
 
 
 class BatchAgentSummary(BaseModel):
@@ -309,8 +333,6 @@ class BatchAgentSummary(BaseModel):
     tool_call_avg: float | None = None
     failed_tool_total: int = 0
     finish_reasons: dict[str, int] = Field(default_factory=dict)
-    cluster_count: int = 0
-    clusters: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class BatchRunResponse(BaseModel):
@@ -320,6 +342,35 @@ class BatchRunResponse(BaseModel):
     items: list[BatchRunItem]
     summaries: dict[str, BatchAgentSummary]
     cancelled: bool = False
+
+
+class ConsistencyIssue(BaseModel):
+    index: int
+    agent_key: Literal["a", "b"]
+    problem: str
+    severity: Literal["low", "medium", "high"] = "medium"
+
+
+class ConsistencyAgentReport(BaseModel):
+    agent_key: Literal["a", "b"]
+    agent_name: str
+    samples_evaluated: int
+    stable: bool
+    consistency_score: int
+    summary: str
+    issues: list[ConsistencyIssue] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+
+
+class ConsistencyResponse(BaseModel):
+    ok: bool
+    batch_id: str
+    created_at: str
+    model: str = ""
+    latency_ms: int | None = None
+    reports: list[ConsistencyAgentReport] = Field(default_factory=list)
+    error: str | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
 
 
 def utc_now() -> str:
@@ -424,6 +475,25 @@ def init_history_db() -> None:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_batch_runs_created_at ON batch_runs(created_at DESC)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS batch_consistency_results (
+                id TEXT PRIMARY KEY,
+                batch_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                model TEXT,
+                ok INTEGER NOT NULL,
+                latency_ms INTEGER,
+                error TEXT,
+                result_json TEXT NOT NULL,
+                FOREIGN KEY (batch_id) REFERENCES batch_runs(id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_batch_consistency_batch_id "
+            "ON batch_consistency_results(batch_id, created_at DESC)"
+        )
 
 
 def history_connect() -> sqlite3.Connection:
@@ -593,12 +663,70 @@ def row_to_history_summary(row: sqlite3.Row) -> HistorySummary:
     )
 
 
+def row_to_batch_summary(row: sqlite3.Row) -> BatchHistorySummary:
+    request_data = json_loads_dict(row["request_json"])
+    summaries_data = json_loads_dict(row["summaries_json"])
+    form = request_data.get("form") if isinstance(request_data.get("form"), dict) else {}
+    raw_body = request_data.get("raw_body") if isinstance(request_data.get("raw_body"), dict) else {}
+    user_input = str((form or {}).get("input") or (raw_body or {}).get("input") or "").strip()
+
+    agent_summaries: list[dict[str, Any]] = []
+    total_items = 0
+    total_success = 0
+    for key in ("a", "b"):
+        s = summaries_data.get(key)
+        if not isinstance(s, dict):
+            continue
+        total = int(s.get("total") or 0)
+        success = int(s.get("success") or 0)
+        total_items += total
+        total_success += success
+        agent_summaries.append(
+            {
+                "agent_key": key,
+                "agent_name": s.get("agent_name") or f"Agent {key.upper()}",
+                "agent_model": s.get("agent_model") or "",
+                "total": total,
+                "success": success,
+                "success_rate": s.get("success_rate"),
+                "latency_p50_ms": s.get("latency_p50_ms"),
+                "latency_p90_ms": s.get("latency_p90_ms"),
+            }
+        )
+    success_rate = round(total_success / total_items, 4) if total_items else None
+    return BatchHistorySummary(
+        batch_id=row["id"],
+        created_at=row["created_at"],
+        target=row["target"],
+        mode=row["mode"],
+        iterations=int(row["iterations"]),
+        concurrency=int(row["concurrency"]),
+        cancelled=bool(row["cancelled"]),
+        input=user_input,
+        item_count=total_items,
+        success_count=total_success,
+        success_rate=success_rate,
+        agent_summaries=agent_summaries,
+        consistency_count=int(row["consistency_count"] or 0),
+        latest_consistency=(
+            json.loads(row["latest_consistency_json"])
+            if row["latest_consistency_json"]
+            else None
+        ),
+    )
+
+
 def list_history(limit: int, offset: int) -> HistoryListResponse:
     safe_limit = max(1, min(limit, 100))
     safe_offset = max(0, offset)
     with history_connect() as conn:
-        total = int(conn.execute("SELECT COUNT(*) FROM arena_runs").fetchone()[0])
-        rows = conn.execute(
+        arena_total = int(conn.execute("SELECT COUNT(*) FROM arena_runs").fetchone()[0])
+        batch_total = int(conn.execute("SELECT COUNT(*) FROM batch_runs").fetchone()[0])
+        total = arena_total + batch_total
+
+        fetch_limit = safe_limit + safe_offset
+
+        arena_rows = conn.execute(
             """
             SELECT
                 r.*,
@@ -618,12 +746,37 @@ def list_history(limit: int, offset: int) -> HistoryListResponse:
                     LIMIT 1
                 )
             ORDER BY r.created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT ?
             """,
-            (safe_limit, safe_offset),
+            (fetch_limit,),
         ).fetchall()
+
+        batch_rows = conn.execute(
+            """
+            SELECT
+                b.*,
+                COALESCE((SELECT COUNT(*) FROM batch_consistency_results c WHERE c.batch_id = b.id), 0) AS consistency_count,
+                (
+                    SELECT result_json
+                    FROM batch_consistency_results c2
+                    WHERE c2.batch_id = b.id
+                    ORDER BY c2.created_at DESC
+                    LIMIT 1
+                ) AS latest_consistency_json
+            FROM batch_runs b
+            ORDER BY b.created_at DESC
+            LIMIT ?
+            """,
+            (fetch_limit,),
+        ).fetchall()
+
+    items: list[HistoryItem] = []
+    items.extend(row_to_history_summary(r) for r in arena_rows)
+    items.extend(row_to_batch_summary(r) for r in batch_rows)
+    items.sort(key=lambda x: x.created_at, reverse=True)
+    paged = items[safe_offset : safe_offset + safe_limit]
     return HistoryListResponse(
-        items=[row_to_history_summary(row) for row in rows],
+        items=paged,
         total=total,
         limit=safe_limit,
         offset=safe_offset,
@@ -853,8 +1006,8 @@ def normalize_trace_event(raw: dict[str, Any]) -> AgentTraceEvent:
             or update.get("title")
         )
 
-    text = raw.get("text")
-    delta = raw.get("delta")
+    text = raw.get("text") or update.get("text")
+    delta = raw.get("delta") or update.get("delta")
     if event_name in {"agent_message_chunk", "thought_delta"} and content_text:
         delta = delta or content_text
     elif event_name in {"thought_start", "thought_done"} and content_text:
@@ -1079,13 +1232,16 @@ async def call_agent_responses(
     if terminal:
         fallback, status = extract_response_content(terminal)
         content = content or fallback
+    effective_error = final_error if final_error is not None else (
+        "empty output" if not content.strip() else None
+    )
     return AgentResult(
-        ok=final_error is None,
+        ok=effective_error is None,
         name=agent.name,
         model=str((terminal or {}).get("model") or agent.model),
         content=content,
         latency_ms=latency_ms,
-        error=final_error,
+        error=effective_error,
         raw_finish_reason=status,
         trace_supported=True,
         trace_events=events,
@@ -1212,14 +1368,17 @@ async def call_agent_runs(
                 trace_summary=summarize_trace([], True),
             )
         latency_ms = int((time.perf_counter() - started) * 1000)
+        effective_error = final_error if final_error is not None else (
+            "empty output" if not final_output.strip() else None
+        )
         return AgentResult(
-            ok=final_error is None,
+            ok=effective_error is None,
             name=agent.name,
             model=agent.model,
             content=final_output,
             latency_ms=latency_ms,
-            error=final_error,
-            raw_finish_reason="stop" if final_error is None else "error",
+            error=effective_error,
+            raw_finish_reason="stop" if effective_error is None else "error",
             trace_supported=True,
             trace_events=events,
             trace_summary=summarize_trace(events, True),
@@ -1362,29 +1521,21 @@ async def call_agent_raw(
     if terminal:
         fallback, status = extract_response_content(terminal)
         content = content or fallback
+    effective_error = final_error if final_error is not None else (
+        "empty output" if not content.strip() else None
+    )
     return AgentResult(
-        ok=final_error is None,
+        ok=effective_error is None,
         name=agent.name,
         model=str((terminal or {}).get("model") or payload.get("model") or agent.model),
         content=content,
         latency_ms=latency_ms,
-        error=final_error,
+        error=effective_error,
         raw_finish_reason=status,
         trace_supported=True,
         trace_events=events,
         trace_summary=summarize_trace(events, True),
     )
-
-
-def _normalize_for_hash(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip().lower()
-
-
-def content_fingerprint(text: str) -> str:
-    normalized = _normalize_for_hash(text)
-    if not normalized:
-        return ""
-    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8]
 
 
 def evaluate_assertion(content: str, assertion: BatchAssertion | None) -> bool | None:
@@ -1414,6 +1565,9 @@ def _percentile(values: list[int], pct: float) -> int | None:
     return int(round(sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight))
 
 
+BATCH_ITEM_TRACE_LIMIT = 120
+
+
 def build_run_item(
     index: int,
     agent_key: Literal["a", "b"],
@@ -1421,7 +1575,7 @@ def build_run_item(
     result: AgentResult,
     assertion: BatchAssertion | None,
 ) -> BatchRunItem:
-    fingerprint = content_fingerprint(result.content) if result.ok else ""
+    trimmed_events = (result.trace_events or [])[:BATCH_ITEM_TRACE_LIMIT]
     return BatchRunItem(
         index=index,
         agent_key=agent_key,
@@ -1431,11 +1585,11 @@ def build_run_item(
         latency_ms=result.latency_ms,
         content=result.content,
         content_length=len(result.content or ""),
-        content_hash=fingerprint,
         finish_reason=result.raw_finish_reason,
         error=result.error,
         assertion_passed=evaluate_assertion(result.content, assertion) if result.ok else (False if assertion else None),
         trace_summary=result.trace_summary or {},
+        trace_events=trimmed_events,
     )
 
 
@@ -1458,20 +1612,6 @@ def compute_batch_summary(
     for item in bucket:
         key = item.finish_reason or "<none>"
         finish_reasons[key] = finish_reasons.get(key, 0) + 1
-
-    cluster_map: dict[str, dict[str, Any]] = {}
-    for item in success_items:
-        if not item.content_hash:
-            continue
-        bucket_entry = cluster_map.setdefault(
-            item.content_hash,
-            {"hash": item.content_hash, "count": 0, "sample": item.content, "indexes": []},
-        )
-        bucket_entry["count"] += 1
-        bucket_entry["indexes"].append(item.index)
-    clusters = sorted(cluster_map.values(), key=lambda c: c["count"], reverse=True)
-    for c in clusters:
-        c["sample"] = truncate_text(c["sample"], 400)
 
     assertion_total = 0
     assertion_passed = 0
@@ -1503,8 +1643,6 @@ def compute_batch_summary(
         tool_call_avg=round(statistics.fmean(tool_calls), 2) if tool_calls else None,
         failed_tool_total=failed_tools,
         finish_reasons=finish_reasons,
-        cluster_count=len(clusters),
-        clusters=clusters[:10],
     )
 
 
@@ -1859,6 +1997,249 @@ async def call_judge(request: JudgeRequest) -> JudgeResponse:
         )
 
 
+CONSISTENCY_MAX_SAMPLE_CHARS = 1200
+CONSISTENCY_MAX_SAMPLES_PER_AGENT = 20
+
+
+def build_consistency_prompt(
+    user_input: str,
+    items_by_agent: dict[str, list[dict[str, Any]]],
+) -> str:
+    return json.dumps(
+        {
+            "task": (
+                "你是一个严谨的中文测试工程师。对同一个用户请求，下面提供了一个或两个 Agent "
+                "在多次重复执行下的输出样本，请评估它们的稳定性，找出明显错误或前后不一致的样本，并给出修复建议。"
+            ),
+            "language": "简体中文",
+            "scoring_rule": (
+                "consistency_score 取 0-100：100 表示所有样本完全一致且无错误；"
+                "70-90 表示主体一致但存在细节波动；50-70 表示存在明显分歧或部分错误；"
+                "0-50 表示样本之间差异巨大或大量错误。"
+            ),
+            "stable_rule": "如果 consistency_score >= 80 且没有 high severity issue，stable 为 true，否则 false。",
+            "issue_severity": "low / medium / high；high 表示这个样本显著错误或与其他样本严重不一致。",
+            "required_json_shape": {
+                "reports": [
+                    {
+                        "agent_key": "a|b",
+                        "stable": True,
+                        "consistency_score": 0,
+                        "summary": "中文一句话总结这个 agent 的稳定性",
+                        "issues": [
+                            {"index": 0, "agent_key": "a", "problem": "中文描述问题", "severity": "low|medium|high"}
+                        ],
+                        "suggestions": ["中文修复建议"],
+                    }
+                ]
+            },
+            "user_input": user_input,
+            "samples": items_by_agent,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def collect_consistency_samples(
+    items: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        key = item.get("agent_key") or ""
+        if key not in {"a", "b"}:
+            continue
+        grouped.setdefault(key, []).append(
+            {
+                "index": item.get("index"),
+                "ok": bool(item.get("ok")),
+                "latency_ms": item.get("latency_ms"),
+                "finish_reason": item.get("finish_reason"),
+                "error": item.get("error"),
+                "content": truncate_text(item.get("content") or "", CONSISTENCY_MAX_SAMPLE_CHARS),
+            }
+        )
+    for key in list(grouped.keys()):
+        bucket = grouped[key]
+        bucket.sort(key=lambda x: x.get("index") or 0)
+        if len(bucket) > CONSISTENCY_MAX_SAMPLES_PER_AGENT:
+            grouped[key] = bucket[:CONSISTENCY_MAX_SAMPLES_PER_AGENT]
+    return grouped
+
+
+async def call_consistency_judge(
+    batch_id: str,
+    user_input: str,
+    items: list[dict[str, Any]],
+) -> ConsistencyResponse:
+    judge = get_judge_config()
+    created_at = utc_now()
+    if not judge.configured:
+        return ConsistencyResponse(
+            ok=False,
+            batch_id=batch_id,
+            created_at=created_at,
+            error="Judge is not configured. Set JUDGE_MODEL and JUDGE_OPENAI_API_KEY or OPENAI_API_KEY in .env.",
+        )
+    grouped = collect_consistency_samples(items)
+    if not grouped:
+        return ConsistencyResponse(
+            ok=False,
+            batch_id=batch_id,
+            created_at=created_at,
+            model=judge.model,
+            error="No batch items available for consistency evaluation.",
+        )
+
+    started = time.perf_counter()
+    payload = {
+        "model": judge.model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "你是一个严谨的中文测试工程师。专注于评估同一 Agent 在相同输入下多次输出的稳定性。"
+                    "只能基于提供的样本判断，不要编造未提供的信息。必须只返回合法 JSON，"
+                    "JSON 字段名可以保持英文，但所有解释、问题描述、建议都使用简体中文。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": build_consistency_prompt(user_input, grouped),
+            },
+        ],
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(get_judge_timeout_seconds())) as client:
+            response = await client.post(
+                judge.completion_url,
+                json=payload,
+                headers=build_headers(judge.api_key),
+            )
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        if response.status_code >= 400:
+            return ConsistencyResponse(
+                ok=False,
+                batch_id=batch_id,
+                created_at=created_at,
+                model=judge.model,
+                latency_ms=latency_ms,
+                error=f"HTTP {response.status_code}: {response.text[:1000]}",
+            )
+        data = response.json()
+        content, _finish = extract_content(data)
+        parsed = extract_json_object(content)
+        reports_raw = parsed.get("reports") or []
+        agent_names = {
+            key: (bucket[0].get("agent_name") if bucket else "")
+            for key, bucket in (
+                {k: [i for i in items if i.get("agent_key") == k] for k in ("a", "b")}
+            ).items()
+        }
+        reports: list[ConsistencyAgentReport] = []
+        for entry in reports_raw:
+            if not isinstance(entry, dict):
+                continue
+            key = entry.get("agent_key")
+            if key not in {"a", "b"}:
+                continue
+            issues_raw = entry.get("issues") or []
+            issues: list[ConsistencyIssue] = []
+            for issue in issues_raw:
+                if not isinstance(issue, dict):
+                    continue
+                try:
+                    issues.append(
+                        ConsistencyIssue(
+                            index=int(issue.get("index") or 0),
+                            agent_key=key,
+                            problem=str(issue.get("problem") or "").strip(),
+                            severity=(issue.get("severity") if issue.get("severity") in {"low", "medium", "high"} else "medium"),
+                        )
+                    )
+                except Exception:  # noqa: BLE001
+                    continue
+            suggestions_raw = entry.get("suggestions") or []
+            suggestions = [str(s).strip() for s in suggestions_raw if str(s).strip()]
+            try:
+                score = int(entry.get("consistency_score") or 0)
+            except (TypeError, ValueError):
+                score = 0
+            score = max(0, min(100, score))
+            reports.append(
+                ConsistencyAgentReport(
+                    agent_key=key,
+                    agent_name=str(entry.get("agent_name") or agent_names.get(key, "") or f"Agent {key.upper()}"),
+                    samples_evaluated=len(grouped.get(key, [])),
+                    stable=bool(entry.get("stable")),
+                    consistency_score=score,
+                    summary=str(entry.get("summary") or "").strip(),
+                    issues=issues,
+                    suggestions=suggestions,
+                )
+            )
+        return ConsistencyResponse(
+            ok=True,
+            batch_id=batch_id,
+            created_at=created_at,
+            model=judge.model,
+            latency_ms=latency_ms,
+            reports=reports,
+            raw=parsed,
+        )
+    except Exception as exc:  # noqa: BLE001
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return ConsistencyResponse(
+            ok=False,
+            batch_id=batch_id,
+            created_at=created_at,
+            model=judge.model,
+            latency_ms=latency_ms,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+
+def save_consistency_result(response: ConsistencyResponse) -> str:
+    result_id = new_id("consistency")
+    with history_connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO batch_consistency_results (
+                id, batch_id, created_at, model, ok, latency_ms, error, result_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                result_id,
+                response.batch_id,
+                response.created_at,
+                response.model,
+                int(response.ok),
+                response.latency_ms,
+                response.error,
+                json_dumps(response),
+            ),
+        )
+    return result_id
+
+
+def list_consistency_results(batch_id: str) -> list[ConsistencyResponse]:
+    with history_connect() as conn:
+        rows = conn.execute(
+            "SELECT result_json FROM batch_consistency_results WHERE batch_id = ? ORDER BY created_at DESC",
+            (batch_id,),
+        ).fetchall()
+    out: list[ConsistencyResponse] = []
+    for row in rows:
+        try:
+            out.append(ConsistencyResponse(**json.loads(row["result_json"])))
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
 app = FastAPI(title="AgentArena", version="0.2.0")
 
 app.add_middleware(
@@ -1975,6 +2356,7 @@ async def api_batch_detail(batch_id: str) -> dict[str, Any]:
             (batch_id,),
         ).fetchall()
     items = [json.loads(r["item_json"]) for r in item_rows]
+    consistency = [model_to_dict(c) for c in list_consistency_results(batch_id)]
     return {
         "batch_id": row["id"],
         "created_at": row["created_at"],
@@ -1986,7 +2368,41 @@ async def api_batch_detail(batch_id: str) -> dict[str, Any]:
         "request": json.loads(row["request_json"]),
         "summaries": json.loads(row["summaries_json"]),
         "items": items,
+        "consistency_results": consistency,
     }
+
+
+@app.post(
+    "/api/batch/{batch_id}/consistency",
+    response_model=ConsistencyResponse,
+    dependencies=[ArenaAuth],
+)
+async def api_batch_consistency(batch_id: str) -> ConsistencyResponse:
+    with history_connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM batch_runs WHERE id = ?",
+            (batch_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="batch not found")
+        item_rows = conn.execute(
+            "SELECT item_json FROM batch_run_items WHERE batch_id = ? ORDER BY idx ASC, agent_key ASC",
+            (batch_id,),
+        ).fetchall()
+    items = [json.loads(r["item_json"]) for r in item_rows]
+    request_data = json.loads(row["request_json"]) if row["request_json"] else {}
+    form = request_data.get("form") or {}
+    user_input = ""
+    if isinstance(form, dict):
+        user_input = str(form.get("input") or "").strip()
+    if not user_input:
+        raw_body = request_data.get("raw_body") or {}
+        if isinstance(raw_body, dict):
+            user_input = str(raw_body.get("input") or "").strip()
+    response = await call_consistency_judge(batch_id, user_input, items)
+    if response.ok:
+        save_consistency_result(response)
+    return response
 
 
 @app.post("/api/judge", response_model=JudgeResponse, dependencies=[ArenaAuth])

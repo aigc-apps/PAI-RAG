@@ -172,6 +172,7 @@ export function ArenaPage({
             config={config?.agents.a}
             result={result?.agents.a}
             loading={loading}
+            input={input}
           />
           <AgentResultPanel
             id="b"
@@ -179,6 +180,7 @@ export function ArenaPage({
             config={config?.agents.b}
             result={result?.agents.b}
             loading={loading}
+            input={input}
           />
         </div>
 

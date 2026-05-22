@@ -24,11 +24,12 @@ import {
 import { normalizeError, reportFrontendLog } from "@/lib/frontendLogger"
 import { samplePrompt } from "@/lib/formatters"
 import type {
+  BatchDetailResponse,
   CompareResponse,
   ConfigResponse,
   HistoryDetailResponse,
+  HistoryItem,
   HistoryListResponse,
-  HistorySummary,
   JudgeResponse,
   ViewMode,
 } from "@/lib/types"
@@ -68,9 +69,11 @@ function App() {
   const [result, setResult] = useState<CompareResponse | null>(null)
   const [judge, setJudge] = useState<JudgeResponse | null>(null)
   const [error, setError] = useState("")
-  const [historyItems, setHistoryItems] = useState<HistorySummary[]>([])
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
   const [historyDetail, setHistoryDetail] = useState<HistoryDetailResponse | null>(null)
+  const [historyBatchDetail, setHistoryBatchDetail] = useState<BatchDetailResponse | null>(null)
   const [selectedHistoryRunId, setSelectedHistoryRunId] = useState("")
+  const [selectedHistoryKind, setSelectedHistoryKind] = useState<"arena" | "batch">("arena")
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyDetailLoading, setHistoryDetailLoading] = useState(false)
   const [historyError, setHistoryError] = useState("")
@@ -154,6 +157,10 @@ function App() {
       (result.agents.a.content.trim() || result.agents.b.content.trim()),
   )
 
+  function historyItemId(item: HistoryItem): string {
+    return item.kind === "arena" ? item.run_id : item.batch_id
+  }
+
   async function loadHistory() {
     setHistoryLoading(true)
     setHistoryError("")
@@ -161,12 +168,19 @@ function App() {
       const response = await apiFetch("/history?limit=50")
       const history = await readApiJson<HistoryListResponse>(response)
       setHistoryItems(history.items)
-      const nextRunId = selectedHistoryRunId || history.items[0]?.run_id || ""
-      if (nextRunId) {
-        setSelectedHistoryRunId(nextRunId)
-        void loadHistoryDetail(nextRunId)
+      const first = history.items[0]
+      const previousStillExists = history.items.find(
+        (h) => historyItemId(h) === selectedHistoryRunId,
+      )
+      const next = previousStillExists || first
+      if (next) {
+        setSelectedHistoryRunId(historyItemId(next))
+        setSelectedHistoryKind(next.kind)
+        void loadHistoryDetail(historyItemId(next), next.kind)
       } else {
         setHistoryDetail(null)
+        setHistoryBatchDetail(null)
+        setSelectedHistoryRunId("")
       }
     } catch (err) {
       if (isUnauthorizedError(err)) {
@@ -187,13 +201,20 @@ function App() {
     }
   }
 
-  async function loadHistoryDetail(runId: string) {
+  async function loadHistoryDetail(runId: string, kind: "arena" | "batch") {
     if (!runId) return
     setHistoryDetailLoading(true)
     setHistoryError("")
     try {
-      const response = await apiFetch(`/history/${encodeURIComponent(runId)}`)
-      setHistoryDetail(await readApiJson<HistoryDetailResponse>(response))
+      if (kind === "arena") {
+        const response = await apiFetch(`/history/${encodeURIComponent(runId)}`)
+        setHistoryDetail(await readApiJson<HistoryDetailResponse>(response))
+        setHistoryBatchDetail(null)
+      } else {
+        const response = await apiFetch(`/batch/${encodeURIComponent(runId)}`)
+        setHistoryBatchDetail(await readApiJson<BatchDetailResponse>(response))
+        setHistoryDetail(null)
+      }
     } catch (err) {
       if (isUnauthorizedError(err)) {
         markUnauthorized()
@@ -206,7 +227,7 @@ function App() {
         source: "app.history_detail",
         message: normalized.message,
         stack: normalized.stack,
-        payload: { run_id: runId },
+        payload: { run_id: runId, kind },
       })
       setHistoryError(normalized.message)
     } finally {
@@ -214,9 +235,16 @@ function App() {
     }
   }
 
-  function selectHistoryRun(runId: string) {
+  function selectHistoryRun(runId: string, kind: "arena" | "batch") {
     setSelectedHistoryRunId(runId)
-    void loadHistoryDetail(runId)
+    setSelectedHistoryKind(kind)
+    void loadHistoryDetail(runId, kind)
+  }
+
+  async function refreshBatchDetail() {
+    if (selectedHistoryKind === "batch" && selectedHistoryRunId) {
+      await loadHistoryDetail(selectedHistoryRunId, "batch")
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -439,13 +467,16 @@ function App() {
           <HistoryPage
             items={historyItems}
             detail={historyDetail}
+            batchDetail={historyBatchDetail}
             selectedRunId={selectedHistoryRunId}
+            selectedKind={selectedHistoryKind}
             loading={historyLoading}
             detailLoading={historyDetailLoading}
             error={historyError}
             config={config}
             onRefresh={loadHistory}
             onSelect={selectHistoryRun}
+            onBatchRefresh={refreshBatchDetail}
           />
         )}
       </PageBody>

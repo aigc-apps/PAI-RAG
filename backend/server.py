@@ -167,6 +167,39 @@ app.add_middleware(
 )
 
 
+async def _warmup_responses_runner():
+    # Cold-start of the SDK runner drops the model's first response into
+    # output[] = []. One in-process ping consumes that path so real user
+    # requests start on the warm runner. ASGI transport avoids needing
+    # to know the externally bound port.
+    import asyncio
+    await asyncio.sleep(0.5)
+    try:
+        import httpx
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url='http://warmup', timeout=120) as client:
+            async with client.stream(
+                'POST', '/v1/responses',
+                json={
+                    'model': runtime_config.get_active_model(),
+                    'input': 'ping',
+                    'stream': True,
+                    'store': False,
+                },
+            ) as resp:
+                async for _ in resp.aiter_lines():
+                    pass
+        logger.info('[warmup] sdk runner warmed via /v1/responses ping')
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('[warmup] sdk runner warmup failed: %s', exc)
+
+
+@app.on_event('startup')
+async def _on_startup_warmup():
+    import asyncio
+    asyncio.create_task(_warmup_responses_runner())
+
+
 def _error_payload_from_detail(detail, default_code=''):
     if isinstance(detail, dict):
         payload = {
@@ -1194,6 +1227,7 @@ async def _sdk_response_stream(*, body, model, model_override, instructions, con
     created_at = int(time.time())
     response_id_holder = {'id': previous_response_id if resume_payload is not None else ''}
     yielded_created = False
+    visible_text_emitted = False
 
     try:
         async for frame in sdk_runner.stream_responses_run(
@@ -1222,6 +1256,8 @@ async def _sdk_response_stream(*, body, model, model_override, instructions, con
                     yield emit('response.created', response_object(
                         response_id_holder['id'], model, status='in_progress', created_at=created_at,
                     ))
+                if frame.chunk.get('type') == 'response.output_text.delta' and frame.chunk.get('delta'):
+                    visible_text_emitted = True
                 yield emit(frame.chunk['type'], frame.chunk)
             if frame.terminal:
                 final = frame.response_object or {}
@@ -1233,6 +1269,17 @@ async def _sdk_response_stream(*, body, model, model_override, instructions, con
                     ))
                 final.setdefault('created_at', created_at)
                 final.setdefault('model', model)
+                if (final.get('status') == 'completed' and not visible_text_emitted):
+                    final_text = _final_assistant_text(final.get('output') or [])
+                    if final_text:
+                        yield emit('response.output_text.delta', {
+                            'type': 'response.output_text.delta',
+                            'response_id': rid,
+                            'delta': final_text,
+                            'output_index': 0,
+                            'content_index': 0,
+                        })
+                        visible_text_emitted = True
                 if final.get('status') == 'requires_action':
                     yield emit('response.requires_action', final)
                     # Emit a standard Responses API terminator so strict clients
