@@ -57,8 +57,10 @@ class PaiLlmGuardrail:
             if response.status_code == 200 and response.body.code == 200:
                 # 调用成功
                 risk_level = response.body.data.risk_level
+                attack_level = getattr(response.body.data, 'attack_level', None) or ""
+
                 reject = False
-                if risk_level.lower() == "high":
+                if risk_level.lower() == "high" or attack_level.lower() == "high":
                     reject = True
 
                 advice = self.custom_advice
@@ -69,8 +71,13 @@ class PaiLlmGuardrail:
                         advice = DEFAULT_GUARDRAIL_ADVICE
 
                 reason = None
-                if reject and len(response.body.data.result) > 0:
-                    reason = response.body.data.result[0].description
+                if reject:
+                    if attack_level.lower() == "high":
+                        attack_result = getattr(response.body.data, 'attack_result', None) or []
+                        if len(attack_result) > 0:
+                            reason = attack_result[0].description
+                    elif len(response.body.data.result) > 0:
+                        reason = response.body.data.result[0].description
 
                 result = TextCheckResult(
                     reject=reject,
