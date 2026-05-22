@@ -1,14 +1,11 @@
 import { FormEvent, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Download,
-  Loader2,
   Play,
   Square,
-  XCircle,
 } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -17,16 +14,17 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { AgentIdBadge } from "@/components/AgentIdBadge"
+import { StatCardRow, type StatItem } from "@/components/StatCard"
+import { StatusDot } from "@/components/StatusDot"
 import type { ConfigResponse } from "@/lib/types"
 import { apiHeaders, apiUrl } from "@/lib/api"
 import { normalizeError, reportFrontendLog } from "@/lib/frontendLogger"
@@ -191,95 +189,136 @@ async function consumeSse(
   }
 }
 
-function StatusIcon({ item }: { item: BatchRunItem }) {
-  if (!item.ok) return <XCircle className="size-4 text-destructive" />
-  if (item.assertion_passed === false) {
-    return <AlertTriangle className="size-4 text-amber-500" />
-  }
-  return <CheckCircle2 className="size-4 text-emerald-600" />
+function rowStatusKind(item: BatchRunItem): "ok" | "warn" | "err" {
+  if (!item.ok) return "err"
+  if (item.assertion_passed === false) return "warn"
+  return "ok"
+}
+
+function rowStatusLabel(item: BatchRunItem): string {
+  if (!item.ok) return "failed"
+  if (item.assertion_passed === false) return "degraded"
+  return "ok"
 }
 
 function SummaryCard({
+  agentKey,
   summary,
   hasAssertion,
+  concurrency,
 }: {
+  agentKey: AgentKey
   summary: BatchAgentSummary | undefined
   hasAssertion: boolean
+  concurrency: number
 }) {
   if (!summary) {
     return (
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">等待结果</CardTitle>
+        <CardHeader className="flex flex-row items-center gap-2.5">
+          <AgentIdBadge id={agentKey} />
+          <div className="min-w-0 flex-1">
+            <CardTitle>等待 Agent {agentKey.toUpperCase()} 完成事件</CardTitle>
+          </div>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          尚未收到该 Agent 的完成事件。
-        </CardContent>
       </Card>
     )
   }
   const successPct = summary.total ? summary.success / summary.total : 0
+  const finishText = Object.keys(summary.finish_reasons).length
+    ? Object.entries(summary.finish_reasons)
+        .map(([k, v]) => `${k} ×${v}`)
+        .join(" · ")
+    : "—"
+  const stats: StatItem[] = [
+    {
+      label: "P50 延迟",
+      value: formatLatency(summary.latency_p50_ms),
+    },
+    {
+      label: "P90 延迟",
+      value: formatLatency(summary.latency_p90_ms),
+    },
+    {
+      label: "输出长度 avg",
+      value: summary.content_len_avg === null ? "—" : Math.round(summary.content_len_avg),
+      delta: {
+        text:
+          summary.content_len_min !== null && summary.content_len_max !== null
+            ? `${summary.content_len_min} – ${summary.content_len_max}`
+            : "",
+        tone: "muted",
+      },
+    },
+    {
+      label: "平均 tool 调用",
+      value: summary.tool_call_avg ?? "—",
+      delta:
+        summary.failed_tool_total > 0
+          ? { text: `失败 ${summary.failed_tool_total}`, tone: "down" }
+          : { text: "无失败", tone: "muted" },
+    },
+  ]
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-base">
-          <span className="truncate">{summary.agent_name}</span>
-          <Badge variant="outline" className="ml-2 shrink-0">
-            {summary.agent_model || "—"}
+      <CardHeader className="flex flex-row items-center gap-2.5">
+        <AgentIdBadge id={agentKey} />
+        <div className="min-w-0 flex-1">
+          <CardTitle className="truncate">{summary.agent_name}</CardTitle>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-arena-text-tertiary">
+            <span className="truncate">{summary.agent_model || "—"}</span>
+            <span>·</span>
+            <span>
+              {summary.total} runs · concurrency {concurrency}
+            </span>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <Badge variant={successPct >= 0.95 ? "success" : successPct >= 0.8 ? "warning" : "destructive"}>
+            成功率 {(successPct * 100).toFixed(1)}%
           </Badge>
-        </CardTitle>
-        <CardDescription>{summary.total} 次执行</CardDescription>
+          {hasAssertion ? (
+            <Badge
+              variant={
+                (summary.assertion_rate ?? 0) >= 0.9
+                  ? "info"
+                  : (summary.assertion_rate ?? 0) >= 0.6
+                    ? "warning"
+                    : "destructive"
+              }
+            >
+              断言 {formatPct(summary.assertion_rate)}
+            </Badge>
+          ) : null}
+        </div>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-3">
-          <Metric label="成功率" value={`${(successPct * 100).toFixed(1)}% (${summary.success}/${summary.total})`} />
-          <Metric
-            label="断言通过率"
-            value={
-              hasAssertion
-                ? `${formatPct(summary.assertion_rate)} (${summary.assertion_passed}/${summary.assertion_total})`
-                : "—"
-            }
+      <StatCardRow items={stats} className="rounded-none border-x-0 border-b-0 shadow-none" />
+      <CardContent className="bg-arena-bg-subtle p-[18px]">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px]">
+          <KeyVal k="finish_reason" v={finishText} />
+          <KeyVal k="指纹簇" v={summary.cluster_count} />
+          <KeyVal
+            k="断言通过"
+            v={hasAssertion ? `${summary.assertion_passed}/${summary.assertion_total}` : "—"}
           />
-          <Metric label="延迟 min / p50" value={`${formatLatency(summary.latency_min_ms)} / ${formatLatency(summary.latency_p50_ms)}`} />
-          <Metric label="延迟 p90 / max" value={`${formatLatency(summary.latency_p90_ms)} / ${formatLatency(summary.latency_max_ms)}`} />
-          <Metric
-            label="答案长度 min/avg/max"
-            value={
-              summary.content_len_avg === null
-                ? "—"
-                : `${summary.content_len_min ?? "—"} / ${summary.content_len_avg.toFixed(0)} / ${summary.content_len_max ?? "—"}`
-            }
-          />
-          <Metric
-            label="平均 tool 调用 / 失败"
-            value={`${summary.tool_call_avg ?? "—"} / ${summary.failed_tool_total}`}
-          />
-          <Metric label="答案簇数" value={`${summary.cluster_count}`} />
-          <Metric
-            label="finish_reason"
-            value={
-              Object.keys(summary.finish_reasons).length
-                ? Object.entries(summary.finish_reasons)
-                    .map(([k, v]) => `${k}:${v}`)
-                    .join(", ")
-                : "—"
-            }
-          />
+          <KeyVal k="失败工具" v={summary.failed_tool_total} />
         </div>
         {summary.clusters.length ? (
-          <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="mt-3 space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
               答案指纹簇
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {summary.clusters.map((cluster) => (
-                <div key={cluster.hash} className="rounded-md border bg-muted/40 p-2 text-xs">
+                <div
+                  key={cluster.hash}
+                  className="rounded-arena border border-arena-border bg-white p-2.5 text-[12px]"
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px]">{cluster.hash}</span>
-                    <Badge variant="secondary">{cluster.count} 次</Badge>
+                    <span className="font-mono text-[11px] text-arena-text-secondary">{cluster.hash}</span>
+                    <Badge variant="neutral">{cluster.count} 次</Badge>
                   </div>
-                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-muted-foreground">
+                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-arena-text-secondary">
                     {cluster.sample}
                   </p>
                 </div>
@@ -292,12 +331,12 @@ function SummaryCard({
   )
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
   return (
-    <div className="rounded-md border bg-background p-2">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-medium">{value}</div>
-    </div>
+    <span className="inline-flex items-center gap-1.5 font-mono">
+      <span className="text-arena-text-tertiary">{k}</span>
+      <span className="font-semibold text-arena-text-primary">{v}</span>
+    </span>
   )
 }
 
@@ -310,56 +349,78 @@ function ItemRow({
   expanded: boolean
   onToggle: () => void
 }) {
+  const statusKind = rowStatusKind(item)
+  const statusLabel = rowStatusLabel(item)
   return (
     <>
-      <tr className="border-b last:border-b-0 hover:bg-muted/40">
-        <td className="px-2 py-1.5">
-          <button
-            type="button"
-            onClick={onToggle}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            aria-label={expanded ? "collapse" : "expand"}
-          >
-            {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-            <span className="font-mono">{item.index}</span>
-          </button>
-        </td>
-        <td className="px-2 py-1.5 text-xs">
-          <Badge variant="outline">{item.agent_key.toUpperCase()}</Badge>
-        </td>
-        <td className="px-2 py-1.5">
-          <StatusIcon item={item} />
-        </td>
-        <td className="px-2 py-1.5 text-xs font-mono">{formatLatency(item.latency_ms)}</td>
-        <td className="px-2 py-1.5 text-xs font-mono">{item.content_length}</td>
-        <td className="px-2 py-1.5 text-xs">{item.finish_reason || "—"}</td>
-        <td className="px-2 py-1.5 text-xs font-mono">{item.content_hash || "—"}</td>
-        <td className="px-2 py-1.5 text-xs">
-          {item.assertion_passed === null ? (
-            <span className="text-muted-foreground">—</span>
-          ) : item.assertion_passed ? (
-            <CheckCircle2 className="size-4 text-emerald-600" />
+      <tr
+        onClick={onToggle}
+        className="cursor-pointer border-b border-arena-border bg-white last:border-b-0 hover:bg-arena-bg-hover"
+      >
+        <td className="px-2 py-1.5 text-arena-text-tertiary">
+          {expanded ? (
+            <ChevronDown className="size-3.5" />
           ) : (
-            <XCircle className="size-4 text-destructive" />
+            <ChevronRight className="size-3.5" />
           )}
         </td>
-        <td className="max-w-[260px] truncate px-2 py-1.5 text-xs text-destructive">
+        <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
+          {String(item.index).padStart(3, "0")}
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex items-center gap-1.5 text-[12px] text-arena-text-primary">
+            <AgentIdBadge id={item.agent_key} size="sm" />
+            <span className="truncate">{item.agent_name}</span>
+          </div>
+        </td>
+        <td className="px-2 py-1.5">
+          <StatusDot kind={statusKind}>{statusLabel}</StatusDot>
+        </td>
+        <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
+          {formatLatency(item.latency_ms)}
+        </td>
+        <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
+          {item.content_length}
+        </td>
+        <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
+          {item.finish_reason || "—"}
+        </td>
+        <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
+          {item.content_hash || "—"}
+        </td>
+        <td className="px-2 py-1.5">
+          {item.assertion_passed === null ? (
+            <Badge variant="neutral">N/A</Badge>
+          ) : item.assertion_passed ? (
+            <Badge variant="success">PASS</Badge>
+          ) : (
+            <Badge variant="destructive">FAIL</Badge>
+          )}
+        </td>
+        <td
+          className="truncate px-2 py-1.5 font-mono text-[11px] text-arena-danger"
+          title={item.error || undefined}
+        >
           {previewError(item.error)}
         </td>
       </tr>
       {expanded ? (
-        <tr className="border-b bg-muted/30">
-          <td colSpan={9} className="px-3 py-2">
+        <tr className="border-b border-arena-border bg-arena-bg-subtle">
+          <td colSpan={9} className="px-4 py-3">
             <div className="space-y-2">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Content</div>
-              <ScrollArea className="h-[180px] rounded-md border bg-slate-950 p-3">
-                <pre className="whitespace-pre-wrap break-words text-xs leading-5 text-slate-100">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
+                Content
+              </div>
+              <ScrollArea className="h-[180px] rounded-arena border border-arena-border bg-arena-bg-code p-3">
+                <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-slate-100">
                   {item.content || "(空)"}
                 </pre>
               </ScrollArea>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Trace summary</div>
-              <ScrollArea className="h-[120px] rounded-md border bg-slate-950 p-3">
-                <pre className="whitespace-pre-wrap break-words text-xs leading-5 text-slate-100">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
+                Trace summary
+              </div>
+              <ScrollArea className="h-[120px] rounded-arena border border-arena-border bg-arena-bg-code p-3">
+                <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-slate-100">
                   {JSON.stringify(item.trace_summary || {}, null, 2)}
                 </pre>
               </ScrollArea>
@@ -602,18 +663,16 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
 
   const progress = total > 0 ? items.length / total : 0
   const canExport = items.length > 0 && !running
+  const inFlight = running && total > 0 ? Math.max(0, Math.min(parsedConcurrency, total - items.length)) : 0
 
   return (
-    <section className="grid gap-5 xl:grid-cols-[420px_1fr]">
+    <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
       <Card className="h-fit">
         <CardHeader>
-          <CardTitle>稳定性测试</CardTitle>
-          <CardDescription>
-            用同一个 query body 对单 Agent 跑 N 次，看成功率、延迟、答案是否稳定。
-          </CardDescription>
+          <CardTitle>运行配置</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={startBatch}>
+        <CardContent className="p-[18px]">
+          <form className="space-y-3.5" onSubmit={startBatch}>
             <div className="space-y-2">
               <Label>目标 Agent</Label>
               <div className="grid grid-cols-3 gap-2">
@@ -703,23 +762,25 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
               </div>
             </div>
 
-            <div className="rounded-md border p-3">
-              <label className="flex items-center gap-2 text-sm font-medium">
+            <div className="rounded-arena border border-arena-border bg-arena-bg-subtle p-3">
+              <label className="flex items-center gap-2 text-[12.5px] font-semibold text-arena-text-primary">
                 <input
                   type="checkbox"
                   checked={assertionEnabled}
                   onChange={(e) => setAssertionEnabled(e.target.checked)}
+                  className="accent-arena-accent"
                 />
-                启用 assertion
+                启用断言 (assertion)
               </label>
               {assertionEnabled ? (
                 <div className="mt-3 space-y-2">
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <Button
                       type="button"
                       size="sm"
                       variant={assertionKind === "substring" ? "default" : "outline"}
                       onClick={() => setAssertionKind("substring")}
+                      className="flex-1"
                     >
                       substring
                     </Button>
@@ -728,22 +789,25 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
                       size="sm"
                       variant={assertionKind === "regex" ? "default" : "outline"}
                       onClick={() => setAssertionKind("regex")}
+                      className="flex-1"
                     >
                       regex
                     </Button>
-                    <label className="ml-auto flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={assertionCaseSensitive}
-                        onChange={(e) => setAssertionCaseSensitive(e.target.checked)}
-                      />
-                      区分大小写
-                    </label>
                   </div>
+                  <label className="flex items-center gap-1.5 text-[11.5px] text-arena-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={assertionCaseSensitive}
+                      onChange={(e) => setAssertionCaseSensitive(e.target.checked)}
+                      className="accent-arena-accent"
+                    />
+                    区分大小写
+                  </label>
                   <Input
                     placeholder={assertionKind === "regex" ? "JavaScript regex source" : "期望出现的子串"}
                     value={assertionValue}
                     onChange={(e) => setAssertionValue(e.target.value)}
+                    className="font-mono text-[12px]"
                   />
                 </div>
               ) : null}
@@ -757,19 +821,25 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
               </Alert>
             ) : null}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 pt-1">
               {running ? (
-                <Button type="button" variant="destructive" onClick={cancelBatch}>
+                <Button type="button" variant="destructive" onClick={cancelBatch} className="w-full">
                   <Square className="size-4" />
-                  取消
+                  取消运行
                 </Button>
               ) : (
-                <Button type="submit">
+                <Button type="submit" className="w-full">
                   <Play className="size-4" />
-                  开始
+                  开始 Batch
                 </Button>
               )}
-              <Button type="button" variant="outline" disabled={!canExport} onClick={exportJson}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canExport}
+                onClick={exportJson}
+                className="w-full"
+              >
                 <Download className="size-4" />
                 导出 JSON
               </Button>
@@ -780,65 +850,94 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
 
       <div className="space-y-5">
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between text-base">
-              <span>执行进度</span>
-              <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
-                {running ? <Loader2 className="size-4 animate-spin" /> : null}
-                <span>
-                  {items.length} / {total || "?"}
-                </span>
-                {batchId ? <Badge variant="outline">{batchId}</Badge> : null}
+          <CardContent className="p-[18px]">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <StatusDot
+                  kind={running ? "run" : completedAt ? "ok" : items.length > 0 ? "warn" : "idle"}
+                >
+                  {running ? "运行中" : completedAt ? "已完成" : items.length > 0 ? "已停止" : "待启动"}
+                </StatusDot>
+                {batchId ? (
+                  <span className="font-mono text-[11px] text-arena-text-tertiary">
+                    batch_id: {batchId}
+                  </span>
+                ) : null}
               </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
+                <KeyVal k="完成" v={`${items.length} / ${total || "?"}`} />
+                {running ? <KeyVal k="in-flight" v={inFlight} /> : null}
+                {completedAt ? (
+                  <KeyVal
+                    k="完成于"
+                    v={new Date(completedAt).toLocaleString("zh-CN", { hour12: false })}
+                  />
+                ) : null}
+              </div>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-arena-neutral-soft">
               <div
-                className={cn("h-full bg-primary transition-all", running ? "" : "")}
+                className="h-full rounded-full bg-[linear-gradient(90deg,#FF5A1F_0%,#E84818_100%)] transition-all duration-200"
                 style={{ width: `${Math.min(100, Math.round(progress * 100))}%` }}
               />
             </div>
-            {completedAt ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                完成于 {new Date(completedAt).toLocaleString("zh-CN", { hour12: false })}
-              </p>
-            ) : null}
           </CardContent>
         </Card>
 
-        <div className={cn("grid gap-5", targetKeys.length > 1 ? "lg:grid-cols-2" : "")}>
+        <div className={cn("grid gap-5", targetKeys.length > 1 ? "xl:grid-cols-2" : "")}>
           {targetKeys.map((key) => (
-            <SummaryCard key={key} summary={summaries[key]} hasAssertion={hasAssertion} />
+            <SummaryCard
+              key={key}
+              agentKey={key}
+              summary={summaries[key]}
+              hasAssertion={hasAssertion}
+              concurrency={parsedConcurrency}
+            />
           ))}
         </div>
 
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">每次执行</CardTitle>
-            <CardDescription>点击行号展开看完整 content 和 trace summary。</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle>执行明细</CardTitle>
+              <p className="mt-0.5 text-[11.5px] text-arena-text-tertiary">
+                {items.length} 条记录 · 点击行可展开看完整 content 和 trace summary
+              </p>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <Separator />
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+              <table className="w-full table-fixed border-separate border-spacing-0 text-left">
+                <colgroup>
+                  <col className="w-[28px]" />
+                  <col className="w-[56px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[96px]" />
+                  <col className="w-[78px]" />
+                  <col className="w-[64px]" />
+                  <col className="w-[78px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[74px]" />
+                  <col />
+                </colgroup>
+                <thead className="bg-arena-bg-subtle text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
                   <tr>
-                    <th className="px-2 py-2">#</th>
-                    <th className="px-2 py-2">agent</th>
-                    <th className="px-2 py-2">状态</th>
-                    <th className="px-2 py-2">延迟</th>
-                    <th className="px-2 py-2">len</th>
-                    <th className="px-2 py-2">finish</th>
-                    <th className="px-2 py-2">hash</th>
-                    <th className="px-2 py-2">assert</th>
-                    <th className="px-2 py-2">error</th>
+                    <th className="border-b border-arena-border px-2 py-2"></th>
+                    <th className="border-b border-arena-border px-2 py-2">#</th>
+                    <th className="border-b border-arena-border px-2 py-2">Agent</th>
+                    <th className="border-b border-arena-border px-2 py-2">状态</th>
+                    <th className="border-b border-arena-border px-2 py-2 text-right">延迟</th>
+                    <th className="border-b border-arena-border px-2 py-2 text-right">长度</th>
+                    <th className="border-b border-arena-border px-2 py-2">finish</th>
+                    <th className="border-b border-arena-border px-2 py-2">fingerprint</th>
+                    <th className="border-b border-arena-border px-2 py-2">断言</th>
+                    <th className="border-b border-arena-border px-2 py-2">error</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-2 py-6 text-center text-sm text-muted-foreground">
+                      <td colSpan={10} className="px-2 py-10 text-center text-[13px] text-arena-text-tertiary">
                         尚未开始或无结果。
                       </td>
                     </tr>
@@ -858,7 +957,7 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
           </CardContent>
         </Card>
       </div>
-    </section>
+    </div>
   )
 }
 
