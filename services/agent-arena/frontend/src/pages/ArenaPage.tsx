@@ -1,18 +1,16 @@
 import { FormEvent } from "react"
-import { AlertTriangle, Eraser, Gavel, Loader2, SendHorizontal } from "lucide-react"
+import { AlertTriangle, Eraser, Loader2, Play, Scale } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AgentResultPanel } from "@/components/arena/AgentResultPanel"
@@ -68,56 +66,76 @@ export function ArenaPage({
   onClear: () => void
 }) {
   return (
-    <section className="grid gap-5 xl:grid-cols-[420px_1fr]">
+    <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
       <Card className="h-fit">
-        <CardHeader>
-          <CardTitle>输入</CardTitle>
-          <CardDescription>
-            请求由后端转发，浏览器不会接触 Agent 或 Judge API key。
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>请求配置</CardTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClear}
+            disabled={loading || judgeLoading}
+          >
+            <Eraser className="size-3.5" />
+            清空
+          </Button>
         </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="prompt">User prompt</Label>
+        <CardContent className="p-[18px]">
+          <form className="space-y-3.5" onSubmit={onSubmit}>
+            <div className="space-y-1.5">
+              <Label htmlFor="prompt" className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-arena-text-secondary">
+                输入 Query
+                <span className="font-mono text-[10px] font-normal text-arena-text-tertiary">user prompt</span>
+              </Label>
               <Textarea
                 id="prompt"
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder="输入要同时发送给两个 Agent 的问题"
-                className="min-h-[180px] resize-y"
+                className="min-h-[140px] resize-y"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="system">System prompt</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="system" className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wider text-arena-text-secondary">
+                System Prompt
+                <span className="font-mono text-[10px] font-normal text-arena-text-tertiary">可选</span>
+              </Label>
               <Textarea
                 id="system"
                 value={system}
                 onChange={(event) => setSystem(event.target.value)}
                 placeholder="可选"
-                className="min-h-[96px] resize-y"
+                className="min-h-[80px] resize-y"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="temperature">Temperature</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="temperature" className="text-[12px] font-semibold uppercase tracking-wider text-arena-text-secondary">
+                  Temperature
+                </Label>
                 <Input
                   id="temperature"
                   value={temperature}
                   onChange={(event) => setTemperature(event.target.value)}
                   inputMode="decimal"
+                  className="font-mono"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="maxTokens">Max tokens</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="maxTokens" className="text-[12px] font-semibold uppercase tracking-wider text-arena-text-secondary">
+                  Max tokens
+                </Label>
                 <Input
                   id="maxTokens"
                   value={maxTokens}
                   onChange={(event) => setMaxTokens(event.target.value)}
                   inputMode="numeric"
+                  className="font-mono"
                 />
               </div>
             </div>
+
             {error ? (
               <Alert variant="destructive">
                 <AlertTriangle className="size-4" />
@@ -125,18 +143,21 @@ export function ArenaPage({
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : null}
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={loading || judgeLoading}>
-                {loading ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
-                开始对比
+
+            <div className="flex flex-col gap-2 pt-2">
+              <Button type="submit" disabled={loading || judgeLoading} className="w-full">
+                {loading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                发起对比
               </Button>
-              <Button type="button" variant="secondary" onClick={onJudge} disabled={!canJudge || judgeLoading}>
-                {judgeLoading ? <Loader2 className="size-4 animate-spin" /> : <Gavel className="size-4" />}
-                对比
-              </Button>
-              <Button type="button" variant="outline" onClick={onClear} disabled={loading || judgeLoading}>
-                <Eraser className="size-4" />
-                清空
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onJudge}
+                disabled={!canJudge || judgeLoading}
+                className="w-full"
+              >
+                {judgeLoading ? <Loader2 className="size-4 animate-spin" /> : <Scale className="size-4" />}
+                运行 Judge
               </Button>
             </div>
           </form>
@@ -144,28 +165,44 @@ export function ArenaPage({
       </Card>
 
       <div className="space-y-5">
-        <div className="grid gap-5 lg:grid-cols-2">
-          <AgentResultPanel title="Agent A" config={config?.agents.a} result={result?.agents.a} loading={loading} />
-          <AgentResultPanel title="Agent B" config={config?.agents.b} result={result?.agents.b} loading={loading} />
+        <div className="grid gap-5 xl:grid-cols-2">
+          <AgentResultPanel
+            id="a"
+            title="Agent A"
+            config={config?.agents.a}
+            result={result?.agents.a}
+            loading={loading}
+          />
+          <AgentResultPanel
+            id="b"
+            title="Agent B"
+            config={config?.agents.b}
+            result={result?.agents.b}
+            loading={loading}
+          />
         </div>
 
-        <JudgePanel judge={judge} judgeLoading={judgeLoading} canJudge={canJudge} config={config} onJudge={onJudge} />
+        <JudgePanel
+          judge={judge}
+          judgeLoading={judgeLoading}
+          canJudge={canJudge}
+          config={config}
+          onJudge={onJudge}
+        />
 
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>调试信息</CardTitle>
-            <CardDescription>查看实际请求 payload、Agent 返回和 Judge 返回。</CardDescription>
+          <CardHeader>
+            <CardTitle>Debug 信息</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-[18px]">
             <Tabs defaultValue="request">
               <TabsList>
                 <TabsTrigger value="request">Request</TabsTrigger>
-                <TabsTrigger value="response">Response</TabsTrigger>
-                <TabsTrigger value="judge">Judge</TabsTrigger>
-                <TabsTrigger value="config">Config</TabsTrigger>
+                <TabsTrigger value="response">Compare response</TabsTrigger>
+                <TabsTrigger value="judge">Judge JSON</TabsTrigger>
+                <TabsTrigger value="config">Config snapshot</TabsTrigger>
               </TabsList>
-              <Separator className="my-3" />
-              <TabsContent value="request">
+              <TabsContent value="request" className="mt-3">
                 <CodeBlock
                   value={JSON.stringify(
                     { input, system, temperature: parsedTemperature, max_tokens: parsedMaxTokens },
@@ -174,19 +211,19 @@ export function ArenaPage({
                   )}
                 />
               </TabsContent>
-              <TabsContent value="response">
+              <TabsContent value="response" className="mt-3">
                 <CodeBlock value={result ? JSON.stringify(result, null, 2) : "尚无对比结果"} />
               </TabsContent>
-              <TabsContent value="judge">
+              <TabsContent value="judge" className="mt-3">
                 <CodeBlock value={judge ? JSON.stringify(judge, null, 2) : "尚无 Judge 结果"} />
               </TabsContent>
-              <TabsContent value="config">
+              <TabsContent value="config" className="mt-3">
                 <CodeBlock value={config ? JSON.stringify(config, null, 2) : "配置尚未加载"} />
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
       </div>
-    </section>
+    </div>
   )
 }

@@ -1,17 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import {
-  AlertTriangle,
-  FlaskConical,
-  History,
-  KeyRound,
-  LogOut,
-  RefreshCcw,
-  Settings2,
-  Swords,
-} from "lucide-react"
+import { AlertTriangle, Download, KeyRound, LogOut, RefreshCcw } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -22,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AppShell, PageBody, PageHeader } from "@/components/AppShell"
 import {
   apiFetch,
   clearArenaAccessKey,
@@ -44,6 +35,25 @@ import type {
 import { BatchPage } from "@/BatchPage"
 import { ArenaPage } from "@/pages/ArenaPage"
 import { HistoryPage } from "@/pages/HistoryPage"
+
+const PAGE_TITLE: Record<ViewMode, { title: string; badge?: string; subtitle: string }> = {
+  arena: {
+    title: "竞技场对比",
+    badge: "A/B Compare",
+    subtitle:
+      "将同一条输入并发推送给两个 Agent，对比答案、过程事件与延迟，再交给 Judge 评分。",
+  },
+  batch: {
+    title: "稳定性测试",
+    badge: "Batch",
+    subtitle: "同一输入多次迭代，统计成功率、延迟分布与 Judge 一致性。",
+  },
+  history: {
+    title: "历史记录",
+    badge: "Replay",
+    subtitle: "所有对比与 Judge 评估结果，按时间倒序展示，支持回放。",
+  },
+}
 
 function App() {
   const [view, setView] = useState<ViewMode>("arena")
@@ -320,75 +330,51 @@ function App() {
     setError("")
   }
 
+  const agentCount = config ? 2 : 0
+  const isConfigured = Boolean(config?.agents.a.configured && config?.agents.b.configured)
+  const pageInfo = PAGE_TITLE[view]
+
   return (
-    <main className="min-h-screen bg-muted/30">
-      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5 px-4 py-5 lg:px-6">
-        <header className="flex flex-col gap-4 rounded-lg border bg-background px-5 py-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Swords className="size-5 text-primary" />
-              <h1 className="text-xl font-semibold tracking-normal">Agent Arena</h1>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              同一输入，并发调用两个 Agent，展示最终答案、公开过程事件，并用 Judge 评估。
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant={view === "arena" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setView("arena")}
-            >
-              <Swords className="size-4" />
-              竞技场
-            </Button>
-            <Button
-              type="button"
-              variant={view === "batch" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setView("batch")}
-            >
-              <FlaskConical className="size-4" />
-              稳定性测试
-            </Button>
-            <Button
-              type="button"
-              variant={view === "history" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setView("history")}
-            >
-              <History className="size-4" />
-              历史记录
-            </Button>
-            <Badge variant="outline" className="gap-1">
-              <Settings2 className="size-3" />
-              Agent timeout {config?.timeout_seconds ?? "--"}s
-            </Badge>
-            <Badge variant="outline">Judge timeout {config?.judge_timeout_seconds ?? "--"}s</Badge>
-            <Button type="button" variant="outline" size="sm" onClick={loadConfig}>
-              <RefreshCcw className="size-4" />
+    <AppShell
+      view={view}
+      onViewChange={setView}
+      configured={isConfigured}
+      agentCount={agentCount}
+      historyCount={historyItems.length || undefined}
+      onAccessKey={openAccessKeyPrompt}
+    >
+      <PageHeader
+        title={pageInfo.title}
+        badge={pageInfo.badge}
+        subtitle={pageInfo.subtitle}
+        actions={
+          <>
+            <Button type="button" variant="ghost" size="sm" onClick={loadConfig}>
+              <RefreshCcw className="size-3.5" />
               刷新配置
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={openAccessKeyPrompt}>
-              <KeyRound className="size-4" />
-              Access key
-            </Button>
-          </div>
-        </header>
-
+            {view === "arena" ? (
+              <Button type="button" variant="outline" size="sm" disabled>
+                <Download className="size-3.5" />
+                导出结果
+              </Button>
+            ) : null}
+          </>
+        }
+      />
+      <PageBody>
         {needsAccessKey ? (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <KeyRound className="size-4 text-primary" />
+          <Card className="mb-5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <KeyRound className="size-4 text-arena-accent" />
                 AgentArena 访问密钥
               </CardTitle>
               <CardDescription>
                 后端设置了 ARENA_API_KEY，浏览器请求需要携带同一个 Bearer token。
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-[18px]">
               <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={saveAccessKey}>
                 <div className="min-w-0 flex-1 space-y-2">
                   <Label htmlFor="arenaAccessKey">Access key</Label>
@@ -417,7 +403,7 @@ function App() {
         ) : null}
 
         {configError && !needsAccessKey ? (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="mb-5">
             <AlertTriangle className="size-4" />
             <AlertTitle>配置读取失败</AlertTitle>
             <AlertDescription>{configError}</AlertDescription>
@@ -462,8 +448,8 @@ function App() {
             onSelect={selectHistoryRun}
           />
         )}
-      </div>
-    </main>
+      </PageBody>
+    </AppShell>
   )
 }
 
