@@ -1,0 +1,2079 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent Arena · PAI 控制台原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============ Design tokens ============ */
+  :root {
+    --bg-page: #F4F5F7;
+    --bg-card: #FFFFFF;
+    --bg-subtle: #FAFAFB;
+    --bg-code: #0E1116;
+    --bg-topbar: #0E1116;
+    --bg-sidebar: #FFFFFF;
+    --bg-hover: #F2F3F5;
+
+    --border: #E6E8EC;
+    --border-strong: #D5D8DE;
+    --border-focus: #FF5A1F;
+
+    --text-primary: #0E1116;
+    --text-secondary: #4A525E;
+    --text-tertiary: #8A93A1;
+    --text-inverse: #FFFFFF;
+    --text-mute-on-dark: #98A0AE;
+
+    --accent: #FF5A1F;
+    --accent-hover: #E84818;
+    --accent-press: #C73A0E;
+    --accent-soft: #FFF1EC;
+    --accent-tint: #FFE2D5;
+
+    --success: #00A86B;
+    --success-soft: #E5F6EE;
+    --warning: #E89C1A;
+    --warning-soft: #FCF1DC;
+    --danger: #E11D48;
+    --danger-soft: #FDE6EA;
+    --info: #2A60E0;
+    --info-soft: #E4ECFD;
+    --neutral: #6B7280;
+    --neutral-soft: #EEF0F3;
+
+    --radius-sm: 4px;
+    --radius: 6px;
+    --radius-lg: 10px;
+    --shadow-sm: 0 1px 2px rgba(14,17,22,0.04);
+    --shadow-md: 0 4px 16px rgba(14,17,22,0.06);
+    --shadow-lg: 0 12px 40px rgba(14,17,22,0.08);
+
+    --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
+    --topbar-h: 52px;
+    --sidebar-w: 220px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  ::selection { background: var(--accent); color: white; }
+
+  /* ============ Top bar ============ */
+  .topbar {
+    position: fixed; inset: 0 0 auto 0;
+    height: var(--topbar-h);
+    background: var(--bg-topbar);
+    color: var(--text-inverse);
+    display: flex; align-items: center;
+    padding: 0 20px;
+    z-index: 50;
+    border-bottom: 1px solid #1A1F27;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 14px; letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    width: 26px; height: 26px;
+    background: linear-gradient(135deg, #FF5A1F 0%, #FF8A3D 100%);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 13px; color: white;
+    font-family: var(--font-mono);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .brand-name { font-weight: 700; }
+  .brand-sub {
+    color: var(--text-mute-on-dark);
+    font-weight: 400;
+    font-size: 12px;
+    margin-left: 4px;
+  }
+  .topbar-divider {
+    width: 1px; height: 18px; background: #2A323F;
+    margin: 0 16px;
+  }
+  .breadcrumb {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text-mute-on-dark); font-size: 12px;
+  }
+  .breadcrumb b { color: white; font-weight: 600; }
+  .breadcrumb-sep { color: #404a59; }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .topbar-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px;
+    background: #1A2029;
+    border: 1px solid #252C36;
+    color: #C2C9D4;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .topbar-pill:hover { background: #222933; color: white; }
+  .topbar-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #00D17C; box-shadow: 0 0 6px #00d17c80;
+  }
+  .topbar-icon {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    color: #C2C9D4;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .topbar-icon:hover { background: #1A2029; color: white; }
+  .topbar-user {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 10px 4px 4px;
+    background: #1A2029;
+    border-radius: 20px;
+    cursor: pointer;
+  }
+  .topbar-user:hover { background: #222933; }
+  .avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: linear-gradient(135deg, #FF5A1F, #C73A0E);
+    color: white; font-weight: 700; font-size: 11px;
+    display: grid; place-items: center;
+    font-family: var(--font-mono);
+  }
+  .topbar-user span { color: white; font-size: 12px; font-weight: 500; }
+
+  /* ============ Sidebar ============ */
+  .sidebar {
+    position: fixed;
+    top: var(--topbar-h); bottom: 0; left: 0;
+    width: var(--sidebar-w);
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px 0;
+  }
+  .nav-section {
+    padding: 0 12px;
+    margin-bottom: 18px;
+  }
+  .nav-label {
+    padding: 6px 12px;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius);
+    font-weight: 500;
+    font-size: 13px;
+    margin-bottom: 1px;
+    transition: background .12s, color .12s;
+    position: relative;
+  }
+  .nav-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .nav-item.active {
+    background: var(--accent-soft);
+    color: var(--accent-press);
+    font-weight: 600;
+  }
+  .nav-item.active::before {
+    content: "";
+    position: absolute; left: -12px; top: 8px; bottom: 8px;
+    width: 3px; background: var(--accent);
+    border-radius: 0 2px 2px 0;
+  }
+  .nav-item svg { flex-shrink: 0; }
+  .nav-item .nav-tag {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--border);
+    color: var(--text-tertiary);
+    font-weight: 600;
+    font-family: var(--font-mono);
+  }
+  .nav-item.active .nav-tag {
+    background: var(--accent-tint);
+    color: var(--accent-press);
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-family: var(--font-mono);
+  }
+
+  /* ============ Main layout ============ */
+  .main {
+    margin-top: var(--topbar-h);
+    margin-left: var(--sidebar-w);
+    min-height: calc(100vh - var(--topbar-h));
+  }
+
+  .page-header {
+    padding: 22px 32px 18px;
+    background: white;
+    border-bottom: 1px solid var(--border);
+  }
+  .page-title-row {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 6px;
+  }
+  .page-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  .page-title-badge {
+    padding: 2px 8px;
+    background: var(--accent-soft);
+    color: var(--accent-press);
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+  }
+  .page-subtitle {
+    color: var(--text-tertiary);
+    font-size: 13px;
+  }
+  .page-actions {
+    margin-left: auto;
+    display: flex; gap: 8px;
+  }
+  .page-header-flex {
+    display: flex; align-items: flex-start;
+  }
+  .page-header-left { flex: 1; min-width: 0; }
+
+  .page-body {
+    padding: 24px 32px 60px;
+  }
+
+  /* ============ Cards ============ */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .card-subtitle {
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+  .card-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .card-body { padding: 18px; }
+  .card-body.dense { padding: 0; }
+
+  /* ============ Buttons ============ */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-strong);
+    background: white;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all .12s;
+    line-height: 1.4;
+  }
+  .btn:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.18);
+  }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-ghost {
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border); }
+  .btn-danger { color: var(--danger); border-color: var(--border); }
+  .btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+  .btn-icon { padding: 6px 8px; }
+  .btn-sm { padding: 4px 8px; font-size: 11px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ============ Inputs ============ */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .label-hint {
+    font-weight: 400;
+    color: var(--text-tertiary);
+    font-size: 11px;
+  }
+  .input, .textarea, .select {
+    width: 100%;
+    background: white;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    color: var(--text-primary);
+    transition: border-color .1s, box-shadow .1s;
+    outline: none;
+  }
+  .input:focus, .textarea:focus, .select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(255,90,31,0.15);
+  }
+  .textarea {
+    resize: vertical; min-height: 80px;
+    font-family: var(--font-sans);
+    line-height: 1.55;
+  }
+  .input-mono { font-family: var(--font-mono); }
+
+  /* ============ Badges & status ============ */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    line-height: 1.4;
+    font-family: var(--font-mono);
+    letter-spacing: 0.01em;
+  }
+  .badge-success { background: var(--success-soft); color: #007E50; }
+  .badge-warning { background: var(--warning-soft); color: #966208; }
+  .badge-danger { background: var(--danger-soft); color: #B01438; }
+  .badge-info { background: var(--info-soft); color: #1A47B0; }
+  .badge-neutral { background: var(--neutral-soft); color: #4B5563; }
+  .badge-accent { background: var(--accent-soft); color: var(--accent-press); }
+  .badge-outline {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+  }
+
+  .status-dot {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-secondary);
+  }
+  .status-dot::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+  }
+  .status-dot.ok::before    { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .status-dot.warn::before  { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft); }
+  .status-dot.err::before   { background: var(--danger);  box-shadow: 0 0 0 3px var(--danger-soft);  }
+  .status-dot.run::before   {
+    background: var(--info); box-shadow: 0 0 0 3px var(--info-soft);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--info-soft); }
+    50% { box-shadow: 0 0 0 5px var(--info-soft); }
+  }
+
+  /* ============ Tabs ============ */
+  .tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 18px;
+    background: white;
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: flex; align-items: center; gap: 6px;
+    transition: color .12s;
+  }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active {
+    color: var(--accent-press);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+  .tab .badge { font-size: 10px; padding: 1px 5px; }
+
+  /* ============ Arena layout ============ */
+  .arena-grid {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 18px;
+  }
+
+  .agent-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+
+  /* ============ Agent card ============ */
+  .agent-card { display: flex; flex-direction: column; }
+  .agent-card .card-header { gap: 10px; }
+  .agent-id {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    font-family: var(--font-mono);
+    font-weight: 700; font-size: 13px;
+    color: white;
+  }
+  .agent-id.a { background: linear-gradient(135deg, #2A60E0 0%, #4F7DEA 100%); }
+  .agent-id.b { background: linear-gradient(135deg, #00A86B 0%, #1ED48D 100%); }
+  .agent-meta {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .metric-cell {
+    padding: 10px 14px;
+    border-right: 1px solid var(--border);
+  }
+  .metric-cell:last-child { border-right: none; }
+  .metric-label {
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+  .metric-value {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-top: 2px;
+    letter-spacing: -0.01em;
+  }
+  .metric-value.muted { color: var(--text-tertiary); }
+  .metric-value.danger { color: var(--danger); }
+  .metric-value-sub { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
+
+  .answer-area {
+    padding: 16px 18px;
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.65;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .answer-area p { margin: 0 0 10px; }
+  .answer-area code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--neutral-soft);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ============ Trace timeline ============ */
+  .timeline {
+    padding: 14px 18px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .tl-event {
+    display: grid;
+    grid-template-columns: 24px 80px 1fr auto;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border);
+    align-items: flex-start;
+  }
+  .tl-event:last-child { border-bottom: none; }
+  .tl-marker {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    color: white; font-size: 10px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+  .tl-marker.tool   { background: var(--info); }
+  .tl-marker.think  { background: #7C3AED; }
+  .tl-marker.msg    { background: var(--success); }
+  .tl-marker.err    { background: var(--danger); }
+  .tl-time {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    padding-top: 2px;
+  }
+  .tl-body { font-size: 12.5px; }
+  .tl-title { font-weight: 600; color: var(--text-primary); }
+  .tl-desc { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+  .tl-desc code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--neutral-soft);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text-primary);
+  }
+  .tl-dur {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    background: var(--bg-subtle);
+    padding: 2px 6px;
+    border-radius: 3px;
+    align-self: flex-start;
+    margin-top: 2px;
+  }
+
+  /* ============ Judge card ============ */
+  .judge-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .judge-side {
+    padding: 16px 20px;
+  }
+  .judge-side:first-child { border-right: 1px solid var(--border); }
+  .judge-side-title {
+    font-size: 12px; font-weight: 600; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .judge-list { font-size: 12.5px; color: var(--text-secondary); margin: 0; padding-left: 16px; }
+  .judge-list li { margin-bottom: 4px; line-height: 1.55; }
+  .judge-list li::marker { color: var(--text-tertiary); }
+  .judge-summary {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #FFFCFA 0%, white 100%);
+  }
+  .judge-winner {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .winner-badge {
+    padding: 4px 10px;
+    background: var(--accent);
+    color: white;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  .score-row {
+    display: grid;
+    grid-template-columns: 1fr 100px;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .score-bar {
+    height: 4px;
+    background: var(--neutral-soft);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+  .score-bar > span {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+    border-radius: 2px;
+  }
+  .score-bar.b > span {
+    background: linear-gradient(90deg, var(--success) 0%, #1ED48D 100%);
+  }
+  .score-num { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+
+  /* ============ Code block ============ */
+  pre.code {
+    background: var(--bg-code);
+    color: #C9D1D9;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-x: auto;
+    margin: 0;
+  }
+  pre.code .key { color: #79C0FF; }
+  pre.code .str { color: #A5D6A0; }
+  pre.code .num { color: #F2A36B; }
+  pre.code .com { color: #6E7681; font-style: italic; }
+
+  /* ============ Table ============ */
+  .table-wrap { overflow-x: auto; }
+  table.data {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  table.data th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--bg-subtle);
+    color: var(--text-tertiary);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.data td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    vertical-align: middle;
+  }
+  table.data tr:last-child td { border-bottom: none; }
+  table.data tr.row-expand {
+    background: var(--bg-subtle);
+  }
+  table.data tr.row-expand td {
+    padding: 16px 22px;
+  }
+  table.data tbody tr:hover:not(.row-expand) { background: var(--bg-hover); cursor: pointer; }
+  td.mono { font-family: var(--font-mono); font-size: 12px; }
+  td.num  { font-family: var(--font-mono); text-align: right; }
+
+  .caret {
+    display: inline-block;
+    transition: transform .15s;
+    color: var(--text-tertiary);
+  }
+  .caret.open { transform: rotate(90deg); color: var(--accent); }
+
+  /* ============ Progress ============ */
+  .progress {
+    height: 8px;
+    background: var(--neutral-soft);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .progress > span {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--accent) 0%, #FF8A3D 100%);
+    border-radius: 4px;
+    transition: width .2s;
+  }
+
+  /* ============ Stat cards ============ */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: white;
+    overflow: hidden;
+  }
+  .stat {
+    padding: 14px 18px;
+    border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+  .stat-label {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .stat-value {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-top: 4px;
+    letter-spacing: -0.015em;
+  }
+  .stat-delta {
+    font-size: 11px;
+    margin-top: 2px;
+    font-family: var(--font-mono);
+  }
+  .stat-delta.up   { color: var(--success); }
+  .stat-delta.down { color: var(--danger); }
+
+  /* ============ History sidebar list ============ */
+  .history-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 18px;
+  }
+  .history-list {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .history-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .history-item:hover { background: var(--bg-hover); }
+  .history-item.active {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding-left: 11px;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-top {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+  }
+  .history-time {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+  .history-preview {
+    font-size: 12.5px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .history-meta {
+    display: flex; gap: 10px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+
+  /* ============ Misc utilities ============ */
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  .col-tight { display: flex; flex-direction: column; gap: 8px; }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .mt-12 { margin-top: 12px; } .mt-16 { margin-top: 16px; } .mt-20 { margin-top: 20px; }
+  .mb-0 { margin-bottom: 0; }
+  .text-mute { color: var(--text-tertiary); }
+  .text-sm { font-size: 11.5px; }
+  .mono { font-family: var(--font-mono); }
+  .hidden { display: none !important; }
+
+  /* Inline mini stat */
+  .kv {
+    display: inline-flex; gap: 5px; align-items: baseline;
+    font-size: 12px;
+  }
+  .kv .k { color: var(--text-tertiary); }
+  .kv .v { color: var(--text-primary); font-weight: 600; font-family: var(--font-mono); }
+
+  /* Region pill */
+  .region {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  /* Inconsistency callout */
+  .callout {
+    border: 1px solid var(--warning);
+    background: var(--warning-soft);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    font-size: 12.5px;
+    color: #6B4408;
+  }
+  .callout-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* Inline trace chip */
+  .chip-row { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  /* Section heading inside body */
+  .section-heading {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 22px 0 8px;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 18px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+  .toolbar .spacer { flex: 1; }
+  .search {
+    position: relative;
+    flex: 0 1 280px;
+  }
+  .search input {
+    padding-left: 28px;
+  }
+  .search svg {
+    position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+    color: var(--text-tertiary);
+  }
+
+  /* Filter chip */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 9px;
+    background: white;
+    border: 1px solid var(--border-strong);
+    border-radius: 100px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .chip:hover { border-color: var(--text-tertiary); }
+  .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-press); font-weight: 600; }
+
+  /* Switch-like segmented */
+  .segment {
+    display: inline-flex;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2px;
+  }
+  .segment button {
+    padding: 5px 10px;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .segment button.active {
+    background: white;
+    color: var(--text-primary);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 0 0 1px var(--border);
+    font-weight: 600;
+  }
+
+  /* SVG icon sizing */
+  .icon { width: 14px; height: 14px; flex-shrink: 0; }
+  .icon-lg { width: 16px; height: 16px; }
+
+</style>
+</head>
+<body>
+
+<!-- ================= TOP BAR ================= -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">A</div>
+    <span class="brand-name">Agent Arena</span>
+    <span class="brand-sub">/ PAI 控制台</span>
+  </div>
+  <div class="topbar-divider"></div>
+  <div class="breadcrumb">
+    <span>智能体平台</span>
+    <span class="breadcrumb-sep">/</span>
+    <span>评测中心</span>
+    <span class="breadcrumb-sep">/</span>
+    <b id="bc-page">竞技场对比</b>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-pill">
+      <span class="dot"></span>
+      <span>cn-hangzhou</span>
+    </div>
+    <div class="topbar-pill" title="Agent A 端点状态">
+      <span class="dot"></span>
+      <span>2 Agents online</span>
+    </div>
+    <div class="topbar-icon" title="文档">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11H7a4 4 0 0 0 0 8h4M15 11h2a4 4 0 0 1 0 8h-4M8 15h8"/></svg>
+    </div>
+    <div class="topbar-icon" title="通知">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+    </div>
+    <div class="topbar-user">
+      <div class="avatar">XW</div>
+      <span>xiaowen.l</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SIDEBAR ================= -->
+<aside class="sidebar">
+  <div class="nav-section">
+    <div class="nav-label">评测</div>
+    <div class="nav-item active" data-page="arena" onclick="switchPage('arena')">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h6l3-9 4 18 3-9h4"/></svg>
+      <span>竞技场对比</span>
+      <span class="nav-tag">A/B</span>
+    </div>
+    <div class="nav-item" data-page="batch" onclick="switchPage('batch')">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>稳定性测试</span>
+      <span class="nav-tag">N×</span>
+    </div>
+    <div class="nav-item" data-page="history" onclick="switchPage('history')">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-9 9z"/><path d="M3 12h4M12 3v4M12 12l4 2"/></svg>
+      <span>历史记录</span>
+      <span class="nav-tag">128</span>
+    </div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">资源</div>
+    <div class="nav-item">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      <span>Agent 端点</span>
+    </div>
+    <div class="nav-item">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+      <span>评测集</span>
+    </div>
+    <div class="nav-item">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Judge 模型</span>
+    </div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">运维</div>
+    <div class="nav-item">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg>
+      <span>调用日志</span>
+    </div>
+    <div class="nav-item">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+      <span>健康监控</span>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    v0.5.2 · build a1c4f9d
+  </div>
+</aside>
+
+<!-- ================= MAIN ================= -->
+<main class="main">
+
+  <!-- ============ ARENA PAGE ============ -->
+  <section id="page-arena" class="page">
+    <div class="page-header">
+      <div class="page-header-flex">
+        <div class="page-header-left">
+          <div class="page-title-row">
+            <h1 class="page-title">竞技场对比</h1>
+            <span class="page-title-badge">A/B Compare</span>
+          </div>
+          <div class="page-subtitle">将同一条输入并发推送给两个 Agent，对比答案、过程事件与延迟，再交给 Judge 评分。</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            导入预设
+          </button>
+          <button class="btn">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            导出结果
+          </button>
+          <button class="btn btn-primary" onclick="simulateRun()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            发起对比
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="arena-grid">
+
+        <!-- LEFT: input config -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">请求配置</h3>
+            <div class="card-actions">
+              <button class="btn btn-ghost btn-sm">清空</button>
+            </div>
+          </div>
+          <div class="card-body col-tight" style="gap:14px;">
+            <div class="field">
+              <label class="label">输入 Query <span class="label-hint">user prompt</span></label>
+              <textarea class="textarea" rows="5">请基于公开资料对比 RAG 中常用的稠密检索与稀疏检索的优劣，给出一个选型建议。</textarea>
+            </div>
+            <div class="field">
+              <label class="label">System Prompt <span class="label-hint">可选</span></label>
+              <textarea class="textarea" rows="3">你是一个严谨的技术分析师，回答需要带依据，并且明确说出取舍。</textarea>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="label">Temperature</label>
+                <input class="input input-mono" value="0.20" />
+              </div>
+              <div class="field">
+                <label class="label">Max tokens</label>
+                <input class="input input-mono" value="2048" />
+              </div>
+            </div>
+
+            <div class="section-heading" style="margin-top:8px;">Judge 配置</div>
+            <div class="field">
+              <label class="label">Judge 模型</label>
+              <select class="select">
+                <option>gpt-4.1-mini · OpenAI</option>
+                <option>claude-opus-4-7 · Anthropic</option>
+                <option>qwen3-72b-instruct · DashScope</option>
+              </select>
+            </div>
+            <div class="row" style="gap:6px; margin-top:4px;">
+              <button class="btn" style="flex:1">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                运行 Judge
+              </button>
+              <button class="btn btn-ghost btn-icon" title="设置">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6M7 12H1m17.07-7.07-4.24 4.24M9.17 14.83l-4.24 4.24m14.14 0-4.24-4.24M9.17 9.17 4.93 4.93"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: agent results + judge -->
+        <div class="col">
+
+          <!-- Two agent cards -->
+          <div class="agent-cards">
+
+            <!-- Agent A -->
+            <div class="card agent-card">
+              <div class="card-header">
+                <div class="agent-id a">A</div>
+                <div>
+                  <div class="card-title">Hermes Agent</div>
+                  <div class="agent-meta">
+                    <span>hermes-agent</span>
+                    <span>·</span>
+                    <span>responses</span>
+                  </div>
+                </div>
+                <div class="card-actions">
+                  <span class="status-dot ok">已完成</span>
+                  <button class="btn btn-ghost btn-icon" title="复制 endpoint">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="metric-grid">
+                <div class="metric-cell">
+                  <div class="metric-label">延迟</div>
+                  <div class="metric-value">3.42<span class="metric-value-sub">s</span></div>
+                </div>
+                <div class="metric-cell">
+                  <div class="metric-label">工具调用</div>
+                  <div class="metric-value">4</div>
+                </div>
+                <div class="metric-cell">
+                  <div class="metric-label">失败</div>
+                  <div class="metric-value muted">0</div>
+                </div>
+                <div class="metric-cell">
+                  <div class="metric-label">事件</div>
+                  <div class="metric-value">17</div>
+                </div>
+              </div>
+
+              <div class="tabs">
+                <div class="tab active" onclick="switchTab(this, 'a-answer')">答案</div>
+                <div class="tab" onclick="switchTab(this, 'a-trace')">过程 <span class="badge badge-neutral">17</span></div>
+                <div class="tab" onclick="switchTab(this, 'a-raw')">原始 JSON</div>
+              </div>
+
+              <div id="a-answer" class="answer-area">
+                <p><b>选型建议：先用混合检索打底，再根据召回质量决定权重。</b></p>
+                <p>稠密检索 (e.g. <code>bge-large-zh</code>) 在语义相近但表述差异大的场景上明显占优，特别是 FAQ、对话历史召回。</p>
+                <p>稀疏检索 (<code>BM25</code>、<code>SPLADE</code>) 在专有名词、代码片段、版本号召回上保持稳定，并且能给出明确的命中关键词，便于排查 badcase。</p>
+                <p>实践中较稳的方案是 <code>BM25 + dense top-k</code> 再用一个轻量 reranker（<code>bge-reranker-base</code>）做合并，常见组合权重 0.4 / 0.6。</p>
+              </div>
+
+              <div id="a-trace" class="timeline hidden">
+                <div class="tl-event">
+                  <div class="tl-marker think">T</div>
+                  <div class="tl-time">+0.05s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">reasoning.available</div>
+                    <div class="tl-desc">规划：先查检索器对比文献，再总结取舍。</div>
+                  </div>
+                  <div class="tl-dur">120ms</div>
+                </div>
+                <div class="tl-event">
+                  <div class="tl-marker tool">⚙</div>
+                  <div class="tl-time">+0.18s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">tool.started · <code>web_search</code></div>
+                    <div class="tl-desc">query=<code>"dense vs sparse retrieval tradeoff"</code></div>
+                  </div>
+                  <div class="tl-dur">820ms</div>
+                </div>
+                <div class="tl-event">
+                  <div class="tl-marker tool">⚙</div>
+                  <div class="tl-time">+1.05s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">tool.completed · <code>web_search</code></div>
+                    <div class="tl-desc">返回 7 条结果，命中 paper / blog 各 3 篇</div>
+                  </div>
+                  <div class="tl-dur">820ms</div>
+                </div>
+                <div class="tl-event">
+                  <div class="tl-marker tool">⚙</div>
+                  <div class="tl-time">+1.12s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">tool.started · <code>fetch_page</code></div>
+                    <div class="tl-desc">url=<code>arxiv.org/abs/2107.05720</code></div>
+                  </div>
+                  <div class="tl-dur">680ms</div>
+                </div>
+                <div class="tl-event">
+                  <div class="tl-marker msg">✓</div>
+                  <div class="tl-time">+3.42s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">run.completed</div>
+                    <div class="tl-desc">finish_reason=<code>stop</code> · 输出 642 token</div>
+                  </div>
+                  <div class="tl-dur">—</div>
+                </div>
+              </div>
+
+              <div id="a-raw" class="answer-area hidden">
+<pre class="code"><span class="key">"id"</span>: <span class="str">"resp_01JE7Y3"</span>,
+<span class="key">"model"</span>: <span class="str">"hermes-agent"</span>,
+<span class="key">"usage"</span>: { <span class="key">"input"</span>: <span class="num">1284</span>, <span class="key">"output"</span>: <span class="num">642</span> },
+<span class="key">"finish_reason"</span>: <span class="str">"stop"</span>,
+<span class="key">"trace_supported"</span>: <span class="num">true</span></pre>
+              </div>
+            </div>
+
+            <!-- Agent B -->
+            <div class="card agent-card">
+              <div class="card-header">
+                <div class="agent-id b">B</div>
+                <div>
+                  <div class="card-title">Mini Agent</div>
+                  <div class="agent-meta">
+                    <span>mini-agent</span>
+                    <span>·</span>
+                    <span>responses</span>
+                  </div>
+                </div>
+                <div class="card-actions">
+                  <span class="status-dot ok">已完成</span>
+                  <button class="btn btn-ghost btn-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="metric-grid">
+                <div class="metric-cell">
+                  <div class="metric-label">延迟</div>
+                  <div class="metric-value">2.18<span class="metric-value-sub">s</span></div>
+                </div>
+                <div class="metric-cell">
+                  <div class="metric-label">工具调用</div>
+                  <div class="metric-value">2</div>
+                </div>
+                <div class="metric-cell">
+                  <div class="metric-label">失败</div>
+                  <div class="metric-value danger">1</div>
+                </div>
+                <div class="metric-cell">
+                  <div class="metric-label">事件</div>
+                  <div class="metric-value">9</div>
+                </div>
+              </div>
+
+              <div class="tabs">
+                <div class="tab active" onclick="switchTab(this, 'b-answer')">答案</div>
+                <div class="tab" onclick="switchTab(this, 'b-trace')">过程 <span class="badge badge-neutral">9</span></div>
+                <div class="tab" onclick="switchTab(this, 'b-raw')">原始 JSON</div>
+              </div>
+
+              <div id="b-answer" class="answer-area">
+                <p>稠密检索利用向量空间相似度，能够捕捉语义相近但表述不同的查询；稀疏检索基于词频，命中关键词命中率高，对低资源语言更稳。</p>
+                <p>结论：如果你的语料以中文 FAQ 为主，可以只用稠密检索，加 reranker。如果是源代码或者长尾命名实体多，建议混合检索。</p>
+                <p><i>注：调用 <code>web_search</code> 时一次超时，已自动重试一次成功。</i></p>
+              </div>
+
+              <div id="b-trace" class="timeline hidden">
+                <div class="tl-event">
+                  <div class="tl-marker tool">⚙</div>
+                  <div class="tl-time">+0.10s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">tool.started · <code>web_search</code></div>
+                    <div class="tl-desc">query=<code>"dense retrieval"</code></div>
+                  </div>
+                  <div class="tl-dur">2500ms</div>
+                </div>
+                <div class="tl-event">
+                  <div class="tl-marker err">!</div>
+                  <div class="tl-time">+2.62s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">tool.failed · <code>web_search</code></div>
+                    <div class="tl-desc">timeout after 2500ms · 自动重试</div>
+                  </div>
+                  <div class="tl-dur">—</div>
+                </div>
+                <div class="tl-event">
+                  <div class="tl-marker tool">⚙</div>
+                  <div class="tl-time">+2.65s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">tool.completed · <code>web_search</code></div>
+                    <div class="tl-desc">返回 4 条结果</div>
+                  </div>
+                  <div class="tl-dur">410ms</div>
+                </div>
+                <div class="tl-event">
+                  <div class="tl-marker msg">✓</div>
+                  <div class="tl-time">+2.18s</div>
+                  <div class="tl-body">
+                    <div class="tl-title">run.completed</div>
+                    <div class="tl-desc">finish_reason=<code>stop</code> · 输出 318 token</div>
+                  </div>
+                  <div class="tl-dur">—</div>
+                </div>
+              </div>
+
+              <div id="b-raw" class="answer-area hidden">
+<pre class="code"><span class="key">"id"</span>: <span class="str">"resp_01JE7YH"</span>,
+<span class="key">"model"</span>: <span class="str">"mini-agent"</span>,
+<span class="key">"usage"</span>: { <span class="key">"input"</span>: <span class="num">1284</span>, <span class="key">"output"</span>: <span class="num">318</span> },
+<span class="key">"finish_reason"</span>: <span class="str">"stop"</span></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Judge card -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Judge 评估</h3>
+              <span class="badge badge-neutral mono">gpt-4.1-mini</span>
+              <div class="card-actions">
+                <span class="text-mute text-sm">12s ago</span>
+                <button class="btn btn-sm">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-9 9z"/><path d="M3 12h4M12 3v4"/></svg>
+                  重跑
+                </button>
+              </div>
+            </div>
+
+            <div class="judge-summary">
+              <div class="judge-winner">
+                <span class="winner-badge">WINNER · A</span>
+                <span>Hermes Agent 在证据使用与完整性上更胜一筹，但延迟高于 B。</span>
+              </div>
+
+              <div class="mt-12" style="display:grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div>
+                  <div class="text-sm text-mute" style="margin-bottom:6px; font-weight:600; color: var(--text-secondary);">Agent A 维度得分</div>
+                  <div class="score-row"><span>指令遵循</span><div class="row" style="gap:6px;"><div class="score-bar" style="flex:1;"><span style="width:90%;"></span></div><span class="score-num">9.0</span></div></div>
+                  <div class="score-row"><span>正确性</span><div class="row" style="gap:6px;"><div class="score-bar" style="flex:1;"><span style="width:88%;"></span></div><span class="score-num">8.8</span></div></div>
+                  <div class="score-row"><span>完整性</span><div class="row" style="gap:6px;"><div class="score-bar" style="flex:1;"><span style="width:92%;"></span></div><span class="score-num">9.2</span></div></div>
+                  <div class="score-row"><span>工具效率</span><div class="row" style="gap:6px;"><div class="score-bar" style="flex:1;"><span style="width:75%;"></span></div><span class="score-num">7.5</span></div></div>
+                  <div class="score-row"><span>清晰度</span><div class="row" style="gap:6px;"><div class="score-bar" style="flex:1;"><span style="width:85%;"></span></div><span class="score-num">8.5</span></div></div>
+                </div>
+                <div>
+                  <div class="text-sm text-mute" style="margin-bottom:6px; font-weight:600; color: var(--text-secondary);">Agent B 维度得分</div>
+                  <div class="score-row"><span>指令遵循</span><div class="row" style="gap:6px;"><div class="score-bar b" style="flex:1;"><span style="width:80%;"></span></div><span class="score-num">8.0</span></div></div>
+                  <div class="score-row"><span>正确性</span><div class="row" style="gap:6px;"><div class="score-bar b" style="flex:1;"><span style="width:75%;"></span></div><span class="score-num">7.5</span></div></div>
+                  <div class="score-row"><span>完整性</span><div class="row" style="gap:6px;"><div class="score-bar b" style="flex:1;"><span style="width:62%;"></span></div><span class="score-num">6.2</span></div></div>
+                  <div class="score-row"><span>工具效率</span><div class="row" style="gap:6px;"><div class="score-bar b" style="flex:1;"><span style="width:60%;"></span></div><span class="score-num">6.0</span></div></div>
+                  <div class="score-row"><span>清晰度</span><div class="row" style="gap:6px;"><div class="score-bar b" style="flex:1;"><span style="width:88%;"></span></div><span class="score-num">8.8</span></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="judge-grid">
+              <div class="judge-side">
+                <div class="judge-side-title">
+                  <div class="agent-id a" style="width:18px;height:18px;font-size:10px;">A</div>
+                  Hermes Agent
+                </div>
+                <div class="text-sm" style="color: var(--success); font-weight:600;">优势</div>
+                <ul class="judge-list">
+                  <li>明确给出权重数字 (0.4/0.6) 与 reranker 选型</li>
+                  <li>覆盖了 BM25 / SPLADE / dense 三类的差异</li>
+                  <li>引用结构化、可直接执行</li>
+                </ul>
+                <div class="text-sm mt-12" style="color: var(--danger); font-weight:600;">劣势</div>
+                <ul class="judge-list">
+                  <li>未说明数据集规模对选型的影响</li>
+                  <li>延迟略高，工具效率可优化</li>
+                </ul>
+              </div>
+              <div class="judge-side">
+                <div class="judge-side-title">
+                  <div class="agent-id b" style="width:18px;height:18px;font-size:10px;">B</div>
+                  Mini Agent
+                </div>
+                <div class="text-sm" style="color: var(--success); font-weight:600;">优势</div>
+                <ul class="judge-list">
+                  <li>响应快，输出简洁</li>
+                  <li>正确指出了工具调用失败已经被处理</li>
+                </ul>
+                <div class="text-sm mt-12" style="color: var(--danger); font-weight:600;">劣势</div>
+                <ul class="judge-list">
+                  <li>缺少具体方案与权重</li>
+                  <li>没有覆盖稀疏检索内部的细分（BM25/SPLADE）</li>
+                  <li>对源代码场景描述不够具体</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Debug -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Debug 信息</h3>
+              <span class="card-subtitle">折叠原始请求、配置与中间产物</span>
+              <div class="card-actions">
+                <button class="btn btn-ghost btn-sm">展开全部</button>
+              </div>
+            </div>
+            <div class="tabs">
+              <div class="tab active">Request payload</div>
+              <div class="tab">Compare response</div>
+              <div class="tab">Judge JSON</div>
+              <div class="tab">Config snapshot</div>
+            </div>
+            <div class="card-body">
+<pre class="code"><span class="com">// POST /api/compare</span>
+{
+  <span class="key">"input"</span>:    <span class="str">"请基于公开资料对比 RAG 中常用的稠密..."</span>,
+  <span class="key">"system"</span>:   <span class="str">"你是一个严谨的技术分析师..."</span>,
+  <span class="key">"temperature"</span>: <span class="num">0.2</span>,
+  <span class="key">"max_tokens"</span>:  <span class="num">2048</span>,
+  <span class="key">"targets"</span>: [<span class="str">"a"</span>, <span class="str">"b"</span>]
+}</pre>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BATCH PAGE ============ -->
+  <section id="page-batch" class="page hidden">
+    <div class="page-header">
+      <div class="page-header-flex">
+        <div class="page-header-left">
+          <div class="page-title-row">
+            <h1 class="page-title">稳定性测试</h1>
+            <span class="page-title-badge">Batch · N×</span>
+          </div>
+          <div class="page-subtitle">用同一条请求对单个 Agent 或两边并发跑 N 次，看成功率、延迟分布与答案一致性。</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            导出 JSON
+          </button>
+          <button class="btn btn-danger">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
+            取消运行
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div style="display:grid; grid-template-columns: 320px 1fr; gap: 18px;">
+
+        <!-- Config -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">运行配置</h3>
+          </div>
+          <div class="card-body col-tight" style="gap:14px;">
+            <div class="field">
+              <label class="label">目标 Agent</label>
+              <div class="segment" style="width:100%; display:grid; grid-template-columns: 1fr 1fr 1fr;">
+                <button>仅 A</button>
+                <button>仅 B</button>
+                <button class="active">A + B</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label">请求体模式</label>
+              <div class="segment" style="width:100%; display:grid; grid-template-columns: 1fr 1fr;">
+                <button class="active">Form</button>
+                <button>Raw JSON</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label">Input</label>
+              <textarea class="textarea" rows="3">请用三句话介绍 PAI-RAG。</textarea>
+            </div>
+            <div class="field">
+              <label class="label">System</label>
+              <textarea class="textarea" rows="2">你是一个严谨的助手。</textarea>
+            </div>
+            <div class="field-row">
+              <div class="field"><label class="label">Temperature</label><input class="input input-mono" value="0.7" /></div>
+              <div class="field"><label class="label">Max tokens</label><input class="input input-mono" value="800" /></div>
+            </div>
+
+            <div class="field-row" style="margin-top:4px;">
+              <div class="field">
+                <label class="label">Iterations</label>
+                <input class="input input-mono" value="50" />
+              </div>
+              <div class="field">
+                <label class="label">Concurrency</label>
+                <input class="input input-mono" value="4" />
+              </div>
+            </div>
+
+            <div class="section-heading" style="margin-top:8px;">断言 (assertion)</div>
+            <div class="field">
+              <label class="label">类型</label>
+              <select class="select">
+                <option>substring</option>
+                <option>regex</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label">表达式</label>
+              <input class="input input-mono" value="PAI-RAG" />
+            </div>
+
+            <button class="btn btn-primary" style="margin-top:6px; justify-content:center;">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              开始 Batch
+            </button>
+          </div>
+        </div>
+
+        <!-- Right side: progress + stats + table -->
+        <div class="col">
+
+          <!-- Progress card -->
+          <div class="card">
+            <div class="card-body">
+              <div class="row-between" style="margin-bottom:10px;">
+                <div class="row" style="gap:10px;">
+                  <span class="status-dot run">运行中</span>
+                  <span class="text-sm text-mute mono">batch_id: 01JE7YK · started 00:14 ago</span>
+                </div>
+                <div class="row" style="gap:14px;">
+                  <span class="kv"><span class="k">完成</span><span class="v">63 / 100</span></span>
+                  <span class="kv"><span class="k">in-flight</span><span class="v">4</span></span>
+                  <span class="kv"><span class="k">ETA</span><span class="v">~22s</span></span>
+                </div>
+              </div>
+              <div class="progress"><span style="width:63%"></span></div>
+            </div>
+          </div>
+
+          <!-- Summary stat row (Agent A) -->
+          <div class="card">
+            <div class="card-header">
+              <div class="agent-id a">A</div>
+              <div>
+                <div class="card-title">Hermes Agent</div>
+                <div class="agent-meta"><span>hermes-agent</span> · <span>50 runs · concurrency 4</span></div>
+              </div>
+              <div class="card-actions">
+                <span class="badge badge-success">成功率 96%</span>
+                <span class="badge badge-info">断言通过 92%</span>
+              </div>
+            </div>
+            <div class="stat-row" style="border-radius:0; border:none; border-bottom:1px solid var(--border);">
+              <div class="stat">
+                <div class="stat-label">P50 延迟</div>
+                <div class="stat-value">2.84<span style="font-size:13px; color:var(--text-tertiary);">s</span></div>
+                <div class="stat-delta down">+0.18s vs 上次</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">P90 延迟</div>
+                <div class="stat-value">4.61<span style="font-size:13px; color:var(--text-tertiary);">s</span></div>
+                <div class="stat-delta down">+0.40s</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">输出长度 avg</div>
+                <div class="stat-value">412<span style="font-size:13px; color:var(--text-tertiary);">tok</span></div>
+                <div class="stat-delta up">-23 tok</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">平均工具调用</div>
+                <div class="stat-value">3.2</div>
+                <div class="stat-delta up">-0.4</div>
+              </div>
+            </div>
+            <div class="card-body" style="background: var(--bg-subtle);">
+              <div class="row" style="gap:16px; flex-wrap:wrap;">
+                <span class="kv"><span class="k">finish_reason</span><span class="v">stop ×48 · length ×2</span></span>
+                <span class="kv"><span class="k">指纹簇</span><span class="v">3</span></span>
+                <span class="kv"><span class="k">主簇覆盖</span><span class="v">76%</span></span>
+                <span class="kv"><span class="k">失败工具</span><span class="v">1</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary stat row (Agent B) -->
+          <div class="card">
+            <div class="card-header">
+              <div class="agent-id b">B</div>
+              <div>
+                <div class="card-title">Mini Agent</div>
+                <div class="agent-meta"><span>mini-agent</span> · <span>50 runs · concurrency 4</span></div>
+              </div>
+              <div class="card-actions">
+                <span class="badge badge-warning">成功率 88%</span>
+                <span class="badge badge-danger">断言通过 60%</span>
+              </div>
+            </div>
+            <div class="stat-row" style="border-radius:0; border:none; border-bottom:1px solid var(--border);">
+              <div class="stat">
+                <div class="stat-label">P50 延迟</div>
+                <div class="stat-value">1.76<span style="font-size:13px; color:var(--text-tertiary);">s</span></div>
+                <div class="stat-delta up">-0.05s</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">P90 延迟</div>
+                <div class="stat-value">2.42<span style="font-size:13px; color:var(--text-tertiary);">s</span></div>
+                <div class="stat-delta up">-0.12s</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">输出长度 avg</div>
+                <div class="stat-value">186<span style="font-size:13px; color:var(--text-tertiary);">tok</span></div>
+                <div class="stat-delta up">-12 tok</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">平均工具调用</div>
+                <div class="stat-value">1.4</div>
+                <div class="stat-delta down">+0.1</div>
+              </div>
+            </div>
+            <div class="card-body" style="background: var(--bg-subtle);">
+              <div class="row" style="gap:16px; flex-wrap:wrap;">
+                <span class="kv"><span class="k">finish_reason</span><span class="v">stop ×44 · error ×6</span></span>
+                <span class="kv"><span class="k">指纹簇</span><span class="v">7</span></span>
+                <span class="kv"><span class="k">主簇覆盖</span><span class="v">38%</span></span>
+                <span class="kv"><span class="k">失败工具</span><span class="v">4</span></span>
+              </div>
+              <div class="callout mt-12">
+                <div class="callout-title">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  一致性 Judge 检测到差异
+                </div>
+                Agent B 在 38% 的运行中回答 "PAI-RAG 是一个 LLM 框架"，与其它运行 "PAI-RAG 是 RAG 服务"
+                语义不一致。建议先检查 Mini Agent 的 system prompt 与 temperature 设置。
+              </div>
+            </div>
+          </div>
+
+          <!-- Execution table -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">执行明细</h3>
+              <span class="card-subtitle">100 条记录</span>
+              <div class="card-actions">
+                <span class="chip active">全部</span>
+                <span class="chip">仅失败</span>
+                <span class="chip">断言未通过</span>
+              </div>
+            </div>
+            <div class="toolbar">
+              <div class="search">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input class="input" placeholder="按 hash / 错误关键字过滤…" />
+              </div>
+              <span class="spacer"></span>
+              <button class="btn btn-ghost btn-sm">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                列设置
+              </button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th style="width:24px;"></th>
+                    <th style="width:46px;">#</th>
+                    <th>Agent</th>
+                    <th>状态</th>
+                    <th style="text-align:right;">延迟</th>
+                    <th style="text-align:right;">长度</th>
+                    <th>finish</th>
+                    <th>fingerprint</th>
+                    <th>断言</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="batch-table">
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">012</td>
+                    <td><div class="row"><div class="agent-id a" style="width:18px;height:18px;font-size:10px;">A</div> Hermes</div></td>
+                    <td><span class="status-dot ok">ok</span></td>
+                    <td class="num">2.81s</td>
+                    <td class="num">418</td>
+                    <td class="mono">stop</td>
+                    <td class="mono">8f2a91c4</td>
+                    <td><span class="badge badge-success">PASS</span></td>
+                    <td></td>
+                  </tr>
+                  <tr class="row-expand hidden">
+                    <td colspan="10">
+<pre class="code"><span class="com">// item #012 · agent A · 2.81s</span>
+<span class="key">"content"</span>: <span class="str">"PAI-RAG 是阿里云 PAI 平台上的 RAG 服务子产品，封装了..."</span>,
+<span class="key">"trace_summary"</span>: { <span class="key">"tools"</span>: <span class="num">3</span>, <span class="key">"failed"</span>: <span class="num">0</span> },
+<span class="key">"finish_reason"</span>: <span class="str">"stop"</span></pre>
+                    </td>
+                  </tr>
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">013</td>
+                    <td><div class="row"><div class="agent-id b" style="width:18px;height:18px;font-size:10px;">B</div> Mini</div></td>
+                    <td><span class="status-dot ok">ok</span></td>
+                    <td class="num">1.65s</td>
+                    <td class="num">192</td>
+                    <td class="mono">stop</td>
+                    <td class="mono">d7b4e0a1</td>
+                    <td><span class="badge badge-success">PASS</span></td>
+                    <td></td>
+                  </tr>
+                  <tr class="row-expand hidden">
+                    <td colspan="10">
+<pre class="code"><span class="com">// item #013 · agent B · 1.65s</span>
+<span class="key">"content"</span>: <span class="str">"PAI-RAG 是一个由 PAI 团队维护的 RAG 服务..."</span>,
+<span class="key">"trace_summary"</span>: { <span class="key">"tools"</span>: <span class="num">1</span>, <span class="key">"failed"</span>: <span class="num">0</span> }</pre>
+                    </td>
+                  </tr>
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">014</td>
+                    <td><div class="row"><div class="agent-id b" style="width:18px;height:18px;font-size:10px;">B</div> Mini</div></td>
+                    <td><span class="status-dot warn">degraded</span></td>
+                    <td class="num">3.42s</td>
+                    <td class="num">98</td>
+                    <td class="mono">length</td>
+                    <td class="mono">2c9f80be</td>
+                    <td><span class="badge badge-danger">FAIL</span></td>
+                    <td></td>
+                  </tr>
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">015</td>
+                    <td><div class="row"><div class="agent-id a" style="width:18px;height:18px;font-size:10px;">A</div> Hermes</div></td>
+                    <td><span class="status-dot ok">ok</span></td>
+                    <td class="num">2.62s</td>
+                    <td class="num">405</td>
+                    <td class="mono">stop</td>
+                    <td class="mono">8f2a91c4</td>
+                    <td><span class="badge badge-success">PASS</span></td>
+                    <td></td>
+                  </tr>
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">016</td>
+                    <td><div class="row"><div class="agent-id b" style="width:18px;height:18px;font-size:10px;">B</div> Mini</div></td>
+                    <td><span class="status-dot err">failed</span></td>
+                    <td class="num">5.00s</td>
+                    <td class="num">0</td>
+                    <td class="mono">timeout</td>
+                    <td class="mono">—</td>
+                    <td><span class="badge badge-neutral">N/A</span></td>
+                    <td></td>
+                  </tr>
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">017</td>
+                    <td><div class="row"><div class="agent-id a" style="width:18px;height:18px;font-size:10px;">A</div> Hermes</div></td>
+                    <td><span class="status-dot ok">ok</span></td>
+                    <td class="num">3.15s</td>
+                    <td class="num">432</td>
+                    <td class="mono">stop</td>
+                    <td class="mono">8f2a91c4</td>
+                    <td><span class="badge badge-success">PASS</span></td>
+                    <td></td>
+                  </tr>
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">018</td>
+                    <td><div class="row"><div class="agent-id b" style="width:18px;height:18px;font-size:10px;">B</div> Mini</div></td>
+                    <td><span class="status-dot ok">ok</span></td>
+                    <td class="num">1.81s</td>
+                    <td class="num">204</td>
+                    <td class="mono">stop</td>
+                    <td class="mono">d7b4e0a1</td>
+                    <td><span class="badge badge-success">PASS</span></td>
+                    <td></td>
+                  </tr>
+                  <tr onclick="toggleRow(this)">
+                    <td><span class="caret">▶</span></td>
+                    <td class="mono">019</td>
+                    <td><div class="row"><div class="agent-id b" style="width:18px;height:18px;font-size:10px;">B</div> Mini</div></td>
+                    <td><span class="status-dot ok">ok</span></td>
+                    <td class="num">1.93s</td>
+                    <td class="num">221</td>
+                    <td class="mono">stop</td>
+                    <td class="mono">f1e9c3b7</td>
+                    <td><span class="badge badge-danger">FAIL</span></td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY PAGE ============ -->
+  <section id="page-history" class="page hidden">
+    <div class="page-header">
+      <div class="page-header-flex">
+        <div class="page-header-left">
+          <div class="page-title-row">
+            <h1 class="page-title">历史记录</h1>
+            <span class="page-title-badge">128 runs</span>
+          </div>
+          <div class="page-subtitle">所有对比与 Judge 评估结果，按时间倒序展示，支持过滤与回放。</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M9 18h6"/></svg>
+            过滤
+          </button>
+          <button class="btn">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            刷新
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="history-layout">
+
+        <!-- History list -->
+        <div class="history-list">
+          <div class="toolbar">
+            <div class="search">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input class="input" placeholder="搜索输入或 run id…" />
+            </div>
+          </div>
+
+          <div class="history-item active">
+            <div class="history-top">
+              <span class="winner-badge" style="background: var(--info); font-size:10px;">WIN · A</span>
+              <span class="badge badge-neutral">Judge ×2</span>
+              <span class="history-time">12s ago</span>
+            </div>
+            <div class="history-preview">请基于公开资料对比 RAG 中常用的稠密检索与稀疏检索的优劣，给出一个选型建议。</div>
+            <div class="history-meta">
+              <span class="status-dot ok">A 3.42s</span>
+              <span class="status-dot ok">B 2.18s</span>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-top">
+              <span class="winner-badge" style="background: var(--success); font-size:10px;">WIN · B</span>
+              <span class="badge badge-neutral">Judge ×1</span>
+              <span class="history-time">3m ago</span>
+            </div>
+            <div class="history-preview">写一个 Python 函数，使用 retry 装饰器处理 OpenAI 限流错误。</div>
+            <div class="history-meta">
+              <span class="status-dot ok">A 4.81s</span>
+              <span class="status-dot ok">B 2.04s</span>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-top">
+              <span class="badge badge-neutral" style="font-size:10px;">TIE</span>
+              <span class="badge badge-neutral">Judge ×1</span>
+              <span class="history-time">7m ago</span>
+            </div>
+            <div class="history-preview">如何在生产环境追踪 Agent 工具调用的失败率？</div>
+            <div class="history-meta">
+              <span class="status-dot ok">A 2.41s</span>
+              <span class="status-dot ok">B 2.12s</span>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-top">
+              <span class="winner-badge" style="background: var(--info); font-size:10px;">WIN · A</span>
+              <span class="badge badge-neutral">Judge ×3</span>
+              <span class="history-time">12m ago</span>
+            </div>
+            <div class="history-preview">设计一个带工具调用的天气助手 prompt，要求工具失败时优雅降级。</div>
+            <div class="history-meta">
+              <span class="status-dot ok">A 5.61s</span>
+              <span class="status-dot err">B failed</span>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-top">
+              <span class="winner-badge" style="background: var(--success); font-size:10px;">WIN · B</span>
+              <span class="badge badge-neutral">Judge ×1</span>
+              <span class="history-time">31m ago</span>
+            </div>
+            <div class="history-preview">解释 prompt cache 在 Anthropic API 中的 TTL 表现，给一个最佳实践。</div>
+            <div class="history-meta">
+              <span class="status-dot ok">A 3.20s</span>
+              <span class="status-dot ok">B 1.95s</span>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-top">
+              <span class="badge badge-danger" style="font-size:10px;">A FAIL</span>
+              <span class="history-time">1h ago</span>
+            </div>
+            <div class="history-preview">用 React 实现一个无限滚动的列表组件，要求 SSR 友好。</div>
+            <div class="history-meta">
+              <span class="status-dot err">A error</span>
+              <span class="status-dot ok">B 4.02s</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail view -->
+        <div class="col">
+
+          <div class="card">
+            <div class="card-body">
+              <div class="row-between" style="margin-bottom: 12px;">
+                <div class="row" style="gap: 10px;">
+                  <span class="badge badge-accent">run_01JE7Y3</span>
+                  <span class="text-mute text-sm mono">2026-05-21 09:42:18</span>
+                  <span class="badge badge-neutral">Judge ×2</span>
+                </div>
+                <div class="row" style="gap: 6px;">
+                  <button class="btn btn-ghost btn-sm">复制 run_id</button>
+                  <button class="btn btn-sm">在竞技场打开</button>
+                </div>
+              </div>
+
+              <div style="font-size: 13.5px; line-height:1.6; padding: 12px 14px; background: var(--bg-subtle); border-radius: var(--radius); border: 1px solid var(--border);">
+                请基于公开资料对比 RAG 中常用的稠密检索与稀疏检索的优劣，给出一个选型建议。
+              </div>
+
+              <div class="row" style="gap:14px; margin-top:12px;">
+                <span class="kv"><span class="k">temperature</span><span class="v">0.20</span></span>
+                <span class="kv"><span class="k">max_tokens</span><span class="v">2048</span></span>
+                <span class="kv"><span class="k">system</span><span class="v">"你是一个严谨的技术分析师..."</span></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="agent-cards">
+            <div class="card">
+              <div class="card-header">
+                <div class="agent-id a">A</div>
+                <div>
+                  <div class="card-title">Hermes Agent</div>
+                  <div class="agent-meta"><span>3.42s</span> · <span>17 events</span> · <span>4 tools</span></div>
+                </div>
+                <div class="card-actions">
+                  <span class="status-dot ok"></span>
+                </div>
+              </div>
+              <div class="answer-area">
+                选型建议：先用混合检索打底，再根据召回质量决定权重。稠密检索 (bge-large-zh) 在语义相近但表述差异大的场景上明显占优……
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <div class="agent-id b">B</div>
+                <div>
+                  <div class="card-title">Mini Agent</div>
+                  <div class="agent-meta"><span>2.18s</span> · <span>9 events</span> · <span>2 tools</span></div>
+                </div>
+                <div class="card-actions">
+                  <span class="status-dot ok"></span>
+                </div>
+              </div>
+              <div class="answer-area">
+                稠密检索利用向量空间相似度，能够捕捉语义相近但表述不同的查询；稀疏检索基于词频，命中关键词命中率高……
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Judge 历史</h3>
+              <span class="card-subtitle">这条 run 被评估过 2 次</span>
+            </div>
+            <div class="table-wrap">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Judge 模型</th>
+                    <th>时间</th>
+                    <th>Winner</th>
+                    <th>A 综合</th>
+                    <th>B 综合</th>
+                    <th>摘要</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mono">1</td>
+                    <td class="mono">gpt-4.1-mini</td>
+                    <td class="mono">09:42:30</td>
+                    <td><span class="winner-badge" style="font-size:10px;">A</span></td>
+                    <td class="num">8.6</td>
+                    <td class="num">7.3</td>
+                    <td>A 提供权重与组合方案更落地。</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">2</td>
+                    <td class="mono">claude-opus-4-7</td>
+                    <td class="mono">09:45:11</td>
+                    <td><span class="winner-badge" style="font-size:10px;">A</span></td>
+                    <td class="num">8.4</td>
+                    <td class="num">7.0</td>
+                    <td>A 覆盖更广，B 简洁但缺细节。</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  function switchPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+    document.getElementById('page-' + name).classList.remove('hidden');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelector('.nav-item[data-page="' + name + '"]').classList.add('active');
+    const titles = { arena: '竞技场对比', batch: '稳定性测试', history: '历史记录' };
+    document.getElementById('bc-page').textContent = titles[name];
+    window.scrollTo(0, 0);
+  }
+
+  function switchTab(el, targetId) {
+    const tabs = el.parentElement.querySelectorAll('.tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    const card = el.closest('.card');
+    // hide siblings of target that are answer-area or timeline
+    const siblings = card.querySelectorAll('.answer-area, .timeline');
+    siblings.forEach(s => s.classList.add('hidden'));
+    document.getElementById(targetId).classList.remove('hidden');
+  }
+
+  function toggleRow(tr) {
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains('row-expand')) {
+      next.classList.toggle('hidden');
+      const caret = tr.querySelector('.caret');
+      if (caret) caret.classList.toggle('open');
+    }
+  }
+
+  function simulateRun() {
+    // toy: nothing real, just a press feedback
+    const btn = event.currentTarget;
+    btn.style.transform = 'translateY(1px)';
+    setTimeout(() => btn.style.transform = '', 120);
+  }
+</script>
+
+</body>
+</html>

@@ -1,4 +1,13 @@
-import { AlertTriangle, Loader2, RefreshCcw, ShieldCheck } from "lucide-react"
+import { useState } from "react"
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  Loader2,
+  RefreshCcw,
+  ShieldCheck,
+} from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -12,10 +21,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { AgentIdBadge } from "@/components/AgentIdBadge"
 import { AgentResultPanel, EmptyBox } from "@/components/arena/AgentResultPanel"
 import { CodeBlock } from "@/components/arena/CodeBlock"
 import { ConsistencyPanel } from "@/components/arena/ConsistencyPanel"
 import { JudgePanel } from "@/components/arena/JudgePanel"
+import { TraceModal } from "@/components/arena/TraceModal"
 import { StatusDot } from "@/components/StatusDot"
 import {
   formatDateTime,
@@ -25,6 +36,8 @@ import {
 import { apiFetch, readApiJson } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type {
+  AgentResult,
+  BatchDetailItem,
   BatchDetailResponse,
   BatchHistorySummary,
   ConfigResponse,
@@ -587,18 +600,60 @@ function BatchConsistencyCard({
   )
 }
 
+function batchItemToAgentResult(item: BatchDetailItem): AgentResult {
+  return {
+    ok: item.ok,
+    name: item.agent_name,
+    model: item.agent_model,
+    content: item.content,
+    latency_ms: item.latency_ms,
+    error: item.error,
+    raw_finish_reason: item.finish_reason,
+    trace_supported: true,
+    trace_events: item.trace_events || [],
+    trace_summary: item.trace_summary,
+  }
+}
+
+function batchInputFromRequest(detail: BatchDetailResponse): string | undefined {
+  const req = detail.request as Record<string, unknown>
+  const form = (req.form ?? {}) as { input?: string }
+  const raw = (req.raw_body ?? {}) as { input?: string }
+  return form.input || raw.input
+}
+
 function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [traceItem, setTraceItem] = useState<BatchDetailItem | null>(null)
+  const userInput = batchInputFromRequest(detail)
+
+  function rowKey(item: BatchDetailItem) {
+    return `${item.agent_key}-${item.index}`
+  }
+  function toggle(item: BatchDetailItem) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      const key = rowKey(item)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
   return (
     <Card>
       <CardHeader>
         <CardTitle>执行明细 ({detail.items.length})</CardTitle>
+        <p className="mt-0.5 text-[11.5px] text-arena-text-tertiary">
+          点击行展开完整 content，点击 <GitBranch className="inline size-3" /> 查看 Trace
+        </p>
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full table-fixed border-separate border-spacing-0 text-left">
             <colgroup>
+              <col className="w-[48px]" />
               <col className="w-[56px]" />
-              <col className="w-[160px]" />
+              <col className="w-[180px]" />
               <col className="w-[88px]" />
               <col className="w-[78px]" />
               <col className="w-[64px]" />
@@ -607,6 +662,7 @@ function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
             </colgroup>
             <thead className="bg-arena-bg-subtle text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
               <tr>
+                <th className="border-b border-arena-border px-2 py-2"></th>
                 <th className="border-b border-arena-border px-2 py-2">#</th>
                 <th className="border-b border-arena-border px-2 py-2">Agent</th>
                 <th className="border-b border-arena-border px-2 py-2">状态</th>
@@ -620,7 +676,7 @@ function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
               {detail.items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-2 py-10 text-center text-[13px] text-arena-text-tertiary"
                   >
                     无执行记录
@@ -628,48 +684,136 @@ function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
                 </tr>
               ) : (
                 detail.items.map((item) => (
-                  <tr
-                    key={`${item.agent_key}-${item.index}`}
-                    className="border-b border-arena-border bg-white last:border-b-0"
-                  >
-                    <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
-                      {String(item.index).padStart(3, "0")}
-                    </td>
-                    <td className="truncate px-2 py-1.5 text-[12px] text-arena-text-primary">
-                      <span className="font-mono text-arena-text-tertiary">{item.agent_key.toUpperCase()}</span>
-                      <span className="ml-1.5">{item.agent_name}</span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <StatusDot kind={item.ok ? "ok" : "err"}>
-                        {item.ok ? "ok" : "failed"}
-                      </StatusDot>
-                    </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
-                      {formatLatency(item.latency_ms)}
-                    </td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
-                      {item.content_length}
-                    </td>
-                    <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
-                      {item.finish_reason || "—"}
-                    </td>
-                    <td className="truncate px-2 py-1.5 text-[12.5px] text-arena-text-secondary">
-                      <span className="line-clamp-1">
-                        {item.error
-                          ? `⚠ ${item.error}`
-                          : item.content
-                            ? item.content.slice(0, 200)
-                            : "(空)"}
-                      </span>
-                    </td>
-                  </tr>
+                  <HistoryItemRow
+                    key={rowKey(item)}
+                    item={item}
+                    expanded={expanded.has(rowKey(item))}
+                    onToggle={() => toggle(item)}
+                    onOpenTrace={() => setTraceItem(item)}
+                  />
                 ))
               )}
             </tbody>
           </table>
         </div>
       </CardContent>
+      <TraceModal
+        open={traceItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setTraceItem(null)
+        }}
+        result={traceItem ? batchItemToAgentResult(traceItem) : null}
+        title={
+          traceItem
+            ? `Trace · #${String(traceItem.index).padStart(3, "0")} · ${traceItem.agent_name}`
+            : "Trace"
+        }
+        subtitle={traceItem ? traceItem.agent_model : ""}
+        input={userInput}
+      />
     </Card>
+  )
+}
+
+function HistoryItemRow({
+  item,
+  expanded,
+  onToggle,
+  onOpenTrace,
+}: {
+  item: BatchDetailItem
+  expanded: boolean
+  onToggle: () => void
+  onOpenTrace: () => void
+}) {
+  return (
+    <>
+      <tr
+        onClick={onToggle}
+        className="cursor-pointer border-b border-arena-border bg-white last:border-b-0 hover:bg-arena-bg-hover"
+      >
+        <td className="px-1 py-1.5 text-arena-text-tertiary">
+          <div className="flex items-center gap-0.5">
+            {expanded ? (
+              <ChevronDown className="size-3.5" />
+            ) : (
+              <ChevronRight className="size-3.5" />
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenTrace()
+              }}
+              className="inline-grid size-5 place-items-center rounded text-arena-text-tertiary transition-colors hover:bg-arena-accent-soft hover:text-arena-accent"
+              title="查看 Trace"
+            >
+              <GitBranch className="size-3.5" />
+            </button>
+          </div>
+        </td>
+        <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
+          {String(item.index).padStart(3, "0")}
+        </td>
+        <td className="px-2 py-1.5">
+          <div className="flex items-center gap-1.5 text-[12px] text-arena-text-primary">
+            <AgentIdBadge id={item.agent_key} size="sm" />
+            <span className="truncate">{item.agent_name}</span>
+          </div>
+        </td>
+        <td className="px-2 py-1.5">
+          <StatusDot kind={item.ok ? "ok" : "err"}>
+            {item.ok ? "ok" : "failed"}
+          </StatusDot>
+        </td>
+        <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
+          {formatLatency(item.latency_ms)}
+        </td>
+        <td className="px-2 py-1.5 text-right font-mono text-[12px] text-arena-text-primary">
+          {item.content_length}
+        </td>
+        <td className="px-2 py-1.5 font-mono text-[12px] text-arena-text-secondary">
+          {item.finish_reason || "—"}
+        </td>
+        <td className="truncate px-2 py-1.5 text-[12.5px] text-arena-text-secondary">
+          <span className="line-clamp-1">
+            {item.error
+              ? `⚠ ${item.error}`
+              : item.content
+                ? item.content.slice(0, 200)
+                : "(空)"}
+          </span>
+        </td>
+      </tr>
+      {expanded ? (
+        <tr className="border-b border-arena-border bg-arena-bg-subtle">
+          <td colSpan={8} className="px-4 py-3">
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-arena-text-tertiary">
+                Content ({item.content_length} chars)
+              </div>
+              <ScrollArea className="h-[260px] rounded-arena border border-arena-border bg-arena-bg-code p-3">
+                <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-slate-100">
+                  {item.content || "(空)"}
+                </pre>
+              </ScrollArea>
+              {item.error ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="size-4" />
+                  <AlertTitle>错误</AlertTitle>
+                  <AlertDescription className="whitespace-pre-wrap break-words">
+                    {item.error}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              <div className="text-[11px] text-arena-text-tertiary">
+                点击行首 <GitBranch className="inline size-3" /> 图标查看完整 Trace 可视化
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   )
 }
 

@@ -108,13 +108,32 @@ function eventDisplayName(event: AgentTraceEvent): string {
 }
 
 function eventBody(event: AgentTraceEvent): string {
-  return event.preview || event.text || event.delta || ""
+  return event.text || event.delta || event.preview || ""
 }
 
 function deltaStem(eventName: string): string | null {
   if (eventName.endsWith(".delta")) return eventName.slice(0, -".delta".length)
   if (eventName.endsWith(".done")) return eventName.slice(0, -".done".length)
   return null
+}
+
+// Lifecycle / structural markers that carry no content — pure start/end
+// scaffolding emitted by the Responses API. Filtered before span construction.
+const NOISE_EVENTS = new Set([
+  "response.created",
+  "response.in_progress",
+  "response.completed",
+  "response.reasoning_step.started",
+  "response.reasoning_step.completed",
+  "response.output_item.added",
+  "response.output_item.done",
+  "response.content_part.added",
+  "response.content_part.done",
+])
+
+function isNoiseEvent(ev: AgentTraceEvent): boolean {
+  if (ev.error) return false
+  return NOISE_EVENTS.has(ev.event)
 }
 
 // Merge consecutive *.delta events (optionally followed by *.done) into a
@@ -173,8 +192,15 @@ function collapseDeltaRuns(events: AgentTraceEvent[]): AgentTraceEvent[] {
 }
 
 function buildSpans(result: AgentResult): SpanNode[] {
-  const rawEvents = result.trace_events || []
-  const events = collapseDeltaRuns(rawEvents)
+  const rawEvents = (result.trace_events || []).filter((ev) => !isNoiseEvent(ev))
+  const events = collapseDeltaRuns(rawEvents).filter((ev) => {
+    // Drop collapsed delta runs whose accumulated text is whitespace-only —
+    // these are usually the "\n" separators the agent emits between tool
+    // calls and add no signal to the trace view.
+    if (!ev.event.startsWith("response.") || ev.error) return true
+    const body = (ev.text || ev.delta || "").trim()
+    return body.length > 0
+  })
   let maxTs = 0
   for (const ev of events) {
     const t = typeof ev.timestamp === "number" ? ev.timestamp : 0
@@ -533,14 +559,14 @@ export function TraceModal({
               </div>
             </div>
             <div className="grid min-h-[560px] grid-cols-[300px_1fr] max-h-[calc(92vh-130px)]">
-              <div className="border-r border-arena-border bg-arena-bg-page">
+              <div className="flex min-h-0 flex-col border-r border-arena-border bg-arena-bg-page">
                 <div className="border-b border-arena-border px-3 py-1.5">
                   <div className="flex items-center justify-between font-mono text-[11px] text-arena-text-tertiary">
                     <span>Spans</span>
                     <span>{spans.length}</span>
                   </div>
                 </div>
-                <ScrollArea className="h-[calc(100%-32px)]">
+                <ScrollArea className="min-h-0 flex-1">
                   <div className="space-y-1 p-2">
                     {spans.map((span) => (
                       <SpanRow

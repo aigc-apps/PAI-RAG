@@ -47,9 +47,13 @@ LOG_DIR = ROOT_DIR / "logs"
 FRONTEND_LOG_PATH = LOG_DIR / "frontend.log"
 DATA_DIR = ROOT_DIR / "data"
 HISTORY_DB_PATH = Path(os.getenv("HISTORY_DB_PATH") or (DATA_DIR / "arena_history.sqlite3"))
-MAX_TRACE_EVENTS = 240
+MAX_TRACE_EVENTS = 2000
 MAX_EVENT_TEXT = 1800
 SUPPRESSED_TRACE_EVENTS = {"tool.delta", "tool.updated", "tool_call_delta"}
+# Tool names whose function_call_arguments stream is redundant with the final
+# user-visible output. The args carry the same content already accumulated via
+# response.output_text — recording them just bloats the trace.
+SUPPRESSED_ARG_TOOLS = {"final_report"}
 
 frontend_logger = logging.getLogger("agent_arena.frontend")
 frontend_logger.setLevel(logging.INFO)
@@ -978,6 +982,34 @@ def frontend_log_level(level: str) -> int:
     return logging.ERROR
 
 
+def update_item_tool_map(event_type: str, data: dict[str, Any], item_tool: dict[str, str]) -> None:
+    """Track item_id → tool_name from response.output_item.added events so
+    later function_call_arguments deltas can be attributed to a tool."""
+    if event_type != "response.output_item.added":
+        return
+    item = data.get("item")
+    if not isinstance(item, dict):
+        return
+    if item.get("type") != "function_call":
+        return
+    iid = item.get("id")
+    name = item.get("name")
+    if isinstance(iid, str) and isinstance(name, str):
+        item_tool[iid] = name
+
+
+def is_suppressed_function_call_args(event_type: str, data: dict[str, Any], item_tool: dict[str, str]) -> bool:
+    """True for function_call_arguments stream events whose parent tool is in
+    SUPPRESSED_ARG_TOOLS (e.g. report_markdown — args are redundant with the
+    final output_text)."""
+    if not event_type.startswith("response.function_call_arguments"):
+        return False
+    iid = data.get("item_id")
+    if not isinstance(iid, str):
+        return False
+    return item_tool.get(iid, "") in SUPPRESSED_ARG_TOOLS
+
+
 def normalize_trace_event(raw: dict[str, Any]) -> AgentTraceEvent:
     update = raw.get("update") if isinstance(raw.get("update"), dict) else raw.get("data")
     if not isinstance(update, dict):
@@ -1159,6 +1191,7 @@ async def call_agent_responses(
     events: list[AgentTraceEvent] = []
     terminal: dict[str, Any] | None = None
     final_error: str | None = None
+    item_tool: dict[str, str] = {}
     try:
         async with client.stream(
             "POST",
@@ -1202,6 +1235,10 @@ async def call_agent_responses(
                         if event_type == "response.failed":
                             err = terminal.get("error") if isinstance(terminal, dict) else {}
                             final_error = str((err or {}).get("message") or "response failed")
+                    update_item_tool_map(event_type, data, item_tool)
+                    if is_suppressed_function_call_args(event_type, data, item_tool):
+                        event_name = ""
+                        continue
                     trace_event = normalize_trace_event({"event": event_type, "data": data})
                     if trace_event.event not in SUPPRESSED_TRACE_EVENTS and len(events) < MAX_TRACE_EVENTS:
                         events.append(trace_event)
@@ -1448,6 +1485,7 @@ async def call_agent_raw(
     events: list[AgentTraceEvent] = []
     terminal: dict[str, Any] | None = None
     final_error: str | None = None
+    item_tool: dict[str, str] = {}
     try:
         async with client.stream(
             "POST",
@@ -1491,6 +1529,10 @@ async def call_agent_raw(
                         if event_type == "response.failed":
                             err = terminal.get("error") if isinstance(terminal, dict) else {}
                             final_error = str((err or {}).get("message") or "response failed")
+                    update_item_tool_map(event_type, data, item_tool)
+                    if is_suppressed_function_call_args(event_type, data, item_tool):
+                        event_name = ""
+                        continue
                     trace_event = normalize_trace_event({"event": event_type, "data": data})
                     if trace_event.event not in SUPPRESSED_TRACE_EVENTS and len(events) < MAX_TRACE_EVENTS:
                         events.append(trace_event)
@@ -1565,7 +1607,7 @@ def _percentile(values: list[int], pct: float) -> int | None:
     return int(round(sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight))
 
 
-BATCH_ITEM_TRACE_LIMIT = 120
+BATCH_ITEM_TRACE_LIMIT = MAX_TRACE_EVENTS
 
 
 def build_run_item(
