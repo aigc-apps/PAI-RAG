@@ -599,6 +599,30 @@ class AutonomousHitlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(answer, 'Use option A')
         self.assertEqual(policy, 'default_action')
 
+    def test_pause_like_default_action_falls_back_to_conservative_answer(self):
+        from backend.agents_sdk.runner import _AUTONOMOUS_ASK_USER_ANSWER
+
+        pause_like_values = [
+            '等待确认',
+            '等待用户回复',
+            '暂停等待用户',
+            '稍后再问用户',
+            'wait for user',
+            'pause and ask user',
+            'hold until confirmed',
+        ]
+        for value in pause_like_values:
+            env = InterruptionEnvelope(
+                call_id='c1',
+                tool_name='ask_user',
+                arguments={'question': 'Pick?', 'default_action': value, 'risk': 'low'},
+                is_input_request=True,
+            )
+            approve, answer, policy = _autonomous_hitl_resolution(env)
+            self.assertTrue(approve, msg=value)
+            self.assertEqual(answer, _AUTONOMOUS_ASK_USER_ANSWER, msg=value)
+            self.assertEqual(policy, 'pause_like_default_rejected', msg=value)
+
     async def test_default_autonomous_mode_approves_ask_user_and_completes(self):
         from backend.agents_sdk import runner
 

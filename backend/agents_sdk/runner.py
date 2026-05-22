@@ -173,6 +173,14 @@ _AUTONOMOUS_ASK_USER_ANSWER = (
     '当前未开启用户打断。请不要等待用户输入；请基于已有证据选择最保守、可逆、低风险的默认方案继续。'
     '如果缺少用户独有信息或需要不可逆/高风险授权，请停止该动作，并在最终报告中说明阻塞原因、已验证证据和需要用户补充的信息。'
 )
+# default_action that is itself a meta-instruction to pause/wait creates a loop:
+# the runner echoes the string back as if it were the user's answer, the model
+# reads "用户回答：等待确认" and asks again, eventually hitting the max-continue
+# cap. Filter those out and force the conservative answer instead.
+_PAUSE_LIKE_DEFAULT_ACTION_RE = re.compile(
+    r'(等待|等候|等用户|稍后|暂停|暂缓|确认|询问用户|向用户|不要继续|挂起|hold\b|wait\b|pause\b|ask\s+(?:the\s+)?user|defer\b|stand\s*by)',
+    re.IGNORECASE,
+)
 _TOOL_INTENT_WITHOUT_CALL_RETRY_PROMPT = (
     '上一轮你在文本里声称要调用工具或激活 skill（例如「调用 ask_user」'
     '「启动/激活 X 技能」「use_skill …」「我将暂停流程」或类似表述），'
@@ -592,6 +600,8 @@ def _autonomous_hitl_resolution(envelope: InterruptionEnvelope) -> tuple[bool, s
             'default',
         )
         if default:
+            if _PAUSE_LIKE_DEFAULT_ACTION_RE.search(default):
+                return True, _AUTONOMOUS_ASK_USER_ANSWER, 'pause_like_default_rejected'
             return True, default, 'default_action'
         return True, _AUTONOMOUS_ASK_USER_ANSWER, 'conservative_default'
     return False, _AUTONOMOUS_REJECT_ANSWER, 'reject_non_input_approval'
