@@ -168,6 +168,15 @@ _PRIVATE_BLOCK_RE = re.compile(
     r'.*?</\1>',
     re.IGNORECASE | re.DOTALL,
 )
+# Some models (observed: qwen3.6-plus) sometimes serialize the final_report
+# tool call as plain assistant text — `<final_report>{"report_markdown": "..."}</final_report>` —
+# instead of the proper OpenAI tool-call protocol frame. We rescue those by
+# pattern-matching the wrapper post-hoc and surfacing the inner markdown via
+# the normal final-report contract.
+_FINAL_REPORT_TEXT_RE = re.compile(
+    r'<final_report\b[^>]*>\s*(\{[\s\S]*?\})\s*</final_report>',
+    re.IGNORECASE,
+)
 _SECRET_LINE_RE = re.compile(r'(?i)(access[_-]?key|access[_-]?id|secret|password|token)')
 _AUTO_HITL_MAX_CONTINUES = 3
 _AUTONOMOUS_ASK_USER_ANSWER = (
@@ -305,6 +314,36 @@ def _final_report_from_extras(ctx: RunContext) -> str:
     if not isinstance(report, dict):
         return ''
     return str(report.get('report_markdown') or '').strip()
+
+
+def _final_report_from_text_wrapper(output: list[dict]) -> str:
+    """Recover `report_markdown` from a textual `<final_report>{...}</final_report>` block.
+
+    Some models (notably qwen3.6-plus) occasionally emit the final_report tool
+    invocation as plain assistant text instead of an OpenAI tool-call frame,
+    which means ``ctx.extras['final_report']`` is never populated. Walks
+    output messages newest-first, returns the first parseable wrapper's
+    ``report_markdown``, or '' if none match.
+    """
+    for item in reversed(output or []):
+        if not isinstance(item, dict) or item.get('type') != 'message':
+            continue
+        text = _message_output_text(item)
+        if not text:
+            continue
+        match = _FINAL_REPORT_TEXT_RE.search(text)
+        if not match:
+            continue
+        try:
+            parsed = json.loads(match.group(1))
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        markdown = parsed.get('report_markdown')
+        if isinstance(markdown, str) and markdown.strip():
+            return markdown.strip()
+    return ''
 
 
 def _strip_model_protocol_blocks(text: str) -> str:
@@ -1146,7 +1185,10 @@ async def _drive_stream(
                     ))
         final_state = retry_streaming.to_state()
 
-    final_report_text = _final_report_from_extras(ctx)
+    final_report_text = (
+        _final_report_from_extras(ctx)
+        or _final_report_from_text_wrapper(bridge_state.output)
+    )
     if final_report_text:
         for chunk in _apply_final_report_contract(
             bridge_state,

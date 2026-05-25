@@ -36,6 +36,7 @@ from backend.agents_sdk.runner import (
     _apply_final_report_contract,
     _autonomous_hitl_resolution,
     _drive_stream,
+    _final_report_from_text_wrapper,
     _final_report_retry_input,
     _final_text_from_output,
     _needs_final_report_retry,
@@ -437,6 +438,75 @@ class EventBridgeTests(unittest.TestCase):
         }]
 
         self.assertFalse(_needs_tool_intent_retry(output))
+
+    def test_final_report_text_wrapper_extracted(self):
+        output = [{
+            'id': 'msg_1',
+            'type': 'message',
+            'status': 'completed',
+            'role': 'assistant',
+            'content': [{
+                'type': 'output_text',
+                'text': (
+                    'some preamble\n'
+                    '<final_report>\n'
+                    '{"report_markdown": "## Result\\n- ok"}\n'
+                    '</final_report>'
+                ),
+            }],
+        }]
+        self.assertEqual(
+            _final_report_from_text_wrapper(output),
+            '## Result\n- ok',
+        )
+
+    def test_final_report_text_wrapper_returns_empty_when_absent(self):
+        output = [{
+            'id': 'msg_1',
+            'type': 'message',
+            'status': 'completed',
+            'role': 'assistant',
+            'content': [{'type': 'output_text', 'text': 'plain report, no wrapper'}],
+        }]
+        self.assertEqual(_final_report_from_text_wrapper(output), '')
+
+    def test_final_report_text_wrapper_ignores_malformed_json(self):
+        output = [{
+            'id': 'msg_1',
+            'type': 'message',
+            'status': 'completed',
+            'role': 'assistant',
+            'content': [{
+                'type': 'output_text',
+                'text': '<final_report>{not valid json}</final_report>',
+            }],
+        }]
+        self.assertEqual(_final_report_from_text_wrapper(output), '')
+
+    def test_final_report_text_wrapper_picks_last_match(self):
+        output = [
+            {
+                'id': 'msg_old',
+                'type': 'message',
+                'status': 'completed',
+                'role': 'assistant',
+                'content': [{
+                    'type': 'output_text',
+                    'text': '<final_report>{"report_markdown": "old"}</final_report>',
+                }],
+            },
+            {
+                'id': 'msg_new',
+                'type': 'message',
+                'status': 'completed',
+                'role': 'assistant',
+                'content': [{
+                    'type': 'output_text',
+                    'text': '<final_report>{"report_markdown": "new"}</final_report>',
+                }],
+            },
+        ]
+        self.assertEqual(_final_report_from_text_wrapper(output), 'new')
 
     def test_skill_capability_description_does_not_trigger_tool_intent_retry(self):
         output = [{
