@@ -25,6 +25,7 @@ moment the error bubbles up.
 """
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Tuple
 
@@ -35,6 +36,8 @@ from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 import provider_pool
 import runtime_config
 import settings as config
+
+logger = logging.getLogger(__name__)
 
 _INIT_LOCK = threading.Lock()
 _SHARED_HTTP_CLIENT: httpx.AsyncClient | None = None
@@ -142,7 +145,16 @@ def acquire_request_model(model_name: str) -> OpenAIChatCompletionsModel:
     reverse-map it back to ``(provider, key_id)`` for failure feedback.
     """
     http_client = _ensure_shared_http_client()
-    api_key, api_base, _key_id = _resolve_credentials()
+    api_key, api_base, key_id = _resolve_credentials()
+    # Log key tail per acquisition so multi-key round-robin distribution is
+    # observable in worker logs without exposing the full secret. Watch for
+    # the tail rotating across concurrent requests.
+    logger.info(
+        'acquired llm key tail=%s key_id=%s model=%s',
+        api_key[-4:] if len(api_key) >= 4 else '',
+        key_id,
+        model_name,
+    )
     openai_client = AsyncOpenAI(
         api_key=api_key,
         base_url=api_base,

@@ -1,0 +1,21 @@
+{
+  "active_model": "qwen-plus",
+  "default_provider": "qwen",
+  "cooldown_seconds": 300,
+  "providers": {
+    "qwen": {
+      "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_keys": [
+        "sk-REPLACE-WITH-QWEN-KEY-1",
+        "sk-REPLACE-WITH-QWEN-KEY-2"
+      ]
+    },
+    "deepseek": {
+      "api_base": "https://api.deepseek.com/v1",
+      "api_keys": [
+        "sk-REPLACE-WITH-DEEPSEEK-KEY-1"
+      ],
+      "model_prefixes": ["deepseek-"]
+    }
+  }
+}

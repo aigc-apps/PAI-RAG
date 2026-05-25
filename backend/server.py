@@ -38,6 +38,7 @@ from tools import WorkspaceViolation as ToolWorkspaceViolation
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+import provider_pool
 import settings as config
 import runtime_config
 
@@ -46,6 +47,14 @@ app = FastAPI(title='PAI-RAG OpenAI Compatible Backend')
 service = AgentService()
 RUNNER_BACKEND = 'sdk'  # reported by /v1/health/detailed; the SDK runner is the only runtime since Phase 5
 SESSION_ARCHIVE_CREATED_AFTER = datetime.now()
+# Project never configured the root logger, so every ``logger.info`` from
+# ``backend.*`` modules used to get dropped (root default = WARNING). Wire
+# a basic handler with a level overridable via env so per-key-acquisition
+# audit + warmup + memory-review lines actually reach the worker log.
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO').upper(),
+    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+)
 logger = logging.getLogger(__name__)
 
 # Lazy SDK-runtime stores: share the same SQLite file as ``service.store``
@@ -1127,6 +1136,14 @@ async def set_active_model_endpoint(request: Request):
 def skills():
     scope = handler_memory_scope(SERVER_USER_ID)
     return skills_inventory(ROOT, scope.root)
+
+
+@app.get('/v1/admin/pool')
+def admin_pool():
+    """Per-worker view of the LLM credential pool. Read-only, redacts keys
+    to a 4-char tail. State is in-process so each worker reports its own
+    eviction/cooldown state; agreement across workers is not guaranteed."""
+    return provider_pool.snapshot()
 
 
 async def _sdk_response_stream(*, body, model, model_override, instructions, conversation,
