@@ -30,6 +30,7 @@ from agents.run_state import RunState
 from backend.agents_sdk import event_bridge
 from backend.agents_sdk.agent_factory import build as build_agent
 from backend.agents_sdk.event_bridge import ResponsesStreamState
+from backend.agents_sdk.runtime_setup import acquire_request_model
 from backend.agents_sdk.hitl import (
     InterruptionEnvelope,
     ResumePayload,
@@ -845,7 +846,10 @@ async def stream_responses_run(
     run_id = _mint_run_id()
     response_id = _mint_response_id()
     audit_log_id = _mint_audit_id()
-    agent = build_agent(model=model, tools=tools, user_id=user_id, instructions_override=instructions_override)
+    # Per-request Model: rotates the LLM credential via provider_pool so
+    # concurrent runs spread across keys (see runtime_setup docstring).
+    model_instance = acquire_request_model(model)
+    agent = build_agent(model=model_instance, tools=tools, user_id=user_id, instructions_override=instructions_override)
     ctx = RunContext(
         session_id=sid, run_id=run_id, response_id=response_id,
         user_id=user_id, cwd=cwd, allow_hitl=allow_hitl,
@@ -894,7 +898,10 @@ async def _resume_run(
     run_id = row['run_id']
     response_id = row['response_id'] or row['id']
     audit_log_id = row['audit_log_id']
-    agent = build_agent(model=model, tools=tools, user_id=user_id, instructions_override=instructions_override)
+    # Resume runs also rotate keys — a HITL pause might span hours, and the
+    # key chosen on first leg may no longer be optimal (or alive).
+    model_instance = acquire_request_model(model)
+    agent = build_agent(model=model_instance, tools=tools, user_id=user_id, instructions_override=instructions_override)
     ctx = RunContext(
         session_id=sid, run_id=run_id, response_id=response_id,
         user_id=user_id, cwd=cwd, pending_human_answer=resume.answer,

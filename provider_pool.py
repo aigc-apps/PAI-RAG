@@ -332,3 +332,21 @@ def reset_cache():
         _STATE['mtime'] = -1.0
         _STATE['default_provider'] = ''
         _STATE['providers'] = {}
+
+
+def _snapshot_full_keys():
+    """In-process-only reverse map ``api_key -> (provider, key_id)``.
+
+    Internal API for the agents-SDK httpx response hook, which only sees the
+    raw ``Authorization`` bearer and needs to feed ``report_failure`` the
+    right ``(provider, key_id)`` pair. Never exposed over the wire — keys are
+    secrets — and intentionally distinct from :func:`snapshot` (which redacts
+    to ``api_key_tail``).
+    """
+    _maybe_reload()
+    out = {}
+    for name, state in _STATE['providers'].items():
+        for i, ks in enumerate(state.keys):
+            if ks.api_key:
+                out[ks.api_key] = (name, i)
+    return out

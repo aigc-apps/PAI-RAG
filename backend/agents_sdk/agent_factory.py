@@ -3,11 +3,14 @@
 Reuses :func:`backend.agent_service.build_system_prompt` so the legacy and
 SDK runners read the same prompt body + memory index + skills inventory.
 
-The model is bound at Agent construction time, so callers must pass
-``model=runtime_config.get_active_model()`` or a per-run override. On a
-mid-conversation model switch (via ``/v1/models/active``) the next call to
-``build`` returns a fresh Agent and the runner attaches it on
-``RunState.from_string(initial_agent=...)``.
+The model is bound at Agent construction time. Callers pass either a model
+name string (``runtime_config.get_active_model()`` or a per-run override) or
+a fully-built ``Model`` instance — the runner now passes the latter via
+:func:`backend.agents_sdk.runtime_setup.acquire_request_model` so each
+request carries its own ``AsyncOpenAI`` (per-request key rotation against
+the multi-key ``provider_pool``). On a mid-conversation model switch (via
+``/v1/models/active``) the next call to ``build`` returns a fresh Agent and
+the runner attaches it on ``RunState.from_string(initial_agent=...)``.
 """
 from __future__ import annotations
 
