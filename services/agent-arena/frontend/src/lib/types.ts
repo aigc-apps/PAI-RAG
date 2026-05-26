@@ -37,6 +37,7 @@ export type AgentTraceEvent = {
   error?: boolean | string | null
   text?: string | null
   delta?: string | null
+  item_type?: string | null
 }
 
 export type TraceSummary = {
@@ -220,4 +221,145 @@ export type BatchDetailResponse = {
   consistency_results: ConsistencyResponse[]
 }
 
-export type ViewMode = "arena" | "batch" | "history"
+export type ViewMode =
+  | "arena"
+  | "batch"
+  | "history"
+  | "endpoints"
+  | "judge-model"
+  | "datasets"
+
+// ---- DB-backed config & dataset entities ----------------------------------
+
+export type EnvVarStatus = {
+  name: string
+  present: boolean
+  preview: string
+}
+
+export type AgentDef = {
+  id: string
+  created_at: string
+  updated_at: string
+  name: string
+  base_url: string
+  model: string
+  trace_mode: "responses" | "chat" | "runs"
+  api_key_env: EnvVarStatus
+  runs_base_url: string
+  headers: Record<string, string>
+  description: string
+}
+
+export type ActivePair = {
+  a_agent_id: string | null
+  b_agent_id: string | null
+  updated_at: string | null
+}
+
+export type AgentListResponse = {
+  agents: AgentDef[]
+  active_pair: ActivePair
+}
+
+export type JudgeConfigDef = {
+  base_url: string
+  model: string
+  api_key_env: EnvVarStatus
+  source: "db" | "env"
+  updated_at?: string | null
+}
+
+export type Dataset = {
+  id: string
+  created_at: string
+  updated_at: string
+  name: string
+  description: string
+  case_count?: number
+  last_run?: DatasetRun | null
+}
+
+export type DatasetCase = {
+  id: string
+  dataset_id: string
+  created_at: string
+  updated_at: string
+  query: string
+  system_prompt: string
+  expected_answer: string
+  tags: string[]
+  source_run_id: string | null
+}
+
+export type DatasetWithChildren = Dataset & {
+  cases: DatasetCase[]
+  runs: DatasetRun[]
+}
+
+export type DatasetRunWinners = {
+  a: number
+  b: number
+  tie: number
+  unknown: number
+}
+
+export type DatasetRunSummary = {
+  total?: number
+  completed?: number
+  failed?: number
+  judged?: number
+  winners?: DatasetRunWinners
+}
+
+export type DatasetRun = {
+  id: string
+  dataset_id: string
+  created_at: string
+  finished_at: string | null
+  status: "running" | "completed" | "completed_with_errors" | "failed" | string
+  agent_a_id: string | null
+  agent_b_id: string | null
+  judge_model: string | null
+  summary: DatasetRunSummary
+}
+
+export type DatasetRunItemBody = {
+  case?: { id: string; query: string; expected_answer: string }
+  agents?: {
+    a?: { name?: string; model?: string; ok?: boolean; latency_ms?: number | null; error?: string | null; content_preview?: string }
+    b?: { name?: string; model?: string; ok?: boolean; latency_ms?: number | null; error?: string | null; content_preview?: string }
+  }
+  judge?: {
+    ok?: boolean
+    winner?: string | null
+    summary?: string
+    error?: string | null
+  }
+  error?: string
+}
+
+export type DatasetRunItem = {
+  id: string
+  run_id: string
+  case_id: string
+  idx: number
+  status: string
+  a_run_id: string | null
+  b_run_id: string | null
+  judge_result_id: string | null
+  body: DatasetRunItemBody
+}
+
+export type DatasetRunDetail = DatasetRun & {
+  items: DatasetRunItem[]
+}
+
+export type ArenaRunCandidate = {
+  run_id: string
+  created_at: string
+  input: string
+  system: string
+  agent_a_name: string
+  agent_b_name: string
+}

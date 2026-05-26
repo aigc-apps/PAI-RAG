@@ -26,6 +26,7 @@ import { AgentResultPanel, EmptyBox } from "@/components/arena/AgentResultPanel"
 import { CodeBlock } from "@/components/arena/CodeBlock"
 import { ConsistencyPanel } from "@/components/arena/ConsistencyPanel"
 import { JudgePanel } from "@/components/arena/JudgePanel"
+import { SaveToDatasetButton } from "@/components/arena/SaveToDatasetButton"
 import { TraceModal } from "@/components/arena/TraceModal"
 import { StatusDot } from "@/components/StatusDot"
 import {
@@ -362,6 +363,11 @@ function ArenaDetail({
               <Badge variant="neutral">Judge ×{detail.judges.length}</Badge>
               {latestJudge ? <WinnerBadge winner={latestJudge.winner} /> : null}
             </div>
+            <SaveToDatasetButton
+              source={{ kind: "arena", runId: detail.run_id }}
+              defaultQuery={detail.input}
+              defaultSystem={detail.system}
+            />
           </div>
           <div className="rounded-arena border border-arena-border bg-arena-bg-subtle p-3 text-[13px] leading-relaxed text-arena-text-primary">
             {detail.input}
@@ -622,10 +628,18 @@ function batchInputFromRequest(detail: BatchDetailResponse): string | undefined 
   return form.input || raw.input
 }
 
+function batchSystemFromRequest(detail: BatchDetailResponse): string | undefined {
+  const req = detail.request as Record<string, unknown>
+  const form = (req.form ?? {}) as { system?: string }
+  const raw = (req.raw_body ?? {}) as { system?: string }
+  return form.system || raw.system
+}
+
 function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [traceItem, setTraceItem] = useState<BatchDetailItem | null>(null)
   const userInput = batchInputFromRequest(detail)
+  const userSystem = batchSystemFromRequest(detail)
 
   function rowKey(item: BatchDetailItem) {
     return `${item.agent_key}-${item.index}`
@@ -687,6 +701,9 @@ function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
                   <HistoryItemRow
                     key={rowKey(item)}
                     item={item}
+                    batchId={detail.batch_id}
+                    batchInput={userInput}
+                    batchSystem={userSystem}
                     expanded={expanded.has(rowKey(item))}
                     onToggle={() => toggle(item)}
                     onOpenTrace={() => setTraceItem(item)}
@@ -717,11 +734,17 @@ function BatchItemsTable({ detail }: { detail: BatchDetailResponse }) {
 
 function HistoryItemRow({
   item,
+  batchId,
+  batchInput,
+  batchSystem,
   expanded,
   onToggle,
   onOpenTrace,
 }: {
   item: BatchDetailItem
+  batchId: string
+  batchInput?: string
+  batchSystem?: string
   expanded: boolean
   onToggle: () => void
   onOpenTrace: () => void
@@ -806,8 +829,22 @@ function HistoryItemRow({
                   </AlertDescription>
                 </Alert>
               ) : null}
-              <div className="text-[11px] text-arena-text-tertiary">
-                点击行首 <GitBranch className="inline size-3" /> 图标查看完整 Trace 可视化
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] text-arena-text-tertiary">
+                  点击行首 <GitBranch className="inline size-3" /> 图标查看完整 Trace 可视化
+                </div>
+                <SaveToDatasetButton
+                  source={{
+                    kind: "batch-item",
+                    batchId,
+                    idx: item.index,
+                    agentKey: item.agent_key,
+                  }}
+                  defaultQuery={batchInput}
+                  defaultSystem={batchSystem}
+                  defaultExpectedAnswer={item.content || ""}
+                  label="此条入集"
+                />
               </div>
             </div>
           </td>

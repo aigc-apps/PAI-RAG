@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { AgentResultPanel } from "@/components/arena/AgentResultPanel"
 import { CodeBlock } from "@/components/arena/CodeBlock"
 import { JudgePanel } from "@/components/arena/JudgePanel"
+import { SaveToDatasetButton } from "@/components/arena/SaveToDatasetButton"
 import type {
   CompareResponse,
   ConfigResponse,
@@ -165,6 +166,16 @@ export function ArenaPage({
       </Card>
 
       <div className="space-y-5">
+        {result ? (
+          <div className="flex items-center justify-end gap-2 text-[11px] text-arena-text-tertiary">
+            <span className="font-mono">run_id {result.run_id}</span>
+            <SaveToDatasetButton
+              source={{ kind: "arena", runId: result.run_id }}
+              defaultQuery={input}
+              defaultSystem={system}
+            />
+          </div>
+        ) : null}
         <div className="grid gap-5 xl:grid-cols-2">
           <AgentResultPanel
             id="a"

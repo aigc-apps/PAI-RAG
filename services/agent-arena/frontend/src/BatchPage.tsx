@@ -33,6 +33,7 @@ import type {
   ConsistencyResponse,
 } from "@/lib/types"
 import { ConsistencyPanel } from "@/components/arena/ConsistencyPanel"
+import { SaveToDatasetButton } from "@/components/arena/SaveToDatasetButton"
 import { TraceModal } from "@/components/arena/TraceModal"
 import { apiFetch, apiHeaders, apiUrl, readApiJson } from "@/lib/api"
 import { normalizeError, reportFrontendLog } from "@/lib/frontendLogger"
@@ -317,11 +318,19 @@ function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
 
 function ItemRow({
   item,
+  batchId,
+  batchInput,
+  batchSystem,
+  saveDisabled,
   expanded,
   onToggle,
   onOpenTrace,
 }: {
   item: BatchRunItem
+  batchId: string
+  batchInput?: string
+  batchSystem?: string
+  saveDisabled: boolean
   expanded: boolean
   onToggle: () => void
   onOpenTrace: () => void
@@ -410,8 +419,23 @@ function ItemRow({
                   <AlertDescription className="whitespace-pre-wrap break-words">{item.error}</AlertDescription>
                 </Alert>
               ) : null}
-              <div className="text-[11px] text-arena-text-tertiary">
-                点击行首 <GitBranch className="inline size-3" /> 图标查看完整 Trace 可视化
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] text-arena-text-tertiary">
+                  点击行首 <GitBranch className="inline size-3" /> 图标查看完整 Trace 可视化
+                </div>
+                <SaveToDatasetButton
+                  source={{
+                    kind: "batch-item",
+                    batchId,
+                    idx: item.index,
+                    agentKey: item.agent_key,
+                  }}
+                  defaultQuery={batchInput}
+                  defaultSystem={batchSystem}
+                  defaultExpectedAnswer={item.content || ""}
+                  label="此条入集"
+                  disabled={saveDisabled}
+                />
               </div>
             </div>
           </td>
@@ -947,6 +971,10 @@ export function BatchPage({ config }: { config: ConfigResponse | null }) {
                       <ItemRow
                         key={rowKey(item)}
                         item={item}
+                        batchId={batchId}
+                        batchInput={mode === "form" ? formInput : undefined}
+                        batchSystem={mode === "form" ? formSystem : undefined}
+                        saveDisabled={running || !batchId}
                         expanded={expanded.has(rowKey(item))}
                         onToggle={() => toggleExpand(item)}
                         onOpenTrace={() => setTraceItem(item)}

@@ -36,6 +36,9 @@ import type {
 import { BatchPage } from "@/BatchPage"
 import { ArenaPage } from "@/pages/ArenaPage"
 import { HistoryPage } from "@/pages/HistoryPage"
+import { EndpointsPage } from "@/pages/EndpointsPage"
+import { JudgeModelPage } from "@/pages/JudgeModelPage"
+import { DatasetsPage } from "@/pages/DatasetsPage"
 
 const PAGE_TITLE: Record<ViewMode, { title: string; badge?: string; subtitle: string }> = {
   arena: {
@@ -53,6 +56,21 @@ const PAGE_TITLE: Record<ViewMode, { title: string; badge?: string; subtitle: st
     title: "历史记录",
     badge: "Replay",
     subtitle: "所有对比与 Judge 评估结果，按时间倒序展示，支持回放。",
+  },
+  endpoints: {
+    title: "Agent 端点",
+    badge: "Library",
+    subtitle: "管理 Agent 库与当前 A/B 绑定。API Key 仅记录环境变量名，密钥不入库。",
+  },
+  "judge-model": {
+    title: "Judge 模型",
+    badge: "Evaluator",
+    subtitle: "竞技场、稳定性测试、评测集统一调用的 Judge 模型配置。",
+  },
+  datasets: {
+    title: "评测集",
+    badge: "Eval",
+    subtitle: "命名管理黄金答案集 / Query 集合，可手动新增，也可从历史 Arena 运行采集。",
   },
 }
 
@@ -463,6 +481,12 @@ function App() {
             onJudge={runJudge}
             onClear={clearAll}
           />
+        ) : view === "endpoints" ? (
+          <EndpointsPage onUnauthorized={() => markUnauthorized()} />
+        ) : view === "judge-model" ? (
+          <JudgeModelPage onUnauthorized={() => markUnauthorized()} />
+        ) : view === "datasets" ? (
+          <DatasetsPage onUnauthorized={() => markUnauthorized()} />
         ) : (
           <HistoryPage
             items={historyItems}

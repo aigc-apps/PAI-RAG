@@ -22,6 +22,8 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
+from . import config_store, dataset_store
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
@@ -135,6 +137,11 @@ class AgentTraceEvent(BaseModel):
     error: bool | str | None = None
     text: str | None = None
     delta: str | None = None
+    # Responses API output_item type (e.g. "function_call", "message",
+    # "reasoning"). Lets summarize_trace count function_call items as tool
+    # invocations even though the event name is response.output_item.added
+    # rather than the agents-trace native tool.started.
+    item_type: str | None = None
 
 
 class AgentResult(BaseModel):
@@ -377,6 +384,92 @@ class ConsistencyResponse(BaseModel):
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
+# ---- Config & dataset payloads (DB-backed config; api_key_env references the
+# name of an env var that holds the real secret) -----------------------------
+
+
+class AgentDefCreate(BaseModel):
+    name: str = Field(..., min_length=1)
+    base_url: str = Field(..., min_length=1)
+    model: str = Field(..., min_length=1)
+    trace_mode: Literal["responses", "chat", "runs"] = "responses"
+    api_key_env: str = ""
+    runs_base_url: str = ""
+    headers: dict[str, str] = Field(default_factory=dict)
+    description: str = ""
+
+
+class AgentDefPatch(BaseModel):
+    name: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    trace_mode: Literal["responses", "chat", "runs"] | None = None
+    api_key_env: str | None = None
+    runs_base_url: str | None = None
+    headers: dict[str, str] | None = None
+    description: str | None = None
+
+
+class ActivePairSet(BaseModel):
+    a_agent_id: str | None = None
+    b_agent_id: str | None = None
+
+
+class JudgeConfigSet(BaseModel):
+    base_url: str = Field(..., min_length=1)
+    model: str = Field(..., min_length=1)
+    api_key_env: str = ""
+
+
+class DatasetCreate(BaseModel):
+    name: str = Field(..., min_length=1)
+    description: str = ""
+
+
+class DatasetPatch(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class DatasetCaseCreate(BaseModel):
+    query: str = Field(..., min_length=1)
+    system_prompt: str = ""
+    expected_answer: str = ""
+    tags: list[str] = Field(default_factory=list)
+    source_run_id: str | None = None
+
+
+class DatasetCasePatch(BaseModel):
+    query: str | None = None
+    system_prompt: str | None = None
+    expected_answer: str | None = None
+    tags: list[str] | None = None
+
+
+class HarvestCasePayload(BaseModel):
+    dataset_id: str = Field(..., min_length=1)
+    expected_answer: str = ""
+    query_override: str | None = None
+    system_override: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class BatchItemHarvestPayload(BaseModel):
+    batch_id: str = Field(..., min_length=1)
+    idx: int = Field(..., ge=0)
+    agent_key: str = Field(..., min_length=1)  # "a" or "b"
+    dataset_id: str = Field(..., min_length=1)
+    expected_answer: str = ""
+    query_override: str | None = None
+    system_override: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class DatasetRunStart(BaseModel):
+    case_ids: list[str] | None = None  # None = all cases
+    judge_each: bool = True
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -498,6 +591,8 @@ def init_history_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_batch_consistency_batch_id "
             "ON batch_consistency_results(batch_id, created_at DESC)"
         )
+        config_store.init_tables(conn)
+        dataset_store.init_tables(conn)
 
 
 def history_connect() -> sqlite3.Connection:
@@ -856,7 +951,7 @@ def normalize_runs_url(base_url: str) -> str:
     return f"{clean}/v1/runs"
 
 
-def get_agent_config(prefix: str, fallback_name: str) -> AgentConfig:
+def _env_agent_config(prefix: str, fallback_name: str) -> AgentConfig:
     trace_mode = os.getenv(f"{prefix}_TRACE_MODE", "responses").strip().lower()
     if trace_mode not in {"responses", "chat", "runs"}:
         trace_mode = "responses"
@@ -870,7 +965,46 @@ def get_agent_config(prefix: str, fallback_name: str) -> AgentConfig:
     )
 
 
+def _record_to_agent_config(record: dict[str, Any]) -> AgentConfig:
+    trace_mode = record.get("trace_mode", "responses")
+    if trace_mode not in {"responses", "chat", "runs"}:
+        trace_mode = "responses"
+    api_key_env = record.get("api_key_env") or ""
+    api_key = os.getenv(api_key_env, "").strip() if api_key_env else ""
+    return AgentConfig(
+        name=record.get("name") or "",
+        base_url=record.get("base_url") or "",
+        api_key=api_key,
+        model=record.get("model") or "",
+        trace_mode=trace_mode,
+        runs_base_url=record.get("runs_base_url") or "",
+    )
+
+
+def get_agent_config(slot: str, fallback_name: str) -> AgentConfig:
+    """Resolve the active agent for slot 'a' or 'b'. DB-first, env fallback."""
+    slot_norm = (slot or "").strip().lower()
+    if slot_norm not in {"a", "b"}:
+        slot_norm = "a"
+    with history_connect() as conn:
+        record = config_store.load_active_agent_record(conn, slot_norm)  # type: ignore[arg-type]
+    if record is not None:
+        return _record_to_agent_config(record)
+    prefix = f"AGENT_{slot_norm.upper()}"
+    return _env_agent_config(prefix, fallback_name)
+
+
 def get_judge_config() -> JudgeConfig:
+    with history_connect() as conn:
+        record = config_store.get_judge_record(conn)
+    if record is not None:
+        api_key_env = record.get("api_key_env") or ""
+        api_key = os.getenv(api_key_env, "").strip() if api_key_env else ""
+        return JudgeConfig(
+            base_url=record.get("base_url") or "",
+            api_key=api_key,
+            model=record.get("model") or "",
+        )
     return JudgeConfig(
         base_url=os.getenv("JUDGE_BASE_URL", "https://api.openai.com/v1").strip(),
         api_key=(
@@ -1023,11 +1157,14 @@ def normalize_trace_event(raw: dict[str, Any]) -> AgentTraceEvent:
     elif isinstance(content, str):
         content_text = content
 
+    item = update.get("item") if isinstance(update.get("item"), dict) else None
+    item_type = str(item.get("type")) if item and isinstance(item.get("type"), str) else None
     tool_name = (
         raw.get("tool")
         or update.get("tool")
         or update.get("toolName")
         or update.get("name")
+        or (item.get("name") if item and isinstance(item.get("name"), str) else None)
     )
     preview = raw.get("preview")
     if preview is None:
@@ -1047,26 +1184,35 @@ def normalize_trace_event(raw: dict[str, Any]) -> AgentTraceEvent:
     elif content_text:
         text = text or content_text
 
+    err_raw = raw.get("error") if raw.get("error") is not None else update.get("error")
+    if isinstance(err_raw, dict):
+        err_raw = str(err_raw.get("message") or json.dumps(err_raw, ensure_ascii=False))
+    elif err_raw is not None and not isinstance(err_raw, (bool, str)):
+        err_raw = str(err_raw)
+
     return AgentTraceEvent(
         event=event_name,
         timestamp=raw.get("timestamp") or raw.get("created_at"),
         tool=tool_name,
         preview=truncate_text(preview) if preview is not None else None,
         duration=raw.get("duration") or update.get("duration"),
-        error=raw.get("error") if raw.get("error") is not None else update.get("error"),
+        error=err_raw,
         text=truncate_text(text) if text is not None else None,
         delta=truncate_text(delta) if delta is not None else None,
+        item_type=item_type,
     )
 
 
 def summarize_trace(events: list[AgentTraceEvent], supported: bool) -> dict[str, Any]:
     tool_call_count = sum(
         1 for event in events
-        if event.event in {"tool.started", "tool_call_update"} and event.preview != "completed"
+        if (event.event in {"tool.started", "tool_call_update"} and event.preview != "completed")
+        or (event.event == "response.output_item.added" and event.item_type == "function_call")
     )
     failed_tool_count = sum(
         1 for event in events
-        if event.event in {"tool.completed", "tool_call_update"} and bool(event.error)
+        if (event.event in {"tool.completed", "tool_call_update"} and bool(event.error))
+        or (event.event == "response.output_item.done" and event.item_type == "function_call" and bool(event.error))
     )
     total_tool_duration_s = sum(
         event.duration or 0 for event in events if event.event in {"tool.completed", "tool_call_update"}
@@ -1752,8 +1898,8 @@ async def stream_batch(request: BatchRunRequest):
     created_at = utc_now()
     keys = _agent_keys_for_target(request.target)
     agents: dict[str, AgentConfig] = {
-        "a": get_agent_config("AGENT_A", "Agent A"),
-        "b": get_agent_config("AGENT_B", "Agent B"),
+        "a": get_agent_config("a", "Agent A"),
+        "b": get_agent_config("b", "Agent B"),
     }
     total_items = request.iterations * len(keys)
     queue: asyncio.Queue[BatchRunItem | None] = asyncio.Queue()
@@ -2322,14 +2468,16 @@ ArenaAuth = Depends(require_arena_auth)
 @app.on_event("startup")
 async def startup() -> None:
     init_history_db()
+    with history_connect() as conn:
+        config_store.migrate_from_env(conn)
 
 
 @app.get("/api/config", dependencies=[ArenaAuth])
 async def api_config() -> dict[str, Any]:
     return {
         "agents": {
-            "a": public_agent_config(get_agent_config("AGENT_A", "Agent A")),
-            "b": public_agent_config(get_agent_config("AGENT_B", "Agent B")),
+            "a": public_agent_config(get_agent_config("a", "Agent A")),
+            "b": public_agent_config(get_agent_config("b", "Agent B")),
         },
         "judge": public_judge_config(get_judge_config()),
         "timeout_seconds": get_timeout_seconds(),
@@ -2349,8 +2497,8 @@ async def api_compare(request: CompareRequest) -> CompareResponse:
         messages.append({"role": "system", "content": request.system.strip()})
     messages.append({"role": "user", "content": user_input})
 
-    agent_a = get_agent_config("AGENT_A", "Agent A")
-    agent_b = get_agent_config("AGENT_B", "Agent B")
+    agent_a = get_agent_config("a", "Agent A")
+    agent_b = get_agent_config("b", "Agent B")
     timeout = httpx.Timeout(get_timeout_seconds())
 
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -2477,6 +2625,518 @@ async def api_history_detail(run_id: str) -> HistoryDetailResponse:
     if detail is None:
         raise HTTPException(status_code=404, detail="history run not found")
     return detail
+
+
+# ---------- Agent library CRUD + active pair --------------------------------
+
+
+def _public_agent_record(record: dict[str, Any]) -> dict[str, Any]:
+    out = dict(record)
+    out["api_key_env"] = config_store.env_var_status(record.get("api_key_env") or "")
+    return out
+
+
+@app.get("/api/agents", dependencies=[ArenaAuth])
+async def api_list_agents() -> dict[str, Any]:
+    with history_connect() as conn:
+        records = config_store.list_agents(conn)
+        pair = config_store.get_active_pair(conn)
+    return {
+        "agents": [_public_agent_record(r) for r in records],
+        "active_pair": pair,
+    }
+
+
+@app.post("/api/agents", dependencies=[ArenaAuth])
+async def api_create_agent(payload: AgentDefCreate) -> dict[str, Any]:
+    with history_connect() as conn:
+        rec = config_store.create_agent(
+            conn,
+            name=payload.name,
+            base_url=payload.base_url,
+            model=payload.model,
+            trace_mode=payload.trace_mode,
+            api_key_env=payload.api_key_env,
+            runs_base_url=payload.runs_base_url,
+            headers=payload.headers,
+            description=payload.description,
+        )
+    return _public_agent_record(rec)
+
+
+@app.patch("/api/agents/{agent_id}", dependencies=[ArenaAuth])
+async def api_update_agent(agent_id: str, payload: AgentDefPatch) -> dict[str, Any]:
+    with history_connect() as conn:
+        rec = config_store.update_agent(
+            conn,
+            agent_id,
+            name=payload.name,
+            base_url=payload.base_url,
+            model=payload.model,
+            trace_mode=payload.trace_mode,
+            api_key_env=payload.api_key_env,
+            runs_base_url=payload.runs_base_url,
+            headers=payload.headers,
+            description=payload.description,
+        )
+    if rec is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+    return _public_agent_record(rec)
+
+
+@app.delete("/api/agents/{agent_id}", dependencies=[ArenaAuth])
+async def api_delete_agent(agent_id: str) -> dict[str, Any]:
+    with history_connect() as conn:
+        ok = config_store.delete_agent(conn, agent_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="agent not found")
+    return {"ok": True}
+
+
+@app.get("/api/agents/active-pair", dependencies=[ArenaAuth])
+async def api_get_active_pair() -> dict[str, Any]:
+    with history_connect() as conn:
+        return config_store.get_active_pair(conn)
+
+
+@app.put("/api/agents/active-pair", dependencies=[ArenaAuth])
+async def api_set_active_pair(payload: ActivePairSet) -> dict[str, Any]:
+    with history_connect() as conn:
+        # Validate referenced agents exist (None is allowed = clear slot).
+        for aid in (payload.a_agent_id, payload.b_agent_id):
+            if aid and config_store.get_agent(conn, aid) is None:
+                raise HTTPException(status_code=400, detail=f"agent {aid} not found")
+        return config_store.set_active_pair(
+            conn,
+            a_agent_id=payload.a_agent_id,
+            b_agent_id=payload.b_agent_id,
+        )
+
+
+# ---------- Judge config -----------------------------------------------------
+
+
+@app.get("/api/judge/config", dependencies=[ArenaAuth])
+async def api_get_judge_config() -> dict[str, Any]:
+    with history_connect() as conn:
+        rec = config_store.get_judge_record(conn)
+    if rec is None:
+        # Expose env-fallback shape so the frontend form has values to render.
+        env_fallback = get_judge_config()
+        return {
+            "base_url": env_fallback.base_url,
+            "model": env_fallback.model,
+            "api_key_env": config_store.env_var_status(""),
+            "source": "env",
+        }
+    out = dict(rec)
+    out["api_key_env"] = config_store.env_var_status(rec.get("api_key_env") or "")
+    out["source"] = "db"
+    return out
+
+
+@app.put("/api/judge/config", dependencies=[ArenaAuth])
+async def api_set_judge_config(payload: JudgeConfigSet) -> dict[str, Any]:
+    with history_connect() as conn:
+        rec = config_store.set_judge_record(
+            conn,
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key_env=payload.api_key_env,
+        )
+    out = dict(rec)
+    out["api_key_env"] = config_store.env_var_status(rec.get("api_key_env") or "")
+    out["source"] = "db"
+    return out
+
+
+# ---------- Datasets CRUD + cases CRUD --------------------------------------
+
+
+@app.get("/api/datasets", dependencies=[ArenaAuth])
+async def api_list_datasets() -> dict[str, Any]:
+    with history_connect() as conn:
+        return {"datasets": dataset_store.list_datasets(conn)}
+
+
+@app.post("/api/datasets", dependencies=[ArenaAuth])
+async def api_create_dataset(payload: DatasetCreate) -> dict[str, Any]:
+    with history_connect() as conn:
+        return dataset_store.create_dataset(
+            conn, name=payload.name, description=payload.description
+        )
+
+
+@app.get("/api/datasets/{dataset_id}", dependencies=[ArenaAuth])
+async def api_get_dataset(dataset_id: str) -> dict[str, Any]:
+    with history_connect() as conn:
+        ds = dataset_store.get_dataset(conn, dataset_id)
+        if ds is None:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        ds["cases"] = dataset_store.list_cases(conn, dataset_id)
+        ds["runs"] = dataset_store.list_runs(conn, dataset_id)
+    return ds
+
+
+@app.patch("/api/datasets/{dataset_id}", dependencies=[ArenaAuth])
+async def api_update_dataset(dataset_id: str, payload: DatasetPatch) -> dict[str, Any]:
+    with history_connect() as conn:
+        ds = dataset_store.update_dataset(
+            conn, dataset_id, name=payload.name, description=payload.description
+        )
+    if ds is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return ds
+
+
+@app.delete("/api/datasets/{dataset_id}", dependencies=[ArenaAuth])
+async def api_delete_dataset(dataset_id: str) -> dict[str, Any]:
+    with history_connect() as conn:
+        ok = dataset_store.delete_dataset(conn, dataset_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return {"ok": True}
+
+
+@app.post("/api/datasets/{dataset_id}/cases", dependencies=[ArenaAuth])
+async def api_create_case(dataset_id: str, payload: DatasetCaseCreate) -> dict[str, Any]:
+    with history_connect() as conn:
+        if dataset_store.get_dataset(conn, dataset_id) is None:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        return dataset_store.create_case(
+            conn,
+            dataset_id=dataset_id,
+            query=payload.query,
+            system_prompt=payload.system_prompt,
+            expected_answer=payload.expected_answer,
+            tags=payload.tags,
+            source_run_id=payload.source_run_id,
+        )
+
+
+@app.patch("/api/datasets/cases/{case_id}", dependencies=[ArenaAuth])
+async def api_update_case(case_id: str, payload: DatasetCasePatch) -> dict[str, Any]:
+    with history_connect() as conn:
+        case = dataset_store.update_case(
+            conn,
+            case_id,
+            query=payload.query,
+            system_prompt=payload.system_prompt,
+            expected_answer=payload.expected_answer,
+            tags=payload.tags,
+        )
+    if case is None:
+        raise HTTPException(status_code=404, detail="case not found")
+    return case
+
+
+@app.delete("/api/datasets/cases/{case_id}", dependencies=[ArenaAuth])
+async def api_delete_case(case_id: str) -> dict[str, Any]:
+    with history_connect() as conn:
+        ok = dataset_store.delete_case(conn, case_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="case not found")
+    return {"ok": True}
+
+
+# ---------- Harvest a run into a dataset + candidates listing ---------------
+
+
+@app.get("/api/arena-runs/candidates", dependencies=[ArenaAuth])
+async def api_arena_run_candidates(limit: int = 30) -> dict[str, Any]:
+    """Recent arena_runs that have NOT yet been harvested into any dataset.
+
+    Used by the dataset detail page's Candidates tab so users can promote
+    interesting one-off arena runs into a permanent eval case.
+    """
+    safe_limit = max(1, min(limit, 100))
+    with history_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT r.id, r.created_at, r.input, r.system, r.agent_a_name, r.agent_b_name
+            FROM arena_runs r
+            WHERE NOT EXISTS (
+                SELECT 1 FROM dataset_cases c WHERE c.source_run_id = r.id
+            )
+            ORDER BY r.created_at DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    return {
+        "candidates": [
+            {
+                "run_id": r["id"],
+                "created_at": r["created_at"],
+                "input": r["input"],
+                "system": r["system"] or "",
+                "agent_a_name": r["agent_a_name"] or "",
+                "agent_b_name": r["agent_b_name"] or "",
+            }
+            for r in rows
+        ]
+    }
+
+
+@app.post("/api/arena-runs/{run_id}/save-to-dataset", dependencies=[ArenaAuth])
+async def api_save_run_to_dataset(run_id: str, payload: HarvestCasePayload) -> dict[str, Any]:
+    with history_connect() as conn:
+        run_row = conn.execute(
+            "SELECT input, system FROM arena_runs WHERE id = ?", (run_id,)
+        ).fetchone()
+        if run_row is None:
+            raise HTTPException(status_code=404, detail="arena run not found")
+        if dataset_store.get_dataset(conn, payload.dataset_id) is None:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        query = (payload.query_override or run_row["input"] or "").strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="query is empty")
+        system_prompt = (
+            payload.system_override
+            if payload.system_override is not None
+            else (run_row["system"] or "")
+        )
+        case = dataset_store.create_case(
+            conn,
+            dataset_id=payload.dataset_id,
+            query=query,
+            system_prompt=system_prompt,
+            expected_answer=payload.expected_answer,
+            tags=payload.tags,
+            source_run_id=run_id,
+        )
+    return case
+
+
+@app.post("/api/batch-items/save-to-dataset", dependencies=[ArenaAuth])
+async def api_save_batch_item_to_dataset(payload: BatchItemHarvestPayload) -> dict[str, Any]:
+    # Batch items don't have an entry in arena_runs (different storage path),
+    # so we resolve query/system from batch_runs.request_json and synthesize
+    # a composite source_run_id of the form "batch:{batch_id}#{idx}/{agent_key}".
+    with history_connect() as conn:
+        batch_row = conn.execute(
+            "SELECT request_json FROM batch_runs WHERE id = ?", (payload.batch_id,)
+        ).fetchone()
+        if batch_row is None:
+            raise HTTPException(status_code=404, detail="batch not found")
+        item_row = conn.execute(
+            "SELECT 1 FROM batch_run_items WHERE batch_id = ? AND idx = ? AND agent_key = ?",
+            (payload.batch_id, payload.idx, payload.agent_key),
+        ).fetchone()
+        if item_row is None:
+            raise HTTPException(status_code=404, detail="batch item not found")
+        if dataset_store.get_dataset(conn, payload.dataset_id) is None:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        try:
+            request_data = json.loads(batch_row["request_json"]) or {}
+        except (TypeError, ValueError):
+            request_data = {}
+        form = request_data.get("form") if isinstance(request_data.get("form"), dict) else {}
+        raw_body = request_data.get("raw_body") if isinstance(request_data.get("raw_body"), dict) else {}
+        default_query = form.get("input") or raw_body.get("input") or ""
+        default_system = form.get("system") or raw_body.get("system") or ""
+        query = (payload.query_override or default_query or "").strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="query is empty")
+        system_prompt = (
+            payload.system_override
+            if payload.system_override is not None
+            else (default_system or "")
+        )
+        source_id = f"batch:{payload.batch_id}#{payload.idx}/{payload.agent_key}"
+        case = dataset_store.create_case(
+            conn,
+            dataset_id=payload.dataset_id,
+            query=query,
+            system_prompt=system_prompt,
+            expected_answer=payload.expected_answer,
+            tags=payload.tags,
+            source_run_id=source_id,
+        )
+    return case
+
+
+# ---------- Dataset eval run: start (async), fetch, list --------------------
+
+
+async def _orchestrate_dataset_run(
+    *,
+    run_id: str,
+    dataset_id: str,
+    case_ids: list[str] | None,
+    judge_each: bool,
+) -> None:
+    """Background task: run every selected case through agents A and B, then
+    judge each. Writes per-case rows into dataset_run_items, updates summary
+    on dataset_runs at the end. Catches per-case exceptions so one bad case
+    can't tank the whole run.
+    """
+    agent_a = get_agent_config("a", "Agent A")
+    agent_b = get_agent_config("b", "Agent B")
+    judge = get_judge_config()
+    timeout = httpx.Timeout(get_timeout_seconds())
+
+    with history_connect() as conn:
+        all_cases = dataset_store.list_cases(conn, dataset_id)
+    if case_ids:
+        wanted = set(case_ids)
+        cases = [c for c in all_cases if c["id"] in wanted]
+    else:
+        cases = all_cases
+
+    summary: dict[str, Any] = {
+        "total": len(cases),
+        "completed": 0,
+        "failed": 0,
+        "judged": 0,
+        "winners": {"A": 0, "B": 0, "tie": 0, "unknown": 0},
+    }
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for idx, case in enumerate(cases):
+            messages: list[dict[str, str]] = []
+            if case["system_prompt"]:
+                messages.append({"role": "system", "content": case["system_prompt"]})
+            messages.append({"role": "user", "content": case["query"]})
+
+            a_run_id_used: str | None = None
+            b_run_id_used: str | None = None
+            judge_result_id: str | None = None
+            body: dict[str, Any] = {
+                "case": {
+                    "id": case["id"],
+                    "query": case["query"],
+                    "expected_answer": case["expected_answer"],
+                }
+            }
+            item_status = "completed"
+            try:
+                result_a, result_b = await asyncio.gather(
+                    call_agent(client, agent_a, messages, 0.2, None),
+                    call_agent(client, agent_b, messages, 0.2, None),
+                )
+                compare = CompareResponse(
+                    run_id=new_id("run"),
+                    request={
+                        "messages": messages,
+                        "temperature": 0.2,
+                        "max_tokens": None,
+                        "dataset_run_id": run_id,
+                        "dataset_case_id": case["id"],
+                    },
+                    agents={"a": result_a, "b": result_b},
+                )
+                save_compare_history(
+                    compare, case["query"], case["system_prompt"], 0.2, None
+                )
+                a_run_id_used = compare.run_id
+                b_run_id_used = compare.run_id
+                body["agents"] = {
+                    "a": agent_history_summary(result_a),
+                    "b": agent_history_summary(result_b),
+                }
+
+                if judge_each and judge.configured:
+                    judge_resp = await call_judge(
+                        JudgeRequest(
+                            run_id=compare.run_id,
+                            input=case["query"],
+                            system=case["system_prompt"],
+                            agent_a=result_a,
+                            agent_b=result_b,
+                        )
+                    )
+                    if judge_resp.ok:
+                        save_judge_history(compare.run_id, judge_resp)
+                        judge_result_id = judge_resp.judge_id
+                        summary["judged"] += 1
+                        winner = (judge_resp.winner or "unknown").upper()
+                        key = winner if winner in {"A", "B", "TIE"} else "UNKNOWN"
+                        summary["winners"][key.lower() if key != "TIE" else "tie"] += 1
+                    body["judge"] = {
+                        "ok": judge_resp.ok,
+                        "winner": judge_resp.winner,
+                        "summary": judge_resp.summary,
+                        "error": judge_resp.error,
+                    }
+                summary["completed"] += 1
+            except Exception as exc:  # noqa: BLE001
+                item_status = "failed"
+                summary["failed"] += 1
+                body["error"] = str(exc)
+
+            with history_connect() as conn:
+                dataset_store.upsert_run_item(
+                    conn,
+                    run_id=run_id,
+                    case_id=case["id"],
+                    idx=idx,
+                    status=item_status,
+                    a_run_id=a_run_id_used,
+                    b_run_id=b_run_id_used,
+                    judge_result_id=judge_result_id,
+                    body=body,
+                )
+
+    with history_connect() as conn:
+        dataset_store.finish_run(
+            conn,
+            run_id,
+            status="completed" if summary["failed"] == 0 else "completed_with_errors",
+            summary=summary,
+        )
+
+
+@app.post("/api/datasets/{dataset_id}/runs", dependencies=[ArenaAuth])
+async def api_start_dataset_run(
+    dataset_id: str, payload: DatasetRunStart
+) -> dict[str, Any]:
+    with history_connect() as conn:
+        if dataset_store.get_dataset(conn, dataset_id) is None:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        pair = config_store.get_active_pair(conn)
+        judge_rec = config_store.get_judge_record(conn)
+        cases = dataset_store.list_cases(conn, dataset_id)
+        if payload.case_ids:
+            wanted = set(payload.case_ids)
+            cases = [c for c in cases if c["id"] in wanted]
+        if not cases:
+            raise HTTPException(status_code=400, detail="no cases selected")
+        run = dataset_store.create_run(
+            conn,
+            dataset_id=dataset_id,
+            agent_a_id=pair.get("a_agent_id"),
+            agent_b_id=pair.get("b_agent_id"),
+            judge_model=(judge_rec or {}).get("model"),
+        )
+
+    asyncio.create_task(
+        _orchestrate_dataset_run(
+            run_id=run["id"],
+            dataset_id=dataset_id,
+            case_ids=payload.case_ids,
+            judge_each=payload.judge_each,
+        )
+    )
+    return run
+
+
+@app.get("/api/datasets/{dataset_id}/runs", dependencies=[ArenaAuth])
+async def api_list_dataset_runs(dataset_id: str) -> dict[str, Any]:
+    with history_connect() as conn:
+        if dataset_store.get_dataset(conn, dataset_id) is None:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        return {"runs": dataset_store.list_runs(conn, dataset_id)}
+
+
+@app.get("/api/datasets/runs/{run_id}", dependencies=[ArenaAuth])
+async def api_get_dataset_run(run_id: str) -> dict[str, Any]:
+    with history_connect() as conn:
+        run = dataset_store.get_run(conn, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="run not found")
+        run["items"] = dataset_store.list_run_items(conn, run_id)
+    return run
 
 
 @app.post("/api/frontend-log", dependencies=[ArenaAuth])

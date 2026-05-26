@@ -7,6 +7,9 @@ const PAGE_LABEL: Record<ViewMode, string> = {
   arena: "竞技场对比",
   batch: "稳定性测试",
   history: "历史记录",
+  endpoints: "Agent 端点",
+  "judge-model": "Judge 模型",
+  datasets: "评测集",
 }
 
 export function TopBar({

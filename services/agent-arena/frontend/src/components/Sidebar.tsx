@@ -27,9 +27,9 @@ const NAV_PRIMARY: NavItem[] = [
 ]
 
 const NAV_RESOURCES: NavItem[] = [
-  { key: "endpoints", label: "Agent 端点", icon: <Server className="size-4" />, disabled: true },
-  { key: "datasets", label: "评测集", icon: <FileText className="size-4" />, disabled: true },
-  { key: "judge-model", label: "Judge 模型", icon: <Settings2 className="size-4" />, disabled: true },
+  { key: "endpoints", label: "Agent 端点", icon: <Server className="size-4" /> },
+  { key: "datasets", label: "评测集", icon: <FileText className="size-4" /> },
+  { key: "judge-model", label: "Judge 模型", icon: <Settings2 className="size-4" /> },
 ]
 
 const NAV_OPS: NavItem[] = [
@@ -64,7 +64,12 @@ export function Sidebar({
       </NavSection>
       <NavSection label="资源">
         {NAV_RESOURCES.map((item) => (
-          <NavRow key={item.key} item={item} />
+          <NavRow
+            key={item.key}
+            item={item}
+            active={item.key === view}
+            onClick={() => onViewChange(item.key as ViewMode)}
+          />
         ))}
       </NavSection>
       <NavSection label="运维">
