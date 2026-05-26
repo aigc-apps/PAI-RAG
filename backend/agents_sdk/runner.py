@@ -21,7 +21,7 @@ import json
 import re
 import secrets
 import threading
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable
 
 from agents import Runner
@@ -1079,7 +1079,7 @@ async def _drive_stream(
             current_streaming = Runner.run_streamed(agent, input=final_state, max_turns=max_turns)
             continue
 
-        blob = final_state.to_string()
+        blob = final_state.to_string(context_serializer=asdict)
         pending_json = json.dumps(
             [
                 {
@@ -1215,7 +1215,7 @@ async def _drive_stream(
     state_store.upsert(
         id=ctx.response_id, session_id=ctx.session_id, run_id=ctx.run_id,
         response_id=ctx.response_id, user_id=ctx.user_id, model=model,
-        status=RUN_STATE_COMPLETED, run_state_blob=final_state.to_string(),
+        status=RUN_STATE_COMPLETED, run_state_blob=final_state.to_string(context_serializer=asdict),
         pending_interruption_json=None, last_event_id=None,
         audit_log_id=audit_log_id,
     )

@@ -81,7 +81,7 @@ class _FakeRunState:
         self.rejected.append((item, rejection_message))
         self._interruptions = [candidate for candidate in self._interruptions if candidate is not item]
 
-    def to_string(self):
+    def to_string(self, *, context_serializer=None):
         return '{"state":"ok"}'
 
 

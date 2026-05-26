@@ -30,7 +30,7 @@ import threading
 from typing import Tuple
 
 import httpx
-from agents import AsyncOpenAI, set_default_openai_api
+from agents import AsyncOpenAI, set_default_openai_api, set_tracing_disabled
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 
 import provider_pool
@@ -90,6 +90,11 @@ def _ensure_shared_http_client() -> httpx.AsyncClient:
             )
         if not _API_SET:
             set_default_openai_api('chat_completions')
+            # We target non-OpenAI upstreams via per-request keys; the SDK's
+            # default trace exporter posts to OpenAI's traces endpoint, which
+            # has no key here and would warn "OPENAI_API_KEY is not set,
+            # skipping trace export" on every run.
+            set_tracing_disabled(True)
             _API_SET = True
     return _SHARED_HTTP_CLIENT
 
