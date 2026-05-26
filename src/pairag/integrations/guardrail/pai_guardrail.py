@@ -15,6 +15,7 @@ class TextCheckResult(BaseModel):
     reject: bool = False  # 是否拒绝
     reason: str | None = None
     risk_level: str = "low"
+    attack_level: str = ""
     advice: str | None = None
 
 
@@ -57,8 +58,11 @@ class PaiLlmGuardrail:
             if response.status_code == 200 and response.body.code == 200:
                 # 调用成功
                 risk_level = response.body.data.risk_level
+                # risk_level 是 API 必返字段，直接访问；attack_level 是新增字段，旧版 SDK 可能不含此属性
+                attack_level = getattr(response.body.data, "attack_level", None) or ""
+
                 reject = False
-                if risk_level.lower() == "high":
+                if risk_level.lower() == "high" or attack_level.lower() == "high":
                     reject = True
 
                 advice = self.custom_advice
@@ -69,13 +73,19 @@ class PaiLlmGuardrail:
                         advice = DEFAULT_GUARDRAIL_ADVICE
 
                 reason = None
-                if reject and len(response.body.data.result) > 0:
-                    reason = response.body.data.result[0].description
+                if reject:
+                    if attack_level.lower() == "high":
+                        attack_result = getattr(response.body.data, "attack_result", None) or []
+                        if attack_result:
+                            reason = attack_result[0].description
+                    if reason is None and len(response.body.data.result) > 0:
+                        reason = response.body.data.result[0].description
 
                 result = TextCheckResult(
                     reject=reject,
                     reason=reason,
                     risk_level=response.body.data.risk_level,
+                    attack_level=attack_level,
                     advice=advice,
                 )
 
