@@ -18,7 +18,7 @@ import { apiFetch, isUnauthorizedError, readApiJson } from "@/lib/api"
 import { normalizeError } from "@/lib/frontendLogger"
 import type { ActivePair, AgentDef, AgentListResponse } from "@/lib/types"
 
-const TRACE_MODES = ["responses", "chat", "runs"] as const
+const TRACE_MODES = ["responses", "chat", "runs", "openclaw"] as const
 
 type FormState = {
   id: string | null
@@ -304,7 +304,7 @@ export function EndpointsPage({ onUnauthorized }: { onUnauthorized?: () => void 
             <div>
               <DialogTitle>{form.id ? "编辑 Agent" : "新增 Agent"}</DialogTitle>
               <DialogDescription>
-                Trace mode 决定后端调用哪种 API：responses 用 /v1/responses；chat 用 /v1/chat/completions；runs 用 /v1/runs。
+                Trace mode 决定后端调用哪种 API：responses 用 /v1/responses；chat 用 /v1/chat/completions；runs 用 /v1/runs；openclaw 用 OpenClaw cookie 会话和 /api/chat。
               </DialogDescription>
             </div>
             <div className="grid gap-3 md:grid-cols-2">

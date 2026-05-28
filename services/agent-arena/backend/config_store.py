@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-VALID_TRACE_MODES = {"responses", "chat", "runs"}
+VALID_TRACE_MODES = {"responses", "chat", "runs", "openclaw"}
 
 DDL_STATEMENTS: tuple[str, ...] = (
     """

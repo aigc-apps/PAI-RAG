@@ -100,6 +100,15 @@ GET  /v1/runs/{run_id}/events
 
 不会要求模型泄露隐藏 chain-of-thought；只展示 API 明确返回的可公开过程信息。
 
+如果对接的是 OpenClaw Web API，可以开启：
+
+```bash
+AGENT_A_TRACE_MODE=openclaw
+AGENT_A_BASE_URL=http://openclaw-host:3000
+```
+
+OpenClaw 使用 cookie 会话协议，后端会执行 CSRF、登录、创建 session、`POST /api/chat` SSE，并展示 `started`、`status`、`token`、`done` 这些公开过程事件。固定账号可以通过 `OPENCLAW_EMAIL` / `OPENCLAW_PASSWORD`，或对应 agent 的 API key 环境变量写成 `email@example.com:password`。
+
 ### Judge 裁判员
 
 Judge 仍使用外部 OpenAI-compatible `/v1/chat/completions`：

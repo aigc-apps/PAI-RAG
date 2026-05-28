@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Union
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -241,7 +241,7 @@ class BatchHistorySummary(BaseModel):
 
 
 HistoryItem = Annotated[
-    HistorySummary | BatchHistorySummary,
+    Union[HistorySummary, BatchHistorySummary],
     Field(discriminator="kind"),
 ]
 
@@ -392,7 +392,7 @@ class AgentDefCreate(BaseModel):
     name: str = Field(..., min_length=1)
     base_url: str = Field(..., min_length=1)
     model: str = Field(..., min_length=1)
-    trace_mode: Literal["responses", "chat", "runs"] = "responses"
+    trace_mode: Literal["responses", "chat", "runs", "openclaw"] = "responses"
     api_key_env: str = ""
     runs_base_url: str = ""
     headers: dict[str, str] = Field(default_factory=dict)
@@ -403,7 +403,7 @@ class AgentDefPatch(BaseModel):
     name: str | None = None
     base_url: str | None = None
     model: str | None = None
-    trace_mode: Literal["responses", "chat", "runs"] | None = None
+    trace_mode: Literal["responses", "chat", "runs", "openclaw"] | None = None
     api_key_env: str | None = None
     runs_base_url: str | None = None
     headers: dict[str, str] | None = None
@@ -953,7 +953,7 @@ def normalize_runs_url(base_url: str) -> str:
 
 def _env_agent_config(prefix: str, fallback_name: str) -> AgentConfig:
     trace_mode = os.getenv(f"{prefix}_TRACE_MODE", "responses").strip().lower()
-    if trace_mode not in {"responses", "chat", "runs"}:
+    if trace_mode not in {"responses", "chat", "runs", "openclaw"}:
         trace_mode = "responses"
     return AgentConfig(
         name=os.getenv(f"{prefix}_NAME", fallback_name).strip() or fallback_name,
@@ -967,7 +967,7 @@ def _env_agent_config(prefix: str, fallback_name: str) -> AgentConfig:
 
 def _record_to_agent_config(record: dict[str, Any]) -> AgentConfig:
     trace_mode = record.get("trace_mode", "responses")
-    if trace_mode not in {"responses", "chat", "runs"}:
+    if trace_mode not in {"responses", "chat", "runs", "openclaw"}:
         trace_mode = "responses"
     api_key_env = record.get("api_key_env") or ""
     api_key = os.getenv(api_key_env, "").strip() if api_key_env else ""
@@ -1241,6 +1241,278 @@ def build_headers(api_key: str) -> dict[str, str]:
 
 def format_request_error(stage: str, url: str, exc: Exception) -> str:
     return f"{stage} {url}: {type(exc).__name__}: {exc}"
+
+
+def normalize_openclaw_url(base_url: str, path: str) -> str:
+    clean_base = (base_url or "").strip().rstrip("/")
+    clean_path = path if path.startswith("/") else f"/{path}"
+    return f"{clean_base}{clean_path}"
+
+
+def openclaw_credentials(agent: AgentConfig) -> tuple[str, str, bool]:
+    """Return (email, password, should_register).
+
+    OpenClaw's public API is cookie/session based. For production use, set
+    OPENCLAW_EMAIL/OPENCLAW_PASSWORD or put "email:password" in the configured
+    API-key env var. If neither is present, create an ephemeral test user.
+    """
+    raw = (agent.api_key or "").strip()
+    if ":" in raw:
+        email, password = raw.split(":", 1)
+        if "@" in email and password:
+            return email.strip(), password.strip(), False
+
+    env_email = os.getenv("OPENCLAW_EMAIL", "").strip()
+    env_password = os.getenv("OPENCLAW_PASSWORD", "").strip()
+    if env_email and env_password:
+        return env_email, env_password, False
+
+    suffix = uuid.uuid4().hex[:16]
+    return f"agent-arena-{suffix}@example.com", f"AgentArena{suffix}Aa1", True
+
+
+def redact_openclaw_auth_text(text: str, email: str, password: str) -> str:
+    redacted = text or ""
+    if email:
+        redacted = redacted.replace(email, "[redacted-email]")
+    if password:
+        redacted = redacted.replace(password, "[redacted-password]")
+    return redacted
+
+
+def parse_openclaw_sse_event(event_name: str, payload: dict[str, Any]) -> tuple[AgentTraceEvent | None, str, str | None, bool]:
+    """Map one OpenClaw SSE event to AgentArena trace/content primitives."""
+    name = event_name or "message"
+    if name == "started":
+        return (
+            AgentTraceEvent(
+                event="run.started",
+                preview=str(payload.get("assistantMessageId") or ""),
+                text=str(payload.get("runStartedAt") or ""),
+            ),
+            "",
+            None,
+            False,
+        )
+    if name == "status":
+        phase = str(payload.get("phase") or payload.get("status") or "")
+        detail = str(payload.get("detail") or "")
+        text = detail or phase
+        return (
+            AgentTraceEvent(event="openclaw.status", preview=phase or None, text=text or None),
+            "",
+            None,
+            False,
+        )
+    if name == "token":
+        delta = str(payload.get("text") or "")
+        return (
+            AgentTraceEvent(event="message.delta", delta=delta),
+            delta,
+            None,
+            False,
+        )
+    if name == "done":
+        state = str(payload.get("runState") or "DONE")
+        return (
+            AgentTraceEvent(event="run.completed", preview=state),
+            "",
+            None,
+            True,
+        )
+    if name in {"error", "failed"}:
+        message = str(payload.get("message") or payload.get("error") or "OpenClaw run failed")
+        return (
+            AgentTraceEvent(event="run.failed", error=message, text=message),
+            "",
+            message,
+            True,
+        )
+    return (
+        AgentTraceEvent(event=f"openclaw.{name}", text=truncate_text(json.dumps(payload, ensure_ascii=False))),
+        "",
+        None,
+        False,
+    )
+
+
+async def call_agent_openclaw(
+    client: httpx.AsyncClient,
+    agent: AgentConfig,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: int | None,
+) -> AgentResult:
+    if isinstance(client, httpx.AsyncClient):
+        async with httpx.AsyncClient(timeout=client.timeout) as isolated_client:
+            return await _call_agent_openclaw_with_client(
+                isolated_client, agent, messages, temperature, max_tokens
+            )
+    return await _call_agent_openclaw_with_client(client, agent, messages, temperature, max_tokens)
+
+
+async def _call_agent_openclaw_with_client(
+    client: Any,
+    agent: AgentConfig,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: int | None,
+) -> AgentResult:
+    del temperature, max_tokens  # OpenClaw's /api/chat endpoint does not expose these knobs.
+    started = time.perf_counter()
+    events: list[AgentTraceEvent] = []
+    output_parts: list[str] = []
+    session_id = ""
+    try:
+        email, password, should_register = openclaw_credentials(agent)
+        if should_register:
+            register_url = normalize_openclaw_url(agent.base_url, "/api/auth/register")
+            register_response = await client.post(
+                register_url,
+                json={"email": email, "password": password},
+                headers={"Content-Type": "application/json"},
+            )
+            if register_response.status_code >= 400:
+                body = redact_openclaw_auth_text(register_response.text[:1000], email, password)
+                raise RuntimeError(f"register HTTP {register_response.status_code}: {body}")
+
+        csrf_url = normalize_openclaw_url(agent.base_url, "/api/auth/csrf")
+        csrf_response = await client.get(csrf_url)
+        if csrf_response.status_code >= 400:
+            body = redact_openclaw_auth_text(csrf_response.text[:1000], email, password)
+            raise RuntimeError(f"csrf HTTP {csrf_response.status_code}: {body}")
+        csrf_token = str(csrf_response.json().get("csrfToken") or "")
+        if not csrf_token:
+            raise RuntimeError("csrf response did not include csrfToken")
+
+        login_url = normalize_openclaw_url(agent.base_url, "/api/auth/callback/credentials")
+        login_response = await client.post(
+            login_url,
+            data={
+                "csrfToken": csrf_token,
+                "email": email,
+                "password": password,
+                "redirect": "false",
+                "json": "true",
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        if login_response.status_code >= 400:
+            body = redact_openclaw_auth_text(login_response.text[:1000], email, password)
+            raise RuntimeError(f"login HTTP {login_response.status_code}: {body}")
+
+        session_url = normalize_openclaw_url(agent.base_url, "/api/sessions")
+        session_response = await client.post(
+            session_url,
+            json={"title": "AgentArena compare"},
+            headers={"Content-Type": "application/json"},
+        )
+        if session_response.status_code >= 400:
+            body = redact_openclaw_auth_text(session_response.text[:1000], email, password)
+            raise RuntimeError(f"session HTTP {session_response.status_code}: {body}")
+        session_id = str(session_response.json().get("id") or "")
+        if not session_id:
+            raise RuntimeError("session response did not include id")
+
+        system = "\n".join(msg["content"] for msg in messages if msg.get("role") == "system").strip()
+        user_messages = [msg for msg in messages if msg.get("role") != "system"]
+        user_input = user_messages[-1]["content"] if user_messages else ""
+        message = f"{system}\n\n{user_input}".strip() if system else user_input
+
+        event_name = ""
+        data_lines: list[str] = []
+        chat_url = normalize_openclaw_url(agent.base_url, "/api/chat")
+        async with client.stream(
+            "POST",
+            chat_url,
+            json={"sessionId": session_id, "message": message},
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+        ) as response:
+            if response.status_code >= 400:
+                body = await response.aread()
+                raise RuntimeError(f"chat HTTP {response.status_code}: {body.decode(errors='replace')[:1000]}")
+            async for line in response.aiter_lines():
+                if not line:
+                    if not data_lines:
+                        event_name = ""
+                        continue
+                    raw_data = "\n".join(data_lines)
+                    data_lines = []
+                    try:
+                        payload = json.loads(raw_data)
+                    except json.JSONDecodeError:
+                        event_name = ""
+                        continue
+                    trace_event, delta, error, done = parse_openclaw_sse_event(event_name, payload)
+                    if trace_event is not None and len(events) < MAX_TRACE_EVENTS:
+                        events.append(trace_event)
+                    if delta:
+                        output_parts.append(delta)
+                    if error:
+                        latency_ms = int((time.perf_counter() - started) * 1000)
+                        return AgentResult(
+                            ok=False,
+                            name=agent.name,
+                            model=agent.model,
+                            content="".join(output_parts),
+                            latency_ms=latency_ms,
+                            error=error,
+                            raw_finish_reason="error",
+                            trace_supported=True,
+                            trace_events=events,
+                            trace_summary=summarize_trace(events, True),
+                        )
+                    if done:
+                        break
+                    event_name = ""
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("event:"):
+                    event_name = line.removeprefix("event:").strip()
+                elif line.startswith("data:"):
+                    data_lines.append(line.removeprefix("data:").strip())
+
+        final_output = "".join(output_parts)
+        if not final_output.strip() and session_id:
+            messages_url = normalize_openclaw_url(agent.base_url, f"/api/sessions/{session_id}/messages?limit=10")
+            history_response = await client.get(messages_url)
+            if history_response.status_code < 400:
+                history = history_response.json()
+                if isinstance(history, list):
+                    for item in reversed(history):
+                        if isinstance(item, dict) and str(item.get("role") or "").upper() == "ASSISTANT":
+                            final_output = str(item.get("content") or "")
+                            break
+
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        effective_error = None if final_output.strip() else "empty output"
+        return AgentResult(
+            ok=effective_error is None,
+            name=agent.name,
+            model=agent.model,
+            content=final_output,
+            latency_ms=latency_ms,
+            error=effective_error,
+            raw_finish_reason="stop" if effective_error is None else "error",
+            trace_supported=True,
+            trace_events=events,
+            trace_summary=summarize_trace(events, True),
+        )
+    except Exception as exc:  # noqa: BLE001
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return AgentResult(
+            ok=False,
+            name=agent.name,
+            model=agent.model,
+            content="".join(output_parts),
+            latency_ms=latency_ms,
+            error=format_request_error("openclaw failed", agent.base_url, exc),
+            raw_finish_reason="error",
+            trace_supported=True,
+            trace_events=events,
+            trace_summary=summarize_trace(events, True),
+        )
 
 
 async def call_agent_chat(
@@ -1592,9 +1864,11 @@ async def call_agent(
             name=agent.name,
             model=agent.model,
             error="Agent is not configured. Set base URL and model in .env.",
-            trace_supported=agent.trace_mode == "runs",
-            trace_summary=summarize_trace([], agent.trace_mode == "runs"),
+            trace_supported=agent.trace_mode in {"runs", "openclaw"},
+            trace_summary=summarize_trace([], agent.trace_mode in {"runs", "openclaw"}),
         )
+    if agent.trace_mode == "openclaw":
+        return await call_agent_openclaw(client, agent, messages, temperature, max_tokens)
     if agent.trace_mode == "runs":
         return await call_agent_runs(client, agent, messages, temperature, max_tokens)
     if agent.trace_mode == "responses":

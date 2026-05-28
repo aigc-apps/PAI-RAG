@@ -5,7 +5,7 @@ export type PublicAgentConfig = {
   configured: boolean
   has_api_key: boolean
   completion_path: string
-  trace_mode: "chat" | "runs"
+  trace_mode: "responses" | "chat" | "runs" | "openclaw"
   runs_path: string
 }
 
@@ -244,7 +244,7 @@ export type AgentDef = {
   name: string
   base_url: string
   model: string
-  trace_mode: "responses" | "chat" | "runs"
+  trace_mode: "responses" | "chat" | "runs" | "openclaw"
   api_key_env: EnvVarStatus
   runs_base_url: string
   headers: Record<string, string>
