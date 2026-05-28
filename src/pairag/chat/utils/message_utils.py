@@ -68,13 +68,35 @@ def extract_openai_message_content(message_dict: dict) -> str:
 
 def remove_think_from_messages(messages: List[ChatMessage]):
     for message in messages:
+        # 处理content字段
+        if message.content:
+            # 移除完整的<think>...</think>块
+            message.content = re.sub(
+                r"<think>.*?</think>", "", message.content, flags=re.DOTALL
+            )
+            # 移除孤立的</think>标签
+            message.content = re.sub(
+                r"</think>\n*", "", message.content, flags=re.DOTALL
+            )
+            # 移除孤立的<think>标签
+            message.content = re.sub(
+                r"<think>\n*", "", message.content, flags=re.DOTALL
+            )
+            message.content = message.content.strip()
+
+        # 处理blocks字段
         new_blocks = []
         for block in message.blocks:
             if isinstance(block, TextBlock):
-                # 对文本内容进行正则替换
-                cleaned_text = re.sub(r"</think>\n*", "", block.text, flags=re.DOTALL)
+                # 对文本内容进行正则替换，移除完整的thinking块
+                cleaned_text = re.sub(
+                    r"<think>.*?</think>", "", block.text, flags=re.DOTALL
+                )
+                # 移除孤立的标签
+                cleaned_text = re.sub(r"</think>\n*", "", cleaned_text, flags=re.DOTALL)
+                cleaned_text = re.sub(r"<think>\n*", "", cleaned_text, flags=re.DOTALL)
                 if cleaned_text.strip():
-                    new_blocks.append(TextBlock(text=cleaned_text))
+                    new_blocks.append(TextBlock(text=cleaned_text.strip()))
             else:
                 new_blocks.append(block)
         message.blocks = new_blocks

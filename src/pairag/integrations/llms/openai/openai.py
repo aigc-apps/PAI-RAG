@@ -642,11 +642,37 @@ class OpenAI(FunctionCallingLLM):
 
     def _get_response_token_counts(self, raw_response: Any) -> dict:
         """Get the token usage reported by the response."""
-        if hasattr(raw_response, "usage"):
+        if hasattr(raw_response, "usage") and raw_response.usage:
             try:
                 prompt_tokens = raw_response.usage.prompt_tokens
                 completion_tokens = raw_response.usage.completion_tokens
                 total_tokens = raw_response.usage.total_tokens
+
+                # Include reasoning_tokens in the total if available
+                reasoning_tokens = 0
+                if (
+                    hasattr(raw_response.usage, "completion_tokens_details")
+                    and raw_response.usage.completion_tokens_details
+                ):
+                    reasoning_tokens = (
+                        getattr(
+                            raw_response.usage.completion_tokens_details,
+                            "reasoning_tokens",
+                            0,
+                        )
+                        or 0
+                    )
+
+                result = {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                }
+
+                if reasoning_tokens > 0:
+                    result["reasoning_tokens"] = reasoning_tokens
+
+                return result
             except AttributeError:
                 return {}
         elif isinstance(raw_response, dict):
@@ -658,14 +684,24 @@ class OpenAI(FunctionCallingLLM):
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
             total_tokens = usage.get("total_tokens", 0)
+
+            result = {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+            }
+
+            # Check for reasoning_tokens in dict format
+            if "completion_tokens_details" in usage:
+                reasoning_tokens = usage.get("completion_tokens_details", {}).get(
+                    "reasoning_tokens", 0
+                )
+                if reasoning_tokens > 0:
+                    result["reasoning_tokens"] = reasoning_tokens
+
+            return result
         else:
             return {}
-
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": total_tokens,
-        }
 
     # ===== Async Endpoints =====
     @llm_chat_callback()
@@ -785,52 +821,70 @@ class OpenAI(FunctionCallingLLM):
                 **self._get_model_kwargs(stream=True, **kwargs),
             ):
                 response = cast(ChatCompletionChunk, response)
-                if len(response.choices) > 0:
-                    # check if the first chunk has neither content nor tool_calls
+
+                # Check if this is the final chunk with usage info but no choices
+                if len(response.choices) == 0:
+                    token_counts = self._get_response_token_counts(response)
+                    if token_counts:
+                        # This is the final chunk with usage information
+                        yield ChatResponse(
+                            message=ChatMessage(
+                                role=MessageRole.ASSISTANT,
+                                content=content,
+                                additional_kwargs={},
+                            ),
+                            delta="",
+                            raw=response,
+                            additional_kwargs=token_counts,
+                        )
+                    elif not isinstance(aclient, AsyncAzureOpenAI):
+                        delta = ChoiceDelta()
+                    else:
+                        continue
+                else:
+                    # check if the first chunk has neither content nor tool_calls nor reasoning_content
                     # this happens when 1106 models end up calling multiple tools
                     if (
                         first_chat_chunk
                         and response.choices[0].delta.content is None
                         and response.choices[0].delta.tool_calls is None
+                        and not getattr(
+                            response.choices[0].delta, "reasoning_content", None
+                        )
                     ):
                         first_chat_chunk = False
                         continue
                     delta = response.choices[0].delta
-                else:
-                    if isinstance(aclient, AsyncAzureOpenAI):
+                    first_chat_chunk = False
+
+                    if delta is None:
                         continue
-                    else:
-                        delta = ChoiceDelta()
-                first_chat_chunk = False
 
-                if delta is None:
-                    continue
+                    # check if this chunk is the start of a function call
+                    if delta.tool_calls:
+                        is_function = True
 
-                # check if this chunk is the start of a function call
-                if delta.tool_calls:
-                    is_function = True
+                    # update using deltas
+                    role = delta.role or MessageRole.ASSISTANT
+                    content_delta = delta.content or ""
+                    content += content_delta
 
-                # update using deltas
-                role = delta.role or MessageRole.ASSISTANT
-                content_delta = delta.content or ""
-                content += content_delta
+                    additional_kwargs = {}
+                    if is_function:
+                        tool_calls = update_tool_calls(tool_calls, delta.tool_calls)
+                        if tool_calls:
+                            additional_kwargs["tool_calls"] = tool_calls
 
-                additional_kwargs = {}
-                if is_function:
-                    tool_calls = update_tool_calls(tool_calls, delta.tool_calls)
-                    if tool_calls:
-                        additional_kwargs["tool_calls"] = tool_calls
-
-                yield ChatResponse(
-                    message=ChatMessage(
-                        role=role,
-                        content=content,
-                        additional_kwargs=additional_kwargs,
-                    ),
-                    delta=content_delta,
-                    raw=response,
-                    additional_kwargs=self._get_response_token_counts(response),
-                )
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=role,
+                            content=content,
+                            additional_kwargs=additional_kwargs,
+                        ),
+                        delta=content_delta,
+                        raw=response,
+                        additional_kwargs=self._get_response_token_counts(response),
+                    )
 
         return gen()
 

@@ -167,12 +167,13 @@ async def respond(input_elements: List[Any]):
 
         is_thinking = False
         async for resp in response_gen:
-            if resp.delta == "<think>":
+            delta_clean = resp.delta.strip()
+            if delta_clean == "<think>":
                 chatbot[-1]["metadata"]["title"] = "thinking..."
                 chatbot[-1]["metadata"]["log"] = ""
                 is_thinking = True
 
-            elif resp.delta == "</think>":
+            elif delta_clean == "</think>":
                 chatbot[-1]["metadata"]["title"] = "thought"
                 chatbot[-1]["metadata"]["status"] = "done"
                 is_thinking = False
