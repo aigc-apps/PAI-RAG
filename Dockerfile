@@ -43,6 +43,26 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/venv
 
+RUN curl -fsSL -o /tmp/aliyun-cli.tgz \
+        https://easyrec.oss-cn-beijing.aliyuncs.com/aliyun-cli-spec/aliyun-cli-linux-latest-amd64.tgz \
+    && tar -xzf /tmp/aliyun-cli.tgz -C /usr/local/bin aliyun \
+    && chmod +x /usr/local/bin/aliyun \
+    && rm /tmp/aliyun-cli.tgz \
+    && aliyun version
+
+RUN aliyun plugin install --names \
+        aliyun-cli-eas \
+        aliyun-cli-pairecservice \
+        aliyun-cli-pai-dsw \
+    && aliyun plugin list
+
+RUN mkdir -p /app/skills/alibabacloud-pai-rec-diagnosis \
+    && curl -fsSL -o /tmp/pai-rec-diagnosis.zip \
+        "https://skills.aliyun.com/api/public/skills/alibabacloud-pai-rec-diagnosis/download?spm=aliyun-agent-skills-portal.skill_detail.0.0.490556efPbwzVC" \
+    && python3 -m zipfile -e /tmp/pai-rec-diagnosis.zip /app/skills/alibabacloud-pai-rec-diagnosis/ \
+    && rm /tmp/pai-rec-diagnosis.zip \
+    && ls /app/skills/alibabacloud-pai-rec-diagnosis/
+
 WORKDIR /app
 
 COPY requirements.txt ./
