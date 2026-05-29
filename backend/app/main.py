@@ -79,7 +79,11 @@ async def lifespan(app: FastAPI):
 
 def create_app():
     from api.v1.routers import add_chat_router, add_config_router
-    from api.api_exception import ApiException, api_exception_handler
+    from api.api_exception import (
+        ApiException,
+        api_exception_handler,
+        unhandled_exception_handler,
+    )
     from fastapi.exceptions import RequestValidationError
     import api.v1.mcp_server_middleware as mcp_middleware
     from app.log_middleware import CustomLoggingMiddleware
@@ -109,6 +113,11 @@ def create_app():
     setup_propagator(app)
     app.add_exception_handler(ApiException, api_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    # Last-resort handler: anything that escapes the specific handlers above
+    # (e.g. a route that forgot `@handle_api_exceptions` and let an unexpected
+    # error propagate) returns a structured JSON body instead of Starlette's
+    # default HTML "Internal Server Error" page.
+    app.add_exception_handler(Exception, unhandled_exception_handler)
     return app
 
 app = create_app()
