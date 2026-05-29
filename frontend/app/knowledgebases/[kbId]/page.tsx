@@ -653,10 +653,11 @@ export default function KnowledgeBaseDetailPage(
     
     // 初始化切片配置：优先使用文件的chunk_config，否则使用知识库默认配置
     const initialConfig: any = file?.chunk_config || defaultConfig;
+    const kbChunkConfig: any = knowledgebase?.chunk_config || {};
     const config: any = {
       parser_type: initialConfig.parser_type || 'structure',
-      image_caption_model: initialConfig.image_caption_model,
-      image_caption_provider_name: initialConfig.image_caption_provider_name || 'openai_like',
+      image_caption_model: initialConfig.image_caption_model ?? kbChunkConfig.image_caption_model,
+      image_caption_provider_name: initialConfig.image_caption_provider_name ?? kbChunkConfig.image_caption_provider_name ?? 'openai_like',
     };
     
     if (initialConfig.parser_type === 'table') {
@@ -797,24 +798,21 @@ export default function KnowledgeBaseDetailPage(
     }
 
     setShowBatchReprocessDialog(false);
-    
-    // 获取第一个文件的chunk_config或使用知识库默认配置
+
     const fileIds = Array.from(selectedFiles);
-    const firstFile = kbfiles.find(f => fileIds.includes(f.id));
-    const defaultConfig = knowledgebase?.chunk_config || {
+
+    // 批量重新解析：直接使用知识库默认配置（多个文件可能有不同的文件级配置，统一以 KB 配置作为起点）
+    const initialConfig: any = knowledgebase?.chunk_config || {
       parser_type: 'structure',
       chunk_size: '1000',
       chunk_overlap: '50',
     };
-    
-    // 初始化切片配置：优先使用第一个文件的chunk_config，否则使用知识库默认配置
-    const initialConfig: any = firstFile?.chunk_config || defaultConfig;
     const config: any = {
       parser_type: initialConfig.parser_type || 'structure',
       image_caption_model: initialConfig.image_caption_model,
       image_caption_provider_name: initialConfig.image_caption_provider_name || 'openai_like',
     };
-    
+
     if (initialConfig.parser_type === 'table') {
       config.table_config = initialConfig.table_config || {
         concat_rows: false,
