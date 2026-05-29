@@ -83,7 +83,10 @@ class TestMcpAPI:
         self.mock_service.get_mcpserver_by_name.return_value = None
 
         response = self.client.get("/v1/config/mcps?name=nonexistent")
-        assert response.status_code == 500  # ApiException.not_found raises, caught by outer except
+        # ``ApiException.not_found`` raises HTTP 404; the unified exception
+        # decorator re-raises HTTPException as-is so the original status code
+        # is preserved instead of being collapsed to 500.
+        assert response.status_code == 404
 
     def test_read_mcp_success(self):
         self.mock_service.get_mcpserver.return_value = self._make_mcp_entity()
@@ -95,7 +98,10 @@ class TestMcpAPI:
         self.mock_service.get_mcpserver.return_value = None
 
         response = self.client.get("/v1/config/mcps/nonexistent")
-        assert response.status_code == 500  # not_found wrapped in outer except
+        # ``ApiException.not_found`` raises HTTP 404; the unified exception
+        # decorator re-raises HTTPException as-is so the original status code
+        # is preserved instead of being collapsed to 500.
+        assert response.status_code == 404
 
     def test_update_mcp_success(self):
         self.mock_service.update_mcpserver.return_value = self._make_mcp_entity()

@@ -86,6 +86,7 @@ F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
 def handle_api_exceptions(
     *,
     action: Optional[str] = None,
+    i18n_error_key: Optional[str] = None,
     value_error_code: int = 400,
     validation_error_code: int = 400,
     default_code: int = 500,
@@ -94,9 +95,16 @@ def handle_api_exceptions(
 
     Args:
         action: Human-readable verb phrase woven into log lines and the
-            user-facing error message (e.g. ``"create knowledge base"``).
-            Defaults to the wrapped function's name with underscores
-            replaced by spaces.
+            default user-facing error message (e.g. ``"create knowledge
+            base"``). Defaults to the wrapped function's name with
+            underscores replaced by spaces.
+        i18n_error_key: Optional i18n key (e.g. ``"api.llm.create_failed"``)
+            used to render the user-facing message when an exception is
+            converted. The original error is interpolated as the ``error``
+            parameter: ``i18n.t(i18n_error_key, error=str(e))``. When
+            ``None`` (the default), a plain English ``"Failed to {action}:
+            {error}"`` message is used. Log lines always use the plain
+            English form so they stay consistent across locales.
         value_error_code: HTTP status code used for :class:`ValueError`
             (the canonical "invalid input" signal in this codebase).
         validation_error_code: HTTP status code used for Pydantic
@@ -110,21 +118,35 @@ def handle_api_exceptions(
           so endpoints can still pick a specific status code at the call
           site.
         - :class:`ValueError` is logged at WARNING and converted to
-          ``ApiException(value_error_code, str(e))``.
+          ``ApiException(value_error_code, ...)``.
         - :class:`pydantic.ValidationError` is logged at WARNING and
-          converted to ``ApiException(validation_error_code, str(e))``.
+          converted to ``ApiException(validation_error_code, ...)``.
         - All other exceptions are logged at ERROR with full traceback and
-          converted to ``ApiException(default_code, f"Failed to {action}: {e}")``.
+          converted to ``ApiException(default_code, ...)``.
 
     Example:
         >>> @router.get("")
         ... @handle_api_exceptions(action="get trace config")
         ... async def get_trace_config(...):
         ...     return success_response(data=await svc.get(...))
+
+        >>> @router.post("")
+        ... @handle_api_exceptions(
+        ...     action="create llm", i18n_error_key="api.llm.create_failed"
+        ... )
+        ... async def create_llm(...):
+        ...     return success_response(...)
     """
 
     def decorator(func: F) -> F:
         verb = action or func.__name__.replace("_", " ")
+
+        def _user_message(err: Exception) -> str:
+            if i18n_error_key:
+                from common.i18n import i18n
+
+                return i18n.t(i18n_error_key, error=str(err))
+            return f"Failed to {verb}: {err}"
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -137,20 +159,22 @@ def handle_api_exceptions(
                 raise
             except ValueError as e:
                 logger.warning(f"Validation error while trying to {verb}: {e}")
-                raise ApiException(code=value_error_code, message=str(e)) from e
+                raise ApiException(
+                    code=value_error_code, message=_user_message(e)
+                ) from e
             except ValidationError as e:
                 logger.warning(
                     f"Pydantic validation error while trying to {verb}: {e}"
                 )
                 raise ApiException(
-                    code=validation_error_code, message=str(e)
+                    code=validation_error_code, message=_user_message(e)
                 ) from e
             except Exception as e:
                 logger.error(
                     f"Failed to {verb}: {e}\n{traceback.format_exc()}"
                 )
                 raise ApiException(
-                    code=default_code, message=f"Failed to {verb}: {e}"
+                    code=default_code, message=_user_message(e)
                 ) from e
 
         return wrapper  # type: ignore[return-value]
