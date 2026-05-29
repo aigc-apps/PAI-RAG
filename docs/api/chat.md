@@ -247,10 +247,35 @@ curl -sN -X POST "http://localhost:8680/v1/chat/completions" \
 | `model` | `string` | ✓ | 模型名称，需支持多模态（如 `qwen-vl-plus`） |
 | `stream` | `boolean` | ✗ | 默认 `true`，SSE 流式输出 |
 | `messages` | `Array` | ✓ | 消息数组 |
-| `messages[].content` | `string` | ✓ | 用户提问文本（可为空，仅发送图片时系统自动引导分析） |
+| `messages[].content` | `string` &#124; `Array` | ✓ | 用户提问文本；**仅发送图片不打字时请使用空数组 `[]`**（不要使用空字符串 `""`），系统会自动引导分析 |
 | `messages[].attachments` | `Array` | ✓ | 附件数组，引用已上传的文件 |
 | `attachments[].id` | `string` | ✓ | 第一步上传返回的文件 ID |
 | `attachments[].contentType` | `string` | ✓ | MIME 类型，如 `image/jpeg`、`image/png`、`video/mp4` |
+
+---
+
+### 仅发送图片（无文字）示例
+
+不打字时 `content` 必须是空数组 `[]`，**不要写成空字符串 `""`** —— 否则上游模型可能直接忽略附件，不会触发图片理解工具。
+
+```bash
+curl -sN -X POST "http://localhost:8680/v1/chat/completions" \
+  -H "X-TENANT-ID: your-tenant-id" \
+  -H "Content-Type: application/json" \
+  -d '{
+  "model": "qwen-vl-plus",
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": [],
+      "attachments": [
+        {"id": "file-abc123", "contentType": "image/jpeg"}
+      ]
+    }
+  ]
+}'
+```
 
 ---
 
