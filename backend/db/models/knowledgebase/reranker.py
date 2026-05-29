@@ -5,10 +5,11 @@ from enum import Enum
 from common.system_constants import DEFAULT_TENANT_ID
 from sqlalchemy import UniqueConstraint
 
-# 支持openai_like和dashscope两种模式
+# 支持openai_like、dashscope与multimodal_dashscope三种模式
 class RerankerType(str, Enum):
     OPENAI_LIKE = "openai_like"
     DASHSCOPE = "dashscope"
+    MULTIMODAL_DASHSCOPE = "multimodal_dashscope"
 
 
 class RerankerModel(SQLModel):
@@ -17,6 +18,7 @@ class RerankerModel(SQLModel):
     base_url: str = Field(default=None)
     model_id: str = Field(default=None)
     type: Optional[str] = Field(default=RerankerType.OPENAI_LIKE)
+    is_multimodal: Optional[bool] = Field(default=False) # 是否为多模态 rerank，true 时会把节点 images_info 拼入 documents
     provider_name: Optional[str] = Field(default=None)
 
 

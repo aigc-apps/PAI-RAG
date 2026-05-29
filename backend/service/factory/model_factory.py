@@ -5,7 +5,9 @@ from db.models.knowledgebase.embedding import EmbeddingModelEntity, EmbeddingTyp
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.embeddings.openai_like import OpenAILikeEmbedding
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from rag.embedding.multimodal_dashscope_embedding import MultimodalDashscopeEmbedding
 from rag.rerank.dashscope_reranker import DashscopeReranker
+from rag.rerank.multimodal_dashscope_reranker import MultimodalDashscopeReranker
 from utils.modelscope_utils import download_model_to_directory
 from rag.rerank.reranker import OpenAICompatibleReranker
 from db.models.knowledgebase.reranker import RerankerType, RerankerModelEntity
@@ -68,6 +70,8 @@ def create_embedding_model(config: EmbeddingModelEntity) -> BaseEmbedding:
             return f"openailike_{config.endpoint}_{config.encrypted_api_key}_{config.model_name}_{config.dimension}_{config.embed_batch_size}"
         elif config.type == EmbeddingType.LOCAL:
             return f"local_{config.model_name}"
+        elif config.type == EmbeddingType.MULTIMODAL_DASHSCOPE:
+            return f"mm_dashscope_{config.endpoint}_{config.encrypted_api_key}_{config.model_name}_{config.dimension}_{config.embed_batch_size}"
         else:
             raise ValueError(f"Unsupported embedding type: {config.type}")
 
@@ -101,6 +105,17 @@ def create_embedding_model(config: EmbeddingModelEntity) -> BaseEmbedding:
             device=infer_cuda_device(),
             show_progress_bar=False,
         )
+    elif config.type == EmbeddingType.MULTIMODAL_DASHSCOPE:
+        logger.info(
+            f"Creating multimodal DashScope embedding model {config.model_name} with {config}."
+        )
+        embedding_model = MultimodalDashscopeEmbedding(
+            api_key=decrypt_key(config.encrypted_api_key),
+            model_name=config.model_name,
+            base_url=config.endpoint or "",
+            dimension=config.dimension,
+            embed_batch_size=config.embed_batch_size,
+        )
     else:
         raise ValueError(f"Unsupported embedding type: {config.type}")
 
@@ -108,7 +123,9 @@ def create_embedding_model(config: EmbeddingModelEntity) -> BaseEmbedding:
     return embedding_model
 
 
-def create_reranker_model(config: RerankerModelEntity) -> Union[DashscopeReranker, OpenAICompatibleReranker]:
+def create_reranker_model(
+    config: RerankerModelEntity,
+) -> Union[DashscopeReranker, OpenAICompatibleReranker, MultimodalDashscopeReranker]:
     def reranker_cache_key(config: RerankerModelEntity) -> str:
         return f"reranker_{config.base_url}_{config.encrypted_api_key}_{config.model_name}_{config.type}"
 
@@ -120,7 +137,16 @@ def create_reranker_model(config: RerankerModelEntity) -> Union[DashscopeReranke
 
     model_type = config.type or RerankerType.OPENAI_LIKE
 
-    if model_type == RerankerType.DASHSCOPE:
+    if model_type == RerankerType.MULTIMODAL_DASHSCOPE:
+        logger.info(
+            f"Creating multimodal DashScope reranker model {config.model_name} with {config}."
+        )
+        reranker = MultimodalDashscopeReranker(
+            api_key=decrypt_key(config.encrypted_api_key),
+            model=config.model_name,
+            base_url=config.base_url,
+        )
+    elif model_type == RerankerType.DASHSCOPE:
         logger.info(
             f"Creating DashScope reranker model {config.model_name} with {config}."
         )
