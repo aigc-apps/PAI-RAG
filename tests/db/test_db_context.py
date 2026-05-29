@@ -15,8 +15,8 @@ class TestGetAsyncDbEngine:
             mock_engine = MagicMock()
             mock_engine.sync_engine = MagicMock()
             mock_create.return_value = mock_engine
-            from db.db_context import get_async_db_angine
-            engine = get_async_db_angine()
+            from db.db_context import get_async_db_engine
+            engine = get_async_db_engine()
             assert engine is not None
 
     @patch.dict(os.environ, {
@@ -29,8 +29,8 @@ class TestGetAsyncDbEngine:
     def test_postgresql_engine(self):
         with patch("db.db_context.create_async_engine") as mock_create:
             mock_create.return_value = MagicMock()
-            from db.db_context import get_async_db_angine
-            engine = get_async_db_angine()
+            from db.db_context import get_async_db_engine
+            engine = get_async_db_engine()
             assert engine is not None
             call_args = mock_create.call_args[0][0]
             assert "postgresql+asyncpg" in call_args
@@ -45,11 +45,18 @@ class TestGetAsyncDbEngine:
     def test_mysql_engine(self):
         with patch("db.db_context.create_async_engine") as mock_create:
             mock_create.return_value = MagicMock()
-            from db.db_context import get_async_db_angine
-            engine = get_async_db_angine()
+            from db.db_context import get_async_db_engine
+            engine = get_async_db_engine()
             assert engine is not None
             call_args = mock_create.call_args[0][0]
             assert "mysql+aiomysql" in call_args
+
+    def test_deprecated_alias_still_works(self):
+        """The historical misspelling `get_async_db_angine` must remain
+        importable as an alias to `get_async_db_engine` for backwards
+        compatibility. Remove this test when the alias is dropped."""
+        from db.db_context import get_async_db_angine, get_async_db_engine
+        assert get_async_db_angine is get_async_db_engine
 
 
 class TestGetDbSession:
