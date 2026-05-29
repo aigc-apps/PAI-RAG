@@ -142,6 +142,69 @@ class TestHandleApiExceptionsPreservesMetadata:
         assert str(exc.value.__cause__) == "root cause"
 
 
+class TestHandleApiExceptionsI18n:
+    """The decorator should use ``i18n.t`` when ``i18n_error_key`` is set.
+
+    Routers that historically rendered user-facing messages via
+    ``i18n.t("api.<feature>.<verb>_failed", error=str(e))`` keep that
+    behaviour after migration so end-user strings stay localized.
+    """
+
+    async def test_i18n_key_renders_localized_value_error_message(self):
+        # api.mcp.create_failed exists in resources/i18n/zh.json
+        @handle_api_exceptions(
+            action="create mcp", i18n_error_key="api.mcp.create_failed"
+        )
+        async def fail():
+            raise ValueError("boom")
+
+        with pytest.raises(ApiException) as exc:
+            await fail()
+        assert exc.value.status_code == 400
+        # Localized template: "创建MCP配置失败: 'boom'."
+        assert "创建MCP配置失败" in exc.value.detail
+        assert "boom" in exc.value.detail
+
+    async def test_i18n_key_renders_localized_unknown_exception_message(self):
+        @handle_api_exceptions(
+            action="create mcp", i18n_error_key="api.mcp.create_failed"
+        )
+        async def fail():
+            raise RuntimeError("kaboom")
+
+        with pytest.raises(ApiException) as exc:
+            await fail()
+        assert exc.value.status_code == 500
+        assert "创建MCP配置失败" in exc.value.detail
+        assert "kaboom" in exc.value.detail
+
+    async def test_missing_i18n_key_falls_back_to_key_itself(self):
+        """When the key is missing, ``i18n.t`` returns the key as-is and the
+        decorator forwards it without crashing.
+        """
+        @handle_api_exceptions(
+            action="do thing",
+            i18n_error_key="api.this.definitely.does.not.exist",
+        )
+        async def fail():
+            raise ValueError("bad")
+
+        with pytest.raises(ApiException) as exc:
+            await fail()
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "api.this.definitely.does.not.exist"
+
+    async def test_no_i18n_key_uses_plain_english_template(self):
+        @handle_api_exceptions(action="create kb")
+        async def fail():
+            raise ValueError("name required")
+
+        with pytest.raises(ApiException) as exc:
+            await fail()
+        # Plain English fallback (no localisation).
+        assert exc.value.detail == "Failed to create kb: name required"
+
+
 class TestUnhandledExceptionHandler:
     async def test_returns_500_with_structured_body(self):
         request = MagicMock()
