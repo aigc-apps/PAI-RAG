@@ -1,6 +1,5 @@
-import traceback
 from typing import List
-from api.api_exception import ApiException
+from api.api_exception import ApiException, handle_api_exceptions
 from common.knowledgebase.constants import DEFAULT_EMBEDDING_MODEL
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -27,6 +26,7 @@ class EmbeddingInput(BaseModel):
 
 
 @embedding_router.post("")
+@handle_api_exceptions(action="embed")
 async def aembed(
     embedding_input: EmbeddingInput,
     tenant_id: str = Depends(get_tenant_id),
@@ -54,34 +54,27 @@ async def aembed(
     if embedding_input.model == "bge-m3":
         embedding_input.model = DEFAULT_EMBEDDING_MODEL
 
-    try:
-        embedding_entity = await embedding_service.get_embedding_by_model_id(embedding_input.model, tenant_id=tenant_id)
-        if not embedding_entity:
-            raise ApiException(code=400, message=f"Embedding model {embedding_input.model} not found.")
+    embedding_entity = await embedding_service.get_embedding_by_model_id(embedding_input.model, tenant_id=tenant_id)
+    if not embedding_entity:
+        raise ApiException(code=400, message=f"Embedding model {embedding_input.model} not found.")
 
-        embed_model = create_embedding_model(embedding_entity)
-        text_embeddings = await embed_model.aget_text_embedding_batch(text_inputs)
-        embedding_data_list = [
-            Embedding(
-                embedding=embedding,
-                index=i,
-                object="embedding",
-            )
-            for i, embedding in enumerate(text_embeddings)
-        ]
-        logger.info(f"aembed: finished embedding {len(embedding_data_list)} texts.")
-        return CreateEmbeddingResponse(
-            object="list",
-            data=embedding_data_list,
-            model=embedding_input.model,
-            usage=EmbeddingUsage(
-                prompt_tokens=0,
-                total_tokens=0,
-            ),
+    embed_model = create_embedding_model(embedding_entity)
+    text_embeddings = await embed_model.aget_text_embedding_batch(text_inputs)
+    embedding_data_list = [
+        Embedding(
+            embedding=embedding,
+            index=i,
+            object="embedding",
         )
-    except ValueError as ve:
-        logger.warning(f"Embedding failed due to value error: {traceback.format_exc()}")
-        raise ApiException(code=400, message=f"Embedding failed: {ve}")
-    except Exception as ex:
-        logger.error(f"Embedding failed: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"Embedding failed: {ex}")
+        for i, embedding in enumerate(text_embeddings)
+    ]
+    logger.info(f"aembed: finished embedding {len(embedding_data_list)} texts.")
+    return CreateEmbeddingResponse(
+        object="list",
+        data=embedding_data_list,
+        model=embedding_input.model,
+        usage=EmbeddingUsage(
+            prompt_tokens=0,
+            total_tokens=0,
+        ),
+    )

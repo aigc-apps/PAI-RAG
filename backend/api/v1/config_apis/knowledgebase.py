@@ -19,7 +19,7 @@ from pairag.file.nodeparsers.file_parser import ChunkConfig
 from db.db_context import get_db_session
 from pairag.file.store.file_store_helper import file_store
 from common.chat.response_model import ResponseModel, success_response
-from api.api_exception import ApiException
+from api.api_exception import ApiException, handle_api_exceptions
 from service.injection import get_rag_service, get_file_service, get_chunk_service, get_tenant_id, get_knowledgebase_service
 from service.knowledgebase.rag_service import RagService
 from service.knowledgebase.file_service import FileService
@@ -34,21 +34,18 @@ knowledgebase_router = APIRouter()
 
 
 @knowledgebase_router.delete("/metadata-schema-cache")
+@handle_api_exceptions(action="clear metadata schema cache")
 async def clear_metadata_schema_cache(
     tenant_id: str = Depends(get_tenant_id),
 ):
     """Clear metadata schema cache for the current tenant.
     The background task will automatically repopulate the cache."""
-    try:
-        from service.cache.metadata_schema_cache import metadata_schema_cache
-        count = await metadata_schema_cache.clear_cache_by_tenant(tenant_id)
-        return success_response(
-            data={"cleared": count},
-            message="Metadata schema cache cleared.",
-        )
-    except Exception as e:
-        logger.error(f"Failed to clear metadata schema cache: {e}")
-        raise ApiException(code=500, message=f"Failed to clear metadata schema cache: {e}")
+    from service.cache.metadata_schema_cache import metadata_schema_cache
+    count = await metadata_schema_cache.clear_cache_by_tenant(tenant_id)
+    return success_response(
+        data={"cleared": count},
+        message="Metadata schema cache cleared.",
+    )
 
 
 @knowledgebase_router.post("", response_model=ResponseModel[KbEntity])
@@ -81,6 +78,7 @@ async def create_knowledgebase(
         raise ApiException(code=400, message=i18n.t("api.knowledgebase.create_failed", error=str(e)))
 
 @knowledgebase_router.get("")
+@handle_api_exceptions(action="list knowledgebases", i18n_error_key="api.knowledgebase.list_failed", default_code=400)
 async def list_knowledgebases(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
@@ -91,42 +89,26 @@ async def list_knowledgebases(
     rag_service: RagService = Depends(get_rag_service),
     knowledgebase_service: KnowledgebaseService = Depends(get_knowledgebase_service),
 ):
-    try:
-        if not ids:
-            paged_result = await rag_service.list_knowledgebases(tenant_id=tenant_id, page=page, size=size, query=query)
-            return success_response(data=paged_result, message=i18n.t("api.knowledgebase.list_success"))
-        else:
-            kb_ids = parse_comma_separated_list(ids)
-            total_result = await knowledgebase_service.get_knowledgebases_by_ids(tenant_id=tenant_id, kb_ids=kb_ids)
-            return success_response(data=total_result, message=i18n.t("api.knowledgebase.list_success"))
-    except ValueError as e:
-        logger.error(f"Failed to list knowledge bases.\nValueError:{e}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to list knowledge bases.\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=i18n.t("api.knowledgebase.list_failed", error=str(e)))
+    if not ids:
+        paged_result = await rag_service.list_knowledgebases(tenant_id=tenant_id, page=page, size=size, query=query)
+        return success_response(data=paged_result, message=i18n.t("api.knowledgebase.list_success"))
+    kb_ids = parse_comma_separated_list(ids)
+    total_result = await knowledgebase_service.get_knowledgebases_by_ids(tenant_id=tenant_id, kb_ids=kb_ids)
+    return success_response(data=total_result, message=i18n.t("api.knowledgebase.list_success"))
 
 
 @knowledgebase_router.get("/{kb_id}", response_model=ResponseModel[KbEntity])
+@handle_api_exceptions(action="query knowledgebase", i18n_error_key="api.knowledgebase.query_failed", default_code=400)
 async def read_knowledgebase(
     kb_id: str,
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        knowledgebase = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
-        if not knowledgebase:
-            raise ApiException.not_found(kb_id, "Knowledgebase")
-        return success_response(data=knowledgebase, message=i18n.t("api.knowledgebase.query_success"))
-    except ApiException:
-        raise
-    except ValueError as e:
-        logger.error(f"Failed to query knowledge base.\nValueError:{e}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to query knowledge base.\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=i18n.t("api.knowledgebase.query_failed", error=str(e)))
+    knowledgebase = await rag_service.get_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
+    if not knowledgebase:
+        raise ApiException.not_found(kb_id, "Knowledgebase")
+    return success_response(data=knowledgebase, message=i18n.t("api.knowledgebase.query_success"))
 
 
 @knowledgebase_router.put("/{kb_id}", response_model=ResponseModel[KbEntity])
@@ -191,24 +173,18 @@ async def update_knowledgebase(
         ))
 
 @knowledgebase_router.delete("/{kb_id}")
+@handle_api_exceptions(action="delete knowledgebase", default_code=400)
 async def delete_knowledgebase(
     kb_id: str,
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        await rag_service.delete_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
-
-        return success_response(data=None, message=i18n.t("api.knowledgebase.delete_success"))
-    except ValueError as e:
-        logger.error(f"Failed to delete knowledge base.\nValueError:{e}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to delete knowledge base.\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"Failed to delete knowledge base: {e}.")
+    await rag_service.delete_knowledgebase(kb_id=kb_id, tenant_id=tenant_id)
+    return success_response(data=None, message=i18n.t("api.knowledgebase.delete_success"))
 
 @knowledgebase_router.get("/{kb_id}/files")
+@handle_api_exceptions(action="list files", default_code=400)
 async def list_files(
     kb_id: str,
     file_name: Optional[str] = None,
@@ -220,21 +196,13 @@ async def list_files(
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        if file_name:
-            file_entity = await rag_service.get_file_by_name(kb_id=kb_id, file_name=file_name, tenant_id=tenant_id)
-            if not file_entity:
-                raise ApiException.not_found(file_name, i18n.t("api.knowledgebase.file_resource_name"))
-            return success_response(data=file_entity, message=i18n.t("api.knowledgebase.file_query_success"))
-        else:
-            page_result = await rag_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status)
-            return success_response(data=page_result, message=i18n.t("api.knowledgebase.file_list_success"))
-    except ValueError as e:
-        logger.error(f"Failed to query file.\nValueError:{e}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to query file.\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"Failed to query file: {e}.")
+    if file_name:
+        file_entity = await rag_service.get_file_by_name(kb_id=kb_id, file_name=file_name, tenant_id=tenant_id)
+        if not file_entity:
+            raise ApiException.not_found(file_name, i18n.t("api.knowledgebase.file_resource_name"))
+        return success_response(data=file_entity, message=i18n.t("api.knowledgebase.file_query_success"))
+    page_result = await rag_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status)
+    return success_response(data=page_result, message=i18n.t("api.knowledgebase.file_list_success"))
 
 
 
@@ -413,6 +381,7 @@ async def upload_files(
 @knowledgebase_router.get(
     "/{kb_id}/files/{file_id}", response_model=ResponseModel[KbFileEntity]
 )
+@handle_api_exceptions(action="get file", default_code=400)
 async def get_kb_file(
     kb_id: str,
     file_id: str,
@@ -420,20 +389,13 @@ async def get_kb_file(
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        file_entity = await rag_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        if not file_entity:
-            raise ApiException.not_found(file_id, "File")
+    file_entity = await rag_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+    if not file_entity:
+        raise ApiException.not_found(file_id, "File")
 
-        file_url = await file_store.get_url_async(file_path=file_entity.file_path, tenant_id=tenant_id)
-        file_entity.file_metadata["file_url"] = file_url
-        return success_response(data=file_entity, message="File query successful")
-    except ValueError as e:
-        logger.error(f"File query failed.\nValueError:{e}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"File query failed.\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"File query failed: {e}.")
+    file_url = await file_store.get_url_async(file_path=file_entity.file_path, tenant_id=tenant_id)
+    file_entity.file_metadata["file_url"] = file_url
+    return success_response(data=file_entity, message="File query successful")
 
 
 class ReprocessFileRequest(BaseModel):
@@ -441,6 +403,7 @@ class ReprocessFileRequest(BaseModel):
 
 
 @knowledgebase_router.put("/{kb_id}/files/{file_id}")
+@handle_api_exceptions(action="reprocess file", default_code=400)
 async def reprocess_file(
     kb_id: str,
     file_id: str,
@@ -450,39 +413,31 @@ async def reprocess_file(
     file_service: FileService = Depends(get_file_service),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        file_entities = await file_service.get_files_by_ids(file_ids=[file_id], tenant_id=tenant_id)
-        if not file_entities:
-            raise ApiException.not_found(file_id, "File")
+    file_entities = await file_service.get_files_by_ids(file_ids=[file_id], tenant_id=tenant_id)
+    if not file_entities:
+        raise ApiException.not_found(file_id, "File")
 
-        # 如果提供了 chunk_config，先验证并更新
-        chunk_config = None
-        if body and body.chunk_config:
-            try:
-                ChunkConfig.model_validate(body.chunk_config)
-                chunk_config = body.chunk_config
-            except Exception as e:
-                raise ApiException(code=400, message=f"chunk_config format is incorrect: {e}")
+    # 如果提供了 chunk_config，先验证并更新
+    chunk_config = None
+    if body and body.chunk_config:
+        try:
+            ChunkConfig.model_validate(body.chunk_config)
+            chunk_config = body.chunk_config
+        except Exception as e:
+            raise ApiException(code=400, message=f"chunk_config format is incorrect: {e}")
 
-        reprocessed_count = await _batch_reprocess_files(
-            kb_id=kb_id,
-            file_entities=file_entities,
-            session=session,
-            tenant_id=tenant_id,
-            chunk_config=chunk_config
-        )
-        return success_response(data=reprocessed_count, message=f"Successfully added {reprocessed_count} files to the reprocessing queue.")
-    except ApiException:
-        raise
-    except ValueError as e:
-        logger.error(f"Reprocess file failed.\nValueError:{e}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Reprocess file failed.\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"Reprocess file failed: {e}.")
+    reprocessed_count = await _batch_reprocess_files(
+        kb_id=kb_id,
+        file_entities=file_entities,
+        session=session,
+        tenant_id=tenant_id,
+        chunk_config=chunk_config
+    )
+    return success_response(data=reprocessed_count, message=f"Successfully added {reprocessed_count} files to the reprocessing queue.")
 
 
 @knowledgebase_router.delete("/{kb_id}/files/{file_id}")
+@handle_api_exceptions(action="delete file", default_code=400)
 async def delete_file(
     kb_id: str,
     file_id: str,
@@ -490,15 +445,8 @@ async def delete_file(
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        await rag_service.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        return success_response(data=None, message="File deletion successful.")
-    except ValueError as e:
-        logger.error(f"File deletion failed.\nValueError:{e}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"File deletion failed.\nException:{traceback.format_exc()}")
-        raise ApiException(code=400, message=f"File deletion failed: {e}.")
+    await rag_service.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+    return success_response(data=None, message="File deletion successful.")
 
 
 class BatchOperationRequest(BaseModel):
@@ -659,6 +607,7 @@ async def set_file_source(
 
 
 @knowledgebase_router.get("/{kb_id}/files/{file_id}/chunks")
+@handle_api_exceptions(action="list chunks", default_code=500)
 async def list_chunks(
     kb_id: str,
     file_id: str,
@@ -668,16 +617,12 @@ async def list_chunks(
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        chunk_entities = await rag_service.list_chunks(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id, page=page, size=size)
-
-        return success_response(data=chunk_entities, message="Chunk list retrieval successful")
-    except Exception as e:
-        logger.error(f"Failed to list chunks for knowledgebase {kb_id} / file {file_id}: {e}")
-        raise ApiException(code=500, message=f"List chunks failed: {e}")
+    chunk_entities = await rag_service.list_chunks(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id, page=page, size=size)
+    return success_response(data=chunk_entities, message="Chunk list retrieval successful")
 
 
 @knowledgebase_router.put("/{kb_id}/files/{file_id}/chunks/{chunk_id}", response_model=ResponseModel[KbChunkEntity])
+@handle_api_exceptions(action="update chunk", default_code=500)
 async def update_chunk(
     kb_id: str,
     file_id: str,
@@ -687,12 +632,8 @@ async def update_chunk(
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        kb_chunk = await rag_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, chunk=update_kb_chunk, tenant_id=tenant_id)
-        return success_response(data=kb_chunk, message="Chunk update successful")
-    except Exception as ex:
-        logger.error(f"Failed to update knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"Chunk update failed: {str(ex)}")
+    kb_chunk = await rag_service.update_chunk(kb_id=kb_id, file_id=file_id, chunk_id=chunk_id, chunk=update_kb_chunk, tenant_id=tenant_id)
+    return success_response(data=kb_chunk, message="Chunk update successful")
 
 
 class AddChunkRequest(BaseModel):
@@ -700,6 +641,7 @@ class AddChunkRequest(BaseModel):
     chunk_metadata: dict = Field(default={}, description="Chunk metadata")
 
 @knowledgebase_router.delete("/{kb_id}/files/{file_id}/chunks/{chunk_id}")
+@handle_api_exceptions(action="delete chunk", default_code=500)
 async def delete_chunk(
     kb_id: str,
     file_id: str,
@@ -708,14 +650,11 @@ async def delete_chunk(
     session: AsyncSession = Depends(get_db_session),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        await rag_service.delete_chunk(chunk_id=chunk_id, kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
-        return success_response(data=None, message="Chunk deletion successful.")
-    except Exception as ex:
-        logger.error(f"Failed to delete chunk from knowledgebase {kb_id} / file {file_id} / chunk {chunk_id}: {traceback.format_exc()}")
-        raise ApiException(code=500, message=f"Chunk deletion failed: {str(ex)}")
+    await rag_service.delete_chunk(chunk_id=chunk_id, kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+    return success_response(data=None, message="Chunk deletion successful.")
 
 @knowledgebase_router.post("/{kb_id}/files/{file_id}/chunks", response_model=ResponseModel[KbChunkEntity])
+@handle_api_exceptions(action="add chunk", default_code=500)
 async def add_chunk(
     kb_id: str,
     file_id: str,
@@ -733,10 +672,5 @@ async def add_chunk(
     - chunk_index: Automatically set to max(index) + 1 for the file
     - chunk_metadata: Combines file_metadata + token_count
     """
-    try:
-        new_chunk = await rag_service.add_chunk(kb_id=kb_id, file_id=file_id, text=request.text, chunk_metadata=request.chunk_metadata, tenant_id=tenant_id)
-
-        return success_response(data=new_chunk, message="Chunk addition successful.")
-    except Exception as ex:
-        logger.exception(f"Failed to add chunk to knowledgebase {kb_id} / file {file_id}: {ex}")
-        raise ApiException(code=500, message=f"Chunk addition failed: {str(ex)}")
+    new_chunk = await rag_service.add_chunk(kb_id=kb_id, file_id=file_id, text=request.text, chunk_metadata=request.chunk_metadata, tenant_id=tenant_id)
+    return success_response(data=new_chunk, message="Chunk addition successful.")
