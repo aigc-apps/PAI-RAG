@@ -6,18 +6,18 @@ dotenv.load_dotenv()
 from loguru import logger
 from sqlmodel import SQLModel
 from sqlalchemy import event
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 from contextlib import asynccontextmanager
 from functools import wraps
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from urllib.parse import quote_plus
 import os
 
 
-def get_async_db_engine():
+def get_async_db_engine() -> AsyncEngine:
     # 从环境变量中读取数据库配置
     if not os.path.exists("./localdata"):
         os.makedirs("./localdata")
@@ -105,13 +105,78 @@ def get_async_db_engine():
         return async_engine
 
 
-async_engine = get_async_db_engine()
-AsyncSessionLocal = async_sessionmaker(
-    bind=async_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-)
+# ---------------------------------------------------------------------------
+# Lazy singletons
+# ---------------------------------------------------------------------------
+# The engine and session factory are constructed on first use rather than at
+# module-import time. This keeps `import db.db_context` (and any module that
+# transitively imports it, such as FastAPI routers under `api.*`) free of side
+# effects, which makes unit tests, CLI tools, and Alembic significantly easier
+# to reason about.
+_engine: Optional[AsyncEngine] = None
+_session_factory: Optional[async_sessionmaker] = None
+
+
+def get_engine() -> AsyncEngine:
+    """Return the process-wide async engine, creating it on first access."""
+    global _engine
+    if _engine is None:
+        _engine = get_async_db_engine()
+    return _engine
+
+
+def get_session_factory() -> async_sessionmaker:
+    """Return the process-wide async session factory, bound to the lazy engine."""
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(
+            bind=get_engine(),
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
+        )
+    return _session_factory
+
+
+# ---------------------------------------------------------------------------
+# Test hooks
+# ---------------------------------------------------------------------------
+def reset_engine_for_test() -> None:
+    """Drop any cached engine/session factory so the next call rebuilds them.
+
+    Intended for unit tests that mutate `DB_TYPE`/`SQLITE_URL` and need a fresh
+    engine. Not safe for production use.
+    """
+    global _engine, _session_factory
+    _engine = None
+    _session_factory = None
+
+
+def set_engine_for_test(engine: AsyncEngine) -> None:
+    """Inject a pre-built engine (e.g. an in-memory mock) for tests."""
+    global _engine, _session_factory
+    _engine = engine
+    _session_factory = None  # force rebuild against the injected engine
+
+
+def set_session_factory_for_test(factory) -> None:
+    """Inject a session factory (e.g. one that yields AsyncMock sessions)."""
+    global _session_factory
+    _session_factory = factory
+
+
+# ---------------------------------------------------------------------------
+# Backwards compatibility
+# ---------------------------------------------------------------------------
+# Historical callers and tests reference `async_engine` and `AsyncSessionLocal`
+# as module-level attributes. Expose them via PEP 562 `__getattr__` so the
+# import surface is unchanged while the actual construction stays lazy.
+def __getattr__(name):
+    if name == "async_engine":
+        return get_engine()
+    if name == "AsyncSessionLocal":
+        return get_session_factory()
+    raise AttributeError(f"module 'db.db_context' has no attribute {name!r}")
 
 
 # Backwards-compatible alias for the historical misspelling.
@@ -120,7 +185,7 @@ get_async_db_angine = get_async_db_engine
 
 
 async def init_db():
-    async with async_engine.begin() as conn:
+    async with get_engine().begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
 
@@ -130,7 +195,7 @@ async def create_db_session() -> AsyncGenerator[AsyncSession, None]:
     Async context manager that owns a SQLAlchemy AsyncSession lifecycle.
 
     Behavior:
-        - Creates a new Session from AsyncSessionLocal.
+        - Creates a new Session from the lazy session factory.
         - On normal exit: commits the session.
         - On exception: rolls back and re-raises.
         - Always closes the session.
@@ -139,7 +204,7 @@ async def create_db_session() -> AsyncGenerator[AsyncSession, None]:
     `get_db_session` (FastAPI dependency) and `with_async_db_session`
     (decorator) both delegate to it to avoid duplication.
     """
-    session = AsyncSessionLocal()
+    session = get_session_factory()()
     try:
         yield session
         await session.commit()
