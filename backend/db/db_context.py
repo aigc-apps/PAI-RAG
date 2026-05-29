@@ -17,7 +17,7 @@ from urllib.parse import quote_plus
 import os
 
 
-def get_async_db_angine():
+def get_async_db_engine():
     # 从环境变量中读取数据库配置
     if not os.path.exists("./localdata"):
         os.makedirs("./localdata")
@@ -105,7 +105,7 @@ def get_async_db_angine():
         return async_engine
 
 
-async_engine = get_async_db_angine()
+async_engine = get_async_db_engine()
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
     class_=AsyncSession,
@@ -114,73 +114,62 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+# Backwards-compatible alias for the historical misspelling.
+# Deprecated: use get_async_db_engine() instead. Will be removed in a future release.
+get_async_db_angine = get_async_db_engine
+
+
 async def init_db():
     async with async_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """
-    FastAPI Dependency: 为每个请求提供一个 AsyncSession，并负责事务管理和关闭。
-    """
-    session = AsyncSessionLocal() # 1. 事务开始：创建新的 Session
-    try:
-        # 2. 暂停执行：将 Session 实例注入到 API 路由中
-        yield session
-
-        # 3. 成功路径：API 路由执行完毕且没有抛出异常，执行 commit
-        await session.commit()
-
-    except Exception:
-        # 4. 失败路径：API 路由抛出异常，执行 rollback
-        await session.rollback()
-        raise # 重新抛出异常，让 FastAPI 返回错误响应
-
-    finally:
-        # 5. 资源清理：无论成功还是失败，最终都会执行 close
-        await session.close()
-
-
 @asynccontextmanager
 async def create_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
-    一个可重用的异步上下文管理器。
-    它手动创建 Session，并在 with 块退出时自动处理 commit/rollback/close。
+    Async context manager that owns a SQLAlchemy AsyncSession lifecycle.
+
+    Behavior:
+        - Creates a new Session from AsyncSessionLocal.
+        - On normal exit: commits the session.
+        - On exception: rolls back and re-raises.
+        - Always closes the session.
+
+    This is the single source of truth for session lifecycle management;
+    `get_db_session` (FastAPI dependency) and `with_async_db_session`
+    (decorator) both delegate to it to avoid duplication.
     """
-    # 事务开始：使用 Session Factory 创建新的 Session
     session = AsyncSessionLocal()
-
     try:
-        # 暂停执行：将 Session 注入到 'async with' 块中
         yield session
-
-        # 成功路径：如果 with 块中没有异常，执行 commit
         await session.commit()
-
     except Exception:
-        # 失败路径：如果 with 块中抛出异常，执行 rollback
         await session.rollback()
-        raise # 重新抛出异常
-
+        raise
     finally:
-        # 资源清理：无论成功还是失败，最终都会执行 close
         await session.close()
 
 
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    FastAPI dependency: yields an AsyncSession per request with
+    commit/rollback/close managed by `create_db_session`.
+    """
+    async with create_db_session() as session:
+        yield session
+
+
 def with_async_db_session(func):
+    """Decorator that injects a managed AsyncSession as `session` kwarg."""
+
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        session = AsyncSessionLocal()
-        try:
+        async with create_db_session() as session:
             kwargs["session"] = session
-            result = await func(*args, **kwargs)
-            await session.commit()
-            return result
-        except Exception as e:
-            logger.error(f"Execution error: {e}")
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                logger.error(f"Execution error: {e}")
+                raise
 
     return wrapper
