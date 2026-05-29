@@ -39,7 +39,7 @@ from rag.file_item_utils import to_file_entity
 from typing import Optional, List
 from io import BytesIO
 import json
-from api.api_exception import ApiException
+from api.api_exception import ApiException, handle_api_exceptions
 import traceback
 from loguru import logger
 from common.i18n import i18n
@@ -53,6 +53,7 @@ from db.models.faq_item import FAQItemCreate, FAQItemEntity
 # FAQ routes - MUST be defined before /{id} routes to avoid route conflicts
 # FastAPI matches routes in order, so more specific routes must come first
 @app_router.post("/{app_id}/faqs", response_model=ResponseModel[FAQItemEntity], tags=["FAQ"])
+@handle_api_exceptions(action="create FAQ item", i18n_error_key="api.faq.create_failed", default_code=500)
 async def create_faq_item(
     app_id: str,
     faq_item_create: FAQItemCreate,
@@ -63,34 +64,26 @@ async def create_faq_item(
     rag_service: RagService = Depends(get_rag_service),
 ):
     logger.info(f"Creating FAQ item for app_id: {app_id}")
-    try:
-        # Get chatbot by app_id to get chatbot_id
-        chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
-        if not chatbot:
-            raise ApiException(code=404, message=f"Chat App '{app_id}' does not exist.")
+    # Get chatbot by app_id to get chatbot_id
+    chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
+    if not chatbot:
+        raise ApiException(code=404, message=f"Chat App '{app_id}' does not exist.")
 
-        if not chatbot.enable_faq or not chatbot.faq_config:
-            raise ApiException(code=400, message="FAQ is not enabled.")
+    if not chatbot.enable_faq or not chatbot.faq_config:
+        raise ApiException(code=400, message="FAQ is not enabled.")
 
-        faq_item = await faq_item_service.create_faq_item(
-            chatbot_id=chatbot.app_id,
-            faq_item_data=faq_item_create,
-            tenant_id=tenant_id,
-        )
-        await faq_item_service.save_faq_to_knowledgebase(faq_item, tenant_id, rag_service)
-        await session.commit()
-        await session.refresh(faq_item)
-        return success_response(data=faq_item, message=i18n.t("api.faq.create_success"))
-    except ValueError as e:
-        logger.error(f"Failed to create FAQ item: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except ApiException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to create FAQ item: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.faq.create_failed", error=traceback.format_exc()))
+    faq_item = await faq_item_service.create_faq_item(
+        chatbot_id=chatbot.app_id,
+        faq_item_data=faq_item_create,
+        tenant_id=tenant_id,
+    )
+    await faq_item_service.save_faq_to_knowledgebase(faq_item, tenant_id, rag_service)
+    await session.commit()
+    await session.refresh(faq_item)
+    return success_response(data=faq_item, message=i18n.t("api.faq.create_success"))
 
 @app_router.get("/{app_id}/faqs", tags=["FAQ"])
+@handle_api_exceptions(action="list FAQ items", i18n_error_key="api.faq.list_failed", default_code=500)
 async def list_faq_items(
     app_id: str,
     page: int = Query(default=1, ge=1),
@@ -101,29 +94,21 @@ async def list_faq_items(
     faq_item_service: FAQItemService = Depends(get_faq_item_service),
 ):
     logger.info(f"Listing FAQ items for app_id: {app_id}")
-    try:
-        # Get chatbot by app_id to get chatbot_id
-        chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
-        if not chatbot:
-            raise ApiException(code=404, message=f"Chat app '{app_id}' does not exist.")
+    # Get chatbot by app_id to get chatbot_id
+    chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
+    if not chatbot:
+        raise ApiException(code=404, message=f"Chat app '{app_id}' does not exist.")
 
-        faq_items = await faq_item_service.list_faq_items(
-            chatbot_id=chatbot.app_id,
-            tenant_id=tenant_id,
-            page=page,
-            size=size,
-        )
-        return success_response(data=faq_items, message=i18n.t("api.faq.list_success"))
-    except ValueError as e:
-        logger.error(f"Failed to list FAQ items: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except ApiException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to list FAQ items: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.faq.list_failed", error=traceback.format_exc()))
+    faq_items = await faq_item_service.list_faq_items(
+        chatbot_id=chatbot.app_id,
+        tenant_id=tenant_id,
+        page=page,
+        size=size,
+    )
+    return success_response(data=faq_items, message=i18n.t("api.faq.list_success"))
 
 @app_router.put("/{app_id}/faqs/{faq_item_id}", response_model=ResponseModel[FAQItemEntity], tags=["FAQ"])
+@handle_api_exceptions(action="update FAQ item", i18n_error_key="api.faq.update_failed", default_code=500)
 async def update_faq_item(
     app_id: str,
     faq_item_id: str,
@@ -133,21 +118,15 @@ async def update_faq_item(
     faq_item_service: FAQItemService = Depends(get_faq_item_service),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        faq_item = await faq_item_service.update_faq_item(
-            id=faq_item_id, update_data=faq_item_update, tenant_id=tenant_id, rag_service=rag_service
-        )
-        await session.commit()
-        await session.refresh(faq_item)
-        return success_response(data=faq_item, message=i18n.t("api.faq.update_success"))
-    except ValueError as e:
-        logger.error(f"Failed to update FAQ item: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to update FAQ item: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.faq.update_failed", error=traceback.format_exc()))
+    faq_item = await faq_item_service.update_faq_item(
+        id=faq_item_id, update_data=faq_item_update, tenant_id=tenant_id, rag_service=rag_service
+    )
+    await session.commit()
+    await session.refresh(faq_item)
+    return success_response(data=faq_item, message=i18n.t("api.faq.update_success"))
 
 @app_router.delete("/{app_id}/faqs/{faq_item_id}", tags=["FAQ"])
+@handle_api_exceptions(action="delete FAQ item", i18n_error_key="api.faq.delete_failed", default_code=500)
 async def delete_faq_item(
     app_id: str,
     faq_item_id: str,
@@ -156,16 +135,9 @@ async def delete_faq_item(
     faq_item_service: FAQItemService = Depends(get_faq_item_service),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        await faq_item_service.delete_faq_item(id=faq_item_id, tenant_id=tenant_id, rag_service=rag_service)
-        await session.commit()
-        return success_response(message=i18n.t("api.faq.delete_success", id=faq_item_id))
-    except ValueError as e:
-        logger.error(f"Failed to delete FAQ item: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to delete FAQ item: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.faq.delete_failed", error=traceback.format_exc()))
+    await faq_item_service.delete_faq_item(id=faq_item_id, tenant_id=tenant_id, rag_service=rag_service)
+    await session.commit()
+    return success_response(message=i18n.t("api.faq.delete_success", id=faq_item_id))
 
 MAX_CHECK_ATTEMPTS = 100
 CHECK_INTERVAL = 3
@@ -437,26 +409,21 @@ async def upload_faq_files(
 
 
 @app_router.post("", response_model=ResponseModel[ChatBotEntity])
+@handle_api_exceptions(action="create chatapp", i18n_error_key="api.app.create_failed", default_code=500)
 async def create_chatbot(
     chatbot_create: ChatBotCreate,
     tenant_id: str = Depends(get_tenant_id),
     session: AsyncSession = Depends(get_db_session),
     chatapp_service: ChatappService = Depends(get_chatapp_service),
 ):
-    try:
-        chatbot = await chatapp_service.create_chatapp(app_data=chatbot_create, tenant_id=tenant_id)
-        await session.commit()
-        await session.refresh(chatbot)
-        return success_response(data=chatbot, message=i18n.t("api.app.create_success"))
-    except ValueError as e:
-        logger.error(f"Failed to create chatapp: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to create chatapp: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.app.create_failed", error=traceback.format_exc()))
+    chatbot = await chatapp_service.create_chatapp(app_data=chatbot_create, tenant_id=tenant_id)
+    await session.commit()
+    await session.refresh(chatbot)
+    return success_response(data=chatbot, message=i18n.t("api.app.create_success"))
 
 
 @app_router.get("")
+@handle_api_exceptions(action="list chatapps", i18n_error_key="api.app.list_failed", default_code=500)
 async def get_chatbots(
     app_id: str = None,
     page: int = Query(default=1, ge=1),
@@ -465,24 +432,17 @@ async def get_chatbots(
     session: AsyncSession = Depends(get_db_session),
     chatapp_service: ChatappService = Depends(get_chatapp_service),
 ):
-    try:
-        if not app_id:
-            chatbots = await chatapp_service.list_chatapps(page=page, size=size, tenant_id=tenant_id)
-            return success_response(data=chatbots, message=i18n.t("api.app.list_success"))
-        else:
-            chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
-            if not chatbot:
-                raise ApiException(code=404, message=i18n.t("api.app.query_failed", id=app_id))
-            return success_response(data=chatbot, message=i18n.t("api.app.query_success"))
-    except ValueError as e:
-        logger.error(f"Failed to list chatapps: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to list chatapps: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.app.list_failed", error=traceback.format_exc()))
+    if not app_id:
+        chatbots = await chatapp_service.list_chatapps(page=page, size=size, tenant_id=tenant_id)
+        return success_response(data=chatbots, message=i18n.t("api.app.list_success"))
+    chatbot = await chatapp_service.get_chatapp_by_app_id(app_id=app_id, tenant_id=tenant_id)
+    if not chatbot:
+        raise ApiException(code=404, message=i18n.t("api.app.query_failed", id=app_id))
+    return success_response(data=chatbot, message=i18n.t("api.app.query_success"))
 
 
 @app_router.put("/{id}", response_model=ResponseModel[ChatBotEntity])
+@handle_api_exceptions(action="update chatapp", i18n_error_key="api.app.update_failed", default_code=500)
 async def update_chatbot(
     id: str,
     new_chatbot: ChatBotCreate,
@@ -490,18 +450,12 @@ async def update_chatbot(
     session: AsyncSession = Depends(get_db_session),
     chatapp_service: ChatappService = Depends(get_chatapp_service),
 ):
-    try:
-        chatbot = await chatapp_service.update_chatapp(id=id, update_data=new_chatbot, tenant_id=tenant_id)
-        return success_response(data=chatbot, message=i18n.t("api.app.update_success"))
-    except ValueError as e:
-        logger.error(f"Failed to update chatapp: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to update chatapp: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.app.update_failed", error=traceback.format_exc()))
+    chatbot = await chatapp_service.update_chatapp(id=id, update_data=new_chatbot, tenant_id=tenant_id)
+    return success_response(data=chatbot, message=i18n.t("api.app.update_success"))
 
 
 @app_router.delete("/{id}")
+@handle_api_exceptions(action="delete chatapp", i18n_error_key="api.app.delete_failed", default_code=500)
 async def delete_chatbot(
     id: str,
     tenant_id: str = Depends(get_tenant_id),
@@ -509,13 +463,6 @@ async def delete_chatbot(
     chatapp_service: ChatappService = Depends(get_chatapp_service),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    try:
-        await chatapp_service.delete_chatapp(id=id, tenant_id=tenant_id, rag_service=rag_service)
-        await session.commit()
-        return success_response(message=i18n.t("api.app.delete_success", id=id))
-    except ValueError as e:
-        logger.error(f"Failed to delete chatapp: {str(e)}")
-        raise ApiException(code=400, message=str(e))
-    except Exception as e:
-        logger.error(f"Failed to delete chatapp: {traceback.format_exc()}")
-        raise ApiException(code=500, message=i18n.t("api.app.delete_failed", error=traceback.format_exc()))
+    await chatapp_service.delete_chatapp(id=id, tenant_id=tenant_id, rag_service=rag_service)
+    await session.commit()
+    return success_response(message=i18n.t("api.app.delete_success", id=id))
