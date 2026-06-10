@@ -33,6 +33,16 @@ _FUSION_CAPABLE_MODELS = {
     "qwen2.5-vl-embedding",
 }
 
+# 单请求图片数上限（参考 DashScope qwen3-vl-embedding / qwen2.5-vl-embedding 限制：
+# 单请求最多 20 个元素、其中最多 5 张图片）。超出时截断并打 warning，
+# 避免索引整批失败。
+_PER_REQUEST_IMAGE_LIMITS: Dict[str, int] = {
+    "qwen3-vl-embedding": 5,
+    "qwen2.5-vl-embedding": 5,
+}
+_PER_REQUEST_VIDEO_LIMIT_DEFAULT = 3
+_PER_REQUEST_TOTAL_ELEMENTS_LIMIT = 20
+
 
 class MultimodalDashscopeEmbedding(BaseEmbedding):
     """DashScope 多模态向量化客户端。
@@ -214,6 +224,62 @@ class MultimodalDashscopeEmbedding(BaseEmbedding):
     # ------------------------------------------------------------------
     # 多模态扩展
     # ------------------------------------------------------------------
+    def _truncate_modalities(
+        self,
+        images: Optional[List[str]],
+        videos: Optional[List[str]],
+        has_text: bool,
+    ) -> tuple[List[str], List[str]]:
+        """按 DashScope 单请求上限截断 images/videos，并打 warning。
+
+        - 不同模型对单请求图片数有上限（如 qwen3-vl-embedding 为 5）；
+        - 同时单请求总元素数（text + image + video）不超过 20。
+
+        截断而非抛错，避免整批索引失败；调用方可读取日志并复跑。
+        """
+        image_limit = _PER_REQUEST_IMAGE_LIMITS.get(self.model_name)
+        imgs = [u for u in (images or []) if u]
+        vids = [u for u in (videos or []) if u]
+
+        if image_limit is not None and len(imgs) > image_limit:
+            logger.warning(
+                "[MultimodalDashscopeEmbedding] model={model} received {n} images "
+                "in a single request, truncating to {limit} (DashScope per-request "
+                "image cap). Consider splitting nodes upstream.",
+                model=self.model_name,
+                n=len(imgs),
+                limit=image_limit,
+            )
+            imgs = imgs[:image_limit]
+
+        if len(vids) > _PER_REQUEST_VIDEO_LIMIT_DEFAULT:
+            logger.warning(
+                "[MultimodalDashscopeEmbedding] model={model} received {n} videos "
+                "in a single request, truncating to {limit}.",
+                model=self.model_name,
+                n=len(vids),
+                limit=_PER_REQUEST_VIDEO_LIMIT_DEFAULT,
+            )
+            vids = vids[:_PER_REQUEST_VIDEO_LIMIT_DEFAULT]
+
+        # 总元素 ≤ 20（text 占用一个 slot）
+        max_elements = _PER_REQUEST_TOTAL_ELEMENTS_LIMIT - (1 if has_text else 0)
+        if len(imgs) + len(vids) > max_elements:
+            logger.warning(
+                "[MultimodalDashscopeEmbedding] model={model} total elements "
+                "{total} exceeds per-request cap {cap}, further truncating images.",
+                model=self.model_name,
+                total=len(imgs) + len(vids) + (1 if has_text else 0),
+                cap=_PER_REQUEST_TOTAL_ELEMENTS_LIMIT,
+            )
+            # 先保留 video，再截 image
+            vid_keep = min(len(vids), max_elements)
+            img_keep = max(0, max_elements - vid_keep)
+            imgs = imgs[:img_keep]
+            vids = vids[:vid_keep]
+
+        return imgs, vids
+
     async def aget_multimodal_embedding(
         self,
         text: Optional[str] = None,
@@ -228,18 +294,20 @@ class MultimodalDashscopeEmbedding(BaseEmbedding):
         - 模型仅支持独立向量（如 tongyi-embedding-vision-plus）：仍合并到一次
           请求，返回时优先取文本向量作为节点代表向量（与现网用户对纯文本查询
           的检索行为一致）。
+
+        注意：超过 DashScope 单请求上限的 images/videos 会被截断并打 warning，
+        以避免单个节点导致整批索引失败。
         """
+        has_text = bool(text)
+        imgs, vids = self._truncate_modalities(images, videos, has_text=has_text)
+
         contents: List[Dict[str, Any]] = []
-        if text:
+        if has_text:
             contents.append({"text": text})
-        if images:
-            for img in images:
-                if img:
-                    contents.append({"image": img})
-        if videos:
-            for v in videos:
-                if v:
-                    contents.append({"video": v})
+        for img in imgs:
+            contents.append({"image": img})
+        for v in vids:
+            contents.append({"video": v})
         if not contents:
             raise ValueError("aget_multimodal_embedding requires at least one of text/images/videos")
 

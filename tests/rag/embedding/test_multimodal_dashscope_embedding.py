@@ -118,6 +118,40 @@ async def test_aget_multimodal_embedding_with_images_fusion():
 
 
 @pytest.mark.asyncio
+async def test_aget_multimodal_embedding_truncates_images_over_qwen3_vl_cap():
+    """qwen3-vl-embedding 单请求最多 5 张图，超出应截断而非抛错。"""
+    e = MultimodalDashscopeEmbedding(api_key="sk", model_name="qwen3-vl-embedding")
+    fake_response = {
+        "output": {
+            "embeddings": [{"index": 0, "embedding": [1.0], "type": "fusion"}]
+        }
+    }
+    with patch.object(e, "_post", new=AsyncMock(return_value=fake_response)) as m:
+        v = await e.aget_multimodal_embedding(
+            text="caption",
+            images=[f"http://x/{i}.png" for i in range(8)],
+        )
+        assert v == [1.0]
+        called_payload = m.await_args.args[0]
+        image_items = [c for c in called_payload["input"]["contents"] if "image" in c]
+        assert len(image_items) == 5
+
+
+def test_truncate_modalities_respects_total_element_cap():
+    """text + image + video 总数不能超过 20。"""
+    e = MultimodalDashscopeEmbedding(api_key="sk", model_name="qwen3-vl-embedding")
+    imgs, vids = e._truncate_modalities(
+        images=[f"i{i}" for i in range(50)],
+        videos=[f"v{i}" for i in range(5)],
+        has_text=True,
+    )
+    # image 先被截到 5（qwen3-vl-embedding 单请求上限），再受总元素 20 - 1(text) - 3(video) 限制
+    assert len(imgs) <= 5
+    assert len(vids) <= 3
+    assert len(imgs) + len(vids) + 1 <= 20
+
+
+@pytest.mark.asyncio
 async def test_aget_multimodal_embedding_batch_returns_per_item_vector():
     e = MultimodalDashscopeEmbedding(api_key="sk", model_name="qwen3-vl-embedding")
 

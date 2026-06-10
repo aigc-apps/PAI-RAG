@@ -234,6 +234,8 @@ class RerankerService:
             reranker.base_url = update_data.base_url
         if update_data.type is not None:
             reranker.type = update_data.type
+        if update_data.is_multimodal is not None:
+            reranker.is_multimodal = update_data.is_multimodal
         if update_data.api_key is not None:
             reranker.encrypted_api_key = encrypt_key(update_data.api_key)
         if update_data.provider_name is not None:

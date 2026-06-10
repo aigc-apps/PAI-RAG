@@ -184,9 +184,19 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                     ? 'bg-background shadow-sm font-medium text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
-                onClick={() =>
-                  setEmb({ ...emb, type: 'multimodal_dashscope', is_multimodal: true })
-                }
+                onClick={() => {
+                  const isCompatibleMode =
+                    !emb.endpoint ||
+                    emb.endpoint.includes('/compatible-mode');
+                  setEmb({
+                    ...emb,
+                    type: 'multimodal_dashscope',
+                    is_multimodal: true,
+                    endpoint: isCompatibleMode
+                      ? 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding'
+                      : emb.endpoint,
+                  });
+                }}
               >
                 {t('config.model.multimodalDashscope')}
               </button>
@@ -237,17 +247,34 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                   </label>
                   <Input
                     id="endpoint"
-                    list="endpoint_options"
-                    placeholder={t('config.model.endpointPlaceholder')}
+                    list={isMultimodal ? 'mm_endpoint_options' : 'endpoint_options'}
+                    placeholder={
+                      isMultimodal
+                        ? t('config.model.multimodalEndpointPlaceholder')
+                        : t('config.model.endpointPlaceholder')
+                    }
                     value={emb?.endpoint ?? ''}
                     onChange={(e) => setEmb((prev) => ({ ...prev, endpoint: e.target.value }))}
                   />
-                  <datalist id="endpoint_options">
-                    <option value="https://api.openai.com/v1">OpenAI</option>
-                    <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
-                      {t('config.model.qwenModel')}
-                    </option>
-                  </datalist>
+                  {isMultimodal ? (
+                    <>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {t('config.model.multimodalEndpointHint')}
+                      </p>
+                      <datalist id="mm_endpoint_options">
+                        <option value="https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding">
+                          {t('config.model.qwenMultimodalEmbedding')}
+                        </option>
+                      </datalist>
+                    </>
+                  ) : (
+                    <datalist id="endpoint_options">
+                      <option value="https://api.openai.com/v1">OpenAI</option>
+                      <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
+                        {t('config.model.qwenModel')}
+                      </option>
+                    </datalist>
+                  )}
                 </div>
 
                 <div>
