@@ -8,11 +8,15 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'integrations/**'
+      - 'resources/**'
       - 'alembic/**'
+      - 'alembic.ini'
       - 'scripts/**'
-      - 'pyproject.toml'
-      - 'poetry.lock'
+      - '**/pyproject.toml'
+      - '**/poetry.lock'
       - 'Dockerfile'
+      - '.github/workflows/docker.yml'
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
