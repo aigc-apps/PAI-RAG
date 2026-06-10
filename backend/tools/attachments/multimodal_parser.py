@@ -87,12 +87,26 @@ async def aget_multimodal_analysis(
     video_list: List[str] = [],
     question: str = None,
     llm_service: LlmService = None,
-    tenant_id: str = None):
+    tenant_id: str = None,
+    vision_model_id: Optional[str] = None):
     """Get read file tool"""
     if not llm_service:
         raise ValueError("llm_service is required")
 
-    multimodal_llm_config = await llm_service.get_multimodal_llm(tenant_id=tenant_id)
+    multimodal_llm_config = None
+    if vision_model_id:
+        multimodal_llm_config = await llm_service.get_llm_by_model_id(
+            model_id=vision_model_id,
+            tenant_id=tenant_id,
+        )
+        if not multimodal_llm_config:
+            raise ValueError(f"图片理解模型 {vision_model_id} 不存在。")
+        if not multimodal_llm_config.enabled:
+            raise ValueError(f"图片理解模型 {vision_model_id} 已禁用。")
+        if not multimodal_llm_config.vision_support:
+            raise ValueError(f"图片理解模型 {vision_model_id} 未开启多模态能力。")
+    else:
+        multimodal_llm_config = await llm_service.get_multimodal_llm(tenant_id=tenant_id)
     if not multimodal_llm_config:
         raise ValueError("要使用图片解析工具，请在模型配置页面配置多模态大模型。")
     multimodal_llm = create_llm(multimodal_llm_config)
@@ -104,6 +118,7 @@ async def aget_multimodal_parser_tool(
     video_list: List[str] = [],
     llm_service: LlmService = None,
     tenant_id: str = None,
+    vision_model_id: Optional[str] = None,
 ):
     """
     创建 multimodal-parser 工具，用于解析上传的图片和视频内容。
@@ -113,7 +128,14 @@ async def aget_multimodal_parser_tool(
     async def aget_multimodal_analysis_func(
         query: str = "请描述图片和视频中的内容。",
     ):
-        return await aget_multimodal_analysis(image_list=image_list, video_list=video_list, question=query, llm_service=llm_service, tenant_id=tenant_id)
+        return await aget_multimodal_analysis(
+            image_list=image_list,
+            video_list=video_list,
+            question=query,
+            llm_service=llm_service,
+            tenant_id=tenant_id,
+            vision_model_id=vision_model_id,
+        )
 
     multimodal_parser_tool = FunctionTool.from_defaults(
         async_fn=aget_multimodal_analysis_func,

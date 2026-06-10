@@ -174,12 +174,15 @@ export default function LlmConfigPage() {
               </div>
 
               <div className="flex items-start gap-3 pr-20">
-                <div className="model-icon type-llm shrink-0">{(llm.model_id || 'M').charAt(0)}</div>
+                <div className="model-icon type-llm shrink-0">{(llm.model || 'M').charAt(0)}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate" title={llm.model_id}>
-                    {llm.model_id}
+                  <div className="font-medium text-sm truncate" title={llm.model}>
+                    {llm.model}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate">{llm.model}</div>
+                  <div className="model-card-meta" title={llm.model_id}>
+                    <span className="meta-key">ID</span>
+                    <span className="truncate">{llm.model_id}</span>
+                  </div>
                 </div>
               </div>
 

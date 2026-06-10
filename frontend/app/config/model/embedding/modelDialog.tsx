@@ -34,7 +34,7 @@ export interface EmbConfig {
   api_key: string;
   endpoint: string;
   dimension: number | undefined;
-  embed_batch_size: number;
+  embed_batch_size: number | undefined;
   is_ready: boolean;
   is_default: boolean;
   is_multimodal: boolean;
@@ -49,6 +49,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
 }) => {
   const [emb, setEmb] = useState<EmbConfig>(embConfig);
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
+  const [modelIdEdited, setModelIdEdited] = useState(false);
   const { tenantFetch } = useTenantFetch();
   const { t } = useI18n();
 
@@ -60,6 +61,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
 
   useEffect(() => {
     setEmb(embConfig);
+    setModelIdEdited(false);
   }, [isAdd, embConfig]);
 
   useEffect(() => {
@@ -70,46 +72,53 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     setSaveErrorMsg('');
     const is_api_model = emb.type != 'local';
     const is_multimodal_type = emb.type === 'multimodal_dashscope';
-    if (emb.dimension === 0) emb.dimension = undefined;
+    const submitData = {
+      ...emb,
+      dimension: emb.dimension && emb.dimension > 0 ? emb.dimension : undefined,
+      embed_batch_size:
+        emb.embed_batch_size && emb.embed_batch_size > 0 ? emb.embed_batch_size : undefined,
+      model_id: emb.model_id || emb.model_name,
+    };
 
     if (
       is_api_model &&
-      (!emb.model_id ||
-        (isAdd && !emb.api_key) ||
-        !emb.endpoint ||
-        !emb.model_name ||
-        !emb.type ||
-        (is_multimodal_type && !emb.dimension))
+      (!submitData.model_id ||
+        (isAdd && !submitData.api_key) ||
+        !submitData.endpoint ||
+        !submitData.model_name ||
+        !submitData.type)
     ) {
       setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
     } else if (
       !is_api_model &&
-      (!emb.model_id || !emb.model_name || !emb.dimension || !emb.type)
+      (!submitData.model_id || !submitData.model_name || !submitData.type)
     ) {
       setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
     }
 
     if (is_multimodal_type) {
-      emb.is_multimodal = true;
-    } else if (emb.is_multimodal) {
-      emb.is_multimodal = false;
+      submitData.is_multimodal = true;
+    } else if (submitData.is_multimodal) {
+      submitData.is_multimodal = false;
     }
     const submit_url = isAdd
       ? `/api/config/embeddings`
       : `/api/config/embeddings/${emb.id}`;
     const updateMethod = isAdd ? 'POST' : 'PUT';
-    if (emb.api_key === '******') emb.api_key = '';
+    if (submitData.api_key === '******') submitData.api_key = '';
     try {
       const res = await tenantFetch(submit_url, {
         method: updateMethod,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(emb),
+        body: JSON.stringify(submitData),
       });
 
       if (!res.ok) {
-        setSaveErrorMsg(t('config.model.requestFailedCheckInfo', { method: updateMethod }));
+        const errorData = await res.json().catch(() => null);
+        const detail = errorData?.message || errorData?.detail || errorData?.error;
+        setSaveErrorMsg(detail || t('config.model.requestFailedCheckInfo', { method: updateMethod }));
         return;
       }
       const jsondata = await res.json();
@@ -133,18 +142,29 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="type-corner-badge type-embedding">EMB</span>
             {displayIsAdd ? '添加 Embedding 模型' : '编辑 Embedding 模型'}
           </DialogTitle>
           <DialogDescription>
-            填写 Embedding（向量）模型的配置信息后保存
+            填写模型服务或本地模型名称即可，PAI-RAG 模型标识会默认跟随模型名称
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <div className="model-field-guide">
+            <div>
+              <span className="guide-label">模型服务需要</span>
+              <span className="guide-value">endpoint / api_key / model_name</span>
+            </div>
+            <div>
+              <span className="guide-label">PAI-RAG 自动生成</span>
+              <span className="guide-value">model_id = model_name</span>
+            </div>
+          </div>
+
           {/* Type selector — segmented */}
           <div>
             <label className="form-label">
@@ -203,42 +223,10 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             </div>
           </div>
 
-          {/* Basic section */}
-          <div>
-            <div className="dialog-section-title">Basic</div>
-            <div className="space-y-3">
-              <div>
-                <label htmlFor="model_id" className="form-label">
-                  {t('config.model.modelId')}
-                  <span className="required">*</span>
-                </label>
-                <Input
-                  id="model_id"
-                  placeholder={t('config.model.modelIdPlaceholder')}
-                  value={emb?.model_id ?? ''}
-                  onChange={(e) => setEmb((prev) => ({ ...prev, model_id: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="model_name" className="form-label">
-                  {t('config.model.modelName')}
-                  <span className="required">*</span>
-                </label>
-                <Input
-                  id="model_name"
-                  placeholder={t('config.model.modelNamePlaceholder')}
-                  value={emb?.model_name ?? ''}
-                  onChange={(e) => setEmb((prev) => ({ ...prev, model_name: e.target.value }))}
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Endpoint section (only for API-like) */}
           {isApiLike && (
             <div>
-              <div className="dialog-section-title">Endpoint</div>
+              <div className="dialog-section-title">Provider connection</div>
               <div className="space-y-3">
                 <div>
                   <label htmlFor="endpoint" className="form-label">
@@ -294,6 +282,35 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
             </div>
           )}
 
+          {/* Model service section */}
+          <div>
+            <div className="dialog-section-title">Model service</div>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="model_name" className="form-label">
+                  服务商模型名称 <span className="field-code">model_name</span>
+                  <span className="required">*</span>
+                </label>
+                <Input
+                  id="model_name"
+                  placeholder="text-embedding-v4 / BAAI/bge-m3"
+                  value={emb?.model_name ?? ''}
+                  onChange={(e) => {
+                    const modelName = e.target.value;
+                    setEmb((prev) => ({
+                      ...prev,
+                      model_name: modelName,
+                      model_id: isAdd && !modelIdEdited ? modelName : prev.model_id,
+                    }));
+                  }}
+                />
+                <p className="field-hint">
+                  API 模式下是请求服务商时使用的模型名；本地模式下是 ModelScope 模型名。
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Advanced section */}
           <div>
             <div className="dialog-section-title">Advanced</div>
@@ -301,17 +318,21 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <div>
                 <label htmlFor="dimension" className="form-label">
                   {t('config.model.vectorDimension')}
-                  {(!isApiLike || isMultimodal) && <span className="required">*</span>}
                 </label>
                 <Input
                   id="dimension"
                   type="number"
-                  placeholder={t('config.model.vectorDimensionPlaceholder')}
+                  placeholder="留空使用模型默认维度"
                   value={emb?.dimension ?? ''}
-                  onChange={(e) =>
-                    setEmb({ ...emb, dimension: Number(e.target.value) || undefined })
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setEmb({
+                      ...emb,
+                      dimension: value === '' ? undefined : Number(value) || undefined,
+                    });
+                  }}
                 />
+                <p className="field-hint">通常留空，系统会根据模型输出自动推断向量维度。</p>
               </div>
 
               <div>
@@ -321,12 +342,17 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                 <Input
                   id="embed_batch_size"
                   type="number"
-                  placeholder={t('config.model.vectorBatchSizePlaceholder')}
+                  placeholder="留空使用默认值 10"
                   value={emb?.embed_batch_size ?? ''}
-                  onChange={(e) =>
-                    setEmb({ ...emb, embed_batch_size: Number(e.target.value) })
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setEmb({
+                      ...emb,
+                      embed_batch_size: value === '' ? undefined : Number(value) || undefined,
+                    });
+                  }}
                 />
+                <p className="field-hint">留空时后端默认使用 10；填写正整数可自定义批处理大小。</p>
               </div>
             </div>
 
@@ -343,6 +369,29 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                   setIsDialogOpen(true);
                 }}
               />
+            </div>
+          </div>
+
+          {/* Identity section */}
+          <div>
+            <div className="dialog-section-title">PAI-RAG identity (optional)</div>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="model_id" className="form-label">
+                  PAI-RAG 模型标识 <span className="field-code">model_id</span>
+                  <span className="required">*</span>
+                </label>
+                <Input
+                  id="model_id"
+                  placeholder={emb?.model_name || '默认与服务商模型名称一致'}
+                  value={emb?.model_id ?? ''}
+                  onChange={(e) => {
+                    setModelIdEdited(true);
+                    setEmb((prev) => ({ ...prev, model_id: e.target.value }));
+                  }}
+                />
+                <p className="field-hint">默认跟随模型名称；留空保存时会提交上方模型名称。若提示冲突，再改成 embedding-v4-prod / bge-m3-local 这类独立 ID。</p>
+              </div>
             </div>
           </div>
 

@@ -439,6 +439,33 @@ body {
   color: oklch(0.700 0.015 265);
 }
 
+.model-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: oklch(0.556 0.020 265);
+}
+.model-card-meta .meta-key {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: oklch(0.488 0.180 285);
+  background: oklch(0.488 0.180 285 / 0.10);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.dark .model-card-meta {
+  color: oklch(0.650 0.020 265);
+}
+.dark .model-card-meta .meta-key {
+  color: oklch(0.720 0.180 285);
+  background: oklch(0.620 0.180 285 / 0.16);
+}
+
 /* Icon action button (edit/delete) */
 .icon-action-btn {
   width: 30px;
@@ -546,6 +573,72 @@ body {
   color: oklch(0.577 0.245 27.325);
   font-size: 13px;
   line-height: 1;
+}
+.field-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: oklch(0.488 0.180 285);
+  background: oklch(0.488 0.180 285 / 0.10);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.field-hint {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: oklch(0.556 0.020 265);
+}
+.dark .field-code {
+  color: oklch(0.720 0.180 285);
+  background: oklch(0.620 0.180 285 / 0.16);
+}
+.dark .field-hint {
+  color: oklch(0.650 0.020 265);
+}
+
+.model-field-guide {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid oklch(0.915 0.008 260);
+  border-radius: 8px;
+  background: oklch(0.985 0.003 260);
+}
+.model-field-guide > div {
+  min-width: 0;
+}
+.model-field-guide .guide-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: oklch(0.556 0.020 265);
+}
+.model-field-guide .guide-value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: oklch(0.205 0.015 265);
+}
+.dark .model-field-guide {
+  border-color: oklch(0.280 0.018 265);
+  background: oklch(0.220 0.020 265);
+}
+.dark .model-field-guide .guide-label {
+  color: oklch(0.650 0.020 265);
+}
+.dark .model-field-guide .guide-value {
+  color: oklch(0.955 0.008 260);
+}
+@media (max-width: 520px) {
+  .model-field-guide {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Inline field row: label on left, control on right */

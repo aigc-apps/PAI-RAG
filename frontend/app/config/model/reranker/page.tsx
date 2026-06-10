@@ -176,11 +176,12 @@ export default function RerankerConfigPage() {
               <div className="flex items-start gap-3 pr-20">
                 <div className="model-icon type-reranker shrink-0">{(reranker.model_name || 'R').charAt(0)}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate" title={reranker.model_id}>
-                    {reranker.model_id}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
+                  <div className="font-medium text-sm truncate" title={reranker.model_name}>
                     {reranker.model_name}
+                  </div>
+                  <div className="model-card-meta" title={reranker.model_id}>
+                    <span className="meta-key">ID</span>
+                    <span className="truncate">{reranker.model_id}</span>
                   </div>
                 </div>
               </div>

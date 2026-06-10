@@ -10,6 +10,7 @@ import {
   Database,
   Boxes,
   Pencil,
+  Image,
 } from 'lucide-react';
 import { useI18n } from '@/app/providers/i18n';
 
@@ -78,6 +79,7 @@ export interface Chatbot {
   mcp_ids: string[];
   kb_ids: string[];
   model_id: string;
+  vision_model_id?: string | null;
   updated_at: string;
   enable_auto_metadata_filter?: boolean;
   enable_input_guardrail: boolean;
@@ -162,6 +164,7 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
   });
 
   const router = useRouter();
+  const visionLlms = llms.filter((llm) => llm.vision_support);
 
   // Load default prompts from API (client-side)
   useEffect(() => {
@@ -392,6 +395,44 @@ export const ChatbotConfigCard: FC<ChatbotConfigProps> = ({
               </DialogContent>
             </Dialog>
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="visionmodel" className="text-xs font-medium">
+            {t('apps.visionModel')}
+          </Label>
+          {visionLlms.length > 0 ? (
+            <Select
+              value={botConfig.vision_model_id || 'DISABLED'}
+              onValueChange={(value) =>
+                onConfigChange({ vision_model_id: value === 'DISABLED' ? null : value })
+              }
+            >
+              <SelectTrigger className="w-full h-9">
+                <SelectValue placeholder={t('apps.selectVisionModel')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DISABLED">{t('apps.disableVisionModel')}</SelectItem>
+                {visionLlms.map((llm) => (
+                  <SelectItem key={llm.id} value={llm.model_id}>
+                    {llm.model || llm.model_id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full justify-start text-muted-foreground font-normal h-9"
+              onClick={() => router.push('/config/model/llm')}
+            >
+              {t('apps.noVisionModelConfigured')} — {t('apps.addModel')}
+            </Button>
+          )}
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <Image className="w-3.5 h-3.5" />
+            {t('apps.visionModelHint')}
+          </p>
         </div>
       </Section>
 
