@@ -116,6 +116,7 @@ class AgentService:
                 chat_request.enable_search = chatapp.enable_search
                 chat_request.enable_chatdb = chatapp.enable_chatdb
                 chat_request.enable_agent = chatapp.enable_agent
+                chat_request.vision_model_id = chatapp.vision_model_id
                 chat_request.enable_input_guardrail = chatapp.enable_input_guardrail
                 chat_request.enable_output_guardrail = chatapp.enable_output_guardrail
                 chat_request.guardrail_hint = chatapp.guardrail_hint
@@ -143,6 +144,7 @@ class AgentService:
                 chatapp_id=chatapp_id,
                 metadata_condition=chat_request.metadata_condition,
                 enable_auto_metadata_filter=chat_request.enable_auto_metadata_filter,
+                vision_model_id=chat_request.vision_model_id,
                 tenant_id=tenant_id,
             )
 
@@ -179,6 +181,7 @@ class AgentService:
         tenant_id: str = None,
         chatapp_id: Optional[str] = None,
         faq_config: Optional[dict] = None,
+        vision_model_id: Optional[str] = None,
     ) -> tuple[List[FunctionTool], Callable | None]:
         tools = []
 
@@ -229,7 +232,11 @@ class AgentService:
             tools.extend(chatdb_tools)
             logger.info(f"Loaded {len(chatdb_tools)} chat_db tools.")
 
-        attachment_tools, cleanup_code_sandbox = await self.parse_attachment_tools(messages=messages, tenant_id=tenant_id)
+        attachment_tools, cleanup_code_sandbox = await self.parse_attachment_tools(
+            messages=messages,
+            tenant_id=tenant_id,
+            vision_model_id=vision_model_id,
+        )
         tools.extend(attachment_tools)
         logger.info(f"Loaded {len(attachment_tools)} attachment tools.")
         return tools, cleanup_code_sandbox
@@ -239,6 +246,7 @@ class AgentService:
         self,
         messages: List[dict],
         tenant_id: str,
+        vision_model_id: Optional[str] = None,
     ) -> tuple[List[FunctionTool], Callable | None]:
         file_service = await self._get_file_resource_service()
         llm_service = await self._get_llm_service()
@@ -287,6 +295,7 @@ class AgentService:
                     video_list=video_base64_list,
                     llm_service=llm_service,
                     tenant_id=tenant_id,
+                    vision_model_id=vision_model_id,
                 )
             )
             media_summary = []

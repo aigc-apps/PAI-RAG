@@ -40,7 +40,16 @@ class LlmService:
         """
         Get the multimodal LLM entity.
         """
-        statement = select(LlmModelEntity).where(LlmModelEntity.vision_support, LlmModelEntity.tenant_id == tenant_id)
+        statement = (
+            select(LlmModelEntity)
+            .where(LlmModelEntity.vision_support, LlmModelEntity.tenant_id == tenant_id)
+            .order_by(
+                LlmModelEntity.enabled.desc(),
+                LlmModelEntity.provider_name.asc(),
+                LlmModelEntity.model_id.asc(),
+                LlmModelEntity.id.asc(),
+            )
+        )
         result = (await self.session.exec(statement)).first()
         return result
 

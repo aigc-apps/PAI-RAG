@@ -31,8 +31,8 @@ const newembconfig: EmbConfig = {
   type: '',
   api_key: '',
   endpoint: '',
-  dimension: 0,
-  embed_batch_size: 0,
+  dimension: undefined,
+  embed_batch_size: undefined,
   is_ready: false,
   is_default: false,
   is_multimodal: false,
@@ -169,10 +169,13 @@ export default function EmbConfigPage() {
               <div className="flex items-start gap-3 pr-28">
                 <div className="model-icon type-embedding shrink-0">{(emb.model_name || 'E').charAt(0)}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate" title={emb.model_id}>
-                    {emb.model_id}
+                  <div className="font-medium text-sm truncate" title={emb.model_name}>
+                    {emb.model_name}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate">{emb.model_name}</div>
+                  <div className="model-card-meta" title={emb.model_id}>
+                    <span className="meta-key">ID</span>
+                    <span className="truncate">{emb.model_id}</span>
+                  </div>
                 </div>
               </div>
 

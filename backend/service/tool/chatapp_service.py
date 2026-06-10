@@ -288,6 +288,8 @@ class ChatappService:
             chatbot.app_id = update_data.app_id
         if update_data.model_id is not None:
             chatbot.model_id = update_data.model_id
+        if "vision_model_id" in update_data.model_fields_set:
+            chatbot.vision_model_id = update_data.vision_model_id
         if update_data.enable_search is not None:
             chatbot.enable_search = update_data.enable_search
         if update_data.enable_agent is not None:

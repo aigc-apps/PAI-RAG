@@ -49,6 +49,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 }) => {
   const [reranker, setReranker] = useState<RerankerConfig>(rerankerConfig);
   const [saveErrorMsg, setSaveErrorMsg] = useState('');
+  const [modelIdEdited, setModelIdEdited] = useState(false);
   const { tenantFetch } = useTenantFetch();
   const { t } = useI18n();
 
@@ -60,6 +61,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 
   useEffect(() => {
     setReranker(rerankerConfig);
+    setModelIdEdited(false);
   }, [isAdd, rerankerConfig]);
 
   useEffect(() => {
@@ -68,11 +70,15 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 
   const handleSubmit = async () => {
     setSaveErrorMsg('');
+    const normalizedReranker = {
+      ...reranker,
+      model_id: reranker.model_id || reranker.model_name,
+    };
     if (
-      !reranker.model_id ||
-      (isAdd && !reranker.api_key) ||
-      !reranker.model_name ||
-      !reranker.base_url
+      !normalizedReranker.model_id ||
+      (isAdd && !normalizedReranker.api_key) ||
+      !normalizedReranker.model_name ||
+      !normalizedReranker.base_url
     ) {
       setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
@@ -81,7 +87,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       ? `/api/config/rerankers`
       : `/api/config/rerankers/${reranker.id}`;
     const updateMethod = isAdd ? 'POST' : 'PUT';
-    if (reranker.api_key === '******') reranker.api_key = '';
+    if (normalizedReranker.api_key === '******') normalizedReranker.api_key = '';
 
     const typeMapping: Record<string, string> = {
       OpenAICompatible: 'openai_like',
@@ -92,7 +98,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       ? typeMapping[reranker.type] || reranker.type
       : 'openai_like';
     const submitData = {
-      ...reranker,
+      ...normalizedReranker,
       type: backendType,
       is_multimodal: backendType === 'multimodal_dashscope'
         ? true
@@ -107,7 +113,9 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       });
 
       if (!res.ok) {
-        setSaveErrorMsg(t('config.model.requestFailedCheckInfo', { method: updateMethod }));
+        const errorData = await res.json().catch(() => null);
+        const detail = errorData?.message || errorData?.detail || errorData?.error;
+        setSaveErrorMsg(detail || t('config.model.requestFailedCheckInfo', { method: updateMethod }));
         return;
       }
       const jsondata = await res.json();
@@ -136,52 +144,33 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="type-corner-badge type-reranker">RNK</span>
             {displayIsAdd ? '添加 Reranker 模型' : '编辑 Reranker 模型'}
           </DialogTitle>
           <DialogDescription>
-            填写 Reranker（重排序）模型的配置信息后保存
+            填写模型服务调用参数即可，PAI-RAG 模型标识会默认跟随模型名称
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Basic section */}
+          <div className="model-field-guide">
+            <div>
+              <span className="guide-label">模型服务需要</span>
+              <span className="guide-value">base_url / api_key / model_name</span>
+            </div>
+            <div>
+              <span className="guide-label">PAI-RAG 自动生成</span>
+              <span className="guide-value">model_id = model_name</span>
+            </div>
+          </div>
+
+          {/* Provider section */}
           <div>
-            <div className="dialog-section-title">Basic</div>
+            <div className="dialog-section-title">Provider connection</div>
             <div className="space-y-3">
-              <div>
-                <label htmlFor="model_id" className="form-label">
-                  {t('config.model.modelId')}
-                  <span className="required">*</span>
-                </label>
-                <Input
-                  id="model_id"
-                  placeholder={t('config.model.modelIdPlaceholder')}
-                  value={reranker?.model_id ?? ''}
-                  onChange={(e) =>
-                    setReranker((prev) => ({ ...prev, model_id: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label htmlFor="model_name" className="form-label">
-                  {t('config.model.modelName')}
-                  <span className="required">*</span>
-                </label>
-                <Input
-                  id="model_name"
-                  placeholder={t('config.model.modelNamePlaceholder')}
-                  value={reranker?.model_name ?? ''}
-                  onChange={(e) =>
-                    setReranker((prev) => ({ ...prev, model_name: e.target.value }))
-                  }
-                />
-              </div>
-
               <div>
                 <label htmlFor="type" className="form-label">
                   {t('config.model.modelType') || 'Type'}
@@ -208,13 +197,6 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-          </div>
-
-          {/* Endpoint section */}
-          <div>
-            <div className="dialog-section-title">Endpoint</div>
-            <div className="space-y-3">
               <div>
                 <label htmlFor="base_url" className="form-label">
                   {t('config.model.endpointUrl')}
@@ -244,6 +226,50 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                     setReranker((prev) => ({ ...prev, api_key: e.target.value }))
                   }
                 />
+              </div>
+
+              <div>
+                <label htmlFor="model_name" className="form-label">
+                  服务商模型名称 <span className="field-code">model_name</span>
+                  <span className="required">*</span>
+                </label>
+                <Input
+                  id="model_name"
+                  placeholder="Qwen3-Reranker-0.6B"
+                  value={reranker?.model_name ?? ''}
+                  onChange={(e) => {
+                    const modelName = e.target.value;
+                    setReranker((prev) => ({
+                      ...prev,
+                      model_name: modelName,
+                      model_id: isAdd && !modelIdEdited ? modelName : prev.model_id,
+                    }));
+                  }}
+                />
+                <p className="field-hint">请求重排序服务时使用的模型名或部署名。</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Identity section */}
+          <div>
+            <div className="dialog-section-title">PAI-RAG identity (optional)</div>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="model_id" className="form-label">
+                  PAI-RAG 模型标识 <span className="field-code">model_id</span>
+                  <span className="required">*</span>
+                </label>
+                <Input
+                  id="model_id"
+                  placeholder={reranker?.model_name || '默认与服务商模型名称一致'}
+                  value={reranker?.model_id ?? ''}
+                  onChange={(e) => {
+                    setModelIdEdited(true);
+                    setReranker((prev) => ({ ...prev, model_id: e.target.value }));
+                  }}
+                />
+                <p className="field-hint">默认跟随模型名称；保存时若提示冲突，再改成 qwen-reranker-prod / qwen-reranker-mm 这类独立 ID。</p>
               </div>
             </div>
           </div>

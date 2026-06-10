@@ -134,6 +134,7 @@ class ChatAgentRequest(BaseModel):
     enable_search: Optional[bool] = False
     enable_agent: Optional[bool] = False
     enable_chatdb: Optional[bool] = False
+    vision_model_id: Optional[str] = None
     max_steps: Optional[int] = None
     user_id: Optional[str] = None
     session_id: Optional[str] = None  # 会话ID，用于会话历史管理

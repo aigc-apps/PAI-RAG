@@ -34,6 +34,7 @@ const default_chat_config: Chatbot = {
     mcp_ids: [],
     kb_ids: [],
     model_id: "",
+    vision_model_id: null,
     updated_at: "",
     enable_agent: false,
     enable_chatdb: false,
