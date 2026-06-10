@@ -103,6 +103,12 @@ class HtmlReader(BaseReader):
                         table_matrix[current_row_index + i][
                             current_col_index
                         ] = cell_content
+                    else:
+                        logger.warning(
+                            "Failed to apply rowspan cell at row "
+                            f"{current_row_index + i}, col {current_col_index}; "
+                            "table row is shorter than expected."
+                        )
                 max_rows = max(current_row_index + row_span, max_rows)
                 current_col_index += col_span
             if row_header_flag:
@@ -259,6 +265,7 @@ class HtmlReader(BaseReader):
         return content, saved_images
 
     def read(self, file_item: FileItem) -> List[Document]:
+        """Read an HTML file and return a single Markdown document."""
         file_item.file.seek(0)
         html_content = file_item.file.read().decode("utf-8")
         html_content = replace_consecutive_spaces(html_content)
