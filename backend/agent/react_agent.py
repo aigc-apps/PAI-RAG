@@ -14,6 +14,7 @@ from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.json_utils import parse_tool_arguments
 from agent.tool_utils import check_and_handle_return_direct
+from agent.message_manager import AgentMessageManager
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
@@ -87,6 +88,10 @@ class ReactAgent:
         self.tool_metadata = [
             tool.metadata.to_openai_tool(skip_length_check=True) for tool in self.tools
         ]
+        self.msg_manager = AgentMessageManager(
+            context_window=llm.context_window,
+            max_output_tokens=llm.max_tokens,
+        )
 
 
     @pai_agent_wrapper
@@ -110,6 +115,9 @@ class ReactAgent:
 
                 tool_calls = []
                 step_content = ""
+
+                # Compress messages to fit within token budget
+                messages = self.msg_manager.fit_to_budget(messages)
 
                 # Call LLM with current messages and available tools
                 async for chunk in await self.llm.astream(
@@ -200,10 +208,11 @@ class ReactAgent:
                         "tool_calls": [tool_call]
                     })
 
-                    # Add tool result message
+                    # Add tool result message (cap large results)
+                    capped_content = self.msg_manager.cap_tool_result(message_content) if message_content else message_content
                     messages.append({
                         "role": "tool",
-                        "content": message_content,
+                        "content": capped_content,
                         "tool_call_id": tool_call.id
                     })
 

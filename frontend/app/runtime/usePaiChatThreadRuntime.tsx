@@ -737,8 +737,10 @@ export const usePaiChatThreadRuntime = (options: PaiChatRuntimeOptions) => {
 
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
+      const threadListItem = useThreadListItem();
+      const sessionId = threadListItem.remoteId || initializedThreadId || undefined;
       return useLocalThreadRuntime(
-        new MyModelAdapter({...otherOptions, tenantFetch, onUsage, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id }}),
+        new MyModelAdapter({...otherOptions, tenantFetch, onUsage, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id, session_id: sessionId }}),
         localRuntimeOptions,
       );
     },

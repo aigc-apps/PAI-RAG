@@ -31,9 +31,11 @@ def session_history_key(user_id: str, session_id: str) -> str:
 class SessionHistoryManager:
     """会话历史管理器"""
 
-    # 配置常量
-    MAX_HISTORY_ROUNDS = 5  # 保存最近 5 轮对话
-    TTL_SECONDS = 7 * 24 * 60 * 60  # 7 天过期
+    MAX_HISTORY_ROUNDS = 5
+    MAX_HISTORY_MESSAGES = 40
+    MAX_OLD_TOOL_RESULT_CHARS = 500
+    TOOL_RESULT_TRUNCATED_MARKER = "\n...[truncated]"
+    TTL_SECONDS = 7 * 24 * 60 * 60
 
     def __init__(self):
         self.cache = cache_manager.get_cache()
@@ -44,16 +46,21 @@ class SessionHistoryManager:
         session_id: str,
         user_message: ChatCompletionMessageParam,
         assistant_message: ChatCompletionMessageParam,
+        tool_messages: List[ChatCompletionMessageParam] | None = None,
     ) -> None:
         """
-        保存一轮对话（用户消息 + 助手回复）到 Redis
+        保存一轮对话到 Redis。
+
+        一轮完整的对话包含:
+        user_message → [assistant(tool_calls) → tool(result)]* → assistant(final_text)
 
         Args:
             user_id: 用户ID
-            model: 模型名称
             session_id: 会话ID
             user_message: 用户消息
-            assistant_message: 助手回复消息
+            assistant_message: 助手最终回复消息
+            tool_messages: 中间的 tool 交互消息列表
+                           (assistant with tool_calls + tool results)
         """
         if not user_id or not session_id:
             logger.debug(
@@ -65,28 +72,74 @@ class SessionHistoryManager:
         try:
             key = session_history_key(user_id, session_id)
 
-            # 获取现有历史
             existing_history = await self._get_history_list(key)
 
-            # 添加新的一轮对话（用户消息 + 助手回复）
             existing_history.append(user_message)
+            if tool_messages:
+                existing_history.extend(tool_messages)
             existing_history.append(assistant_message)
 
-            # 保持最近的 N 轮对话（每轮包含用户 + 助手两条消息）
-            max_messages = self.MAX_HISTORY_ROUNDS * 2
-            if len(existing_history) > max_messages:
-                existing_history = existing_history[-max_messages:]
+            existing_history = self._trim_to_rounds(existing_history, self.MAX_HISTORY_ROUNDS)
 
-            # 序列化并保存到 Redis
             history_json = json.dumps(existing_history, ensure_ascii=False)
             await self.cache.set(key, history_json, ttl=self.TTL_SECONDS)
 
             logger.info(
                 f"Saved session history: user={user_id}, "
-                f"session={session_id}, total_messages={len(existing_history)}"
+                f"session={session_id}, total_messages={len(existing_history)}, "
+                f"tool_messages={len(tool_messages) if tool_messages else 0}"
             )
         except Exception as e:
             logger.error(f"Failed to save session history: {e}", exc_info=True)
+
+    @classmethod
+    def _trim_to_rounds(
+        cls,
+        messages: List[ChatCompletionMessageParam],
+        max_rounds: int,
+    ) -> List[ChatCompletionMessageParam]:
+        user_indices = [
+            i for i, m in enumerate(messages)
+            if isinstance(m, dict) and m.get("role") == "user"
+        ]
+        if len(user_indices) > max_rounds:
+            cut_from = user_indices[-max_rounds]
+            messages = messages[cut_from:]
+
+        while len(messages) > cls.MAX_HISTORY_MESSAGES:
+            user_indices = [
+                i for i, m in enumerate(messages)
+                if isinstance(m, dict) and m.get("role") == "user"
+            ]
+            if len(user_indices) <= 1:
+                break
+            messages = messages[user_indices[1]:]
+            logger.info(
+                f"History over {cls.MAX_HISTORY_MESSAGES} messages, "
+                f"reduced to {len(user_indices) - 1} rounds ({len(messages)} msgs)"
+            )
+
+        cls._truncate_old_tool_results(messages)
+        return messages
+
+    @classmethod
+    def _truncate_old_tool_results(
+        cls,
+        messages: List[ChatCompletionMessageParam],
+    ) -> None:
+        last_user_idx = -1
+        for i in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[i], dict) and messages[i].get("role") == "user":
+                last_user_idx = i
+                break
+
+        for i in range(last_user_idx):
+            msg = messages[i]
+            if not isinstance(msg, dict) or msg.get("role") != "tool":
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str) and len(content) > cls.MAX_OLD_TOOL_RESULT_CHARS:
+                msg["content"] = content[:cls.MAX_OLD_TOOL_RESULT_CHARS] + cls.TOOL_RESULT_TRUNCATED_MARKER
 
     async def get_history_messages(
         self,

@@ -32,6 +32,8 @@ interface LlmConfig {
   api_key: string;
   base_url: string;
   max_context: number;
+  context_window: number;
+  max_tokens: number;
   enabled: boolean;
   vision_support: boolean;
   enable_thinking: boolean;
@@ -269,6 +271,50 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                     }));
                   }}
                   className="w-20 h-8 text-right"
+                />
+              </div>
+
+              <div className="form-row-inline">
+                <div className="form-row-inline-label">
+                  <span className="title">Context Window</span>
+                  <span className="hint">模型最大上下文长度 (tokens)</span>
+                </div>
+                <Input
+                  id="context_window"
+                  type="number"
+                  step="1000"
+                  min="1000"
+                  value={llm?.context_window ?? 110000}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setLlm((prev) => ({
+                      ...prev,
+                      context_window: isNaN(val) || val < 1000 ? 110000 : val,
+                    }));
+                  }}
+                  className="w-28 h-8 text-right"
+                />
+              </div>
+
+              <div className="form-row-inline">
+                <div className="form-row-inline-label">
+                  <span className="title">Max Output Tokens</span>
+                  <span className="hint">模型单次最大输出长度 (tokens)</span>
+                </div>
+                <Input
+                  id="max_tokens"
+                  type="number"
+                  step="1000"
+                  min="256"
+                  value={llm?.max_tokens ?? 8000}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setLlm((prev) => ({
+                      ...prev,
+                      max_tokens: isNaN(val) || val < 256 ? 8000 : val,
+                    }));
+                  }}
+                  className="w-28 h-8 text-right"
                 />
               </div>
             </div>

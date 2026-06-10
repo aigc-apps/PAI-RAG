@@ -249,6 +249,8 @@ class LlmService:
             llm.vision_support = update_data.vision_support
         if update_data.enable_thinking is not None:
             llm.enable_thinking = update_data.enable_thinking
+        if update_data.max_tokens is not None:
+            llm.max_tokens = update_data.max_tokens
 
         self.session.add(llm)
 
