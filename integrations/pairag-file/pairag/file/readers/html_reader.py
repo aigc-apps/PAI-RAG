@@ -45,8 +45,12 @@ class HtmlReader(BaseReader):
             table.attrs['data-placeholder'] = placeholder
         return str(soup), tables
 
+    def _pad_rows_to_max_cols(self, table_matrix, max_cols):
+        for r in range(len(table_matrix)):
+            if len(table_matrix[r]) < max_cols:
+                table_matrix[r].extend([""] * (max_cols - len(table_matrix[r])))
+
     def _convert_table_to_pai_table(self, table):
-        # 标记header的index
         row_headers_index = []
         col_headers_index = []
         row_header_flag = True
@@ -64,6 +68,8 @@ class HtmlReader(BaseReader):
             if current_row_index >= max_rows:
                 table_matrix.append(row_cells)
                 max_rows += 1
+            else:
+                self._pad_rows_to_max_cols(table_matrix, max_cols)
             for cell in row.find_all(["th", "td"]):
                 if cell.name != "th":
                     row_header_flag = False
@@ -75,31 +81,34 @@ class HtmlReader(BaseReader):
                 if current_row_index != 0:
                     while (
                         current_col_index < max_cols
+                        and current_col_index < len(table_matrix[current_row_index])
                         and table_matrix[current_row_index][current_col_index] != ""
                     ):
                         current_col_index += 1
-                if (current_col_index > max_cols and max_cols != 0) or (
-                    current_row_index > max_rows and max_rows != 0
-                ):
-                    break
+                if current_col_index + col_span > max_cols:
+                    max_cols = current_col_index + col_span
+                    self._pad_rows_to_max_cols(table_matrix, max_cols)
                 for i in range(col_span):
-                    if current_row_index == 0:
-                        table_matrix[current_row_index].append(cell_content)
-                    elif current_col_index + i < max_cols:
+                    if current_col_index + i < len(table_matrix[current_row_index]):
                         table_matrix[current_row_index][
                             current_col_index + i
                         ] = cell_content
 
-                if current_row_index == 0:
-                    max_cols += col_span
                 for i in range(1, row_span):
                     if current_row_index + i >= max_rows:
                         row_cells = [""] * max_cols
                         table_matrix.append(row_cells)
                         max_rows += 1
-                    table_matrix[current_row_index + i][
-                        current_col_index
-                    ] = cell_content
+                    if current_col_index < len(table_matrix[current_row_index + i]):
+                        table_matrix[current_row_index + i][
+                            current_col_index
+                        ] = cell_content
+                    else:
+                        logger.warning(
+                            "Failed to apply rowspan cell at row "
+                            f"{current_row_index + i}, col {current_col_index}; "
+                            "table row is shorter than expected."
+                        )
                 max_rows = max(current_row_index + row_span, max_rows)
                 current_col_index += col_span
             if row_header_flag:
@@ -108,6 +117,9 @@ class HtmlReader(BaseReader):
 
         for i in range(col_header_index_max + 1):
             col_headers_index.append(i)
+
+        if not table_matrix:
+            table_matrix = [[]]
 
         table = PaiTable(
             data=table_matrix,
@@ -253,46 +265,42 @@ class HtmlReader(BaseReader):
         return content, saved_images
 
     def read(self, file_item: FileItem) -> List[Document]:
-        """
-        Read a CSV file and return a list of Documents.
-        """
-        try:
-            file_item.file.seek(0)
-            html_content = file_item.file.read().decode("utf-8")
-            html_content = replace_consecutive_spaces(html_content)
+        """Read an HTML file and return a single Markdown document."""
+        file_item.file.seek(0)
+        html_content = file_item.file.read().decode("utf-8")
+        html_content = replace_consecutive_spaces(html_content)
 
-            modified_html, tables = self._extract_tables(html_content)
+        modified_html, tables = self._extract_tables(html_content)
 
-            # 将 HTML 转换为 Markdown
-            markdown_content = markdownify(modified_html)
-            for table in tables:
-                # Use the stored placeholder (no underscore = no escape risk)
-                placeholder = table.attrs.get('data-placeholder')
-                if not placeholder:
-                    logger.warning("Table missing data-placeholder attribute")
-                    continue
-                    
+        markdown_content = markdownify(modified_html)
+        for table in tables:
+            placeholder = table.attrs.get('data-placeholder')
+            if not placeholder:
+                logger.warning("Table missing data-placeholder attribute")
+                continue
+
+            try:
                 table_markdown = self._convert_table_to_markdown(table) + "\n\n"
-                
-                if placeholder in markdown_content:
-                    markdown_content = markdown_content.replace(placeholder, table_markdown)
-                else:
-                    logger.warning(f"Placeholder '{placeholder}' not found in markdown")
-                    logger.debug(f"Content preview: {markdown_content[:300]}")
-            images = []
-            markdown_content, images = self._replace_image_paths(
-                markdown_content, file_item.kb_id + "/images/{}", tenant_id=file_item.tenant_id,
-            )
-            logger.info(
-                f"Successfully read {file_item.file_name} with images {images}."
-            )
+            except Exception as e:
+                logger.warning(f"Failed to convert table to markdown: {e}")
+                table_markdown = markdownify(str(table)) + "\n\n"
 
-            metadata = file_item.metadata()
+            if placeholder in markdown_content:
+                markdown_content = markdown_content.replace(placeholder, table_markdown)
+            else:
+                logger.warning(f"Placeholder '{placeholder}' not found in markdown")
+                logger.debug(f"Content preview: {markdown_content[:300]}")
+        images = []
+        markdown_content, images = self._replace_image_paths(
+            markdown_content, file_item.kb_id + "/images/{}", tenant_id=file_item.tenant_id,
+        )
+        logger.info(
+            f"Successfully read {file_item.file_name} with images {images}."
+        )
 
-            docs = [Document(id_=file_item.id, text=markdown_content, metadata=metadata)]
-            logger.info(f"Successfully read {file_item.file_name}.")
+        metadata = file_item.metadata()
 
-            return docs
-        except Exception as e:
-            logger.exception(e)
-            return []
+        docs = [Document(id_=file_item.id, text=markdown_content, metadata=metadata)]
+        logger.info(f"Successfully read {file_item.file_name}.")
+
+        return docs
