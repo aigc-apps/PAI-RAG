@@ -101,6 +101,8 @@ async def aget_multimodal_analysis(
         )
         if not multimodal_llm_config:
             raise ValueError(f"图片理解模型 {vision_model_id} 不存在。")
+        if not multimodal_llm_config.enabled:
+            raise ValueError(f"图片理解模型 {vision_model_id} 已禁用。")
         if not multimodal_llm_config.vision_support:
             raise ValueError(f"图片理解模型 {vision_model_id} 未开启多模态能力。")
     else:

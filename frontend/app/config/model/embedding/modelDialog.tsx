@@ -390,7 +390,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                     setEmb((prev) => ({ ...prev, model_id: e.target.value }));
                   }}
                 />
-                <p className="field-hint">默认跟随模型名称；保存时若提示冲突，再改成 embedding-v4-prod / bge-m3-local 这类独立 ID。</p>
+                <p className="field-hint">默认跟随模型名称；留空保存时会提交上方模型名称。若提示冲突，再改成 embedding-v4-prod / bge-m3-local 这类独立 ID。</p>
               </div>
             </div>
           </div>

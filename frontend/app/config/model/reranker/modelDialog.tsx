@@ -70,15 +70,15 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 
   const handleSubmit = async () => {
     setSaveErrorMsg('');
-    const normalizedReranker = {
+    const baseData = {
       ...reranker,
       model_id: reranker.model_id || reranker.model_name,
     };
     if (
-      !normalizedReranker.model_id ||
-      (isAdd && !normalizedReranker.api_key) ||
-      !normalizedReranker.model_name ||
-      !normalizedReranker.base_url
+      !baseData.model_id ||
+      (isAdd && !baseData.api_key) ||
+      !baseData.model_name ||
+      !baseData.base_url
     ) {
       setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
@@ -87,7 +87,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       ? `/api/config/rerankers`
       : `/api/config/rerankers/${reranker.id}`;
     const updateMethod = isAdd ? 'POST' : 'PUT';
-    if (normalizedReranker.api_key === '******') normalizedReranker.api_key = '';
+    if (baseData.api_key === '******') baseData.api_key = '';
 
     const typeMapping: Record<string, string> = {
       OpenAICompatible: 'openai_like',
@@ -98,7 +98,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       ? typeMapping[reranker.type] || reranker.type
       : 'openai_like';
     const submitData = {
-      ...normalizedReranker,
+      ...baseData,
       type: backendType,
       is_multimodal: backendType === 'multimodal_dashscope'
         ? true
@@ -269,7 +269,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                     setReranker((prev) => ({ ...prev, model_id: e.target.value }));
                   }}
                 />
-                <p className="field-hint">默认跟随模型名称；保存时若提示冲突，再改成 qwen-reranker-prod / qwen-reranker-mm 这类独立 ID。</p>
+                <p className="field-hint">默认跟随模型名称；留空保存时会提交上方模型名称。若提示冲突，再改成 qwen-reranker-prod / qwen-reranker-mm 这类独立 ID。</p>
               </div>
             </div>
           </div>

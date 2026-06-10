@@ -42,7 +42,11 @@ class LlmService:
         """
         statement = (
             select(LlmModelEntity)
-            .where(LlmModelEntity.vision_support, LlmModelEntity.tenant_id == tenant_id)
+            .where(
+                LlmModelEntity.vision_support,
+                LlmModelEntity.enabled,
+                LlmModelEntity.tenant_id == tenant_id,
+            )
             .order_by(
                 LlmModelEntity.enabled.desc(),
                 LlmModelEntity.provider_name.asc(),

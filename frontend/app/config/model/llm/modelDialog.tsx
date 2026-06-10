@@ -212,7 +212,7 @@ export const LLMModelDialog: FC<LLMModelDialogProps> = ({
                     setLlm((prev) => ({ ...prev, model_id: e.target.value }));
                   }}
                 />
-                <p className="field-hint">默认跟随服务商模型名称；保存时若提示冲突，再改成 qwen3-plus-think / qwen3-plus-nothink 这类独立 ID。</p>
+                <p className="field-hint">默认跟随服务商模型名称；留空保存时会提交上方模型名称。若提示冲突，再改成 qwen3-plus-think / qwen3-plus-nothink 这类独立 ID。</p>
               </div>
             </div>
           </div>
