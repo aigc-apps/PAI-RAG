@@ -87,6 +87,56 @@
 3. 验证模型配置
    配置成功后，模型列表中应显示模型状态均为"可用"
 
+### 配置 Qwen3-VL 多模态向量模型（DashScope）
+
+PAI-RAG 内置了对 DashScope 多模态向量模型（如 `multimodal-embedding-v1`、`qwen3-vl-plus` 系列）的支持。配置后，索引阶段会把文档节点中的图片与文本一起送入模型，融合为单一多模态向量，从而提升图文检索效果。
+
+1. 进入 Settings → Model → Embedding，点击"添加 Embedding 模型"。
+2. 在"模型类型"分段控件中选择 **多模态 (DashScope)**。
+3. 填写模型配置信息：
+
+   ```bash
+   模型ID:        qwen3-vl-embedding (可自定义)
+   模型名称:      multimodal-embedding-v1   # 或 qwen3-vl-plus 等
+   Endpoint URL:  https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding
+   API Key:       your_dashscope_api_key
+   向量维度:      1024                       # 与所选模型一致
+   向量Batch大小: 10
+   ```
+
+   > 说明：
+   > - 调用地址（POST）固定为
+   >   `https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding`。
+   >   仅填写根域名 `https://dashscope.aliyuncs.com` 或部分路径时，服务端会自动补全为完整端点。
+   > - 选择"多模态 (DashScope)"类型后，`is_multimodal` 会被自动置为 `true`，索引阶段会把节点中的图片与文本一起送入模型并融合为单一向量。
+
+4. 点击"保存"完成配置；可按需在卡片上将其设为"默认向量模型"。
+5. 后续创建知识库时，向量模型选择该多模态模型即可。
+
+### 配置 Qwen3-VL Rerank 模型（DashScope）
+
+PAI-RAG 同样支持 DashScope 的多模态/文本 rerank 模型（如 `gte-rerank-v2`、Qwen3-VL Rerank 系列）。配置后，检索阶段在重排序时会同时考虑命中节点的图片，对图文混合内容更友好。
+
+1. 进入 Settings → Model → Reranker，点击"Add"。
+2. 在"Type"下拉中选择 **多模态 (DashScope)**（`MultimodalDashScope`）。
+3. 填写模型配置信息：
+
+   ```bash
+   模型ID:        qwen3-vl-rerank (可自定义)
+   模型名称:      gte-rerank-v2              # 或 qwen3-vl-rerank 等
+   Base URL:      https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
+   API Key:       your_dashscope_api_key
+   ```
+
+   > 说明：
+   > - 调用地址（POST）固定为
+   >   `https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank`。
+   >   仅填写到 `.../rerank/text-rerank` 或根域名时，服务端会自动补全为完整端点。
+   > - 选择"多模态 (DashScope)"类型后，`is_multimodal` 会被自动置为 `true`，rerank 阶段会把节点中的图片与文本一并作为 documents 送入模型。
+
+4. 点击"保存"完成配置。
+5. 在创建/编辑知识库时勾选"开启重排序"并选择该 Rerank 模型即可。
+
 ## 使用知识库进行多模态问答
 
 1. 创建知识库
