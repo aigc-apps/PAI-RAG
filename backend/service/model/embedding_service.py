@@ -279,6 +279,8 @@ class EmbeddingService:
             embedding.embed_batch_size = update_data.embed_batch_size
         if update_data.is_default is not None:
             embedding.is_default = update_data.is_default
+        if update_data.is_multimodal is not None:
+            embedding.is_multimodal = update_data.is_multimodal
         if update_data.api_key is not None:
             embedding.encrypted_api_key = encrypt_key(update_data.api_key)
         if update_data.provider_name is not None:

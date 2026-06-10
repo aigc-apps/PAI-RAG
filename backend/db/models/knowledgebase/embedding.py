@@ -7,10 +7,11 @@ from enum import Enum
 from sqlalchemy import UniqueConstraint
 from common.system_constants import DEFAULT_TENANT_ID
 
-# 支持openai_like和local两种模式
+# 支持openai_like、local与multimodal_dashscope三种模式
 class EmbeddingType(str, Enum):
     OPENAI_LIKE = "openai_like"
     LOCAL = "local"
+    MULTIMODAL_DASHSCOPE = "multimodal_dashscope"
 
 
 class EmbeddingModel(SQLModel):
@@ -23,6 +24,7 @@ class EmbeddingModel(SQLModel):
     model_id: str = Field(default=None, max_length=64)
     is_ready: Optional[bool] = Field(default=False) # 是否已经加载完成，用于本地模型下载
     is_default: Optional[bool] = Field(default=False)
+    is_multimodal: Optional[bool] = Field(default=False) # 是否为多模态向量模型，true 时索引侧会将节点中的图片喂入 embedding
     provider_name: Optional[str] = Field(default=None)
 
 
@@ -37,6 +39,7 @@ class EmbeddingModelCreate(SQLModel):
     model_id: str = Field(default=None, max_length=64)
     is_ready: Optional[bool] = False
     is_default: Optional[bool] = False
+    is_multimodal: Optional[bool] = False
     provider_name: Optional[str] = Field(default=None)
 
     @model_validator(mode='after')

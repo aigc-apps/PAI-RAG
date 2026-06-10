@@ -37,6 +37,7 @@ interface RerankerConfig {
   api_key: string;
   base_url: string;
   type?: string;
+  is_multimodal?: boolean;
 }
 
 export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
@@ -85,12 +86,17 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
     const typeMapping: Record<string, string> = {
       OpenAICompatible: 'openai_like',
       DashScope: 'dashscope',
+      MultimodalDashScope: 'multimodal_dashscope',
     };
+    const backendType = reranker.type
+      ? typeMapping[reranker.type] || reranker.type
+      : 'openai_like';
     const submitData = {
       ...reranker,
-      type: reranker.type
-        ? typeMapping[reranker.type] || reranker.type
-        : 'openai_like',
+      type: backendType,
+      is_multimodal: backendType === 'multimodal_dashscope'
+        ? true
+        : Boolean(reranker.is_multimodal),
     };
 
     try {
@@ -108,6 +114,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
       const reverseTypeMapping: Record<string, string> = {
         openai_like: 'OpenAICompatible',
         dashscope: 'DashScope',
+        multimodal_dashscope: 'MultimodalDashScope',
       };
       const responseData = {
         ...jsondata.data,
@@ -181,7 +188,13 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                 </label>
                 <Select
                   value={reranker?.type || 'OpenAICompatible'}
-                  onValueChange={(v) => setReranker((prev) => ({ ...prev, type: v }))}
+                  onValueChange={(v) =>
+                    setReranker((prev) => ({
+                      ...prev,
+                      type: v,
+                      is_multimodal: v === 'MultimodalDashScope',
+                    }))
+                  }
                 >
                   <SelectTrigger id="type" className="w-full">
                     <SelectValue />
@@ -189,6 +202,9 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
                   <SelectContent>
                     <SelectItem value="OpenAICompatible">OpenAI Compatible</SelectItem>
                     <SelectItem value="DashScope">DashScope</SelectItem>
+                    <SelectItem value="MultimodalDashScope">
+                      {t('config.model.multimodalDashscope')}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

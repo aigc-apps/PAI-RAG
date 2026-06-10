@@ -2,6 +2,7 @@
 from typing import Union
 from rag.rerank.reranker import OpenAICompatibleReranker
 from rag.rerank.dashscope_reranker import DashscopeReranker
+from rag.rerank.multimodal_dashscope_reranker import MultimodalDashscopeReranker
 from logging import getLogger
 from typing import List
 from common.knowledgebase.constants import DEFAULT_VECTOR_WEIGHT, DEFAULT_SIMILARITY_TOP_K, DEFAULT_RERANK_SIMILARITY_TOP_K
@@ -155,7 +156,7 @@ async def arerank_fusion(
     query: str = None,
     text_result: VectorStoreQueryResult = None,
     dense_result: VectorStoreQueryResult = None,
-    rerank_model: Union[DashscopeReranker, OpenAICompatibleReranker] = None,
+    rerank_model: Union[DashscopeReranker, OpenAICompatibleReranker, MultimodalDashscopeReranker] = None,
     vector_weight: float = DEFAULT_VECTOR_WEIGHT,
     top_k: int = DEFAULT_SIMILARITY_TOP_K,
     rerank_top_k: int = DEFAULT_RERANK_SIMILARITY_TOP_K,

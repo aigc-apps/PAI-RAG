@@ -22,6 +22,7 @@ interface RerankerConfig {
   api_key: string;
   base_url: string;
   type?: string;
+  is_multimodal?: boolean;
 }
 
 const newrerankerconfig: RerankerConfig = {
@@ -31,6 +32,7 @@ const newrerankerconfig: RerankerConfig = {
   api_key: '',
   base_url: '',
   type: 'OpenAICompatible',
+  is_multimodal: false,
 };
 export default function RerankerConfigPage() {
   const { t } = useI18n();
@@ -52,6 +54,7 @@ export default function RerankerConfigPage() {
         const reverseTypeMapping: Record<string, string> = {
           'openai_like': 'OpenAICompatible',
           'dashscope': 'DashScope',
+          'multimodal_dashscope': 'MultimodalDashScope',
         };
         const data = (json_data.data.items || []).map((item: RerankerConfig) => ({
           ...item,

@@ -1135,8 +1135,23 @@ class RagService:
             raise ValueError(f"Embedding model not found for knowledgebase {kb_id}.")
 
         embed_model = create_embedding_model(embed_model_entity)
-        texts_to_embed = get_node_texts_for_embedding(nodes)
-        embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
+        if hasattr(embed_model, "aget_multimodal_embedding_batch"):
+            # 多模态向量模型：把节点中的图片直接送入 embedding，与文本融合为单个向量
+            texts_to_embed = get_node_texts_for_embedding(nodes)
+            mm_items = []
+            for i, node in enumerate(nodes):
+                images = []
+                for img in (node.metadata or {}).get("images_info") or []:
+                    url = img.get("url") if isinstance(img, dict) else None
+                    if url:
+                        images.append(url)
+                mm_items.append({"text": texts_to_embed[i], "images": images})
+            embeddings = await embed_model.aget_multimodal_embedding_batch(
+                mm_items, show_progress=True
+            )
+        else:
+            texts_to_embed = get_node_texts_for_embedding(nodes)
+            embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=True)
         for i in range(len(nodes)):
             nodes[i].embedding = embeddings[i]
 

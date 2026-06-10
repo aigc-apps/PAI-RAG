@@ -35,6 +35,7 @@ const newembconfig: EmbConfig = {
   embed_batch_size: 0,
   is_ready: false,
   is_default: false,
+  is_multimodal: false,
 };
 export default function EmbConfigPage() {
   const { t } = useI18n();

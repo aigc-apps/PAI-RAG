@@ -37,6 +37,7 @@ export interface EmbConfig {
   embed_batch_size: number;
   is_ready: boolean;
   is_default: boolean;
+  is_multimodal: boolean;
 }
 
 export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
@@ -68,6 +69,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
   const handleSubmit = async () => {
     setSaveErrorMsg('');
     const is_api_model = emb.type != 'local';
+    const is_multimodal_type = emb.type === 'multimodal_dashscope';
     if (emb.dimension === 0) emb.dimension = undefined;
 
     if (
@@ -76,7 +78,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
         (isAdd && !emb.api_key) ||
         !emb.endpoint ||
         !emb.model_name ||
-        !emb.type)
+        !emb.type ||
+        (is_multimodal_type && !emb.dimension))
     ) {
       setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
@@ -86,6 +89,12 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
     ) {
       setSaveErrorMsg(t('config.model.fillCompleteInfo'));
       return;
+    }
+
+    if (is_multimodal_type) {
+      emb.is_multimodal = true;
+    } else if (emb.is_multimodal) {
+      emb.is_multimodal = false;
     }
     const submit_url = isAdd
       ? `/api/config/embeddings`
@@ -119,7 +128,8 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [pendingState, setPendingState] = useState<boolean | null>(null);
 
-  const isApiLike = emb?.type === 'openai_like';
+  const isMultimodal = emb?.type === 'multimodal_dashscope';
+  const isApiLike = emb?.type === 'openai_like' || isMultimodal;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
@@ -141,7 +151,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               {t('config.model.modelType')}
               <span className="required">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2 p-1 rounded-lg bg-muted">
+            <div className="grid grid-cols-3 gap-2 p-1 rounded-lg bg-muted">
               <button
                 type="button"
                 className={cn(
@@ -150,7 +160,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                     ? 'bg-background shadow-sm font-medium text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
-                onClick={() => setEmb({ ...emb, type: 'local' })}
+                onClick={() => setEmb({ ...emb, type: 'local', is_multimodal: false })}
               >
                 {t('config.model.localHosted')}
               </button>
@@ -162,9 +172,33 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                     ? 'bg-background shadow-sm font-medium text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
-                onClick={() => setEmb({ ...emb, type: 'openai_like' })}
+                onClick={() => setEmb({ ...emb, type: 'openai_like', is_multimodal: false })}
               >
                 {t('config.model.apiOpenaiLike')}
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'px-3 py-2 text-sm rounded-md transition-all',
+                  emb?.type === 'multimodal_dashscope'
+                    ? 'bg-background shadow-sm font-medium text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => {
+                  const isCompatibleMode =
+                    !emb.endpoint ||
+                    emb.endpoint.includes('/compatible-mode');
+                  setEmb({
+                    ...emb,
+                    type: 'multimodal_dashscope',
+                    is_multimodal: true,
+                    endpoint: isCompatibleMode
+                      ? 'https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding'
+                      : emb.endpoint,
+                  });
+                }}
+              >
+                {t('config.model.multimodalDashscope')}
               </button>
             </div>
           </div>
@@ -213,17 +247,34 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
                   </label>
                   <Input
                     id="endpoint"
-                    list="endpoint_options"
-                    placeholder={t('config.model.endpointPlaceholder')}
+                    list={isMultimodal ? 'mm_endpoint_options' : 'endpoint_options'}
+                    placeholder={
+                      isMultimodal
+                        ? t('config.model.multimodalEndpointPlaceholder')
+                        : t('config.model.endpointPlaceholder')
+                    }
                     value={emb?.endpoint ?? ''}
                     onChange={(e) => setEmb((prev) => ({ ...prev, endpoint: e.target.value }))}
                   />
-                  <datalist id="endpoint_options">
-                    <option value="https://api.openai.com/v1">OpenAI</option>
-                    <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
-                      {t('config.model.qwenModel')}
-                    </option>
-                  </datalist>
+                  {isMultimodal ? (
+                    <>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {t('config.model.multimodalEndpointHint')}
+                      </p>
+                      <datalist id="mm_endpoint_options">
+                        <option value="https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding">
+                          {t('config.model.qwenMultimodalEmbedding')}
+                        </option>
+                      </datalist>
+                    </>
+                  ) : (
+                    <datalist id="endpoint_options">
+                      <option value="https://api.openai.com/v1">OpenAI</option>
+                      <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">
+                        {t('config.model.qwenModel')}
+                      </option>
+                    </datalist>
+                  )}
                 </div>
 
                 <div>
@@ -250,7 +301,7 @@ export const EmbeddingModelDialog: FC<EmbeddingModelDialogProps> = ({
               <div>
                 <label htmlFor="dimension" className="form-label">
                   {t('config.model.vectorDimension')}
-                  {!isApiLike && <span className="required">*</span>}
+                  {(!isApiLike || isMultimodal) && <span className="required">*</span>}
                 </label>
                 <Input
                   id="dimension"

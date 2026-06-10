@@ -262,10 +262,25 @@ class KbFileClient:
                 persist_progress_bar = tqdm(total=len(nodes), desc=f"Embedding & Persisting Nodes for file {file_item.file_name} part {file_task.file_part}")
                 n_batches = (len(nodes) - 1) // embed_batch_size + 1
 
+                supports_multimodal = hasattr(embed_model, "aget_multimodal_embedding_batch")
                 for i in range(0, len(nodes), embed_batch_size):
                     batch_nodes = nodes[i:i + embed_batch_size]
                     texts_to_embed = get_node_texts_for_embedding(batch_nodes)
-                    embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
+                    if supports_multimodal:
+                        # 多模态向量模型：把节点中的图片直接送入 embedding，与文本融合为单个向量
+                        mm_items = []
+                        for k, node in enumerate(batch_nodes):
+                            images = []
+                            for img in (node.metadata or {}).get("images_info") or []:
+                                url = img.get("url") if isinstance(img, dict) else None
+                                if url:
+                                    images.append(url)
+                            mm_items.append({"text": texts_to_embed[k], "images": images})
+                        embeddings = await embed_model.aget_multimodal_embedding_batch(
+                            mm_items, show_progress=False
+                        )
+                    else:
+                        embeddings = await embed_model.aget_text_embedding_batch(texts_to_embed, show_progress=False)
                     # 在 for 循环里，append 之后加一行，例如：
                     persist_progress_bar.set_postfix_str(f"embedded {(i // embed_batch_size) + 1}/{n_batches} batches")
                     for j in range(len(batch_nodes)):
