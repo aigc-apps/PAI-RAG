@@ -44,19 +44,29 @@ class TestGetMessageContent:
 
 
 class TestAgentState:
-    def test_from_messages_filters_non_user_assistant(self):
+    def test_from_messages_filters_system_and_orphaned_tool(self):
         messages = [
             {"role": "system", "content": "You are helpful"},
             {"role": "user", "content": "Hello"},
-            {"role": "tool", "content": "result"},
+            {"role": "tool", "content": "result"},  # orphaned: no preceding assistant with tool_calls
             {"role": "assistant", "content": "Hi there"},
         ]
         state = AgentState.from_messages(messages)
         roles = [m["role"] for m in state.messages]
         assert "system" not in roles
-        assert "tool" in roles
+        assert "tool" not in roles
         assert "user" in roles
         assert "assistant" in roles
+
+    def test_from_messages_preserves_tool_with_preceding_assistant(self):
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "t1", "type": "function", "function": {"name": "search", "arguments": "{}"}}]},
+            {"role": "tool", "content": "result", "tool_call_id": "t1"},
+        ]
+        state = AgentState.from_messages(messages)
+        roles = [m["role"] for m in state.messages]
+        assert roles == ["user", "assistant", "tool"]
 
     def test_from_messages_filters_image_only_assistant(self):
         messages = [

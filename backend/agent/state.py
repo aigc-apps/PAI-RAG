@@ -24,7 +24,9 @@ def convert_thread_messages(messages: List[dict]) -> List[dict]:
         content = msg.get("content")
 
         if role == "tool":
-            result.append(msg)
+            last_msg = result[-1] if result else None
+            if last_msg and last_msg.get("role") == MessageRole.ASSISTANT and last_msg.get("tool_calls"):
+                result.append(msg)
             continue
 
         if role == MessageRole.ASSISTANT and msg.get("tool_calls"):
