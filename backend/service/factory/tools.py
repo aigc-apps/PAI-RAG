@@ -48,18 +48,40 @@ def create_search_tools(websearch_config: WebSearchConfigEntity) -> List[Functio
         res = await search_client.aquery(query)
         return json.dumps(res, ensure_ascii=False)
 
+    websearch_description = """Search the web for up-to-date information and return relevant results.
+
+# When to use
+You MUST call this tool whenever the user's query involves ANY of the following:
+- Current events, news, or recent happenings
+- Real-time data: weather, stock prices, sports scores, exchange rates
+- Facts that may have changed: population, rankings, product info, policies
+- People, companies, or organizations (latest status, announcements)
+- Technical questions: APIs, libraries, error messages, best practices
+- Any topic you are not 100% certain about
+- Any follow-up question on a new topic, even within a multi-turn conversation
+
+# When NOT to use
+Only skip this tool for simple greetings ("hi"), trivial math ("1+1"), or universally known constants ("speed of light").
+
+# Parameters
+- **query** (required, string): A clear, specific search query. For time-sensitive topics, include the date or time period (e.g. "2026年6月 xxx"). Rewrite vague references into standalone queries.
+
+# Returns
+- A JSON object containing a list of search results with titles, URLs, and content snippets.
+"""
+
     if websearch_config.type == "tavily":
         search_tool = FunctionTool.from_defaults(
             async_fn=aget_search_result,
             name="tavily-websearch",
-            description="从 Tavily 搜索引擎中搜索给定查询的最新内容。",
+            description=websearch_description,
             return_direct=False,
         )
     else:
         search_tool = FunctionTool.from_defaults(
             async_fn=aget_search_result,
             name="aliyun-websearch",
-            description="从阿里云搜索引擎中搜索给定查询的最新内容。",
+            description=websearch_description,
             return_direct=False,
         )
 

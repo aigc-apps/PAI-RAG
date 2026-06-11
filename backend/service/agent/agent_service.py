@@ -1,4 +1,3 @@
-from agent.context import RunContext
 from common.chat.models import ChatAgentRequest
 from service.factory.model_factory import create_llm
 from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
@@ -148,8 +147,11 @@ class AgentService:
                 tenant_id=tenant_id,
             )
 
-            run_context = RunContext()
-            system_prompt = system_prompt.format(context_str=run_context.to_string())
+            tools_str = _build_tools_summary(tools)
+            system_prompt = system_prompt.format(
+                tools_str=tools_str,
+                context_str="",  # backward-compat: old custom prompts may still have {context_str}
+            )
             agent = ReactAgent(
                 llm=llm,
                 system_prompt=system_prompt,
@@ -436,3 +438,20 @@ class AgentService:
             append_text(user_message, reply_text)
 
         return attachment_tools, cleanup_code_sandbox
+
+
+def _build_tools_summary(tools: List[FunctionTool]) -> str:
+    if not tools:
+        return (
+            "No tools are available in this session. "
+            "Answer the user's questions directly using your own knowledge. "
+            "Ignore all tool-related instructions above."
+        )
+    lines = [f"You have {len(tools)} tool(s). For every user query, pick the most relevant tool(s) to call:\n"]
+    for tool in tools:
+        name = tool.metadata.name
+        desc = tool.metadata.description or ""
+        first_line = desc.strip().split("\n")[0]
+        lines.append(f"- **{name}**: {first_line}")
+    lines.append("\nRemember: call at least one tool for any factual question.")
+    return "\n".join(lines)

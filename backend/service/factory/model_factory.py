@@ -24,7 +24,7 @@ reranker_cache = LruCache(max_size=10)
 
 
 def llm_cache_key(config: LlmModelEntity) -> str:
-    return f"llm_{config.base_url}_{config.encrypted_api_key}_{config.model}_{config.enable_thinking}_{config.vision_support}_{config.temperature}_{config.context_window}"
+    return f"llm_{config.base_url}_{config.encrypted_api_key}_{config.model}_{config.enable_thinking}_{config.vision_support}_{config.temperature}_{config.context_window}_{config.max_tokens}"
 
 def create_llm(config: LlmModelEntity) -> PaiLlm:
     llm_key = llm_cache_key(config)
@@ -44,6 +44,7 @@ def create_llm(config: LlmModelEntity) -> PaiLlm:
             vision_support=config.vision_support,
             temperature=config.temperature,
             context_window=config.context_window,
+            max_tokens=config.max_tokens,
         )
     llm_cache.put(llm_key, llm)
     return llm
@@ -58,7 +59,7 @@ def create_openailike_llm(config: LlmModelEntity) -> OpenAILike:
         api_base=config.base_url,
         api_key=decrypt_key(config.encrypted_api_key),
         temperature=config.temperature,
-        max_tokens=config.context_window,
+        max_tokens=config.max_tokens,
         is_chat_model=True,
         is_function_calling_model=True,
     )

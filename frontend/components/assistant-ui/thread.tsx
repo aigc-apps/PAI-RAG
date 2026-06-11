@@ -133,25 +133,18 @@ export const Thread: FC<{
     };
 
     fetchConfigs();
-    let newOptions: string[] = [];
-    if (enable_search) {
-      newOptions.push('search');
-    }
-    if (enable_agent) {
-      newOptions.push('planning');
-    }
-    if (enable_chatdb) {
-      newOptions.push('chatdb');
-    }
-    if (kb_ids.length > 0) {
-      newOptions.push('kb');
-    }
-    if (mcp_ids.length > 0) {
-      newOptions.push('mcp');
-    }
+  }, []);
+
+  useEffect(() => {
+    const newOptions: string[] = [];
+    if (enable_search) newOptions.push('search');
+    if (enable_agent) newOptions.push('planning');
+    if (enable_chatdb) newOptions.push('chatdb');
+    if (kb_ids.length > 0) newOptions.push('kb');
+    if (mcp_ids.length > 0) newOptions.push('mcp');
     setActiveTools(newOptions);
     onToggleChange?.(newOptions);
-  }, []);
+  }, [enable_search, enable_agent, enable_chatdb, kb_ids, mcp_ids]);
 
 
   const handleToolUpdate = (

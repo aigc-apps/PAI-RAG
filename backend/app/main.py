@@ -72,7 +72,8 @@ async def lifespan(app: FastAPI):
         sync_sqlite_store()
         sqlite_thread.join(timeout=10)
     from pairag.file.store.file_store_helper import file_store
-    await file_store.cleanup()
+    if hasattr(file_store, "cleanup"):
+        await file_store.cleanup()
     await HttpSessionShared.cleanup()
     logger.info("Application shutting down...")
 

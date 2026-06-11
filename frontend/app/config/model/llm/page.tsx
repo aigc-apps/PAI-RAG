@@ -23,6 +23,8 @@ export interface LlmConfig {
   api_key: string;
   base_url: string;
   max_context: number;
+  context_window: number;
+  max_tokens: number;
   enabled: boolean;
   vision_support: boolean;
   enable_thinking: boolean;
@@ -38,6 +40,8 @@ const newllmconfig: LlmConfig = {
   api_key: '',
   vision_support: false,
   max_context: 0,
+  context_window: 110000,
+  max_tokens: 8000,
   enabled: true,
   enable_thinking: false,
   temperature: 0.1,

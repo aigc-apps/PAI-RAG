@@ -71,9 +71,24 @@ async def aget_knowledgebase_tool(
         raise ValueError(f"Knowledgebase {kb_id} not found.")
 
     base_description = (
-        f"根据上下文从知识库中搜索和用户查询相关的内容。\n"
-        f"知识库名称: {knowledgebase.name}\n"
-        f"知识库描述: {knowledgebase.description}\n"
+        f"Search the private knowledgebase for information relevant to the user's query.\n"
+        f"\n"
+        f"# Knowledgebase info\n"
+        f"- Name: {knowledgebase.name}\n"
+        f"- Description: {knowledgebase.description}\n"
+        f"\n"
+        f"# When to use\n"
+        f"You MUST call this tool whenever the user's query could be answered or enriched by the content in this knowledgebase. This includes:\n"
+        f"- Domain-specific questions that match the knowledgebase description\n"
+        f"- Questions about internal documents, policies, products, or proprietary data\n"
+        f"- Any query where the knowledgebase may contain more accurate or detailed information than general knowledge\n"
+        f"- Follow-up questions on topics previously answered using this knowledgebase — always re-search to get the most relevant context\n"
+        f"\n"
+        f"# Parameters\n"
+        f"- **query** (required, string): Rewrite the user's question into a clear, standalone search query. Resolve pronouns, add necessary context from the conversation, and make the query self-contained.\n"
+        f"\n"
+        f"# Returns\n"
+        f"- A JSON list of matched document chunks with text content, metadata, and relevance scores.\n"
     )
 
     # Determine whether to expose metadata_condition to the model

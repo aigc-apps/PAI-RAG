@@ -44,11 +44,12 @@ class TestLlmModelEntity:
         from db.models.llm import LlmModelEntity
         # Provide id explicitly since default_factory uses validated_data
         llm = LlmModelEntity(id="test-id", model_id="qwen-plus", model="qwen-plus")
-        assert llm.context_window == 8000
+        assert llm.context_window == 110000
         assert llm.temperature == 0.1
         assert llm.enabled is True
         assert llm.vision_support is False
         assert llm.enable_thinking is False
+        assert llm.max_tokens == 8000
 
 
 class TestKbFileEntity:

@@ -3,6 +3,7 @@ import traceback
 from typing import Dict, Optional, Tuple
 from common.llm.models import ErrorChunk, ReasoningChunk, ToolResultChunk, TextChunk
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
+from utils.time_utils import get_current_time_str
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from loguru import logger
 from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
@@ -14,6 +15,7 @@ from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.json_utils import parse_tool_arguments
 from agent.tool_utils import check_and_handle_return_direct
+from agent.message_manager import AgentMessageManager
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 
@@ -87,6 +89,10 @@ class ReactAgent:
         self.tool_metadata = [
             tool.metadata.to_openai_tool(skip_length_check=True) for tool in self.tools
         ]
+        self.msg_manager = AgentMessageManager(
+            context_window=llm.context_window,
+            max_output_tokens=llm.max_tokens,
+        )
 
 
     @pai_agent_wrapper
@@ -97,7 +103,22 @@ class ReactAgent:
         @use_current_span(trace.get_current_span())
         async def gen():
             # Initialize messages with system prompt and conversation history
-            messages = [{"role": "system", "content": self.system_prompt}] + state.messages.copy()
+            messages = state.messages.copy()
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i].get("role") == "user":
+                    time_prefix = f"[System Time: {get_current_time_str()}]\n"
+                    content = messages[i].get("content", "")
+                    if isinstance(content, str):
+                        messages[i]["content"] = time_prefix + content
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                block["text"] = time_prefix + (block.get("text") or "")
+                                break
+                        else:
+                            content.insert(0, {"type": "text", "text": time_prefix})
+                    break
+            messages = [{"role": "system", "content": self.system_prompt}] + messages
 
             # Build tool metadata, adding plan tool if enable_agent is True
             tools_to_use = self.tool_metadata.copy()
@@ -110,6 +131,9 @@ class ReactAgent:
 
                 tool_calls = []
                 step_content = ""
+
+                # Compress messages to fit within token budget
+                messages = self.msg_manager.fit_to_budget(messages)
 
                 # Call LLM with current messages and available tools
                 async for chunk in await self.llm.astream(
@@ -200,10 +224,11 @@ class ReactAgent:
                         "tool_calls": [tool_call]
                     })
 
-                    # Add tool result message
+                    # Add tool result message (cap large results)
+                    capped_content = self.msg_manager.cap_tool_result(message_content) if message_content else message_content
                     messages.append({
                         "role": "tool",
-                        "content": message_content,
+                        "content": capped_content,
                         "tool_call_id": tool_call.id
                     })
 

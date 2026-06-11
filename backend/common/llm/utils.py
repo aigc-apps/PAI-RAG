@@ -14,6 +14,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from loguru import logger
 from extensions.trace.context import get_request_id
+from typing import List
 
 
 def parse_llm_json(json_str: str) -> dict:
@@ -62,6 +63,34 @@ def extract_citations(tool_chunk: ToolResultChunk):
 
 
 
+MAX_TOOL_HISTORY_CHARS = 20000
+TOOL_HISTORY_TRUNCATED_MARKER = "\n...[content truncated]"
+
+
+def _collect_tool_history(chunk: ToolResultChunk, tool_history_messages: List[dict]):
+    tool_call = chunk.tool
+    tool_history_messages.append({
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [{
+            "id": tool_call.id,
+            "type": "function",
+            "function": {
+                "name": tool_call.function.name,
+                "arguments": tool_call.function.arguments,
+            }
+        }]
+    })
+    raw_content = chunk.result or chunk.error or ""
+    if isinstance(raw_content, str) and len(raw_content) > MAX_TOOL_HISTORY_CHARS:
+        raw_content = raw_content[:MAX_TOOL_HISTORY_CHARS] + TOOL_HISTORY_TRUNCATED_MARKER
+    tool_history_messages.append({
+        "role": "tool",
+        "tool_call_id": tool_call.id,
+        "content": raw_content,
+    })
+
+
 async def error_chunk_gen(message: str, exception: Exception | None = None) -> ChatResponseGenerator:
     yield ErrorChunk(
         delta=message,
@@ -95,6 +124,7 @@ async def convert_gen_to_stream_chat_completions(
     output_check_result = TextCheckResult()
     fail_fast = False
     final_content = ""  # 累积完整的助手回复内容
+    tool_history_messages = []  # 收集 tool 交互消息用于保存历史
 
     try:
         async for chunk in response_generator:
@@ -112,6 +142,7 @@ async def convert_gen_to_stream_chat_completions(
 
             if isinstance(chunk, ToolResultChunk):
                 citations, citation_details = extract_citations(chunk)
+                _collect_tool_history(chunk, tool_history_messages)
 
             current_content += chunk.delta
             final_content += chunk.delta
@@ -168,6 +199,7 @@ async def convert_gen_to_stream_chat_completions(
                     session_id=session_id,
                     user_message=user_message,
                     assistant_message=assistant_message,
+                    tool_messages=tool_history_messages if tool_history_messages else None,
                 )
                 logger.info(f"Session history saved in stream mode for user={user_id}, session={session_id}")
             except Exception as e:
@@ -245,9 +277,9 @@ async def convert_gen_to_chat_completions(
 
 
     checked = False
+    tool_history_messages = []
 
     async for chunk in response_generator:
-        # 出错直接返回
         if isinstance(chunk, ErrorChunk):
             logger.info(f"Input guardrail failed: {chunk.delta}, directly return.")
             content = chunk.delta
@@ -267,6 +299,7 @@ async def convert_gen_to_chat_completions(
         if isinstance(chunk, ToolResultChunk):
             steps.append(chunk)
             citations, citation_details = extract_citations(chunk)
+            _collect_tool_history(chunk, tool_history_messages)
 
     if not checked and enable_output_check and checker:
         current_result = TextCheckResult()
@@ -310,6 +343,7 @@ async def convert_gen_to_chat_completions(
                 session_id=session_id,
                 user_message=user_message,
                 assistant_message=assistant_message,
+                tool_messages=tool_history_messages if tool_history_messages else None,
             )
             logger.info(f"Session history saved in non-stream mode for user={user_id}, session={session_id}")
         except Exception as e:
