@@ -16,7 +16,7 @@ class LlmModel(SQLModel):
     model_id: str = Field(default=None, max_length=64)
     enabled: bool = Field(default=True)
     vision_support: bool = Field(default=False)
-    max_tokens: int = Field(default=8000)
+    max_tokens: int = Field(default=128000)
     enable_thinking: bool = Field(default=False, description="Whether the LLM supports thinking mode.")
     provider_name: Optional[str] = Field(default=None)
     source: str = Field(default=None)

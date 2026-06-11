@@ -97,7 +97,7 @@ def convert_thread_messages(messages: List[dict]) -> List[dict]:
                     "content": "\n".join(text_parts),
                 })
             elif not tool_call_parts:
-                result.append({"role": MessageRole.ASSISTANT, "content": ""})
+                continue
             continue
 
         result.append(msg)

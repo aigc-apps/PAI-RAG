@@ -54,7 +54,7 @@ class TestAgentState:
         state = AgentState.from_messages(messages)
         roles = [m["role"] for m in state.messages]
         assert "system" not in roles
-        assert "tool" not in roles
+        assert "tool" in roles
         assert "user" in roles
         assert "assistant" in roles
 

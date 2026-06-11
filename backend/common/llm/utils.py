@@ -63,6 +63,10 @@ def extract_citations(tool_chunk: ToolResultChunk):
 
 
 
+MAX_TOOL_HISTORY_CHARS = 20000
+TOOL_HISTORY_TRUNCATED_MARKER = "\n...[content truncated]"
+
+
 def _collect_tool_history(chunk: ToolResultChunk, tool_history_messages: List[dict]):
     tool_call = chunk.tool
     tool_history_messages.append({
@@ -77,10 +81,13 @@ def _collect_tool_history(chunk: ToolResultChunk, tool_history_messages: List[di
             }
         }]
     })
+    raw_content = chunk.result or chunk.error or ""
+    if isinstance(raw_content, str) and len(raw_content) > MAX_TOOL_HISTORY_CHARS:
+        raw_content = raw_content[:MAX_TOOL_HISTORY_CHARS] + TOOL_HISTORY_TRUNCATED_MARKER
     tool_history_messages.append({
         "role": "tool",
         "tool_call_id": tool_call.id,
-        "content": chunk.result or chunk.error or "",
+        "content": raw_content,
     })
 
 

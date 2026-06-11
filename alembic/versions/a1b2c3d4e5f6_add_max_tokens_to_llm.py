@@ -23,7 +23,7 @@ def upgrade() -> None:
     """Upgrade schema."""
     safe_add_column(
         "pai_llm_model",
-        sa.Column("max_tokens", sa.Integer(), nullable=True, server_default="8000"),
+        sa.Column("max_tokens", sa.Integer(), nullable=True, server_default="128000"),
     )
 
 
