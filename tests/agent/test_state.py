@@ -68,6 +68,20 @@ class TestAgentState:
         roles = [m["role"] for m in state.messages]
         assert roles == ["user", "assistant", "tool"]
 
+    def test_from_messages_preserves_multiple_parallel_tool_results(self):
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": None, "tool_calls": [
+                {"id": "t1", "type": "function", "function": {"name": "search", "arguments": "{}"}},
+                {"id": "t2", "type": "function", "function": {"name": "search", "arguments": "{}"}},
+            ]},
+            {"role": "tool", "content": "result1", "tool_call_id": "t1"},
+            {"role": "tool", "content": "result2", "tool_call_id": "t2"},
+        ]
+        state = AgentState.from_messages(messages)
+        roles = [m["role"] for m in state.messages]
+        assert roles == ["user", "assistant", "tool", "tool"]
+
     def test_from_messages_filters_image_only_assistant(self):
         messages = [
             {"role": "user", "content": "Hello"},

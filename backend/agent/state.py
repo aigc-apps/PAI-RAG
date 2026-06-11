@@ -5,6 +5,20 @@ from common.chat.constants import MessageRole, DEFAULT_AGENT_HISTORY_ROUNDS
 from loguru import logger
 
 
+def _find_preceding_assistant_with_tool_call(result: List[dict], tool_call_id: str) -> bool:
+    for msg in reversed(result):
+        role = msg.get("role", "")
+        if role == "tool":
+            continue
+        if role == MessageRole.ASSISTANT:
+            tool_calls = msg.get("tool_calls", [])
+            for tc in tool_calls:
+                if tc.get("id") == tool_call_id:
+                    return True
+        return False
+    return False
+
+
 def get_message_content(msg: dict) -> str:
     content = msg.get("content", "")
     if isinstance(content, list):
@@ -24,8 +38,8 @@ def convert_thread_messages(messages: List[dict]) -> List[dict]:
         content = msg.get("content")
 
         if role == "tool":
-            last_msg = result[-1] if result else None
-            if last_msg and last_msg.get("role") == MessageRole.ASSISTANT and last_msg.get("tool_calls"):
+            tool_call_id = msg.get("tool_call_id", "")
+            if tool_call_id and _find_preceding_assistant_with_tool_call(result, tool_call_id):
                 result.append(msg)
             continue
 
