@@ -150,6 +150,7 @@ class AgentService:
             tools_str = _build_tools_summary(tools)
             system_prompt = system_prompt.format(
                 tools_str=tools_str,
+                context_str="",  # backward-compat: old custom prompts may still have {context_str}
             )
             agent = ReactAgent(
                 llm=llm,
