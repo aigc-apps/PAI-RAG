@@ -202,7 +202,7 @@ class SessionHistoryManager:
             return
 
         try:
-            key = session_history_key(user_id, model, session_id)
+            key = session_history_key(user_id, session_id)
             await self.cache.delete(key)
             logger.info(
                 f"Cleared session history: user={user_id}, model={model}, "

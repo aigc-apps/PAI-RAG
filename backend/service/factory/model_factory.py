@@ -59,7 +59,7 @@ def create_openailike_llm(config: LlmModelEntity) -> OpenAILike:
         api_base=config.base_url,
         api_key=decrypt_key(config.encrypted_api_key),
         temperature=config.temperature,
-        max_tokens=config.context_window,
+        max_tokens=config.max_tokens,
         is_chat_model=True,
         is_function_calling_model=True,
     )

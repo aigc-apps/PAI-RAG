@@ -219,7 +219,7 @@ class ReactAgent:
                     # Yield tool result chunk
                     yield ToolResultChunk(
                         tool=tool_call,
-                        result=tool_content,
+                        result=capped_content,
                         error=tool_error
                     )
 

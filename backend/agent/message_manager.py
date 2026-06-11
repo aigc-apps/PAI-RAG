@@ -33,7 +33,7 @@ class AgentMessageManager:
         min_protected_history_rounds: int = DEFAULT_MIN_PROTECTED_HISTORY_ROUNDS,
         history_msg_max_tokens: int = DEFAULT_HISTORY_MSG_MAX_TOKENS,
     ):
-        if context_window < DEFAULT_CONTEXT_WINDOW:
+        if context_window < 10000:
             context_window = DEFAULT_CONTEXT_WINDOW
         if max_output_tokens < DEFAULT_MAX_TOKENS:
             max_output_tokens = DEFAULT_MAX_TOKENS
