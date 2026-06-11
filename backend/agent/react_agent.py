@@ -3,6 +3,7 @@ import traceback
 from typing import Dict, Optional, Tuple
 from common.llm.models import ErrorChunk, ReasoningChunk, ToolResultChunk, TextChunk
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
+from utils.time_utils import get_current_time_str
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from loguru import logger
 from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
@@ -102,7 +103,22 @@ class ReactAgent:
         @use_current_span(trace.get_current_span())
         async def gen():
             # Initialize messages with system prompt and conversation history
-            messages = [{"role": "system", "content": self.system_prompt}] + state.messages.copy()
+            messages = state.messages.copy()
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i].get("role") == "user":
+                    time_prefix = f"[System Time: {get_current_time_str()}]\n"
+                    content = messages[i].get("content", "")
+                    if isinstance(content, str):
+                        messages[i]["content"] = time_prefix + content
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                block["text"] = time_prefix + (block.get("text") or "")
+                                break
+                        else:
+                            content.insert(0, {"type": "text", "text": time_prefix})
+                    break
+            messages = [{"role": "system", "content": self.system_prompt}] + messages
 
             # Build tool metadata, adding plan tool if enable_agent is True
             tools_to_use = self.tool_metadata.copy()

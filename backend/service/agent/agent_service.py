@@ -1,4 +1,3 @@
-from agent.context import RunContext
 from common.chat.models import ChatAgentRequest
 from service.factory.model_factory import create_llm
 from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
@@ -148,10 +147,8 @@ class AgentService:
                 tenant_id=tenant_id,
             )
 
-            run_context = RunContext()
             tools_str = _build_tools_summary(tools)
             system_prompt = system_prompt.format(
-                context_str=run_context.to_string(),
                 tools_str=tools_str,
             )
             agent = ReactAgent(

@@ -45,5 +45,3 @@ react_prompt: |
   - Include relevant image links from tool results in Markdown when useful.
   - Before finalizing, do a quick self-check: if your answer contains any changeable facts not backed by a tool result this turn, go back and call a tool.
 
-  ## Context
-  {context_str}
