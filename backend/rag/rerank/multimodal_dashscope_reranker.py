@@ -231,17 +231,18 @@ class MultimodalDashscopeReranker:
             raise ValueError("Query content cannot be empty")
         if not vector_result:
             raise ValueError("VectorStoreQueryResult list cannot be empty")
-        if not vector_result.nodes or len(vector_result.nodes) <= 1:
-            return vector_result
-
         # Rerank API rejects empty documents; keep only nodes with text or an image
-        # while preserving each survivor's original similarity.
-        sims = vector_result.similarities or [0.0] * len(vector_result.nodes)
-        kept = [(n, s) for n, s in zip(vector_result.nodes, sims) if _node_has_renderable_content(n)]
+        # while preserving each survivor's original similarity. Apply
+        # similarity_threshold to the sole survivor too.
+        nodes = vector_result.nodes or []
+        sims = vector_result.similarities or [0.0] * len(nodes)
+        kept = [(n, s) for n, s in zip(nodes, sims) if _node_has_renderable_content(n)]
         if not kept:
             return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
         if len(kept) == 1:
             only, sim = kept[0]
+            if sim < similarity_threshold:
+                return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
             return VectorStoreQueryResult(nodes=[only], ids=[only.node_id], similarities=[sim])
 
         origin_nodes = [n for n, _ in kept]

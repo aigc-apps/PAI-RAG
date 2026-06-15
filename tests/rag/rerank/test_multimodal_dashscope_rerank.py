@@ -125,11 +125,43 @@ async def test_rerank_normalizes_string_query_and_documents():
 @pytest.mark.asyncio
 async def test_vector_store_rerank_passthrough_on_few_nodes():
     r = MultimodalDashscopeReranker(api_key="sk")
-    # 0 or 1 node short-circuits without API call
-    n = TextNode(text="solo", metadata={})
+    # 1 valid node short-circuits without API call and keeps its similarity
+    n = TextNode(id_="x", text="solo", metadata={})
     vr = VectorStoreQueryResult(nodes=[n], ids=["x"], similarities=[0.5])
-    result = await r.vector_store_rerank(query="q", vector_result=vr)
-    assert result is vr
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        result = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert result.ids == ["x"]
+    assert result.similarities == [0.5]
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_empty_node_returns_empty():
+    """A single empty-text node must not pass through unchanged."""
+    r = MultimodalDashscopeReranker(api_key="sk")
+    n = TextNode(id_="x", text="", metadata={})
+    vr = VectorStoreQueryResult(nodes=[n], ids=["x"], similarities=[0.99])
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        result = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert result.nodes == []
+    assert result.similarities == []
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_survivor_below_threshold_drops():
+    r = MultimodalDashscopeReranker(api_key="sk")
+    n_bad = TextNode(id_="bad", text="", metadata={})
+    n_low = TextNode(id_="low", text="below threshold", metadata={})
+    vr = VectorStoreQueryResult(
+        nodes=[n_bad, n_low], ids=["bad", "low"], similarities=[0.99, 0.05]
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        result = await r.vector_store_rerank(
+            query="q", vector_result=vr, similarity_threshold=0.8
+        )
+        m.assert_not_called()
+    assert result.nodes == []
 
 
 @pytest.mark.asyncio

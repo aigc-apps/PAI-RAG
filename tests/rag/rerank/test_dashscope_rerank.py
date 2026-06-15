@@ -173,3 +173,53 @@ async def test_vector_store_rerank_single_survivor_preserves_low_score():
         m.assert_not_called()
     assert out.ids == ["valid_low"]
     assert out.similarities == [0.05]
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_empty_node_returns_empty():
+    """Single empty-text input must NOT pass through unchanged (pre-filter must run)."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[TextNode(id_="x", text="")], ids=["x"], similarities=[0.99]
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert out.nodes == []
+    assert out.similarities == []
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_survivor_below_threshold_drops():
+    """Sole survivor with score below similarity_threshold must be dropped."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[
+            TextNode(id_="bad", text=""),
+            TextNode(id_="low", text="below threshold"),
+        ],
+        ids=["bad", "low"],
+        similarities=[0.99, 0.05],
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(
+            query="q", vector_result=vr, similarity_threshold=0.8
+        )
+        m.assert_not_called()
+    assert out.nodes == []
+    assert out.similarities == []
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_input_node_below_threshold_drops():
+    """Single non-empty input below threshold must be dropped (no pre-filter bypass)."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[TextNode(id_="x", text="valid")], ids=["x"], similarities=[0.05]
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(
+            query="q", vector_result=vr, similarity_threshold=0.8
+        )
+        m.assert_not_called()
+    assert out.nodes == []

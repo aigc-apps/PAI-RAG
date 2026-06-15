@@ -219,17 +219,18 @@ class OpenAICompatibleReranker:
         if not vector_result:
             raise ValueError("VectorStoreQueryResult list cannot be empty")
 
-        if not vector_result.nodes or len(vector_result.nodes) <= 1:
-            return vector_result
-
-        # Rerank APIs reject empty documents; drop empty-text nodes before the call
-        # while preserving each survivor's original similarity.
-        sims = vector_result.similarities or [0.0] * len(vector_result.nodes)
-        kept = [(n, s) for n, s in zip(vector_result.nodes, sims) if (n.text or "").strip()]
+        # Rerank APIs reject empty documents; drop empty-text nodes first while
+        # preserving each survivor's original similarity. Apply similarity_threshold
+        # to the sole survivor too — otherwise a low-score node bypasses the gate.
+        nodes = vector_result.nodes or []
+        sims = vector_result.similarities or [0.0] * len(nodes)
+        kept = [(n, s) for n, s in zip(nodes, sims) if (n.text or "").strip()]
         if not kept:
             return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
         if len(kept) == 1:
             only, sim = kept[0]
+            if sim < similarity_threshold:
+                return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
             return VectorStoreQueryResult(nodes=[only], ids=[only.node_id], similarities=[sim])
 
         origin_nodes = [n for n, _ in kept]
