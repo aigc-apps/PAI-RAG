@@ -234,14 +234,17 @@ class MultimodalDashscopeReranker:
         if not vector_result.nodes or len(vector_result.nodes) <= 1:
             return vector_result
 
-        # Rerank API rejects empty documents; keep only nodes with text or an image.
-        origin_nodes = [n for n in vector_result.nodes if _node_has_renderable_content(n)]
-        if not origin_nodes:
+        # Rerank API rejects empty documents; keep only nodes with text or an image
+        # while preserving each survivor's original similarity.
+        sims = vector_result.similarities or [0.0] * len(vector_result.nodes)
+        kept = [(n, s) for n, s in zip(vector_result.nodes, sims) if _node_has_renderable_content(n)]
+        if not kept:
             return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
-        if len(origin_nodes) == 1:
-            only = origin_nodes[0]
-            return VectorStoreQueryResult(nodes=[only], ids=[only.node_id], similarities=[1.0])
+        if len(kept) == 1:
+            only, sim = kept[0]
+            return VectorStoreQueryResult(nodes=[only], ids=[only.node_id], similarities=[sim])
 
+        origin_nodes = [n for n, _ in kept]
         documents = _node_documents_with_images(origin_nodes)
 
         rerank_results = await self.rerank(

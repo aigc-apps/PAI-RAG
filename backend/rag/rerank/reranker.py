@@ -222,14 +222,17 @@ class OpenAICompatibleReranker:
         if not vector_result.nodes or len(vector_result.nodes) <= 1:
             return vector_result
 
-        # Rerank APIs reject empty documents; drop empty-text nodes before the call.
-        origin_nodes = [n for n in vector_result.nodes if (n.text or "").strip()]
-        if not origin_nodes:
+        # Rerank APIs reject empty documents; drop empty-text nodes before the call
+        # while preserving each survivor's original similarity.
+        sims = vector_result.similarities or [0.0] * len(vector_result.nodes)
+        kept = [(n, s) for n, s in zip(vector_result.nodes, sims) if (n.text or "").strip()]
+        if not kept:
             return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
-        if len(origin_nodes) == 1:
-            only = origin_nodes[0]
-            return VectorStoreQueryResult(nodes=[only], ids=[only.node_id], similarities=[1.0])
+        if len(kept) == 1:
+            only, sim = kept[0]
+            return VectorStoreQueryResult(nodes=[only], ids=[only.node_id], similarities=[sim])
 
+        origin_nodes = [n for n, _ in kept]
         documents=[node.text for node in origin_nodes]
         rerank_results = await self.rerank(query, documents, model, top_n, similarity_threshold)
 

@@ -150,3 +150,26 @@ async def test_vector_store_rerank_single_nonempty_after_filter_skips_api():
         out = await r.vector_store_rerank(query="q", vector_result=vr)
         m.assert_not_called()
     assert out.ids == ["b"]
+    # Must preserve original similarity, not invent 1.0
+    assert out.similarities == [0.2]
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_survivor_preserves_low_score():
+    """Regression: an empty-text node with high score must not boost a surviving
+    low-score node to 1.0 (which would bypass downstream thresholds and inflate
+    multi-KB merge ordering)."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[
+            TextNode(id_="empty_high", text=""),
+            TextNode(id_="valid_low", text="real but low"),
+        ],
+        ids=["empty_high", "valid_low"],
+        similarities=[0.99, 0.05],
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert out.ids == ["valid_low"]
+    assert out.similarities == [0.05]
