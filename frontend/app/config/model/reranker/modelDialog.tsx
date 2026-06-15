@@ -144,7 +144,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-      <DialogContent className="sm:max-w-[640px]">
+      <DialogContent className="sm:max-w-[640px] flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="type-corner-badge type-reranker">RNK</span>
@@ -155,7 +155,7 @@ export const RerankerModelDialog: FC<RerankerModelDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
           <div className="model-field-guide">
             <div>
               <span className="guide-label">模型服务需要</span>
