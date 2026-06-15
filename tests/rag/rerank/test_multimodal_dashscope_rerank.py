@@ -7,6 +7,7 @@ from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from rag.rerank.multimodal_dashscope_reranker import (
     MultimodalDashscopeReranker,
     _node_documents_with_images,
+    _node_has_renderable_content,
 )
 from rag.rerank.reranker import RerankResult
 
@@ -124,11 +125,43 @@ async def test_rerank_normalizes_string_query_and_documents():
 @pytest.mark.asyncio
 async def test_vector_store_rerank_passthrough_on_few_nodes():
     r = MultimodalDashscopeReranker(api_key="sk")
-    # 0 or 1 node short-circuits without API call
-    n = TextNode(text="solo", metadata={})
+    # 1 valid node short-circuits without API call and keeps its similarity
+    n = TextNode(id_="x", text="solo", metadata={})
     vr = VectorStoreQueryResult(nodes=[n], ids=["x"], similarities=[0.5])
-    result = await r.vector_store_rerank(query="q", vector_result=vr)
-    assert result is vr
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        result = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert result.ids == ["x"]
+    assert result.similarities == [0.5]
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_empty_node_returns_empty():
+    """A single empty-text node must not pass through unchanged."""
+    r = MultimodalDashscopeReranker(api_key="sk")
+    n = TextNode(id_="x", text="", metadata={})
+    vr = VectorStoreQueryResult(nodes=[n], ids=["x"], similarities=[0.99])
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        result = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert result.nodes == []
+    assert result.similarities == []
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_survivor_below_threshold_drops():
+    r = MultimodalDashscopeReranker(api_key="sk")
+    n_bad = TextNode(id_="bad", text="", metadata={})
+    n_low = TextNode(id_="low", text="below threshold", metadata={})
+    vr = VectorStoreQueryResult(
+        nodes=[n_bad, n_low], ids=["bad", "low"], similarities=[0.99, 0.05]
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        result = await r.vector_store_rerank(
+            query="q", vector_result=vr, similarity_threshold=0.8
+        )
+        m.assert_not_called()
+    assert result.nodes == []
 
 
 @pytest.mark.asyncio
@@ -153,3 +186,50 @@ async def test_vector_store_rerank_uses_node_images():
         assert out.similarities == [0.9, 0.7]
         kwargs = m.await_args.kwargs
         assert kwargs["documents"] == [{"text": "text doc"}, {"image": "http://x/a.png"}]
+
+
+def test_node_has_renderable_content_text():
+    assert _node_has_renderable_content(TextNode(text="hi", metadata={}))
+
+
+def test_node_has_renderable_content_image_only():
+    n = TextNode(text="", metadata={"images_info": [{"url": "http://x/a.png"}]})
+    assert _node_has_renderable_content(n)
+
+
+def test_node_has_renderable_content_empty():
+    assert not _node_has_renderable_content(TextNode(text="   ", metadata={}))
+    assert not _node_has_renderable_content(
+        TextNode(text="", metadata={"images_info": [{"desc": "no url"}]})
+    )
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_drops_text_empty_no_image_nodes():
+    r = MultimodalDashscopeReranker(api_key="sk")
+    n_bad = TextNode(id_="bad", text="", metadata={"images_info": []})
+    n_text = TextNode(id_="t", text="real text", metadata={})
+    n_img = TextNode(
+        id_="i",
+        text="",
+        metadata={"images_info": [{"url": "http://x/y.png"}]},
+    )
+    vr = VectorStoreQueryResult(
+        nodes=[n_bad, n_text, n_img],
+        ids=["bad", "t", "i"],
+        similarities=[0.1, 0.2, 0.3],
+    )
+    fake_results = [
+        RerankResult(index=0, score=0.9, doc="real text"),
+        RerankResult(index=1, score=0.8, doc="http://x/y.png"),
+    ]
+    with patch.object(r, "rerank", new=AsyncMock(return_value=fake_results)) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr, top_n=3)
+        kwargs = m.await_args.kwargs
+        # n_bad must be filtered out before API call
+        assert kwargs["documents"] == [
+            {"text": "real text"},
+            {"image": "http://x/y.png"},
+        ]
+        assert "bad" not in out.ids
+        assert out.ids == ["t", "i"]

@@ -96,6 +96,7 @@ def merge_vector_store_results_by_text(text_result: VectorStoreQueryResult, dens
     """
     合并两个 VectorStoreQueryResult，去重后返回合并结果。
     用于 reranker 场景，需要先合并再去重。
+    空文本节点会被跳过（rerank API 不接受空文档）。
 
     Args:
         text_result: 文本搜索结果
@@ -106,9 +107,13 @@ def merge_vector_store_results_by_text(text_result: VectorStoreQueryResult, dens
     """
     merged_nodes = {}
     for node, similarity in zip(text_result.nodes, text_result.similarities):
+        if not (node.text or "").strip():
+            continue
         merged_nodes[node.text] = (node, similarity, node.node_id)
 
     for node, similarity in zip(dense_result.nodes, dense_result.similarities):
+        if not (node.text or "").strip():
+            continue
         merged_nodes.setdefault(node.text, (node, similarity, node.node_id))
 
     if merged_nodes:

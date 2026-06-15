@@ -83,7 +83,143 @@ async def test_dashscope_rerank(dashscope_reranker, sample_query, sample_documen
     assert scores == sorted(scores, reverse=True), "结果应该按相关性分数降序排列"
 
     top_doc_text = sample_documents[results[0].index]
-    second_doc_text = sample_documents[results[1].index] 
+    second_doc_text = sample_documents[results[1].index]
     assert top_doc_text == "数据库查询性能优化是提升应用响应速度的关键。可以通过创建合适的索引、优化SQL语句结构、使用查询缓存、分析执行计划等方式来提升查询效率。索引应该建立在经常用于WHERE、JOIN和ORDER BY的列上，但要避免过度索引。"
     assert second_doc_text == "SQL查询优化技巧包括：避免使用SELECT *，只查询需要的列；使用LIMIT限制返回结果数量；合理使用JOIN，避免笛卡尔积；在WHERE子句中使用索引列；避免在WHERE子句中使用函数，这会导致索引失效。"
 
+
+# ---------------------------------------------------------------------------
+# Unit tests (no real API): vector_store_rerank empty-text filtering
+# ---------------------------------------------------------------------------
+
+from unittest.mock import patch, AsyncMock
+from llama_index.core.schema import TextNode
+from llama_index.core.vector_stores.types import VectorStoreQueryResult
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_filters_empty_text_nodes():
+    """Empty-text nodes must not be sent to DashScope — API rejects them with 400."""
+    r = DashscopeReranker(api_key="sk")
+    n_empty = TextNode(id_="empty", text="")
+    n_keep1 = TextNode(id_="k1", text="real doc 1")
+    n_keep2 = TextNode(id_="k2", text="real doc 2")
+    vr = VectorStoreQueryResult(
+        nodes=[n_empty, n_keep1, n_keep2],
+        ids=["empty", "k1", "k2"],
+        similarities=[0.1, 0.2, 0.3],
+    )
+    fake_results = [
+        RerankResult(index=1, score=0.9, doc="real doc 2"),
+        RerankResult(index=0, score=0.7, doc="real doc 1"),
+    ]
+    with patch.object(r, "rerank", new=AsyncMock(return_value=fake_results)) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr, top_n=2)
+        kwargs_or_args = m.await_args
+        # documents passed positionally as 2nd arg in current impl
+        sent_documents = kwargs_or_args.args[1] if len(kwargs_or_args.args) >= 2 else kwargs_or_args.kwargs.get("documents")
+        assert "" not in sent_documents
+        assert sent_documents == ["real doc 1", "real doc 2"]
+        assert out.ids == ["k2", "k1"]
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_all_empty_returns_empty_result():
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[TextNode(id_="a", text=""), TextNode(id_="b", text="   ")],
+        ids=["a", "b"],
+        similarities=[0.1, 0.2],
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert out.nodes == []
+    assert out.ids == []
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_nonempty_after_filter_skips_api():
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[TextNode(id_="a", text=""), TextNode(id_="b", text="only one")],
+        ids=["a", "b"],
+        similarities=[0.1, 0.2],
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert out.ids == ["b"]
+    # Must preserve original similarity, not invent 1.0
+    assert out.similarities == [0.2]
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_survivor_preserves_low_score():
+    """Regression: an empty-text node with high score must not boost a surviving
+    low-score node to 1.0 (which would bypass downstream thresholds and inflate
+    multi-KB merge ordering)."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[
+            TextNode(id_="empty_high", text=""),
+            TextNode(id_="valid_low", text="real but low"),
+        ],
+        ids=["empty_high", "valid_low"],
+        similarities=[0.99, 0.05],
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert out.ids == ["valid_low"]
+    assert out.similarities == [0.05]
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_empty_node_returns_empty():
+    """Single empty-text input must NOT pass through unchanged (pre-filter must run)."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[TextNode(id_="x", text="")], ids=["x"], similarities=[0.99]
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(query="q", vector_result=vr)
+        m.assert_not_called()
+    assert out.nodes == []
+    assert out.similarities == []
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_survivor_below_threshold_drops():
+    """Sole survivor with score below similarity_threshold must be dropped."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[
+            TextNode(id_="bad", text=""),
+            TextNode(id_="low", text="below threshold"),
+        ],
+        ids=["bad", "low"],
+        similarities=[0.99, 0.05],
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(
+            query="q", vector_result=vr, similarity_threshold=0.8
+        )
+        m.assert_not_called()
+    assert out.nodes == []
+    assert out.similarities == []
+
+
+@pytest.mark.asyncio
+async def test_vector_store_rerank_single_input_node_below_threshold_drops():
+    """Single non-empty input below threshold must be dropped (no pre-filter bypass)."""
+    r = DashscopeReranker(api_key="sk")
+    vr = VectorStoreQueryResult(
+        nodes=[TextNode(id_="x", text="valid")], ids=["x"], similarities=[0.05]
+    )
+    with patch.object(r, "rerank", new=AsyncMock()) as m:
+        out = await r.vector_store_rerank(
+            query="q", vector_result=vr, similarity_threshold=0.8
+        )
+        m.assert_not_called()
+    assert out.nodes == []
