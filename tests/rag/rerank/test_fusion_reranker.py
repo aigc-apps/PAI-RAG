@@ -122,6 +122,28 @@ class TestMergeVectorStoreResultsByText:
         result = merge_vector_store_results_by_text(r1, r2)
         assert len(result.nodes) == 0
 
+    def test_skips_empty_text_nodes(self):
+        n_empty = TextNode(id_="a", text="")
+        n_keep = TextNode(id_="b", text="real content")
+        r1 = _make_result([n_empty, n_keep], [0.9, 0.8])
+        r2 = _make_result([], [])
+        result = merge_vector_store_results_by_text(r1, r2)
+        assert result.ids == ["b"]
+
+    def test_skips_whitespace_only_text_nodes(self):
+        n_ws = TextNode(id_="a", text="   \n\t  ")
+        n_keep = TextNode(id_="b", text="real content")
+        r1 = _make_result([n_ws], [0.9])
+        r2 = _make_result([n_keep], [0.8])
+        result = merge_vector_store_results_by_text(r1, r2)
+        assert result.ids == ["b"]
+
+    def test_all_empty_text_returns_empty(self):
+        r1 = _make_result([TextNode(id_="a", text="")], [0.9])
+        r2 = _make_result([TextNode(id_="b", text="  ")], [0.8])
+        result = merge_vector_store_results_by_text(r1, r2)
+        assert len(result.nodes) == 0
+
 
 class TestFilterNodeResult:
     def test_threshold_filter_and_sort(self):

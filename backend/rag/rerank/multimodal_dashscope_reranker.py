@@ -25,6 +25,17 @@ DEFAULT_DASHSCOPE_MM_RERANK_ENDPOINT = (
 )
 
 
+def _node_has_renderable_content(node) -> bool:
+    """节点是否有可送入 rerank 的内容：非空文本 或 至少一张图片 URL。"""
+    if (node.text or "").strip():
+        return True
+    images_info = (node.metadata or {}).get("images_info") or []
+    for img in images_info:
+        if isinstance(img, dict) and img.get("url"):
+            return True
+    return False
+
+
 def _node_documents_with_images(nodes) -> List[Dict[str, Any]]:
     """将节点转换为多模态 rerank 可接受的 documents。
 
@@ -223,7 +234,14 @@ class MultimodalDashscopeReranker:
         if not vector_result.nodes or len(vector_result.nodes) <= 1:
             return vector_result
 
-        origin_nodes = vector_result.nodes
+        # Rerank API rejects empty documents; keep only nodes with text or an image.
+        origin_nodes = [n for n in vector_result.nodes if _node_has_renderable_content(n)]
+        if not origin_nodes:
+            return VectorStoreQueryResult(nodes=[], ids=[], similarities=[])
+        if len(origin_nodes) == 1:
+            only = origin_nodes[0]
+            return VectorStoreQueryResult(nodes=[only], ids=[only.node_id], similarities=[1.0])
+
         documents = _node_documents_with_images(origin_nodes)
 
         rerank_results = await self.rerank(
