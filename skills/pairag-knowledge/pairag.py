@@ -251,9 +251,11 @@ def render_grep(pattern, payload, as_json):
     for item in results:
         title = item.get("title") or "(untitled)"
         lines.append(f"- {title} · doc_id={item.get('doc_id')} · line {item.get('line')}")
-        match = (item.get("match") or "").strip()
-        if match:
-            lines.append(f"    {match}")
+        # Render the surrounding context block (before + match + after lines) so
+        # --context is reflected in the output; fall back to the match line alone.
+        block = item.get("context") or item.get("match") or ""
+        for ctx_line in block.splitlines():
+            lines.append(f"    {ctx_line}")
     if payload.get("scan_capped"):
         lines.append("")
         lines.append("(scan capped — not all files were searched; narrow the pattern or KB)")

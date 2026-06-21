@@ -346,7 +346,7 @@ def test_cmd_grep_markdown_with_counts():
                         "file_id": "f1",
                         "line": 42,
                         "match": "timeout = 600",
-                        "context": "a\ntimeout = 600\nb",
+                        "context": "before line\ntimeout = 600\nafter line",
                         "source_url": None,
                         "title": "config.py",
                     },
@@ -370,7 +370,10 @@ def test_cmd_grep_markdown_with_counts():
     }
     assert '1 match(es) for "timeout" (scanned 7 file(s))' in out
     assert "- config.py · doc_id=d1 · line 42" in out
-    assert "timeout = 600" in out
+    # the full context block is rendered, not just the match line
+    assert "    before line" in out
+    assert "    timeout = 600" in out
+    assert "    after line" in out
 
 
 def test_cmd_grep_empty():
