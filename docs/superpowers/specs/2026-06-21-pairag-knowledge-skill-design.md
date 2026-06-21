@@ -53,14 +53,12 @@ The skill ships inside the repo (versioned with the service; symlinkable into
 ```
 skills/pairag-knowledge/
 ├── SKILL.md            # agent-facing instructions + command vocabulary
-├── pairag.py           # single zero-dep Python 3 CLI (stdlib only)
-└── reference/
-    └── retrieval.md    # deep reference: modes, metadata filters, examples
+└── pairag.py           # single zero-dep Python 3 CLI (stdlib only)
 ```
 
-`SKILL.md` stays lean (always loaded). `reference/retrieval.md` holds heavier
-detail the agent reads only when needed (retrieval modes, full metadata-filter
-operator set, worked examples).
+With the trimmed surface, the five commands and config fit comfortably in a lean
+`SKILL.md` — no separate reference file is needed. If retrieval tuning or catalog
+facets are added later, the deeper detail can move into a `reference/` doc then.
 
 ### Configuration & connection
 
@@ -83,9 +81,9 @@ server's base URL):
 | Command | Purpose | Endpoint |
 |---|---|---|
 | `pairag kbs [query]` | Discover KBs — id, name, description | `GET /v1/config/knowledgebases` |
-| `pairag search <query> [--kb] [--mode] [--top-k] [--rerank] [--threshold] [--filter]` | Semantic / hybrid retrieval | `POST /v1/tools/retrieval/{kb}` |
-| `pairag catalog [--kb] [--query] [--product] [--section] [--lang] [--limit]` | Browse documents by metadata (no body reads) | `GET /v1/config/knowledgebases/{kb}/catalog` |
-| `pairag grep <pattern> [--kb] [--context] [--path-prefix] [--limit]` | Literal keyword grep (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword` |
+| `pairag search <query> [--kb]` | Semantic / hybrid retrieval | `POST /v1/tools/retrieval/{kb}` |
+| `pairag catalog [--kb] [--query] [--limit]` | Browse documents by metadata (no body reads) | `GET /v1/config/knowledgebases/{kb}/catalog` |
+| `pairag grep <pattern> [--kb] [--context] [--limit]` | Literal keyword grep (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword` |
 | `pairag read <id> [--kb] [--max-chars] [--offset]` | Fetch a file's full text (from a search/catalog/grep result) | `GET /v1/config/knowledgebases/{kb}/file-content` |
 
 `read` accepts the `file_id` or `doc_id` carried by any `search`, `catalog`, or
@@ -100,13 +98,12 @@ Behavior details:
   listing once per process and caching it. If `--kb` is omitted, it falls back to
   `PAIRAG_KB`; if neither is set, the command errors with the list of available
   KBs.
-- `--mode` ∈ `vector | fulltext | hybrid`, mapped into the request's
-  `retrieval_setting.retrieval_mode`. `--rerank` toggles
-  `retrieval_setting.enable_rerank`. `--top-k` → `top_k`. `--threshold` →
-  `similarity_threshold`.
-- `--filter` takes a compact `key=value` (equals) / `key~value` (contains)
-  syntax that the CLI compiles into the service's `metadata_condition` JSON. The
-  full operator reference lives in `reference/retrieval.md`.
+- `search` sends only the `query` (and resolved KB). It does **not** pass a
+  `retrieval_setting`, so the service applies the KB's own configured retrieval
+  defaults (mode, rerank, top_k, threshold). Retrieval tuning flags and metadata
+  filters are deliberately deferred — see Future extensions.
+- `catalog` browses by an optional free-text `--query` and `--limit`. The
+  `product` / `section` / `lang` facets the endpoint also supports are deferred.
 
 ### Confirmed endpoint contracts
 
@@ -128,7 +125,7 @@ Behavior details:
 Default = **compact markdown**, token-efficient and citable. Example for `search`:
 
 ```
-3 results for "vector index config" in kb=docs (hybrid, reranked)
+3 results for "vector index config" in kb=docs
 
 1. [0.87] Configuring the vector store · file_id=a1b2c3 · setup/vectordb.md
    …set `vector_store.type` to `elasticsearch` and provide the endpoint…
@@ -158,15 +155,23 @@ Default = **compact markdown**, token-efficient and citable. Example for `search
   metadata, `grep` = exact strings, `kbs` = discover, `read` = fetch full text),
   the five commands with one example each, the config note, and the "cite the
   `file_id`" convention.
-- Heavy detail deferred to `reference/retrieval.md`.
 
 ## Testing
 
 - A `--self-test` path (or pytest module) that mocks the HTTP layer (stdlib
   `http.server` or monkeypatched `urllib` opener) — no live server required.
-- Coverage: command/argument parsing, KB name→id resolution, `--filter`
-  compilation into `metadata_condition`, output rendering (markdown + `--json`),
-  and error paths (connection refused, 404 KB, HTTP error).
+- Coverage: command/argument parsing, KB name→id resolution, request building
+  per command, output rendering (markdown + `--json`), and error paths
+  (connection refused, 404 KB, HTTP error).
+
+## Future extensions
+
+Deferred for now; addable without breaking the interface:
+
+- `search` retrieval tuning flags: `--mode` (vector/fulltext/hybrid), `--top-k`,
+  `--rerank`, `--threshold`, and a `--filter` syntax compiled into the service's
+  `metadata_condition`.
+- `catalog` facet flags: `--product`, `--section`, `--lang`.
 
 ## Open questions
 
