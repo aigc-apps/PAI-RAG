@@ -50,6 +50,17 @@ def test_pairag_error_is_exception():
     assert issubclass(pairag.PairagError, Exception)
 
 
+def test_config_corrupt_file_raises_pairag_error(tmp_path):
+    bad = tmp_path / "config.json"
+    bad.write_text("{ this is not valid json")
+    try:
+        pairag.resolve_config(_Args(), env={}, config_path=str(bad))
+        assert False, "expected PairagError"
+    except pairag.PairagError as e:
+        assert "config" in str(e).lower()
+        assert str(bad) in str(e)
+
+
 # --------------------------------------------------------------------------- #
 # Task 2: HTTP client
 # --------------------------------------------------------------------------- #

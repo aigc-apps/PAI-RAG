@@ -37,8 +37,11 @@ def resolve_config(args, env, config_path=None):
     path = os.path.expanduser(config_path or DEFAULT_CONFIG_PATH)
     file_cfg = {}
     if os.path.exists(path):
-        with open(path, encoding="utf-8") as fh:
-            file_cfg = json.load(fh)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                file_cfg = json.load(fh)
+        except (OSError, ValueError) as exc:  # ValueError covers JSONDecodeError
+            raise PairagError(f"Failed to read config file {path}: {exc}")
 
     def pick(flag, env_key, file_key, default=None):
         if flag is not None:
@@ -359,9 +362,9 @@ def dispatch(args, config, client):
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    config = resolve_config(args, os.environ)
-    client = Client(config)
     try:
+        config = resolve_config(args, os.environ)
+        client = Client(config)
         output = dispatch(args, config, client)
     except PairagError as exc:
         print(str(exc), file=sys.stderr)
