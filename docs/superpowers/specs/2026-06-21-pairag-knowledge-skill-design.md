@@ -92,6 +92,15 @@ server's base URL):
 `files` (file listing) and `chunks` (chunk listing) are intentionally **not**
 exposed: `catalog` covers document discovery and `read` covers content.
 
+**Coverage caveat (backend behavior).** `catalog` and `grep` operate only over
+documents ingested through a **data source** (`DataSourceDocumentEntity`);
+manually-uploaded files (`KbFileEntity` with no data-source mapping) are not
+listed by `catalog` and not scanned by `grep` — the backend scopes both to
+data-source files by design. `search` (`/v1/retrieval`) queries the vector store
+over all indexed chunks, so it covers the whole KB including manual uploads.
+SKILL.md states this so an agent does not read an empty `catalog`/`grep` result
+as "document absent."
+
 Behavior details:
 
 - `--kb` accepts a **name or id**. The CLI resolves name→id by fetching the `kbs`

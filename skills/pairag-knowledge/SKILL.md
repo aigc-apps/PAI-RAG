@@ -15,11 +15,22 @@ Run via: `python <skill-dir>/pairag.py <command> [...]` (Python 3, no dependenci
 
 - **`search <query>`** — semantic / hybrid retrieval. Use for meaning-based
   questions ("how do I configure the vector store?"). Returns ranked passages,
-  each with a `doc_id`.
+  each with a `doc_id`. **Covers the whole KB**, including manually-uploaded files.
 - **`catalog`** — browse the document catalog by metadata (no body reads). Use to
   see what documents exist: `--query <text>` to filter, `--limit N`.
+  **Data-source documents only** (see Scope below).
 - **`grep <pattern>`** — literal keyword search over document bodies, with line
   numbers and context. Use for exact strings (an error message, a config key).
+  **Data-source documents only** (see Scope below).
+
+## Scope: catalog and grep see data-source documents only
+
+`catalog` and `grep` operate over documents ingested through a **data source**
+(llms.txt, Sphinx, GitHub, and similar). Files added by **manual upload** are not
+listed by `catalog` and not scanned by `grep`. So an empty `catalog`/`grep`
+result does **not** mean a document is absent from the knowledge base — it may
+have been uploaded directly. When you need full-KB coverage (including manual
+uploads), use `search`, which retrieves over all indexed content.
 - **`read <id>`** — fetch a file's full text. Pass the `doc_id` (or `file_id`)
   from any `search` / `catalog` / `grep` result. Supports `--max-chars` and
   `--offset` for paging large files.
