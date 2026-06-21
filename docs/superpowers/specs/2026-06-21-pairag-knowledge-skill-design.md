@@ -7,10 +7,14 @@
 
 Give any CLI-capable agent (Claude Code and other mainstream agents) direct,
 read-only access to a running PAI-RAG knowledge base service for search and file
-inspection. The skill packages a single zero-dependency CLI plus agent-facing
+retrieval. The skill packages a single zero-dependency CLI plus agent-facing
 instructions, so an agent can discover knowledge bases, retrieve relevant
-passages, grep document bodies, and read file contents — then cite results back
-to the user.
+passages (semantic search), browse the document catalog by metadata, grep
+document bodies, and fetch a file's full text from a search result — then cite
+results back to the user.
+
+The exposed surface is intentionally small — five commands — to keep the skill
+focused and avoid over-exposing the service's full API.
 
 Scope is **read-only retrieval**. No knowledge-base creation, file ingestion, or
 chunk mutation. This keeps the surface safe for autonomous agents and matches how
@@ -31,6 +35,8 @@ mainstream RAG/retrieval skills are scoped.
 
 - Write operations (create/delete KB, upload/parse files, edit/delete chunks).
 - Replacing the existing MCP retrieval integration — this is a complementary CLI.
+- File listing and chunk listing — deliberately omitted to keep the surface
+  small; `catalog` covers document discovery and `read` covers content.
 - Multi-server orchestration or session/state management beyond per-process
   caching of the KB list for name→id resolution.
 
@@ -71,17 +77,22 @@ Optional config file at `~/.config/pairag/config.json` accepts the same keys.
 
 ### Command surface
 
-Top-level verbs mapped to confirmed service endpoints (all under the running
+Five top-level verbs mapped to confirmed service endpoints (all under the running
 server's base URL):
 
 | Command | Purpose | Endpoint |
 |---|---|---|
 | `pairag kbs [query]` | Discover KBs — id, name, description | `GET /v1/config/knowledgebases` |
 | `pairag search <query> [--kb] [--mode] [--top-k] [--rerank] [--threshold] [--filter]` | Semantic / hybrid retrieval | `POST /v1/tools/retrieval/{kb}` |
+| `pairag catalog [--kb] [--query] [--product] [--section] [--lang] [--limit]` | Browse documents by metadata (no body reads) | `GET /v1/config/knowledgebases/{kb}/catalog` |
 | `pairag grep <pattern> [--kb] [--context] [--path-prefix] [--limit]` | Literal keyword grep (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword` |
-| `pairag files [--kb] [--status] [--name] [--limit]` | List files in a KB | `GET /v1/config/knowledgebases/{kb}/files` |
-| `pairag read <file_id> [--kb] [--max-chars] [--offset]` | Read a file's full text | `GET /v1/config/knowledgebases/{kb}/file-content` |
-| `pairag chunks <file_id> [--kb]` | List a file's indexed chunks | `GET /v1/config/knowledgebases/{kb}/files/{file_id}/chunks` |
+| `pairag read <id> [--kb] [--max-chars] [--offset]` | Fetch a file's full text (from a search/catalog/grep result) | `GET /v1/config/knowledgebases/{kb}/file-content` |
+
+`read` accepts the `file_id` or `doc_id` carried by any `search`, `catalog`, or
+`grep` result — that is the "fetch file from search result" path.
+
+`files` (file listing) and `chunks` (chunk listing) are intentionally **not**
+exposed: `catalog` covers document discovery and `read` covers content.
 
 Behavior details:
 
@@ -104,9 +115,10 @@ Behavior details:
   → `{status, status_code, data: {total, nodes: [...]}, request_id}`.
 - KB list: `GET /v1/config/knowledgebases?page&size&query&ids` (paginated KB
   entities with `kb_id`, `name`, `description`).
-- Files list: `GET /v1/config/knowledgebases/{kb_id}/files?file_name&query&status&source&page&size`.
-- File content: `GET /v1/config/knowledgebases/{kb_id}/file-content?file_id&max_chars&offset`.
-- Chunks: `GET /v1/config/knowledgebases/{kb_id}/files/{file_id}/chunks`.
+- Catalog search: `GET /v1/config/knowledgebases/{kb_id}/catalog?query&product&section&lang&limit`
+  → `{results, total}` (metadata-level document entries; no body reads).
+- File content: `GET /v1/config/knowledgebases/{kb_id}/file-content?file_id&doc_id&max_chars&offset`
+  (accepts `file_id` or `doc_id`).
 - Keyword grep: `GET /v1/config/knowledgebases/{kb_id}/keyword?pattern&doc_id&path_prefix&datasource&context&limit`
   → `{results, scanned_files, scan_capped, limit_reached}`.
 - Tenant header: `X-TENANT-ID` (optional; omitted when not configured).
@@ -125,7 +137,7 @@ Default = **compact markdown**, token-efficient and citable. Example for `search
 ```
 
 - Each result carries a citable id (`file_id` / `doc_id`) so the agent can chain
-  into `read` / `chunks`.
+  into `read`.
 - `--json` emits the raw service payload for programmatic parsing.
 - Empty results are explicit (`No results for …`), never silent.
 
@@ -142,9 +154,10 @@ Default = **compact markdown**, token-efficient and citable. Example for `search
 
 - Frontmatter: `name` + trigger-rich `description` (knowledge base, retrieval,
   search docs, RAG, PAI-RAG, "look it up in the knowledge base").
-- Body (one screen): decision guide (`search` = semantic, `grep` = exact
-  strings, `kbs` = discover, `read`/`chunks` = inspect), the six commands with
-  one example each, the config note, and the "cite the `file_id`" convention.
+- Body (one screen): decision guide (`search` = semantic, `catalog` = browse by
+  metadata, `grep` = exact strings, `kbs` = discover, `read` = fetch full text),
+  the five commands with one example each, the config note, and the "cite the
+  `file_id`" convention.
 - Heavy detail deferred to `reference/retrieval.md`.
 
 ## Testing
