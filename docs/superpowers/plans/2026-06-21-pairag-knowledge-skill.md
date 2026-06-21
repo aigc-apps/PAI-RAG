@@ -1439,8 +1439,25 @@ Expected: all tests pass.
 
 - [ ] **Confirm zero third-party imports**
 
-Run: `python -c "import ast,sys; m=ast.parse(open('skills/pairag-knowledge/pairag.py').read()); mods={(n.module or n.names[0].name).split('.')[0] for n in ast.walk(m) if isinstance(n,(ast.Import,ast.ImportFrom))}; std={'json','os','re','sys','argparse','urllib','dataclasses','typing'}; extra=mods-std; sys.exit(0 if not extra else (print('non-stdlib imports:',extra) or 1))"`
-Expected: exit 0 — only standard-library modules are imported.
+Run:
+```bash
+python3 - <<'PY'
+import ast, sys
+tree = ast.parse(open('skills/pairag-knowledge/pairag.py').read())
+mods = set()
+for n in ast.walk(tree):
+    if isinstance(n, ast.Import):
+        for a in n.names:
+            mods.add(a.name.split('.')[0])
+    elif isinstance(n, ast.ImportFrom):
+        mods.add((n.module or '').split('.')[0])
+std = {'json', 'os', 're', 'sys', 'argparse', 'urllib', 'dataclasses', 'typing'}
+extra = mods - std
+print("non-stdlib:", sorted(extra) or "none")
+sys.exit(1 if extra else 0)
+PY
+```
+Expected: exit 0, `non-stdlib: none` — only standard-library modules are imported.
 
 - [ ] **End-to-end smoke test against a live server (optional, if one is running)**
 
