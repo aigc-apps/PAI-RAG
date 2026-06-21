@@ -183,6 +183,10 @@ class ReactAgent:
                 # live. `pending` is the held-back, not-yet-yielded text.
                 buffering = nudge_count < MAX_INTENT_NUDGES
                 pending = ""
+                # Usage normally rides only the final chunk, so while we withhold
+                # text we keep the latest usage seen and re-attach it on flush —
+                # otherwise a buffered short answer would drop its token counts.
+                pending_usage = None
 
                 # Compress messages to fit within token budget
                 messages = self.msg_manager.fit_to_budget(messages)
@@ -207,8 +211,9 @@ class ReactAgent:
                             # narration, not a dangling preview — release it.
                             if buffering:
                                 if pending:
-                                    yield TextChunk(delta=pending, usage=chunk.usage)
+                                    yield TextChunk(delta=pending, usage=chunk.usage or pending_usage)
                                     pending = ""
+                                    pending_usage = None
                                 buffering = False
 
                         if isinstance(chunk, ReasoningChunk):
@@ -216,11 +221,14 @@ class ReactAgent:
                         elif buffering:
                             step_content += chunk.delta
                             pending += chunk.delta
+                            if chunk.usage:
+                                pending_usage = chunk.usage
                             # Past the intent window it can't be a short preview:
                             # flush what we held and stream the rest live.
                             if len(step_content) >= _INTENT_MAX_LEN:
-                                yield TextChunk(delta=pending, usage=chunk.usage)
+                                yield TextChunk(delta=pending, usage=chunk.usage or pending_usage)
                                 pending = ""
+                                pending_usage = None
                                 buffering = False
                         else:
                             step_content += chunk.delta
@@ -245,8 +253,11 @@ class ReactAgent:
                         and _looks_like_unfinished_intent(step_content)
                     ):
                         # Dangling preview: it was withheld (still in `pending`), so
-                        # the user never saw it — drop it and nudge to actually act.
+                        # the user never saw it — drop the TEXT and nudge to actually
+                        # act, but still surface the usage so token accounting is kept.
                         nudge_count += 1
+                        if pending_usage:
+                            yield TextChunk(delta="", usage=pending_usage)
                         messages.append({"role": "assistant", "content": step_content})
                         messages.append({"role": "user", "content": _INTENT_NUDGE_MSG})
                         logger.info(
@@ -254,12 +265,14 @@ class ReactAgent:
                         )
                         step_content = ""
                         pending = ""
+                        pending_usage = None
                         continue
-                    # Real final answer (or nudges exhausted): release any held text,
-                    # then persist + finish.
+                    # Real final answer (or nudges exhausted): release any held text
+                    # (with its usage), then persist + finish.
                     if pending:
-                        yield TextChunk(delta=pending)
+                        yield TextChunk(delta=pending, usage=pending_usage)
                         pending = ""
+                        pending_usage = None
                     if step_content:
                         messages.append({"role": "assistant", "content": step_content})
                         step_content = ""

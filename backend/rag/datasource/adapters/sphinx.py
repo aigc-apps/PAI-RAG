@@ -28,10 +28,18 @@ from loguru import logger
 from rag.datasource.base_adapter import BaseAdapter
 from rag.datasource.schema import DiscoveredDoc
 from rag.datasource.http_util import http_get
+from utils.constants import try_get_int_env
 
 # Sphinx-generated non-content pages / asset dirs we never ingest
 EXCLUDE_BASENAMES = {"genindex.html", "search.html", "py-modindex.html", "modindex.html"}
 EXCLUDE_PATH_PARTS = ("/_modules/", "/_sources/", "/_static/", "/_downloads/", "/_images/")
+
+# Resource bounds for the BFS crawl (override via env). Cap concurrency so a
+# misconfigured `workers` can't open hundreds of sockets, and cap total pages so
+# a sprawling / link-looping site can't crawl unbounded.
+DEFAULT_WORKERS = 6
+MAX_WORKERS = try_get_int_env("PAIRAG_DATASOURCE_SPHINX_MAX_WORKERS", 8)
+MAX_PAGES = try_get_int_env("PAIRAG_DATASOURCE_SPHINX_MAX_PAGES", 2000)
 
 
 def parse_toctree(home_html: str) -> List[Tuple[str, str, str]]:
@@ -120,7 +128,8 @@ class SphinxAdapter(BaseAdapter):
         base = self._base_url()
         product = self.source_config.get("product") or None
         lang = self.source_config.get("lang") or None
-        workers = int(self.source_config.get("workers", 6))
+        # Clamp concurrency into [1, MAX_WORKERS] regardless of config.
+        workers = max(1, min(int(self.source_config.get("workers", DEFAULT_WORKERS)), MAX_WORKERS))
 
         seeds = parse_toctree(http_get(base))
         section_of = {urljoin(base, "index.html"): ""}
@@ -134,6 +143,16 @@ class SphinxAdapter(BaseAdapter):
         while frontier:
             rounds += 1
             batch = [u for u in frontier if u not in visited]
+            # Cap total pages crawled so a link-looping / huge site can't run away;
+            # a truncated crawl is an incomplete listing, so block deletes.
+            remaining = MAX_PAGES - len(visited)
+            if remaining <= 0:
+                logger.warning(f"[sphinx] hit MAX_PAGES={MAX_PAGES} for {base}; stopping crawl.")
+                self.discovery_partial = True
+                break
+            if len(batch) > remaining:
+                batch = batch[:remaining]
+                self.discovery_partial = True
             visited.update(batch)
             newly: Set[str] = set()
 

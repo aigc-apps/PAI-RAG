@@ -24,11 +24,13 @@ from common.chat.response_model import ResponseModel, success_response
 from api.api_exception import ApiException, handle_api_exceptions
 from service.injection import (
     get_datasource_service,
+    get_file_service,
     get_knowledgebase_service,
     get_rag_service,
     get_tenant_id,
 )
 from service.knowledgebase.datasource_service import DataSourceService
+from service.knowledgebase.file_service import FileService
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
 from service.knowledgebase.rag_service import RagService
 
@@ -129,6 +131,7 @@ async def delete_datasource(
     session: AsyncSession = Depends(get_db_session),
     datasource_service: DataSourceService = Depends(get_datasource_service),
     rag_service: RagService = Depends(get_rag_service),
+    file_service: FileService = Depends(get_file_service),
 ):
     datasource = await _get_owned_datasource(kb_id, ds_id, tenant_id, datasource_service)
     # Refuse to delete while a sync is in flight: the running worker keeps
@@ -150,14 +153,19 @@ async def delete_datasource(
     failed_file_id = None
     failed_err = None
     for file_id in file_ids:
+        # Skip files that are already gone (idempotent retry). Check existence
+        # EXPLICITLY rather than pattern-matching exception strings — "not found"
+        # also appears in config errors ("VectorDB config not found", "Embedding
+        # model not found", "Vector table name not found"), and swallowing those
+        # would skip real cleanup and orphan KB files/vectors.
+        existing = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+        if existing is None:
+            continue
         try:
             await rag_service.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
             await session.commit()
         except Exception as e:  # noqa: BLE001
             await session.rollback()
-            msg = str(e).lower()
-            if "does not exist" in msg or "not found" in msg:
-                continue  # already gone — fine, keep going
             logger.warning(f"Failed to delete file {file_id} of datasource {ds_id}: {e}")
             failed_file_id, failed_err = file_id, str(e)
             break  # stop on first real failure; deleted-so-far are durably committed
