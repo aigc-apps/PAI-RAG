@@ -334,14 +334,19 @@ async def keyword_search(
     datasource: Optional[str] = Query(default=None),
     context: int = Query(default=2, ge=0, le=10),
     limit: int = Query(default=20, ge=1, le=200),
+    scope: str = Query(default="datasource", pattern="^(datasource|kb)$"),
     tenant_id: str = Depends(get_tenant_id),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    """Literal keyword grep over document bodies (line numbers + context)."""
+    """Literal keyword grep over document bodies (line numbers + context).
+
+    ``scope=datasource`` (default) searches data-source documents only;
+    ``scope=kb`` searches the whole knowledge base, manual uploads included.
+    """
     out = await rag_service.keyword_search(
         kb_id=kb_id, tenant_id=tenant_id, pattern=pattern,
         doc_id=doc_id, path_prefix=path_prefix, datasource=datasource,
-        context=context, limit=limit,
+        context=context, limit=limit, scope=scope,
     )
     return success_response(data=out, message="Keyword search success.")
 

@@ -350,8 +350,14 @@ class RagService:
         self, kb_id: str, tenant_id: str, pattern: str,
         doc_id: Optional[str] = None, path_prefix: Optional[str] = None,
         datasource: Optional[str] = None, context: int = 2, limit: int = 20,
+        scope: str = "datasource",
     ) -> dict:
-        """Literal (non-regex) keyword grep over data-source document bodies.
+        """Literal (non-regex) keyword grep over document bodies.
+
+        ``scope`` controls coverage of the unfiltered case: ``"datasource"``
+        (default) restricts to data-source-origin files so it matches the agent
+        tool's scope; ``"kb"`` searches the whole knowledge base, including
+        manually-uploaded files.
 
         Bounded for safety: a SQL/manifest prefilter picks candidate files, then
         each is grepped line-by-line from the file store for accurate line numbers
@@ -402,20 +408,23 @@ class RagService:
             )).all()
             file_ids = [x for x in rows if x]
         else:
-            # literal prefilter on chunk text, restricted to data-source-origin
-            # files (manual uploads excluded) so it matches the tool's scope.
-            ds_files = select(DataSourceDocumentEntity.file_id).where(
-                DataSourceDocumentEntity.kb_id == kb_id,
-                DataSourceDocumentEntity.tenant_id == tenant_id,
-                DataSourceDocumentEntity.file_id.is_not(None),
+            # literal prefilter on chunk text. scope="datasource" (default)
+            # restricts to data-source-origin files (manual uploads excluded) so
+            # it matches the tool's scope; scope="kb" searches the whole KB.
+            chunk_stmt = select(KbChunkEntity.file_id).where(
+                KbChunkEntity.kb_id == kb_id,
+                KbChunkEntity.tenant_id == tenant_id,
+                KbChunkEntity.text.like(f"%{pattern}%"),
             )
+            if scope != "kb":
+                ds_files = select(DataSourceDocumentEntity.file_id).where(
+                    DataSourceDocumentEntity.kb_id == kb_id,
+                    DataSourceDocumentEntity.tenant_id == tenant_id,
+                    DataSourceDocumentEntity.file_id.is_not(None),
+                )
+                chunk_stmt = chunk_stmt.where(KbChunkEntity.file_id.in_(ds_files))
             rows = (await self.session.exec(
-                select(KbChunkEntity.file_id).where(
-                    KbChunkEntity.kb_id == kb_id,
-                    KbChunkEntity.tenant_id == tenant_id,
-                    KbChunkEntity.text.like(f"%{pattern}%"),
-                    KbChunkEntity.file_id.in_(ds_files),
-                ).distinct().limit(MAX_SCAN_FILES)
+                chunk_stmt.distinct().limit(MAX_SCAN_FILES)
             )).all()
             file_ids = [x for x in rows if x]
             scan_capped = len(file_ids) >= MAX_SCAN_FILES

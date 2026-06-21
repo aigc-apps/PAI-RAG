@@ -283,7 +283,7 @@ def test_cmd_search_json_returns_records():
 # --------------------------------------------------------------------------- #
 # Task 6: catalog command
 # --------------------------------------------------------------------------- #
-def test_cmd_catalog_markdown_and_path():
+def test_cmd_catalog_lists_kb_files_brief():
     c = _client(opener=None)
     sent = {}
 
@@ -291,38 +291,42 @@ def test_cmd_catalog_markdown_and_path():
         sent["path"], sent["params"] = path, params
         return {
             "data": {
-                "results": [
+                "items": [
                     {
-                        "doc_id": "d1",
-                        "title": "Install",
-                        "path": "guide/install.md",
-                        "product": "rag",
-                        "section": "setup",
-                        "lang": "en",
-                        "source_url": None,
-                        "score": None,
+                        "id": "f1",
+                        "file_name": "install.md",
+                        "file_source": "https://example/install.md",
+                        "file_metadata": {"title": "Install guide"},
+                    },
+                    {
+                        "id": "f2",
+                        "file_name": "notes.txt",
+                        "file_source": None,
+                        "file_metadata": {},
                     },
                 ],
-                "total": 1,
+                "total": 2,
             }
         }
 
     c._request = fake
     out = pairag.cmd_catalog(c, kb_target="f" * 32, query="install", limit=20, as_json=False)
-    assert sent["path"] == "/v1/config/knowledgebases/" + "f" * 32 + "/catalog"
-    assert sent["params"] == {"query": "install", "limit": 20}
-    assert "1 document(s)" in out
-    assert "- Install · doc_id=d1 · guide/install.md" in out
-    assert "[rag/setup/en]" in out
+    assert sent["path"] == "/v1/config/knowledgebases/" + "f" * 32 + "/files"
+    assert sent["params"] == {"query": "install", "size": 20}
+    assert "2 file(s)" in out
+    assert (
+        "- Install guide · install.md · file_id=f1 · https://example/install.md" in out
+    )
+    assert "- notes.txt · file_id=f2" in out
 
 
 def test_cmd_catalog_empty():
     c = _client(opener=None)
     c._request = lambda method, path, params=None, body=None: {
-        "data": {"results": [], "total": 0}
+        "data": {"items": [], "total": 0}
     }
     out = pairag.cmd_catalog(c, kb_target="f" * 32, query=None, limit=20, as_json=False)
-    assert out == "No documents found."
+    assert out == "No files found."
 
 
 # --------------------------------------------------------------------------- #
@@ -358,7 +362,12 @@ def test_cmd_grep_markdown_with_counts():
         c, kb_target="f" * 32, pattern="timeout", context=2, limit=20, as_json=False
     )
     assert sent["path"] == "/v1/config/knowledgebases/" + "f" * 32 + "/keyword"
-    assert sent["params"] == {"pattern": "timeout", "context": 2, "limit": 20}
+    assert sent["params"] == {
+        "pattern": "timeout",
+        "context": 2,
+        "limit": 20,
+        "scope": "kb",
+    }
     assert '1 match(es) for "timeout" (scanned 7 file(s))' in out
     assert "- config.py · doc_id=d1 · line 42" in out
     assert "timeout = 600" in out

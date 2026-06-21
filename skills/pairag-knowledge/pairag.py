@@ -209,37 +209,35 @@ def cmd_search(client, kb_target, query, as_json):
     return render_search(query, kb_target or kb_id, records, as_json)
 
 
-def _facets(item):
-    parts = [item.get("product"), item.get("section"), item.get("lang")]
-    parts = [p for p in parts if p]
-    return f" [{'/'.join(parts)}]" if parts else ""
-
-
-def render_catalog(results, as_json):
+def render_catalog(items, as_json):
     if as_json:
-        return json.dumps(results, indent=2, ensure_ascii=False)
-    if not results:
-        return "No documents found."
-    lines = [f"{len(results)} document(s):", ""]
-    for item in results:
-        title = item.get("title") or "(untitled)"
-        loc = item.get("path") or item.get("source_url") or ""
-        head = f"- {title} · doc_id={item.get('doc_id')}"
-        if loc:
-            head += f" · {loc}"
-        head += _facets(item)
-        lines.append(head)
+        return json.dumps(items, indent=2, ensure_ascii=False)
+    if not items:
+        return "No files found."
+    lines = [f"{len(items)} file(s):", ""]
+    for item in items:
+        meta = item.get("file_metadata") or {}
+        name = item.get("file_name") or "(unnamed)"
+        title = meta.get("title") or name
+        source = item.get("file_source") or meta.get("source_url") or ""
+        bits = []
+        if name != title:
+            bits.append(name)
+        bits.append(f"file_id={item.get('id')}")
+        if source:
+            bits.append(source)
+        lines.append(f"- {title} · " + " · ".join(bits))
     return "\n".join(lines)
 
 
 def cmd_catalog(client, kb_target, query, limit, as_json):
     kb_id = resolve_kb(client, kb_target)
     resp = client.get(
-        f"/v1/config/knowledgebases/{kb_id}/catalog",
-        {"query": query, "limit": limit},
+        f"/v1/config/knowledgebases/{kb_id}/files",
+        {"query": query, "size": limit},
     )
-    results = (data_of(resp) or {}).get("results") or []
-    return render_catalog(results, as_json)
+    items = (data_of(resp) or {}).get("items") or []
+    return render_catalog(items, as_json)
 
 
 def render_grep(pattern, payload, as_json):
@@ -269,7 +267,7 @@ def cmd_grep(client, kb_target, pattern, context, limit, as_json):
     kb_id = resolve_kb(client, kb_target)
     resp = client.get(
         f"/v1/config/knowledgebases/{kb_id}/keyword",
-        {"pattern": pattern, "context": context, "limit": limit},
+        {"pattern": pattern, "context": context, "limit": limit, "scope": "kb"},
     )
     return render_grep(pattern, data_of(resp) or {}, as_json)
 

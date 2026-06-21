@@ -82,24 +82,26 @@ server's base URL):
 |---|---|---|
 | `pairag kbs [query]` | Discover KBs — id, name, description | `GET /v1/config/knowledgebases` |
 | `pairag search <query> [--kb]` | Semantic / hybrid retrieval | `POST /v1/retrieval` |
-| `pairag catalog [--kb] [--query] [--limit]` | Browse documents by metadata (no body reads) | `GET /v1/config/knowledgebases/{kb}/catalog` |
-| `pairag grep <pattern> [--kb] [--context] [--limit]` | Literal keyword grep (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword` |
+| `pairag catalog [--kb] [--query] [--limit]` | List KB files — name, title, source (no body reads) | `GET /v1/config/knowledgebases/{kb}/files` |
+| `pairag grep <pattern> [--kb] [--context] [--limit]` | Literal keyword grep over the whole KB (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword?scope=kb` |
 | `pairag read <id> [--kb] [--max-chars] [--offset]` | Fetch a file's full text (from a search/catalog/grep result) | `GET /v1/config/knowledgebases/{kb}/file-content` |
 
 `read` accepts the `file_id` or `doc_id` carried by any `search`, `catalog`, or
-`grep` result — that is the "fetch file from search result" path.
+`grep` result — that is the "fetch file from result" path. `catalog` always
+yields a `file_id`; `search`/`grep` yield `doc_id` (falling back to `file_id`).
 
-`files` (file listing) and `chunks` (chunk listing) are intentionally **not**
-exposed: `catalog` covers document discovery and `read` covers content.
+`chunks` (chunk listing) is intentionally **not** exposed: `catalog` covers file
+discovery and `read` covers content.
 
-**Coverage caveat (backend behavior).** `catalog` and `grep` operate only over
-documents ingested through a **data source** (`DataSourceDocumentEntity`);
-manually-uploaded files (`KbFileEntity` with no data-source mapping) are not
-listed by `catalog` and not scanned by `grep` — the backend scopes both to
-data-source files by design. `search` (`/v1/retrieval`) queries the vector store
-over all indexed chunks, so it covers the whole KB including manual uploads.
-SKILL.md states this so an agent does not read an empty `catalog`/`grep` result
-as "document absent."
+**Whole-KB coverage.** All commands cover the entire knowledge base, including
+manually-uploaded files:
+- `catalog` lists `KbFileEntity` rows via the files endpoint (every file in the
+  KB), returning `file_name`, `file_metadata.title`, and `file_source`.
+- `grep` passes `scope=kb` to the keyword endpoint. The backend `keyword_search`
+  gained a `scope` parameter (default `datasource` to preserve the in-process
+  agent tool in `datasource_tool.py`); `scope=kb` drops the data-source filter so
+  the chunk-text prefilter spans all files.
+- `search` (`/v1/retrieval`) already queries the vector store over all chunks.
 
 Behavior details:
 
@@ -115,8 +117,9 @@ Behavior details:
   sends no `retrieval_setting`, so the service applies the KB's own configured
   retrieval defaults (mode, rerank, top_k, threshold). Tuning flags and metadata
   filters are deferred — see Future extensions.
-- `catalog` browses by an optional free-text `--query` and `--limit`. The
-  `product` / `section` / `lang` facets the endpoint also supports are deferred.
+- `catalog` lists KB files via the files endpoint with an optional free-text
+  `--query` (matches file name + title) and `--limit` (→ `size`). It renders
+  title, file name, `file_id`, and source per file.
 
 ### Confirmed endpoint contracts
 
@@ -130,10 +133,12 @@ the CLI reads `data`. The HTTP helper handles both.
   `metadata` carries `doc_id`, `file_path`, `file_name`, `file_source`.
 - KB list: `GET /v1/config/knowledgebases?page&size&query` →
   `data: {items: [{id, name, description, ...}], total, pages, page, size}`.
-- Catalog search: `GET /v1/config/knowledgebases/{kb_id}/catalog?query&limit` →
-  `data: {results: [{doc_id, title, path, product, section, lang, source_url, score}], total}`.
-- Keyword grep: `GET /v1/config/knowledgebases/{kb_id}/keyword?pattern&context&limit` →
+- File list (catalog): `GET /v1/config/knowledgebases/{kb_id}/files?query&size` →
+  `data: {items: [{id, file_name, file_source, file_metadata: {title, source_url, ...}, ...}], total, pages, page, size}`.
+- Keyword grep: `GET /v1/config/knowledgebases/{kb_id}/keyword?pattern&context&limit&scope` →
   `data: {results: [{doc_id, file_id, line, match, context, source_url, title}], scanned_files, scan_capped, limit_reached}`.
+  `scope=kb` (CLI default) covers the whole KB; `scope=datasource` (backend
+  default) restricts to data-source files.
 - File content: `GET /v1/config/knowledgebases/{kb_id}/file-content?file_id&doc_id&max_chars&offset`
   (accepts `file_id` **or** `doc_id`) → `data: {file_id, file_name, title,
   source_url, doc_id, content, content_length, offset, returned_chars,
