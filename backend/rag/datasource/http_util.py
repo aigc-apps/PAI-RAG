@@ -15,6 +15,7 @@ read-time deadline so a malicious/slow public host cannot exhaust worker memory
 or pin a worker forever (urllib3's timeout is per-read, not total).
 """
 
+import threading
 import time
 from urllib.parse import urljoin, urlparse
 
@@ -47,7 +48,14 @@ def _charset(content_type: str) -> str:
 
 
 def _read_capped(resp, url: str) -> bytes:
-    """Stream the body to memory, aborting if it exceeds the size/time bounds."""
+    """Stream the body to memory, aborting if it exceeds the size/time bounds.
+
+    The time bound is a genuine wall-clock deadline: a watchdog closes the
+    connection when it elapses, so a slow-drip host that keeps each socket read
+    just under the per-read timeout (and would otherwise block forever inside a
+    single ``stream()`` iteration) is force-unblocked, not merely checked between
+    chunks.
+    """
     declared = resp.headers.get("Content-Length")
     if declared is not None:
         try:
@@ -58,18 +66,44 @@ def _read_capped(resp, url: str) -> bytes:
                 )
         except ValueError:
             pass  # bogus header — fall through to the streaming cap
+
     deadline = time.monotonic() + MAX_READ_SECONDS
+    timed_out = threading.Event()
+
+    def _abort():
+        timed_out.set()
+        try:
+            resp.close()  # closes the underlying socket → unblocks a stuck read
+        except Exception:  # noqa: BLE001
+            pass
+
+    watchdog = threading.Timer(MAX_READ_SECONDS, _abort)
+    watchdog.daemon = True
+    watchdog.start()
     buf = bytearray()
-    for chunk in resp.stream(_STREAM_CHUNK, decode_content=True):
-        buf += chunk
-        if len(buf) > MAX_RESPONSE_BYTES:
-            raise FetchLimitExceeded(
-                f"Response from '{url}' exceeds {MAX_RESPONSE_BYTES} bytes; aborting."
-            )
-        if time.monotonic() > deadline:
+    try:
+        for chunk in resp.stream(_STREAM_CHUNK, decode_content=True):
+            buf += chunk
+            if len(buf) > MAX_RESPONSE_BYTES:
+                raise FetchLimitExceeded(
+                    f"Response from '{url}' exceeds {MAX_RESPONSE_BYTES} bytes; aborting."
+                )
+            if timed_out.is_set() or time.monotonic() > deadline:
+                raise FetchLimitExceeded(
+                    f"Reading '{url}' exceeded {MAX_READ_SECONDS}s; aborting."
+                )
+    except FetchLimitExceeded:
+        raise
+    except Exception as e:  # noqa: BLE001
+        # The watchdog closing the socket surfaces here as an I/O error — translate
+        # it to the deadline error so callers see the real cause.
+        if timed_out.is_set():
             raise FetchLimitExceeded(
                 f"Reading '{url}' exceeded {MAX_READ_SECONDS}s; aborting."
-            )
+            ) from e
+        raise
+    finally:
+        watchdog.cancel()
     return bytes(buf)
 
 

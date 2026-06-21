@@ -40,6 +40,9 @@ EXCLUDE_PATH_PARTS = ("/_modules/", "/_sources/", "/_static/", "/_downloads/", "
 DEFAULT_WORKERS = 6
 MAX_WORKERS = try_get_int_env("PAIRAG_DATASOURCE_SPHINX_MAX_WORKERS", 8)
 MAX_PAGES = try_get_int_env("PAIRAG_DATASOURCE_SPHINX_MAX_PAGES", 2000)
+# Cumulative cap on rendered-body memory held in _rendered across one crawl
+# (per-page + page-count caps alone still allow MAX_PAGES large bodies to pile up).
+MAX_TOTAL_BYTES = try_get_int_env("PAIRAG_DATASOURCE_SPHINX_MAX_TOTAL_BYTES", 200 * 1024 * 1024)
 
 
 def parse_toctree(home_html: str) -> List[Tuple[str, str, str]]:
@@ -140,6 +143,7 @@ class SphinxAdapter(BaseAdapter):
         visited: Set[str] = set()
         frontier = list(section_of)
         rounds = 0
+        total_bytes = 0  # cumulative size of rendered bodies held in _rendered
         while frontier:
             rounds += 1
             batch = [u for u in frontier if u not in visited]
@@ -183,10 +187,20 @@ class SphinxAdapter(BaseAdapter):
                     continue
                 path = _url_to_path(url)
                 self._rendered[path] = (title or url, md, url, section_of.get(url, ""))
+                total_bytes += len(md.encode("utf-8"))
                 for link in links:
                     if link not in visited and link not in section_of:
                         section_of[link] = section_of.get(url, "")
                         newly.add(link)
+            # Cap cumulative in-memory body size across the whole crawl: the per-
+            # response limit alone still lets MAX_PAGES bodies pile up in _rendered.
+            if total_bytes >= MAX_TOTAL_BYTES:
+                logger.warning(
+                    f"[sphinx] hit MAX_TOTAL_BYTES={MAX_TOTAL_BYTES} for {base} "
+                    f"({total_bytes} bytes rendered); stopping crawl."
+                )
+                self.discovery_partial = True
+                break
             frontier = list(newly)
 
         docs: List[DiscoveredDoc] = []
