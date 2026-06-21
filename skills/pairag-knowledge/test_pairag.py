@@ -362,12 +362,7 @@ def test_cmd_grep_markdown_with_counts():
         c, kb_target="f" * 32, pattern="timeout", context=2, limit=20, as_json=False
     )
     assert sent["path"] == "/v1/config/knowledgebases/" + "f" * 32 + "/keyword"
-    assert sent["params"] == {
-        "pattern": "timeout",
-        "context": 2,
-        "limit": 20,
-        "scope": "kb",
-    }
+    assert sent["params"] == {"pattern": "timeout", "context": 2, "limit": 20}
     assert '1 match(es) for "timeout" (scanned 7 file(s))' in out
     assert "- config.py · doc_id=d1 · line 42" in out
     # the full context block is rendered, not just the match line

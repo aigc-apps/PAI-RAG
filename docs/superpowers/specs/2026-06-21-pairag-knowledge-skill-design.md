@@ -83,7 +83,7 @@ server's base URL):
 | `pairag kbs [query]` | Discover KBs — id, name, description | `GET /v1/config/knowledgebases` |
 | `pairag search <query> [--kb]` | Semantic / hybrid retrieval | `POST /v1/retrieval` |
 | `pairag catalog [--kb] [--query] [--limit]` | List KB files — name, title, source (no body reads) | `GET /v1/config/knowledgebases/{kb}/files` |
-| `pairag grep <pattern> [--kb] [--context] [--limit]` | Literal keyword grep over the whole KB (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword?scope=kb` |
+| `pairag grep <pattern> [--kb] [--context] [--limit]` | Literal keyword grep over the whole KB (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword` |
 | `pairag read <id> [--kb] [--max-chars] [--offset]` | Fetch a file's full text (from a search/catalog/grep result) | `GET /v1/config/knowledgebases/{kb}/file-content` |
 
 `read` accepts the `file_id` or `doc_id` carried by any `search`, `catalog`, or
@@ -98,12 +98,14 @@ documents — but `catalog` and the search commands differ on *indexed* vs *all*
 - `catalog` lists `KbFileEntity` rows via the files endpoint — **every file in
   the KB regardless of parse status** — returning `file_name`,
   `file_metadata.title`, and `file_source`.
-- `grep` passes `scope=kb` to the keyword endpoint. The backend `keyword_search`
-  gained a `scope` parameter (default `datasource` to preserve the in-process
-  agent tool in `datasource_tool.py`); `scope=kb` drops the data-source filter so
-  the chunk-text prefilter spans all files. Its candidate set comes from
-  `KbChunkEntity`, so **only indexed (chunked) files are searched** — files still
-  parsing, failed, or chunk-less are not.
+- `grep` hits the keyword endpoint, whose unfiltered case now searches the whole
+  KB. `keyword_search`'s default branch no longer restricts to data-source files
+  (the in-process `datasource_tool.py` agent tool is now KB-wide too; its
+  optional `datasource` / `path_prefix` / `doc_id` filters still narrow scope).
+  Its candidate set comes from `KbChunkEntity`, so **only indexed (chunked) files
+  are searched** — files still parsing, failed, or chunk-less are not. The
+  chunk-text prefilter uses `contains(pattern, autoescape=True)` so literal
+  `%` / `_` are not treated as SQL wildcards.
 - `search` (`/v1/retrieval`) queries the vector store, so it likewise covers
   **indexed content only**.
 
@@ -143,10 +145,9 @@ the CLI reads `data`. The HTTP helper handles both.
   `data: {items: [{id, name, description, ...}], total, pages, page, size}`.
 - File list (catalog): `GET /v1/config/knowledgebases/{kb_id}/files?query&size` →
   `data: {items: [{id, file_name, file_source, file_metadata: {title, source_url, ...}, ...}], total, pages, page, size}`.
-- Keyword grep: `GET /v1/config/knowledgebases/{kb_id}/keyword?pattern&context&limit&scope` →
+- Keyword grep: `GET /v1/config/knowledgebases/{kb_id}/keyword?pattern&context&limit` →
   `data: {results: [{doc_id, file_id, line, match, context, source_url, title}], scanned_files, scan_capped, limit_reached}`.
-  `scope=kb` (CLI default) covers the whole KB; `scope=datasource` (backend
-  default) restricts to data-source files.
+  The unfiltered call covers the whole KB (indexed files).
 - File content: `GET /v1/config/knowledgebases/{kb_id}/file-content?file_id&doc_id&max_chars&offset`
   (accepts `file_id` **or** `doc_id`) → `data: {file_id, file_name, title,
   source_url, doc_id, content, content_length, offset, returned_chars,
@@ -196,6 +197,18 @@ Default = **compact markdown**, token-efficient and citable. Example for `search
 - Coverage: command/argument parsing, KB name→id resolution, request building
   per command, output rendering (markdown + `--json`), and error paths
   (connection refused, 404 KB, HTTP error).
+
+**Deferred — backend `keyword_search` service test.** Making `grep` KB-wide
+changed `keyword_search`'s default branch (drop the data-source filter; autoescape
+the literal pattern). This is not covered by a backend test because the repo has
+no real-DB test harness: `tests/service` mocks the `AsyncSession` (so the SQL
+`WHERE` is never executed), `tests/db` mocks the engine, and `tests/integration`
+is end-to-end but skipped without `DASHSCOPE_API_KEY` + Redis + Chroma. A
+meaningful test needs net-new infrastructure (an in-memory sqlite session, seeded
+`KbChunkEntity` / `KbFileEntity` / `DataSourceDocumentEntity` rows, and a mocked
+`file_store`) to assert whole-KB coverage, tenant isolation, the `MAX_SCAN_FILES`
+cap, and `%` / `_` literal patterns. Tracked as follow-up; the change is
+behavior-additive for the CLI and covered at the CLI layer (request building).
 
 ## Future extensions
 

@@ -269,7 +269,7 @@ def cmd_grep(client, kb_target, pattern, context, limit, as_json):
     kb_id = resolve_kb(client, kb_target)
     resp = client.get(
         f"/v1/config/knowledgebases/{kb_id}/keyword",
-        {"pattern": pattern, "context": context, "limit": limit, "scope": "kb"},
+        {"pattern": pattern, "context": context, "limit": limit},
     )
     return render_grep(pattern, data_of(resp) or {}, as_json)
 

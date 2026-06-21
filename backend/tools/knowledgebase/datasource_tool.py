@@ -196,7 +196,7 @@ async def aget_datasource_keyword_tool(
         raise ValueError(f"Knowledgebase {kb_id} not found.")
 
     description = (
-        f"Exact (literal) keyword/identifier lookup across the data-source documents of "
+        f"Exact (literal) keyword/identifier lookup across the documents of "
         f"knowledge base '{knowledgebase.name}'. Returns matching lines with line numbers + "
         f"surrounding context.\n"
         f"\n# When to use\n"
