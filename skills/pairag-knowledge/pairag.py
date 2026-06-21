@@ -42,6 +42,10 @@ def resolve_config(args, env, config_path=None):
                 file_cfg = json.load(fh)
         except (OSError, ValueError) as exc:  # ValueError covers JSONDecodeError
             raise PairagError(f"Failed to read config file {path}: {exc}")
+        if not isinstance(file_cfg, dict):
+            raise PairagError(
+                f"Config file {path} must contain a JSON object, got {type(file_cfg).__name__}."
+            )
 
     def pick(flag, env_key, file_key, default=None):
         if flag is not None:
@@ -307,37 +311,52 @@ def cmd_read(client, kb_target, ident, max_chars, offset, as_json):
     return render_read(data_of(resp) or {}, as_json)
 
 
-def build_parser():
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--base-url", dest="base_url")
-    common.add_argument("--tenant")
-    common.add_argument("--token")
-    common.add_argument("--kb")
-    common.add_argument("--json", dest="as_json", action="store_true")
+def _add_common(parser, suppress):
+    """Register the global options on a parser.
 
+    They are added both to the top-level parser (with real defaults) and to each
+    subparser (with ``SUPPRESS`` defaults). SUPPRESS means a subparser leaves the
+    attribute untouched when the option is absent, so a value given *before* the
+    subcommand (e.g. ``pairag --kb docs search q``) is not clobbered by the
+    subparser's default. Either position works.
+    """
+    default = argparse.SUPPRESS if suppress else None
+    bool_default = argparse.SUPPRESS if suppress else False
+    parser.add_argument("--base-url", dest="base_url", default=default)
+    parser.add_argument("--tenant", default=default)
+    parser.add_argument("--token", default=default)
+    parser.add_argument("--kb", default=default)
+    parser.add_argument("--json", dest="as_json", action="store_true", default=bool_default)
+
+
+def build_parser():
     parser = argparse.ArgumentParser(
         prog="pairag", description="Read-only CLI for a running PAI-RAG knowledge base."
     )
+    _add_common(parser, suppress=False)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_kbs = sub.add_parser("kbs", parents=[common], help="List knowledge bases")
+    p_kbs = sub.add_parser("kbs", help="List knowledge bases")
+    _add_common(p_kbs, suppress=True)
     p_kbs.add_argument("query", nargs="?", default=None)
 
-    p_search = sub.add_parser("search", parents=[common], help="Semantic search")
+    p_search = sub.add_parser("search", help="Semantic search")
+    _add_common(p_search, suppress=True)
     p_search.add_argument("query")
 
-    p_catalog = sub.add_parser(
-        "catalog", parents=[common], help="Browse documents by metadata"
-    )
+    p_catalog = sub.add_parser("catalog", help="Browse documents by metadata")
+    _add_common(p_catalog, suppress=True)
     p_catalog.add_argument("--query", dest="cat_query", default=None)
     p_catalog.add_argument("--limit", type=int, default=20)
 
-    p_grep = sub.add_parser("grep", parents=[common], help="Literal keyword search")
+    p_grep = sub.add_parser("grep", help="Literal keyword search")
+    _add_common(p_grep, suppress=True)
     p_grep.add_argument("pattern")
     p_grep.add_argument("--context", type=int, default=2)
     p_grep.add_argument("--limit", type=int, default=20)
 
-    p_read = sub.add_parser("read", parents=[common], help="Fetch a file's text by id")
+    p_read = sub.add_parser("read", help="Fetch a file's text by id")
+    _add_common(p_read, suppress=True)
     p_read.add_argument("id")
     p_read.add_argument("--max-chars", dest="max_chars", type=int, default=None)
     p_read.add_argument("--offset", type=int, default=0)

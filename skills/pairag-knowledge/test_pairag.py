@@ -61,6 +61,16 @@ def test_config_corrupt_file_raises_pairag_error(tmp_path):
         assert str(bad) in str(e)
 
 
+def test_config_non_object_json_raises_pairag_error(tmp_path):
+    bad = tmp_path / "config.json"
+    bad.write_text(json.dumps(["not", "a", "dict"]))
+    try:
+        pairag.resolve_config(_Args(), env={}, config_path=str(bad))
+        assert False, "expected PairagError"
+    except pairag.PairagError as e:
+        assert "JSON object" in str(e)
+
+
 # --------------------------------------------------------------------------- #
 # Task 2: HTTP client
 # --------------------------------------------------------------------------- #
@@ -461,6 +471,22 @@ def test_main_kbs_prints_and_exits_zero():
 def test_main_json_flag_after_subcommand():
     fake = _kbs_client()
     code, out, _ = _run_main(["kbs", "--json"], fake)
+    assert code == 0
+    assert json.loads(out)[0]["id"] == "id-1"
+
+
+def test_main_global_kb_before_subcommand():
+    fake = _search_client(
+        [{"content": "x", "score": 0.1, "title": "T", "metadata": {"doc_id": "d1"}}]
+    )
+    code, out, _ = _run_main(["--kb", "f" * 32, "search", "q"], fake)
+    assert code == 0
+    assert fake.sent["body"]["knowledge_id"] == "f" * 32
+
+
+def test_main_global_json_before_subcommand():
+    fake = _kbs_client()
+    code, out, _ = _run_main(["--json", "kbs"], fake)
     assert code == 0
     assert json.loads(out)[0]["id"] == "id-1"
 

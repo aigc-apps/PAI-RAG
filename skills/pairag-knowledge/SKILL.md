@@ -22,6 +22,10 @@ Run via: `python <skill-dir>/pairag.py <command> [...]` (Python 3, no dependenci
 - **`grep <pattern>`** — literal keyword search over document bodies, with line
   numbers and context. Use for exact strings (an error message, a config key).
   **Data-source documents only** (see Scope below).
+- **`read <id>`** — fetch a file's full text. Pass the `doc_id` (or `file_id`)
+  from any `search` / `catalog` / `grep` result. Supports `--max-chars` and
+  `--offset` for paging large files.
+- **`kbs [query]`** — list available knowledge bases (id, name, description).
 
 ## Scope: catalog and grep see data-source documents only
 
@@ -31,10 +35,6 @@ listed by `catalog` and not scanned by `grep`. So an empty `catalog`/`grep`
 result does **not** mean a document is absent from the knowledge base — it may
 have been uploaded directly. When you need full-KB coverage (including manual
 uploads), use `search`, which retrieves over all indexed content.
-- **`read <id>`** — fetch a file's full text. Pass the `doc_id` (or `file_id`)
-  from any `search` / `catalog` / `grep` result. Supports `--max-chars` and
-  `--offset` for paging large files.
-- **`kbs [query]`** — list available knowledge bases (id, name, description).
 
 ## Targeting a knowledge base
 
