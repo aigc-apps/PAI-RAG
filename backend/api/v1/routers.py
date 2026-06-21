@@ -9,6 +9,7 @@ def add_config_router(app: FastAPI):
     from api.v1.config_apis.embedding import embedding_router
     from api.v1.config_apis.reranker import reranker_router
     from api.v1.config_apis.metadata import knowledgebase_router
+    from api.v1.config_apis.datasource import datasource_router
     from api.v1.config_apis.chatapp import app_router
     from api.v1.config_apis.role.role import role_router
     from api.v1.config_apis.guardrail import guardrail_router
@@ -27,6 +28,7 @@ def add_config_router(app: FastAPI):
     app.include_router(embedding_router, prefix="/v1/config/embeddings")
     app.include_router(reranker_router, prefix="/v1/config/rerankers")
     app.include_router(knowledgebase_router, prefix="/v1/config/knowledgebases")
+    app.include_router(datasource_router, prefix="/v1/config/knowledgebases")
     app.include_router(app_router, prefix="/v1/config/apps")
     app.include_router(role_router, prefix="/v1/config/roles")
     app.include_router(guardrail_router, prefix="/v1/config/guardrail")

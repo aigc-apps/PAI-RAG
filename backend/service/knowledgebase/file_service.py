@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from sqlmodel import select, func, delete
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from loguru import logger
 
@@ -109,6 +110,7 @@ class FileService:
         size: int = 10,
         query: Optional[str] = None,
         status: Optional[str] = None,
+        source: Optional[str] = None,
     ) -> PagedResult[List[KbFileEntity]]:
         """
         List File entities with pagination and optional filtering.
@@ -126,15 +128,35 @@ class FileService:
         # Build base query
         base_query = select(KbFileEntity).where(KbFileEntity.kb_id == kb_id, KbFileEntity.tenant_id == tenant_id)
 
-        # Add query filter if provided
+        # Add query filter if provided — match the storage name OR the human
+        # title stored in file_metadata (data-source docs carry a real title;
+        # manually-uploaded files match via file_name).
         if query:
+            like = f"%{query.lower()}%"
+            title_text = func.lower(
+                func.coalesce(KbFileEntity.file_metadata["title"].as_string(), "")
+            )
             base_query = base_query.where(
-                func.lower(KbFileEntity.file_name).like(func.lower(f"%{query}%"))
+                or_(
+                    func.lower(KbFileEntity.file_name).like(like),
+                    title_text.like(like),
+                )
             )
 
         # Add status filter if provided
         if status:
             base_query = base_query.where(KbFileEntity.status == status)
+
+        # Add source filter if provided: "manual" = no datasource_key, otherwise
+        # match a specific data source key in file_metadata.
+        if source:
+            ds_key = func.coalesce(
+                KbFileEntity.file_metadata["datasource_key"].as_string(), ""
+            )
+            if source == "manual":
+                base_query = base_query.where(ds_key == "")
+            else:
+                base_query = base_query.where(ds_key == source)
 
         # Get total count
         count_query = select(func.count()).select_from(base_query)

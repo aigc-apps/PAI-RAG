@@ -70,6 +70,18 @@ if _FILE_GC_INTERVAL > 0:
         },
     }
 
+# Periodic dispatcher that enqueues syncs for due data sources (per their
+# sync_schedule). Set PAIRAG_DATASOURCE_SYNC_DISPATCH_INTERVAL_SECONDS=0 to disable.
+_DS_DISPATCH_INTERVAL = int(os.environ.get("PAIRAG_DATASOURCE_SYNC_DISPATCH_INTERVAL_SECONDS", "300"))
+if _DS_DISPATCH_INTERVAL > 0:
+    app.conf.beat_schedule = {
+        **getattr(app.conf, "beat_schedule", {}),
+        "pairag-datasource-sync-dispatch": {
+            "task": "datasource_sync_dispatch",
+            "schedule": _DS_DISPATCH_INTERVAL,
+        },
+    }
+
 
 @worker_shutdown.connect
 def on_worker_shutdown(**kwargs):
@@ -92,17 +104,24 @@ async def enqueue_file_tasks_async(file_id: str, file_version: int, is_attachmen
     from rag.split.file_split import split_file_tasks
 
     logger.info(f"[WORKER] Enqueueing file {file_id} for tenant {tenant_id} in background.")
-    await update_file_status_async(file_id=file_id, status=FileStatus.parsing, tenant_id=tenant_id)
 
     try:
+        # Read FIRST and bail before touching status, so a cancelled/superseded
+        # file is never flipped back to parsing (cancel race).
         file_entity: KbFileEntity = await read_file_from_db(file_id=file_id, tenant_id=tenant_id)
         if not file_entity:
             logger.warning(f"[WORKER] file {file_id} not found. Process file completed.")
             return
 
         if file_entity.file_version != file_version:
-            logger.warning(f"[WORKER] file {file_id} has been updated. Process file completed.")
+            logger.warning(f"[WORKER] file {file_id} has been updated/cancelled (version changed). Skipping.")
             return
+
+        if file_entity.status in (FileStatus.cancelled, FileStatus.failed):
+            logger.warning(f"[WORKER] file {file_id} is {file_entity.status}; skipping enqueue.")
+            return
+
+        await update_file_status_async(file_id=file_id, status=FileStatus.parsing, tenant_id=tenant_id)
 
         await delete_file_tasks_by_file_id_async(file_id=file_id, kb_id=file_entity.kb_id, tenant_id=tenant_id)
         # Split file into small file tasks
@@ -276,6 +295,24 @@ def process_file_task(task_id: str, is_attachment: bool = False, tenant_id: str 
     logger.info(f"Processing file {task_id}.")
     loop.run_until_complete(kb_file_client.process_file_async(task_id=task_id, is_attachment=is_attachment, tenant_id=tenant_id))
     logger.info(f"Processed file {task_id} completed.")
+
+
+@app.task(name="datasource_sync_dispatch")
+def datasource_sync_dispatch():
+    from rag.datasource.scheduler import dispatch_due_datasources
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(dispatch_due_datasources())
+
+
+@app.task(name="sync_datasource")
+def sync_datasource(datasource_id: str, tenant_id: str = None, trigger: str = "manual", triggered_by: str = None):
+    from rag.datasource.sync_worker import run_sync
+    loop = asyncio.get_event_loop()
+    logger.info(f"[WORKER] Syncing data source {datasource_id} for tenant {tenant_id} (trigger={trigger}).")
+    loop.run_until_complete(run_sync(
+        datasource_id=datasource_id, tenant_id=tenant_id, trigger=trigger, triggered_by=triggered_by,
+    ))
+    logger.info(f"[WORKER] Synced data source {datasource_id} completed.")
 
 
 @app.task(name="download_model")

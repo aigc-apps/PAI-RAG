@@ -737,10 +737,15 @@ export const usePaiChatThreadRuntime = (options: PaiChatRuntimeOptions) => {
 
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: () => {
-      const threadListItem = useThreadListItem();
-      const sessionId = threadListItem.remoteId || initializedThreadId || undefined;
+      useThreadListItem(); // keep the hook call to scope the runtime to the thread item
+      // NOTE: assistant-ui owns conversation history (persisted via /api/threads
+      // and sent in `messages`). We intentionally do NOT send session_id, so the
+      // backend won't ALSO prepend Redis session memory — that dual-history
+      // injection bloated context and broke retry (replayed the prior tool trace
+      // + a duplicated user message). Backend session memory remains available to
+      // stateless API callers that pass session_id themselves.
       return useLocalThreadRuntime(
-        new MyModelAdapter({...otherOptions, tenantFetch, onUsage, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id, session_id: sessionId }}),
+        new MyModelAdapter({...otherOptions, tenantFetch, onUsage, body: { model, enable_agent, enable_search, enable_chatdb, mcp_ids, kb_ids, user_id }}),
         localRuntimeOptions,
       );
     },

@@ -18,6 +18,49 @@ from agent.tool_utils import check_and_handle_return_direct
 from agent.message_manager import AgentMessageManager
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
+# 流式调用的"空闲超时":超过该秒数没有收到任何分片(package)即超时(非总时长)
+LLM_STREAM_IDLE_TIMEOUT = try_get_int_env("LLM_STREAM_IDLE_TIMEOUT_SECONDS", 30)
+
+
+async def _iter_with_idle_timeout(stream, timeout: int):
+    """Yield chunks from a streaming response, raising ``asyncio.TimeoutError`` if
+    no chunk arrives within ``timeout`` seconds. This is an idle/inter-chunk
+    timeout (resets on every chunk), NOT a total-duration budget."""
+    iterator = stream.__aiter__()
+    while True:
+        try:
+            chunk = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
+        except StopAsyncIteration:
+            return
+        yield chunk
+
+
+# 当模型只"预告"下一步动作却没产生 tool_call 时,最多纠正(轻推)几次
+MAX_INTENT_NUDGES = try_get_int_env("MAX_INTENT_NUDGES", 1)
+_INTENT_NUDGE_MSG = (
+    "你刚才只描述了下一步,但没有真正执行。请在本次响应中**直接调用合适的工具**,"
+    "或者直接给出最终答案。不要再预告或描述将要调用的工具。"
+)
+# 行动预告的常见措辞(中英),用于识别"只说不做"的悬空消息。
+# 刻意只保留"明显要去用工具"的短语,避免误伤正常答案(去掉了"接下来/下一步/我将"等宽泛词)。
+_INTENT_PHRASES = (
+    "让我搜索", "让我查", "让我继续", "让我再", "让我先",
+    "我需要查找", "我需要搜索", "我来搜", "我来查", "继续搜索",
+    "let me search", "let me look", "let me find",
+    "i'll search", "i will search", "i need to search", "i need to find", "i'll look",
+)
+
+
+# 一个"行动预告"必然是短消息;超过这个长度就当作正常正文,不再扣留/纠正。
+_INTENT_MAX_LEN = 200
+
+
+def _looks_like_unfinished_intent(text: str) -> bool:
+    """A short assistant message that only announces a next action (no tool call)."""
+    if not text:
+        return False
+    t = text.strip().lower()
+    return len(text) < _INTENT_MAX_LEN and any(p in t for p in _INTENT_PHRASES)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -123,6 +166,7 @@ class ReactAgent:
             # Build tool metadata, adding plan tool if enable_agent is True
             tools_to_use = self.tool_metadata.copy()
             react_step = 1
+            nudge_count = 0  # times we've corrected an "announce-but-don't-act" turn
 
             # ReAct loop: continue calling tools until completion or max_steps
             while react_step <= self.max_steps:
@@ -131,41 +175,116 @@ class ReactAgent:
 
                 tool_calls = []
                 step_content = ""
+                # If we can still nudge this turn, withhold streamed text until we
+                # know it isn't a bare action-preview — otherwise the user sees the
+                # dangling "let me search…" before we silently correct it. We only
+                # hold back the short intent window; past _INTENT_MAX_LEN (or once a
+                # tool_call appears) the text can't be a preview, so flush and stream
+                # live. `pending` is the held-back, not-yet-yielded text.
+                buffering = nudge_count < MAX_INTENT_NUDGES
+                pending = ""
+                # Usage normally rides only the final chunk, so while we withhold
+                # text we keep the latest usage seen and re-attach it on flush —
+                # otherwise a buffered short answer would drop its token counts.
+                pending_usage = None
 
                 # Compress messages to fit within token budget
                 messages = self.msg_manager.fit_to_budget(messages)
 
-                # Call LLM with current messages and available tools
-                async for chunk in await self.llm.astream(
+                # Call LLM with current messages and available tools.
+                # Wrap the stream with an idle timeout: if no package arrives within
+                # LLM_STREAM_IDLE_TIMEOUT seconds, abort with a clear error.
+                _llm_stream = await self.llm.astream(
                     messages=messages,
                     tools=tools_to_use,
-                ):
-                    if isinstance(chunk, ErrorChunk):
-                        logger.error(f"LLM call failed: {chunk.error_message}")
-                        yield chunk
-                        return
+                )
+                try:
+                    async for chunk in _iter_with_idle_timeout(_llm_stream, LLM_STREAM_IDLE_TIMEOUT):
+                        if isinstance(chunk, ErrorChunk):
+                            logger.error(f"LLM call failed: {chunk.error_message}")
+                            yield chunk
+                            return
 
-                    if chunk.tool_calls:
-                        tool_calls = chunk.tool_calls
+                        if chunk.tool_calls:
+                            tool_calls = chunk.tool_calls
+                            # A tool call means any text so far is legit pre-call
+                            # narration, not a dangling preview — release it.
+                            if buffering:
+                                if pending:
+                                    yield TextChunk(delta=pending, usage=chunk.usage or pending_usage)
+                                    pending = ""
+                                    pending_usage = None
+                                buffering = False
 
-                    if isinstance(chunk, ReasoningChunk):
-                        yield chunk
-                    else:
-                        step_content += chunk.delta
-                        yield TextChunk(delta=chunk.delta, usage=chunk.usage)
+                        if isinstance(chunk, ReasoningChunk):
+                            yield chunk
+                        elif buffering:
+                            step_content += chunk.delta
+                            pending += chunk.delta
+                            if chunk.usage:
+                                pending_usage = chunk.usage
+                            # Past the intent window it can't be a short preview:
+                            # flush what we held and stream the rest live.
+                            if len(step_content) >= _INTENT_MAX_LEN:
+                                yield TextChunk(delta=pending, usage=chunk.usage or pending_usage)
+                                pending = ""
+                                pending_usage = None
+                                buffering = False
+                        else:
+                            step_content += chunk.delta
+                            yield TextChunk(delta=chunk.delta, usage=chunk.usage)
+                except asyncio.TimeoutError:
+                    logger.error(
+                        f"LLM stream idle for >{LLM_STREAM_IDLE_TIMEOUT}s (no package received); aborting."
+                    )
+                    yield ErrorChunk(
+                        error_message=f"模型调用超时：{LLM_STREAM_IDLE_TIMEOUT}s 内未收到任何响应分片。",
+                        error_type="llm_stream_timeout",
+                    )
+                    return
 
-                # If LLM generated text response, add it to messages
-                if step_content:
-                    messages.append({
-                        "role": "assistant",
-                        "content": step_content,
-                    })
-                    step_content = ""
-
-                # If no tool calls, agent has finished
+                # No tool calls: either a genuine final answer, OR the model only
+                # narrated an intended next action (finish_reason=stop, no tool_call).
+                # In the latter case, nudge once to act instead of ending the run.
                 if not tool_calls:
+                    if (
+                        step_content
+                        and nudge_count < MAX_INTENT_NUDGES
+                        and _looks_like_unfinished_intent(step_content)
+                    ):
+                        # Dangling preview: it was withheld (still in `pending`), so
+                        # the user never saw it — drop the TEXT and nudge to actually
+                        # act, but still surface the usage so token accounting is kept.
+                        nudge_count += 1
+                        if pending_usage:
+                            yield TextChunk(delta="", usage=pending_usage)
+                        messages.append({"role": "assistant", "content": step_content})
+                        messages.append({"role": "user", "content": _INTENT_NUDGE_MSG})
+                        logger.info(
+                            f"Action-preview without tool call; nudging ({nudge_count}/{MAX_INTENT_NUDGES})."
+                        )
+                        step_content = ""
+                        pending = ""
+                        pending_usage = None
+                        continue
+                    # Real final answer (or nudges exhausted): release any held text
+                    # (with its usage), then persist + finish.
+                    if pending:
+                        yield TextChunk(delta=pending, usage=pending_usage)
+                        pending = ""
+                        pending_usage = None
+                    if step_content:
+                        messages.append({"role": "assistant", "content": step_content})
+                        step_content = ""
                     logger.info("No tool calls. ReAct loop complete.")
                     break
+
+                # Tool calls present: carry any pre-call narration ON the tool-call
+                # assistant message (below), NOT as a separate assistant turn — the
+                # "narration then tool_call" history pattern teaches the model to
+                # emit bare previews.
+                narration_content = step_content or None
+                step_content = ""
 
                 # Filter valid tool calls
                 valid_tool_calls = [
@@ -182,7 +301,7 @@ class ReactAgent:
                         invalid_tc = tool_calls[0]
                         messages.append({
                             "role": "assistant",
-                            "content": None,
+                            "content": narration_content,
                             "tool_calls": [invalid_tc]
                         })
 
@@ -216,11 +335,12 @@ class ReactAgent:
 
                 # Process results and check for return_direct
                 should_return = False
-                for tool_call, tool_content, tool_error, message_content in tool_results:
-                    # Add assistant message with tool call
+                for idx, (tool_call, tool_content, tool_error, message_content) in enumerate(tool_results):
+                    # Add assistant message with tool call; attach any narration to
+                    # the first one so it stays bound to an actual tool call.
                     messages.append({
                         "role": "assistant",
-                        "content": None,
+                        "content": narration_content if idx == 0 else None,
                         "tool_calls": [tool_call]
                     })
 

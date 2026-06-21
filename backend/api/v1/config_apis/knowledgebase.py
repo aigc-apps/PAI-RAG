@@ -190,6 +190,7 @@ async def list_files(
     file_name: Optional[str] = None,
     query: Optional[str] = None,
     status: Optional[str] = None,
+    source: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, le=1000),
     tenant_id: str = Depends(get_tenant_id),
@@ -201,8 +202,47 @@ async def list_files(
         if not file_entity:
             raise ApiException.not_found(file_name, i18n.t("api.knowledgebase.file_resource_name"))
         return success_response(data=file_entity, message=i18n.t("api.knowledgebase.file_query_success"))
-    page_result = await rag_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status)
+    page_result = await rag_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status, source=source)
     return success_response(data=page_result, message=i18n.t("api.knowledgebase.file_list_success"))
+
+
+@knowledgebase_router.get("/{kb_id}/file-content")
+@handle_api_exceptions(action="get file content")
+async def get_file_content(
+    kb_id: str,
+    file_id: Optional[str] = None,
+    doc_id: Optional[str] = None,
+    max_chars: Optional[int] = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    rag_service: RagService = Depends(get_rag_service),
+):
+    """Return a file's full text + metadata, by file_id or by data-source doc_id.
+    Powers the 召回测试 page's "查看文件" (fetch) tool."""
+    from sqlmodel import select
+    from db.models.knowledgebase.datasource import DataSourceDocumentEntity
+
+    resolved = file_id
+    if not resolved and doc_id:
+        result = await session.exec(
+            select(DataSourceDocumentEntity.file_id).where(
+                DataSourceDocumentEntity.kb_id == kb_id,
+                DataSourceDocumentEntity.doc_id == doc_id,
+                DataSourceDocumentEntity.tenant_id == tenant_id,
+            )
+        )
+        # fall back to treating doc_id as a file_id (search results expose
+        # doc_id == file_id when source_doc_id is absent)
+        resolved = result.first() or doc_id
+    if not resolved:
+        raise ApiException.not_found(doc_id or file_id or "", "File")
+    data = await rag_service.get_file_content(
+        kb_id=kb_id, file_id=resolved, tenant_id=tenant_id, max_chars=max_chars, offset=offset,
+    )
+    if not data:
+        raise ApiException.not_found(resolved, "File")
+    return success_response(data=data, message="Get file content success.")
 
 
 
