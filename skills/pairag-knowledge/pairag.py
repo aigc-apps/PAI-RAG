@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+"""pairag — read-only CLI for a running PAI-RAG knowledge base service."""
+
+import argparse
+import json
+import os
+import re
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from typing import Optional
+
+DEFAULT_BASE_URL = "http://localhost:8682"
+DEFAULT_CONFIG_PATH = "~/.config/pairag/config.json"
+HTTP_TIMEOUT = 30
+SNIPPET_CHARS = 200
+
+_HEX32 = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+
+
+class PairagError(Exception):
+    """User-facing error; message is printed to stderr and the process exits 1."""
+
+
+@dataclass
+class Config:
+    base_url: str
+    tenant: Optional[str]
+    default_kb: Optional[str]
+    token: Optional[str]
+
+
+def resolve_config(args, env, config_path=None):
+    """Resolve settings with precedence: flags > env > config file > defaults."""
+    path = os.path.expanduser(config_path or DEFAULT_CONFIG_PATH)
+    file_cfg = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            file_cfg = json.load(fh)
+
+    def pick(flag, env_key, file_key, default=None):
+        if flag is not None:
+            return flag
+        if env.get(env_key):
+            return env[env_key]
+        if file_cfg.get(file_key):
+            return file_cfg[file_key]
+        return default
+
+    return Config(
+        base_url=pick(
+            getattr(args, "base_url", None), "PAIRAG_BASE_URL", "base_url", DEFAULT_BASE_URL
+        ),
+        tenant=pick(getattr(args, "tenant", None), "PAIRAG_TENANT_ID", "tenant", None),
+        default_kb=pick(None, "PAIRAG_KB", "kb", None),
+        token=pick(getattr(args, "token", None), "PAIRAG_TOKEN", "token", None),
+    )
+
+
+def _extract_error_message(body_txt):
+    try:
+        obj = json.loads(body_txt)
+    except (ValueError, TypeError):
+        return body_txt.strip() or None
+    if isinstance(obj, dict):
+        return obj.get("message") or obj.get("detail") or None
+    return None
+
+
+class Client:
+    def __init__(self, config, opener=None):
+        self.base_url = config.base_url.rstrip("/")
+        self.tenant = config.tenant
+        self.token = config.token
+        self._opener = opener or urllib.request.urlopen
+
+    def _request(self, method, path, params=None, body=None):
+        url = self.base_url + path
+        if params:
+            query = {k: v for k, v in params.items() if v is not None and v != ""}
+            if query:
+                url += "?" + urllib.parse.urlencode(query)
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        headers = {"Accept": "application/json"}
+        if data is not None:
+            headers["Content-Type"] = "application/json"
+        if self.tenant:
+            headers["X-TENANT-ID"] = self.tenant
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            resp = self._opener(req, timeout=HTTP_TIMEOUT)
+            raw = resp.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = _extract_error_message(exc.read().decode("utf-8", "replace")) or exc.reason
+            raise PairagError(f"Server returned HTTP {exc.code}: {detail}")
+        except urllib.error.URLError as exc:
+            raise PairagError(
+                f"Cannot reach PAI-RAG at {self.base_url} — is the server running? ({exc.reason})"
+            )
+        return json.loads(raw) if raw else {}
+
+    def get(self, path, params=None):
+        return self._request("GET", path, params=params)
+
+    def post(self, path, body=None):
+        return self._request("POST", path, body=body)
+
+
+def data_of(resp):
+    """Config endpoints wrap as {code,message,data}; /v1/retrieval is flat."""
+    if isinstance(resp, dict) and "data" in resp:
+        return resp["data"]
+    return resp
+
+
+def _list_kbs(client):
+    resp = client.get("/v1/config/knowledgebases", {"size": 1000})
+    return (data_of(resp) or {}).get("items") or []
+
+
+def resolve_kb(client, kb):
+    """Resolve a --kb value (name or id) to a knowledge-base id."""
+    if not kb:
+        raise PairagError(
+            "No knowledge base specified. Pass --kb <name|id> or set PAIRAG_KB."
+        )
+    if _HEX32.match(kb):
+        return kb
+    items = _list_kbs(client)
+    for item in items:
+        if (item.get("name") or "").lower() == kb.lower():
+            return item["id"]
+    for item in items:
+        if item.get("id") == kb:
+            return item["id"]
+    available = ", ".join((it.get("name") or it.get("id") or "?") for it in items) or "(none)"
+    raise PairagError(f"No knowledge base named '{kb}'. Available: {available}")
+
+
+def render_kbs(items, as_json):
+    if as_json:
+        return json.dumps(items, indent=2, ensure_ascii=False)
+    if not items:
+        return "No knowledge bases found."
+    lines = [f"{len(items)} knowledge base(s):", ""]
+    for item in items:
+        desc = item.get("description") or ""
+        line = f"- {item.get('name')} (id={item.get('id')})"
+        if desc:
+            line += f" — {desc}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def cmd_kbs(client, query, as_json):
+    resp = client.get("/v1/config/knowledgebases", {"size": 1000, "query": query})
+    items = (data_of(resp) or {}).get("items") or []
+    return render_kbs(items, as_json)
+
+
+def _snippet(text, limit=SNIPPET_CHARS):
+    if not text:
+        return ""
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[:limit].rstrip() + "…"
+
+
+def render_search(query, label, records, as_json):
+    if as_json:
+        return json.dumps(records, indent=2, ensure_ascii=False)
+    if not records:
+        return f'No results for "{query}".'
+    lines = [f'{len(records)} result(s) for "{query}" in kb={label}', ""]
+    for i, rec in enumerate(records, 1):
+        meta = rec.get("metadata") or {}
+        ident = meta.get("doc_id") or meta.get("file_name") or ""
+        loc = meta.get("file_path") or rec.get("url") or ""
+        title = rec.get("title") or meta.get("file_name") or "(untitled)"
+        score = rec.get("score") or 0
+        head = f"{i}. [{score:.2f}] {title}"
+        tail = " · ".join(x for x in [f"doc_id={ident}" if ident else "", loc] if x)
+        if tail:
+            head += " · " + tail
+        lines.append(head)
+        snippet = _snippet(rec.get("content"))
+        if snippet:
+            lines.append(f"   {snippet}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+def cmd_search(client, kb_target, query, as_json):
+    kb_id = resolve_kb(client, kb_target)
+    resp = client.post("/v1/retrieval", {"query": query, "knowledge_id": kb_id})
+    records = resp.get("records") or []
+    return render_search(query, kb_target or kb_id, records, as_json)
+
+
+def _facets(item):
+    parts = [item.get("product"), item.get("section"), item.get("lang")]
+    parts = [p for p in parts if p]
+    return f" [{'/'.join(parts)}]" if parts else ""
+
+
+def render_catalog(results, as_json):
+    if as_json:
+        return json.dumps(results, indent=2, ensure_ascii=False)
+    if not results:
+        return "No documents found."
+    lines = [f"{len(results)} document(s):", ""]
+    for item in results:
+        title = item.get("title") or "(untitled)"
+        loc = item.get("path") or item.get("source_url") or ""
+        head = f"- {title} · doc_id={item.get('doc_id')}"
+        if loc:
+            head += f" · {loc}"
+        head += _facets(item)
+        lines.append(head)
+    return "\n".join(lines)
+
+
+def cmd_catalog(client, kb_target, query, limit, as_json):
+    kb_id = resolve_kb(client, kb_target)
+    resp = client.get(
+        f"/v1/config/knowledgebases/{kb_id}/catalog",
+        {"query": query, "limit": limit},
+    )
+    results = (data_of(resp) or {}).get("results") or []
+    return render_catalog(results, as_json)
+
+
+def render_grep(pattern, payload, as_json):
+    results = payload.get("results") or []
+    scanned = payload.get("scanned_files", 0)
+    if as_json:
+        return json.dumps(payload, indent=2, ensure_ascii=False)
+    if not results:
+        return f'No matches for "{pattern}" (scanned {scanned} file(s)).'
+    lines = [f'{len(results)} match(es) for "{pattern}" (scanned {scanned} file(s))', ""]
+    for item in results:
+        title = item.get("title") or "(untitled)"
+        lines.append(f"- {title} · doc_id={item.get('doc_id')} · line {item.get('line')}")
+        match = (item.get("match") or "").strip()
+        if match:
+            lines.append(f"    {match}")
+    if payload.get("scan_capped"):
+        lines.append("")
+        lines.append("(scan capped — not all files were searched; narrow the pattern or KB)")
+    if payload.get("limit_reached"):
+        lines.append("")
+        lines.append("(result limit reached — raise --limit for more)")
+    return "\n".join(lines)
+
+
+def cmd_grep(client, kb_target, pattern, context, limit, as_json):
+    kb_id = resolve_kb(client, kb_target)
+    resp = client.get(
+        f"/v1/config/knowledgebases/{kb_id}/keyword",
+        {"pattern": pattern, "context": context, "limit": limit},
+    )
+    return render_grep(pattern, data_of(resp) or {}, as_json)
+
+
+def render_read(doc, as_json):
+    if as_json:
+        return json.dumps(doc, indent=2, ensure_ascii=False)
+    title = doc.get("title") or doc.get("file_name") or "(untitled)"
+    header = [
+        title,
+        " · ".join(
+            x
+            for x in [
+                f"file_id={doc.get('file_id')}" if doc.get("file_id") else "",
+                f"doc_id={doc.get('doc_id')}" if doc.get("doc_id") else "",
+                doc.get("source_url") or "",
+            ]
+            if x
+        ),
+        "",
+    ]
+    body = doc.get("content") or "(empty)"
+    out = "\n".join(header) + body
+    if doc.get("truncated"):
+        nxt = doc.get("next_offset")
+        out += f"\n\n[truncated at {doc.get('returned_chars')} of {doc.get('content_length')} chars"
+        if nxt is not None:
+            out += f"; continue with --offset {nxt}"
+        out += "]"
+    return out
+
+
+def cmd_read(client, kb_target, ident, max_chars, offset, as_json):
+    kb_id = resolve_kb(client, kb_target)
+    resp = client.get(
+        f"/v1/config/knowledgebases/{kb_id}/file-content",
+        {"doc_id": ident, "max_chars": max_chars, "offset": offset},
+    )
+    return render_read(data_of(resp) or {}, as_json)
+
+
+def build_parser():
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--base-url", dest="base_url")
+    common.add_argument("--tenant")
+    common.add_argument("--token")
+    common.add_argument("--kb")
+    common.add_argument("--json", dest="as_json", action="store_true")
+
+    parser = argparse.ArgumentParser(
+        prog="pairag", description="Read-only CLI for a running PAI-RAG knowledge base."
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_kbs = sub.add_parser("kbs", parents=[common], help="List knowledge bases")
+    p_kbs.add_argument("query", nargs="?", default=None)
+
+    p_search = sub.add_parser("search", parents=[common], help="Semantic search")
+    p_search.add_argument("query")
+
+    p_catalog = sub.add_parser(
+        "catalog", parents=[common], help="Browse documents by metadata"
+    )
+    p_catalog.add_argument("--query", dest="cat_query", default=None)
+    p_catalog.add_argument("--limit", type=int, default=20)
+
+    p_grep = sub.add_parser("grep", parents=[common], help="Literal keyword search")
+    p_grep.add_argument("pattern")
+    p_grep.add_argument("--context", type=int, default=2)
+    p_grep.add_argument("--limit", type=int, default=20)
+
+    p_read = sub.add_parser("read", parents=[common], help="Fetch a file's text by id")
+    p_read.add_argument("id")
+    p_read.add_argument("--max-chars", dest="max_chars", type=int, default=None)
+    p_read.add_argument("--offset", type=int, default=0)
+
+    return parser
+
+
+def dispatch(args, config, client):
+    kb_target = args.kb or config.default_kb
+    if args.command == "kbs":
+        return cmd_kbs(client, args.query, args.as_json)
+    if args.command == "search":
+        return cmd_search(client, kb_target, args.query, args.as_json)
+    if args.command == "catalog":
+        return cmd_catalog(client, kb_target, args.cat_query, args.limit, args.as_json)
+    if args.command == "grep":
+        return cmd_grep(client, kb_target, args.pattern, args.context, args.limit, args.as_json)
+    if args.command == "read":
+        return cmd_read(client, kb_target, args.id, args.max_chars, args.offset, args.as_json)
+    raise PairagError(f"Unknown command: {args.command}")
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    config = resolve_config(args, os.environ)
+    client = Client(config)
+    try:
+        output = dispatch(args, config, client)
+    except PairagError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(output)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
