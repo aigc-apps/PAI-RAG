@@ -81,7 +81,7 @@ server's base URL):
 | Command | Purpose | Endpoint |
 |---|---|---|
 | `pairag kbs [query]` | Discover KBs — id, name, description | `GET /v1/config/knowledgebases` |
-| `pairag search <query> [--kb]` | Semantic / hybrid retrieval | `POST /v1/tools/retrieval/{kb}` |
+| `pairag search <query> [--kb]` | Semantic / hybrid retrieval | `POST /v1/retrieval` |
 | `pairag catalog [--kb] [--query] [--limit]` | Browse documents by metadata (no body reads) | `GET /v1/config/knowledgebases/{kb}/catalog` |
 | `pairag grep <pattern> [--kb] [--context] [--limit]` | Literal keyword grep (line numbers + context) | `GET /v1/config/knowledgebases/{kb}/keyword` |
 | `pairag read <id> [--kb] [--max-chars] [--offset]` | Fetch a file's full text (from a search/catalog/grep result) | `GET /v1/config/knowledgebases/{kb}/file-content` |
@@ -98,26 +98,37 @@ Behavior details:
   listing once per process and caching it. If `--kb` is omitted, it falls back to
   `PAIRAG_KB`; if neither is set, the command errors with the list of available
   KBs.
-- `search` sends only the `query` (and resolved KB). It does **not** pass a
-  `retrieval_setting`, so the service applies the KB's own configured retrieval
-  defaults (mode, rerank, top_k, threshold). Retrieval tuning flags and metadata
-  filters are deliberately deferred — see Future extensions.
+- `search` posts `{query, knowledge_id}` to `/v1/retrieval` (the records-format
+  endpoint), not the MCP tool endpoint. The records endpoint preserves each
+  hit's full `metadata` dict — including `doc_id`, `file_path`, `file_name` —
+  which is what `read` needs to fetch the source file. The MCP tool endpoint
+  (`/v1/tools/retrieval`) drops those ids, so it cannot feed `read`. `search`
+  sends no `retrieval_setting`, so the service applies the KB's own configured
+  retrieval defaults (mode, rerank, top_k, threshold). Tuning flags and metadata
+  filters are deferred — see Future extensions.
 - `catalog` browses by an optional free-text `--query` and `--limit`. The
   `product` / `section` / `lang` facets the endpoint also supports are deferred.
 
 ### Confirmed endpoint contracts
 
-- Retrieval (agent-tool format): `POST /v1/tools/retrieval/{knowledgebase_id}`
-  with body `{query, image_list?, user_id?, retrieval_setting?, metadata_condition?}`
-  → `{status, status_code, data: {total, nodes: [...]}, request_id}`.
-- KB list: `GET /v1/config/knowledgebases?page&size&query&ids` (paginated KB
-  entities with `kb_id`, `name`, `description`).
-- Catalog search: `GET /v1/config/knowledgebases/{kb_id}/catalog?query&product&section&lang&limit`
-  → `{results, total}` (metadata-level document entries; no body reads).
+**Response envelopes.** `/v1/retrieval` returns a **flat** body `{records: [...]}`.
+All `/v1/config/...` endpoints wrap their payload as `{code, message, data}` —
+the CLI reads `data`. The HTTP helper handles both.
+
+- Retrieval (records format): `POST /v1/retrieval` with body
+  `{query, knowledge_id, retrieval_setting?, metadata_condition?}` → flat
+  `{records: [{content, score, title, url, metadata}]}`. Each record's
+  `metadata` carries `doc_id`, `file_path`, `file_name`, `file_source`.
+- KB list: `GET /v1/config/knowledgebases?page&size&query` →
+  `data: {items: [{id, name, description, ...}], total, pages, page, size}`.
+- Catalog search: `GET /v1/config/knowledgebases/{kb_id}/catalog?query&limit` →
+  `data: {results: [{doc_id, title, path, product, section, lang, source_url, score}], total}`.
+- Keyword grep: `GET /v1/config/knowledgebases/{kb_id}/keyword?pattern&context&limit` →
+  `data: {results: [{doc_id, file_id, line, match, context, source_url, title}], scanned_files, scan_capped, limit_reached}`.
 - File content: `GET /v1/config/knowledgebases/{kb_id}/file-content?file_id&doc_id&max_chars&offset`
-  (accepts `file_id` or `doc_id`).
-- Keyword grep: `GET /v1/config/knowledgebases/{kb_id}/keyword?pattern&doc_id&path_prefix&datasource&context&limit`
-  → `{results, scanned_files, scan_capped, limit_reached}`.
+  (accepts `file_id` **or** `doc_id`) → `data: {file_id, file_name, title,
+  source_url, doc_id, content, content_length, offset, returned_chars,
+  truncated, next_offset, degraded, metadata}`.
 - Tenant header: `X-TENANT-ID` (optional; omitted when not configured).
 
 ### Output format
