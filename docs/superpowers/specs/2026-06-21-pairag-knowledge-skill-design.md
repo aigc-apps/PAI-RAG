@@ -113,6 +113,16 @@ Because `search`/`grep` see only indexed content, an empty result does not prove
 a file is absent; `catalog` is the source of truth for "does this file exist."
 SKILL.md states this so an agent does not misread an empty search as "absent."
 
+**Related backend change — agent KB file tools.** The same KB-wide capabilities
+are mirrored to the in-process agent. The old data-source-gated `datasource_tool`
+module (search/catalog/keyword/fetch, exposed only for KBs with data sources) was
+replaced by `tools/knowledgebase/knowledgebase_file_tools.py` providing three
+whole-KB tools — `catalog` (list files via `list_files`), `grep` (KB-wide
+`keyword_search`), and `fetch` (read a file by id) — registered for **every** KB
+in `agent_service.py`. The redundant semantic `search` tool was dropped; the
+existing `aget_knowledgebase_tool` remains the canonical semantic retriever. This
+keeps the agent surface coherent with the CLI's `catalog`/`grep`/`read`.
+
 Behavior details:
 
 - `--kb` accepts a **name or id**. The CLI resolves name→id by fetching the `kbs`
