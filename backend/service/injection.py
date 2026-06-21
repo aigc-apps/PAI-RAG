@@ -20,6 +20,7 @@ from service.tool.trace_service import TraceService
 from service.knowledgebase.vectordb_service import VectordbService
 from service.tool.role_service import RoleService
 from service.knowledgebase.knowledgebase_service import KnowledgebaseService
+from service.knowledgebase.datasource_service import DataSourceService
 from service.knowledgebase.file_service import FileService
 from service.file.file_resource_service import FileResourceService
 from service.knowledgebase.chunk_service import ChunkService
@@ -184,6 +185,21 @@ async def get_knowledgebase_service(
         ```
     """
     return KnowledgebaseService(session)
+
+
+async def get_datasource_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> DataSourceService:
+    """
+    FastAPI dependency injection function for DataSourceService.
+
+    Args:
+        session: Database session (injected via Depends)
+
+    Returns:
+        DataSourceService instance with the injected session
+    """
+    return DataSourceService(session)
 
 
 async def get_file_service(

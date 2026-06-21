@@ -26,6 +26,47 @@ class ChunkStatus(str, Enum):
     failed = "failed"
 
 
+class DataSourceType(str, Enum):
+    llms_txt = "llms_txt"  # sites exposing an official llms.txt manifest (e.g. help.aliyun.com)
+    sphinx = "sphinx"  # readthedocs / Sphinx sites
+    local = "local"  # user-uploaded local files
+    github = "github"  # github repo docs
+
+
+class DataSourceStatus(str, Enum):
+    """Aggregate state of a data source (two-phase, see plan §1.4)."""
+    idle = "idle"  # never synced or no run in progress
+    syncing = "syncing"  # phase A: discover/diff/fetch/enqueue in progress
+    ingesting = "ingesting"  # phase A done, files enqueued and parsing async
+    succeeded = "succeeded"  # all documents synced
+    partial = "partial"  # some documents failed to parse
+    failed = "failed"  # phase A itself failed
+    cancelled = "cancelled"  # sync cancelled by the user
+
+
+class DataSourceDocStatus(str, Enum):
+    """Per-document sync state within a data source."""
+    discovered = "discovered"  # listed by adapter, not yet fetched
+    fetching = "fetching"  # body being fetched
+    ingesting = "ingesting"  # enqueued into the KB ingestion pipeline
+    synced = "synced"  # parsed/embedded successfully
+    failed = "failed"  # fetch or parse failed
+    cancelled = "cancelled"  # parse cancelled by the user
+    deleted = "deleted"  # removed from source, cleaned up
+
+
+class SyncRunStatus(str, Enum):
+    running = "running"
+    succeeded = "succeeded"
+    partial = "partial"
+    failed = "failed"
+
+
+class SyncTrigger(str, Enum):
+    manual = "manual"
+    scheduled = "scheduled"
+
+
 class VectorDbType(str, Enum):
     OPENSEARCH = "opensearch"
     ELASTICSEARCH = "elasticsearch"

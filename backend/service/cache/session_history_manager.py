@@ -7,10 +7,24 @@
 """
 
 import json
+import re
 from typing import List
 from loguru import logger
 from openai.types.chat import ChatCompletionMessageParam
 from service.cache.redis_cache import cache_manager
+
+# Strip the "[System Time: ...]\n" prefix the agent injects into the live user
+# message so it never gets persisted into session history.
+_SYS_TIME_PREFIX_RE = re.compile(r"^\[System Time:[^\]]*\]\n")
+
+
+def _clean_user_message(msg):
+    """Return a copy of a user message with the injected System Time prefix removed."""
+    if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+        cleaned = _SYS_TIME_PREFIX_RE.sub("", msg["content"])
+        if cleaned != msg["content"]:
+            return {**msg, "content": cleaned}
+    return msg
 
 
 def session_history_key(user_id: str, session_id: str) -> str:
@@ -74,9 +88,13 @@ class SessionHistoryManager:
 
             existing_history = await self._get_history_list(key)
 
-            existing_history.append(user_message)
-            if tool_messages:
-                existing_history.extend(tool_messages)
+            # Persist ONLY the clean Q/A pair: the user question (without the
+            # injected System Time prefix) and the assistant's final answer.
+            # Intermediate tool_calls/tool-result steps (`tool_messages`) are this
+            # turn's ephemeral working state and are NOT stored — replaying them on
+            # later turns bloats context, confuses the model, and (on retry)
+            # produces duplicated/garbled history.
+            existing_history.append(_clean_user_message(user_message))
             existing_history.append(assistant_message)
 
             existing_history = self._trim_to_rounds(existing_history, self.MAX_HISTORY_ROUNDS)

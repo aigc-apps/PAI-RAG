@@ -1,0 +1,1 @@
+"""Concrete data source adapters."""

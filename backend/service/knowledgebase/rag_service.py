@@ -327,6 +327,7 @@ class RagService:
         size: int = 10,
         query: Optional[str] = None,
         status: Optional[str] = None,
+        source: Optional[str] = None,
     ) -> PagedResult[List[KbFileEntity]]:
         """
         List files in a knowledgebase.
@@ -335,14 +336,206 @@ class RagService:
             kb_id: Knowledgebase ID
             page: Page number (1-indexed)
             size: Page size
-            query: Optional search query (searches in file_name)
+            query: Optional search query (searches in file_name + title)
             status: Optional filter for file status
+            source: Optional origin filter ("manual" or a datasource_key)
 
         Returns:
             PagedResult containing list of KbFileEntity and pagination metadata
         """
         file_service = await self._get_file_service()
-        return await file_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status)
+        return await file_service.list_files(kb_id=kb_id, tenant_id=tenant_id, page=page, size=size, query=query, status=status, source=source)
+
+    async def keyword_search(
+        self, kb_id: str, tenant_id: str, pattern: str,
+        doc_id: Optional[str] = None, path_prefix: Optional[str] = None,
+        datasource: Optional[str] = None, context: int = 2, limit: int = 20,
+    ) -> dict:
+        """Literal (non-regex) keyword grep over data-source document bodies.
+
+        Bounded for safety: a SQL/manifest prefilter picks candidate files, then
+        each is grepped line-by-line from the file store for accurate line numbers
+        + surrounding context. Returns ``{results, scanned_files, scan_capped,
+        limit_reached}`` where each result is ``{doc_id, file_id, line, match,
+        context, source_url, title}``.
+        """
+        from sqlalchemy import and_
+        from db.models.knowledgebase.datasource import DataSourceDocumentEntity, DataSourceEntity
+
+        pattern = (pattern or "").strip()
+        if not pattern:
+            return {"results": [], "scanned_files": 0, "scan_capped": False, "limit_reached": False}
+
+        MAX_SCAN_FILES = 200
+        file_ids: List[str] = []
+        scan_capped = False
+
+        if doc_id:
+            r = await self.session.exec(
+                select(DataSourceDocumentEntity.file_id).where(
+                    DataSourceDocumentEntity.kb_id == kb_id,
+                    DataSourceDocumentEntity.doc_id == doc_id,
+                    DataSourceDocumentEntity.tenant_id == tenant_id,
+                )
+            )
+            fid = r.first()
+            file_ids = [fid] if fid else []
+        elif path_prefix or datasource:
+            conds = [
+                DataSourceDocumentEntity.kb_id == kb_id,
+                DataSourceDocumentEntity.tenant_id == tenant_id,
+                DataSourceDocumentEntity.file_id.is_not(None),
+            ]
+            if path_prefix:
+                conds.append(DataSourceDocumentEntity.path.like(f"{path_prefix}%"))
+            if datasource:
+                ds_ids = (await self.session.exec(
+                    select(DataSourceEntity.id).where(
+                        DataSourceEntity.kb_id == kb_id,
+                        DataSourceEntity.datasource_key == datasource,
+                        DataSourceEntity.tenant_id == tenant_id,
+                    )
+                )).all()
+                conds.append(DataSourceDocumentEntity.datasource_id.in_(list(ds_ids) or ["__none__"]))
+            rows = (await self.session.exec(
+                select(DataSourceDocumentEntity.file_id).where(and_(*conds)).limit(MAX_SCAN_FILES)
+            )).all()
+            file_ids = [x for x in rows if x]
+        else:
+            # literal prefilter on chunk text, restricted to data-source-origin
+            # files (manual uploads excluded) so it matches the tool's scope.
+            ds_files = select(DataSourceDocumentEntity.file_id).where(
+                DataSourceDocumentEntity.kb_id == kb_id,
+                DataSourceDocumentEntity.tenant_id == tenant_id,
+                DataSourceDocumentEntity.file_id.is_not(None),
+            )
+            rows = (await self.session.exec(
+                select(KbChunkEntity.file_id).where(
+                    KbChunkEntity.kb_id == kb_id,
+                    KbChunkEntity.tenant_id == tenant_id,
+                    KbChunkEntity.text.like(f"%{pattern}%"),
+                    KbChunkEntity.file_id.in_(ds_files),
+                ).distinct().limit(MAX_SCAN_FILES)
+            )).all()
+            file_ids = [x for x in rows if x]
+            scan_capped = len(file_ids) >= MAX_SCAN_FILES
+
+        if not file_ids:
+            return {"results": [], "scanned_files": 0, "scan_capped": scan_capped, "limit_reached": False}
+
+        entities = {}
+        eres = await self.session.exec(
+            select(KbFileEntity).where(KbFileEntity.id.in_(file_ids), KbFileEntity.tenant_id == tenant_id)
+        )
+        for e in eres.all():
+            entities[e.id] = e
+
+        from pairag.file.store.file_store_helper import file_store
+        results: List[dict] = []
+        done = False
+        for fid in file_ids:
+            if done:
+                break
+            entity = entities.get(fid)
+            if not entity or not entity.file_path:
+                continue
+            try:
+                stream = await file_store.read_async(file_path=entity.file_path, tenant_id=tenant_id)
+                if stream is None:
+                    continue
+                raw = stream.read() if hasattr(stream, "read") else stream
+                text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[keyword] read failed for {entity.file_path}: {e}")
+                continue
+            lines = text.splitlines()
+            md = entity.file_metadata or {}
+            for idx, line in enumerate(lines):
+                if pattern in line:
+                    lo = max(0, idx - context)
+                    hi = min(len(lines), idx + context + 1)
+                    results.append({
+                        "doc_id": md.get("source_doc_id") or fid,
+                        "file_id": fid,
+                        "line": idx + 1,
+                        "match": line.strip()[:300],
+                        "context": "\n".join(lines[lo:hi]),
+                        "source_url": entity.file_source,
+                        "title": md.get("title") or entity.file_name,
+                    })
+                    if len(results) >= limit:
+                        done = True
+                        break
+
+        return {
+            "results": results,
+            "scanned_files": len(file_ids),
+            "scan_capped": scan_capped,
+            "limit_reached": len(results) >= limit,
+        }
+
+    async def get_file_content(
+        self, kb_id: str, file_id: str, tenant_id: str,
+        max_chars: Optional[int] = None, offset: int = 0,
+    ) -> Optional[dict]:
+        """Return a file's text (windowed) + metadata (powers fetch/查看文件).
+
+        Prefers the original markdown in the file store; falls back to reassembling
+        the stored chunks in order. Mirrors the agent `fetch` tool. When ``max_chars``
+        is set, returns only ``content[offset:offset+max_chars]`` plus truncation
+        info so callers can page through long documents.
+        """
+        file_service = await self._get_file_service()
+        entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+        if not entity:
+            return None
+
+        content = None
+        if entity.file_path:
+            try:
+                from pairag.file.store.file_store_helper import file_store
+                stream = await file_store.read_async(file_path=entity.file_path, tenant_id=tenant_id)
+                if stream is not None:
+                    raw = stream.read() if hasattr(stream, "read") else stream
+                    content = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"file_store read failed for {entity.file_path}: {e}")
+                content = None
+
+        degraded = None
+        if not content:
+            chunk_service = await self._get_chunk_service()
+            chunks = await chunk_service.get_chunks_by_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+            if chunks:
+                content = "\n\n".join(c.text for c in sorted(chunks, key=lambda c: c.index) if c.text)
+                degraded = "content_from_chunks"
+
+        full = content or ""
+        total = len(full)
+        offset = max(0, offset or 0)
+        if max_chars and max_chars > 0:
+            windowed = full[offset:offset + max_chars]
+        else:
+            windowed = full[offset:] if offset else full
+        returned = len(windowed)
+        truncated = (offset + returned) < total
+
+        md = entity.file_metadata or {}
+        return {
+            "file_id": file_id,
+            "file_name": entity.file_name,
+            "title": md.get("title") or entity.file_name,
+            "source_url": entity.file_source or md.get("source_url"),
+            "doc_id": md.get("source_doc_id"),
+            "content": windowed,
+            "content_length": total,
+            "offset": offset,
+            "returned_chars": returned,
+            "truncated": truncated,
+            "next_offset": (offset + returned) if truncated else None,
+            "degraded": degraded,
+            "metadata": md,
+        }
 
 
     async def get_files_by_names(self, kb_id: str, file_names: List[str], tenant_id: str) -> List[KbFileEntity]:

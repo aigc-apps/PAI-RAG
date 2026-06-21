@@ -114,6 +114,7 @@ import { Slider } from '@/components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { SearchCode, TextSearch, ScanSearch, ChevronDownIcon as ChevronDown, ChevronUpIcon as ChevronUp, Save } from 'lucide-react';
 import { useTenantFetch } from '@/hooks/use-tenant-fetch';
+import DataSourcesPanel from './data-sources/data-sources-panel';
 import { HeaderPortal } from '@/components/header-portal';
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Spinner, PageLoading } from '@/components/ui/loading';
@@ -182,6 +183,9 @@ export default function KnowledgeBaseDetailPage(
   const fileQueryRef = useRef(fileQuery);
   const [statusFilter, setStatusFilter] = useState('all');
   const statusRef = useRef(statusFilter);
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const sourceRef = useRef(sourceFilter);
+  const [dsKeys, setDsKeys] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = useState(false);
   const [showBatchReprocessDialog, setShowBatchReprocessDialog] = useState(false);
@@ -263,7 +267,18 @@ export default function KnowledgeBaseDetailPage(
   );
   const [metadataConfigDialogOpen, setMetadataConfigDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
-  const [view, setView] = useState<'details' | 'retrieval_test'>('details');
+  const [view, setView] = useState<'details' | 'data_sources' | 'retrieval_test'>('details');
+  // 召回测试页内的子工具：召回(search) / 目录(catalog) / 查看文件(fetch) / API 说明
+  const [recallTool, setRecallTool] = useState<'search' | 'catalog' | 'keyword' | 'fetch' | 'api'>('search');
+  const [fetchRef, setFetchRef] = useState('');
+  const [fetchResult, setFetchResult] = useState<any>(null);
+  const [fetchLoading, setFetchLoading] = useState(false);
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogResults, setCatalogResults] = useState<any[] | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [keywordPattern, setKeywordPattern] = useState('');
+  const [keywordResults, setKeywordResults] = useState<any[] | null>(null);
+  const [keywordLoading, setKeywordLoading] = useState(false);
   const [metadataEditDialogOpen, setMetadataEditDialogOpen] = useState(false);
   const [editingMetadataConfig, setEditingMetadataConfig] = useState<MetadataConfig | null>(null);
   const [newMetadataName, setNewMetadataName] = useState('');
@@ -384,6 +399,10 @@ export default function KnowledgeBaseDetailPage(
   }, [statusFilter]);
 
   useEffect(() => {
+    sourceRef.current = sourceFilter;
+  }, [sourceFilter]);
+
+  useEffect(() => {
     fileQueryRef.current = fileQuery;
   }, [fileQuery]);
 
@@ -401,7 +420,8 @@ export default function KnowledgeBaseDetailPage(
     console.log("Refreshing file list... query:", fileQueryRef.current, statusRef.current);
 
     const filter = statusRef.current;
-    const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}&query=${fileQueryRef.current || ''}&status=${filter === 'all' ? '': filter}`;
+    const sourceVal = sourceRef.current && sourceRef.current !== 'all' ? sourceRef.current : '';
+    const url = `/api/config/knowledgebases/${kbId}/files?page=${pageRef.current}&size=${fileSizePerPage}&query=${fileQueryRef.current || ''}&status=${filter === 'all' ? '': filter}&source=${encodeURIComponent(sourceVal)}`;
 
     try {
       const files_res = await tenantFetch(url, { signal: controller.signal, });
@@ -420,10 +440,91 @@ export default function KnowledgeBaseDetailPage(
     }
   }, [kbId]);
 
-  // 页面和状态筛选变化时立即获取数据
+  const FETCH_UI_CHARS = 20000; // per-request window for the human "查看文件" view
+  const handleFetchFile = useCallback(async (refOverride?: string, append = false) => {
+    const ref = (refOverride ?? fetchRef).trim();
+    if (!ref) return;
+    if (refOverride !== undefined) setFetchRef(refOverride);
+    setFetchLoading(true);
+    if (!append) setFetchResult(null);
+    try {
+      // a value containing "/" is treated as a data-source doc_id, else a file_id
+      const param = ref.includes('/') ? `doc_id=${encodeURIComponent(ref)}` : `file_id=${encodeURIComponent(ref)}`;
+      const off = append && fetchResult?.next_offset ? fetchResult.next_offset : 0;
+      const res = await tenantFetch(
+        `/api/config/knowledgebases/${kbId}/file-content?${param}&max_chars=${FETCH_UI_CHARS}&offset=${off}`,
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.message || t('knowledgebase.fetchContentFailed'));
+      const data = json.data;
+      if (append && fetchResult) {
+        setFetchResult({ ...data, content: (fetchResult.content || '') + (data.content || '') });
+      } else {
+        setFetchResult(data);
+      }
+    } catch (err: any) {
+      toast.error(err.message || t('knowledgebase.fetchContentFailed'));
+    } finally {
+      setFetchLoading(false);
+    }
+  }, [fetchRef, fetchResult, kbId, tenantFetch, t]);
+
+  const handleCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '30' });
+      if (catalogQuery.trim()) params.set('query', catalogQuery.trim());
+      const res = await tenantFetch(`/api/config/knowledgebases/${kbId}/catalog?${params}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.message || t('knowledgebase.catalogFailed'));
+      setCatalogResults(json.data?.results || []);
+    } catch (err: any) {
+      toast.error(err.message || t('knowledgebase.catalogFailed'));
+      setCatalogResults([]);
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [catalogQuery, kbId, tenantFetch, t]);
+
+  const handleKeyword = useCallback(async () => {
+    const p = keywordPattern.trim();
+    if (!p) return;
+    setKeywordLoading(true);
+    try {
+      const params = new URLSearchParams({ pattern: p, limit: '30', context: '2' });
+      const res = await tenantFetch(`/api/config/knowledgebases/${kbId}/keyword?${params}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.message || t('knowledgebase.keywordFailed'));
+      setKeywordResults(json.data?.results || []);
+    } catch (err: any) {
+      toast.error(err.message || t('knowledgebase.keywordFailed'));
+      setKeywordResults([]);
+    } finally {
+      setKeywordLoading(false);
+    }
+  }, [keywordPattern, kbId, tenantFetch, t]);
+
+  // 页面和状态/来源筛选变化时立即获取数据
   useEffect(() => {
     fetchKbFiles();
-  }, [fetchKbFiles, page, statusFilter]);
+  }, [fetchKbFiles, page, statusFilter, sourceFilter]);
+
+  // 拉取本知识库的数据源 key 列表，用于「来源」筛选下拉
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await tenantFetch(`/api/config/knowledgebases/${kbId}/datasources?page=1&size=100`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const keys = (json.data?.items || []).map((d: any) => d.datasource_key).filter(Boolean);
+        if (!cancelled) setDsKeys(Array.from(new Set<string>(keys)));
+      } catch {
+        /* non-fatal: filter just won't list datasource keys */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [kbId, tenantFetch]);
 
   // 搜索关键词变化时触发搜索（带防抖）
   useEffect(() => {
@@ -1708,6 +1809,17 @@ export default function KnowledgeBaseDetailPage(
           </button>
           <button
             type="button"
+            onClick={() => setView('data_sources')}
+            className={`text-xs py-1.5 border-b-2 -mb-[9px] transition-colors ${
+              view === 'data_sources'
+                ? 'border-primary text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t('datasource.title')}
+          </button>
+          <button
+            type="button"
             onClick={() => setView('retrieval_test')}
             className={`text-xs py-1.5 border-b-2 -mb-[9px] transition-colors ${
               view === 'retrieval_test'
@@ -1718,9 +1830,10 @@ export default function KnowledgeBaseDetailPage(
             {t('knowledgebase.retrievalTest')}
           </button>
         </div>
-        <Tabs value={view} onValueChange={(v) => setView(v as 'details' | 'retrieval_test')}>
+        <Tabs value={view} onValueChange={(v) => setView(v as 'details' | 'data_sources' | 'retrieval_test')}>
           <TabsList className="sr-only" aria-hidden="true">
             <TabsTrigger value="details">{t('knowledgebase.fileManagement')}</TabsTrigger>
+            <TabsTrigger value="data_sources">{t('datasource.title')}</TabsTrigger>
             <TabsTrigger value="retrieval_test">{t('knowledgebase.retrievalTest')}</TabsTrigger>
           </TabsList>
           <TabsContent value="details" className="py-2">
@@ -2364,6 +2477,20 @@ export default function KnowledgeBaseDetailPage(
                           <TableHead className="text-xs text-muted-foreground px-2 py-1">{t('knowledgebase.updatedTime')}</TableHead>
                           <TableHead className="text-xs text-muted-foreground px-2 py-1">{t('knowledgebase.parserTypeCol')}</TableHead>
                           <TableHead className="px-2 py-1">
+                            <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
+                              <SelectTrigger className="h-6 text-xs w-28 border-none shadow-none px-1 text-muted-foreground">
+                                <SelectValue placeholder={t('datasource.source')} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">{t('datasource.allSources')}</SelectItem>
+                                <SelectItem value="manual">{t('datasource.manualUpload')}</SelectItem>
+                                {dsKeys.map((k) => (
+                                  <SelectItem key={k} value={k}>{k}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableHead>
+                          <TableHead className="px-2 py-1">
                             <FileStatusFilter
                               value={statusFilter as 'all' | 'succeeded' | 'failed' | 'pending' | 'parsing' | 'persisting'}
                               onValueChange={setStatusFilter}
@@ -2398,9 +2525,21 @@ export default function KnowledgeBaseDetailPage(
                               />
                             </TableCell>
                             <TableCell className="px-2 py-0.5">
-                              <span className="truncate block w-full text-left font-medium text-xs">
-                                {file.file_name}
-                              </span>
+                              {(() => {
+                                const displayTitle = file.file_metadata?.title || file.file_name;
+                                return (
+                                  <div className="min-w-0">
+                                    <span className="truncate block w-full text-left font-medium text-xs">
+                                      {displayTitle}
+                                    </span>
+                                    {file.file_name !== displayTitle && (
+                                      <span className="truncate block w-full text-left text-[10px] text-muted-foreground">
+                                        {file.file_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell className="text-xs px-2 py-0.5 text-muted-foreground">
                               {formatFileSize(Number(file.file_size))}
@@ -2427,6 +2566,17 @@ export default function KnowledgeBaseDetailPage(
                                    file.chunk_config.parser_type === 'table' ? t('knowledgebase.tableShort') :
                                    file.chunk_config.parser_type === 'paragraph' ? t('knowledgebase.paragraphShort') :
                                    file.chunk_config.parser_type}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs px-2 py-0.5">
+                              {file.file_metadata?.datasource_key ? (
+                                <Badge variant="secondary" className="bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/20 dark:text-violet-400 h-5 px-1.5 text-[10px]">
+                                  {file.file_metadata.datasource_key}
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="bg-muted text-muted-foreground h-5 px-1.5 text-[10px]">
+                                  {t('datasource.manualUpload')}
                                 </Badge>
                               )}
                             </TableCell>
@@ -3147,7 +3297,35 @@ export default function KnowledgeBaseDetailPage(
                 />
               </div>
           </TabsContent>
+          <TabsContent value="data_sources" className="py-2">
+            <DataSourcesPanel kbId={kbId} />
+          </TabsContent>
           <TabsContent value="retrieval_test" className="py-2 flex flex-col h-full min-h-0">
+            {/* 子工具切换：召回 / 查看文件 / API 说明 */}
+            <div className="flex items-center gap-4 px-4 pb-2 mb-1 border-b border-border flex-shrink-0">
+              {([
+                ['search', t('knowledgebase.toolSearch')],
+                ['catalog', t('knowledgebase.toolCatalog')],
+                ['keyword', t('knowledgebase.toolKeyword')],
+                ['fetch', t('knowledgebase.toolFetch')],
+                ['api', t('knowledgebase.toolApiDoc')],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setRecallTool(key)}
+                  className={`text-xs py-1.5 border-b-2 -mb-[9px] transition-colors ${
+                    recallTool === key
+                      ? 'border-primary text-foreground font-medium'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {recallTool === 'search' && (
             <div className="flex flex-col flex-1 min-h-0 px-4 gap-3">
               {/* 顶部：搜索栏 + 工具栏 */}
               <div className="flex flex-col gap-2 flex-shrink-0">
@@ -3472,11 +3650,27 @@ export default function KnowledgeBaseDetailPage(
                                 </Badge>
                               )}
                             </div>
-                            {isExpanded ? (
-                              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            ) : (
-                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            )}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                className="text-[11px] text-primary hover:underline shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const m: any = chunk.metadata || {};
+                                  const ref = m.source_doc_id || m.doc_id;
+                                  if (!ref) { toast.error(t('knowledgebase.fetchContentFailed')); return; }
+                                  setRecallTool('fetch');
+                                  handleFetchFile(ref);
+                                }}
+                              >
+                                {t('knowledgebase.viewFullText')}
+                              </button>
+                              {isExpanded ? (
+                                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              )}
+                            </div>
                           </div>
                           <div
                             className={`text-[11px] leading-relaxed break-words text-foreground/80 ${
@@ -3517,6 +3711,196 @@ export default function KnowledgeBaseDetailPage(
                 )}
               </div>
             </div>
+            )}
+
+            {recallTool === 'catalog' && (
+              <div className="flex flex-col flex-1 min-h-0 px-4 gap-2 py-1">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={catalogQuery}
+                    onChange={(e) => setCatalogQuery(e.target.value)}
+                    placeholder={t('knowledgebase.catalogPlaceholder')}
+                    className="flex-1 text-xs h-9"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCatalog(); }}
+                  />
+                  <Button onClick={() => handleCatalog()} className="text-xs h-9 px-4" size="sm" disabled={catalogLoading}>
+                    {catalogLoading && <Spinner size="sm" className="mr-1" />}
+                    {t('knowledgebase.catalogRun')}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{t('knowledgebase.catalogHint')}</p>
+                <div className="flex-1 min-h-0 overflow-y-auto mt-1">
+                  {catalogResults && catalogResults.length === 0 && (
+                    <div className="text-center text-xs text-muted-foreground py-8">{t('knowledgebase.catalogEmpty')}</div>
+                  )}
+                  {catalogResults && catalogResults.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      {catalogResults.map((doc, i) => (
+                        <div key={doc.doc_id || i} className="rounded-md border border-border px-3 py-2 hover:bg-muted/40">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-xs font-medium truncate">{doc.title || doc.path}</div>
+                              <div className="text-[10px] text-muted-foreground truncate font-mono">{doc.doc_id}</div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {typeof doc.score === 'number' && (
+                                <span className="text-[10px] text-amber-600">{doc.score.toFixed(2)}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="text-[11px] text-primary hover:underline"
+                                onClick={() => { setRecallTool('fetch'); handleFetchFile(doc.doc_id); }}
+                              >
+                                {t('knowledgebase.viewFullText')}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-1 flex gap-1.5 flex-wrap">
+                            {doc.product && <span>{doc.product}</span>}
+                            {doc.section && <span>· {doc.section}</span>}
+                            {doc.lang && <span>· {doc.lang}</span>}
+                            {doc.source_url && (
+                              <a href={doc.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">· {t('knowledgebase.sourceLink')}</a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {recallTool === 'keyword' && (
+              <div className="flex flex-col flex-1 min-h-0 px-4 gap-2 py-1">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={keywordPattern}
+                    onChange={(e) => setKeywordPattern(e.target.value)}
+                    placeholder={t('knowledgebase.keywordPlaceholder')}
+                    className="flex-1 text-xs h-9 font-mono"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleKeyword(); }}
+                  />
+                  <Button onClick={() => handleKeyword()} className="text-xs h-9 px-4" size="sm" disabled={keywordLoading}>
+                    {keywordLoading && <Spinner size="sm" className="mr-1" />}
+                    {t('knowledgebase.keywordRun')}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{t('knowledgebase.keywordHint')}</p>
+                <div className="flex-1 min-h-0 overflow-y-auto mt-1">
+                  {keywordResults && keywordResults.length === 0 && (
+                    <div className="text-center text-xs text-muted-foreground py-8">{t('knowledgebase.keywordEmpty')}</div>
+                  )}
+                  {keywordResults && keywordResults.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      {keywordResults.map((m, i) => (
+                        <div key={i} className="rounded-md border border-border px-3 py-2 hover:bg-muted/40">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              <span className="font-medium text-foreground/80">{m.title || m.doc_id}</span>
+                              <span className="ml-1.5">· {t('knowledgebase.lineLabel')} {m.line}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {m.source_url && (
+                                <a href={m.source_url} target="_blank" rel="noreferrer" className="text-[11px] text-primary hover:underline">{t('knowledgebase.sourceLink')}</a>
+                              )}
+                              <button
+                                type="button"
+                                className="text-[11px] text-primary hover:underline"
+                                onClick={() => { setRecallTool('fetch'); handleFetchFile(m.doc_id); }}
+                              >
+                                {t('knowledgebase.viewFullText')}
+                              </button>
+                            </div>
+                          </div>
+                          <pre className="text-[11px] whitespace-pre-wrap break-words font-mono bg-muted/40 rounded p-2">{m.context}</pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {recallTool === 'fetch' && (
+              <div className="flex flex-col flex-1 min-h-0 px-4 gap-2 py-1">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={fetchRef}
+                    onChange={(e) => setFetchRef(e.target.value)}
+                    placeholder={t('knowledgebase.fetchRefPlaceholder')}
+                    className="flex-1 text-xs h-9"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleFetchFile(); }}
+                  />
+                  <Button onClick={() => handleFetchFile()} className="text-xs h-9 px-4" size="sm" disabled={fetchLoading}>
+                    {fetchLoading && <Spinner size="sm" className="mr-1" />}
+                    {t('knowledgebase.fetchView')}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{t('knowledgebase.fetchRefHint')}</p>
+                {fetchResult && (
+                  <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border border-border p-3 mt-1">
+                    <div className="text-sm font-medium">{fetchResult.title}</div>
+                    <div className="text-[11px] text-muted-foreground mb-2 break-all">
+                      {fetchResult.doc_id || fetchResult.file_id}
+                      {fetchResult.source_url && (
+                        <> · <a href={fetchResult.source_url} target="_blank" rel="noreferrer" className="hover:underline text-primary">{t('knowledgebase.sourceLink')}</a></>
+                      )}
+                      {fetchResult.degraded && <> · <span className="text-amber-600">{fetchResult.degraded}</span></>}
+                    </div>
+                    <pre className="text-xs whitespace-pre-wrap break-words font-mono bg-muted/40 rounded p-3">{fetchResult.content}</pre>
+                    {fetchResult.truncated && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={fetchLoading} onClick={() => handleFetchFile(undefined, true)}>
+                          {fetchLoading && <Spinner size="sm" className="mr-1" />}
+                          {t('knowledgebase.loadMore')}
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground">
+                          {t('knowledgebase.shownChars', { shown: (fetchResult.content?.length ?? 0).toLocaleString(), total: (fetchResult.content_length ?? 0).toLocaleString() })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {recallTool === 'api' && (
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 py-1 space-y-4">
+                <p className="text-xs text-muted-foreground">{t('knowledgebase.apiDocIntro')}</p>
+                {(() => {
+                  const host = 'https://<your-host>';
+                  const copy = (s: string) => { navigator.clipboard?.writeText(s); toast.success(t('knowledgebase.copied')); };
+                  const recallCurl = `curl -X POST '${host}/v1/retrieval' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-TENANT-ID: ${tenantId}' \\\n  -d '{\n    "knowledge_id": "${kbId}",\n    "query": "如何快速开始",\n    "retrieval_setting": { "top_k": 5, "similarity_threshold": 0.2, "retrieval_mode": "hybrid" },\n    "metadata_condition": { "logical_operator": "and", "conditions": [\n      { "name": "datasource_key", "comparison_operator": "is", "value": "<datasource_key>" }\n    ] }\n  }'`;
+                  const recallResp = `{\n  "code": 200,\n  "data": [\n    { "id": "<chunk_id>", "title": "...", "content": "...", "score": 0.87,\n      "url": "https://...", "metadata": { "datasource_key": "...", "source_doc_id": "...", "title": "..." } }\n  ]\n}`;
+                  const fetchCurl = `# 取文件内容（长文档会按窗口截断，用 offset 翻页）\ncurl '${host}/v1/config/knowledgebases/${kbId}/file-content?doc_id=<datasource_key>/<path>&max_chars=6000&offset=0' \\\n  -H 'X-TENANT-ID: ${tenantId}'\n# 也可用 file_id: ?file_id=<file_id>\n# 参数: max_chars=单次返回字符数(省略=全文); offset=起始字符(翻页传上一次的 next_offset)`;
+                  const fetchResp = `{\n  "code": 200,\n  "data": {\n    "file_id": "...", "title": "...", "doc_id": "...",\n    "source_url": "https://...",\n    "content": "# ...(本窗口内容)",\n    "content_length": 20007,        // 全文总字符数\n    "offset": 0, "returned_chars": 6000,\n    "truncated": true,              // 还有后续内容\n    "next_offset": 6000,            // 下一段: offset=next_offset 再请求\n    "metadata": { }\n  }\n}`;
+                  const block = (title: string, curl: string, resp: string) => (
+                    <div className="rounded-lg border border-border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">{title}</span>
+                        <button type="button" onClick={() => copy(curl)} className="text-[11px] text-primary hover:underline">{t('knowledgebase.copy')}</button>
+                      </div>
+                      <pre className="text-[11px] whitespace-pre-wrap break-words font-mono bg-muted/40 rounded p-2">{curl}</pre>
+                      <div className="text-[11px] text-muted-foreground">{t('knowledgebase.apiResponseExample')}</div>
+                      <pre className="text-[11px] whitespace-pre-wrap break-words font-mono bg-muted/40 rounded p-2">{resp}</pre>
+                    </div>
+                  );
+                  const catalogCurl = `# 按元数据查找/浏览文档（不读正文）\ncurl '${host}/v1/config/knowledgebases/${kbId}/catalog?query=计费&limit=20' \\\n  -H 'X-TENANT-ID: ${tenantId}'\n# 可选过滤: &product=<product>&section=<section>&lang=<zh|en>；query 省略=浏览`;
+                  const catalogResp = `{\n  "code": 200,\n  "data": { "results": [\n    { "doc_id": "...", "title": "...", "path": "...",\n      "product": "...", "section": "...", "lang": "zh",\n      "source_url": "https://...", "score": 0.91 }\n  ], "total": 1 }\n}`;
+                  const keywordCurl = `# 精确关键词/标识符定位（字面匹配，非正则）\ncurl '${host}/v1/config/knowledgebases/${kbId}/keyword?pattern=eventTime&context=2&limit=20' \\\n  -H 'X-TENANT-ID: ${tenantId}'\n# 可选 scope: &doc_id=<doc_id> / &path_prefix=<前缀> / &datasource=<key>`;
+                  const keywordResp = `{\n  "code": 200,\n  "data": { "results": [\n    { "doc_id": "...", "line": 42, "match": "...eventTime...",\n      "context": "前后 N 行...", "source_url": "https://..." }\n  ], "scanned_files": 3, "scan_capped": false, "limit_reached": false }\n}`;
+                  return (
+                    <>
+                      {block(t('knowledgebase.apiRecallTitle'), recallCurl, recallResp)}
+                      {block(t('knowledgebase.apiCatalogTitle'), catalogCurl, catalogResp)}
+                      {block(t('knowledgebase.apiKeywordTitle'), keywordCurl, keywordResp)}
+                      {block(t('knowledgebase.apiFetchTitle'), fetchCurl, fetchResp)}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
