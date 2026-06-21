@@ -414,7 +414,10 @@ class RagService:
             chunk_stmt = select(KbChunkEntity.file_id).where(
                 KbChunkEntity.kb_id == kb_id,
                 KbChunkEntity.tenant_id == tenant_id,
-                KbChunkEntity.text.like(f"%{pattern}%"),
+                # autoescape so literal % / _ in the pattern are not treated as
+                # SQL LIKE wildcards (which would broaden the prefilter and could
+                # crowd out real matches under the MAX_SCAN_FILES cap).
+                KbChunkEntity.text.contains(pattern, autoescape=True),
             )
             if scope != "kb":
                 ds_files = select(DataSourceDocumentEntity.file_id).where(

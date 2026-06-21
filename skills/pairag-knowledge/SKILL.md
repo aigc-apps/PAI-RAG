@@ -26,8 +26,11 @@ Run via: `python <skill-dir>/pairag.py <command> [...]` (Python 3, no dependenci
   `--offset` for paging large files.
 - **`kbs [query]`** — list available knowledge bases (id, name, description).
 
-All commands cover the **whole knowledge base**, including manually-uploaded
-files (not just documents ingested via a data source).
+Coverage: `catalog` lists **every file** in the KB (any status). `search` and
+`grep` cover all **indexed** content — a file that is still parsing, failed to
+parse, or otherwise has no chunks yet will not appear in their results. So an
+empty `search`/`grep` result does not by itself mean a file is absent; check
+`catalog` to confirm whether the file exists.
 
 ## Targeting a knowledge base
 

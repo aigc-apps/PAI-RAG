@@ -93,15 +93,23 @@ yields a `file_id`; `search`/`grep` yield `doc_id` (falling back to `file_id`).
 `chunks` (chunk listing) is intentionally **not** exposed: `catalog` covers file
 discovery and `read` covers content.
 
-**Whole-KB coverage.** All commands cover the entire knowledge base, including
-manually-uploaded files:
-- `catalog` lists `KbFileEntity` rows via the files endpoint (every file in the
-  KB), returning `file_name`, `file_metadata.title`, and `file_source`.
+**Coverage.** The commands cover manually-uploaded files, not just data-source
+documents — but `catalog` and the search commands differ on *indexed* vs *all*:
+- `catalog` lists `KbFileEntity` rows via the files endpoint — **every file in
+  the KB regardless of parse status** — returning `file_name`,
+  `file_metadata.title`, and `file_source`.
 - `grep` passes `scope=kb` to the keyword endpoint. The backend `keyword_search`
   gained a `scope` parameter (default `datasource` to preserve the in-process
   agent tool in `datasource_tool.py`); `scope=kb` drops the data-source filter so
-  the chunk-text prefilter spans all files.
-- `search` (`/v1/retrieval`) already queries the vector store over all chunks.
+  the chunk-text prefilter spans all files. Its candidate set comes from
+  `KbChunkEntity`, so **only indexed (chunked) files are searched** — files still
+  parsing, failed, or chunk-less are not.
+- `search` (`/v1/retrieval`) queries the vector store, so it likewise covers
+  **indexed content only**.
+
+Because `search`/`grep` see only indexed content, an empty result does not prove
+a file is absent; `catalog` is the source of truth for "does this file exist."
+SKILL.md states this so an agent does not misread an empty search as "absent."
 
 Behavior details:
 
