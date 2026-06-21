@@ -139,30 +139,36 @@ async def delete_datasource(
             code=409,
             message="Data source is syncing; cancel or wait for it to finish before deleting.",
         )
-    # First delete each ingested KB file (chunks + vectors). Only drop the data
-    # source + manifest if ALL files were removed — otherwise we'd orphan vectors
-    # that stay searchable with no way to clean them up. Failures abort the delete
-    # so the caller can retry (delete_file is idempotent for already-gone files).
+    # Delete each ingested KB file (chunks + vectors), committing PER FILE.
+    # delete_file removes the external vector immediately (non-transactional), so we
+    # must commit each file's DB deletion as we go — a single batch transaction would,
+    # on a later failure, roll back earlier files' DB rows while their vectors are
+    # already gone (orphaned, un-recallable). Per-file commit keeps DB and vector
+    # store consistent; on real failure we stop and the data source is kept, so a
+    # retry resumes (delete_file is idempotent for already-gone files).
     file_ids = await datasource_service.list_document_file_ids(ds_id=ds_id, tenant_id=tenant_id)
-    failed = []
+    failed_file_id = None
+    failed_err = None
     for file_id in file_ids:
         try:
             await rag_service.delete_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
+            await session.commit()
         except Exception as e:  # noqa: BLE001
+            await session.rollback()
             msg = str(e).lower()
             if "does not exist" in msg or "not found" in msg:
-                continue  # already gone — fine
+                continue  # already gone — fine, keep going
             logger.warning(f"Failed to delete file {file_id} of datasource {ds_id}: {e}")
-            failed.append(file_id)
-    if failed:
-        await session.rollback()
+            failed_file_id, failed_err = file_id, str(e)
+            break  # stop on first real failure; deleted-so-far are durably committed
+    if failed_file_id:
         raise ApiException(
             code=500,
             message=(
-                f"Failed to delete {len(failed)} ingested file(s); data source not removed. "
-                f"Please retry."
+                "Failed to delete an ingested file; data source kept. Already-deleted "
+                "files are removed. Please retry to resume."
             ),
-            data={"failed_file_ids": failed},
+            data={"failed_file_id": failed_file_id, "error": failed_err},
         )
     await datasource_service.delete_datasource(ds_id=ds_id, tenant_id=tenant_id)
     await session.commit()

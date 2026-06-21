@@ -53,6 +53,13 @@ def _is_missing_file_error(e: Exception) -> bool:
     return "does not exist" in str(e).lower() or "not found" in str(e).lower()
 
 
+async def _is_cancelled(datasource_id: str, tenant_id: str) -> bool:
+    """Re-read the data source's status to detect a concurrent user cancel."""
+    async with create_db_session() as session:
+        ds = await DataSourceService(session).get_datasource(datasource_id, tenant_id)
+        return bool(ds and ds.status == DataSourceStatus.cancelled)
+
+
 # -- default (production) dependency implementations ------------------------
 async def _default_file_writer(content: bytes, file_name: str, dest_path: str, tenant_id: str) -> str:
     from pairag.file.store.file_store_helper import file_store
@@ -266,14 +273,18 @@ async def run_sync(
         # -- phase A: fetch + ingest changed docs in batches ---------------
         was_cancelled = False
         for batch in _chunks(to_process, batch_size):
-            # cooperative cancel: stop enqueuing if the user cancelled mid-fetch
-            async with create_db_session() as session:
-                cur = await DataSourceService(session).get_datasource(datasource_id, tenant_id)
-            if cur and cur.status == DataSourceStatus.cancelled:
+            # cooperative cancel: stop before fetching a batch
+            if await _is_cancelled(datasource_id, tenant_id):
                 was_cancelled = True
                 logger.info(f"[datasource-sync] {datasource_id}: cancelled by user; stopping fetch.")
                 break
             fetched = _fetch_bodies(adapter, [d for d, _ in batch], fetch_workers)
+            # Re-check after the (blocking) fetch: if cancelled meanwhile, drop this
+            # batch entirely — do NOT ingest/commit/enqueue it.
+            if await _is_cancelled(datasource_id, tenant_id):
+                was_cancelled = True
+                logger.info(f"[datasource-sync] {datasource_id}: cancelled during fetch; dropping batch.")
+                break
             # Collect (file_id, version) and enqueue ONLY AFTER the session
             # commits — otherwise the Celery worker (separate connection) reads
             # the KbFileEntity before it is committed and fails "File not found".
@@ -333,6 +344,17 @@ async def run_sync(
                         counts["failed"] += 1
                         _record_error(doc_id, str(ie))
                 await session.commit()
+
+            # Final cancel check before enqueue: if cancelled in the tiny window
+            # after commit, don't enqueue. Sweep the just-committed pending files to
+            # cancelled so they don't sit forever unparsed.
+            if to_enqueue and await _is_cancelled(datasource_id, tenant_id):
+                was_cancelled = True
+                async with create_db_session() as session:
+                    await DataSourceService(session).cancel_sync(datasource_id, tenant_id)
+                    await session.commit()
+                logger.info(f"[datasource-sync] {datasource_id}: cancelled before enqueue; swept batch.")
+                break
 
             # Files + manifest rows are committed now — safe to enqueue parsing.
             for file_id, version in to_enqueue:

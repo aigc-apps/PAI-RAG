@@ -12,6 +12,7 @@ internal documentation site on a corporate network).
 import os
 import ipaddress
 import socket
+from typing import Optional
 from urllib.parse import urlparse
 
 
@@ -55,3 +56,42 @@ def validate_public_url(url: str) -> None:
             raise UrlNotAllowed(
                 f"Blocked URL '{url}': host '{host}' resolves to non-public address {ip}."
             )
+
+
+def resolve_validated_ip(url: str) -> Optional[str]:
+    """Validate `url` and return the single public IP the caller must connect to.
+
+    This closes the DNS-rebinding gap: ``validate_public_url`` resolves the host and
+    checks the IP, but a plain client re-resolves at connect time and may land on a
+    different (private) address. Callers should connect to the returned IP directly
+    while preserving the original Host header / TLS SNI.
+
+    Returns ``None`` when private networks are explicitly allowed
+    (``PAIRAG_DATASOURCE_ALLOW_PRIVATE_NETWORK``) — the caller resolves normally then.
+    Raises ``UrlNotAllowed`` if the scheme/host is invalid or any resolved address is
+    non-public.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise UrlNotAllowed(f"Blocked URL scheme '{parsed.scheme}': only http/https are allowed.")
+    host = parsed.hostname
+    if not host:
+        raise UrlNotAllowed(f"Blocked URL '{url}': missing host.")
+    if _allow_private():
+        return None
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise UrlNotAllowed(f"Cannot resolve host '{host}': {e}") from e
+    ips = [info[4][0] for info in infos]
+    if not ips:
+        raise UrlNotAllowed(f"Cannot resolve host '{host}': no addresses returned.")
+    # Reject if ANY record is non-public (a mixed answer could be used to slip past
+    # a check that only inspects the first record).
+    for ip in ips:
+        if _is_blocked_ip(ip):
+            raise UrlNotAllowed(
+                f"Blocked URL '{url}': host '{host}' resolves to non-public address {ip}."
+            )
+    return ips[0]

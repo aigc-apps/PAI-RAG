@@ -41,13 +41,18 @@ _INTENT_NUDGE_MSG = (
     "你刚才只描述了下一步,但没有真正执行。请在本次响应中**直接调用合适的工具**,"
     "或者直接给出最终答案。不要再预告或描述将要调用的工具。"
 )
-# 行动预告的常见措辞(中英),用于识别"只说不做"的悬空消息
+# 行动预告的常见措辞(中英),用于识别"只说不做"的悬空消息。
+# 刻意只保留"明显要去用工具"的短语,避免误伤正常答案(去掉了"接下来/下一步/我将"等宽泛词)。
 _INTENT_PHRASES = (
-    "让我", "我需要查找", "我需要搜索", "我来搜", "我来查", "接下来", "下一步",
-    "继续搜索", "继续查", "我将", "我会查", "我会搜", "让我搜索", "让我查",
-    "let me search", "let me look", "i'll search", "i will search",
-    "i need to search", "i need to find", "i'll look", "next, i", "let me find",
+    "让我搜索", "让我查", "让我继续", "让我再", "让我先",
+    "我需要查找", "我需要搜索", "我来搜", "我来查", "继续搜索",
+    "let me search", "let me look", "let me find",
+    "i'll search", "i will search", "i need to search", "i need to find", "i'll look",
 )
+
+
+# 一个"行动预告"必然是短消息;超过这个长度就当作正常正文,不再扣留/纠正。
+_INTENT_MAX_LEN = 200
 
 
 def _looks_like_unfinished_intent(text: str) -> bool:
@@ -55,7 +60,7 @@ def _looks_like_unfinished_intent(text: str) -> bool:
     if not text:
         return False
     t = text.strip().lower()
-    return len(text) < 200 and any(p in t for p in _INTENT_PHRASES)
+    return len(text) < _INTENT_MAX_LEN and any(p in t for p in _INTENT_PHRASES)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
@@ -170,6 +175,14 @@ class ReactAgent:
 
                 tool_calls = []
                 step_content = ""
+                # If we can still nudge this turn, withhold streamed text until we
+                # know it isn't a bare action-preview — otherwise the user sees the
+                # dangling "let me search…" before we silently correct it. We only
+                # hold back the short intent window; past _INTENT_MAX_LEN (or once a
+                # tool_call appears) the text can't be a preview, so flush and stream
+                # live. `pending` is the held-back, not-yet-yielded text.
+                buffering = nudge_count < MAX_INTENT_NUDGES
+                pending = ""
 
                 # Compress messages to fit within token budget
                 messages = self.msg_manager.fit_to_budget(messages)
@@ -190,9 +203,25 @@ class ReactAgent:
 
                         if chunk.tool_calls:
                             tool_calls = chunk.tool_calls
+                            # A tool call means any text so far is legit pre-call
+                            # narration, not a dangling preview — release it.
+                            if buffering:
+                                if pending:
+                                    yield TextChunk(delta=pending, usage=chunk.usage)
+                                    pending = ""
+                                buffering = False
 
                         if isinstance(chunk, ReasoningChunk):
                             yield chunk
+                        elif buffering:
+                            step_content += chunk.delta
+                            pending += chunk.delta
+                            # Past the intent window it can't be a short preview:
+                            # flush what we held and stream the rest live.
+                            if len(step_content) >= _INTENT_MAX_LEN:
+                                yield TextChunk(delta=pending, usage=chunk.usage)
+                                pending = ""
+                                buffering = False
                         else:
                             step_content += chunk.delta
                             yield TextChunk(delta=chunk.delta, usage=chunk.usage)
@@ -215,6 +244,8 @@ class ReactAgent:
                         and nudge_count < MAX_INTENT_NUDGES
                         and _looks_like_unfinished_intent(step_content)
                     ):
+                        # Dangling preview: it was withheld (still in `pending`), so
+                        # the user never saw it — drop it and nudge to actually act.
                         nudge_count += 1
                         messages.append({"role": "assistant", "content": step_content})
                         messages.append({"role": "user", "content": _INTENT_NUDGE_MSG})
@@ -222,8 +253,13 @@ class ReactAgent:
                             f"Action-preview without tool call; nudging ({nudge_count}/{MAX_INTENT_NUDGES})."
                         )
                         step_content = ""
+                        pending = ""
                         continue
-                    # Real final answer (or nudges exhausted): persist + finish.
+                    # Real final answer (or nudges exhausted): release any held text,
+                    # then persist + finish.
+                    if pending:
+                        yield TextChunk(delta=pending)
+                        pending = ""
                     if step_content:
                         messages.append({"role": "assistant", "content": step_content})
                         step_content = ""
