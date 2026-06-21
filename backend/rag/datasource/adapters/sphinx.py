@@ -140,67 +140,79 @@ class SphinxAdapter(BaseAdapter):
             u = urljoin(base, href).split("#")[0]
             section_of.setdefault(u, section)
 
-        visited: Set[str] = set()
-        frontier = list(section_of)
-        rounds = 0
-        total_bytes = 0  # cumulative size of rendered bodies held in _rendered
-        while frontier:
-            rounds += 1
-            batch = [u for u in frontier if u not in visited]
-            # Cap total pages crawled so a link-looping / huge site can't run away;
-            # a truncated crawl is an incomplete listing, so block deletes.
-            remaining = MAX_PAGES - len(visited)
-            if remaining <= 0:
-                logger.warning(f"[sphinx] hit MAX_PAGES={MAX_PAGES} for {base}; stopping crawl.")
-                self.discovery_partial = True
-                break
-            if len(batch) > remaining:
-                batch = batch[:remaining]
-                self.discovery_partial = True
-            visited.update(batch)
-            newly: Set[str] = set()
+        def _render_page(url):
+            title, md, links = render(http_get(url), url, base)
+            return url, title, md, links
 
-            def _render_page(url):
-                title, md, links = render(http_get(url), url, base)
-                return url, title, md, links
-
-            results = []
-            if workers <= 1 or len(batch) <= 1:
-                for u in batch:
+        def _render_slice(urls):
+            """Render up to `workers` pages; bounds bodies held in memory at once."""
+            out = []
+            if workers <= 1 or len(urls) == 1:
+                for u in urls:
                     try:
-                        results.append(_render_page(u))
+                        out.append(_render_page(u))
                     except Exception as e:  # noqa: BLE001
                         logger.warning(f"[sphinx] render failed {u}: {e}")
                         self.discovery_partial = True  # incomplete listing → block deletes
             else:
-                with ThreadPoolExecutor(max_workers=workers) as ex:
-                    futs = {ex.submit(_render_page, u): u for u in batch}
+                with ThreadPoolExecutor(max_workers=min(workers, len(urls))) as ex:
+                    futs = {ex.submit(_render_page, u): u for u in urls}
                     for fu in as_completed(futs):
                         try:
-                            results.append(fu.result())
+                            out.append(fu.result())
                         except Exception as e:  # noqa: BLE001
                             logger.warning(f"[sphinx] render failed {futs[fu]}: {e}")
                             self.discovery_partial = True  # incomplete listing → block deletes
+            return out
 
-            for url, title, md, links in results:
-                if not md:
+        visited: Set[str] = set()
+        frontier = list(section_of)
+        rounds = 0
+        total_bytes = 0  # cumulative size of rendered bodies held in _rendered
+        stop = False
+        while frontier and not stop:
+            rounds += 1
+            pending = [u for u in frontier if u not in visited]
+            newly: Set[str] = set()
+            # Render in bounded slices (~workers pages) and re-check the page-count
+            # AND cumulative-byte budgets after EACH slice — never render the whole
+            # frontier (up to MAX_PAGES) before checking, which could buffer ~20 GB
+            # before the first check and OOM. Transient memory is bounded to one
+            # slice's bodies (workers x per-response cap).
+            for i in range(0, len(pending), workers):
+                remaining = MAX_PAGES - len(visited)
+                if remaining <= 0:
+                    logger.warning(f"[sphinx] hit MAX_PAGES={MAX_PAGES} for {base}; stopping crawl.")
+                    self.discovery_partial = True
+                    stop = True
+                    break
+                slice_urls = [u for u in pending[i:i + workers] if u not in visited]
+                if len(slice_urls) > remaining:
+                    slice_urls = slice_urls[:remaining]
+                    self.discovery_partial = True
+                if not slice_urls:
                     continue
-                path = _url_to_path(url)
-                self._rendered[path] = (title or url, md, url, section_of.get(url, ""))
-                total_bytes += len(md.encode("utf-8"))
-                for link in links:
-                    if link not in visited and link not in section_of:
-                        section_of[link] = section_of.get(url, "")
-                        newly.add(link)
-            # Cap cumulative in-memory body size across the whole crawl: the per-
-            # response limit alone still lets MAX_PAGES bodies pile up in _rendered.
-            if total_bytes >= MAX_TOTAL_BYTES:
-                logger.warning(
-                    f"[sphinx] hit MAX_TOTAL_BYTES={MAX_TOTAL_BYTES} for {base} "
-                    f"({total_bytes} bytes rendered); stopping crawl."
-                )
-                self.discovery_partial = True
-                break
+                visited.update(slice_urls)
+
+                for url, title, md, links in _render_slice(slice_urls):
+                    if not md:
+                        continue
+                    path = _url_to_path(url)
+                    self._rendered[path] = (title or url, md, url, section_of.get(url, ""))
+                    total_bytes += len(md.encode("utf-8"))
+                    for link in links:
+                        if link not in visited and link not in section_of:
+                            section_of[link] = section_of.get(url, "")
+                            newly.add(link)
+
+                if total_bytes >= MAX_TOTAL_BYTES:
+                    logger.warning(
+                        f"[sphinx] hit MAX_TOTAL_BYTES={MAX_TOTAL_BYTES} for {base} "
+                        f"({total_bytes} bytes rendered); stopping crawl."
+                    )
+                    self.discovery_partial = True
+                    stop = True
+                    break
             frontier = list(newly)
 
         docs: List[DiscoveredDoc] = []
