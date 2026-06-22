@@ -11,6 +11,22 @@ for raw output.
 
 Run via: `python <skill-dir>/pairag.py <command> [...]` (Python 3, no dependencies).
 
+**Shorter commands.** Each command also has a wrapper next to `pairag.py`, so once
+the skill dir is on your `PATH` you can drop the `python pairag.py` prefix:
+
+| Wrapper | Equivalent to |
+|---|---|
+| `kb_list` | `pairag.py kbs` |
+| `kb_search` | `pairag.py search` |
+| `kb_catalog` | `pairag.py catalog` |
+| `kb_read` | `pairag.py read` |
+| `kb_grep` | `pairag.py grep` |
+
+```bash
+export PATH="<skill-dir>:$PATH"     # once per shell (or add to your shell rc)
+kb_search "how to configure the vector store" --kb docs
+```
+
 ## Which command
 
 - **`search <query>`** — semantic / hybrid retrieval. Use for meaning-based
@@ -53,17 +69,19 @@ Resolution order: flags → environment → `~/.config/pairag/config.json` → d
 
 ```bash
 # Discover knowledge bases
-python pairag.py kbs
+python pairag.py kbs                 # or: kb_list
 
 # Semantic search in the "docs" KB
 python pairag.py search "how to configure the vector store" --kb docs
+# short form: kb_search "how to configure the vector store" --kb docs
 
-# Browse the catalog, then read a document by its doc_id
-python pairag.py catalog --query install --kb docs
-python pairag.py read d1f2... --kb docs
+# Browse the catalog, then read a document by its id
+python pairag.py catalog --query install --kb docs        # or: kb_catalog --query install --kb docs
+python pairag.py read d1f2... --kb docs                    # or: kb_read d1f2... --kb docs
 
 # Exact-string search with more context, as JSON
 python pairag.py grep "timeout = 600" --kb docs --context 3 --json
+# short form: kb_grep "timeout = 600" --kb docs --context 3 --json
 ```
 
 ## Citing results

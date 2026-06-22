@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Convenience wrapper: `kb_list [...]` == `python pairag.py kbs [...]`
+exec python3 "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/pairag.py" kbs "$@"
