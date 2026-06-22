@@ -56,7 +56,8 @@ value is treated as an id directly. If you don't know the KB, run `kbs` first.
 
 ## Configuration
 
-Resolution order: flags → environment → `~/.config/pairag/config.json` → defaults.
+Resolution order: flags → environment → defaults. Set the env vars once (shell rc,
+or the container's `environment:`) and you can drop the flags entirely.
 
 | Setting    | Flag         | Env                | Default                 |
 |------------|--------------|--------------------|-------------------------|
@@ -69,19 +70,19 @@ Resolution order: flags → environment → `~/.config/pairag/config.json` → d
 
 ```bash
 # Discover knowledge bases
-python pairag.py kbs                 # or: kb_list
+kb_list        
 
 # Semantic search in the "docs" KB
-python pairag.py search "how to configure the vector store" --kb docs
-# short form: kb_search "how to configure the vector store" --kb docs
+kb_search "how to configure the vector store" --kb docs
 
 # Browse the catalog, then read a document by its id
-python pairag.py catalog --query install --kb docs        # or: kb_catalog --query install --kb docs
-python pairag.py read d1f2... --kb docs                    # or: kb_read d1f2... --kb docs
+kb_catalog --query install --kb docs
+
+# Read doc from "docs" KB 
+kb_read d1f2... --kb docs
 
 # Exact-string search with more context, as JSON
-python pairag.py grep "timeout = 600" --kb docs --context 3 --json
-# short form: kb_grep "timeout = 600" --kb docs --context 3 --json
+kb_grep "timeout = 600" --kb docs --context 3 --json
 ```
 
 ## Citing results

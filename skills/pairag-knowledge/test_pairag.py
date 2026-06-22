@@ -28,53 +28,35 @@ class _Args:
 # Task 1: config resolution + error type
 # --------------------------------------------------------------------------- #
 def test_config_defaults_when_nothing_set():
-    cfg = pairag.resolve_config(_Args(), env={}, config_path="/does/not/exist.json")
+    cfg = pairag.resolve_config(_Args(), env={})
     assert cfg.base_url == "http://localhost:8682"
     assert cfg.tenant is None
     assert cfg.default_kb is None
     assert cfg.token is None
 
 
-def test_config_precedence_flag_over_env_over_file(tmp_path):
-    cfg_file = tmp_path / "config.json"
-    cfg_file.write_text(
-        json.dumps({"base_url": "http://file:1", "tenant": "tfile", "kb": "kbfile"})
-    )
+def test_config_precedence_flag_over_env():
     env = {
         "PAIRAG_BASE_URL": "http://env:2",
         "PAIRAG_TENANT_ID": "tenv",
         "PAIRAG_KB": "kbenv",
+        "PAIRAG_TOKEN": "tokenv",
     }
     args = _Args(base_url="http://flag:3")
-    cfg = pairag.resolve_config(args, env=env, config_path=str(cfg_file))
-    assert cfg.base_url == "http://flag:3"  # flag wins
-    assert cfg.tenant == "tenv"  # env beats file
-    assert cfg.default_kb == "kbenv"  # env beats file
+    cfg = pairag.resolve_config(args, env=env)
+    assert cfg.base_url == "http://flag:3"  # flag wins over env
+    assert cfg.tenant == "tenv"  # env used when no flag
+    assert cfg.default_kb == "kbenv"  # PAIRAG_KB → default_kb
+    assert cfg.token == "tokenv"
+
+
+def test_config_empty_env_value_falls_through_to_default():
+    cfg = pairag.resolve_config(_Args(), env={"PAIRAG_TENANT_ID": ""})
+    assert cfg.tenant is None  # empty string treated as unset
 
 
 def test_pairag_error_is_exception():
     assert issubclass(pairag.PairagError, Exception)
-
-
-def test_config_corrupt_file_raises_pairag_error(tmp_path):
-    bad = tmp_path / "config.json"
-    bad.write_text("{ this is not valid json")
-    try:
-        pairag.resolve_config(_Args(), env={}, config_path=str(bad))
-        assert False, "expected PairagError"
-    except pairag.PairagError as e:
-        assert "config" in str(e).lower()
-        assert str(bad) in str(e)
-
-
-def test_config_non_object_json_raises_pairag_error(tmp_path):
-    bad = tmp_path / "config.json"
-    bad.write_text(json.dumps(["not", "a", "dict"]))
-    try:
-        pairag.resolve_config(_Args(), env={}, config_path=str(bad))
-        assert False, "expected PairagError"
-    except pairag.PairagError as e:
-        assert "JSON object" in str(e)
 
 
 # --------------------------------------------------------------------------- #

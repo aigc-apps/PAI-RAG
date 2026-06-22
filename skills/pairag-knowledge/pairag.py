@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 DEFAULT_BASE_URL = "http://localhost:8682"
-DEFAULT_CONFIG_PATH = "~/.config/pairag/config.json"
 HTTP_TIMEOUT = 30
 SNIPPET_CHARS = 200
 
@@ -32,37 +31,21 @@ class Config:
     token: Optional[str]
 
 
-def resolve_config(args, env, config_path=None):
-    """Resolve settings with precedence: flags > env > config file > defaults."""
-    path = os.path.expanduser(config_path or DEFAULT_CONFIG_PATH)
-    file_cfg = {}
-    if os.path.exists(path):
-        try:
-            with open(path, encoding="utf-8") as fh:
-                file_cfg = json.load(fh)
-        except (OSError, ValueError) as exc:  # ValueError covers JSONDecodeError
-            raise PairagError(f"Failed to read config file {path}: {exc}")
-        if not isinstance(file_cfg, dict):
-            raise PairagError(
-                f"Config file {path} must contain a JSON object, got {type(file_cfg).__name__}."
-            )
+def resolve_config(args, env):
+    """Resolve settings with precedence: flags > env > defaults."""
 
-    def pick(flag, env_key, file_key, default=None):
+    def pick(flag, env_key, default=None):
         if flag is not None:
             return flag
         if env.get(env_key):
             return env[env_key]
-        if file_cfg.get(file_key):
-            return file_cfg[file_key]
         return default
 
     return Config(
-        base_url=pick(
-            getattr(args, "base_url", None), "PAIRAG_BASE_URL", "base_url", DEFAULT_BASE_URL
-        ),
-        tenant=pick(getattr(args, "tenant", None), "PAIRAG_TENANT_ID", "tenant", None),
-        default_kb=pick(None, "PAIRAG_KB", "kb", None),
-        token=pick(getattr(args, "token", None), "PAIRAG_TOKEN", "token", None),
+        base_url=pick(getattr(args, "base_url", None), "PAIRAG_BASE_URL", DEFAULT_BASE_URL),
+        tenant=pick(getattr(args, "tenant", None), "PAIRAG_TENANT_ID", None),
+        default_kb=pick(None, "PAIRAG_KB", None),
+        token=pick(getattr(args, "token", None), "PAIRAG_TOKEN", None),
     )
 
 

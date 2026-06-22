@@ -62,7 +62,7 @@ facets are added later, the deeper detail can move into a `reference/` doc then.
 
 ### Configuration & connection
 
-Resolution order: **flags → environment → config file → defaults**.
+Resolution order: **flags → environment → defaults**.
 
 | Setting    | Env                 | Default                       | Notes |
 |------------|---------------------|-------------------------------|-------|
@@ -71,7 +71,8 @@ Resolution order: **flags → environment → config file → defaults**.
 | Default KB | `PAIRAG_KB`         | unset                         | name or id; used when `--kb` omitted (pinned-KB scenario) |
 | Auth token | `PAIRAG_TOKEN`      | unset                         | optional `Authorization: Bearer <token>` (future-proof; current endpoints unauthenticated) |
 
-Optional config file at `~/.config/pairag/config.json` accepts the same keys.
+Configuration is env-vars + flags only — no config file. Flags override env for
+per-call overrides; an empty env value is treated as unset.
 
 ### Command surface
 
