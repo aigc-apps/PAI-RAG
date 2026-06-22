@@ -13,8 +13,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../backend"))
 
 import urllib3  # noqa: E402
 
-from rag.datasource import http_util  # noqa: E402
+from rag.datasource import browser_fetch, http_util  # noqa: E402
 from rag.datasource.http_util import ChallengeDetected, http_get  # noqa: E402
+
+_CHALLENGE_BODY = (200, {"Content-Type": "text/html"}, b"x5secdata=z;<!--rgv587_flag:sm-->")
 
 
 @pytest.fixture(autouse=True)
@@ -98,3 +100,60 @@ def test_looks_like_challenge_markers():
     assert http_util._looks_like_challenge('{"action":"captcha"}')
     assert http_util._looks_like_challenge("...X5SECDATA...")  # case-insensitive
     assert not http_util._looks_like_challenge("# A normal doc mentioning captcha bypass")
+
+
+# --------------------------------------------------------------------------- #
+# Playwright browser fallback wiring
+# --------------------------------------------------------------------------- #
+def test_browser_fallback_off_by_default(monkeypatch):
+    monkeypatch.setattr(http_util, "BROWSER_FALLBACK", False)
+    calls = {"n": 0}
+    monkeypatch.setattr(browser_fetch, "browser_get", lambda *a, **k: calls.__setitem__("n", 1))
+    _seq(monkeypatch, [_CHALLENGE_BODY])
+    with pytest.raises(ChallengeDetected):
+        http_get("https://help.aliyun.com/x.md")
+    assert calls["n"] == 0  # browser never invoked when disabled
+
+
+def test_browser_fallback_used_when_enabled(monkeypatch):
+    monkeypatch.setattr(http_util, "BROWSER_FALLBACK", True)
+    monkeypatch.setattr(browser_fetch, "browser_get", lambda url, timeout=45: "REAL CONTENT")
+    _seq(monkeypatch, [_CHALLENGE_BODY])
+    assert http_get("https://help.aliyun.com/x.md") == "REAL CONTENT"
+
+
+def test_browser_fallback_persistent_challenge_raises(monkeypatch):
+    monkeypatch.setattr(http_util, "BROWSER_FALLBACK", True)
+
+    def _boom(url, timeout=45):
+        raise ChallengeDetected("still blocked")
+
+    monkeypatch.setattr(browser_fetch, "browser_get", _boom)
+    _seq(monkeypatch, [_CHALLENGE_BODY])
+    with pytest.raises(ChallengeDetected):
+        http_get("https://help.aliyun.com/x.md")
+
+
+def test_browser_fallback_missing_playwright_raises_original_challenge(monkeypatch):
+    monkeypatch.setattr(http_util, "BROWSER_FALLBACK", True)
+
+    def _no_pw(url, timeout=45):
+        raise ImportError("No module named 'playwright'")
+
+    monkeypatch.setattr(browser_fetch, "browser_get", _no_pw)
+    _seq(monkeypatch, [_CHALLENGE_BODY])
+    with pytest.raises(ChallengeDetected):  # original challenge, not ImportError
+        http_get("https://help.aliyun.com/x.md")
+
+
+def test_browser_get_rejects_post_solve_challenge(monkeypatch):
+    monkeypatch.setattr(browser_fetch, "validate_public_url", lambda url: None)
+    monkeypatch.setattr(browser_fetch, "_run_sync", lambda url, timeout: "x5secdata persists")
+    with pytest.raises(ChallengeDetected):
+        browser_fetch.browser_get("https://help.aliyun.com/x.md")
+
+
+def test_browser_get_returns_clean_body(monkeypatch):
+    monkeypatch.setattr(browser_fetch, "validate_public_url", lambda url: None)
+    monkeypatch.setattr(browser_fetch, "_run_sync", lambda url, timeout: "# Real doc")
+    assert browser_fetch.browser_get("https://help.aliyun.com/x.md") == "# Real doc"

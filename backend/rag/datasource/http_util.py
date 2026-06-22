@@ -22,9 +22,14 @@ import time
 from urllib.parse import urljoin, urlparse
 
 import urllib3
+from loguru import logger
 
 from rag.datasource.url_guard import resolve_validated_ip
 from utils.constants import try_get_int_env
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 # A browser-like User-Agent reduces spurious anti-bot challenges from doc hosts
 # (e.g. help.aliyun.com). Override via env for honesty or a custom contact UA.
@@ -49,6 +54,12 @@ MAX_RETRIES = try_get_int_env("PAIRAG_DATASOURCE_MAX_RETRIES", 3)
 _RETRY_BASE_DELAY = 0.5
 _RETRY_MAX_DELAY = 10.0
 _RETRYABLE_STATUS = (403, 408, 425, 429, 500, 502, 503, 504)
+
+# Opt-in headless-browser fallback: when a challenge survives all retries, run the
+# challenge JS in Chromium (Playwright) to complete the cookie handshake, then
+# fetch the real body. Requires `pip install playwright && playwright install
+# chromium`. Off by default (needs browser binaries; one browser launch per hit).
+BROWSER_FALLBACK = _env_flag("PAIRAG_DATASOURCE_BROWSER_FALLBACK")
 
 # Substrings marking an anti-bot / WAF challenge page (e.g. Aliyun x5sec) served
 # with HTTP 200 in place of the real content. Treated as a retryable failure so a
@@ -297,4 +308,24 @@ def http_get(url: str, timeout: int = DEFAULT_TIMEOUT) -> str:
             if attempt >= MAX_RETRIES:
                 break
             time.sleep(_retry_delay(attempt, getattr(e, "retry_after", None)))
+
+    # Anti-bot challenge survived every retry → optionally hand off to a real
+    # browser that can run the challenge JS / cookie handshake.
+    if BROWSER_FALLBACK and isinstance(last_exc, ChallengeDetected):
+        try:
+            from rag.datasource import browser_fetch
+
+            logger.warning(f"http_get: persistent challenge on '{url}'; trying browser fallback.")
+            return browser_fetch.browser_get(url, timeout)
+        except ChallengeDetected:
+            raise
+        except ImportError:
+            logger.warning(
+                "Browser fallback is enabled but Playwright is not installed "
+                "(`pip install playwright && playwright install chromium`); "
+                f"raising the challenge for '{url}'."
+            )
+        except Exception as be:  # noqa: BLE001
+            logger.warning(f"Browser fallback failed for '{url}': {be}")
+
     raise last_exc
