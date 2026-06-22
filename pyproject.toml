@@ -110,6 +110,7 @@ opentelemetry-exporter-otlp-proto-http = "^1.39.1"
 opentelemetry-exporter-otlp-proto-grpc = "^1.39.1"
 pyyaml = "^6.0.2"
 greenlet = "^3.3.1"
+playwright = "^1.60.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

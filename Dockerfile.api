@@ -45,6 +45,15 @@ ENV VIRTUAL_ENV=/app/.venv \
 # Copy virtual environment from builder
 COPY --from=python-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
+# Install Playwright's Chromium + OS libraries for the data-source anti-bot
+# fallback (browser_fetch). Browsers live at a fixed path so any runtime user
+# finds them; enable at runtime with PAIRAG_DATASOURCE_BROWSER_FALLBACK=true.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN apt-get update \
+    && playwright install --with-deps chromium \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy application files (no frontend)
 COPY resources ./resources
 COPY scripts ./scripts

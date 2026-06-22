@@ -30,6 +30,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DATABASE: ${POSTGRES_DATABASE}
+      # Data-source fetcher: use the headless-browser fallback to get past
+      # JS/cookie anti-bot challenges (e.g. Aliyun x5sec). Chromium is baked into
+      # the image; set to "false" to disable. Optional tuning below.
+      PAIRAG_DATASOURCE_BROWSER_FALLBACK: ${PAIRAG_DATASOURCE_BROWSER_FALLBACK:-true}
+      # PAIRAG_DATASOURCE_BROWSER_TIMEOUT: "45"
+      # PAIRAG_DATASOURCE_MAX_RETRIES: "3"
+      # PAIRAG_DATASOURCE_USER_AGENT: ""
 
     volumes:
       - ../localdata:/app/localdata
