@@ -22,9 +22,13 @@ from db.models.knowledgebase.datasource import DataSourceDocumentEntity
 if TYPE_CHECKING:
     from service.knowledgebase.rag_service import RagService
 
-# Cap fetch output so a large document can't blow the agent's context window.
-# The agent pages with offset/next_offset, or narrows with grep.
+# Hard caps so a caller-supplied argument can't blow the agent's context window.
+# DEFAULT_FETCH_MAX_CHARS is both the default and the ceiling for `fetch`; the
+# agent pages with offset/next_offset, or narrows with grep, to read more.
 DEFAULT_FETCH_MAX_CHARS = 6000
+MAX_CATALOG_LIMIT = 200
+MAX_GREP_LIMIT = 200
+MAX_GREP_CONTEXT = 10
 
 
 async def aget_kb_catalog_tool(
@@ -49,9 +53,10 @@ async def aget_kb_catalog_tool(
 
     async def kb_catalog_handler(
         query: Annotated[str, "Fuzzy match over file name / title; omit to browse."] = "",
-        limit: Annotated[int, "Max results (default 20)."] = 20,
+        limit: Annotated[int, "Max results (default 20, hard cap 200)."] = 20,
     ) -> str:
         try:
+            limit = min(max(1, limit), MAX_CATALOG_LIMIT)
             page_result = await rag_service.list_files(
                 kb_id=kb_id, tenant_id=tenant_id, page=1, size=limit, query=query or None
             )
@@ -107,12 +112,14 @@ async def aget_kb_grep_tool(
 
     async def kb_grep_handler(
         pattern: Annotated[str, "Literal string to find (not a regex)."] = "",
-        context: Annotated[int, "Lines of context around each match (default 2)."] = 2,
-        limit: Annotated[int, "Max matches (default 20)."] = 20,
+        context: Annotated[int, "Lines of context around each match (default 2, hard cap 10)."] = 2,
+        limit: Annotated[int, "Max matches (default 20, hard cap 200)."] = 20,
     ) -> str:
         try:
             if not pattern:
                 return json.dumps({"ok": True, "results": [], "total": 0}, ensure_ascii=False)
+            context = min(max(0, context), MAX_GREP_CONTEXT)
+            limit = min(max(1, limit), MAX_GREP_LIMIT)
             out = await rag_service.keyword_search(
                 kb_id=kb_id, tenant_id=tenant_id, pattern=pattern,
                 context=context, limit=limit,
@@ -195,7 +202,7 @@ async def aget_kb_fetch_tool(
         file_id: Annotated[Optional[str], "KB file id from a result."] = None,
         doc_id: Annotated[Optional[str], "Document id from a result (alternative to file_id)."] = None,
         offset: Annotated[int, "Start character offset for paging long files (default 0)."] = 0,
-        max_chars: Annotated[int, f"Max characters to return (default {DEFAULT_FETCH_MAX_CHARS})."] = DEFAULT_FETCH_MAX_CHARS,
+        max_chars: Annotated[int, f"Max characters to return; default and hard cap {DEFAULT_FETCH_MAX_CHARS} (page with offset for more)."] = DEFAULT_FETCH_MAX_CHARS,
     ) -> str:
         try:
             session = rag_service.session
@@ -229,9 +236,14 @@ async def aget_kb_fetch_tool(
                 )
 
             # Cap output to protect the agent's context; expose paging info.
+            # max_chars may only request *less* than the ceiling — a large value
+            # cannot widen the window past DEFAULT_FETCH_MAX_CHARS. To read more,
+            # the agent pages via offset/next_offset.
             total = len(content)
             start = max(0, offset or 0)
-            limit = max_chars if (max_chars and max_chars > 0) else DEFAULT_FETCH_MAX_CHARS
+            limit = DEFAULT_FETCH_MAX_CHARS
+            if max_chars and max_chars > 0:
+                limit = min(max_chars, DEFAULT_FETCH_MAX_CHARS)
             windowed = content[start:start + limit]
             truncated = (start + len(windowed)) < total
 
