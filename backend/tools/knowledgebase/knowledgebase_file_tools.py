@@ -47,12 +47,13 @@ async def aget_kb_catalog_tool(
         f"To answer \"which files exist / is there a file about X\", to see what's available, "
         f"or to narrow down before `grep`/`fetch`. Returns file names + ids (not content).\n"
         f"\n# Parameters\n"
-        f"- query (optional): fuzzy match over file name / title; omit to just browse.\n"
+        f"- query (optional): case-insensitive substring match over file name / title "
+        f"(not fuzzy — the literal substring must appear); omit to just browse.\n"
         f"- limit (optional): max results (default 20)."
     )
 
     async def kb_catalog_handler(
-        query: Annotated[str, "Fuzzy match over file name / title; omit to browse."] = "",
+        query: Annotated[str, "Case-insensitive substring match over file name / title; omit to browse."] = "",
         limit: Annotated[int, "Max results (default 20, hard cap 200)."] = 20,
     ) -> str:
         try:
