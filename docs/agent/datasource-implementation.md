@@ -66,18 +66,21 @@
 
 ---
 
-## 5. Agent 检索工具(四轴正交)
+## 5. Agent 检索工具(全知识库)
 
-`backend/tools/knowledgebase/datasource_tool.py`,在 `agent_service.aget_tools()` 中**按 KB** gating(`count_by_kb > 0` 才挂),与现有 `search-knowledgebase` 并存。
+通用「全知识库」文件工具:`backend/tools/knowledgebase/knowledgebase_file_tools.py`,在 `agent_service.aget_tools()` 中**对每个 KB 无条件挂载**(不再按数据源 gating),与既有语义召回工具 `search-knowledgebase`(`aget_knowledgebase_tool`)并存。三个工具覆盖**整个知识库**(含手动上传的文件),不再局限于数据源文档。
+
+> **历史**:早期为 `datasource_tool.py`,提供 search/catalog/keyword/fetch 四个**仅数据源**、按 `count_by_kb>0` gating 的工具。现已重构:语义 `search` 改由既有 `search-knowledgebase` 承担(去重,故此处不再单列),其余三个改为全 KB 语义并迁移至 `knowledgebase_file_tools.py`;`keyword` 更名为 `grep`。
 
 | 工具 | 名称 | 数据来源 | 说明 |
 |---|---|---|---|
-| **search** | `datasource-search-{kb[:8]}` | 向量库(`aquery`) | 语义+混合召回;`datasource/product/section/lang` → `MetadataFilteringCondition`;结果含 `chunk_id/doc_id/source_url` |
-| **catalog** | `catalog-{kb[:8]}` | manifest(关系库) | 找文件/浏览/过滤,**不读正文**;rapidfuzz 排序(title>path>summary);无 `datasource` 过滤 |
-| **keyword** | `keyword-{kb[:8]}` | chunk 预筛 + file_store | **字面短语**精确匹配(非正则),返回**行号+上下文**;scope=`doc_id/path_prefix/datasource`;`MAX_SCAN_FILES=200` 上限 |
-| **fetch** | `fetch-{kb[:8]}` | file_store(回退 chunk 重组) | 取全文;**默认 `max_chars=6000` 截断** + `offset` 分页,返回 `truncated/next_offset`,防爆上下文 |
+| **catalog** | `catalog-{kb[:8]}` | `list_files`(关系库) | 列出 KB 内**全部文件**(文件名/标题/来源),**不读正文**;`query` 对 file_name+title 做大小写不敏感**子串**匹配(非 fuzzy);`limit≤200` |
+| **grep** | `grep-{kb[:8]}` | chunk 预筛 + file_store | **字面短语**精确匹配(非正则),返回**行号+上下文**;参数 `pattern/context(≤10)/limit(≤200)`;预筛用 `contains(pattern, autoescape=True)`(`%`/`_` 不当通配符);`MAX_SCAN_FILES=200` 上限,**仅覆盖已建索引(有 chunk)的文件** |
+| **fetch** | `fetch-{kb[:8]}` | file_store(回退 chunk 重组) | 按 `file_id`/`doc_id` 取全文;**`max_chars` 默认且硬上限 6000**(传入更大值会被夹到上限)+ `offset` 分页,返回 `truncated/next_offset`,防爆上下文 |
 
-> **截断**是防 Agent 上下文溢出的关键:fetch 默认封顶 6000 字符,Agent 用 `offset=next_offset` 翻页或改用 search/keyword 精确定位。
+> **截断**是防 Agent 上下文溢出的关键:fetch 封顶 6000 字符,Agent 用 `offset=next_offset` 翻页或改用 grep 精确定位。
+>
+> 注:数据源专属的 `catalog`/`keyword` HTTP 端点(§6)仍存在并保留 `product/section/lang`、`path_prefix/datasource` 等数据源维度,供前端召回测试等使用;Agent 工具层已不再暴露这些维度。
 
 ---
 
@@ -91,10 +94,10 @@
 - `GET /{ds_id}/documents | document?doc_id= | sync-runs[/{run_id}] | sync-status`
 
 **检索测试 / 工具**(KB 级):
-- `GET /{kb_id}/catalog?query=&product=&section=&lang=&limit=`
+- `GET /{kb_id}/catalog?query=&product=&section=&lang=&limit=`(数据源目录,rapidfuzz 排序;**前端召回测试的 catalog 页现改用下方 `/files`**,本端点保留供其它数据源维度查询)
 - `GET /{kb_id}/keyword?pattern=&doc_id=&path_prefix=&datasource=&context=&limit=`
 - `GET /{kb_id}/file-content?file_id=|doc_id=&max_chars=&offset=`(`backend/api/v1/config_apis/knowledgebase.py`)
-- `GET /{kb_id}/files?...&source=`(扩展:按来源筛选 manual/<datasource_key>;query 同时匹配 file_name + title)
+- `GET /{kb_id}/files?...&source=`(全 KB 文件列表;按来源筛选 manual/<datasource_key>;query 同时匹配 file_name + title。Agent `catalog` 工具与前端召回测试 catalog 页均用此端点)
 - `POST /v1/retrieval`(既有召回 API,search 测试用)
 
 ---
@@ -168,6 +171,6 @@
 
 ## 13. 主要改动文件
 
-后端:`db/models/knowledgebase/datasource.py`、`common/knowledgebase/types.py`、`service/knowledgebase/datasource_service.py`、`service/knowledgebase/rag_service.py`、`service/knowledgebase/file_service.py`、`rag/datasource/*`(schema/base_adapter/registry/http_util/url_guard/sync_worker/scheduler/adapters/{llms_txt,sphinx})、`rag/file_item_utils.py`、`app/worker.py`、`service/agent/agent_service.py`、`tools/knowledgebase/datasource_tool.py`、`api/v1/config_apis/{datasource,knowledgebase}.py`、`api/v1/routers.py`、`service/injection.py`。
+后端:`db/models/knowledgebase/datasource.py`、`common/knowledgebase/types.py`、`service/knowledgebase/datasource_service.py`、`service/knowledgebase/rag_service.py`、`service/knowledgebase/file_service.py`、`rag/datasource/*`(schema/base_adapter/registry/http_util/url_guard/sync_worker/scheduler/adapters/{llms_txt,sphinx})、`rag/file_item_utils.py`、`app/worker.py`、`service/agent/agent_service.py`、`tools/knowledgebase/knowledgebase_file_tools.py`、`api/v1/config_apis/{datasource,knowledgebase}.py`、`api/v1/routers.py`、`service/injection.py`。
 
 前端:`app/knowledgebases/[kbId]/data-sources/data-sources-panel.tsx`、`app/knowledgebases/[kbId]/page.tsx`、`app/api/config/knowledgebases/[kb_id]/{datasources,catalog,keyword,file-content}/...`、`lib/translations.ts`、`api/v1/routers.py`。

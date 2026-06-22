@@ -99,13 +99,13 @@ documents — but `catalog` and the search commands differ on *indexed* vs *all*
   the KB regardless of parse status** — returning `file_name`,
   `file_metadata.title`, and `file_source`.
 - `grep` hits the keyword endpoint, whose unfiltered case now searches the whole
-  KB. `keyword_search`'s default branch no longer restricts to data-source files
-  (the in-process `datasource_tool.py` agent tool is now KB-wide too; its
-  optional `datasource` / `path_prefix` / `doc_id` filters still narrow scope).
+  KB. `keyword_search`'s default branch no longer restricts to data-source files.
   Its candidate set comes from `KbChunkEntity`, so **only indexed (chunked) files
   are searched** — files still parsing, failed, or chunk-less are not. The
   chunk-text prefilter uses `contains(pattern, autoescape=True)` so literal
-  `%` / `_` are not treated as SQL wildcards.
+  `%` / `_` are not treated as SQL wildcards. (The `/keyword` HTTP endpoint still
+  accepts optional `doc_id` / `path_prefix` / `datasource` filters; the agent
+  `grep` tool no longer exposes them — see the agent-tools note below.)
 - `search` (`/v1/retrieval`) queries the vector store, so it likewise covers
   **indexed content only**.
 
