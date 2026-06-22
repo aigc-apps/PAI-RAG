@@ -1,12 +1,18 @@
 import contextlib
+import importlib.util
 import io
 import json
 import os
-import sys
 import urllib.error
 
-sys.path.insert(0, os.path.dirname(__file__))
-import pairag  # noqa: E402
+# Load the CLI script under a unique module name. A plain `import pairag` would
+# collide with the backend's real `pairag` package (src/pairag): in a full test
+# run that package is already in sys.modules and would shadow this script.
+_spec = importlib.util.spec_from_file_location(
+    "pairag_cli_under_test", os.path.join(os.path.dirname(__file__), "pairag.py")
+)
+pairag = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(pairag)
 
 
 class _Args:
