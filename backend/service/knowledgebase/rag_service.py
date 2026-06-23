@@ -351,7 +351,11 @@ class RagService:
         doc_id: Optional[str] = None, path_prefix: Optional[str] = None,
         datasource: Optional[str] = None, context: int = 2, limit: int = 20,
     ) -> dict:
-        """Literal (non-regex) keyword grep over data-source document bodies.
+        """Literal (non-regex) keyword grep over document bodies.
+
+        The unfiltered case searches the whole knowledge base (manual uploads
+        included). ``doc_id`` / ``path_prefix`` / ``datasource`` still narrow to
+        specific data-source documents when supplied.
 
         Bounded for safety: a SQL/manifest prefilter picks candidate files, then
         each is grepped line-by-line from the file store for accurate line numbers
@@ -402,19 +406,15 @@ class RagService:
             )).all()
             file_ids = [x for x in rows if x]
         else:
-            # literal prefilter on chunk text, restricted to data-source-origin
-            # files (manual uploads excluded) so it matches the tool's scope.
-            ds_files = select(DataSourceDocumentEntity.file_id).where(
-                DataSourceDocumentEntity.kb_id == kb_id,
-                DataSourceDocumentEntity.tenant_id == tenant_id,
-                DataSourceDocumentEntity.file_id.is_not(None),
-            )
+            # literal prefilter on chunk text across the whole KB. autoescape so
+            # literal % / _ in the pattern are not treated as SQL LIKE wildcards
+            # (which would broaden the prefilter and could crowd out real matches
+            # under the MAX_SCAN_FILES cap).
             rows = (await self.session.exec(
                 select(KbChunkEntity.file_id).where(
                     KbChunkEntity.kb_id == kb_id,
                     KbChunkEntity.tenant_id == tenant_id,
-                    KbChunkEntity.text.like(f"%{pattern}%"),
-                    KbChunkEntity.file_id.in_(ds_files),
+                    KbChunkEntity.text.contains(pattern, autoescape=True),
                 ).distinct().limit(MAX_SCAN_FILES)
             )).all()
             file_ids = [x for x in rows if x]

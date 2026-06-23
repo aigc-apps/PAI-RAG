@@ -1,13 +1,11 @@
 from common.chat.models import ChatAgentRequest
 from service.factory.model_factory import create_llm
 from tools.knowledgebase.knowledgebase_tool import aget_knowledgebase_tool
-from tools.knowledgebase.datasource_tool import (
-    aget_datasource_search_tool,
-    aget_datasource_fetch_tool,
-    aget_datasource_catalog_tool,
-    aget_datasource_keyword_tool,
+from tools.knowledgebase.knowledgebase_file_tools import (
+    aget_kb_catalog_tool,
+    aget_kb_grep_tool,
+    aget_kb_fetch_tool,
 )
-from service.knowledgebase.datasource_service import DataSourceService
 from tools.knowledgebase.faq_tool import aget_faq_tool
 from service.factory.tools import create_search_tools, create_chatdb_tools, create_codesandbox_tools
 from service.factory.mcp_factory import create_mcp_tools_async
@@ -203,31 +201,26 @@ class AgentService:
             logger.info("Resolved FAQ tool (highest priority).")
 
         # 知识库工具
-        datasource_service = DataSourceService(rag_service.session)
         for kb_id in kb_ids:
             tools.append(await aget_knowledgebase_tool(
                 kb_id=kb_id, user_id=user_id, rag_service=rag_service,
                 tenant_id=tenant_id, metadata_condition=metadata_condition,
                 enable_auto_metadata_filter=enable_auto_metadata_filter,
             ))
-            # Expose datasource access-protocol tools (search + fetch) only for
-            # KBs that actually have data sources bound.
+            # General KB file tools (catalog / grep / fetch) over the whole KB,
+            # complementing the semantic knowledgebase tool above.
             try:
-                if await datasource_service.count_by_kb(kb_id=kb_id, tenant_id=tenant_id) > 0:
-                    tools.append(await aget_datasource_search_tool(
-                        kb_id=kb_id, user_id=user_id, rag_service=rag_service, tenant_id=tenant_id,
-                    ))
-                    tools.append(await aget_datasource_fetch_tool(
-                        kb_id=kb_id, rag_service=rag_service, tenant_id=tenant_id,
-                    ))
-                    tools.append(await aget_datasource_catalog_tool(
-                        kb_id=kb_id, rag_service=rag_service, tenant_id=tenant_id,
-                    ))
-                    tools.append(await aget_datasource_keyword_tool(
-                        kb_id=kb_id, rag_service=rag_service, tenant_id=tenant_id,
-                    ))
+                tools.append(await aget_kb_catalog_tool(
+                    kb_id=kb_id, rag_service=rag_service, tenant_id=tenant_id,
+                ))
+                tools.append(await aget_kb_grep_tool(
+                    kb_id=kb_id, rag_service=rag_service, tenant_id=tenant_id,
+                ))
+                tools.append(await aget_kb_fetch_tool(
+                    kb_id=kb_id, rag_service=rag_service, tenant_id=tenant_id,
+                ))
             except Exception:
-                logger.exception(f"Failed to resolve datasource tools for kb {kb_id}")
+                logger.exception(f"Failed to resolve knowledgebase file tools for kb {kb_id}")
         logger.info(f"Resolved {len(kb_ids)} knowledgebase tools.")
 
         # 搜索工具

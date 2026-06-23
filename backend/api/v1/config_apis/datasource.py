@@ -337,7 +337,11 @@ async def keyword_search(
     tenant_id: str = Depends(get_tenant_id),
     rag_service: RagService = Depends(get_rag_service),
 ):
-    """Literal keyword grep over document bodies (line numbers + context)."""
+    """Literal keyword grep over the whole KB (line numbers + context).
+
+    ``doc_id`` / ``path_prefix`` / ``datasource`` narrow to specific
+    data-source documents when supplied.
+    """
     out = await rag_service.keyword_search(
         kb_id=kb_id, tenant_id=tenant_id, pattern=pattern,
         doc_id=doc_id, path_prefix=path_prefix, datasource=datasource,

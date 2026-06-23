@@ -472,12 +472,23 @@ export default function KnowledgeBaseDetailPage(
   const handleCatalog = useCallback(async () => {
     setCatalogLoading(true);
     try {
-      const params = new URLSearchParams({ limit: '30' });
+      // KB-wide file listing (every file, manual uploads included), matching the
+      // agent/CLI `catalog` tool — not the data-source-only /catalog endpoint.
+      const params = new URLSearchParams({ size: '30' });
       if (catalogQuery.trim()) params.set('query', catalogQuery.trim());
-      const res = await tenantFetch(`/api/config/knowledgebases/${kbId}/catalog?${params}`);
+      const res = await tenantFetch(`/api/config/knowledgebases/${kbId}/files?${params}`);
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || t('knowledgebase.catalogFailed'));
-      setCatalogResults(json.data?.results || []);
+      const items = json.data?.items || [];
+      setCatalogResults(
+        items.map((f: any) => ({
+          file_id: f.id,
+          title: f.file_metadata?.title || f.file_name,
+          file_name: f.file_name,
+          source_url: f.file_source || f.file_metadata?.source_url || null,
+          status: f.status,
+        })),
+      );
     } catch (err: any) {
       toast.error(err.message || t('knowledgebase.catalogFailed'));
       setCatalogResults([]);
@@ -3736,29 +3747,27 @@ export default function KnowledgeBaseDetailPage(
                   {catalogResults && catalogResults.length > 0 && (
                     <div className="flex flex-col gap-1.5">
                       {catalogResults.map((doc, i) => (
-                        <div key={doc.doc_id || i} className="rounded-md border border-border px-3 py-2 hover:bg-muted/40">
+                        <div key={doc.file_id || i} className="rounded-md border border-border px-3 py-2 hover:bg-muted/40">
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-xs font-medium truncate">{doc.title || doc.path}</div>
-                              <div className="text-[10px] text-muted-foreground truncate font-mono">{doc.doc_id}</div>
+                              <div className="text-xs font-medium truncate">{doc.title}</div>
+                              <div className="text-[10px] text-muted-foreground truncate font-mono">{doc.file_id}</div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              {typeof doc.score === 'number' && (
-                                <span className="text-[10px] text-amber-600">{doc.score.toFixed(2)}</span>
+                              {doc.status && (
+                                <span className="text-[10px] text-muted-foreground">{doc.status}</span>
                               )}
                               <button
                                 type="button"
                                 className="text-[11px] text-primary hover:underline"
-                                onClick={() => { setRecallTool('fetch'); handleFetchFile(doc.doc_id); }}
+                                onClick={() => { setRecallTool('fetch'); handleFetchFile(doc.file_id); }}
                               >
                                 {t('knowledgebase.viewFullText')}
                               </button>
                             </div>
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-1 flex gap-1.5 flex-wrap">
-                            {doc.product && <span>{doc.product}</span>}
-                            {doc.section && <span>· {doc.section}</span>}
-                            {doc.lang && <span>· {doc.lang}</span>}
+                            {doc.file_name && doc.file_name !== doc.title && <span className="truncate">{doc.file_name}</span>}
                             {doc.source_url && (
                               <a href={doc.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">· {t('knowledgebase.sourceLink')}</a>
                             )}
@@ -3886,8 +3895,8 @@ export default function KnowledgeBaseDetailPage(
                       <pre className="text-[11px] whitespace-pre-wrap break-words font-mono bg-muted/40 rounded p-2">{resp}</pre>
                     </div>
                   );
-                  const catalogCurl = `# 按元数据查找/浏览文档（不读正文）\ncurl '${host}/v1/config/knowledgebases/${kbId}/catalog?query=计费&limit=20' \\\n  -H 'X-TENANT-ID: ${tenantId}'\n# 可选过滤: &product=<product>&section=<section>&lang=<zh|en>；query 省略=浏览`;
-                  const catalogResp = `{\n  "code": 200,\n  "data": { "results": [\n    { "doc_id": "...", "title": "...", "path": "...",\n      "product": "...", "section": "...", "lang": "zh",\n      "source_url": "https://...", "score": 0.91 }\n  ], "total": 1 }\n}`;
+                  const catalogCurl = `# 列出知识库中的文件（文件名 / 标题 / 来源，不读正文）\ncurl '${host}/v1/config/knowledgebases/${kbId}/files?query=计费&size=20' \\\n  -H 'X-TENANT-ID: ${tenantId}'\n# query 省略=浏览全部；按文件名/标题做大小写不敏感子串匹配`;
+                  const catalogResp = `{\n  "code": 200,\n  "data": { "items": [\n    { "id": "<file_id>", "file_name": "billing.md", "status": "succeeded",\n      "file_source": "https://...",\n      "file_metadata": { "title": "计费说明", "source_doc_id": "..." } }\n  ], "total": 1 }\n}`;
                   const keywordCurl = `# 精确关键词/标识符定位（字面匹配，非正则）\ncurl '${host}/v1/config/knowledgebases/${kbId}/keyword?pattern=eventTime&context=2&limit=20' \\\n  -H 'X-TENANT-ID: ${tenantId}'\n# 可选 scope: &doc_id=<doc_id> / &path_prefix=<前缀> / &datasource=<key>`;
                   const keywordResp = `{\n  "code": 200,\n  "data": { "results": [\n    { "doc_id": "...", "line": 42, "match": "...eventTime...",\n      "context": "前后 N 行...", "source_url": "https://..." }\n  ], "scanned_files": 3, "scan_capped": false, "limit_reached": false }\n}`;
                   return (
