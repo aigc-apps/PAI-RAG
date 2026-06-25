@@ -15,7 +15,7 @@ def _make_mock_tokenizer():
     return tok
 
 
-@patch("memory.utils.get_tokenizer", return_value=_make_mock_tokenizer())
+@patch("agent.budgeting.get_tokenizer", return_value=_make_mock_tokenizer())
 def test_fit_returns_messages_and_keeps_short_history(mock_get_tok):
     from agent.budgeting import AgentMessageManager
     from agent.message import Message
