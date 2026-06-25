@@ -82,3 +82,23 @@ def test_keep_last_rounds_trims_by_user_turn():
 def test_keep_last_rounds_zero_is_noop():
     msgs = [Message("user", "u1")]
     assert keep_last_rounds(msgs, 0) == msgs
+
+
+def test_from_thread_expands_assistant_tool_call_content():
+    out = from_thread([{"role": "assistant", "content": [
+        {"type": "tool-call", "toolCallId": "tc1", "toolName": "read",
+         "args": {"x": 1}, "result": "file body"}]}])
+    assert len(out) == 2
+    assert out[0].role == "assistant"
+    assert out[0].content is None
+    assert out[0].tool_calls[0].id == "tc1"
+    assert out[0].tool_calls[0].name == "read"
+    assert '"x"' in out[0].tool_calls[0].arguments
+    assert out[1].role == "tool"
+    assert out[1].tool_call_id == "tc1"
+    assert out[1].content == "file body"
+
+
+def test_keep_last_rounds_equal_count_returns_all():
+    msgs = [Message("user", "u1"), Message("assistant", "a1"), Message("user", "u2")]
+    assert keep_last_rounds(msgs, 2) == msgs

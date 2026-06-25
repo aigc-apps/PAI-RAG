@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
@@ -73,8 +74,6 @@ def from_thread(raw: List[dict]) -> List["Message"]:
     - assistant 'tool-call' content parts -> assistant(tool_calls) + tool result pairs
     - tool messages without a matching preceding assistant tool_call -> dropped
     """
-    import json
-
     result: List[Message] = []
     for d in raw:
         role = d.get("role", "")
