@@ -40,3 +40,45 @@ def test_list_content_preserved_for_multimodal():
     ]
     m = Message(role="user", content=parts)
     assert m.to_wire()["content"] == parts
+
+
+from agent.message import from_thread, keep_last_rounds
+
+
+def test_from_thread_plain_user_and_assistant():
+    out = from_thread([
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"},
+    ])
+    assert [m.role for m in out] == ["user", "assistant"]
+    assert out[0].content == "q1"
+
+
+def test_from_thread_flattens_user_content_array_text_only():
+    out = from_thread([{"role": "user", "content": [
+        {"type": "text", "text": "line1"}, {"type": "text", "text": "line2"}]}])
+    assert out[0].content == "line1\nline2"
+
+
+def test_from_thread_keeps_image_parts():
+    out = from_thread([{"role": "user", "content": [
+        {"type": "text", "text": "look"},
+        {"type": "image_url", "image_url": {"url": "http://x"}}]}])
+    assert isinstance(out[0].content, list)
+    assert out[0].content[0] == {"type": "text", "text": "look"}
+
+
+def test_from_thread_drops_orphan_tool_message():
+    out = from_thread([{"role": "tool", "content": "x", "tool_call_id": "missing"}])
+    assert out == []
+
+
+def test_keep_last_rounds_trims_by_user_turn():
+    msgs = [Message("user", "u1"), Message("assistant", "a1"),
+            Message("user", "u2"), Message("assistant", "a2")]
+    assert keep_last_rounds(msgs, 1) == msgs[2:]
+
+
+def test_keep_last_rounds_zero_is_noop():
+    msgs = [Message("user", "u1")]
+    assert keep_last_rounds(msgs, 0) == msgs
