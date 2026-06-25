@@ -9,7 +9,6 @@ from loguru import logger
 from agent.context import AgentContext, Attachment, RunVars
 from agent.message import Message
 from agent.budgeting import AgentMessageManager
-from agent.tools import ToolBox
 from agent.message import ToolCall
 from common.llm.models import TextChunk, ReasoningChunk, ErrorChunk, ToolResultChunk
 from utils.constants import try_get_int_env
@@ -24,6 +23,7 @@ LLM_STREAM_IDLE_TIMEOUT = try_get_int_env("LLM_STREAM_IDLE_TIMEOUT_SECONDS", 30)
 
 
 async def _iter_with_idle_timeout(stream, timeout: int):
+    """Yield chunks, raising asyncio.TimeoutError if no chunk arrives within `timeout` seconds (idle/inter-chunk timeout, not total duration)."""
     it = stream.__aiter__()
     while True:
         try:
@@ -100,25 +100,39 @@ class Agent:
         )
         return msgs
 
-    async def _stream_turn(self, messages, tools: ToolBox):
+    async def _stream_turn(self, messages, tools, sink):
         """Stream one model turn. Yields TextChunk/ReasoningChunk live (no buffering).
-        Stores (text, tool_calls) on self._last and any ErrorChunk on self._error."""
+        Writes results into ``sink``: sink["last"] = (text, tool_calls); on an
+        ErrorChunk or an idle-timeout, sink["error"] is set and streaming stops.
+        Results go through ``sink`` (a per-call dict) rather than instance state so
+        an Agent has no cross-run mutable state."""
         wire = [m.to_wire() for m in messages]
         stream = await self.llm.astream(messages=wire, tools=tools.openai_schema() if tools else [])
         text, tool_calls = "", []
-        async for chunk in _iter_with_idle_timeout(stream, LLM_STREAM_IDLE_TIMEOUT):
-            if isinstance(chunk, ErrorChunk):
-                self._error = chunk
-                self._last = (text, tool_calls)
-                return
-            if chunk.tool_calls:
-                tool_calls = chunk.tool_calls
-            if isinstance(chunk, ReasoningChunk):
-                yield chunk
-            elif chunk.delta:
-                text += chunk.delta
-                yield TextChunk(delta=chunk.delta, usage=chunk.usage)
-        self._last = (text, tool_calls)
+        try:
+            async for chunk in _iter_with_idle_timeout(stream, LLM_STREAM_IDLE_TIMEOUT):
+                if isinstance(chunk, ErrorChunk):
+                    sink["error"] = chunk
+                    sink["last"] = (text, tool_calls)
+                    return
+                if chunk.tool_calls:
+                    tool_calls = chunk.tool_calls
+                if isinstance(chunk, ReasoningChunk):
+                    yield chunk
+                elif chunk.delta:
+                    text += chunk.delta
+                    yield TextChunk(delta=chunk.delta, usage=chunk.usage)
+        except asyncio.TimeoutError:
+            logger.error(
+                f"LLM stream idle for >{LLM_STREAM_IDLE_TIMEOUT}s (no package received); aborting."
+            )
+            sink["error"] = ErrorChunk(
+                error_message=f"模型调用超时：{LLM_STREAM_IDLE_TIMEOUT}s 内未收到任何响应分片。",
+                error_type="llm_stream_timeout",
+            )
+            sink["last"] = (text, tool_calls)
+            return
+        sink["last"] = (text, tool_calls)
 
     @pai_agent_wrapper
     async def run(self, ctx: AgentContext) -> AsyncIterator[TextChunk]:
@@ -127,20 +141,19 @@ class Agent:
         @use_current_span(trace.get_current_span())
         async def gen():
             messages = self.build_messages(ctx)
-            self._error = None
 
             for _step in range(self.max_steps):
                 messages = self.budget.fit(messages)
-                self._last = ("", [])
+                sink = {"last": ("", []), "error": None}
 
-                async for ev in self._stream_turn(messages, ctx.tools):
+                async for ev in self._stream_turn(messages, ctx.tools, sink):
                     yield ev
 
-                if self._error is not None:
-                    yield self._error
+                if sink["error"] is not None:
+                    yield sink["error"]
                     return
 
-                text, raw_tcs = self._last
+                text, raw_tcs = sink["last"]
 
                 if not raw_tcs:
                     if text:

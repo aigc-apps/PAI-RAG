@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../backend"))
 sys.path.insert(0, os.path.dirname(__file__))
 from unittest.mock import MagicMock, patch
 from llama_index.core.tools import FunctionTool
-from common.llm.models import TextChunk, ToolResultChunk
+from common.llm.models import TextChunk, ToolResultChunk, ErrorChunk
 from agent.agent import Agent
 from agent.tools import ToolBox
 from agent.context import AgentContext, RunVars
@@ -77,3 +77,23 @@ def test_max_steps_emits_notice(mock_get_tok):
     async def echo(): return "x"
     out = _collect(agent, _ctx(_box(echo, "echo")))
     assert any("max" in c.delta.lower() for c in out if type(c) is TextChunk)
+
+
+@patch("agent.budgeting.get_tokenizer", return_value=_make_mock_tokenizer())
+def test_idle_timeout_yields_error_chunk(mock_get_tok, monkeypatch):
+    import agent.agent as agent_mod
+    monkeypatch.setattr(agent_mod, "LLM_STREAM_IDLE_TIMEOUT", 0)
+
+    class HangingLLM:
+        context_window = 110000
+        max_tokens = 8000
+        async def astream(self, messages, tools):
+            async def gen():
+                await asyncio.sleep(3600)  # never yields within timeout
+                yield TextChunk(delta="never")
+            return gen()
+
+    agent = Agent(HangingLLM(), max_steps=2)
+    async def echo(x: str): return x
+    out = _collect(agent, _ctx(_box(echo, "echo")))
+    assert any(isinstance(c, ErrorChunk) for c in out)
