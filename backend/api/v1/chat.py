@@ -123,6 +123,12 @@ async def chat(
             checker = create_guardrail_checker(guardrail_config)
 
         msgs = from_thread(chat_request.messages)
+        if not msgs:
+            return await generate_reponse(
+                chunk_gen=error_chunk_gen(message="Hi, how can I help you."),
+                model=chat_request.model,
+                stream=chat_request.stream,
+            )
         current_turn = msgs[-1]
         history = keep_last_rounds(msgs[:-1], DEFAULT_AGENT_HISTORY_ROUNDS)
         # The clean, normalized user message used for both the guardrail-rejection
