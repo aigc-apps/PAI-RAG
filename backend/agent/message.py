@@ -37,6 +37,8 @@ class Message:
 
     @classmethod
     def from_wire(cls, d: dict) -> "Message":
+        # Wire dicts come from our own to_wire() or the LLM client and are
+        # assumed well-formed; missing fields degrade to empty strings, not errors.
         raw_tcs = d.get("tool_calls") or []
         tool_calls = [
             ToolCall(

@@ -25,6 +25,7 @@ def test_assistant_tool_call_to_wire():
         "type": "function",
         "function": {"name": "read", "arguments": '{"x":1}'},
     }
+    assert Message.from_wire(wire) == m
 
 
 def test_tool_result_message_to_wire():
