@@ -15,7 +15,7 @@ from extensions.trace.base import use_current_span
 from opentelemetry import trace
 from utils.json_utils import parse_tool_arguments
 from agent.tool_utils import check_and_handle_return_direct
-from agent.message_manager import AgentMessageManager
+from agent.budgeting import AgentMessageManager
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20) # 最大循环步数
 # 流式调用的"空闲超时":超过该秒数没有收到任何分片(package)即超时(非总时长)

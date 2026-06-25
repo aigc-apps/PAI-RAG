@@ -373,3 +373,10 @@ class AgentMessageManager:
         for g in groups:
             result.extend(g.messages)
         return result
+
+    def fit(self, messages):
+        """Message-typed wrapper around the dict-based fit_to_budget."""
+        from agent.message import Message
+        wire = [m.to_wire() for m in messages]
+        fitted = self.fit_to_budget(wire)
+        return [Message.from_wire(d) for d in fitted]
