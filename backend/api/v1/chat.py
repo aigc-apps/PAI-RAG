@@ -1,4 +1,6 @@
-from agent.state import AgentState
+from agent.message import from_thread, keep_last_rounds
+from agent.context import AgentContext, RunVars
+from common.chat.constants import DEFAULT_AGENT_HISTORY_ROUNDS
 from common.llm.models import ChatResponseGenerator
 from common.llm.utils import convert_gen_to_stream_chat_completions, convert_gen_to_chat_completions, error_chunk_gen
 from fastapi import APIRouter, Response
@@ -120,8 +122,13 @@ async def chat(
         if guardrail_config:
             checker = create_guardrail_checker(guardrail_config)
 
-        agent_state = AgentState.from_messages(messages=chat_request.messages)
-        async with agent_service.create_agent(chat_request, tenant_id=tenant_id) as agent:
+        msgs = from_thread(chat_request.messages)
+        current_turn = msgs[-1]
+        history = keep_last_rounds(msgs[:-1], DEFAULT_AGENT_HISTORY_ROUNDS)
+        # The clean, normalized user message used for both the guardrail-rejection
+        # early-return save and the normal save. It is not mutated downstream.
+        current_user_message = current_turn.to_wire()
+        async with agent_service.create_agent(chat_request, tenant_id=tenant_id) as bundle:
             # 输入护栏检测
             if chat_request.enable_input_guardrail:
                 logger.info("Trying to check input.")
@@ -140,9 +147,16 @@ async def chat(
                         user_message=current_user_message,
                     )
 
-            async_response_gen = await agent.run_async(
-                state=agent_state
+            ctx = AgentContext(
+                system_prompt=bundle.system_prompt,
+                history=history,
+                current_turn=current_turn,
+                attachments=bundle.attachments,
+                hints=bundle.hints,
+                tools=bundle.tools,
+                run_vars=RunVars(),
             )
+            async_response_gen = await bundle.agent.run(ctx)
             response = await generate_reponse(
                 chunk_gen=async_response_gen,
                 model=chat_request.model,
