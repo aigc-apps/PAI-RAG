@@ -47,8 +47,20 @@ def pai_agent_wrapper(func):
 
         try:
             request_text = "[unknown]"
-            state = kwargs.get("state")
-            messages = state.messages if state else []
+            # Accept either the legacy AgentState(state=...) kwarg or the new
+            # AgentContext passed positionally to Agent.run(ctx). AgentContext
+            # exposes history + current_turn (Message objects) rather than a
+            # flat .messages list, so build the wire view for tracing.
+            source = kwargs.get("state")
+            if source is None and args:
+                source = args[0]
+            if source is not None and hasattr(source, "messages"):
+                messages = source.messages
+            elif source is not None and hasattr(source, "current_turn"):
+                turns = list(getattr(source, "history", [])) + [source.current_turn]
+                messages = [m.to_wire() for m in turns]
+            else:
+                messages = []
             # extract user input text
             for message in reversed(messages):
                 if message["role"] == "user":
