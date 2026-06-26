@@ -53,7 +53,11 @@ def test_mcp_tool_to_tool_maps_schema_and_calls_client():
 
 
 def test_register_mcp_tools_namespaces_with_prefix():
+    import asyncio
+    calls = []
+
     async def call(name, args):
+        calls.append(name)
         return "ok"
 
     reg = ToolRegistry()
@@ -62,3 +66,7 @@ def test_register_mcp_tools_namespaces_with_prefix():
     names = register_mcp_tools(specs, call, reg, prefix="srv.")
     assert names == ["srv.a", "srv.b"]
     assert reg.get("srv.a") is not None
+    # invoking the prefixed tool must call the server with the UNPREFIXED remote name
+    asyncio.run(reg.get("srv.a").fn())
+    asyncio.run(reg.get("srv.b").fn())
+    assert calls == ["a", "b"]
