@@ -25,7 +25,18 @@ from agent.core.events import (
     ToolResult,
     ToolStarted,
 )
-from extensions.trace.context import get_request_id
+def get_request_id() -> Optional[str]:
+    """Return the current request id from the optional trace package.
+
+    Imported lazily so the lean service can serialize chat responses without
+    depending on ``extensions.trace`` at import time. When the trace package
+    is absent, behaves as if no request id is set (returns None)."""
+    try:
+        from extensions.trace.context import get_request_id as _get_request_id
+    except ImportError:
+        return None
+    return _get_request_id()
+
 
 MAX_TOOL_HISTORY_CHARS = 20_000
 TOOL_HISTORY_TRUNCATED_MARKER = "\n...[content truncated]"

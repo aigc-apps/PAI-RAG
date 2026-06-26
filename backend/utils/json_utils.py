@@ -1,6 +1,5 @@
 import json
 from typing import Dict
-from llama_index.core.llms.utils import parse_partial_json
 from loguru import logger
 
 
@@ -30,7 +29,10 @@ def parse_tool_arguments(json_str: str) -> Dict:
         pass
 
     # 如果标准解析失败，尝试使用 parse_partial_json 处理部分 JSON
+    # 延迟导入 llama_index，避免精简服务在 import 时拉入重型依赖；
+    # 缺失时跳过该策略，回退到下方的字符串修复。
     try:
+        from llama_index.core.llms.utils import parse_partial_json
         result = parse_partial_json(json_str)
         if result:
             return result

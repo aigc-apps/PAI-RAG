@@ -3,8 +3,7 @@ import traceback
 from typing import List, Optional
 from openai import AsyncOpenAI
 from loguru import logger
-from common.llm.models import TextChunk, ReasoningChunk, ErrorChunk
-from common.llm.llm_model import update_tool_calls
+from common.llm.models import TextChunk, ReasoningChunk, ErrorChunk, update_tool_calls
 
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 4096

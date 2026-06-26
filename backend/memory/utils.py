@@ -1,11 +1,21 @@
-from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from typing import List, Tuple, Any
-from transformers import AutoTokenizer
+
+try:
+    # Heavy ML dep — only needed by the message-context helpers below.
+    # Kept optional so lean importers (e.g. agent.budgeting via the
+    # tokenizer helpers) don't transitively pull llama_index at import time.
+    from llama_index.core.base.llms.types import ChatMessage, MessageRole
+except ImportError:  # pragma: no cover - exercised only in lean envs
+    ChatMessage = None
+    MessageRole = None
 
 TOKENIZATION_MODEL = "resources/tokenizer/Qwen3-32B-Tokenizer"
 
 
 def get_tokenizer():
+    # Imported lazily so transformers (torch/accelerate/safetensors/tokenizers)
+    # is pulled only when a real tokenizer is actually requested at runtime.
+    from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(TOKENIZATION_MODEL, local_files_only=True, use_fast=True)
     return tokenizer
 
