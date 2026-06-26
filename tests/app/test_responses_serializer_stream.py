@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../backend"))
 from agent.core.events import (
     RunStarted,
     TextDelta,
+    ReasoningDelta,
     ToolStarted,
     ToolCompleted,
     ToolResult,
@@ -121,6 +122,87 @@ def test_stream_output_indices_are_distinct_for_each_item():
         assert len(idxs) == len(set(idxs)), f"colliding output_index: {idxs}"
         # at least the function_call and the message item were opened
         assert len(added) >= 2
+    asyncio.run(run())
+
+
+def test_stream_reasoning_summary_envelope_before_message():
+    async def run():
+        sink = {}
+        gen = serialize_response_stream(
+            _events(
+                [
+                    RunStarted(response_id="resp_r"),
+                    ReasoningDelta(text="think"),
+                    ReasoningDelta(text="ing"),
+                    TextDelta(text="answer"),
+                    RunCompleted(usage=Usage(input=1, output=1, total=2)),
+                ]
+            ),
+            model="m",
+            response_id="resp_r",
+            conversation_id=None,
+            sink=sink,
+        )
+        evs = _parse([c async for c in gen])
+        types = [e.type for e in evs]
+
+        # the reasoning-summary sub-events appear in order
+        part_added = types.index("response.reasoning_summary_part.added")
+        text_done = types.index("response.reasoning_summary_text.done")
+        part_done = types.index("response.reasoning_summary_part.done")
+        delta_idxs = [
+            i
+            for i, t in enumerate(types)
+            if t == "response.reasoning_summary_text.delta"
+        ]
+        assert len(delta_idxs) == 2
+        assert part_added < delta_idxs[0] < delta_idxs[1] < text_done < part_done
+
+        # the reasoning output item opens before and closes after the summary events
+        reasoning_added = next(
+            i
+            for i, e in enumerate(evs)
+            if e.type == "response.output_item.added"
+            and e.item.type == "reasoning"
+        )
+        reasoning_done = next(
+            i
+            for i, e in enumerate(evs)
+            if e.type == "response.output_item.done"
+            and e.item.type == "reasoning"
+        )
+        assert reasoning_added < part_added
+        assert part_done < reasoning_done
+
+        # reconstructed summary text from deltas
+        summary_text = "".join(
+            e.delta
+            for e in evs
+            if e.type == "response.reasoning_summary_text.delta"
+        )
+        assert summary_text == "thinking"
+
+        # the reasoning item's done event carries the full summary
+        reasoning_done_ev = evs[reasoning_done]
+        assert reasoning_done_ev.item.summary[0].text == "thinking"
+        assert reasoning_done_ev.item.summary[0].type == "summary_text"
+
+        # reasoning item comes before the MESSAGE output item
+        msg_added = next(
+            i
+            for i, e in enumerate(evs)
+            if e.type == "response.output_item.added"
+            and e.item.type == "message"
+        )
+        assert reasoning_added < msg_added
+        assert reasoning_done < msg_added
+
+        # final response output has reasoning first with the summary populated
+        assert sink["response"]["output"][0]["type"] == "reasoning"
+        assert (
+            sink["response"]["output"][0]["summary"][0]["text"] == "thinking"
+        )
+
     asyncio.run(run())
 
 

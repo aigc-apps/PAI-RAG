@@ -18,7 +18,7 @@ from openai.types.responses import (
     ResponseUsage,
 )
 from openai.types.responses.response_output_text import ResponseOutputText
-from openai.types.responses.response_reasoning_item import Content
+from openai.types.responses.response_reasoning_item import Summary
 from openai.types.responses.response_usage import (
     InputTokensDetails,
     OutputTokensDetails,
@@ -37,7 +37,16 @@ from openai.types.responses import (
     ResponseTextDoneEvent,
     ResponseFunctionCallArgumentsDeltaEvent,
     ResponseFunctionCallArgumentsDoneEvent,
-    ResponseReasoningTextDeltaEvent,
+    ResponseReasoningSummaryPartAddedEvent,
+    ResponseReasoningSummaryTextDeltaEvent,
+    ResponseReasoningSummaryTextDoneEvent,
+    ResponseReasoningSummaryPartDoneEvent,
+)
+from openai.types.responses.response_reasoning_summary_part_added_event import (
+    Part as SummaryPartAdded,
+)
+from openai.types.responses.response_reasoning_summary_part_done_event import (
+    Part as SummaryPartDone,
 )
 
 
@@ -131,10 +140,10 @@ class _Assembler:
                     id=f"rs_{self.response_id}",
                     type="reasoning",
                     status="completed",
-                    summary=[],
-                    content=[
-                        Content(text=self.reasoning, type="reasoning_text")
+                    summary=[
+                        Summary(text=self.reasoning, type="summary_text")
                     ],
+                    content=[],
                 ),
             )
             self.store_items.append(
@@ -270,10 +279,55 @@ async def serialize_response_stream(
     msg_item_id = asm._msg_item_id()
     tool_indices: Dict[str, int] = {}  # call_id -> output_index
     reasoning_index = None
+    reasoning_open = False
+    rs_id = f"rs_{response_id}"
     usage = None
+
+    def close_reasoning():
+        """Emit the closing reasoning-summary envelope (text.done, part.done,
+        output_item.done). Yields SSE strings; caller must `yield from`."""
+        full = asm.reasoning
+        yield _sse(
+            ResponseReasoningSummaryTextDoneEvent(
+                item_id=rs_id,
+                output_index=reasoning_index,
+                summary_index=0,
+                text=full,
+                sequence_number=nxt(),
+                type="response.reasoning_summary_text.done",
+            )
+        )
+        yield _sse(
+            ResponseReasoningSummaryPartDoneEvent(
+                item_id=rs_id,
+                output_index=reasoning_index,
+                summary_index=0,
+                part=SummaryPartDone(text=full, type="summary_text"),
+                sequence_number=nxt(),
+                type="response.reasoning_summary_part.done",
+            )
+        )
+        yield _sse(
+            ResponseOutputItemDoneEvent(
+                item=ResponseReasoningItem(
+                    id=rs_id,
+                    type="reasoning",
+                    status="completed",
+                    summary=[Summary(text=full, type="summary_text")],
+                    content=[],
+                ),
+                output_index=reasoning_index,
+                sequence_number=nxt(),
+                type="response.output_item.done",
+            )
+        )
 
     async for ev in events:
         if isinstance(ev, TextDelta):
+            if reasoning_open:
+                for chunk in close_reasoning():
+                    yield chunk
+                reasoning_open = False
             if not msg_open:
                 # open a message output item + a text content part
                 msg_index = alloc_index()
@@ -318,22 +372,50 @@ async def serialize_response_stream(
                 )
             )
         elif isinstance(ev, ReasoningDelta):
-            asm.on_reasoning(ev.text)
-            # surface reasoning text as a streaming delta (item assembled at finalize)
-            if reasoning_index is None:
+            if not reasoning_open:
+                # open the reasoning output item + summary part (comes first)
                 reasoning_index = alloc_index()
-            # TODO: emit reasoning output_item.added/done for full conformance
+                reasoning_open = True
+                yield _sse(
+                    ResponseOutputItemAddedEvent(
+                        item=ResponseReasoningItem(
+                            id=rs_id,
+                            type="reasoning",
+                            status="in_progress",
+                            summary=[],
+                            content=[],
+                        ),
+                        output_index=reasoning_index,
+                        sequence_number=nxt(),
+                        type="response.output_item.added",
+                    )
+                )
+                yield _sse(
+                    ResponseReasoningSummaryPartAddedEvent(
+                        item_id=rs_id,
+                        output_index=reasoning_index,
+                        summary_index=0,
+                        part=SummaryPartAdded(text="", type="summary_text"),
+                        sequence_number=nxt(),
+                        type="response.reasoning_summary_part.added",
+                    )
+                )
+            asm.on_reasoning(ev.text)
             yield _sse(
-                ResponseReasoningTextDeltaEvent(
-                    content_index=0,
+                ResponseReasoningSummaryTextDeltaEvent(
                     delta=ev.text,
-                    item_id=f"rs_{response_id}",
+                    item_id=rs_id,
                     output_index=reasoning_index,
+                    summary_index=0,
                     sequence_number=nxt(),
-                    type="response.reasoning_text.delta",
+                    type="response.reasoning_summary_text.delta",
                 )
             )
         elif isinstance(ev, ToolStarted):
+            if reasoning_open:
+                for chunk in close_reasoning():
+                    yield chunk
+                reasoning_open = False
             idx = alloc_index()
             tool_indices[ev.call_id] = idx
             yield _sse(
@@ -352,6 +434,10 @@ async def serialize_response_stream(
                 )
             )
         elif isinstance(ev, ToolCompleted):
+            if reasoning_open:
+                for chunk in close_reasoning():
+                    yield chunk
+                reasoning_open = False
             asm.on_tool_completed(ev.call_id, ev.name, ev.arguments)
             idx = tool_indices.get(ev.call_id)
             if idx is None:
@@ -413,6 +499,12 @@ async def serialize_response_stream(
             usage = ev.usage
         elif isinstance(ev, RunFailed):
             asm.on_failed(ev.message)
+
+    # close an open reasoning item (reasoning-only run: no text/tool ever arrived)
+    if reasoning_open:
+        for chunk in close_reasoning():
+            yield chunk
+        reasoning_open = False
 
     # close an open message item
     if msg_open:

@@ -118,8 +118,11 @@ def test_sync_reasoning_item_emitted_and_ordered_before_message():
         resp, items = await serialize_response_sync(events, model="m", response_id="resp_r",
                                                     conversation_id=None)
         parsed = Response.model_validate(resp)
-        # reasoning item comes before the assistant message
+        # reasoning item comes before the assistant message, carried in the summary channel
         assert parsed.output[0].type == "reasoning"
+        assert parsed.output[0].summary[0].text == "thinking..."
+        assert parsed.output[0].summary[0].type == "summary_text"
+        assert parsed.output[0].content == []
         assert parsed.output[-1].type == "message"
         assert parsed.output[-1].content[0].text == "answer"
         # reasoning persisted as a store item (skipped on replay, but recorded)
