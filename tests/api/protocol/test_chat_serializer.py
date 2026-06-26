@@ -155,3 +155,108 @@ def test_rejecting_checker_yields_safety_violation_chunk():
     assert safety_chunks, "Expected a safety_violation chunk"
     advice_text = safety_chunks[0]["choices"][0]["delta"].get("content", "")
     assert "violates policy" in advice_text
+
+
+# ---------------------------------------------------------------------------
+# Ordering + single-stop invariant tests
+# ---------------------------------------------------------------------------
+
+
+def test_with_effects_emits_single_stop_after_safety_on_reject():
+    """On a guardrail rejection the safety chunk must precede the single stop chunk."""
+    from extensions.guardrail.guardrail_check import TextCheckResult
+
+    class _Checker:
+        async def acheck_output(self, text, current_result):
+            current_result.reject = True
+            current_result.advice = "blocked"
+
+    # Text long enough (> CHECK_OUTPUT_CHUNK_SIZE=200) to trigger the in-loop check.
+    long_text = "hello world this is long enough to trigger a check " * 5  # ~255 chars
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "service.cache.session_history_manager": MagicMock(
+                session_history_manager=MagicMock(save_messages=AsyncMock())
+            )
+        },
+    ):
+        out = _collect_with_effects(
+            serialize_chat_stream_with_effects(
+                _events(
+                    TextDelta(text=long_text),
+                    RunCompleted(usage=Usage(input=1, output=2, total=3)),
+                ),
+                model="m",
+                enable_output_check=True,
+                checker=_Checker(),
+                guardrail_hint="hint",
+                user_id="u",
+                session_id="s",
+                user_message={"role": "user", "content": "q"},
+            )
+        )
+
+    stops = [i for i, c in enumerate(out) if c["choices"][0].get("finish_reason") == "stop"]
+    safety = [i for i, c in enumerate(out) if c.get("safety_violation")]
+
+    assert len(stops) == 1, f"expected exactly one stop chunk, got {len(stops)}: {out}"
+    assert safety, "expected a safety_violation chunk"
+    assert safety[0] < stops[0], (
+        f"safety chunk (index {safety[0]}) must precede stop chunk (index {stops[0]})"
+    )
+
+
+def test_with_effects_stop_carries_usage_when_completed():
+    """The terminal stop chunk must include usage from RunCompleted."""
+    with patch.dict(
+        "sys.modules",
+        {
+            "service.cache.session_history_manager": MagicMock(
+                session_history_manager=MagicMock(save_messages=AsyncMock())
+            )
+        },
+    ):
+        out = _collect_with_effects(
+            serialize_chat_stream_with_effects(
+                _events(
+                    TextDelta(text="hi"),
+                    RunCompleted(usage=Usage(input=5, output=9, total=14)),
+                ),
+                model="m",
+                user_id="u",
+                session_id="s",
+                user_message={"role": "user", "content": "q"},
+            )
+        )
+
+    stop_chunks = [c for c in out if c["choices"][0].get("finish_reason") == "stop"]
+    assert len(stop_chunks) == 1, f"expected exactly one stop chunk, got {len(stop_chunks)}"
+    stop = stop_chunks[0]
+    assert stop["usage"]["completion_tokens"] == 9, f"expected completion_tokens=9, got {stop['usage']}"
+    assert stop["usage"]["total_tokens"] == 14, f"expected total_tokens=14, got {stop['usage']}"
+
+
+def test_with_effects_run_failed_emits_stop():
+    """RunFailed path must always emit exactly one stop chunk."""
+    with patch.dict(
+        "sys.modules",
+        {
+            "service.cache.session_history_manager": MagicMock(
+                session_history_manager=MagicMock(save_messages=AsyncMock())
+            )
+        },
+    ):
+        out = _collect_with_effects(
+            serialize_chat_stream_with_effects(
+                _events(RunFailed(message="timeout", error_type="llm_stream_timeout")),
+                model="m",
+                user_id="u",
+                session_id="s",
+                user_message={"role": "user", "content": "q"},
+            )
+        )
+
+    stops = [c for c in out if c["choices"][0].get("finish_reason") == "stop"]
+    assert len(stops) == 1, f"expected exactly one stop chunk on RunFailed, got {len(stops)}: {out}"

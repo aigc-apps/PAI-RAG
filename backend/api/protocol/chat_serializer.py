@@ -214,6 +214,14 @@ async def serialize_chat_stream_with_effects(
       (b) Session-history save via session_history_manager.save_messages
 
     The caller wraps each yielded string with 'data: ' prefix and appends [DONE].
+
+    Ordering guarantee (mirrors utils.py):
+      [...content/tool chunks] [safety_violation chunk?] [stop chunk with usage]
+
+    The terminal stop chunk is always deferred to the epilogue so that:
+      1. The safety chunk always precedes the stop chunk (even on RunCompleted).
+      2. fail_fast paths (mid-stream guardrail reject, RunFailed) always emit
+         exactly one stop chunk at the end, never zero.
     """
     from loguru import logger
     from extensions.guardrail.config import CHECK_OUTPUT_CHUNK_OVERLAP, CHECK_OUTPUT_CHUNK_SIZE
@@ -229,10 +237,15 @@ async def serialize_chat_stream_with_effects(
 
     final_content = ""
     current_content = ""
+    # tool_history_messages collects tool interactions for session history.
+    # Note: session_history_manager does not persist tool_messages today, so
+    # these are passed through as-is (placeholder arguments are intentionally inert).
     tool_history_messages: List[dict] = []
     check_tasks: List[asyncio.Task] = []
     output_check_result = TextCheckResult()
     fail_fast = False
+    # pending_usage is set when RunCompleted fires; carried into the epilogue stop chunk.
+    pending_usage: Optional[dict] = None
 
     # We use break (not return) for terminal events so that the code after the
     # try/finally block (guardrail epilogue) can still execute — a return inside
@@ -267,24 +280,60 @@ async def serialize_chat_stream_with_effects(
                     )
                     current_content = current_content[-CHECK_OUTPUT_CHUNK_OVERLAP:]
 
+                # Emit the TextDelta content chunk immediately
+                yield _chunk(chat_id, model, content=ev.text)
+
+            elif isinstance(ev, ReasoningDelta):
+                yield _chunk(chat_id, model, reasoning=ev.text)
+
+            elif isinstance(ev, ToolStarted):
+                yield _chunk(
+                    chat_id,
+                    model,
+                    content="",
+                    extra={"actions": [{"id": ev.call_id, "name": ev.name}]},
+                )
+
             elif isinstance(ev, ToolResult):
                 _collect_tool_history_from_event(ev, tool_history_messages)
+                yield _chunk(
+                    chat_id,
+                    model,
+                    content="",
+                    extra={
+                        "observation": {
+                            "call_id": ev.call_id,
+                            "ok": ev.ok,
+                            "output": ev.output,
+                            "error": ev.error,
+                        }
+                    },
+                )
 
             elif isinstance(ev, RunFailed):
-                # Include error message in final_content so history records it
+                # Include error message in final_content so history records it.
+                # Emit the visible error content chunk now; the stop chunk is
+                # deferred to the epilogue so ordering is always correct.
                 final_content += ev.message
-
-            # Emit chunks for this event
-            for chunk_str in _event_to_chunks(ev, chat_id, model):
-                yield chunk_str
-
-            # Mark terminal events — do NOT return here so that the code
-            # after the try/finally block (guardrail + stop chunk) can still run.
-            if isinstance(ev, RunCompleted):
-                break  # normal completion — run guardrail epilogue below
-            if isinstance(ev, RunFailed):
+                yield _chunk(
+                    chat_id,
+                    model,
+                    content=ev.message,
+                    extra={"error_type": ev.error_type},
+                )
                 fail_fast = True
-                break  # error path — skip guardrail checks, emit stop below
+                break  # error path — skip guardrail checks, emit stop in epilogue
+
+            elif isinstance(ev, RunCompleted):
+                # Capture usage for the epilogue stop chunk; do NOT emit here.
+                # The stop chunk is emitted after the guardrail safety chunk so
+                # ordering is always: [content] [safety?] [stop+usage].
+                pending_usage = {
+                    "prompt_tokens": ev.usage.input,
+                    "completion_tokens": ev.usage.output,
+                    "total_tokens": ev.usage.total,
+                }
+                break  # normal completion — run guardrail epilogue below
 
     finally:
         # Close session if provided (mirrors utils.py finally block)
@@ -341,15 +390,9 @@ async def serialize_chat_stream_with_effects(
             extra={"safety_violation": True},
         )
 
-    # Always emit a stop chunk when not already emitted by _event_to_chunks
-    # (RunFailed already emits its own stop chunk via _event_to_chunks, but
-    # fail_fast=True means we broke out before RunCompleted; emit one anyway
-    # to ensure the stream always terminates properly)
-    if fail_fast:
-        # RunFailed path already emitted a stop chunk via _event_to_chunks;
-        # nothing extra needed.
-        return
-
-    # For RunCompleted path: _event_to_chunks already included the stop+usage chunk,
-    # so we must NOT emit an extra stop chunk here.  The RunCompleted branch breaks
-    # out of the loop without setting fail_fast, so we know we finished normally.
+    # Always emit exactly one terminal stop chunk at the very end, on every path:
+    #   - RunCompleted path: includes usage captured in pending_usage
+    #   - RunFailed / fail_fast path: no usage (pending_usage is None)
+    # This guarantees the safety chunk (if any) always precedes the stop chunk,
+    # and every stream terminates with a stop chunk regardless of the exit path.
+    yield _chunk(chat_id, model, finish_reason="stop", usage=pending_usage)
