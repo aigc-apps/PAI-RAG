@@ -12,6 +12,8 @@ from app.routes.responses import router as responses_router
 from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
 from agent.soul import Soul
+from agent.tools.defaults import build_default_registry
+from agent.tools.skills import load_skills
 
 
 def _build_llm(settings) -> LeanLLM:
@@ -40,9 +42,12 @@ async def lifespan(app: FastAPI):
         await create_all(engine)
         store = SqlStore(engine)
     soul = Soul(name=settings.agent_name, role=settings.agent_role)
+    registry = build_default_registry(settings)
+    if settings.skills_dir:
+        load_skills(settings.skills_dir, registry)
     app.state.app_state = AppState(
         store=store, llm=_build_llm(settings), default_model=settings.default_model,
-        soul=soul,
+        soul=soul, registry=registry,
     )
     yield
 

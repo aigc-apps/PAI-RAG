@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple
 from agent.context import AgentContext, RunVars
 from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
+from agent.tools.registry import ToolRegistry
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
 from agent.soul import Soul, DEFAULT_SOUL, render_system_prompt
@@ -70,11 +71,16 @@ def _input_to_turn(req_input) -> Message:
 
 
 async def build_context(
-    request: ResponsesRequest, store, *, soul: Soul = DEFAULT_SOUL
+    request: ResponsesRequest,
+    store,
+    *,
+    soul: Soul = DEFAULT_SOUL,
+    registry: Optional[ToolRegistry] = None,
 ) -> Tuple[AgentContext, Optional[str]]:
     """Resolve prior history via the store and assemble the AgentContext.
     Composes the effective soul (default <- request.soul <- instructions) into a
-    layered system prompt. Tools are wired in a later plan (tool_names=[] here).
+    layered system prompt. Selects tools from the registry governed by
+    soul.tools_enabled; registry=None keeps empty-ToolBox behavior.
     Raises ValueError on previous_response_id/conversation conflict (-> HTTP 400)."""
     history_items: List[Item] = []
     conversation_id = request.conversation
@@ -95,7 +101,18 @@ async def build_context(
     if request.instructions:
         override["extra_instructions"] = request.instructions
     effective_soul = soul.merge(override)
-    tool_names: List[str] = []  # populated from the tool registry in a later plan
+
+    if registry is not None:
+        selected = (
+            effective_soul.tools_enabled
+            if effective_soul.tools_enabled is not None
+            else registry.names()
+        )
+        toolbox = registry.build_toolbox(selected)
+    else:
+        toolbox = ToolBox([])
+
+    tool_names = [t.name for t in toolbox.tools]
     system_prompt = render_system_prompt(effective_soul, tool_names=tool_names)
 
     ctx = AgentContext(
@@ -104,7 +121,7 @@ async def build_context(
         current_turn=_input_to_turn(request.input),
         attachments=[],
         hints=[],
-        tools=ToolBox([]),
+        tools=toolbox,
         run_vars=RunVars(),
     )
     return ctx, conversation_id
