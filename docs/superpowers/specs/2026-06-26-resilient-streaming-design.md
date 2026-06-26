@@ -38,6 +38,7 @@ We want **resilience**: an in-flight answer must survive the connection. A reloa
 - The `incomplete`/`max_output_tokens` status (length-truncation). Cheap to add later; deferred to keep scope tight. (`Response.status` and the reducer will *tolerate* it, but no producer emits it.)
 - Multi-worker / multi-process resume. The registry is single-process, single-event-loop. A run lives in exactly one worker; cross-worker live-attach would need a shared bus (Redis pub/sub) and is explicitly deferred.
 - Durable (restart-surviving) resume. A server restart kills in-flight runs; the *final* response is only persisted on finalize, so a run killed mid-flight by a restart is lost (same as today). Event-log persistence is deferred.
+- **Hard-reload *live* re-attach.** A full page reload wipes the SPA's in-memory state, so there is no live bubble to resume into. The detached run still finishes and persists server-side (no data loss), and the completed turn appears when the conversation is reopened from the sidebar — but live re-subscription after a hard reload needs an in-flight pointer in `localStorage` and is deferred. Frontend live resume this iteration covers **same-session** interruptions (tab backgrounded, laptop sleep, network drop) where the store state survives.
 - A real job queue / `queued` status. Background runs start immediately as `in_progress`.
 - Tenant/auth; tool/RAG UI.
 
@@ -109,16 +110,16 @@ Add `runs: RunManager` (constructed in `lean_main.py` lifespan and in test `AppS
   - `send` sets `background:true` in the stream params.
   - `stop()` → if the in-flight message has a `responseId`, call `cancelResponse(responseId)`; if the id isn't known yet, set a `cancelPending` ref and fire `cancelResponse` the moment `response.created` yields the id. (No local abort of the run — the run is server-owned.)
   - On the terminal: advance anchors on `completed` **or** `cancelled` (both are persisted, continuable turns) and refresh the sidebar.
-  - **Reconnect:** expose `resumeIfInterrupted()`; the shell calls it on mount, `visibilitychange`→visible, and `online`. If the last message is `status:"streaming"` with a `responseId`, open `streamResume(responseId, lastSequenceNumber, signal)` and feed events through the reducer into `updateLast` (same loop as `send`). Guard against double-subscription with an in-flight ref.
+  - **Reconnect:** expose `resumeIfInterrupted()`; the shell calls it on `visibilitychange`→visible and `online` (and on mount — a no-op after a hard reload since the store is empty). If the last message is `status:"streaming"` with a `responseId`, open `streamResume(responseId, lastSequenceNumber, signal)` and feed events through the reducer into `updateLast` (same loop as `send`). Guard against double-subscription with an in-flight ref.
 - **Components:** `AssistantMessage` renders a subtle "cancelled" note for `status:"cancelled"` and still shows `MessageControls` (it's a real, continuable turn).
 
 ## Data flow
 
 **Normal background turn:** POST `{background:true, stream:true, ...}` → route mints `resp_id`, starts a detached run, returns SSE subscribed from seq 0 → reducer drives the bubble; the run persists in `finally` on `completed`. Anchors advance; sidebar refreshes.
 
-**Reload mid-answer:** the browser drops the SSE; the **run keeps going** server-side. On remount, `resumeIfInterrupted()` sees a `streaming` message with `responseId` + `lastSequenceNumber=N`, opens `GET ?stream=true&starting_after=N`, receives only the missed events then the terminal; the run had already (or will) persist. No tokens lost.
+**Interrupted mid-answer (tab backgrounded / laptop sleep / network drop, same session):** the browser drops the SSE but the SPA stays loaded; the **run keeps going** server-side. On `visibilitychange`→visible or `online`, `resumeIfInterrupted()` sees a `streaming` message with `responseId` + `lastSequenceNumber=N`, opens `GET ?stream=true&starting_after=N`, receives only the missed events then the terminal; the run had already (or will) persist. No tokens lost.
 
-**Plain disconnect, no reconnect:** the run finishes and persists on its own; the conversation appears in the sidebar on next load, fully intact.
+**Hard reload / plain disconnect, no reconnect:** the run finishes and persists on its own; nothing is lost. After a hard reload the in-memory bubble is gone, but the completed (or cancelled) turn appears in full when the conversation is opened from the sidebar.
 
 **Stop:** `cancelResponse(resp_id)` → `run.cancel.set()` → serializer finalizes a partial, emits terminal `response.incomplete (status cancelled)` → pump persists with status `cancelled`, touches the conversation. The bubble shows "cancelled"; the next send continues from `resp_id`.
 
