@@ -105,3 +105,40 @@ def test_sync_failure_sets_failed_status_and_error():
         assert parsed.error is not None and "kaboom" in parsed.error.message
 
     asyncio.run(run())
+
+
+def test_sync_reasoning_item_emitted_and_ordered_before_message():
+    async def run():
+        events = _events([
+            RunStarted(response_id="resp_r"),
+            ReasoningDelta(text="thinking..."),
+            TextDelta(text="answer"),
+            RunCompleted(usage=Usage(input=1, output=1, total=2)),
+        ])
+        resp, items = await serialize_response_sync(events, model="m", response_id="resp_r",
+                                                    conversation_id=None)
+        parsed = Response.model_validate(resp)
+        # reasoning item comes before the assistant message
+        assert parsed.output[0].type == "reasoning"
+        assert parsed.output[-1].type == "message"
+        assert parsed.output[-1].content[0].text == "answer"
+        # reasoning persisted as a store item (skipped on replay, but recorded)
+        assert any(it["type"] == "reasoning" and it["content"]["text"] == "thinking..." for it in items)
+    asyncio.run(run())
+
+
+def test_sync_tool_result_error_stores_error_text():
+    async def run():
+        events = _events([
+            RunStarted(response_id="resp_e"),
+            ToolStarted(call_id="c1", name="boom"),
+            ToolCompleted(call_id="c1", name="boom", arguments="{}"),
+            ToolResult(call_id="c1", name="boom", ok=False, output=None, error="exploded"),
+            TextDelta(text="recovered"),
+            RunCompleted(usage=Usage(input=1, output=1, total=2)),
+        ])
+        resp, items = await serialize_response_sync(events, model="m", response_id="resp_e",
+                                                    conversation_id=None)
+        out = next(it for it in items if it["type"] == "function_call_output")
+        assert out["content"]["output"] == "exploded"
+    asyncio.run(run())

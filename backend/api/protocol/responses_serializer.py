@@ -45,6 +45,7 @@ class _Assembler:
         self.model = model
         self.response_id = response_id
         self.conversation_id = conversation_id
+        self.created_at = time.time()
         self.output: List[Any] = []  # OpenAI output items
         self.store_items: List[
             Dict
@@ -154,7 +155,7 @@ class _Assembler:
     def to_response(self) -> Response:
         return Response(
             id=self.response_id,
-            created_at=time.time(),
+            created_at=self.created_at,
             model=self.model,
             object="response",
             output=self.output,
