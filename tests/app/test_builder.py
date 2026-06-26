@@ -24,7 +24,10 @@ def test_build_context_from_string_input():
         ctx, conv_id = await build_context(req, st)
         assert ctx.current_turn.role == "user"
         assert ctx.current_turn.content == "hi there"
-        assert ctx.system_prompt == "be terse"
+        # instructions now compose into the system prompt (not replace it)
+        assert "be terse" in ctx.system_prompt
+        assert "# Additional instructions" in ctx.system_prompt
+        assert "# Identity" in ctx.system_prompt  # the soul is rendered
         assert ctx.history == []
         assert conv_id is not None
 
@@ -131,5 +134,42 @@ def test_build_context_conflicting_ids_raises_value_error():
 
         with pytest.raises(ValueError):
             await build_context(req, st)
+
+    asyncio.run(run())
+
+
+def test_build_context_renders_default_soul_into_system_prompt():
+    async def run():
+        from agent.soul import DEFAULT_SOUL
+        st = InMemoryStore()
+        req = ResponsesRequest(model="m", input="hi")
+        ctx, _ = await build_context(req, st)
+        assert DEFAULT_SOUL.name in ctx.system_prompt
+        assert "# Operating principles" in ctx.system_prompt
+        # no tools wired in this plan
+        assert "no tools" in ctx.system_prompt.lower()
+
+    asyncio.run(run())
+
+
+def test_build_context_applies_request_soul_override():
+    async def run():
+        st = InMemoryStore()
+        req = ResponsesRequest(
+            model="m", input="hi", soul={"name": "Lex", "role": "a legal analyst"}
+        )
+        ctx, _ = await build_context(req, st)
+        assert "You are Lex, a legal analyst." in ctx.system_prompt
+
+    asyncio.run(run())
+
+
+def test_build_context_accepts_explicit_soul_argument():
+    async def run():
+        from agent.soul import Soul
+        st = InMemoryStore()
+        req = ResponsesRequest(model="m", input="hi")
+        ctx, _ = await build_context(req, st, soul=Soul(name="Custom", role="a tutor"))
+        assert "You are Custom, a tutor." in ctx.system_prompt
 
     asyncio.run(run())

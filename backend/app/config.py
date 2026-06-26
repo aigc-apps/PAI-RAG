@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     default_model: str = "gpt-4o-mini"
     db_url: str = "sqlite+aiosqlite:///./data/agent.db"
     store_backend: str = "sql"   # "sql" | "memory"
+    agent_name: str = "Aria"
+    agent_role: str = "a general-purpose AI assistant"
 
 
 def get_settings() -> Settings:

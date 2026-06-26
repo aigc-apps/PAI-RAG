@@ -100,7 +100,7 @@ async def create_response(
     try:
         # build_context is side-effect-free: conversation_id is ALWAYS non-None
         # (freshly minted for new turns, or the resolved existing one when linking).
-        ctx, conversation_id = await build_context(request, state.store)
+        ctx, conversation_id = await build_context(request, state.store, soul=state.soul)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

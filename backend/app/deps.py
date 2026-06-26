@@ -1,8 +1,9 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fastapi import Request
 from agent.agent import Agent
 from agent.budgeting import AgentMessageManager
+from agent.soul import Soul, DEFAULT_SOUL
 
 
 @dataclass
@@ -12,6 +13,7 @@ class AppState:
     default_model: str
     context_window: int = 110000
     max_output_tokens: int = 8000
+    soul: Soul = field(default_factory=lambda: DEFAULT_SOUL)
 
     def make_agent(self) -> Agent:
         # Verified signature: Agent(llm, max_steps=..., budget: Optional[AgentMessageManager]=None).

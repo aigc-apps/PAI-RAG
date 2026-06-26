@@ -18,3 +18,4 @@ class ResponsesRequest(BaseModel):
     stream: bool = False
     metadata: Optional[Dict[str, str]] = None
     tools: Optional[List[Dict[str, Any]]] = None
+    soul: Optional[Dict[str, Any]] = None

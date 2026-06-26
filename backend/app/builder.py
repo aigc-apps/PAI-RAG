@@ -5,8 +5,7 @@ from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
-
-DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
+from agent.soul import Soul, DEFAULT_SOUL, render_system_prompt
 
 
 def _item_text(content: dict) -> str:
@@ -71,11 +70,12 @@ def _input_to_turn(req_input) -> Message:
 
 
 async def build_context(
-    request: ResponsesRequest, store
+    request: ResponsesRequest, store, *, soul: Soul = DEFAULT_SOUL
 ) -> Tuple[AgentContext, Optional[str]]:
-    """Resolve prior history via the store, assemble the AgentContext the agent runs.
-    Returns (ctx, conversation_id). Raises ValueError on previous_response_id/conversation
-    conflict (the route maps that to HTTP 400)."""
+    """Resolve prior history via the store and assemble the AgentContext.
+    Composes the effective soul (default <- request.soul <- instructions) into a
+    layered system prompt. Tools are wired in a later plan (tool_names=[] here).
+    Raises ValueError on previous_response_id/conversation conflict (-> HTTP 400)."""
     history_items: List[Item] = []
     conversation_id = request.conversation
     if request.previous_response_id or request.conversation:
@@ -88,13 +88,18 @@ async def build_context(
             if resp is not None and resp.conversation_id:
                 conversation_id = resp.conversation_id
 
-    # Fresh turn with no prior conversation: mint a stable conversation_id
-    # WITHOUT persisting. The route owns persistence (e.g. only when store=true).
     if conversation_id is None:
         conversation_id = new_conversation_id()
 
+    override = dict(request.soul or {})
+    if request.instructions:
+        override["extra_instructions"] = request.instructions
+    effective_soul = soul.merge(override)
+    tool_names: List[str] = []  # populated from the tool registry in a later plan
+    system_prompt = render_system_prompt(effective_soul, tool_names=tool_names)
+
     ctx = AgentContext(
-        system_prompt=request.instructions or DEFAULT_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         history=items_to_messages(history_items),
         current_turn=_input_to_turn(request.input),
         attachments=[],
