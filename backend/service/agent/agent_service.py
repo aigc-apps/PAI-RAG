@@ -21,7 +21,7 @@ from llama_index.core.tools.function_tool import FunctionTool
 from sqlmodel.ext.asyncio.session import AsyncSession
 from agent.agent import Agent
 from agent.context import Attachment
-from agent.tools import ToolBox
+from agent.tools import ToolBox, tool_from_function_tool
 from agent.prompts import REACT_PROMPT
 from loguru import logger
 from typing import List, Callable, Awaitable, Dict, Optional, AsyncIterator
@@ -147,7 +147,7 @@ class AgentService:
             bundle = AgentBundle(
                 agent=Agent(llm),
                 system_prompt=system_prompt,
-                tools=ToolBox(tools),
+                tools=ToolBox([tool_from_function_tool(t) for t in tools]),
                 attachments=attachments,
                 hints=hints,
             )
@@ -489,8 +489,13 @@ def _build_tools_summary(tools: List[FunctionTool]) -> str:
         )
     lines = [f"You have {len(tools)} tool(s). For every user query, pick the most relevant tool(s) to call:\n"]
     for tool in tools:
-        name = tool.metadata.name
-        desc = tool.metadata.description or ""
+        # Support both clean Tool (name/description) and legacy FunctionTool (metadata.*)
+        if hasattr(tool, "metadata"):
+            name = tool.metadata.name
+            desc = tool.metadata.description or ""
+        else:
+            name = tool.name
+            desc = tool.description or ""
         first_line = desc.strip().split("\n")[0]
         lines.append(f"- **{name}**: {first_line}")
     lines.append("\nRemember: call at least one tool for any factual question.")
