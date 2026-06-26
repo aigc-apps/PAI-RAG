@@ -5,7 +5,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../backend"))
-from agent.core.events import TextDelta, RunCompleted, RunFailed, Usage, ToolResult
+from agent.core.events import TextDelta, RunCompleted, RunFailed, Usage, ToolResult, ToolStarted, ToolCompleted
 from api.protocol.chat_serializer import (
     serialize_chat_stream,
     serialize_chat_stream_with_effects,
@@ -346,3 +346,114 @@ def test_sync_rejecting_checker_replaces_content_with_advice():
 
     assert result["choices"][0]["message"]["content"] == "This content violates policy."
     assert result.get("safety_violation") is True
+
+
+# ---------------------------------------------------------------------------
+# Frontend shape regression tests (Fix 1 + Fix 2)
+# ---------------------------------------------------------------------------
+
+
+def test_tool_chunks_match_frontend_shape():
+    """Stream serializer must emit actions/observation with the exact shapes the frontend parses.
+
+    Frontend reads:
+      - chunk.actions[].function?.name  (line 308 in usePaiChatThreadRuntime.tsx)
+      - chunk.actions[].function?.arguments  (line 332 in usePaiChatThreadRuntime.tsx)
+      - chunk.observation.tool.id  (line 366 in usePaiChatThreadRuntime.tsx)
+      - chunk.observation.result  (line 369 in usePaiChatThreadRuntime.tsx)
+      - chunk.observation.error   (line 370 in usePaiChatThreadRuntime.tsx)
+    """
+    out = _collect(
+        serialize_chat_stream(
+            _events(
+                ToolStarted(call_id="c1", name="search"),
+                ToolCompleted(call_id="c1", name="search", arguments='{"q":"x"}'),
+                ToolResult(call_id="c1", name="search", ok=True, output="found"),
+                RunCompleted(usage=Usage()),
+            ),
+            model="m",
+        )
+    )
+
+    # actions chunk: must have function.name and function.arguments
+    actions_chunks = [c["actions"] for c in out if c.get("actions")]
+    assert actions_chunks, "Expected at least one chunk with actions"
+    action = actions_chunks[0][0]
+    assert action["function"]["name"] == "search", f"Got: {action}"
+    assert action["function"]["arguments"] == '{"q":"x"}', f"Got: {action}"
+
+    # observation chunk: must have tool.id, result, error
+    obs_chunks = [c["observation"] for c in out if c.get("observation")]
+    assert obs_chunks, "Expected at least one chunk with observation"
+    obs = obs_chunks[0]
+    assert obs["tool"]["id"] == "c1", f"Got: {obs}"
+    assert obs["result"] == "found", f"Got: {obs}"
+    assert obs["error"] is None, f"Got: {obs}"
+
+
+def test_tool_actions_not_emitted_on_tool_started():
+    """ToolStarted must NOT emit an actions chunk — arguments aren't available yet."""
+    out = _collect(
+        serialize_chat_stream(
+            _events(
+                ToolStarted(call_id="c1", name="search"),
+                RunCompleted(usage=Usage()),
+            ),
+            model="m",
+        )
+    )
+    actions_chunks = [c for c in out if c.get("actions")]
+    assert not actions_chunks, f"Unexpected actions chunk on ToolStarted: {actions_chunks}"
+
+
+def test_sync_tool_actions_observation_match_frontend_shape():
+    """Sync serializer must also use the correct actions/observation shapes."""
+    with _mock_history_manager():
+        result = _run_sync(
+            serialize_chat_sync_with_effects(
+                _events(
+                    ToolStarted(call_id="c1", name="search"),
+                    ToolCompleted(call_id="c1", name="search", arguments='{"q":"x"}'),
+                    ToolResult(call_id="c1", name="search", ok=True, output="found"),
+                    RunCompleted(usage=Usage()),
+                ),
+                model="m",
+            )
+        )
+
+    # actions shape
+    assert result.get("actions"), f"Expected actions in sync result: {result}"
+    action = result["actions"][0]
+    assert action["function"]["name"] == "search", f"Got: {action}"
+    assert action["function"]["arguments"] == '{"q":"x"}', f"Got: {action}"
+
+    # observations shape
+    assert result.get("observations"), f"Expected observations in sync result: {result}"
+    obs = result["observations"][0]
+    assert obs["tool"]["id"] == "c1", f"Got: {obs}"
+    assert obs["result"] == "found", f"Got: {obs}"
+
+
+def test_trace_id_emitted_on_stop_chunk():
+    """trace_id must appear on the terminal stop chunk when a request_id is set."""
+    import extensions.trace.context as ctx
+
+    token = ctx._request_id_var.set("test-trace-123")
+    try:
+        out = _collect(
+            serialize_chat_stream(
+                _events(
+                    TextDelta(text="hi"),
+                    RunCompleted(usage=Usage(input=1, output=1, total=2)),
+                ),
+                model="m",
+            )
+        )
+    finally:
+        ctx._request_id_var.reset(token)
+
+    stop_chunks = [c for c in out if c["choices"][0].get("finish_reason") == "stop"]
+    assert stop_chunks, "Expected a stop chunk"
+    assert stop_chunks[0].get("trace_id") == "test-trace-123", (
+        f"Expected trace_id='test-trace-123' on stop chunk, got: {stop_chunks[0]}"
+    )

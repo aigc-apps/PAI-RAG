@@ -21,9 +21,11 @@ from agent.core.events import (
     RunCompleted,
     RunFailed,
     TextDelta,
+    ToolCompleted,
     ToolResult,
     ToolStarted,
 )
+from extensions.trace.context import get_request_id
 
 MAX_TOOL_HISTORY_CHARS = 20_000
 TOOL_HISTORY_TRUNCATED_MARKER = "\n...[content truncated]"
@@ -78,16 +80,37 @@ def _event_to_chunks(
         return [_chunk(chat_id, model, reasoning=ev.text)]
 
     if isinstance(ev, ToolStarted):
+        # Emit a content="" placeholder so the frontend sees the event,
+        # but do NOT include actions here — arguments aren't available yet.
+        return [_chunk(chat_id, model, content="")]
+
+    if isinstance(ev, ToolCompleted):
+        # Emit the actions chunk with the shape the frontend expects:
+        # toolCall.function?.name and toolCall.function?.arguments
         return [
             _chunk(
                 chat_id,
                 model,
                 content="",
-                extra={"actions": [{"id": ev.call_id, "name": ev.name}]},
+                extra={
+                    "actions": [
+                        {
+                            "id": ev.call_id,
+                            "type": "function",
+                            "function": {
+                                "name": ev.name,
+                                "arguments": ev.arguments,
+                            },
+                        }
+                    ]
+                },
             )
         ]
 
     if isinstance(ev, ToolResult):
+        # Emit observation with the shape the frontend expects:
+        # chunk.observation.tool.id (for currentToolCallMap lookup)
+        # chunk.observation.result / chunk.observation.error
         return [
             _chunk(
                 chat_id,
@@ -95,9 +118,8 @@ def _event_to_chunks(
                 content="",
                 extra={
                     "observation": {
-                        "call_id": ev.call_id,
-                        "ok": ev.ok,
-                        "output": ev.output,
+                        "tool": {"id": ev.call_id},
+                        "result": ev.output,
                         "error": ev.error,
                     }
                 },
@@ -116,6 +138,8 @@ def _event_to_chunks(
         ]
 
     if isinstance(ev, RunCompleted):
+        trace_id = get_request_id() or ""
+        extra = {"trace_id": trace_id} if trace_id else None
         return [
             _chunk(
                 chat_id,
@@ -126,10 +150,10 @@ def _event_to_chunks(
                     "completion_tokens": ev.usage.output,
                     "total_tokens": ev.usage.total,
                 },
+                extra=extra,
             )
         ]
 
-    # ToolCompleted: no chat.completion.chunk representation
     return []
 
 
@@ -377,7 +401,9 @@ async def serialize_chat_stream_with_effects(
     #   - RunFailed / fail_fast path: no usage (pending_usage is None)
     # This guarantees the safety chunk (if any) always precedes the stop chunk,
     # and every stream terminates with a stop chunk regardless of the exit path.
-    yield _chunk(chat_id, model, finish_reason="stop", usage=pending_usage)
+    trace_id = get_request_id() or ""
+    stop_extra = {"trace_id": trace_id} if trace_id else None
+    yield _chunk(chat_id, model, finish_reason="stop", usage=pending_usage, extra=stop_extra)
 
 
 # ---------------------------------------------------------------------------
@@ -444,18 +470,27 @@ async def serialize_chat_sync_with_effects(
             elif isinstance(ev, ReasoningDelta):
                 reasoning_content += ev.text
 
-            elif isinstance(ev, ToolStarted):
-                actions.append({"id": ev.call_id, "name": ev.name})
+            elif isinstance(ev, ToolCompleted):
+                # Match frontend shape: toolCall.function?.name / .function?.arguments
+                actions.append({
+                    "id": ev.call_id,
+                    "type": "function",
+                    "function": {
+                        "name": ev.name,
+                        "arguments": ev.arguments,
+                    },
+                })
 
             elif isinstance(ev, ToolResult):
+                # Match frontend shape: observation.tool.id / .result / .error
                 obs = {
-                    "call_id": ev.call_id,
-                    "ok": ev.ok,
-                    "output": ev.output,
+                    "tool": {"id": ev.call_id},
+                    "result": ev.output,
                     "error": ev.error,
                 }
                 observations.append(obs)
-                steps.append({"name": ev.name, **obs})
+                steps.append({"name": ev.name, "call_id": ev.call_id, "ok": ev.ok,
+                               "output": ev.output, "error": ev.error})
                 _collect_tool_history_from_event(ev, tool_history_messages)
 
             elif isinstance(ev, RunCompleted):
@@ -513,6 +548,7 @@ async def serialize_chat_sync_with_effects(
                     f"Failed to save session history (non-stream): {e}", exc_info=True
                 )
 
+    trace_id = get_request_id() or ""
     result: dict = {
         "id": chat_id,
         "object": "chat.completion",
@@ -531,8 +567,11 @@ async def serialize_chat_sync_with_effects(
         ],
         "usage": usage,
         "steps": steps,
+        "actions": actions,
+        "observations": observations,
         "citations": citations,
         "citation_details": citation_details,
+        "trace_id": trace_id,
     }
     if safety_violation:
         result["safety_violation"] = True
