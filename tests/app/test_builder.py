@@ -93,6 +93,21 @@ def test_items_to_messages_handles_function_call_and_output():
     )
 
 
+def test_build_context_from_list_input_takes_last_user_text():
+    async def run():
+        st = InMemoryStore()
+        req = ResponsesRequest(model="m", input=[
+            {"role": "user", "content": "first"},
+            {"role": "user", "content": "second"},
+        ])
+        ctx, conv_id = await build_context(req, st)
+        assert ctx.current_turn.role == "user"
+        assert ctx.current_turn.content == "second"
+        assert conv_id is not None
+
+    asyncio.run(run())
+
+
 def test_build_context_conflicting_ids_raises_value_error():
     async def run():
         st = InMemoryStore()

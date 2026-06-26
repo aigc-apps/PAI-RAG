@@ -8,6 +8,10 @@ def _uuid(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex}"
 
 
+def new_conversation_id() -> str:
+    return _uuid("conv")
+
+
 @dataclass
 class Item:
     type: str

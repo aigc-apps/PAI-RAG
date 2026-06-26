@@ -4,7 +4,7 @@ from agent.context import AgentContext, RunVars
 from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
 from app.schemas import ResponsesRequest
-from app.store.base import Item
+from app.store.base import Item, new_conversation_id
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 
@@ -60,11 +60,13 @@ def items_to_messages(items: List[Item]) -> List[Message]:
 def _input_to_turn(req_input) -> Message:
     if isinstance(req_input, str):
         return Message(role="user", content=req_input)
-    # list of items: take the last item's text (string content or content array)
+    # list of items: prefer the LAST item whose role is "user" or absent
     text = ""
     for it in req_input:
-        if isinstance(it, dict):
-            text = _item_text(it)
+        if isinstance(it, dict) and it.get("role", "user") in ("user", None):
+            t = _item_text(it)
+            if t:
+                text = t
     return Message(role="user", content=text)
 
 
@@ -86,10 +88,10 @@ async def build_context(
             if resp is not None and resp.conversation_id:
                 conversation_id = resp.conversation_id
 
-    # Fresh turn with no prior conversation: open one so the run has a stable
-    # conversation_id to persist items under (route relies on this for linking).
+    # Fresh turn with no prior conversation: mint a stable conversation_id
+    # WITHOUT persisting. The route owns persistence (e.g. only when store=true).
     if conversation_id is None:
-        conversation_id = (await store.create_conversation()).id
+        conversation_id = new_conversation_id()
 
     ctx = AgentContext(
         system_prompt=request.instructions or DEFAULT_SYSTEM_PROMPT,
