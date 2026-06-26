@@ -4,12 +4,18 @@ from sqlalchemy import func, delete
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import Conversation as ConvRow, ConversationItem as ItemRow, ResponseRow
-from app.store.base import Conversation, Item, StoredResponse
+from app.store.base import Conversation, Item, StoredResponse, _now
 
 
 def _to_item(row: ItemRow) -> Item:
     return Item(id=row.id, type=row.type, role=row.role, content=row.content or {},
                 response_id=row.response_id, seq=row.seq)
+
+
+def _to_conv(row: ConvRow) -> Conversation:
+    return Conversation(id=row.id, user_id=row.user_id, title=row.title,
+                        last_response_id=row.last_response_id,
+                        created_at=row.created_at, updated_at=row.updated_at)
 
 
 class SqlStore:
@@ -81,3 +87,54 @@ class SqlStore:
         if not conv_id:
             return []
         return await self.get_conversation_items(conv_id)
+
+    async def ensure_conversation(self, conversation_id, user_id, title) -> Conversation:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(ConvRow, conversation_id)
+            if row is None:
+                row = ConvRow(id=conversation_id, user_id=user_id, title=title)
+                s.add(row)
+                await s.commit()
+                await s.refresh(row)
+            return _to_conv(row)
+
+    async def touch_conversation(self, conversation_id, last_response_id) -> None:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(ConvRow, conversation_id)
+            if row is None:
+                return
+            row.last_response_id = last_response_id
+            row.updated_at = _now()
+            s.add(row)
+            await s.commit()
+
+    async def list_conversations(self, user_id, limit=50, offset=0) -> List[Conversation]:
+        async with AsyncSession(self._engine) as s:
+            stmt = select(ConvRow)
+            if user_id is not None:
+                stmt = stmt.where(ConvRow.user_id == user_id)
+            stmt = stmt.order_by(ConvRow.updated_at.desc()).offset(offset).limit(limit)
+            rows = (await s.exec(stmt)).all()
+        return [_to_conv(r) for r in rows]
+
+    async def get_conversation(self, conversation_id) -> Optional[Conversation]:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(ConvRow, conversation_id)
+        return _to_conv(row) if row is not None else None
+
+    async def list_conversation_responses(self, conversation_id) -> List[StoredResponse]:
+        async with AsyncSession(self._engine) as s:
+            rows = (await s.exec(
+                select(ResponseRow).where(
+                    ResponseRow.conversation_id == conversation_id))).all()
+        return [StoredResponse(id=r.id, model=r.model, status=r.status,
+                               conversation_id=r.conversation_id,
+                               previous_response_id=r.previous_response_id,
+                               usage=r.usage, error=r.error) for r in rows]
+
+    async def delete_conversation(self, conversation_id) -> None:
+        async with AsyncSession(self._engine) as s:
+            await s.exec(delete(ItemRow).where(ItemRow.conversation_id == conversation_id))
+            await s.exec(delete(ResponseRow).where(ResponseRow.conversation_id == conversation_id))
+            await s.exec(delete(ConvRow).where(ConvRow.id == conversation_id))
+            await s.commit()

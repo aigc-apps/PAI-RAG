@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
-from app.store.base import Conversation, Item, StoredResponse
+from app.store.base import Conversation, Item, StoredResponse, _now
 
 
 class InMemoryStore:
@@ -51,3 +51,39 @@ class InMemoryStore:
         if not conv_id:
             return []
         return list(self._items.get(conv_id, []))
+
+    async def ensure_conversation(self, conversation_id, user_id, title) -> Conversation:
+        existing = self._convs.get(conversation_id)
+        if existing is not None:
+            return existing
+        conv = Conversation(id=conversation_id, user_id=user_id, title=title)
+        self._convs[conversation_id] = conv
+        self._items.setdefault(conversation_id, [])
+        return conv
+
+    async def touch_conversation(self, conversation_id, last_response_id) -> None:
+        conv = self._convs.get(conversation_id)
+        if conv is None:
+            return
+        conv.last_response_id = last_response_id
+        conv.updated_at = _now()
+
+    async def list_conversations(self, user_id, limit=50, offset=0) -> List[Conversation]:
+        convs = [c for c in self._convs.values()
+                 if user_id is None or c.user_id == user_id]
+        convs.sort(key=lambda c: c.updated_at, reverse=True)
+        return convs[offset:offset + limit]
+
+    async def get_conversation(self, conversation_id) -> Optional[Conversation]:
+        return self._convs.get(conversation_id)
+
+    async def list_conversation_responses(self, conversation_id) -> List[StoredResponse]:
+        return [r for r in self._responses.values()
+                if r.conversation_id == conversation_id]
+
+    async def delete_conversation(self, conversation_id) -> None:
+        self._convs.pop(conversation_id, None)
+        self._items.pop(conversation_id, None)
+        for rid in [r.id for r in self._responses.values()
+                    if r.conversation_id == conversation_id]:
+            self._responses.pop(rid, None)
