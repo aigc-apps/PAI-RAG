@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     store_backend: str = "sql"   # "sql" | "memory"
     agent_name: str = "Aria"
     agent_role: str = "a general-purpose AI assistant"
+    search_provider: str = "none"
+    search_api_key: str = ""
+    search_endpoint: str = ""
+    skills_dir: str = ""
 
 
 def get_settings() -> Settings:
