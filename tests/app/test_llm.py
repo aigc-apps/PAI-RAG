@@ -4,6 +4,11 @@ import sys, os, asyncio
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../backend"))
 from app.llm import LeanLLM
 from common.llm.models import TextChunk, ErrorChunk
+from openai.types.completion_usage import CompletionUsage
+from openai.types.chat.chat_completion_chunk import (
+    ChoiceDeltaToolCall,
+    ChoiceDeltaToolCallFunction,
+)
 
 
 class _FakeDelta:
@@ -22,12 +27,6 @@ class _FakeChunk:
     def __init__(self, choices, usage=None):
         self.choices = choices
         self.usage = usage
-
-
-class _FakeUsage:
-    prompt_tokens = 3
-    completion_tokens = 5
-    total_tokens = 8
 
 
 class _FakeStream:
@@ -62,7 +61,12 @@ def test_astream_emits_text_and_usage():
         chunks = [
             _FakeChunk([_FakeChoice(_FakeDelta(content="Hell"))]),
             _FakeChunk([_FakeChoice(_FakeDelta(content="o"))]),
-            _FakeChunk([_FakeChoice(_FakeDelta())], usage=_FakeUsage()),
+            _FakeChunk(
+                [_FakeChoice(_FakeDelta())],
+                usage=CompletionUsage(
+                    prompt_tokens=3, completion_tokens=5, total_tokens=8
+                ),
+            ),
         ]
         llm = LeanLLM(base_url="x", api_key="x", model="m")
         llm.client = _FakeClient(chunks)
@@ -81,31 +85,49 @@ def test_astream_emits_text_and_usage():
 
 def test_astream_coalesces_tool_calls():
     async def run():
-        class _TC:
-            def __init__(self, index, id=None, name=None, args=None):
-                self.index = index
-                self.id = id
-                self.type = "function"
-                self.function = type(
-                    "F", (), {"name": name, "arguments": args}
-                )()
-
         chunks = [
             _FakeChunk(
                 [
                     _FakeChoice(
                         _FakeDelta(
                             tool_calls=[
-                                _TC(0, id="call_1", name="get", args='{"a"')
+                                ChoiceDeltaToolCall(
+                                    index=0,
+                                    id="call_1",
+                                    type="function",
+                                    function=ChoiceDeltaToolCallFunction(
+                                        name="get", arguments='{"a"'
+                                    ),
+                                )
                             ]
                         )
                     )
                 ]
             ),
             _FakeChunk(
-                [_FakeChoice(_FakeDelta(tool_calls=[_TC(0, args=":1}")]))]
+                [
+                    _FakeChoice(
+                        _FakeDelta(
+                            tool_calls=[
+                                ChoiceDeltaToolCall(
+                                    index=0,
+                                    id=None,
+                                    type="function",
+                                    function=ChoiceDeltaToolCallFunction(
+                                        name=None, arguments=":1}"
+                                    ),
+                                )
+                            ]
+                        )
+                    )
+                ]
             ),
-            _FakeChunk([_FakeChoice(_FakeDelta())], usage=_FakeUsage()),
+            _FakeChunk(
+                [_FakeChoice(_FakeDelta())],
+                usage=CompletionUsage(
+                    prompt_tokens=3, completion_tokens=5, total_tokens=8
+                ),
+            ),
         ]
         llm = LeanLLM(base_url="x", api_key="x", model="m")
         llm.client = _FakeClient(chunks)

@@ -83,14 +83,14 @@ class LeanLLM:
                     else ""
                 )
                 if reasoning:
-                    yield ReasoningChunk.model_construct(
+                    yield ReasoningChunk(
                         delta="",
                         reasoning_delta=reasoning,
                         tool_calls=tool_calls,
                         usage=usage,
                     )
                 elif content or tool_calls or usage is not None:
-                    yield TextChunk.model_construct(
+                    yield TextChunk(
                         delta=content, tool_calls=tool_calls, usage=usage
                     )
         except Exception as ex:
