@@ -1,0 +1,113 @@
+from __future__ import annotations
+import traceback
+from dataclasses import dataclass
+from typing import Awaitable, Callable, Dict, List, Optional
+from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
+from loguru import logger
+from agent.message import Message, ToolCall
+from utils.json_utils import parse_tool_arguments
+
+
+@dataclass
+class Tool:
+    """A callable the agent can invoke. `fn` takes the parsed JSON arguments as
+    kwargs and returns a string (the tool output)."""
+
+    name: str
+    description: str
+    parameters: Dict  # JSON Schema for the arguments object
+    fn: Callable[..., Awaitable[str]]
+    return_direct: bool = False
+
+    def openai_schema(self) -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+            },
+        }
+
+
+@dataclass
+class ToolResult:
+    message: Message
+    content: Optional[str]
+    error: Optional[str]
+    name: str
+    tool_call: ToolCall
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
+async def _call_with_retry(tool: "Tool", args: dict) -> str:
+    """Invoke the tool fn inside a tracing span, with retry."""
+    from extensions.trace.tracer import get_tracer
+
+    with get_tracer().start_as_current_span(f"tool {tool.name}") as span:
+        try:
+            span.set_attribute("tool.name", tool.name)
+        except Exception:
+            pass
+        result = await tool.fn(**args)
+        return result if isinstance(result, str) else str(result)
+
+
+class ToolBox:
+    def __init__(self, tools: List[Tool]):
+        self.tools = tools
+        self._by_name = {t.name: t for t in tools}
+
+    def __bool__(self) -> bool:
+        return bool(self.tools)
+
+    def get(self, name: str) -> Optional[Tool]:
+        return self._by_name.get(name)
+
+    def is_return_direct(self, name: str) -> bool:
+        tool = self._by_name.get(name)
+        return bool(tool and tool.return_direct)
+
+    def openai_schema(self) -> List[dict]:
+        return [t.openai_schema() for t in self.tools]
+
+    async def dispatch(self, tc: ToolCall) -> ToolResult:
+        tool = self._by_name.get(tc.name)
+        if tool is None:
+            err = f"Unknown tool: {tc.name}. Available: {list(self._by_name)}"
+            logger.warning(err)
+            return ToolResult(
+                message=Message("tool", content=err, tool_call_id=tc.id),
+                content=None,
+                error=err,
+                name=tc.name,
+                tool_call=tc,
+            )
+        args = parse_tool_arguments(tc.arguments)
+        logger.info(f"Calling tool {tc.name} with args: {args}")
+        try:
+            content = await _call_with_retry(tool, args)
+            return ToolResult(
+                message=Message("tool", content=content, tool_call_id=tc.id),
+                content=content,
+                error=None,
+                name=tc.name,
+                tool_call=tc,
+            )
+        except RetryError as re:
+            logger.error(f"Tool call failed after retries: {traceback.format_exc()}")
+            err = f"Tool call failed: {re.last_attempt.exception()}"
+        except Exception as ex:
+            logger.error(f"Tool call failed: {traceback.format_exc()}")
+            err = f"Tool call failed: {ex}"
+        return ToolResult(
+            message=Message("tool", content=err, tool_call_id=tc.id),
+            content=None,
+            error=err,
+            name=tc.name,
+            tool_call=tc,
+        )
