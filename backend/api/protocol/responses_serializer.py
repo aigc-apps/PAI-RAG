@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 from agent.core.events import (
@@ -29,6 +30,7 @@ from openai.types.responses import (
     ResponseInProgressEvent,
     ResponseCompletedEvent,
     ResponseFailedEvent,
+    ResponseIncompleteEvent,
     ResponseOutputItemAddedEvent,
     ResponseOutputItemDoneEvent,
     ResponseContentPartAddedEvent,
@@ -231,6 +233,32 @@ def _sse(event) -> str:
     return f"data: {event.model_dump_json()}\n\n"
 
 
+class _Cancelled(Exception):
+    """Raised inside the stream loop when the cancel event fires."""
+
+
+async def _anext_or_cancel(aiter, cancel):
+    """Return the next event, or raise _Cancelled if the cancel event fires first.
+    Without a cancel event this is a plain anext."""
+    if cancel is None:
+        return await aiter.__anext__()
+    next_task = asyncio.ensure_future(aiter.__anext__())
+    cancel_task = asyncio.ensure_future(cancel.wait())
+    try:
+        done, _pending = await asyncio.wait(
+            {next_task, cancel_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+    except BaseException:
+        next_task.cancel()
+        cancel_task.cancel()
+        raise
+    if next_task in done:
+        cancel_task.cancel()
+        return next_task.result()  # may raise StopAsyncIteration
+    next_task.cancel()
+    raise _Cancelled()
+
+
 async def serialize_response_stream(
     events: AsyncIterator,
     *,
@@ -238,6 +266,7 @@ async def serialize_response_stream(
     response_id: str,
     conversation_id: Optional[str],
     sink: Dict,
+    cancel: Optional[asyncio.Event] = None,
 ) -> AsyncIterator[str]:
     """AgentEvent stream -> SSE `response.*` event strings (OpenAI order). On completion,
     sink["response"] = final Response.model_dump(mode="json") and sink["items"] = store items.
@@ -322,7 +351,16 @@ async def serialize_response_stream(
             )
         )
 
-    async for ev in events:
+    cancelled = False
+    aiter = events.__aiter__()
+    while True:
+        try:
+            ev = await _anext_or_cancel(aiter, cancel)
+        except StopAsyncIteration:
+            break
+        except _Cancelled:
+            cancelled = True
+            break
         if isinstance(ev, TextDelta):
             if reasoning_open:
                 for chunk in close_reasoning():
@@ -553,11 +591,20 @@ async def serialize_response_stream(
             )
         )
 
+    if cancelled:
+        asm.status = "cancelled"
+
     final = asm.to_response()
     if asm.status == "failed":
         yield _sse(
             ResponseFailedEvent(
                 response=final, sequence_number=nxt(), type="response.failed"
+            )
+        )
+    elif asm.status == "cancelled":
+        yield _sse(
+            ResponseIncompleteEvent(
+                response=final, sequence_number=nxt(), type="response.incomplete"
             )
         )
     else:
