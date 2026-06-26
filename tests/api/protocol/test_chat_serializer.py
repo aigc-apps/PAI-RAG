@@ -2,10 +2,11 @@ import sys
 import os
 import json
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../backend"))
 from agent.core.events import TextDelta, RunCompleted, RunFailed, Usage, ToolResult
-from api.protocol.chat_serializer import serialize_chat_stream
+from api.protocol.chat_serializer import serialize_chat_stream, serialize_chat_stream_with_effects
 
 
 async def _events(*evs):
@@ -58,3 +59,99 @@ def test_run_failed_message_is_visible():  # regression: invisible-timeout bug
     )
     text = "".join(c["choices"][0]["delta"].get("content", "") for c in out)
     assert "模型调用超时" in text
+
+
+# ---------------------------------------------------------------------------
+# Step 6: output-guardrail + history-save parity tests
+# ---------------------------------------------------------------------------
+
+
+def _collect_with_effects(gen):
+    async def run():
+        return [json.loads(s) async for s in gen]
+
+    return asyncio.run(run())
+
+
+def test_run_failed_triggers_history_save():
+    """RunFailed must still save history — error text must appear in final_content."""
+    mock_save = AsyncMock()
+    mock_manager = MagicMock()
+    mock_manager.save_messages = mock_save
+
+    with patch(
+        "api.protocol.chat_serializer.serialize_chat_stream_with_effects.__wrapped__"
+        if hasattr(serialize_chat_stream_with_effects, "__wrapped__")
+        else "service.cache.session_history_manager.session_history_manager",
+        mock_manager,
+    ):
+        # Patch the import inside the function
+        with patch.dict(
+            "sys.modules",
+            {
+                "service.cache.session_history_manager": MagicMock(
+                    session_history_manager=mock_manager
+                )
+            },
+        ):
+            out = _collect_with_effects(
+                serialize_chat_stream_with_effects(
+                    _events(RunFailed(message="模型调用超时", error_type="llm_stream_timeout")),
+                    model="m",
+                    user_id="u1",
+                    session_id="s1",
+                    user_message={"role": "user", "content": "hello"},
+                )
+            )
+
+    # The error message must appear in streamed content
+    text = "".join(c["choices"][0]["delta"].get("content", "") for c in out)
+    assert "模型调用超时" in text
+
+    # history-save must have been called with the error text in the assistant message
+    mock_save.assert_called_once()
+    call_kwargs = mock_save.call_args.kwargs
+    assert call_kwargs["user_id"] == "u1"
+    assert call_kwargs["session_id"] == "s1"
+    assert "模型调用超时" in call_kwargs["assistant_message"]["content"]
+
+
+def test_rejecting_checker_yields_safety_violation_chunk():
+    """A checker that rejects must emit a chunk with safety_violation=True and the advice."""
+    from extensions.guardrail.guardrail_check import TextCheckResult
+
+    async def fake_check_output(text, current_result):
+        current_result.reject = True
+        current_result.advice = "This content violates policy."
+
+    fake_checker = MagicMock()
+    fake_checker.acheck_output = fake_check_output
+
+    # Use content long enough to trigger the chunked-check path
+    long_text = "x" * 300  # > CHECK_OUTPUT_CHUNK_SIZE (200)
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "service.cache.session_history_manager": MagicMock(
+                session_history_manager=MagicMock(save_messages=AsyncMock())
+            )
+        },
+    ):
+        out = _collect_with_effects(
+            serialize_chat_stream_with_effects(
+                _events(
+                    TextDelta(text=long_text),
+                    RunCompleted(usage=Usage(input=1, output=1, total=2)),
+                ),
+                model="m",
+                enable_output_check=True,
+                checker=fake_checker,
+                guardrail_hint="Default guardrail message",
+            )
+        )
+
+    safety_chunks = [c for c in out if c.get("safety_violation")]
+    assert safety_chunks, "Expected a safety_violation chunk"
+    advice_text = safety_chunks[0]["choices"][0]["delta"].get("content", "")
+    assert "violates policy" in advice_text

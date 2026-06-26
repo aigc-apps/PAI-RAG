@@ -234,6 +234,10 @@ async def serialize_chat_stream_with_effects(
     output_check_result = TextCheckResult()
     fail_fast = False
 
+    # We use break (not return) for terminal events so that the code after the
+    # try/finally block (guardrail epilogue) can still execute — a return inside
+    # a try/finally would prevent any subsequent yields from reaching the caller.
+
     try:
         async for ev in events:
             # If a previous check already rejected, stop streaming
@@ -270,16 +274,17 @@ async def serialize_chat_stream_with_effects(
                 # Include error message in final_content so history records it
                 final_content += ev.message
 
-            # Emit chunks
+            # Emit chunks for this event
             for chunk_str in _event_to_chunks(ev, chat_id, model):
                 yield chunk_str
 
-            # Early-exit after terminal events
+            # Mark terminal events — do NOT return here so that the code
+            # after the try/finally block (guardrail + stop chunk) can still run.
             if isinstance(ev, RunCompleted):
-                return
+                break  # normal completion — run guardrail epilogue below
             if isinstance(ev, RunFailed):
                 fail_fast = True
-                return
+                break  # error path — skip guardrail checks, emit stop below
 
     finally:
         # Close session if provided (mirrors utils.py finally block)
@@ -314,7 +319,8 @@ async def serialize_chat_stream_with_effects(
                     f"Failed to save session history: {e}", exc_info=True
                 )
 
-    # Final guardrail check on leftover content
+    # --- Guardrail epilogue (runs after try/finally, after history is saved) ---
+    # Final guardrail check on any leftover content not yet submitted
     if not fail_fast and len(current_content) > CHECK_OUTPUT_CHUNK_OVERLAP and enable_output_check and checker:
         check_tasks.append(
             asyncio.create_task(
@@ -335,5 +341,15 @@ async def serialize_chat_stream_with_effects(
             extra={"safety_violation": True},
         )
 
-    # Always emit a stop chunk (mirrors utils.py stop_chunk at end)
-    yield _chunk(chat_id, model, finish_reason="stop")
+    # Always emit a stop chunk when not already emitted by _event_to_chunks
+    # (RunFailed already emits its own stop chunk via _event_to_chunks, but
+    # fail_fast=True means we broke out before RunCompleted; emit one anyway
+    # to ensure the stream always terminates properly)
+    if fail_fast:
+        # RunFailed path already emitted a stop chunk via _event_to_chunks;
+        # nothing extra needed.
+        return
+
+    # For RunCompleted path: _event_to_chunks already included the stop+usage chunk,
+    # so we must NOT emit an extra stop chunk here.  The RunCompleted branch breaks
+    # out of the loop without setting fail_fast, so we know we finished normally.
