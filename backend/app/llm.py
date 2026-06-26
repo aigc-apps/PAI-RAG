@@ -49,55 +49,59 @@ class LeanLLM:
         tools: Optional[List[dict]] = None,
         **kwargs,
     ):
-        tool_calls = []
         tools_to_use = tools or None
-        try:
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                stream=True,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                tools=tools_to_use,
-                stream_options={"include_usage": True},
-                **kwargs,
-            )
-            async for chunk in stream:
-                usage = getattr(chunk, "usage", None)
-                choices = getattr(chunk, "choices", None) or []
-                delta_obj = choices[0].delta if choices else None
-                if delta_obj is not None and getattr(
-                    delta_obj, "tool_calls", None
-                ):
-                    tool_calls = update_tool_calls(
-                        tool_calls, delta_obj.tool_calls
-                    )
-                content = (
-                    getattr(delta_obj, "content", None) or ""
-                    if delta_obj
-                    else ""
+
+        async def gen():
+            tool_calls = []
+            try:
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    stream=True,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    tools=tools_to_use,
+                    stream_options={"include_usage": True},
+                    **kwargs,
                 )
-                reasoning = (
-                    (getattr(delta_obj, "reasoning_content", None) or "")
-                    if delta_obj
-                    else ""
+                async for chunk in stream:
+                    usage = getattr(chunk, "usage", None)
+                    choices = getattr(chunk, "choices", None) or []
+                    delta_obj = choices[0].delta if choices else None
+                    if delta_obj is not None and getattr(
+                        delta_obj, "tool_calls", None
+                    ):
+                        tool_calls = update_tool_calls(
+                            tool_calls, delta_obj.tool_calls
+                        )
+                    content = (
+                        getattr(delta_obj, "content", None) or ""
+                        if delta_obj
+                        else ""
+                    )
+                    reasoning = (
+                        (getattr(delta_obj, "reasoning_content", None) or "")
+                        if delta_obj
+                        else ""
+                    )
+                    if reasoning:
+                        yield ReasoningChunk(
+                            delta="",
+                            reasoning_delta=reasoning,
+                            tool_calls=tool_calls,
+                            usage=usage,
+                        )
+                    elif content or tool_calls or usage is not None:
+                        yield TextChunk(
+                            delta=content, tool_calls=tool_calls, usage=usage
+                        )
+            except Exception as ex:
+                logger.error(f"LeanLLM stream error: {traceback.format_exc()}")
+                yield ErrorChunk(
+                    delta=f"{ex}",
+                    error_message=str(ex),
+                    exception=str(ex),
+                    error_type="llm",
                 )
-                if reasoning:
-                    yield ReasoningChunk(
-                        delta="",
-                        reasoning_delta=reasoning,
-                        tool_calls=tool_calls,
-                        usage=usage,
-                    )
-                elif content or tool_calls or usage is not None:
-                    yield TextChunk(
-                        delta=content, tool_calls=tool_calls, usage=usage
-                    )
-        except Exception as ex:
-            logger.error(f"LeanLLM stream error: {traceback.format_exc()}")
-            yield ErrorChunk(
-                delta=f"{ex}",
-                error_message=str(ex),
-                exception=str(ex),
-                error_type="llm",
-            )
+
+        return gen()

@@ -72,7 +72,7 @@ def test_astream_emits_text_and_usage():
         llm.client = _FakeClient(chunks)
         out = [
             c
-            async for c in llm.astream(
+            async for c in await llm.astream(
                 messages=[{"role": "user", "content": "hi"}], tools=[]
             )
         ]
@@ -131,7 +131,7 @@ def test_astream_coalesces_tool_calls():
         ]
         llm = LeanLLM(base_url="x", api_key="x", model="m")
         llm.client = _FakeClient(chunks)
-        out = [c async for c in llm.astream(messages=[], tools=[])]
+        out = [c async for c in await llm.astream(messages=[], tools=[])]
         final_calls = [c.tool_calls for c in out if c.tool_calls][-1]
         assert final_calls[0].function.name == "get"
         assert final_calls[0].function.arguments == '{"a":1}'
@@ -151,7 +151,7 @@ def test_astream_error_yields_error_chunk():
             (),
             {"chat": type("C", (), {"completions": _BoomCompletions()})()},
         )()
-        out = [c async for c in llm.astream(messages=[], tools=[])]
+        out = [c async for c in await llm.astream(messages=[], tools=[])]
         assert len(out) == 1 and isinstance(out[0], ErrorChunk)
         assert out[0].error_type == "llm"
 
