@@ -24,7 +24,10 @@ def test_dispatch_unknown_tool_is_error_not_crash():
     assert not res.ok and "Unknown tool" in res.message.content
 
 
-def test_dispatch_tool_exception_becomes_error_result():
+def test_dispatch_tool_exception_becomes_error_result(monkeypatch):
+    import agent.tools.base as base
+    # neutralize the 1s retry waits so the test is fast
+    monkeypatch.setattr(base._call_with_retry.retry, "wait", __import__("tenacity").wait_none())
     async def boom(): raise RuntimeError("kaboom")
     box = ToolBox([_tool(boom, "boom")])
     res = asyncio.run(box.dispatch(ToolCall(id="c3", name="boom", arguments="{}")))

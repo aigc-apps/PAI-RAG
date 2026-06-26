@@ -2,10 +2,9 @@ import sys, os, asyncio, json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../backend"))
 sys.path.insert(0, os.path.dirname(__file__))
 from unittest.mock import MagicMock, patch
-from llama_index.core.tools import FunctionTool
 from common.llm.models import TextChunk, ErrorChunk
 from agent.agent import Agent
-from agent.tools import ToolBox
+from agent.tools import Tool, ToolBox
 from agent.context import AgentContext, RunVars
 from agent.message import Message
 from fake_llm import FakeLLM, tool_call
@@ -38,7 +37,9 @@ def _collect(agent, ctx):
 
 
 def _box(fn, name, return_direct=False):
-    return ToolBox([FunctionTool.from_defaults(async_fn=fn, name=name, return_direct=return_direct)])
+    return ToolBox([Tool(name=name, description=name,
+                         parameters={"type": "object", "properties": {}},
+                         fn=fn, return_direct=return_direct)])
 
 
 @patch("agent.budgeting.get_tokenizer", return_value=_make_mock_tokenizer())
