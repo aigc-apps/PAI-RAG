@@ -261,56 +261,8 @@ async def serialize_chat_stream_with_effects(
                 fail_fast = True
                 break
 
-            # Accumulate text content for guardrail + history
-            if isinstance(ev, TextDelta):
-                final_content += ev.text
-                current_content += ev.text
-                if (
-                    enable_output_check
-                    and checker
-                    and len(current_content) >= CHECK_OUTPUT_CHUNK_SIZE
-                ):
-                    check_tasks.append(
-                        asyncio.create_task(
-                            checker.acheck_output(
-                                text=current_content,
-                                current_result=output_check_result,
-                            )
-                        )
-                    )
-                    current_content = current_content[-CHECK_OUTPUT_CHUNK_OVERLAP:]
-
-                # Emit the TextDelta content chunk immediately
-                yield _chunk(chat_id, model, content=ev.text)
-
-            elif isinstance(ev, ReasoningDelta):
-                yield _chunk(chat_id, model, reasoning=ev.text)
-
-            elif isinstance(ev, ToolStarted):
-                yield _chunk(
-                    chat_id,
-                    model,
-                    content="",
-                    extra={"actions": [{"id": ev.call_id, "name": ev.name}]},
-                )
-
-            elif isinstance(ev, ToolResult):
-                _collect_tool_history_from_event(ev, tool_history_messages)
-                yield _chunk(
-                    chat_id,
-                    model,
-                    content="",
-                    extra={
-                        "observation": {
-                            "call_id": ev.call_id,
-                            "ok": ev.ok,
-                            "output": ev.output,
-                            "error": ev.error,
-                        }
-                    },
-                )
-
-            elif isinstance(ev, RunFailed):
+            # Terminal events: special handling (deferred stop chunk, usage capture)
+            if isinstance(ev, RunFailed):
                 # Include error message in final_content so history records it.
                 # Emit the visible error content chunk now; the stop chunk is
                 # deferred to the epilogue so ordering is always correct.
@@ -334,6 +286,34 @@ async def serialize_chat_stream_with_effects(
                     "total_tokens": ev.usage.total,
                 }
                 break  # normal completion — run guardrail epilogue below
+
+            else:
+                # Non-terminal events: accumulate side-effects then delegate
+                # chunk formatting to the shared _event_to_chunks helper.
+                if isinstance(ev, TextDelta):
+                    final_content += ev.text
+                    current_content += ev.text
+                    if (
+                        enable_output_check
+                        and checker
+                        and len(current_content) >= CHECK_OUTPUT_CHUNK_SIZE
+                    ):
+                        check_tasks.append(
+                            asyncio.create_task(
+                                checker.acheck_output(
+                                    text=current_content,
+                                    current_result=output_check_result,
+                                )
+                            )
+                        )
+                        current_content = current_content[-CHECK_OUTPUT_CHUNK_OVERLAP:]
+
+                elif isinstance(ev, ToolResult):
+                    _collect_tool_history_from_event(ev, tool_history_messages)
+
+                # Delegate chunk formatting to the shared helper
+                for s in _event_to_chunks(ev, chat_id, model):
+                    yield s
 
     finally:
         # Close session if provided (mirrors utils.py finally block)
