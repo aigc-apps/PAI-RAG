@@ -16,9 +16,25 @@ from agent.core.events import (
     ToolResult, RunCompleted, RunFailed, Usage,
 )
 from utils.constants import try_get_int_env
-from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
-from extensions.trace.base import use_current_span
-from opentelemetry import trace
+try:
+    from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
+    from extensions.trace.base import use_current_span
+    from opentelemetry import trace
+except Exception:  # lean mode: no trace extension / opentelemetry
+    def pai_agent_wrapper(func):           # passthrough decorator
+        return func
+
+    def use_current_span(_span):           # passthrough decorator factory
+        def _deco(fn):
+            return fn
+        return _deco
+
+    class _NoTrace:
+        @staticmethod
+        def get_current_span():
+            return None
+
+    trace = _NoTrace()
 
 
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20)

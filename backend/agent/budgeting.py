@@ -13,6 +13,25 @@ DEFAULT_TRUNCATED_TOOL_RESULT_TOKENS = 200
 DEFAULT_MIN_PROTECTED_HISTORY_ROUNDS = 5
 DEFAULT_HISTORY_MSG_MAX_TOKENS = 1500
 MESSAGE_OVERHEAD_TOKENS = 4
+# ~4 chars/token heuristic used when no tokenizer is available (lean mode).
+CHARS_PER_TOKEN = 4
+
+
+def _estimate_tokens(text: str, tokenizer) -> int:
+    if not text:
+        return 0
+    if tokenizer is None:
+        return max(1, len(text) // CHARS_PER_TOKEN)
+    return estimate_tokens_in_text(text, tokenizer=tokenizer)
+
+
+def _truncate(text: str, max_token: int, tokenizer):
+    """Tokenizer-aware truncate with a char-based fallback when tokenizer is None.
+    Returns (truncated_text, new_token_count) like memory.utils.truncate."""
+    if tokenizer is None:
+        truncated = text[: max_token * CHARS_PER_TOKEN]
+        return truncated, _estimate_tokens(truncated, None)
+    return truncate(text, max_token=max_token, tokenizer=tokenizer)
 
 
 @dataclass
@@ -47,7 +66,11 @@ class AgentMessageManager:
         self.token_budget = int(
             context_window - max_output_tokens - context_window * reserve_ratio
         )
-        self.tokenizer = get_tokenizer()
+        try:
+            self.tokenizer = get_tokenizer()
+        except Exception:
+            logger.warning("Tokenizer unavailable; using length-based token estimate.")
+            self.tokenizer = None
         logger.info(
             f"AgentMessageManager initialized: context_window={context_window}, "
             f"max_output={max_output_tokens}, token_budget={self.token_budget}"
@@ -57,19 +80,15 @@ class AgentMessageManager:
         tokens = MESSAGE_OVERHEAD_TOKENS
         content = msg.get("content") or ""
         if isinstance(content, str):
-            tokens += estimate_tokens_in_text(content, tokenizer=self.tokenizer)
+            tokens += _estimate_tokens(content, self.tokenizer)
         elif isinstance(content, list):
             for item in content:
                 if isinstance(item, dict) and item.get("type") == "text":
-                    tokens += estimate_tokens_in_text(
-                        item.get("text", ""), tokenizer=self.tokenizer
-                    )
+                    tokens += _estimate_tokens(item.get("text", ""), self.tokenizer)
         tool_calls = msg.get("tool_calls")
         if tool_calls:
             for tc in tool_calls:
-                tokens += estimate_tokens_in_text(
-                    str(tc), tokenizer=self.tokenizer
-                )
+                tokens += _estimate_tokens(str(tc), self.tokenizer)
         return tokens
 
     def estimate_messages_tokens(self, messages: List[dict]) -> int:
@@ -78,10 +97,10 @@ class AgentMessageManager:
     def cap_tool_result(self, content: str) -> str:
         if not content:
             return content
-        tokens = estimate_tokens_in_text(content, tokenizer=self.tokenizer)
+        tokens = _estimate_tokens(content, self.tokenizer)
         if tokens <= self.max_tool_result_tokens:
             return content
-        truncated_text, _ = truncate(
+        truncated_text, _ = _truncate(
             content,
             max_token=self.max_tool_result_tokens,
             tokenizer=self.tokenizer,
@@ -200,10 +219,10 @@ class AgentMessageManager:
             content = msg.get("content") or ""
             if not content:
                 continue
-            current_tokens = estimate_tokens_in_text(content, tokenizer=self.tokenizer)
+            current_tokens = _estimate_tokens(content, self.tokenizer)
             if current_tokens <= target_tokens:
                 continue
-            truncated_text, new_tokens = truncate(
+            truncated_text, new_tokens = _truncate(
                 content, max_token=target_tokens, tokenizer=self.tokenizer
             )
             msg["content"] = truncated_text + TOOL_RESULT_TRUNCATED_MARKER
@@ -339,10 +358,10 @@ class AgentMessageManager:
         content = msg.get("content") or ""
         if not isinstance(content, str) or not content:
             return 0
-        current_tokens = estimate_tokens_in_text(content, tokenizer=self.tokenizer)
+        current_tokens = _estimate_tokens(content, self.tokenizer)
         if current_tokens <= max_tokens:
             return 0
-        truncated_text, new_tokens = truncate(
+        truncated_text, new_tokens = _truncate(
             content, max_token=max_tokens, tokenizer=self.tokenizer
         )
         msg["content"] = truncated_text + TOOL_RESULT_TRUNCATED_MARKER

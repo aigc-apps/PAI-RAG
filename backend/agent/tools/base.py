@@ -45,14 +45,22 @@ class ToolResult:
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 async def _call_with_retry(tool: "Tool", args: dict) -> str:
-    """Invoke the tool fn inside a tracing span, with retry."""
-    from extensions.trace.tracer import get_tracer
+    """Invoke the tool fn inside a tracing span, with retry.
+    The tracing span is optional: in lean mode (no trace extension) the call
+    runs inside a nullcontext instead."""
+    try:
+        from extensions.trace.tracer import get_tracer
+        span_cm = get_tracer().start_as_current_span(f"tool {tool.name}")
+    except Exception:  # lean mode: no trace extension
+        from contextlib import nullcontext
+        span_cm = nullcontext()
 
-    with get_tracer().start_as_current_span(f"tool {tool.name}") as span:
-        try:
-            span.set_attribute("tool.name", tool.name)
-        except Exception:
-            pass
+    with span_cm as span:
+        if span is not None:
+            try:
+                span.set_attribute("tool.name", tool.name)
+            except Exception:
+                pass
         result = await tool.fn(**args)
         return result if isinstance(result, str) else str(result)
 
