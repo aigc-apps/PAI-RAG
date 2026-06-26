@@ -20,3 +20,22 @@ def test_create_all_and_insert_roundtrip():
             got = await s.get(ResponseRow, "resp_1")
             assert got.conversation_id == "conv_1" and got.status == "completed"
     asyncio.run(run())
+
+
+def test_conversation_table_has_title_and_last_response_id():
+    from app.models import Conversation as ConvRow
+    cols = ConvRow.__table__.columns.keys()
+    assert "title" in cols and "last_response_id" in cols
+
+
+def test_conversation_dataclass_defaults():
+    from app.store.base import Conversation
+    c = Conversation()
+    assert c.title is None and c.last_response_id is None
+    assert c.created_at is not None and c.updated_at is not None
+
+
+def test_responses_request_accepts_user_id():
+    from app.schemas import ResponsesRequest
+    req = ResponsesRequest(model="m", input="hi", user_id="u_123")
+    assert req.user_id == "u_123"

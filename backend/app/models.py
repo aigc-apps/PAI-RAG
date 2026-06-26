@@ -15,6 +15,8 @@ class Conversation(SQLModel, table=True):
     user_id: Optional[str] = Field(default=None, index=True, max_length=64)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+    title: Optional[str] = Field(default=None, max_length=200)
+    last_response_id: Optional[str] = Field(default=None, max_length=64)
     meta: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
 
 

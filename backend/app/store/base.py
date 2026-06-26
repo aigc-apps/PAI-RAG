@@ -1,6 +1,7 @@
 from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import List, Optional, Protocol
 
 
@@ -10,6 +11,10 @@ def _uuid(prefix: str) -> str:
 
 def new_conversation_id() -> str:
     return _uuid("conv")
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 @dataclass
@@ -26,6 +31,10 @@ class Item:
 class Conversation:
     id: str = field(default_factory=lambda: _uuid("conv"))
     user_id: Optional[str] = None
+    title: Optional[str] = None
+    last_response_id: Optional[str] = None
+    created_at: datetime = field(default_factory=_now)
+    updated_at: datetime = field(default_factory=_now)
 
 
 @dataclass

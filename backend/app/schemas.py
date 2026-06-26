@@ -13,6 +13,7 @@ class ResponsesRequest(BaseModel):
     instructions: Optional[str] = None
     previous_response_id: Optional[str] = None
     conversation: Optional[str] = None
+    user_id: Optional[str] = None
     store: bool = True
     stream: bool = False
     metadata: Optional[Dict[str, str]] = None
