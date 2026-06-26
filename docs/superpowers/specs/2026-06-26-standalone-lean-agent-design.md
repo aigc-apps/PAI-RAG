@@ -40,6 +40,8 @@ The agent core is now clean (events, serializers, clean `Tool`), but it still bo
 4. **SQLite default** (`aiosqlite`), Postgres-configurable (`asyncpg`); `InMemoryStore` for tests; **no Redis**.
 5. **Simple LLM config** from env (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `DEFAULT_MODEL`) + per-request model override.
 6. `/v1/responses` **strictly conforms** to OpenAI Responses; PAI-RAG-only signals stay on the opt-in `pai.*` extension channel (per the protocol spec).
+7. **New `LeanLLM`** (clean openai-AsyncClient streaming wrapper), not `PaiLlm` — drops the dashscope/model-registry weight.
+8. **Tracing dropped** from the lean path — `agent/` trace touchpoints become optional no-ops; no `extensions/trace` or `opentelemetry` dependency.
 
 ## Architecture
 
@@ -49,7 +51,7 @@ The agent core is now clean (events, serializers, clean `Tool`), but it still bo
 backend/app/
   main.py        # minimal FastAPI app; startup → db.create_all()
   config.py      # Settings: OPENAI_BASE_URL, OPENAI_API_KEY, DEFAULT_MODEL, DB_URL, STORE_BACKEND
-  llm.py         # build the LLM client from Settings (thin over the existing PaiLlm / openai AsyncClient)
+  llm.py         # LeanLLM: a clean minimal streaming client over openai.AsyncOpenAI (no PaiLlm)
   builder.py     # assemble AgentContext + ToolBox from a request (lean; tools from an in-process registry)
   db.py          # SQLModel async engine + create_all()
   models.py      # conversations / conversation_items / responses (SQLModel tables)
@@ -67,15 +69,22 @@ backend/app/
 
 ### LLM config
 
-`config.Settings` (pydantic-settings) reads env: `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `DEFAULT_MODEL`, `DB_URL` (default `sqlite+aiosqlite:///./data/agent.db`), `STORE_BACKEND` (`sql`|`memory`). `llm.build_llm(model)` constructs the client from these (reusing the existing `PaiLlm` over an `openai.AsyncOpenAI` pointed at `OPENAI_BASE_URL`). No `llm_service`, no DB model rows, no tenants.
+`config.Settings` (pydantic-settings) reads env: `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `DEFAULT_MODEL`, `DB_URL` (default `sqlite+aiosqlite:///./data/agent.db`), `STORE_BACKEND` (`sql`|`memory`). No `llm_service`, no DB model rows, no tenants.
+
+**`LeanLLM` (new clean interface, replaces `PaiLlm`).** A ~60-line async streaming client wrapping `openai.AsyncOpenAI(base_url, api_key)`, referencing how open-source agents (OpenAI Agents SDK / pydantic-ai / nanobot) wrap the streaming chat API. Its only contract is what `Agent._stream_turn` already consumes: `async def astream(messages, tools) -> AsyncIterator[chunk]` where each chunk carries `.delta` / `.tool_calls` / `.usage` (and the `ReasoningChunk` / `ErrorChunk` variants). It calls `chat.completions.create(stream=True, stream_options={"include_usage": True}, tools=...)`, coalesces partial `tool_calls` by index, and emits the lightweight chunk types from `common/llm/models.py` (pydantic, no heavy deps) — or a local copy if we want zero cross-package imports. This drops `PaiLlm` and its dashscope/model-registry weight entirely.
 
 ### Builder
 
 `builder.build_context(request, store) -> AgentContext`: resolve input (load prior items via the store if `previous_response_id`/`conversation`), build system prompt + history + current turn + tools (`ToolBox` from a simple in-process tool registry — empty by default; built-in tools added later), `run_vars`. Returns the `AgentContext` the existing `Agent.run` consumes.
 
-### Budgeting tokenizer (lean adjustment)
+### Lean adjustments to the agent core (`agent/`)
 
-`agent/budgeting.py` currently calls `get_tokenizer()` (loads a local Qwen tokenizer). Make it optional: if the tokenizer can't load, fall back to a simple length estimate (`len(text)//4` heuristic) so the lean service boots with zero tokenizer files. Behavior under a real tokenizer is unchanged.
+Two small changes make `agent/` boot with zero heavy deps, without changing behavior when those deps ARE present:
+
+- **Tracing dropped.** `agent/agent.py` imports `extensions.trace.*` + `opentelemetry` at module load (`@pai_agent_wrapper`, `use_current_span`), and `agent/tools/base.py` opens a per-tool span via `get_tracer()`. Make both **optional**: wrap the imports in `try/except` with **no-op fallbacks** (a passthrough decorator / null-context tracer) so the lean service depends on neither `extensions/trace` nor `opentelemetry`. When the trace extension IS installed and `TRACING_ENABLED=true`, behavior is unchanged.
+- **Tokenizer optional.** `agent/budgeting.py` calls `get_tokenizer()` (loads a local Qwen tokenizer). Fall back to a simple length estimate (`len(text)//4`) if it can't load, so the service boots with zero tokenizer files. Behavior under a real tokenizer is unchanged.
+
+Net: the lean agent's only runtime deps are `fastapi`, `openai`, `sqlmodel` + driver, `pydantic`, `tenacity`, `loguru`.
 
 ## Schema (empty DB, `create_all`, no migrations)
 
@@ -138,15 +147,16 @@ After the lean path boots and is green, move non-agent modules into `backend/leg
 
 ## Migration sequencing (each step green)
 
-1. `app/config.py` + `app/db.py` + `app/models.py` (schema) + `create_all`.
-2. `app/store/` (protocol + InMemory + Sql) with tests.
-3. `app/llm.py` + `app/builder.py` (lean wiring) + budgeting tokenizer fallback.
-4. `api/protocol/responses_serializer.py` (`AgentEvent` → Responses) with conformance + SDK tests.
-5. `app/routes/` + `app/main.py` (both endpoints) — lean app boots and serves.
-6. Legacy relocation to `backend/legacy/`, incrementally, keeping the lean app green.
+1. **Agent-core lean adjustments**: trace no-op import fallbacks (`agent/agent.py`, `agent/tools/base.py`) + budgeting tokenizer fallback — `agent/` now imports with zero heavy deps. (Tests: agent suite still green; a "no trace extension" import test.)
+2. `app/config.py` + `app/db.py` + `app/models.py` (schema) + `create_all`.
+3. `app/store/` (protocol + InMemory + Sql) with tests.
+4. `app/llm.py` (`LeanLLM`) + `app/builder.py` (lean wiring); test `Agent.run` over `LeanLLM` with a mocked openai stream.
+5. `api/protocol/responses_serializer.py` (`AgentEvent` → Responses) with conformance + OpenAI-SDK tests.
+6. `app/routes/` + `app/main.py` (both endpoints) — lean app boots and serves (test: boots with `STORE_BACKEND=memory` + fake LLM + no RAG/llamaindex/tokenizer/trace).
+7. Legacy relocation to `backend/legacy/`, incrementally, keeping the lean app green.
 
 ## Risks / open questions
 
-- **Reusing `PaiLlm`** may drag transitive deps (model classes, dashscope shims); if heavy, write a thin `openai.AsyncOpenAI` client adapter that emits the same chunk shape `agent/_stream_turn` consumes. Confirm during step 3.
-- **`agent/` transitive deps:** `agent/agent.py` imports `extensions/trace/*`; verify the trace extension is lean enough to keep, else stub it behind a flag.
+- **`LeanLLM` chunk-contract fidelity:** it must emit exactly what `Agent._stream_turn` consumes (`.delta`/`.tool_calls`/`.usage`, coalesced tool calls, `ReasoningChunk`/`ErrorChunk`). Lock this with a test that drives `Agent.run` against `LeanLLM` backed by a mocked `openai.AsyncOpenAI` stream. (Resolves the former PaiLlm-weight risk.)
+- **Trace no-op fallback:** the `try/except` import fallbacks in `agent/agent.py` + `agent/tools/base.py` must not change behavior when the trace extension IS present (`TRACING_ENABLED=true`). Cover both branches (installed / absent) in a small test. (Resolves the former trace-dep risk.)
 - **Legacy move is large** and risky; sequenced last and done incrementally so the lean app never breaks.
