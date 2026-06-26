@@ -183,8 +183,9 @@ async def convert_gen_to_stream_chat_completions(
         if response_generator and hasattr(response_generator, "aclose"):
             await response_generator.aclose()
             logger.info("convert_gen_to_stream_chat_completions: response_generator closed.")
-            await session.close()
-            logger.info("convert_gen_to_stream_chat_completions: session closed.")
+            if session:
+                await session.close()
+                logger.info("convert_gen_to_stream_chat_completions: session closed.")
 
         # 保存会话历史
         if final_content and user_id and session_id and user_message:

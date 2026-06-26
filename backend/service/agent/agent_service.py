@@ -37,32 +37,6 @@ class AgentBundle:
     attachments: List[Attachment]
     hints: List[str]
 
-def append_text(user_message: Dict, text: str):
-    """Append text to a user message, regardless of whether the content is
-    stored as a string or as a list of content parts (OpenAI content-array
-    format). If the list form has no text block yet — which happens when
-    the user sends *only* attachments with no typed text — we add a fresh
-    text block instead of silently dropping the append.
-    """
-    assert "content" in user_message, "Message必须包含content字段"
-    content = user_message["content"]
-
-    if content is None:
-        user_message["content"] = text
-        return
-    if isinstance(content, str):
-        user_message["content"] = content + text
-        return
-    if isinstance(content, list):
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                block["text"] = (block.get("text") or "") + text
-                return
-        # No text block — append one so the hint isn't dropped.
-        content.append({"type": "text", "text": text})
-        return
-
-
 def _user_message_has_text(user_message: Dict) -> bool:
     """True iff the user actually typed something (not just attached files)."""
     content = user_message.get("content")

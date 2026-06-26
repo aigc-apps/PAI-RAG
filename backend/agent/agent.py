@@ -51,7 +51,12 @@ def _format_return_direct(content):
 def _format_attachments(attachments: List[Attachment]) -> str:
     if not attachments:
         return ""
-    blocks = [f'<attached_file name="{a.name}">\n{a.body}\n</attached_file>' for a in attachments]
+    blocks = []
+    for a in attachments:
+        # Replace any double-quote in the filename so it can't break the
+        # name="..." attribute and confuse the model about block boundaries.
+        safe_name = a.name.replace('"', "'")
+        blocks.append(f'<attached_file name="{safe_name}">\n{a.body}\n</attached_file>')
     return "\n\n以下是用户本次上传的文件内容，请直接基于这些内容回答：\n\n" + "\n\n".join(blocks)
 
 

@@ -51,3 +51,11 @@ def test_multimodal_current_turn_prefixes_text_part():
     parts = msgs[-1].content
     assert isinstance(parts, list)
     assert "[System Time:" in parts[0]["text"] and "看图" in parts[0]["text"]
+
+
+def test_attachment_name_with_quote_is_sanitized():
+    # A double-quote in the filename must not break the name="..." attribute.
+    msgs = Agent.build_messages(_ctx(attachments=[Attachment(name='a"b.pdf', body="body1")]))
+    text = msgs[-1].content
+    assert 'name="a\'b.pdf"' in text
+    assert "body1" in text
