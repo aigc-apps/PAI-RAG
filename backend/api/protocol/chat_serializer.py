@@ -1,9 +1,11 @@
-"""AgentEvent stream → OpenAI chat.completion.chunk JSON strings.
+"""AgentEvent stream → OpenAI chat.completion(.chunk) JSON.
 
-Two entry points:
-  serialize_chat_stream            – pure formatting, no side-effects
-  serialize_chat_stream_with_effects – adds output-guardrail + session-history save
+Entry points:
+  serialize_chat_stream            – pure formatting, no side-effects (streaming)
+  serialize_chat_stream_with_effects – streaming + output-guardrail + session-history save
                                        (parity with convert_gen_to_stream_chat_completions)
+  serialize_chat_sync_with_effects – non-stream aggregation + output-guardrail + history save
+                                       (parity with convert_gen_to_chat_completions)
 """
 from __future__ import annotations
 
@@ -376,3 +378,164 @@ async def serialize_chat_stream_with_effects(
     # This guarantees the safety chunk (if any) always precedes the stop chunk,
     # and every stream terminates with a stop chunk regardless of the exit path.
     yield _chunk(chat_id, model, finish_reason="stop", usage=pending_usage)
+
+
+# ---------------------------------------------------------------------------
+# Entry point 3: non-stream aggregation + guardrail + history save
+# ---------------------------------------------------------------------------
+
+async def serialize_chat_sync_with_effects(
+    events: AsyncIterator[AgentEvent],
+    *,
+    model: str,
+    session=None,
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    user_message: Optional[dict] = None,
+    enable_output_check: bool = False,
+    checker=None,
+    guardrail_hint: Optional[str] = None,
+) -> dict:
+    """Consume the full AgentEvent stream once and return a single chat.completion dict.
+
+    Side-effects (mirroring convert_gen_to_chat_completions in utils.py):
+      (a) Final output-guardrail via checker.acheck_output over the assembled content
+      (b) Session-history save via session_history_manager.save_messages (in finally)
+
+    Output shape mirrors convert_gen_to_chat_completions:
+      {"id","object":"chat.completion","created","model",
+       "choices":[{"index":0,"message":{"role","content","reasoning_content"},
+                   "finish_reason":"stop"}],
+       "usage":{...}, "steps":[...], "citations":[], "citation_details":[],
+       "safety_violation"?: True}
+
+    NOTE on dropped/derived fields vs. the legacy ToolResultChunk-based path:
+      - ``citations``/``citation_details`` were derived by JSON-parsing the raw tool
+        result payload (extract_citations). AgentEvent.ToolResult only carries an
+        opaque ``output`` string, so citation extraction is not reproduced here; both
+        are returned as empty lists. This matches the streaming serializer, which also
+        does not emit citations.
+      - ``steps`` were full ToolResultChunk objects; here they are reconstructed from
+        ToolStarted/ToolResult events (id/name/ok/output/error), enough for the
+        frontend to render the tool-call trace.
+    """
+    from loguru import logger
+    from extensions.guardrail.guardrail_check import TextCheckResult
+
+    chat_id = "chatcmpl-" + uuid.uuid4().hex
+
+    content = ""
+    reasoning_content = ""
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    actions: List[dict] = []
+    observations: List[dict] = []
+    steps: List[dict] = []
+    citations: List[str] = []
+    citation_details: List[dict] = []
+    tool_history_messages: List[dict] = []
+    safety_violation = False
+    error_type: Optional[str] = None
+
+    try:
+        async for ev in events:
+            if isinstance(ev, TextDelta):
+                content += ev.text
+
+            elif isinstance(ev, ReasoningDelta):
+                reasoning_content += ev.text
+
+            elif isinstance(ev, ToolStarted):
+                actions.append({"id": ev.call_id, "name": ev.name})
+
+            elif isinstance(ev, ToolResult):
+                obs = {
+                    "call_id": ev.call_id,
+                    "ok": ev.ok,
+                    "output": ev.output,
+                    "error": ev.error,
+                }
+                observations.append(obs)
+                steps.append({"name": ev.name, **obs})
+                _collect_tool_history_from_event(ev, tool_history_messages)
+
+            elif isinstance(ev, RunCompleted):
+                usage = {
+                    "prompt_tokens": ev.usage.input,
+                    "completion_tokens": ev.usage.output,
+                    "total_tokens": ev.usage.total,
+                }
+
+            elif isinstance(ev, RunFailed):
+                # Make the error message visible in the final content and record
+                # the error_type, mirroring the streaming path.
+                content += ev.message
+                error_type = ev.error_type
+
+        # --- Final output-guardrail over the assembled content ---
+        if enable_output_check and checker and content:
+            current_result = TextCheckResult()
+            await checker.acheck_output(text=content, current_result=current_result)
+            if current_result.reject:
+                logger.warning("serialize_chat_sync_with_effects: output check rejected")
+                content = current_result.advice or guardrail_hint
+                safety_violation = True
+
+    finally:
+        # Close session if provided (mirrors the streaming finally block)
+        if session:
+            try:
+                await session.close()
+                logger.info("serialize_chat_sync_with_effects: session closed.")
+            except Exception:
+                pass
+
+        # Save session history
+        if content and user_id and session_id and user_message:
+            try:
+                from service.cache.session_history_manager import session_history_manager
+
+                assistant_message = {
+                    "role": "assistant",
+                    "content": content,
+                }
+                await session_history_manager.save_messages(
+                    user_id=user_id,
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_message=assistant_message,
+                    tool_messages=tool_history_messages if tool_history_messages else None,
+                )
+                logger.info(
+                    f"Session history saved (non-stream) for user={user_id}, session={session_id}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to save session history (non-stream): {e}", exc_info=True
+                )
+
+    result: dict = {
+        "id": chat_id,
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": content,
+                    "reasoning_content": reasoning_content if reasoning_content else None,
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": usage,
+        "steps": steps,
+        "citations": citations,
+        "citation_details": citation_details,
+    }
+    if safety_violation:
+        result["safety_violation"] = True
+    if error_type:
+        result["error_type"] = error_type
+    return result

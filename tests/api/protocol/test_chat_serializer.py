@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../backend"))
 from agent.core.events import TextDelta, RunCompleted, RunFailed, Usage, ToolResult
-from api.protocol.chat_serializer import serialize_chat_stream, serialize_chat_stream_with_effects
+from api.protocol.chat_serializer import (
+    serialize_chat_stream,
+    serialize_chat_stream_with_effects,
+    serialize_chat_sync_with_effects,
+)
 
 
 async def _events(*evs):
@@ -260,3 +264,85 @@ def test_with_effects_run_failed_emits_stop():
 
     stops = [c for c in out if c["choices"][0].get("finish_reason") == "stop"]
     assert len(stops) == 1, f"expected exactly one stop chunk on RunFailed, got {len(stops)}: {out}"
+
+
+# ---------------------------------------------------------------------------
+# Sync (non-stream) aggregator tests
+# ---------------------------------------------------------------------------
+
+
+def _run_sync(coro):
+    return asyncio.run(coro)
+
+
+def _mock_history_manager():
+    """patch.dict context manager that mocks session_history_manager.save_messages."""
+    return patch.dict(
+        "sys.modules",
+        {
+            "service.cache.session_history_manager": MagicMock(
+                session_history_manager=MagicMock(save_messages=AsyncMock())
+            )
+        },
+    )
+
+
+def test_sync_aggregates_content_and_usage():
+    with _mock_history_manager():
+        result = _run_sync(
+            serialize_chat_sync_with_effects(
+                _events(
+                    TextDelta(text="he"),
+                    TextDelta(text="llo"),
+                    RunCompleted(usage=Usage(input=5, output=2, total=7)),
+                ),
+                model="m",
+            )
+        )
+
+    assert result["object"] == "chat.completion"
+    assert result["choices"][0]["message"]["content"] == "hello"
+    assert result["choices"][0]["finish_reason"] == "stop"
+    assert result["usage"]["completion_tokens"] == 2
+    assert result["usage"]["total_tokens"] == 7
+
+
+def test_sync_run_failed_message_visible():
+    with _mock_history_manager():
+        result = _run_sync(
+            serialize_chat_sync_with_effects(
+                _events(
+                    RunFailed(message="模型调用超时", error_type="llm_stream_timeout"),
+                ),
+                model="m",
+            )
+        )
+
+    assert "模型调用超时" in result["choices"][0]["message"]["content"]
+    assert result.get("error_type") == "llm_stream_timeout"
+
+
+def test_sync_rejecting_checker_replaces_content_with_advice():
+    async def fake_check_output(text, current_result):
+        current_result.reject = True
+        current_result.advice = "This content violates policy."
+
+    fake_checker = MagicMock()
+    fake_checker.acheck_output = fake_check_output
+
+    with _mock_history_manager():
+        result = _run_sync(
+            serialize_chat_sync_with_effects(
+                _events(
+                    TextDelta(text="some disallowed content"),
+                    RunCompleted(usage=Usage(input=1, output=1, total=2)),
+                ),
+                model="m",
+                enable_output_check=True,
+                checker=fake_checker,
+                guardrail_hint="Default guardrail message",
+            )
+        )
+
+    assert result["choices"][0]["message"]["content"] == "This content violates policy."
+    assert result.get("safety_violation") is True
