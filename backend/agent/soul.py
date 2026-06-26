@@ -53,7 +53,7 @@ class Soul(BaseModel):
             for k, v in (override or {}).items()
             if k in type(self).model_fields and v is not None
         }
-        return self.model_copy(update=valid)
+        return type(self).model_validate({**self.model_dump(), **valid})
 
 
 DEFAULT_SOUL = Soul()

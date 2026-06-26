@@ -173,3 +173,13 @@ def test_build_context_accepts_explicit_soul_argument():
         assert "You are Custom, a tutor." in ctx.system_prompt
 
     asyncio.run(run())
+
+
+def test_build_context_invalid_soul_override_raises_value_error():
+    async def run():
+        import pytest
+        st = InMemoryStore()
+        req = ResponsesRequest(model="m", input="hi", soul={"principles": 123})
+        with pytest.raises(ValueError):
+            await build_context(req, st)
+    asyncio.run(run())

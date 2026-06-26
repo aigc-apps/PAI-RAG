@@ -52,3 +52,11 @@ def test_render_includes_expertise_when_set():
     soul = DEFAULT_SOUL.merge({"expertise": ["tax law", "accounting"]})
     out = render_system_prompt(soul, tool_names=[])
     assert "tax law" in out
+
+
+def test_merge_revalidates_and_rejects_bad_types():
+    import pytest
+    with pytest.raises(ValueError):
+        DEFAULT_SOUL.merge({"principles": 123})
+    # original remains usable/unchanged
+    assert isinstance(DEFAULT_SOUL.principles, list)
