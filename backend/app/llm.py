@@ -3,7 +3,14 @@ import traceback
 from typing import List, Optional
 from openai import AsyncOpenAI
 from loguru import logger
-from common.llm.models import TextChunk, ReasoningChunk, ErrorChunk, update_tool_calls
+from common.llm.models import (
+    TextChunk,
+    ReasoningChunk,
+    ErrorChunk,
+    update_tool_calls,
+    THINK_START_TAG,
+    THINK_END_TAG,
+)
 
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 4096
@@ -52,6 +59,8 @@ class LeanLLM:
 
         async def gen():
             tool_calls = []
+            is_reasoning = True
+            has_reasoning_content = False
             try:
                 stream = await self.client.chat.completions.create(
                     model=self.model,
@@ -61,6 +70,12 @@ class LeanLLM:
                     max_tokens=self.max_tokens,
                     tools=tools_to_use,
                     stream_options={"include_usage": True},
+                    extra_body={
+                        "chat_template_kwargs": {
+                            "enable_thinking": self.enable_thinking
+                        },
+                        "enable_thinking": self.enable_thinking,
+                    },
                     **kwargs,
                 )
                 async for chunk in stream:
@@ -78,18 +93,55 @@ class LeanLLM:
                         if delta_obj
                         else ""
                     )
-                    reasoning = (
-                        (getattr(delta_obj, "reasoning_content", None) or "")
-                        if delta_obj
-                        else ""
-                    )
-                    if reasoning:
-                        yield ReasoningChunk(
-                            delta="",
-                            reasoning_delta=reasoning,
-                            tool_calls=tool_calls,
-                            usage=usage,
+
+                    if self.enable_thinking:
+                        reasoning_delta = ""
+                        reasoning_content = (
+                            getattr(delta_obj, "reasoning_content", None)
+                            if delta_obj
+                            else None
                         )
+                        if reasoning_content:
+                            # Model emits a dedicated reasoning_content field.
+                            has_reasoning_content = True
+                            reasoning_delta = reasoning_content
+                        elif content:
+                            # Model inlines reasoning via <think>...</think>.
+                            if has_reasoning_content:
+                                is_reasoning = False
+                            if is_reasoning:
+                                end_pos = content.find(THINK_END_TAG)
+                                if end_pos != -1:
+                                    reasoning_delta = content[:end_pos]
+                                    content = content[
+                                        end_pos + len(THINK_END_TAG):
+                                    ]
+                                    is_reasoning = False
+                                else:
+                                    reasoning_delta = content.replace(
+                                        THINK_START_TAG, ""
+                                    )
+                                    content = ""
+
+                        if content or tool_calls:
+                            yield TextChunk(
+                                delta=content,
+                                tool_calls=tool_calls,
+                                usage=usage,
+                            )
+                        elif reasoning_delta:
+                            yield ReasoningChunk(
+                                delta=content,
+                                reasoning_delta=reasoning_delta,
+                                tool_calls=tool_calls,
+                                usage=usage,
+                            )
+                        elif usage is not None:
+                            yield TextChunk(
+                                delta=content,
+                                tool_calls=tool_calls,
+                                usage=usage,
+                            )
                     elif content or tool_calls or usage is not None:
                         yield TextChunk(
                             delta=content, tool_calls=tool_calls, usage=usage
