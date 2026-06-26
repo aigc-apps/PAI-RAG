@@ -10,6 +10,7 @@ from app.store.sql import SqlStore
 from app.llm import LeanLLM
 from app.routes.responses import router as responses_router
 from app.routes.chat import router as chat_router
+from app.routes.conversations import router as conversations_router
 
 
 def _build_llm(settings) -> LeanLLM:
@@ -46,3 +47,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Lean Agent Service", lifespan=lifespan)
 app.include_router(responses_router)
 app.include_router(chat_router)
+app.include_router(conversations_router)
