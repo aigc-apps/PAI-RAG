@@ -189,7 +189,6 @@ def test_stored_turn_creates_listable_conversation_with_title_and_user():
     # the conversation is now a real, retrievable row via the responses' app_state store
     # (assert through a second turn that continues it AND via a direct store read)
     import asyncio
-    from app.deps import get_state
 
     async def _read():
         # reach the store the TestClient app is using
@@ -223,4 +222,32 @@ def test_store_false_creates_no_conversation():
 
     async def _read():
         assert await c.app.state.app_state.store.get_conversation(conv_id) is None
+    asyncio.run(_read())
+
+
+def test_second_turn_keeps_title_and_advances_last_response_id():
+    c = _client()
+    first = c.post("/v1/responses", json={
+        "input": "first question here",
+        "stream": False,
+        "user_id": "u_7",
+    }).json()
+    conv_id = first["conversation"]["id"]
+    second = c.post("/v1/responses", json={
+        "input": "a different second question",
+        "stream": False,
+        "user_id": "u_7",
+        "previous_response_id": first["id"],
+        "conversation": conv_id,
+    }).json()
+    import asyncio
+
+    async def _read():
+        conv = await c.app.state.app_state.store.get_conversation(conv_id)
+        assert conv is not None
+        # title set only on creation -> still the FIRST turn's text
+        assert conv.title == "first question here"
+        # last_response_id advanced to the SECOND turn
+        assert conv.last_response_id == second["id"]
+        assert second["conversation"]["id"] == conv_id
     asyncio.run(_read())
