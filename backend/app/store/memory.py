@@ -17,9 +17,13 @@ class InMemoryStore:
 
     async def append_items(self, conversation_id: str, items: List[Item]) -> List[Item]:
         log = self._items.setdefault(conversation_id, [])
+        # Mirror SqlStore: next seq is max(seq)+1, so the contract is identical
+        # (monotonic, never reused) even if gaps ever appear.
+        n = max((it.seq for it in log), default=-1) + 1
         for it in items:
-            it.seq = len(log)
+            it.seq = n
             log.append(it)
+            n += 1
         return items
 
     async def get_conversation_items(self, conversation_id: str) -> List[Item]:
