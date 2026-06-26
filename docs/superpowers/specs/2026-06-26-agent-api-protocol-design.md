@@ -14,6 +14,7 @@ Separately, the product is an **agent served as an API** (the UI is a demo), so 
 
 - One internal **`AgentEvent`** discriminated union that the agent loop emits; usage, errors, and tool steps are first-class events, never inferred.
 - Two thin serializers map that one stream to `/v1/responses` and `/v1/chat/completions`.
+- **`/v1/responses` strictly conforms to OpenAI Responses** (events + items, including tool arguments and `function_call_output` outputs) so the stock `openai` client works unmodified. PAI-RAG-only signals live on a separate opt-in extension channel, never embedded in standard items.
 - An **agent-centric** package layout: the agent is the core; guardrail / context / tools / memory are its submodules; HTTP/serialization is a thin shell.
 - A **clean core agent** with no dependency on llamaindex, `pairag.knowledgebases`, or the RAG tooling.
 
@@ -118,13 +119,15 @@ run.failed       { message, type }                 # terminal error (timeout/gua
 | `reasoning.delta` | `response.reasoning_summary_text.delta` | chunk `delta.reasoning_content` |
 | `tool.started` | `response.output_item.added` (`function_call`) | chunk `delta.tool_calls` + custom `pai.tool.progress` event |
 | `tool.completed` | `response.function_call_arguments.done` + `output_item.done` | chunk `delta.tool_calls` |
-| `tool.result` | `function_call_output` item (**extension**, see below) | custom `pai.observation` event (dropped for pure-OpenAI clients) |
+| `tool.result` | `function_call_output` item, using the OpenAI Responses output-item schema | custom `pai.observation` event (dropped for pure-OpenAI clients) |
 | `run.completed` | `response.completed` (usage on `Response`) | final chunk `finish_reason=stop` + `usage` |
 | `run.failed` | `response.failed` / `response.error` | error chunk (message in one field) |
 
 Serializers `match event.type` — no field-presence inference. This makes the four historical bugs structurally impossible.
 
-**Server-side-tool extension note:** standard Responses treats `function_call_output` as an *input* item supplied for the next model call. Our agent executes tools **server-side**, so we surface `function_call_output` inside `Response.output` to make the executed trace visible. This is a documented **PAI-RAG extension** to Responses semantics; clients should not assume vanilla-OpenAI behavior for these items.
+**Strict compatibility (`/v1/responses`).** The `/v1/responses` stream and `Response` object **strictly conform to the OpenAI Responses event and item schemas** — including tool arguments (`function_call` / `function_call_arguments.*`) and tool outputs as `function_call_output` items, using the OpenAI Responses output-item schema with **no extra fields** added to standard items. The stock `openai` client must consume the default stream unmodified.
+
+PAI-RAG-only signals — tool progress, detailed trace, per-tool latency, `stderr`, citation sources — are **never embedded** in strict-mode items; they are delivered on a **separate extension channel**: distinct `pai.*` SSE events (e.g. `pai.tool.progress`) emitted **only when the client opts in** (request flag / header). Default-off keeps the base stream strictly OpenAI-compatible; the debug UI opts in to get the rich events. (`/v1/chat/completions`, which has no native item model for tool I/O, carries this via its own custom events as shown above.)
 
 ## `/v1/responses` behavior
 
@@ -195,14 +198,17 @@ responses
 
 ## Compatibility stance
 
-Target is **schema-compatible / client-compatible**, **not** byte-identical. Chunk index, empty deltas, the final usage chunk, and custom events may differ in field order/defaults from the legacy output. **Golden tests** pin representative chunk sequences; **OpenAI-SDK integration tests** (below) verify real-client behavior.
+Two different bars, by endpoint:
+
+- **`/v1/responses` — strict OpenAI conformance.** The default stream and `Response` object contain only OpenAI Responses events/items with exact schemas; the stock `openai` client must parse both the sync JSON and the streaming events unmodified (incl. `data: [DONE]`, event ordering). PAI-RAG `pai.*` extension events appear only on opt-in. The OpenAI-SDK integration test is the gate.
+- **`/v1/chat/completions` — schema-/client-compatible, not byte-identical.** Chunk index, empty deltas, the final usage chunk, and custom events may differ in field order/defaults from the legacy output. **Golden tests** pin representative chunk sequences so current clients keep working.
 
 ## Testing
 
 - **`AgentEvent` emission** (`FakeLLM` + dummy tools): correct event sequence for text-only, tool-call→answer, `run.failed` (timeout/guardrail), usage on `run.completed`.
 - **`ResponsesSerializer` conformance:** emitted payloads validate against `openai.types.responses.*`; event ordering for stream.
 - **`ChatCompletionsSerializer`:** golden chunk sequences; **regression locks** for the usage-only terminal chunk and the error-message field (invisible-timeout).
-- **OpenAI-SDK integration:** drive a test server and parse responses with the **official `openai` client** — both the sync `Response` JSON and the streaming events (covers SSE ordering, `data: [DONE]`, client-side assembly). This is required in addition to Pydantic conformance.
+- **OpenAI-SDK integration:** drive a test server and parse responses with the **official `openai` client** — both the sync `Response` JSON and the streaming events (covers SSE ordering, `data: [DONE]`, client-side assembly). Assert the **default** stream contains **only** OpenAI event types (no `pai.*`) and that tool args + `function_call_output` items validate as standard items; a separate test with the opt-in flag asserts `pai.*` events appear and the stock SDK still parses the stream. Required in addition to Pydantic conformance.
 - **Store:** save/get/delete; Redis→SQL fallback; `store=false` → no SQL row + `GET` 404; `previous_response_id`/`conversation` resolution incl. the cross-conversation **400** and no-double-prepend.
 - **Endpoints:** POST stream + sync, GET, DELETE, linking.
 
