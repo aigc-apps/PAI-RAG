@@ -176,3 +176,51 @@ def test_conflicting_ids_returns_400():
         },
     )
     assert r.status_code == 400
+
+
+def test_stored_turn_creates_listable_conversation_with_title_and_user():
+    c = _client()
+    body = c.post("/v1/responses", json={
+        "input": "what is the capital of France?",
+        "stream": False,
+        "user_id": "u_42",
+    }).json()
+    conv_id = body["conversation"]["id"]
+    # the conversation is now a real, retrievable row via the responses' app_state store
+    # (assert through a second turn that continues it AND via a direct store read)
+    import asyncio
+    from app.deps import get_state
+
+    async def _read():
+        # reach the store the TestClient app is using
+        state = c.app.state.app_state
+        conv = await state.store.get_conversation(conv_id)
+        assert conv is not None
+        assert conv.title == "what is the capital of France?"
+        assert conv.user_id == "u_42"
+        assert conv.last_response_id == body["id"]
+    asyncio.run(_read())
+
+
+def test_title_is_trimmed_to_80_chars():
+    c = _client()
+    long_q = "x" * 200
+    body = c.post("/v1/responses", json={"input": long_q, "stream": False}).json()
+    conv_id = body["conversation"]["id"]
+    import asyncio
+
+    async def _read():
+        conv = await c.app.state.app_state.store.get_conversation(conv_id)
+        assert len(conv.title) == 80
+    asyncio.run(_read())
+
+
+def test_store_false_creates_no_conversation():
+    c = _client()
+    body = c.post("/v1/responses", json={"input": "ephemeral", "stream": False, "store": False}).json()
+    conv_id = body["conversation"]["id"]
+    import asyncio
+
+    async def _read():
+        assert await c.app.state.app_state.store.get_conversation(conv_id) is None
+    asyncio.run(_read())

@@ -40,6 +40,11 @@ def _user_input_items(current_turn, response_id: str) -> list:
     ]
 
 
+def _title_from_turn(current_turn) -> str:
+    text = current_turn.content if isinstance(current_turn.content, str) else ""
+    return text.strip()[:80]
+
+
 async def _persist(
     state: AppState,
     request: ResponsesRequest,
@@ -51,6 +56,13 @@ async def _persist(
     usage: dict | None,
     error: dict | None = None,
 ):
+    # Create the conversation row if absent (title from the first user message,
+    # set only on creation; user_id from the request). Idempotent on later turns.
+    await state.store.ensure_conversation(
+        conversation_id,
+        user_id=request.user_id,
+        title=_title_from_turn(current_turn),
+    )
     items = _user_input_items(current_turn, response_id)
     for d in store_items:
         items.append(
@@ -73,6 +85,8 @@ async def _persist(
             previous_response_id=request.previous_response_id,
         )
     )
+    # Bump updated_at + record the latest response as the continuation anchor.
+    await state.store.touch_conversation(conversation_id, last_response_id=response_id)
 
 
 @router.post("/v1/responses")
