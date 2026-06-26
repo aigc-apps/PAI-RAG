@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.store.memory import InMemoryStore
 from app.routes.responses import router as responses_router
 from app.deps import AppState
-from common.llm.models import TextChunk
+from common.llm.models import TextChunk, ErrorChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
 
 
@@ -44,6 +44,36 @@ def _client():
     )
     app.include_router(responses_router)
     return TestClient(app)
+
+
+class _FailLLM:
+    """Emits an ErrorChunk so the agent surfaces a RunFailed."""
+
+    async def astream(self, messages, tools=None, **kwargs):
+        async def gen():
+            yield ErrorChunk(delta="boom", error_message="boom", error_type="llm")
+
+        return gen()
+
+
+def _fail_client():
+    app = FastAPI()
+    app.state.app_state = AppState(
+        store=InMemoryStore(), llm=_FailLLM(), default_model="m"
+    )
+    app.include_router(responses_router)
+    return TestClient(app)
+
+
+def test_failed_run_persists_status_and_error():
+    c = _fail_client()
+    body = c.post("/v1/responses", json={"input": "x", "stream": False}).json()
+    assert body["status"] == "failed"
+    assert body["error"] is not None and "boom" in body["error"]["message"]
+    # GET reflects the persisted failed status AND error detail
+    got = c.get(f"/v1/responses/{body['id']}").json()
+    assert got["status"] == "failed"
+    assert got["error"] is not None and "boom" in got["error"]["message"]
 
 
 def test_post_sync_creates_and_persists_response():

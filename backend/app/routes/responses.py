@@ -49,6 +49,7 @@ async def _persist(
     store_items: list,
     status: str,
     usage: dict | None,
+    error: dict | None = None,
 ):
     items = _user_input_items(current_turn, response_id)
     for d in store_items:
@@ -68,6 +69,7 @@ async def _persist(
             model=request.model or state.default_model,
             status=status,
             usage=usage,
+            error=error,
             previous_response_id=request.previous_response_id,
         )
     )
@@ -115,6 +117,7 @@ async def create_response(
                     sink["items"],
                     r["status"],
                     r.get("usage"),
+                    r.get("error"),
                 )
 
         return StreamingResponse(gen(), media_type="text/event-stream")
@@ -135,6 +138,7 @@ async def create_response(
             store_items,
             resp_dict["status"],
             resp_dict.get("usage"),
+            resp_dict.get("error"),
         )
     return JSONResponse(resp_dict)
 
