@@ -97,3 +97,20 @@ def test_idle_timeout_yields_error_chunk(mock_get_tok, monkeypatch):
     async def echo(x: str): return x
     out = _collect(agent, _ctx(_box(echo, "echo")))
     assert any(isinstance(c, ErrorChunk) for c in out)
+
+
+@patch("agent.budgeting.get_tokenizer", return_value=_make_mock_tokenizer())
+def test_usage_only_terminal_chunk_is_forwarded(mock_get_tok):
+    # astream emits token usage on a dedicated empty-delta chunk; the loop must
+    # forward it so the SSE serializer can report token counts.
+    from openai.types.chat.chat_completion_chunk import CompletionUsage
+    usage = CompletionUsage(prompt_tokens=996, completion_tokens=9, total_tokens=1005)
+    llm = FakeLLM([[TextChunk(delta="Hello"), TextChunk(delta="", usage=usage)]])
+    agent = Agent(llm, max_steps=5)
+    async def echo(x: str): return x
+    out = _collect(agent, _ctx(_box(echo, "echo")))
+    # the text still streams
+    assert "".join(c.delta for c in out if type(c) is TextChunk) == "Hello"
+    # and the usage-bearing terminal chunk reached the consumer
+    assert any(c.usage is not None and c.usage.completion_tokens == 9
+               for c in out if type(c) is TextChunk)

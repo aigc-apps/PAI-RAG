@@ -124,7 +124,10 @@ class Agent:
                     tool_calls = chunk.tool_calls
                 if isinstance(chunk, ReasoningChunk):
                     yield chunk
-                elif chunk.delta:
+                elif chunk.delta or chunk.usage:
+                    # Forward usage-bearing terminal chunks (delta="") too —
+                    # astream emits token usage on a dedicated empty-delta chunk,
+                    # and the SSE serializer needs it to report token counts.
                     text += chunk.delta
                     yield TextChunk(delta=chunk.delta, usage=chunk.usage)
         except asyncio.TimeoutError:
