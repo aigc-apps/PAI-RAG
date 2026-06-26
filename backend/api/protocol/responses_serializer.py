@@ -37,6 +37,7 @@ from openai.types.responses import (
     ResponseTextDoneEvent,
     ResponseFunctionCallArgumentsDeltaEvent,
     ResponseFunctionCallArgumentsDoneEvent,
+    ResponseReasoningTextDeltaEvent,
 )
 
 
@@ -240,6 +241,14 @@ async def serialize_response_stream(
         seq += 1
         return seq
 
+    next_index = 0
+
+    def alloc_index() -> int:
+        nonlocal next_index
+        idx = next_index
+        next_index += 1
+        return idx
+
     # response.created + response.in_progress
     yield _sse(
         ResponseCreatedEvent(
@@ -256,21 +265,19 @@ async def serialize_response_stream(
         )
     )
 
-    output_index = 0
     msg_open = False
+    msg_index = 0
     msg_item_id = asm._msg_item_id()
+    tool_indices: Dict[str, int] = {}  # call_id -> output_index
+    reasoning_index = None
     usage = None
 
     async for ev in events:
         if isinstance(ev, TextDelta):
             if not msg_open:
                 # open a message output item + a text content part
-                from openai.types.responses import ResponseOutputMessage as _M
-                from openai.types.responses.response_output_text import (
-                    ResponseOutputText as _T,
-                )
-
-                placeholder = _M(
+                msg_index = alloc_index()
+                placeholder = ResponseOutputMessage(
                     id=msg_item_id,
                     role="assistant",
                     status="in_progress",
@@ -280,7 +287,7 @@ async def serialize_response_stream(
                 yield _sse(
                     ResponseOutputItemAddedEvent(
                         item=placeholder,
-                        output_index=output_index,
+                        output_index=msg_index,
                         sequence_number=nxt(),
                         type="response.output_item.added",
                     )
@@ -289,8 +296,10 @@ async def serialize_response_stream(
                     ResponseContentPartAddedEvent(
                         content_index=0,
                         item_id=msg_item_id,
-                        output_index=output_index,
-                        part=_T(annotations=[], text="", type="output_text"),
+                        output_index=msg_index,
+                        part=ResponseOutputText(
+                            annotations=[], text="", type="output_text"
+                        ),
                         sequence_number=nxt(),
                         type="response.content_part.added",
                     )
@@ -303,7 +312,7 @@ async def serialize_response_stream(
                     delta=ev.text,
                     item_id=msg_item_id,
                     logprobs=[],
-                    output_index=output_index,
+                    output_index=msg_index,
                     sequence_number=nxt(),
                     type="response.output_text.delta",
                 )
@@ -311,27 +320,25 @@ async def serialize_response_stream(
         elif isinstance(ev, ReasoningDelta):
             asm.on_reasoning(ev.text)
             # surface reasoning text as a streaming delta (item assembled at finalize)
-            from openai.types.responses import (
-                ResponseReasoningTextDeltaEvent as _RD,
-            )
-
+            if reasoning_index is None:
+                reasoning_index = alloc_index()
+            # TODO: emit reasoning output_item.added/done for full conformance
             yield _sse(
-                _RD(
+                ResponseReasoningTextDeltaEvent(
                     content_index=0,
                     delta=ev.text,
                     item_id=f"rs_{response_id}",
-                    output_index=output_index,
+                    output_index=reasoning_index,
                     sequence_number=nxt(),
                     type="response.reasoning_text.delta",
                 )
             )
         elif isinstance(ev, ToolStarted):
-            asm_fc_index = output_index if not msg_open else output_index + 1
-            from openai.types.responses import ResponseFunctionToolCall as _FC
-
+            idx = alloc_index()
+            tool_indices[ev.call_id] = idx
             yield _sse(
                 ResponseOutputItemAddedEvent(
-                    item=_FC(
+                    item=ResponseFunctionToolCall(
                         id=f"fc_{ev.call_id}",
                         call_id=ev.call_id,
                         name=ev.name,
@@ -339,19 +346,38 @@ async def serialize_response_stream(
                         type="function_call",
                         status="in_progress",
                     ),
-                    output_index=asm_fc_index,
+                    output_index=idx,
                     sequence_number=nxt(),
                     type="response.output_item.added",
                 )
             )
         elif isinstance(ev, ToolCompleted):
             asm.on_tool_completed(ev.call_id, ev.name, ev.arguments)
-            fc_index = output_index if not msg_open else output_index + 1
+            idx = tool_indices.get(ev.call_id)
+            if idx is None:
+                # No ToolStarted arrived: open the item now.
+                idx = alloc_index()
+                tool_indices[ev.call_id] = idx
+                yield _sse(
+                    ResponseOutputItemAddedEvent(
+                        item=ResponseFunctionToolCall(
+                            id=f"fc_{ev.call_id}",
+                            call_id=ev.call_id,
+                            name=ev.name,
+                            arguments="",
+                            type="function_call",
+                            status="in_progress",
+                        ),
+                        output_index=idx,
+                        sequence_number=nxt(),
+                        type="response.output_item.added",
+                    )
+                )
             yield _sse(
                 ResponseFunctionCallArgumentsDeltaEvent(
                     delta=ev.arguments or "",
                     item_id=f"fc_{ev.call_id}",
-                    output_index=fc_index,
+                    output_index=idx,
                     sequence_number=nxt(),
                     type="response.function_call_arguments.delta",
                 )
@@ -361,16 +387,14 @@ async def serialize_response_stream(
                     arguments=ev.arguments or "",
                     item_id=f"fc_{ev.call_id}",
                     name=ev.name,
-                    output_index=fc_index,
+                    output_index=idx,
                     sequence_number=nxt(),
                     type="response.function_call_arguments.done",
                 )
             )
-            from openai.types.responses import ResponseFunctionToolCall as _FC
-
             yield _sse(
                 ResponseOutputItemDoneEvent(
-                    item=_FC(
+                    item=ResponseFunctionToolCall(
                         id=f"fc_{ev.call_id}",
                         call_id=ev.call_id,
                         name=ev.name,
@@ -378,7 +402,7 @@ async def serialize_response_stream(
                         type="function_call",
                         status="completed",
                     ),
-                    output_index=fc_index,
+                    output_index=idx,
                     sequence_number=nxt(),
                     type="response.output_item.done",
                 )
@@ -392,16 +416,12 @@ async def serialize_response_stream(
 
     # close an open message item
     if msg_open:
-        from openai.types.responses.response_output_text import (
-            ResponseOutputText as _T,
-        )
-
         yield _sse(
             ResponseTextDoneEvent(
                 content_index=0,
                 item_id=msg_item_id,
                 logprobs=[],
-                output_index=output_index,
+                output_index=msg_index,
                 sequence_number=nxt(),
                 text=asm.text,
                 type="response.output_text.done",
@@ -411,8 +431,10 @@ async def serialize_response_stream(
             ResponseContentPartDoneEvent(
                 content_index=0,
                 item_id=msg_item_id,
-                output_index=output_index,
-                part=_T(annotations=[], text=asm.text, type="output_text"),
+                output_index=msg_index,
+                part=ResponseOutputText(
+                    annotations=[], text=asm.text, type="output_text"
+                ),
                 sequence_number=nxt(),
                 type="response.content_part.done",
             )
@@ -420,23 +442,20 @@ async def serialize_response_stream(
 
     asm.finalize(usage)
     if msg_open:
-        from openai.types.responses import ResponseOutputMessage as _M
-        from openai.types.responses.response_output_text import (
-            ResponseOutputText as _T,
-        )
-
         yield _sse(
             ResponseOutputItemDoneEvent(
-                item=_M(
+                item=ResponseOutputMessage(
                     id=msg_item_id,
                     role="assistant",
                     status="completed",
                     type="message",
                     content=[
-                        _T(annotations=[], text=asm.text, type="output_text")
+                        ResponseOutputText(
+                            annotations=[], text=asm.text, type="output_text"
+                        )
                     ],
                 ),
-                output_index=output_index,
+                output_index=msg_index,
                 sequence_number=nxt(),
                 type="response.output_item.done",
             )

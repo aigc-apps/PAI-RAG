@@ -103,6 +103,27 @@ def test_stream_tool_call_events():
     asyncio.run(run())
 
 
+def test_stream_output_indices_are_distinct_for_each_item():
+    async def run():
+        sink = {}
+        gen = serialize_response_stream(
+            _events([RunStarted(response_id="resp_4"),
+                     ToolStarted(call_id="c1", name="get"),
+                     ToolCompleted(call_id="c1", name="get", arguments="{}"),
+                     ToolResult(call_id="c1", name="get", ok=True, output="1"),
+                     TextDelta(text="answer"),
+                     RunCompleted(usage=Usage(input=1, output=1, total=2))]),
+            model="m", response_id="resp_4", conversation_id=None, sink=sink)
+        evs = _parse([c async for c in gen])
+        added = [e for e in evs if e.type == "response.output_item.added"]
+        idxs = [e.output_index for e in added]
+        # each opened output item must have a distinct output_index
+        assert len(idxs) == len(set(idxs)), f"colliding output_index: {idxs}"
+        # at least the function_call and the message item were opened
+        assert len(added) >= 2
+    asyncio.run(run())
+
+
 def test_stream_failure_emits_failed_event():
     async def run():
         sink = {}
