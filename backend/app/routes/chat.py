@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from agent.context import AgentContext, RunVars
 from agent.message import from_thread
@@ -29,7 +29,11 @@ async def chat_completions(
 ):
     model = request.model or state.default_model
     msgs = from_thread(request.messages)
-    current_turn = msgs[-1] if msgs else None
+    if not msgs:
+        raise HTTPException(
+            status_code=400, detail="messages must not be empty"
+        )
+    current_turn = msgs[-1]
     history = msgs[:-1]
     ctx = AgentContext(
         system_prompt=request.system or "You are a helpful assistant.",

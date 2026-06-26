@@ -18,15 +18,18 @@ def _rid() -> str:
     return f"resp_{uuid.uuid4().hex}"
 
 
-def _user_input_items(request: ResponsesRequest, response_id: str) -> list:
-    """The user's turn, stored as a message item (history source of truth)."""
-    if isinstance(request.input, str):
-        text = request.input
-    else:
-        text = ""
-        for it in request.input:
-            if isinstance(it, dict) and isinstance(it.get("content"), str):
-                text = it["content"]
+def _user_input_items(current_turn, response_id: str) -> list:
+    """The user's turn, stored as a message item (history source of truth).
+
+    Uses the exact text the agent saw (``current_turn.content``) rather than
+    re-deriving it from the raw request, so persisted history can never drift
+    from what the model was actually given.
+    """
+    text = (
+        current_turn.content
+        if isinstance(current_turn.content, str)
+        else ""
+    )
     return [
         Item(
             type="message",
@@ -40,13 +43,14 @@ def _user_input_items(request: ResponsesRequest, response_id: str) -> list:
 async def _persist(
     state: AppState,
     request: ResponsesRequest,
+    current_turn,
     response_id: str,
     conversation_id: str,
     store_items: list,
     status: str,
     usage: dict | None,
 ):
-    items = _user_input_items(request, response_id)
+    items = _user_input_items(current_turn, response_id)
     for d in store_items:
         items.append(
             Item(
@@ -105,6 +109,7 @@ async def create_response(
                 await _persist(
                     state,
                     request,
+                    ctx.current_turn,
                     response_id,
                     conversation_id,
                     sink["items"],
@@ -124,6 +129,7 @@ async def create_response(
         await _persist(
             state,
             request,
+            ctx.current_turn,
             response_id,
             conversation_id,
             store_items,
