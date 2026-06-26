@@ -103,11 +103,22 @@ describe("reduceStreamEvent", () => {
     expect(s.message.text).toBe("done");
   });
 
+  it("reasoning_summary_text.done also flips reasoning to done", () => {
+    const s = fold([
+      created("resp_7", "c"),
+      reasoningDelta("partial thought"),
+      { type: "response.reasoning_summary_text.done" },
+    ]);
+    expect(s.message.reasoning).toBe("partial thought");
+    expect(s.message.reasoningStatus).toBe("done");
+  });
+
   it("is pure: does not mutate the input state", () => {
     const s0 = initialStreamState("tmp");
     const s1 = reduceStreamEvent(s0, textDelta("a") as any);
     expect(s0.message.text).toBe("");
     expect(s1.message.text).toBe("a");
     expect(s1).not.toBe(s0);
+    expect(s1.message).not.toBe(s0.message);
   });
 });
