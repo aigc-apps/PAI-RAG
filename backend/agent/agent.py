@@ -10,7 +10,11 @@ from agent.context import AgentContext, Attachment, RunVars
 from agent.message import Message
 from agent.budgeting import AgentMessageManager
 from agent.message import ToolCall
-from common.llm.models import TextChunk, ReasoningChunk, ErrorChunk, ToolResultChunk
+from common.llm.models import ReasoningChunk, ErrorChunk
+from agent.core.events import (
+    RunStarted, TextDelta, ReasoningDelta, ToolStarted, ToolCompleted,
+    ToolResult, RunCompleted, RunFailed, Usage,
+)
 from utils.constants import try_get_int_env
 from extensions.trace.pai_agent_wrapper import pai_agent_wrapper
 from extensions.trace.base import use_current_span
@@ -106,67 +110,67 @@ class Agent:
         return msgs
 
     async def _stream_turn(self, messages, tools, sink):
-        """Stream one model turn. Yields TextChunk/ReasoningChunk live (no buffering).
-        Writes results into ``sink``: sink["last"] = (text, tool_calls); on an
-        ErrorChunk or an idle-timeout, sink["error"] is set and streaming stops.
-        Results go through ``sink`` (a per-call dict) rather than instance state so
-        an Agent has no cross-run mutable state."""
+        """Stream one model turn. Emits AgentEvents (TextDelta/ReasoningDelta) live (no buffering).
+        Accumulates usage into sink["usage"]; on an ErrorChunk or idle-timeout, sets sink["error"]
+        to a RunFailed and stops. Results go through ``sink`` (a per-call dict) rather than
+        instance state so an Agent has no cross-run mutable state."""
         wire = [m.to_wire() for m in messages]
         stream = await self.llm.astream(messages=wire, tools=tools.openai_schema() if tools else [])
         text, tool_calls = "", []
         try:
             async for chunk in _iter_with_idle_timeout(stream, LLM_STREAM_IDLE_TIMEOUT):
                 if isinstance(chunk, ErrorChunk):
-                    sink["error"] = chunk
+                    sink["error"] = RunFailed(message=chunk.error_message or chunk.delta or "LLM error",
+                                              error_type=chunk.error_type or "llm")
                     sink["last"] = (text, tool_calls)
                     return
                 if chunk.tool_calls:
                     tool_calls = chunk.tool_calls
-                if isinstance(chunk, ReasoningChunk):
-                    yield chunk
-                elif chunk.delta or chunk.usage:
-                    # Forward usage-bearing terminal chunks (delta="") too —
-                    # astream emits token usage on a dedicated empty-delta chunk,
-                    # and the SSE serializer needs it to report token counts.
+                if chunk.usage:
+                    sink["usage"] = Usage(input=chunk.usage.prompt_tokens or 0,
+                                          output=chunk.usage.completion_tokens or 0,
+                                          total=chunk.usage.total_tokens or 0)
+                if isinstance(chunk, ReasoningChunk) and chunk.reasoning_delta:
+                    yield ReasoningDelta(text=chunk.reasoning_delta)
+                elif chunk.delta:
                     text += chunk.delta
-                    yield TextChunk(delta=chunk.delta, usage=chunk.usage)
+                    yield TextDelta(text=chunk.delta)
         except asyncio.TimeoutError:
-            logger.error(
-                f"LLM stream idle for >{LLM_STREAM_IDLE_TIMEOUT}s (no package received); aborting."
-            )
-            sink["error"] = ErrorChunk(
-                error_message=f"模型调用超时：{LLM_STREAM_IDLE_TIMEOUT}s 内未收到任何响应分片。",
-                error_type="llm_stream_timeout",
-            )
+            logger.error(f"LLM stream idle >{LLM_STREAM_IDLE_TIMEOUT}s; aborting.")
+            sink["error"] = RunFailed(
+                message=f"模型调用超时：{LLM_STREAM_IDLE_TIMEOUT}s 内未收到任何响应分片。",
+                error_type="llm_stream_timeout")
             sink["last"] = (text, tool_calls)
             return
         sink["last"] = (text, tool_calls)
 
     @pai_agent_wrapper
-    async def run(self, ctx: AgentContext) -> AsyncIterator[TextChunk]:
+    async def run(self, ctx: AgentContext) -> AsyncIterator:
         """Execute the flat run loop. Decorated with @pai_agent_wrapper for tracing."""
 
         @use_current_span(trace.get_current_span())
         async def gen():
             messages = self.build_messages(ctx)
 
+            yield RunStarted(response_id=getattr(ctx, "response_id", "") or "resp_local")
+            usage = Usage()
             for _step in range(self.max_steps):
                 messages = self.budget.fit(messages)
-                sink = {"last": ("", []), "error": None}
-
+                sink = {"last": ("", []), "error": None, "usage": None}
                 async for ev in self._stream_turn(messages, ctx.tools, sink):
                     yield ev
-
+                if sink["usage"]:
+                    usage = sink["usage"]
                 if sink["error"] is not None:
                     yield sink["error"]
                     return
-
                 text, raw_tcs = sink["last"]
 
                 if not raw_tcs:
                     if text:
                         messages.append(Message("assistant", text))
-                    return  # plain text -> done
+                    yield RunCompleted(usage=usage, finish_reason="stop")
+                    return
 
                 pairs = [
                     (raw, ToolCall(
@@ -187,23 +191,23 @@ class Agent:
                         tool_call_id=bad.id))
                     continue
 
-                for raw, _tc in pairs:
-                    yield TextChunk(tool_calls=[raw])
-
+                for raw, tc in pairs:
+                    yield ToolStarted(call_id=tc.id, name=tc.name)
+                    yield ToolCompleted(call_id=tc.id, name=tc.name, arguments=tc.arguments)
                 for idx, (raw, tc) in enumerate(pairs):
                     result = await ctx.tools.dispatch(tc)
                     messages.append(Message("assistant", text if idx == 0 else None, tool_calls=[tc]))
                     capped = (self.budget.cap_tool_result(result.message.content)
                               if result.message.content else result.message.content)
                     messages.append(Message("tool", content=capped, tool_call_id=tc.id))
-                    yield ToolResultChunk(tool=raw, result=result.content, error=result.error)
-
+                    yield ToolResult(call_id=tc.id, name=tc.name, ok=result.ok,
+                                     output=result.content, error=result.error)
                     if ctx.tools.is_return_direct(tc.name) and result.ok:
                         direct = _format_return_direct(result.content)
                         if direct:
-                            yield TextChunk(delta=direct)
+                            yield TextDelta(text=direct)
+                        yield RunCompleted(usage=usage, finish_reason="stop")
                         return
-
-            yield TextChunk(delta=f"\n\nReached maximum iteration count ({self.max_steps}), task ended.")
+            yield RunCompleted(usage=usage, finish_reason="max_steps")
 
         return gen()
