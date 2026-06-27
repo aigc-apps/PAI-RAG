@@ -97,18 +97,37 @@ async def create_response(
     state: AppState = Depends(get_state),
 ):
     if not request.model:
-        request.model = state.default_model
+        request.model = (
+            state.router.default_model_id if state.router is not None else state.default_model
+        )
+
+    cfg = None
+    if state.router is not None:
+        try:
+            cfg = state.router.get_config(request.model)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"unknown model: {request.model}")
+
+    tools_ok = cfg.supports_tools if cfg is not None else True
     try:
         # build_context is side-effect-free: conversation_id is ALWAYS non-None
         # (freshly minted for new turns, or the resolved existing one when linking).
         ctx, conversation_id = await build_context(
-            request, state.store, soul=state.soul, registry=state.registry
+            request, state.store, soul=state.soul,
+            registry=(state.registry if tools_ok else None),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     response_id = _rid()
-    agent = state.make_agent()
+    if state.router is not None and cfg is not None:
+        agent = state.make_agent(
+            llm=state.router.get_llm(request.model),
+            context_window=cfg.context_window,
+            max_output_tokens=cfg.max_output_tokens,
+        )
+    else:
+        agent = state.make_agent()
     events = await agent.run(ctx)
 
     if request.background:
