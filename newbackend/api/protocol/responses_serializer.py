@@ -233,6 +233,13 @@ def _sse(event) -> str:
     return f"data: {event.model_dump_json()}\n\n"
 
 
+import json as _json
+
+
+def _sse_obj(obj: dict) -> str:
+    return f"data: {_json.dumps(obj, ensure_ascii=False)}\n\n"
+
+
 class _Cancelled(Exception):
     """Raised inside the stream loop when the cancel event fires."""
 
@@ -533,6 +540,13 @@ async def serialize_response_stream(
             )
         elif isinstance(ev, ToolResult):
             asm.on_tool_result(ev.call_id, ev.output, ev.error)
+            yield _sse_obj({
+                "type": "response.tool_result",
+                "call_id": ev.call_id,
+                "output": ev.output if ev.output is not None else (ev.error or ""),
+                "ok": ev.ok,
+                "sequence_number": nxt(),
+            })
         elif isinstance(ev, RunCompleted):
             usage = ev.usage
         elif isinstance(ev, RunFailed):
