@@ -58,3 +58,29 @@ def test_update_user_memory_swallows_errors():
         await update_user_memory(st, "u1", "x", "y", boom)
         assert await st.list_memories("u1") == []
     asyncio.run(run())
+
+
+def test_extract_tolerates_braces_in_user_content():
+    # user content with {curly} braces must NOT break prompt building (no str.format)
+    ex = MemoryExtractor(_complete_returning('[{"op":"ADD","text":"writes Python dicts"}]'))
+    ops = asyncio.run(ex.extract("I write {config} = {} dicts", "Noted {x}.", []))
+    assert ops and ops[0]["op"] == "ADD"
+
+
+def test_extract_non_list_json_returns_empty():
+    ex = MemoryExtractor(_complete_returning('{"op":"ADD","text":"x"}'))  # object, not array
+    assert asyncio.run(ex.extract("a", "b", [])) == []
+
+
+def test_make_complete_collects_deltas():
+    from app.memory import make_complete
+    from common.llm.models import TextChunk
+
+    class _LLM:
+        async def astream(self, messages, tools=None, **kwargs):
+            async def gen():
+                yield TextChunk(delta="hel", usage=None)
+                yield TextChunk(delta="lo", usage=None)
+            return gen()
+    complete = make_complete(_LLM())
+    assert asyncio.run(complete("prompt")) == "hello"

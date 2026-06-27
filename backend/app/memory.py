@@ -7,25 +7,16 @@ from app.store.base import MemoryItem
 
 CompleteFn = Callable[[str], Awaitable[str]]
 
-_EXTRACT_PROMPT = """You maintain a long-term memory about a specific user.
+_EXTRACT_INSTRUCTIONS = """You maintain a long-term memory about a specific user.
 Given the latest exchange and the user's existing memories, decide what to change.
 Return ONLY a JSON array of operations, each one of:
-  {{"op":"ADD","text":"<new durable fact about the user>"}}
-  {{"op":"UPDATE","target_id":"<id>","text":"<revised fact>"}}
-  {{"op":"DELETE","target_id":"<id>"}}
-  {{"op":"NOOP"}}
+  {"op":"ADD","text":"<new durable fact about the user>"}
+  {"op":"UPDATE","target_id":"<id>","text":"<revised fact>"}
+  {"op":"DELETE","target_id":"<id>"}
+  {"op":"NOOP"}
 Only record durable, user-specific facts (preferences, identity, context). Do NOT
 record transient chit-chat, the assistant's words, or anything sensitive the user
-didn't volunteer. If nothing is worth changing, return [].
-
-Existing memories:
-{existing}
-
-Latest exchange:
-User: {user_text}
-Assistant: {assistant_text}
-
-JSON operations:"""
+didn't volunteer. If nothing is worth changing, return []."""
 
 
 def _strip_fences(s: str) -> str:
@@ -40,9 +31,14 @@ class MemoryExtractor:
 
     async def extract(self, user_text: str, assistant_text: str,
                       existing: List[MemoryItem]) -> List[dict]:
-        existing_str = "\n".join(f'- (id={m.id}) {m.text}' for m in existing) or "(none)"
-        prompt = _EXTRACT_PROMPT.format(
-            existing=existing_str, user_text=user_text, assistant_text=assistant_text)
+        existing_str = "\n".join(f"- (id={m.id}) {m.text}" for m in existing) or "(none)"
+        prompt = (
+            _EXTRACT_INSTRUCTIONS
+            + "\n\nExisting memories:\n" + existing_str
+            + "\n\nLatest exchange:\nUser: " + user_text
+            + "\nAssistant: " + assistant_text
+            + "\n\nJSON operations:"
+        )
         try:
             raw = await self._complete(prompt)
         except Exception:
@@ -92,7 +88,8 @@ def make_complete(llm) -> CompleteFn:
     """Single-shot completion over a LeanLLM-style astream (collects deltas)."""
     async def complete(prompt: str) -> str:
         chunks: List[str] = []
-        async for ch in llm.astream(messages=[{"role": "user", "content": prompt}], tools=[]):
+        stream = await llm.astream(messages=[{"role": "user", "content": prompt}], tools=[])
+        async for ch in stream:
             delta = getattr(ch, "delta", "") or ""
             if delta:
                 chunks.append(delta)
