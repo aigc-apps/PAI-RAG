@@ -33,6 +33,7 @@ export function useResponsesChat() {
   const currentResponseId = useRef<string | undefined>(undefined);
   const cancelPending = useRef(false);
   const resuming = useRef(false);
+  const sendInFlight = useRef(false);
   const lastInput = useRef("");
 
   // Shared loop: fold each event into the store's last message; fire a deferred
@@ -93,6 +94,7 @@ export function useResponsesChat() {
       chat.appendMessage(assistantMsg);
       chat.setStatus("streaming");
       setIsStreaming(true);
+      sendInFlight.current = true;
 
       const controller = new AbortController();
       let state = initialStreamState(assistantMsg.id);
@@ -110,16 +112,23 @@ export function useResponsesChat() {
         );
         state = await consume(stream, state);
       } catch (err) {
-        useChatStore.getState().updateLast({
-          status: "failed",
-          error: err instanceof Error ? err.message : "stream error",
-        });
         setIsStreaming(false);
         useChatStore.getState().setStatus("idle");
+        sendInFlight.current = false;
+        if (!currentResponseId.current) {
+          // The run never started server-side -> a real failure.
+          useChatStore.getState().updateLast({
+            status: "failed",
+            error: err instanceof Error ? err.message : "stream error",
+          });
+        }
+        // else: the run IS server-owned and resumable; leave the bubble "streaming"
+        // so resumeIfInterrupted() recovers it on the next reconnect signal.
         return;
       }
       setIsStreaming(false);
       useChatStore.getState().setStatus("idle");
+      sendInFlight.current = false;
       finalize(state);
     },
     [consume, finalize]
@@ -139,7 +148,7 @@ export function useResponsesChat() {
   }, [send]);
 
   const resumeIfInterrupted = useCallback(async () => {
-    if (resuming.current) return;
+    if (resuming.current || sendInFlight.current) return;
     const chat = useChatStore.getState();
     const last = chat.messages[chat.messages.length - 1];
     if (

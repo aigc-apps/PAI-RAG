@@ -132,4 +132,48 @@ describe("useResponsesChat (resilient)", () => {
     await act(async () => { await result.current.resumeIfInterrupted(); });
     expect(responsesApi.streamResume).not.toHaveBeenCalled();
   });
+
+  it("resumeIfInterrupted is a no-op while a send is in flight", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    (client.streamResponse as any).mockReturnValue({
+      async *[Symbol.asyncIterator]() {
+        yield { type: "response.created", response: { id: "resp_x", conversation: { id: "c" } }, sequence_number: 1 };
+        yield { type: "response.output_text.delta", delta: "hi", sequence_number: 2 };
+        await gate;
+        yield { type: "response.completed", response: { id: "resp_x", conversation: { id: "c" }, status: "completed" }, sequence_number: 3 };
+      },
+    });
+    const { result } = renderHook(() => useResponsesChat());
+    let p: Promise<void>;
+    await act(async () => { p = result.current.send("hello"); await Promise.resolve(); });
+    await act(async () => { await result.current.resumeIfInterrupted(); });
+    expect(responsesApi.streamResume).not.toHaveBeenCalled();
+    release();
+    await act(async () => { await p; });
+  });
+
+  it("a mid-stream transport error keeps the bubble resumable and resume recovers it", async () => {
+    (client.streamResponse as any).mockReturnValue({
+      async *[Symbol.asyncIterator]() {
+        yield { type: "response.created", response: { id: "resp_r", conversation: { id: "c" } }, sequence_number: 1 };
+        yield { type: "response.output_text.delta", delta: "par", sequence_number: 2 };
+        throw new Error("network dropped");
+      },
+    });
+    const { result } = renderHook(() => useResponsesChat());
+    await act(async () => { await result.current.send("hello"); });
+    let st = useChatStore.getState();
+    expect(st.messages[1].status).toBe("streaming"); // not "failed" — run started, resumable
+    expect(st.messages[1].text).toBe("par");
+    (responsesApi.streamResume as any).mockReturnValue(streamOf([
+      { type: "response.output_text.delta", delta: "tial", sequence_number: 3 },
+      { type: "response.completed", response: { id: "resp_r", conversation: { id: "c" }, status: "completed" }, sequence_number: 4 },
+    ]));
+    await act(async () => { await result.current.resumeIfInterrupted(); });
+    st = useChatStore.getState();
+    expect(st.messages[1].text).toBe("partial");
+    expect(st.messages[1].status).toBe("completed");
+    expect(responsesApi.streamResume).toHaveBeenCalledWith("resp_r", 2, expect.anything());
+  });
 });
