@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -109,6 +110,36 @@ async def create_response(
     response_id = _rid()
     agent = state.make_agent()
     events = await agent.run(ctx)
+
+    if request.background:
+        async def _persist_run(sink: dict, status: str):
+            if not request.store:
+                return
+            r = sink["response"]
+            await _persist(
+                state, request, ctx.current_turn, response_id, conversation_id,
+                sink["items"], status, r.get("usage"), r.get("error"),
+            )
+
+        run = state.runs.start(
+            events=events, model=request.model, response_id=response_id,
+            conversation_id=conversation_id, persist=_persist_run,
+        )
+        if request.stream:
+            return StreamingResponse(
+                state.runs.subscribe(run, starting_after=0),
+                media_type="text/event-stream",
+            )
+        return JSONResponse(
+            {
+                "id": response_id,
+                "object": "response",
+                "status": "in_progress",
+                "model": request.model,
+                "conversation": {"id": conversation_id},
+                "created_at": time.time(),
+            }
+        )
 
     if request.stream:
 

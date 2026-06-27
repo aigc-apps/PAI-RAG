@@ -16,6 +16,7 @@ class ResponsesRequest(BaseModel):
     user_id: Optional[str] = None
     store: bool = True
     stream: bool = False
+    background: bool = False
     metadata: Optional[Dict[str, str]] = None
     tools: Optional[List[Dict[str, Any]]] = None
     soul: Optional[Dict[str, Any]] = None

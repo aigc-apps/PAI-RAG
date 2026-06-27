@@ -5,6 +5,7 @@ from agent.agent import Agent
 from agent.budgeting import AgentMessageManager
 from agent.soul import Soul, DEFAULT_SOUL
 from agent.tools.registry import ToolRegistry
+from app.runs import RunManager
 
 
 @dataclass
@@ -16,6 +17,7 @@ class AppState:
     max_output_tokens: int = 8000
     soul: Soul = field(default_factory=lambda: DEFAULT_SOUL)
     registry: ToolRegistry = field(default_factory=ToolRegistry)
+    runs: RunManager = field(default_factory=RunManager)
 
     def make_agent(self) -> Agent:
         # Verified signature: Agent(llm, max_steps=..., budget: Optional[AgentMessageManager]=None).
