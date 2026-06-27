@@ -17,12 +17,12 @@ export function MessageControls({
   };
 
   return (
-    <div className="mt-1 flex gap-2 text-gray-400">
+    <div className="mt-1 flex gap-2 text-[var(--text-faint)]">
       <button
         type="button"
         aria-label="Copy"
         onClick={copy}
-        className="hover:text-gray-700"
+        className="hover:text-[var(--text)] transition-colors"
       >
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </button>
@@ -31,7 +31,7 @@ export function MessageControls({
           type="button"
           aria-label="Regenerate"
           onClick={onRegenerate}
-          className="hover:text-gray-700"
+          className="hover:text-[var(--text)] transition-colors"
         >
           <RefreshCw className="h-4 w-4" />
         </button>

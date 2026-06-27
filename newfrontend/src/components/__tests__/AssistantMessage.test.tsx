@@ -16,6 +16,15 @@ function msg(over: Partial<ChatMessage>): ChatMessage {
   };
 }
 
+describe("AssistantMessage toolCalls", () => {
+  it("renders tool cards from toolCalls", () => {
+    render(<AssistantMessage message={msg({ status: "completed", text: "ans",
+      toolCalls: [{ id: "c1", name: "web_fetch", arguments: "{}", status: "done", output: "PAGE" }] })} />);
+    expect(screen.getByText("web_fetch")).toBeInTheDocument();
+    expect(screen.getByText("ans")).toBeInTheDocument();
+  });
+});
+
 describe("AssistantMessage cancelled", () => {
   beforeEach(() => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
