@@ -72,44 +72,50 @@ _TOOL_PROTOCOL = (
 )
 
 
-def render_system_prompt(
-    soul: Soul, *, tool_names: List[str],
-    memories: Optional[List[str]] = None, extra: str = ""
+def render_stable_system_prompt(
+    soul: Soul, *, tool_names: List[str], project_context: str = ""
 ) -> str:
-    """Compose the persona (soul) + the engine layer into a system prompt.
-    Pure: no I/O, no clock (the time header is added per-turn elsewhere)."""
+    """Stable, cacheable layer: persona + project + tool protocol + safety.
+    Excludes volatile content (memory, per-request instructions, conversation summary)."""
     parts: List[str] = []
-
     identity = f"# Identity\nYou are {soul.name}, {soul.role}.\n\n{soul.identity}"
     if soul.expertise:
         identity += "\n\nYour areas of expertise: " + ", ".join(soul.expertise) + "."
     parts.append(identity)
-
     personality = "# Personality\n" + _bullets(soul.personality)
     if soul.style:
         personality += "\n\n" + soul.style
     parts.append(personality)
-
     parts.append("# Operating principles\n" + _bullets(soul.principles))
-
-    if memories:
-        parts.append(
-            "# Memory\nWhat you remember about this user (use it naturally; "
-            "do not recite it verbatim):\n" + _bullets(memories)
-        )
-
+    if project_context.strip():
+        parts.append("# Project context\n" + project_context.strip())
     tools_section = "# Tools\n" + _TOOL_PROTOCOL
     if tool_names:
         tools_section += "\n\nTools available this session: " + ", ".join(tool_names) + "."
     else:
         tools_section += "\n\nYou have no tools enabled in this session; answer from your own knowledge."
     parts.append(tools_section)
-
     if soul.constraints:
         parts.append("# Safety\n" + _bullets(soul.constraints))
+    return "\n\n".join(parts)
 
-    tail = "\n\n".join(p for p in (soul.extra_instructions.strip(), extra.strip()) if p)
-    if tail:
-        parts.append("# Additional instructions\n" + tail)
 
+def render_context_block(
+    *, memories: Optional[List[str]] = None, summary: str = "", instructions: str = ""
+) -> str:
+    """Volatile per-turn context: user memory + rolling conversation summary +
+    per-request instructions. Returns '' when all are empty."""
+    parts: List[str] = []
+    if memories:
+        parts.append(
+            "# Memory\nWhat you remember about this user (use it naturally; "
+            "do not recite it verbatim):\n" + _bullets(memories)
+        )
+    if summary.strip():
+        parts.append(
+            "# Conversation summary\nSummary of earlier turns in this conversation:\n"
+            + summary.strip()
+        )
+    if instructions.strip():
+        parts.append("# Additional instructions\n" + instructions.strip())
     return "\n\n".join(parts)

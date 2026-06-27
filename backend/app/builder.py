@@ -8,7 +8,7 @@ from agent.tools.base import ToolBox
 from agent.tools.registry import ToolRegistry
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
-from agent.soul import Soul, DEFAULT_SOUL, render_system_prompt
+from agent.soul import Soul, DEFAULT_SOUL, render_stable_system_prompt, render_context_block
 
 
 def _item_text(content: dict) -> str:
@@ -78,6 +78,7 @@ async def build_context(
     *,
     soul: Soul = DEFAULT_SOUL,
     registry: Optional[ToolRegistry] = None,
+    project_context: str = "",
 ) -> Tuple[AgentContext, Optional[str]]:
     """Resolve prior history via the store and assemble the AgentContext.
     Composes the effective soul (default <- request.soul <- instructions) into a
@@ -100,8 +101,6 @@ async def build_context(
         conversation_id = new_conversation_id()
 
     override = dict(request.soul or {})
-    if request.instructions:
-        override["extra_instructions"] = request.instructions
     effective_soul = soul.merge(override)
 
     if registry is not None:
@@ -115,13 +114,19 @@ async def build_context(
         toolbox = ToolBox([])
 
     tool_names = [t.name for t in toolbox.tools]
+
+    system_prompt = render_stable_system_prompt(
+        effective_soul, tool_names=tool_names, project_context=project_context
+    )
+
     memories: List[str] = []
     uid = request.resolved_user_id
     if uid:
         memories = [m.text for m in await store.list_memories(uid, limit=MEMORY_INJECT_LIMIT)]
-    system_prompt = render_system_prompt(
-        effective_soul, tool_names=tool_names, memories=memories
-    )
+    instructions = "\n\n".join(s for s in [
+        (effective_soul.extra_instructions or "").strip(), (request.instructions or "").strip()
+    ] if s)
+    context_block = render_context_block(memories=memories, instructions=instructions)
 
     ctx = AgentContext(
         system_prompt=system_prompt,
@@ -131,5 +136,6 @@ async def build_context(
         hints=[],
         tools=toolbox,
         run_vars=RunVars(),
+        context_block=context_block,
     )
     return ctx, conversation_id

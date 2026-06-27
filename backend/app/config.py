@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     memory_inject_limit: int = 30
     memory_enabled: bool = False
     memory_model: str = ""
+    project_context: str = ""
 
 
 def get_settings() -> Settings:

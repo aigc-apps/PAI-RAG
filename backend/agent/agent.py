@@ -117,12 +117,11 @@ class Agent:
     def build_messages(ctx: AgentContext) -> List[Message]:
         msgs: List[Message] = [Message("system", ctx.system_prompt)]
         msgs += ctx.history
+        block = getattr(ctx, "context_block", "")
+        if block:
+            msgs.append(Message("system", block))
         msgs.append(render_current_turn(ctx.current_turn, ctx.attachments, ctx.hints, ctx.run_vars))
-        logger.info(
-            "[agent] model input: %d msgs; current turn head=%r",
-            len(msgs),
-            (msgs[-1].content if isinstance(msgs[-1].content, str) else "<multimodal>")[:200],
-        )
+        logger.info("[agent] model input: %d msgs", len(msgs))
         return msgs
 
     async def _stream_turn(self, messages, tools, sink):

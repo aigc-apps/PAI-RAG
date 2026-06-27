@@ -29,3 +29,4 @@ class AgentContext:
     hints: List[str]
     tools: object  # ToolBox; typed loosely to avoid an import cycle
     run_vars: RunVars
+    context_block: str = ""

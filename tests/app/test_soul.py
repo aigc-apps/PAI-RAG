@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../backend"))
-from agent.soul import Soul, DEFAULT_SOUL, render_system_prompt
+from agent.soul import Soul, DEFAULT_SOUL, render_stable_system_prompt, render_context_block
 
 
 def test_default_soul_has_identity_and_name():
@@ -19,39 +19,28 @@ def test_merge_replaces_known_fields_and_ignores_none_and_unknown():
     assert DEFAULT_SOUL.name != "Helper"  # original unchanged
 
 
-def test_render_includes_identity_personality_principles_safety():
-    out = render_system_prompt(DEFAULT_SOUL, tool_names=[])
-    assert DEFAULT_SOUL.name in out
-    assert DEFAULT_SOUL.role in out
-    assert "# Identity" in out
-    assert "# Personality" in out
-    assert "# Operating principles" in out
-    assert "# Safety" in out
-    # the first principle text shows up
-    assert DEFAULT_SOUL.principles[0] in out
+def test_stable_prompt_has_persona_tools_safety_not_memory_or_instructions():
+    out = render_stable_system_prompt(DEFAULT_SOUL, tool_names=["web_fetch"])
+    assert DEFAULT_SOUL.name in out and "# Identity" in out
+    assert "# Personality" in out and "# Operating principles" in out
+    assert "# Safety" in out and "web_fetch" in out and "# Tools" in out
+    assert "# Memory" not in out and "# Additional instructions" not in out
 
 
-def test_render_lists_tools_when_present_and_says_none_when_empty():
-    none_out = render_system_prompt(DEFAULT_SOUL, tool_names=[])
-    assert "no tools" in none_out.lower()
-    tools_out = render_system_prompt(DEFAULT_SOUL, tool_names=["web_search", "web_fetch"])
-    assert "web_search" in tools_out and "web_fetch" in tools_out
-    assert "# Tools" in tools_out
+def test_stable_prompt_lists_no_tools_when_empty_and_project_when_set():
+    assert "no tools" in render_stable_system_prompt(DEFAULT_SOUL, tool_names=[]).lower()
+    out = render_stable_system_prompt(DEFAULT_SOUL, tool_names=[], project_context="Repo: PAI-RAG")
+    assert "# Project context" in out and "Repo: PAI-RAG" in out
+    assert "# Project context" not in render_stable_system_prompt(DEFAULT_SOUL, tool_names=[])
 
 
-def test_render_includes_extra_instructions_only_when_present():
-    soul = DEFAULT_SOUL.merge({"extra_instructions": "Always answer in French."})
-    out = render_system_prompt(soul, tool_names=[])
-    assert "Always answer in French." in out
-    assert "# Additional instructions" in out
-    blank = render_system_prompt(DEFAULT_SOUL, tool_names=[])
-    assert "# Additional instructions" not in blank
-
-
-def test_render_includes_expertise_when_set():
-    soul = DEFAULT_SOUL.merge({"expertise": ["tax law", "accounting"]})
-    out = render_system_prompt(soul, tool_names=[])
-    assert "tax law" in out
+def test_context_block_renders_memory_summary_instructions_and_empty():
+    assert render_context_block() == ""
+    out = render_context_block(memories=["likes tea"], summary="talked about X",
+                               instructions="be terse")
+    assert "# Memory" in out and "likes tea" in out
+    assert "# Conversation summary" in out and "talked about X" in out
+    assert "# Additional instructions" in out and "be terse" in out
 
 
 def test_merge_revalidates_and_rejects_bad_types():

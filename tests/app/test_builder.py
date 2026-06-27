@@ -24,10 +24,11 @@ def test_build_context_from_string_input():
         ctx, conv_id = await build_context(req, st)
         assert ctx.current_turn.role == "user"
         assert ctx.current_turn.content == "hi there"
-        # instructions now compose into the system prompt (not replace it)
-        assert "be terse" in ctx.system_prompt
-        assert "# Additional instructions" in ctx.system_prompt
-        assert "# Identity" in ctx.system_prompt  # the soul is rendered
+        # instructions now live in the volatile context block, not the stable system prompt
+        assert "be terse" in ctx.context_block
+        assert "# Additional instructions" in ctx.context_block
+        assert "be terse" not in ctx.system_prompt
+        assert "# Identity" in ctx.system_prompt
         assert ctx.history == []
         assert conv_id is not None
 
