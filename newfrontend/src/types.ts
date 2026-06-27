@@ -1,4 +1,9 @@
-export type MessageStatus = "streaming" | "completed" | "failed" | "stopped";
+export type MessageStatus =
+  | "streaming"
+  | "completed"
+  | "failed"
+  | "stopped"
+  | "cancelled";
 export type ReasoningStatus = "idle" | "streaming" | "done";
 
 export interface ChatMessage {
@@ -13,6 +18,8 @@ export interface ChatMessage {
   previousResponseId?: string;
   error?: string;
   usage?: { input: number; output: number; total: number };
+  /** highest response.* sequence_number folded so far (resume cursor) */
+  lastSequenceNumber?: number;
 }
 
 export interface ConversationSummary {

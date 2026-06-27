@@ -5,6 +5,7 @@ export interface StreamState {
   message: ChatMessage;
   conversationId?: string;
   responseId?: string;
+  lastSequenceNumber: number;
 }
 
 export function initialStreamState(id: string): StreamState {
@@ -16,7 +17,9 @@ export function initialStreamState(id: string): StreamState {
       reasoning: "",
       reasoningStatus: "idle",
       status: "streaming",
+      lastSequenceNumber: 0,
     },
+    lastSequenceNumber: 0,
   };
 }
 
@@ -26,10 +29,7 @@ function f(event: ResponseStreamEvent): Record<string, unknown> {
   return event as unknown as Record<string, unknown>;
 }
 
-export function reduceStreamEvent(
-  state: StreamState,
-  event: ResponseStreamEvent
-): StreamState {
+function reduceCore(state: StreamState, event: ResponseStreamEvent): StreamState {
   const e = f(event);
   const msg = state.message;
 
@@ -83,11 +83,13 @@ export function reduceStreamEvent(
       return state;
     }
 
-    case "response.completed": {
+    case "response.completed":
+    case "response.incomplete": {
       const response = e.response as
         | {
             id?: string;
             conversation?: { id?: string } | null;
+            status?: string;
             usage?: {
               input_tokens?: number;
               output_tokens?: number;
@@ -102,14 +104,23 @@ export function reduceStreamEvent(
             total: response.usage.total_tokens ?? 0,
           }
         : msg.usage;
+      // response.incomplete carries status "cancelled" (server-side cancel) — and
+      // tolerates "incomplete" (length cap, out of scope) by treating it the same.
+      const status: ChatMessage["status"] =
+        e.type === "response.completed"
+          ? "completed"
+          : response?.status === "incomplete"
+          ? "cancelled"
+          : (response?.status as ChatMessage["status"]) ?? "cancelled";
       return {
         ...state,
         responseId: response?.id ?? state.responseId,
         conversationId: response?.conversation?.id ?? state.conversationId,
         message: {
           ...msg,
-          status: "completed",
-          reasoningStatus: msg.reasoningStatus === "streaming" ? "done" : msg.reasoningStatus,
+          status,
+          reasoningStatus:
+            msg.reasoningStatus === "streaming" ? "done" : msg.reasoningStatus,
           responseId: response?.id ?? msg.responseId,
           usage,
         },
@@ -135,4 +146,22 @@ export function reduceStreamEvent(
       // function_call* — no effect on the rendered message.
       return state;
   }
+}
+
+export function reduceStreamEvent(
+  state: StreamState,
+  event: ResponseStreamEvent
+): StreamState {
+  const e = f(event);
+  const next = reduceCore(state, event);
+  const seq =
+    typeof e.sequence_number === "number"
+      ? Math.max(state.lastSequenceNumber, e.sequence_number as number)
+      : state.lastSequenceNumber;
+  if (next === state && seq === state.lastSequenceNumber) return state;
+  return {
+    ...next,
+    lastSequenceNumber: seq,
+    message: { ...next.message, lastSequenceNumber: seq },
+  };
 }

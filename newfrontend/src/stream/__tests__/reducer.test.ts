@@ -122,3 +122,34 @@ describe("reduceStreamEvent", () => {
     expect(s1.message).not.toBe(s0.message);
   });
 });
+
+describe("reduceStreamEvent — resilience", () => {
+  const withSeq = (ev: any, n: number) => ({ ...ev, sequence_number: n });
+
+  it("captures the max sequence_number across events", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, withSeq({ type: "response.created", response: { id: "r", conversation: { id: "c" } } }, 1) as any);
+    s = reduceStreamEvent(s, withSeq(textDelta("hi"), 5) as any);
+    s = reduceStreamEvent(s, withSeq({ type: "response.in_progress" }, 3) as any); // older/ignored
+    expect(s.lastSequenceNumber).toBe(5);
+    expect(s.message.lastSequenceNumber).toBe(5);
+  });
+
+  it("maps response.incomplete (status cancelled) to a cancelled message", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, { type: "response.created", response: { id: "r1", conversation: { id: "c1" } } } as any);
+    s = reduceStreamEvent(s, textDelta("partial") as any);
+    s = reduceStreamEvent(s, {
+      type: "response.incomplete",
+      response: { id: "r1", conversation: { id: "c1" }, status: "cancelled" },
+    } as any);
+    expect(s.message.status).toBe("cancelled");
+    expect(s.message.text).toBe("partial");
+    expect(s.responseId).toBe("r1");
+    expect(s.conversationId).toBe("c1");
+  });
+
+  it("initial state starts at sequence 0", () => {
+    expect(initialStreamState("x").lastSequenceNumber).toBe(0);
+  });
+});
