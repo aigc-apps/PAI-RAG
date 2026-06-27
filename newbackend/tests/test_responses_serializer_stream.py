@@ -27,11 +27,10 @@ def _parse(lines):
             if part.startswith("data:"):
                 payload = part[len("data:") :].strip()
                 if payload and payload != "[DONE]":
-                    try:
-                        evs.append(_ADAPTER.validate_python(json.loads(payload)))
-                    except Exception:
-                        # skip custom extension events not in OpenAI's union
-                        pass
+                    parsed = json.loads(payload)
+                    if parsed.get("type") == "response.tool_result":
+                        continue  # custom extension event, not in OpenAI's union
+                    evs.append(_ADAPTER.validate_python(parsed))
     return evs
 
 

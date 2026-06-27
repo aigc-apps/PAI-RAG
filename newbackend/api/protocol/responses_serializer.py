@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import json as _json
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 from agent.core.events import (
@@ -231,9 +232,6 @@ async def serialize_response_sync(
 
 def _sse(event) -> str:
     return f"data: {event.model_dump_json()}\n\n"
-
-
-import json as _json
 
 
 def _sse_obj(obj: dict) -> str:
