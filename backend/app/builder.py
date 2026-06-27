@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import List, Optional, Tuple
+
+MEMORY_INJECT_LIMIT = 30
 from agent.context import AgentContext, RunVars
 from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
@@ -113,7 +115,13 @@ async def build_context(
         toolbox = ToolBox([])
 
     tool_names = [t.name for t in toolbox.tools]
-    system_prompt = render_system_prompt(effective_soul, tool_names=tool_names)
+    memories: List[str] = []
+    uid = request.resolved_user_id
+    if uid:
+        memories = [m.text for m in await store.list_memories(uid, limit=MEMORY_INJECT_LIMIT)]
+    system_prompt = render_system_prompt(
+        effective_soul, tool_names=tool_names, memories=memories
+    )
 
     ctx = AgentContext(
         system_prompt=system_prompt,

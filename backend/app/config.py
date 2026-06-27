@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     search_endpoint: str = ""
     skills_dir: str = ""
     models_path: str = "models.yaml"
+    memory_inject_limit: int = 30
 
 
 def get_settings() -> Settings:

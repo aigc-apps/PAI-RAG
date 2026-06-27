@@ -73,7 +73,8 @@ _TOOL_PROTOCOL = (
 
 
 def render_system_prompt(
-    soul: Soul, *, tool_names: List[str], extra: str = ""
+    soul: Soul, *, tool_names: List[str],
+    memories: Optional[List[str]] = None, extra: str = ""
 ) -> str:
     """Compose the persona (soul) + the engine layer into a system prompt.
     Pure: no I/O, no clock (the time header is added per-turn elsewhere)."""
@@ -90,6 +91,12 @@ def render_system_prompt(
     parts.append(personality)
 
     parts.append("# Operating principles\n" + _bullets(soul.principles))
+
+    if memories:
+        parts.append(
+            "# Memory\nWhat you remember about this user (use it naturally; "
+            "do not recite it verbatim):\n" + _bullets(memories)
+        )
 
     tools_section = "# Tools\n" + _TOOL_PROTOCOL
     if tool_names:
