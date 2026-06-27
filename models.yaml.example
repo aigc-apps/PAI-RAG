@@ -1,0 +1,65 @@
+# Model provider catalog for the lean agent service.
+#
+# Copy to `models.yaml` (the path is `Settings.models_path`, default "models.yaml",
+# resolved from the service's working directory) and edit. If this file is absent,
+# the service synthesizes a single model from the legacy env settings
+# (OPENAI_BASE_URL / OPENAI_API_KEY / DEFAULT_MODEL) — so existing deployments keep working.
+#
+# This file is NON-SECRET: API keys are referenced by env-var NAME (`api_key_env`),
+# resolved at client-build time. A model whose required key env is unset is omitted
+# from the catalog at load (logged), so it never appears in /v1/models.
+#
+# Reload at runtime after editing: `POST /v1/models/reload` (no redeploy needed).
+# Per instance, eventually consistent — each instance reads its own copy.
+
+default_model: gpt-4o-mini
+
+models:
+  - id: gpt-4o-mini
+    provider: openai
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    context_window: 128000
+    max_output_tokens: 16384
+    supports_tools: true
+
+  - id: gpt-4o
+    provider: openai
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    context_window: 128000
+    max_output_tokens: 16384
+    supports_tools: true
+
+  - id: claude-sonnet-4-6
+    provider: anthropic
+    base_url: https://api.anthropic.com/v1      # Anthropic's OpenAI-compatible endpoint
+    api_key_env: ANTHROPIC_API_KEY
+    context_window: 200000
+    max_output_tokens: 64000
+    supports_tools: true
+    supports_reasoning: true                    # streams reasoning via reasoning.summary
+
+  - id: deepseek-chat
+    provider: deepseek
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    context_window: 64000
+    max_output_tokens: 8192
+    supports_tools: true
+
+  - id: qwen-max
+    provider: dashscope
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: DASHSCOPE_API_KEY
+    context_window: 32000
+    max_output_tokens: 8192
+    supports_tools: true
+
+  - id: llama-3.3-70b
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    api_key_env: ""                             # local / keyless
+    context_window: 128000
+    max_output_tokens: 8192
+    supports_tools: true
