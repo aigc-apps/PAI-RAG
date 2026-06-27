@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
-from app.store.base import Conversation, Item, StoredResponse, _now
+from app.store.base import Conversation, Item, StoredResponse, User, _now
 
 
 class InMemoryStore:
@@ -8,6 +8,7 @@ class InMemoryStore:
         self._convs: Dict[str, Conversation] = {}
         self._items: Dict[str, List[Item]] = {}
         self._responses: Dict[str, StoredResponse] = {}
+        self._users: Dict[str, User] = {}
 
     async def create_conversation(self, user_id: Optional[str] = None) -> Conversation:
         conv = Conversation(user_id=user_id)
@@ -80,6 +81,17 @@ class InMemoryStore:
     async def list_conversation_responses(self, conversation_id) -> List[StoredResponse]:
         return [r for r in self._responses.values()
                 if r.conversation_id == conversation_id]
+
+    async def ensure_user(self, user_id, display_name=None) -> User:
+        u = self._users.get(user_id)
+        if u is not None:
+            return u
+        u = User(id=user_id, display_name=display_name)
+        self._users[user_id] = u
+        return u
+
+    async def get_user(self, user_id) -> Optional[User]:
+        return self._users.get(user_id)
 
     async def delete_conversation(self, conversation_id) -> None:
         self._convs.pop(conversation_id, None)

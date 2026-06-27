@@ -29,7 +29,16 @@ class ConversationItem(SQLModel, table=True):
     role: Optional[str] = Field(default=None, max_length=16)
     content: dict = Field(default_factory=dict, sa_column=Column(JSON))
     response_id: Optional[str] = Field(default=None, index=True, max_length=64)
+    user_id: Optional[str] = Field(default=None, index=True, max_length=64)
     created_at: datetime = Field(default_factory=_now)
+
+
+class UserRow(SQLModel, table=True):
+    __tablename__ = "users"
+    id: str = Field(primary_key=True, max_length=64)
+    display_name: Optional[str] = Field(default=None, max_length=200)
+    created_at: datetime = Field(default_factory=_now)
+    meta: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
 
 
 class ResponseRow(SQLModel, table=True):

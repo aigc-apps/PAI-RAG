@@ -3,8 +3,8 @@ from typing import List, Optional
 from sqlalchemy import func, delete
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from app.models import Conversation as ConvRow, ConversationItem as ItemRow, ResponseRow
-from app.store.base import Conversation, Item, StoredResponse, _now
+from app.models import Conversation as ConvRow, ConversationItem as ItemRow, ResponseRow, UserRow
+from app.store.base import Conversation, Item, StoredResponse, User, _now
 
 
 def _to_item(row: ItemRow) -> Item:
@@ -131,6 +131,25 @@ class SqlStore:
                                conversation_id=r.conversation_id,
                                previous_response_id=r.previous_response_id,
                                usage=r.usage, error=r.error) for r in rows]
+
+    async def ensure_user(self, user_id, display_name=None) -> User:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(UserRow, user_id)
+            if row is None:
+                row = UserRow(id=user_id, display_name=display_name)
+                s.add(row)
+                await s.commit()
+                await s.refresh(row)
+            return User(id=row.id, display_name=row.display_name,
+                        created_at=row.created_at, meta=row.meta or {})
+
+    async def get_user(self, user_id) -> Optional[User]:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(UserRow, user_id)
+        if row is None:
+            return None
+        return User(id=row.id, display_name=row.display_name,
+                    created_at=row.created_at, meta=row.meta or {})
 
     async def delete_conversation(self, conversation_id) -> None:
         async with AsyncSession(self._engine) as s:

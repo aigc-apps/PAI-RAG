@@ -23,8 +23,17 @@ class Item:
     content: dict
     role: Optional[str] = None
     response_id: Optional[str] = None
+    user_id: Optional[str] = None
     id: str = field(default_factory=lambda: _uuid("item"))
     seq: int = 0
+
+
+@dataclass
+class User:
+    id: str
+    display_name: Optional[str] = None
+    created_at: datetime = field(default_factory=_now)
+    meta: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -65,3 +74,5 @@ class ResponseStore(Protocol):
     async def get_conversation(self, conversation_id: str) -> Optional[Conversation]: ...
     async def list_conversation_responses(self, conversation_id: str) -> List[StoredResponse]: ...
     async def delete_conversation(self, conversation_id: str) -> None: ...
+    async def ensure_user(self, user_id: str, display_name: Optional[str] = None) -> User: ...
+    async def get_user(self, user_id: str) -> Optional[User]: ...
