@@ -17,6 +17,8 @@ class Conversation(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_now)
     title: Optional[str] = Field(default=None, max_length=200)
     last_response_id: Optional[str] = Field(default=None, max_length=64)
+    summary: Optional[str] = Field(default=None, sa_column=Column("summary", Text))
+    summarized_seq: int = Field(default=-1)
     meta: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
 
 

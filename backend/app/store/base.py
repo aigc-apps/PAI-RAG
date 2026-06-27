@@ -42,6 +42,8 @@ class Conversation:
     user_id: Optional[str] = None
     title: Optional[str] = None
     last_response_id: Optional[str] = None
+    summary: Optional[str] = None
+    summarized_seq: int = -1
     created_at: datetime = field(default_factory=_now)
     updated_at: datetime = field(default_factory=_now)
 
@@ -93,3 +95,5 @@ class ResponseStore(Protocol):
     async def update_memory(self, memory_id: str, text: str) -> None: ...
     async def delete_memory(self, memory_id: str) -> None: ...
     async def delete_user_memories(self, user_id: str) -> None: ...
+    async def update_conversation_summary(self, conversation_id: str, summary: str,
+                                          summarized_seq: int) -> None: ...

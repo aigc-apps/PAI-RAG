@@ -123,3 +123,9 @@ class InMemoryStore:
     async def delete_user_memories(self, user_id: str) -> None:
         for mid in [m.id for m in self._memories.values() if m.user_id == user_id]:
             self._memories.pop(mid, None)
+
+    async def update_conversation_summary(self, conversation_id, summary, summarized_seq) -> None:
+        conv = self._convs.get(conversation_id)
+        if conv is not None:
+            conv.summary = summary
+            conv.summarized_seq = summarized_seq

@@ -21,7 +21,8 @@ def _to_item(row: ItemRow) -> Item:
 def _to_conv(row: ConvRow) -> Conversation:
     return Conversation(id=row.id, user_id=row.user_id, title=row.title,
                         last_response_id=row.last_response_id,
-                        created_at=row.created_at, updated_at=row.updated_at)
+                        created_at=row.created_at, updated_at=row.updated_at,
+                        summary=row.summary, summarized_seq=row.summarized_seq)
 
 
 class SqlStore:
@@ -198,3 +199,12 @@ class SqlStore:
         async with AsyncSession(self._engine) as s:
             await s.exec(delete(MemoryRow).where(MemoryRow.user_id == user_id))
             await s.commit()
+
+    async def update_conversation_summary(self, conversation_id, summary, summarized_seq) -> None:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(ConvRow, conversation_id)
+            if row is not None:
+                row.summary = summary
+                row.summarized_seq = summarized_seq
+                s.add(row)
+                await s.commit()
