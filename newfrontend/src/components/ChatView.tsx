@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useChatStore } from "../store/chat";
 import { useResponsesChat } from "../hooks/useResponsesChat";
 import { MessageList } from "./MessageList";
@@ -7,7 +8,22 @@ import { ModelSelector } from "./ModelSelector";
 export function ChatView() {
   const model = useChatStore((s) => s.model);
   const setModel = useChatStore((s) => s.setModel);
-  const { send, stop, regenerate, isStreaming } = useResponsesChat();
+  const { send, stop, regenerate, isStreaming, resumeIfInterrupted } =
+    useResponsesChat();
+
+  // Resume an interrupted in-flight answer when the tab/network comes back.
+  useEffect(() => {
+    const tryResume = () => {
+      if (document.visibilityState === "visible") void resumeIfInterrupted();
+    };
+    tryResume(); // also on mount (no-op unless a streaming message exists)
+    document.addEventListener("visibilitychange", tryResume);
+    window.addEventListener("online", tryResume);
+    return () => {
+      document.removeEventListener("visibilitychange", tryResume);
+      window.removeEventListener("online", tryResume);
+    };
+  }, [resumeIfInterrupted]);
 
   return (
     <div className="flex h-full flex-1 flex-col">

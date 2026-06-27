@@ -10,6 +10,8 @@ export function AssistantMessage({
   message: ChatMessage;
   onRegenerate?: () => void;
 }) {
+  const showControls =
+    message.status === "completed" || message.status === "cancelled";
   return (
     <div className="flex flex-col items-start">
       <div className="max-w-[80%]">
@@ -27,7 +29,10 @@ export function AssistantMessage({
         {message.status === "stopped" && (
           <div className="mt-1 text-xs italic text-gray-400">stopped</div>
         )}
-        {message.status === "completed" && (
+        {message.status === "cancelled" && (
+          <div className="mt-1 text-xs italic text-gray-400">cancelled</div>
+        )}
+        {showControls && (
           <MessageControls text={message.text} onRegenerate={onRegenerate} />
         )}
       </div>
