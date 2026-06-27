@@ -191,7 +191,20 @@ async def create_response(
 
 
 @router.get("/v1/responses/{response_id}")
-async def get_response(response_id: str, state: AppState = Depends(get_state)):
+async def get_response(
+    response_id: str,
+    stream: bool = False,
+    starting_after: int = 0,
+    state: AppState = Depends(get_state),
+):
+    if stream:
+        run = state.runs.get(response_id)
+        if run is None:
+            raise HTTPException(status_code=409, detail="run not resumable")
+        return StreamingResponse(
+            state.runs.subscribe(run, starting_after=starting_after),
+            media_type="text/event-stream",
+        )
     stored = await state.store.get_response(response_id)
     if stored is None:
         raise HTTPException(status_code=404, detail="response not found")
@@ -202,9 +215,7 @@ async def get_response(response_id: str, state: AppState = Depends(get_state)):
             "status": stored.status,
             "model": stored.model,
             "conversation": (
-                {"id": stored.conversation_id}
-                if stored.conversation_id
-                else None
+                {"id": stored.conversation_id} if stored.conversation_id else None
             ),
             "usage": stored.usage,
             "error": stored.error,
@@ -223,4 +234,19 @@ async def delete_response(
     await state.store.delete_response(response_id)
     return JSONResponse(
         {"id": response_id, "object": "response.deleted", "deleted": True}
+    )
+
+
+@router.post("/v1/responses/{response_id}/cancel")
+async def cancel_response(response_id: str, state: AppState = Depends(get_state)):
+    if await state.runs.cancel(response_id):
+        return JSONResponse(
+            {"id": response_id, "object": "response.cancel", "status": "cancelling"}
+        )
+    # no live run: report the stored status if we have it, else 404
+    stored = await state.store.get_response(response_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail="response not found")
+    return JSONResponse(
+        {"id": response_id, "object": "response.cancel", "status": stored.status}
     )
