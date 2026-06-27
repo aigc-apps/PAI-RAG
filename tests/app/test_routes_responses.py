@@ -251,3 +251,19 @@ def test_second_turn_keeps_title_and_advances_last_response_id():
         assert conv.last_response_id == second["id"]
         assert second["conversation"]["id"] == conv_id
     asyncio.run(_read())
+
+
+def test_stored_items_and_conversation_carry_resolved_user_id():
+    c = _client()
+    body = c.post("/v1/responses", json={"input": "hello", "stream": False, "user": "u_alias"}).json()
+    conv_id = body["conversation"]["id"]
+    import asyncio
+
+    async def _read():
+        store = c.app.state.app_state.store
+        conv = await store.get_conversation(conv_id)
+        assert conv.user_id == "u_alias"           # alias resolved
+        assert await store.get_user("u_alias") is not None  # user ensured
+        items = await store.get_conversation_items(conv_id)
+        assert items and all(it.user_id == "u_alias" for it in items)
+    asyncio.run(_read())

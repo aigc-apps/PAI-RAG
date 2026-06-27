@@ -9,7 +9,7 @@ from app.store.base import Conversation, Item, StoredResponse, User, _now
 
 def _to_item(row: ItemRow) -> Item:
     return Item(id=row.id, type=row.type, role=row.role, content=row.content or {},
-                response_id=row.response_id, seq=row.seq)
+                response_id=row.response_id, seq=row.seq, user_id=row.user_id)
 
 
 def _to_conv(row: ConvRow) -> Conversation:
@@ -38,7 +38,8 @@ class SqlStore:
             for it in items:
                 it.seq = n
                 s.add(ItemRow(id=it.id, conversation_id=conversation_id, seq=n, type=it.type,
-                              role=it.role, content=it.content, response_id=it.response_id))
+                              role=it.role, content=it.content, response_id=it.response_id,
+                              user_id=it.user_id))
                 n += 1
             await s.commit()
         return items

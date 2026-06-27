@@ -19,26 +19,16 @@ def _rid() -> str:
     return f"resp_{uuid.uuid4().hex}"
 
 
-def _user_input_items(current_turn, response_id: str) -> list:
+def _user_input_items(current_turn, response_id: str, user_id=None) -> list:
     """The user's turn, stored as a message item (history source of truth).
 
     Uses the exact text the agent saw (``current_turn.content``) rather than
     re-deriving it from the raw request, so persisted history can never drift
     from what the model was actually given.
     """
-    text = (
-        current_turn.content
-        if isinstance(current_turn.content, str)
-        else ""
-    )
-    return [
-        Item(
-            type="message",
-            role="user",
-            content={"text": text},
-            response_id=response_id,
-        )
-    ]
+    text = current_turn.content if isinstance(current_turn.content, str) else ""
+    return [Item(type="message", role="user", content={"text": text},
+                 response_id=response_id, user_id=user_id)]
 
 
 def _title_from_turn(current_turn) -> str:
@@ -57,23 +47,16 @@ async def _persist(
     usage: dict | None,
     error: dict | None = None,
 ):
-    # Create the conversation row if absent (title from the first user message,
-    # set only on creation; user_id from the request). Idempotent on later turns.
+    uid = request.resolved_user_id
+    if uid:
+        await state.store.ensure_user(uid)
     await state.store.ensure_conversation(
-        conversation_id,
-        user_id=request.user_id,
-        title=_title_from_turn(current_turn),
+        conversation_id, user_id=uid, title=_title_from_turn(current_turn),
     )
-    items = _user_input_items(current_turn, response_id)
+    items = _user_input_items(current_turn, response_id, user_id=uid)
     for d in store_items:
-        items.append(
-            Item(
-                type=d["type"],
-                role=d.get("role"),
-                content=d["content"],
-                response_id=response_id,
-            )
-        )
+        items.append(Item(type=d["type"], role=d.get("role"), content=d["content"],
+                          response_id=response_id, user_id=uid))
     await state.store.append_items(conversation_id, items)
     await state.store.save_response(
         StoredResponse(
