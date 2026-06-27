@@ -69,3 +69,26 @@ def test_delete_user_memories():
             time.sleep(0.02)
         assert c.delete("/v1/users/u1/memories").status_code == 200
         assert c.get("/v1/users/u1/memories").json()["data"] == []
+
+
+def test_request_memory_false_skips_extraction():
+    with TestClient(_app(memory_enabled=True)) as c:
+        c.post("/v1/responses", json={"input": "I like hiking", "stream": False,
+                                      "user": "u1", "memory": False})
+        time.sleep(0.2)
+        assert c.get("/v1/users/u1/memories").json()["data"] == []
+
+
+def test_delete_one_user_memory():
+    with TestClient(_app(memory_enabled=True)) as c:
+        c.post("/v1/responses", json={"input": "I like hiking", "stream": False, "user": "u1"})
+        mems = []
+        for _ in range(100):
+            mems = c.get("/v1/users/u1/memories").json()["data"]
+            if mems:
+                break
+            time.sleep(0.02)
+        assert mems
+        mid = mems[0]["id"]
+        assert c.delete(f"/v1/users/u1/memories/{mid}").status_code == 200
+        assert c.get("/v1/users/u1/memories").json()["data"] == []
