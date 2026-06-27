@@ -162,6 +162,8 @@ def test_cancel_persists_cancelled_partial_and_lists_conversation():
         assert len(data) == 1
         detail = c.get(f"/v1/conversations/{data[0]['id']}").json()
         assert detail["latest_response_id"] == rid
+        stored = c.get(f"/v1/responses/{rid}").json()
+        assert stored["status"] == "cancelled"
 
 
 def test_cancel_unknown_returns_404():
