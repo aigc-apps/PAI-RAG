@@ -3,8 +3,14 @@ from typing import List, Optional
 from sqlalchemy import func, delete
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from app.models import Conversation as ConvRow, ConversationItem as ItemRow, ResponseRow, UserRow
-from app.store.base import Conversation, Item, StoredResponse, User, _now
+from app.models import Conversation as ConvRow, ConversationItem as ItemRow, MemoryRow, ResponseRow, UserRow
+from app.store.base import Conversation, Item, MemoryItem, StoredResponse, User, _now
+
+
+def _to_mem(row: MemoryRow) -> MemoryItem:
+    return MemoryItem(id=row.id, user_id=row.user_id, text=row.text, kind=row.kind,
+                      source_response_id=row.source_response_id, status=row.status,
+                      created_at=row.created_at, updated_at=row.updated_at)
 
 
 def _to_item(row: ItemRow) -> Item:
@@ -157,4 +163,38 @@ class SqlStore:
             await s.exec(delete(ItemRow).where(ItemRow.conversation_id == conversation_id))
             await s.exec(delete(ResponseRow).where(ResponseRow.conversation_id == conversation_id))
             await s.exec(delete(ConvRow).where(ConvRow.id == conversation_id))
+            await s.commit()
+
+    async def add_memory(self, item: MemoryItem) -> MemoryItem:
+        async with AsyncSession(self._engine) as s:
+            s.add(MemoryRow(id=item.id, user_id=item.user_id, text=item.text, kind=item.kind,
+                            source_response_id=item.source_response_id, status=item.status,
+                            created_at=item.created_at, updated_at=item.updated_at))
+            await s.commit()
+        return item
+
+    async def list_memories(self, user_id: str, limit: int = 50) -> List[MemoryItem]:
+        async with AsyncSession(self._engine) as s:
+            rows = (await s.exec(
+                select(MemoryRow).where(MemoryRow.user_id == user_id, MemoryRow.status == "active")
+                .order_by(MemoryRow.updated_at.desc()).limit(limit))).all()
+        return [_to_mem(r) for r in rows]
+
+    async def update_memory(self, memory_id: str, text: str) -> None:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(MemoryRow, memory_id)
+            if row is not None:
+                row.text = text
+                row.updated_at = _now()
+                s.add(row)
+                await s.commit()
+
+    async def delete_memory(self, memory_id: str) -> None:
+        async with AsyncSession(self._engine) as s:
+            await s.exec(delete(MemoryRow).where(MemoryRow.id == memory_id))
+            await s.commit()
+
+    async def delete_user_memories(self, user_id: str) -> None:
+        async with AsyncSession(self._engine) as s:
+            await s.exec(delete(MemoryRow).where(MemoryRow.user_id == user_id))
             await s.commit()

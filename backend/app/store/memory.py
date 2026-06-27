@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
-from app.store.base import Conversation, Item, StoredResponse, User, _now
+from app.store.base import Conversation, Item, MemoryItem, StoredResponse, User, _now
 
 
 class InMemoryStore:
@@ -9,6 +9,7 @@ class InMemoryStore:
         self._items: Dict[str, List[Item]] = {}
         self._responses: Dict[str, StoredResponse] = {}
         self._users: Dict[str, User] = {}
+        self._memories: Dict[str, MemoryItem] = {}
 
     async def create_conversation(self, user_id: Optional[str] = None) -> Conversation:
         conv = Conversation(user_id=user_id)
@@ -99,3 +100,26 @@ class InMemoryStore:
         for rid in [r.id for r in self._responses.values()
                     if r.conversation_id == conversation_id]:
             self._responses.pop(rid, None)
+
+    async def add_memory(self, item: MemoryItem) -> MemoryItem:
+        self._memories[item.id] = item
+        return item
+
+    async def list_memories(self, user_id: str, limit: int = 50) -> List[MemoryItem]:
+        mems = [m for m in self._memories.values()
+                if m.user_id == user_id and m.status == "active"]
+        mems.sort(key=lambda m: m.updated_at, reverse=True)
+        return mems[:limit]
+
+    async def update_memory(self, memory_id: str, text: str) -> None:
+        m = self._memories.get(memory_id)
+        if m is not None:
+            m.text = text
+            m.updated_at = _now()
+
+    async def delete_memory(self, memory_id: str) -> None:
+        self._memories.pop(memory_id, None)
+
+    async def delete_user_memories(self, user_id: str) -> None:
+        for mid in [m.id for m in self._memories.values() if m.user_id == user_id]:
+            self._memories.pop(mid, None)

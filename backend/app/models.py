@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import SQLModel, Field, Column
-from sqlalchemy import JSON, BigInteger
+from sqlalchemy import JSON, BigInteger, Text
 
 
 def _now() -> datetime:
@@ -52,3 +52,15 @@ class ResponseRow(SQLModel, table=True):
     error: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_now)
     meta: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
+
+
+class MemoryRow(SQLModel, table=True):
+    __tablename__ = "memory_items"
+    id: str = Field(primary_key=True, max_length=64)
+    user_id: str = Field(index=True, max_length=64)
+    text: str = Field(sa_column=Column("text", Text))
+    kind: str = Field(default="fact", max_length=32)
+    source_response_id: Optional[str] = Field(default=None, max_length=64)
+    status: str = Field(default="active", max_length=16)
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
