@@ -65,6 +65,10 @@ async def maybe_summarize_conversation(
         fold_to_seq = to_fold[-1].seq
         new_summary = await ConversationSummarizer(complete).summarize(
             conv.summary or "", to_fold)
+        if new_summary == (conv.summary or ""):
+            # summarizer failed or produced nothing new — do NOT advance the cursor,
+            # so the unsummarized items stay in history and are retried next turn.
+            return False
         await store.update_conversation_summary(conversation_id, new_summary, fold_to_seq)
         return True
     except Exception:
