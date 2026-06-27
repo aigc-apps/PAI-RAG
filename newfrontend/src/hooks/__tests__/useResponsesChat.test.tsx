@@ -73,6 +73,34 @@ describe("useResponsesChat (resilient)", () => {
     expect(st.lastResponseId).toBe("resp_9");
   });
 
+  it("stop before the response id is known defers the cancel until response.created", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    (client.streamResponse as any).mockReturnValue({
+      async *[Symbol.asyncIterator]() {
+        await gate; // hold BEFORE the first event so stop() runs with no id yet
+        yield { type: "response.created", response: { id: "resp_d", conversation: { id: "c" } }, sequence_number: 1 };
+        yield { type: "response.completed", response: { id: "resp_d", conversation: { id: "c" }, status: "completed" }, sequence_number: 2 };
+      },
+    });
+    const { result } = renderHook(() => useResponsesChat());
+    let p: Promise<void>;
+    await act(async () => {
+      p = result.current.send("hello");
+      await Promise.resolve();
+    });
+    // id not known yet -> stop must defer, not call cancel
+    act(() => result.current.stop());
+    expect(responsesApi.cancelResponse).not.toHaveBeenCalled();
+    release();
+    await act(async () => {
+      await p;
+    });
+    // once response.created yielded the id, the deferred cancel fires exactly once
+    expect(responsesApi.cancelResponse).toHaveBeenCalledTimes(1);
+    expect(responsesApi.cancelResponse).toHaveBeenCalledWith("resp_d");
+  });
+
   it("resumeIfInterrupted resumes a streaming message from its cursor", async () => {
     // seed a half-streamed assistant message in the store
     useChatStore.setState({
