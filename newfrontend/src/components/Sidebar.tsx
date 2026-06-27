@@ -47,22 +47,25 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex w-64 flex-col border-r border-gray-200 bg-gray-50">
-      <button
-        type="button"
-        onClick={newChat}
-        className="m-2 flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-white"
-      >
-        <Plus className="h-4 w-4" /> New chat
-      </button>
-      <div className="flex-1 overflow-y-auto">
+    <aside className="flex w-[260px] flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)] h-full">
+      <div className="p-3">
+        <button
+          type="button"
+          onClick={newChat}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[var(--text)] hover:bg-[var(--user-bubble)]"
+        >
+          <Plus className="h-4 w-4 flex-shrink-0" />
+          New chat
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pb-2">
         {items.map((c) => (
           <div
             key={c.id}
             onClick={() => openConversation(c.id)}
             className={cn(
-              "group flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-gray-100",
-              selectedId === c.id && "bg-gray-200"
+              "group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-[var(--user-bubble)]",
+              selectedId === c.id && "bg-[var(--user-bubble)]"
             )}
           >
             <span className="truncate">{c.title || "Untitled"}</span>
@@ -70,7 +73,7 @@ export function Sidebar() {
               type="button"
               aria-label="Delete conversation"
               onClick={(e) => onDelete(e, c.id)}
-              className="invisible text-gray-400 group-hover:visible hover:text-red-600"
+              className="invisible flex-shrink-0 text-[var(--text-muted)] group-hover:visible hover:text-[var(--danger)]"
             >
               <Trash2 className="h-4 w-4" />
             </button>

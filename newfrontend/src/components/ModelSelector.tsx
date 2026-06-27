@@ -32,7 +32,7 @@ export function ModelSelector({
       aria-label="Model"
       value={model}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+      className="text-sm font-medium text-[var(--text)] rounded-lg px-2 py-1 hover:bg-[var(--user-bubble)] border-0 outline-none bg-transparent cursor-pointer"
     >
       {options.map((m) => (
         <option key={m} value={m}>

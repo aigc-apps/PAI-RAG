@@ -8,6 +8,9 @@ vi.mock("../../api/conversations", () => ({
 }));
 vi.mock("../../api/client", () => ({ streamResponse: vi.fn() }));
 vi.mock("../../lib/user", () => ({ getUserId: () => "u1" }));
+vi.mock("../../api/models", () => ({
+  listModels: vi.fn().mockResolvedValue([]),
+}));
 
 import { App } from "../App";
 import { useChatStore } from "../../store/chat";
