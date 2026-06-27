@@ -14,7 +14,7 @@
   --accent: #0d0d0d;
   --accent-fg: #ffffff;
   --danger: #e02e2e;
-  --radius: 12px;
+  --active: #ececec;
 }
 
 html, body, #root { height: 100%; margin: 0; }

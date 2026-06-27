@@ -65,7 +65,7 @@ export function Sidebar() {
             onClick={() => openConversation(c.id)}
             className={cn(
               "group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-[var(--user-bubble)]",
-              selectedId === c.id && "bg-[var(--user-bubble)]"
+              selectedId === c.id && "bg-[var(--active)] font-medium"
             )}
           >
             <span className="truncate">{c.title || "Untitled"}</span>

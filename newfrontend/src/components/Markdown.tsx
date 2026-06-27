@@ -23,7 +23,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
         type="button"
         aria-label="Copy code"
         onClick={copy}
-        className="absolute right-2 top-2 rounded p-1 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-white"
+        className="absolute right-2 top-2 rounded p-1 text-[var(--text-faint)] opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--text)]"
       >
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </button>
@@ -83,7 +83,7 @@ export function Markdown({ content }: { content: string }) {
           td: ({ children }) => (
             <td className="border border-[var(--border)] px-3 py-2">{children}</td>
           ),
-          code({ className, children, ...props }) {
+          code({ className, children, node, ...props }) {
             const match = /language-(\w+)/.exec(className || "");
             const isBlock = Boolean(match);
             if (!isBlock) {
