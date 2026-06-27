@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { streamResponse } from "../api/client";
+import { cancelResponse, streamResume } from "../api/responses";
 import { getUserId } from "../lib/user";
 import { useChatStore } from "../store/chat";
 import { useConversationsStore } from "../store/conversations";
@@ -14,23 +15,73 @@ function tempId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2)}`;
 }
 
+function patchFromState(s: StreamState): Partial<ChatMessage> {
+  return {
+    text: s.message.text,
+    reasoning: s.message.reasoning,
+    reasoningStatus: s.message.reasoningStatus,
+    status: s.message.status,
+    responseId: s.message.responseId,
+    usage: s.message.usage,
+    error: s.message.error,
+    lastSequenceNumber: s.message.lastSequenceNumber,
+  };
+}
+
 export function useResponsesChat() {
   const [isStreaming, setIsStreaming] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
-  const lastInputRef = useRef<string>("");
+  const currentResponseId = useRef<string | undefined>(undefined);
+  const cancelPending = useRef(false);
+  const resuming = useRef(false);
+  const lastInput = useRef("");
 
-  const runTurn = useCallback(
-    async (
-      text: string,
-      anchors: { conversation?: string; previousResponseId?: string }
-    ) => {
+  // Shared loop: fold each event into the store's last message; fire a deferred
+  // cancel the moment the response id is known.
+  const consume = useCallback(
+    async (stream: AsyncIterable<unknown>, seed: StreamState) => {
+      let state = seed;
+      for await (const event of stream) {
+        state = reduceStreamEvent(state, event as never);
+        if (state.responseId) {
+          currentResponseId.current = state.responseId;
+          if (cancelPending.current) {
+            cancelPending.current = false;
+            void cancelResponse(state.responseId);
+          }
+        }
+        useChatStore.getState().updateLast(patchFromState(state));
+      }
+      return state;
+    },
+    []
+  );
+
+  const finalize = useCallback((state: StreamState) => {
+    const s = state.message.status;
+    // A cancelled turn is a real, persisted, continuable response — advance
+    // anchors exactly as for completed.
+    if (s === "completed" || s === "cancelled") {
+      useChatStore.getState().setAnchors({
+        conversationId: state.conversationId,
+        lastResponseId: state.responseId,
+      });
+      void useConversationsStore.getState().refresh();
+    }
+  }, []);
+
+  const send = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
       const chat = useChatStore.getState();
-      lastInputRef.current = text;
+      lastInput.current = trimmed;
+      currentResponseId.current = undefined;
+      cancelPending.current = false;
 
       const userMsg: ChatMessage = {
         id: tempId("user"),
         role: "user",
-        text,
+        text: trimmed,
         reasoning: "",
         reasoningStatus: "idle",
         status: "completed",
@@ -44,98 +95,91 @@ export function useResponsesChat() {
       setIsStreaming(true);
 
       const controller = new AbortController();
-      abortRef.current = controller;
-      let state: StreamState = initialStreamState(assistantMsg.id);
-      let aborted = false;
-
+      let state = initialStreamState(assistantMsg.id);
       try {
         const stream = streamResponse(
           {
             model: chat.model,
-            input: text,
+            input: trimmed,
             user_id: getUserId(),
-            conversation: anchors.conversation,
-            previous_response_id: anchors.previousResponseId,
-          },
+            conversation: chat.conversationId,
+            previous_response_id: chat.lastResponseId,
+            background: true,
+          } as never,
           controller.signal
         );
-        for await (const event of stream) {
-          state = reduceStreamEvent(state, event);
-          useChatStore.getState().updateLast({
-            text: state.message.text,
-            reasoning: state.message.reasoning,
-            reasoningStatus: state.message.reasoningStatus,
-            status: state.message.status,
-            responseId: state.message.responseId,
-            usage: state.message.usage,
-            error: state.message.error,
-          });
-        }
+        state = await consume(stream, state);
       } catch (err) {
-        if (controller.signal.aborted) {
-          aborted = true;
-        } else {
-          useChatStore.getState().updateLast({
-            status: "failed",
-            error: err instanceof Error ? err.message : "stream error",
-          });
-        }
-      } finally {
-        abortRef.current = null;
+        useChatStore.getState().updateLast({
+          status: "failed",
+          error: err instanceof Error ? err.message : "stream error",
+        });
         setIsStreaming(false);
         useChatStore.getState().setStatus("idle");
-      }
-
-      // Also handle the case where the generator completed without throwing
-      // (e.g., a mock that doesn't check the abort signal itself).
-      if (!aborted && controller.signal.aborted) {
-        aborted = true;
-      }
-
-      if (aborted) {
-        // Stop is local-only: keep the partial bubble, do NOT advance anchors.
-        useChatStore.getState().updateLast({ status: "stopped" });
         return;
       }
-
-      if (state.message.status === "completed") {
-        useChatStore.getState().setAnchors({
-          conversationId: state.conversationId,
-          lastResponseId: state.responseId,
-        });
-        void useConversationsStore.getState().refresh();
-      }
+      setIsStreaming(false);
+      useChatStore.getState().setStatus("idle");
+      finalize(state);
     },
-    []
-  );
-
-  const send = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
-      const chat = useChatStore.getState();
-      await runTurn(trimmed, {
-        conversation: chat.conversationId,
-        previousResponseId: chat.lastResponseId,
-      });
-    },
-    [runTurn]
+    [consume, finalize]
   );
 
   const stop = useCallback(() => {
-    abortRef.current?.abort();
+    if (currentResponseId.current) {
+      void cancelResponse(currentResponseId.current);
+    } else {
+      // response id not known yet — fire the cancel as soon as it arrives.
+      cancelPending.current = true;
+    }
   }, []);
 
   const regenerate = useCallback(async () => {
-    const text = lastInputRef.current;
-    if (!text) return;
-    const chat = useChatStore.getState();
-    // Re-send the last input with the anchors that produced the prior turn.
-    await runTurn(text, {
-      conversation: chat.conversationId,
-      previousResponseId: chat.lastResponseId,
-    });
-  }, [runTurn]);
+    if (lastInput.current) await send(lastInput.current);
+  }, [send]);
 
-  return { send, stop, regenerate, isStreaming };
+  const resumeIfInterrupted = useCallback(async () => {
+    if (resuming.current) return;
+    const chat = useChatStore.getState();
+    const last = chat.messages[chat.messages.length - 1];
+    if (
+      !last ||
+      last.role !== "assistant" ||
+      last.status !== "streaming" ||
+      !last.responseId
+    ) {
+      return;
+    }
+    resuming.current = true;
+    setIsStreaming(true);
+    currentResponseId.current = last.responseId;
+    const controller = new AbortController();
+    const seed: StreamState = {
+      message: last,
+      responseId: last.responseId,
+      conversationId: chat.conversationId,
+      lastSequenceNumber: last.lastSequenceNumber ?? 0,
+    };
+    let state = seed;
+    try {
+      const stream = streamResume(
+        last.responseId,
+        seed.lastSequenceNumber,
+        controller.signal
+      );
+      state = await consume(stream, state);
+    } catch {
+      // 409 (evicted/finished) or a network error: leave the bubble as-is.
+      // The run finished server-side; a conversation reload shows the final.
+      resuming.current = false;
+      setIsStreaming(false);
+      return;
+    }
+    resuming.current = false;
+    setIsStreaming(false);
+    useChatStore.getState().setStatus("idle");
+    finalize(state);
+  }, [consume, finalize]);
+
+  return { send, stop, regenerate, isStreaming, resumeIfInterrupted };
 }

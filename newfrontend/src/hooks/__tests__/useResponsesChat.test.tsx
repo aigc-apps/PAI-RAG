@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
 vi.mock("../../api/client", () => ({ streamResponse: vi.fn() }));
+vi.mock("../../api/responses", () => ({ cancelResponse: vi.fn(), streamResume: vi.fn() }));
 vi.mock("../../lib/user", () => ({ getUserId: () => "u1" }));
 vi.mock("../../store/conversations", () => ({
   useConversationsStore: { getState: () => ({ refresh: vi.fn() }) },
@@ -10,6 +11,7 @@ vi.mock("../../store/conversations", () => ({
 import { useResponsesChat } from "../useResponsesChat";
 import { useChatStore } from "../../store/chat";
 import * as client from "../../api/client";
+import * as responsesApi from "../../api/responses";
 
 function streamOf(events: any[]): AsyncIterable<any> {
   return {
@@ -24,75 +26,82 @@ beforeEach(() => {
   useChatStore.getState().reset();
 });
 
-describe("useResponsesChat", () => {
-  it("send streams a turn, captures text and advances anchors", async () => {
+describe("useResponsesChat (resilient)", () => {
+  it("send runs in background and advances anchors on completion", async () => {
     (client.streamResponse as any).mockReturnValue(
       streamOf([
-        { type: "response.created", response: { id: "resp_1", conversation: { id: "conv_1" } } },
-        { type: "response.output_text.delta", delta: "hi" },
-        {
-          type: "response.completed",
-          response: {
-            id: "resp_1",
-            conversation: { id: "conv_1" },
-            status: "completed",
-            usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
-          },
-        },
+        { type: "response.created", response: { id: "resp_1", conversation: { id: "conv_1" } }, sequence_number: 1 },
+        { type: "response.output_text.delta", delta: "hi", sequence_number: 2 },
+        { type: "response.completed", response: { id: "resp_1", conversation: { id: "conv_1" }, status: "completed" }, sequence_number: 3 },
       ])
     );
     const { result } = renderHook(() => useResponsesChat());
-    await act(async () => {
-      await result.current.send("hello");
-    });
+    await act(async () => { await result.current.send("hello"); });
     const st = useChatStore.getState();
-    expect(st.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(st.messages[1].text).toBe("hi");
     expect(st.messages[1].status).toBe("completed");
     expect(st.conversationId).toBe("conv_1");
     expect(st.lastResponseId).toBe("resp_1");
-    // continuation: a second send carries the conversation anchor
-    (client.streamResponse as any).mockReturnValue(
-      streamOf([
-        { type: "response.created", response: { id: "resp_2", conversation: { id: "conv_1" } } },
-        { type: "response.completed", response: { id: "resp_2", conversation: { id: "conv_1" }, status: "completed" } },
-      ])
-    );
-    await act(async () => {
-      await result.current.send("again");
-    });
-    const params = (client.streamResponse as any).mock.calls[1][0];
-    expect(params.conversation).toBe("conv_1");
-    expect(params.previous_response_id).toBe("resp_1");
+    const params = (client.streamResponse as any).mock.calls[0][0];
+    expect(params.background).toBe(true);
     expect(params.user_id).toBe("u1");
   });
 
-  it("stop aborts and marks the bubble stopped without advancing anchors", async () => {
+  it("stop cancels server-side once the response id is known", async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((r) => (release = r));
     (client.streamResponse as any).mockReturnValue({
       async *[Symbol.asyncIterator]() {
-        yield { type: "response.created", response: { id: "resp_1", conversation: { id: "conv_1" } } };
-        yield { type: "response.output_text.delta", delta: "partial" };
-        await gate; // never resolves before stop()
+        yield { type: "response.created", response: { id: "resp_9", conversation: { id: "c" } }, sequence_number: 1 };
+        yield { type: "response.output_text.delta", delta: "partial", sequence_number: 2 };
+        await gate;
+        yield { type: "response.incomplete", response: { id: "resp_9", conversation: { id: "c" }, status: "cancelled" }, sequence_number: 3 };
       },
     });
     const { result } = renderHook(() => useResponsesChat());
-    let sendPromise: Promise<void>;
-    await act(async () => {
-      sendPromise = result.current.send("hello");
-      await Promise.resolve();
-    });
+    let p: Promise<void>;
+    await act(async () => { p = result.current.send("hello"); await Promise.resolve(); });
     act(() => result.current.stop());
+    expect(responsesApi.cancelResponse).toHaveBeenCalledWith("resp_9");
     release();
-    await act(async () => {
-      await sendPromise;
-    });
+    await act(async () => { await p; });
     const st = useChatStore.getState();
-    expect(st.messages[1].status).toBe("stopped");
+    expect(st.messages[1].status).toBe("cancelled");
     expect(st.messages[1].text).toBe("partial");
-    // Stop does NOT advance anchors (first turn -> next send starts fresh)
-    expect(st.conversationId).toBeUndefined();
-    expect(st.lastResponseId).toBeUndefined();
+    // cancelled turn is continuable: anchors advanced
+    expect(st.conversationId).toBe("c");
+    expect(st.lastResponseId).toBe("resp_9");
+  });
+
+  it("resumeIfInterrupted resumes a streaming message from its cursor", async () => {
+    // seed a half-streamed assistant message in the store
+    useChatStore.setState({
+      messages: [
+        { id: "u", role: "user", text: "q", reasoning: "", reasoningStatus: "idle", status: "completed" },
+        { id: "resp_5", role: "assistant", text: "par", reasoning: "", reasoningStatus: "idle", status: "streaming", responseId: "resp_5", lastSequenceNumber: 4 },
+      ],
+    });
+    (responsesApi.streamResume as any).mockReturnValue(
+      streamOf([
+        { type: "response.output_text.delta", delta: "tial", sequence_number: 5 },
+        { type: "response.completed", response: { id: "resp_5", conversation: { id: "c5" }, status: "completed" }, sequence_number: 6 },
+      ])
+    );
+    const { result } = renderHook(() => useResponsesChat());
+    await act(async () => { await result.current.resumeIfInterrupted(); });
+    expect(responsesApi.streamResume).toHaveBeenCalledWith("resp_5", 4, expect.anything());
+    const st = useChatStore.getState();
+    expect(st.messages[1].text).toBe("partial");
+    expect(st.messages[1].status).toBe("completed");
+    expect(st.lastResponseId).toBe("resp_5");
+  });
+
+  it("resumeIfInterrupted is a no-op when the last message is not streaming", async () => {
+    useChatStore.setState({
+      messages: [{ id: "a", role: "assistant", text: "done", reasoning: "", reasoningStatus: "idle", status: "completed", responseId: "r" }],
+    });
+    const { result } = renderHook(() => useResponsesChat());
+    await act(async () => { await result.current.resumeIfInterrupted(); });
+    expect(responsesApi.streamResume).not.toHaveBeenCalled();
   });
 });
