@@ -23,6 +23,10 @@ class AppState:
     router: Optional[ProviderRouter] = None
     memory_enabled: bool = False
     memory_model: str = ""
+    summary_enabled: bool = False
+    summary_keep_recent: int = 20
+    summary_batch: int = 20
+    project_context: str = ""
 
     def make_agent(self, llm=None, context_window: Optional[int] = None,
                    max_output_tokens: Optional[int] = None) -> Agent:

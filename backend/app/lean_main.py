@@ -55,6 +55,10 @@ async def lifespan(app: FastAPI):
         soul=soul, registry=registry, router=provider_router,
         memory_enabled=settings.memory_enabled,
         memory_model=settings.memory_model,
+        summary_enabled=settings.summary_enabled,
+        summary_keep_recent=settings.summary_keep_recent,
+        summary_batch=settings.summary_batch,
+        project_context=settings.project_context,
     )
     yield
 

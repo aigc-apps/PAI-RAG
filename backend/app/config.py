@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     memory_inject_limit: int = 30
     memory_enabled: bool = False
     memory_model: str = ""
+    summary_enabled: bool = False
+    summary_keep_recent: int = 20
+    summary_batch: int = 20
     project_context: str = ""
 
 

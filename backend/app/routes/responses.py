@@ -9,6 +9,7 @@ from app.builder import build_context
 from app.deps import AppState, get_state
 from app.store.base import Item, StoredResponse
 from app.memory import update_user_memory, make_complete
+from app.summarizer import maybe_summarize_conversation
 from api.protocol.responses_serializer import (
     serialize_response_sync,
     serialize_response_stream,
@@ -103,6 +104,25 @@ def _schedule_memory_update(state, request, current_turn, store_items, response_
     ))
 
 
+def _schedule_summary(state, request, conversation_id):
+    if not (getattr(state, "summary_enabled", False) and conversation_id):
+        return
+    llm = None
+    if state.router is not None:
+        try:
+            llm = state.router.get_llm(getattr(state, "memory_model", "") or request.model)
+        except Exception:
+            llm = None
+    llm = llm or state.llm
+    if llm is None:
+        return
+    asyncio.create_task(maybe_summarize_conversation(
+        state.store, conversation_id, make_complete(llm),
+        keep_recent=getattr(state, "summary_keep_recent", 20),
+        batch=getattr(state, "summary_batch", 20),
+    ))
+
+
 @router.post("/v1/responses")
 async def create_response(
     request: ResponsesRequest,
@@ -128,6 +148,7 @@ async def create_response(
         ctx, conversation_id = await build_context(
             request, state.store, soul=state.soul,
             registry=(state.registry if tools_ok else None),
+            project_context=getattr(state, "project_context", ""),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -153,6 +174,7 @@ async def create_response(
                 sink["items"], status, r.get("usage"), r.get("error"),
             )
             _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id)
+            _schedule_summary(state, request, conversation_id)
 
         run = state.runs.start(
             events=events, model=request.model, response_id=response_id,
@@ -200,6 +222,7 @@ async def create_response(
                     r.get("error"),
                 )
                 _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id)
+                _schedule_summary(state, request, conversation_id)
 
         return StreamingResponse(gen(), media_type="text/event-stream")
 
@@ -222,6 +245,7 @@ async def create_response(
             resp_dict.get("error"),
         )
         _schedule_memory_update(state, request, ctx.current_turn, store_items, response_id)
+        _schedule_summary(state, request, conversation_id)
     return JSONResponse(resp_dict)
 
 
