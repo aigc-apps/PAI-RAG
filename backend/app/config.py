@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     search_api_key: str = ""
     search_endpoint: str = ""
     skills_dir: str = ""
+    models_path: str = "models.yaml"
 
 
 def get_settings() -> Settings:
