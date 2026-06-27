@@ -78,3 +78,25 @@ def test_function_call_items_are_skipped():
     msgs = group_conversation_messages(items, resps)
     assert [m["role"] for m in msgs] == ["user", "assistant"]
     assert msgs[1]["text"] == "done"
+
+
+def test_assistant_message_carries_tool_calls():
+    items = _items([
+        ("message", "user", {"text": "fetch x"}, "resp_1"),
+        ("function_call", None, {"call_id": "c1", "name": "web_fetch", "arguments": "{\"url\":\"x\"}"}, "resp_1"),
+        ("function_call_output", None, {"call_id": "c1", "output": "PAGE"}, "resp_1"),
+        ("message", "assistant", {"text": "here it is"}, "resp_1"),
+    ])
+    resps = [StoredResponse(id="resp_1", model="m", status="completed", conversation_id="c")]
+    msgs = group_conversation_messages(items, resps)
+    assistant = msgs[1]
+    assert assistant["role"] == "assistant" and assistant["text"] == "here it is"
+    assert assistant["tool_calls"] == [
+        {"call_id": "c1", "name": "web_fetch", "arguments": "{\"url\":\"x\"}", "output": "PAGE"}
+    ]
+    # a tool-less turn still has an empty list
+    plain = group_conversation_messages(
+        _items([("message", "user", {"text": "hi"}, "r2"),
+                ("message", "assistant", {"text": "yo"}, "r2")]),
+        [StoredResponse(id="r2", model="m", status="completed", conversation_id="c")])
+    assert plain[1]["tool_calls"] == []
