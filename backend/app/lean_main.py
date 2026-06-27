@@ -8,9 +8,11 @@ from app.db import make_engine, create_all
 from app.store.memory import InMemoryStore
 from app.store.sql import SqlStore
 from app.llm import LeanLLM
+from app.providers import ProviderRouter, load_catalog
 from app.routes.responses import router as responses_router
 from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
+from app.routes.models import router as models_router
 from agent.soul import Soul
 from agent.tools.defaults import build_default_registry
 from agent.tools.skills import load_skills
@@ -45,9 +47,11 @@ async def lifespan(app: FastAPI):
     registry = build_default_registry(settings)
     if settings.skills_dir:
         load_skills(settings.skills_dir, registry)
+    catalog = load_catalog(settings.models_path, settings)
+    provider_router = ProviderRouter(catalog, path=settings.models_path)
     app.state.app_state = AppState(
         store=store, llm=_build_llm(settings), default_model=settings.default_model,
-        soul=soul, registry=registry,
+        soul=soul, registry=registry, router=provider_router,
     )
     yield
 
@@ -56,3 +60,4 @@ app = FastAPI(title="Lean Agent Service", lifespan=lifespan)
 app.include_router(responses_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
+app.include_router(models_router)

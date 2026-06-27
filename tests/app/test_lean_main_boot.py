@@ -40,7 +40,14 @@ def test_app_boots_in_memory_and_serves(monkeypatch):
             return gen()
 
     with TestClient(m.app) as c:
-        c.app.state.app_state.llm = _EchoLLM()
+        echo = _EchoLLM()
+        c.app.state.app_state.llm = echo
+        # When a ProviderRouter is wired, the responses route uses router.get_llm()
+        # rather than state.llm; register the fake LLM so no real API call is made.
+        if c.app.state.app_state.router is not None:
+            c.app.state.app_state.router.register_llm(
+                c.app.state.app_state.default_model, echo
+            )
         r = c.post("/v1/responses", json={"input": "hi", "stream": False})
         assert r.status_code == 200
         body = r.json()
