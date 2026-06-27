@@ -1,0 +1,67 @@
+from __future__ import annotations
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from app.deps import AppState, get_state
+from app.conversations_view import group_conversation_messages
+
+router = APIRouter()
+
+
+def _iso(dt) -> Optional[str]:
+    return dt.isoformat() if dt is not None else None
+
+
+@router.get("/v1/conversations")
+async def list_conversations(
+    user_id: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    state: AppState = Depends(get_state),
+):
+    convs = await state.store.list_conversations(user_id=user_id, limit=limit, offset=offset)
+    return JSONResponse(
+        {
+            "data": [
+                {
+                    "id": c.id,
+                    "title": c.title,
+                    "created_at": _iso(c.created_at),
+                    "updated_at": _iso(c.updated_at),
+                    "last_response_id": c.last_response_id,
+                }
+                for c in convs
+            ]
+        }
+    )
+
+
+@router.get("/v1/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str, state: AppState = Depends(get_state)):
+    conv = await state.store.get_conversation(conversation_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    items = await state.store.get_conversation_items(conversation_id)
+    responses = await state.store.list_conversation_responses(conversation_id)
+    messages = group_conversation_messages(items, responses)
+    return JSONResponse(
+        {
+            "id": conv.id,
+            "title": conv.title,
+            "created_at": _iso(conv.created_at),
+            "updated_at": _iso(conv.updated_at),
+            "latest_response_id": conv.last_response_id,
+            "messages": messages,
+        }
+    )
+
+
+@router.delete("/v1/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str, state: AppState = Depends(get_state)):
+    conv = await state.store.get_conversation(conversation_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    await state.store.delete_conversation(conversation_id)
+    return JSONResponse(
+        {"id": conversation_id, "object": "conversation.deleted", "deleted": True}
+    )
