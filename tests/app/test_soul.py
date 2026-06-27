@@ -43,6 +43,12 @@ def test_context_block_renders_memory_summary_instructions_and_empty():
     assert "# Additional instructions" in out and "be terse" in out
 
 
+def test_stable_prompt_includes_expertise_when_set():
+    soul = DEFAULT_SOUL.merge({"expertise": ["tax law", "accounting"]})
+    out = render_stable_system_prompt(soul, tool_names=[])
+    assert "tax law" in out and "accounting" in out
+
+
 def test_merge_revalidates_and_rejects_bad_types():
     import pytest
     with pytest.raises(ValueError):

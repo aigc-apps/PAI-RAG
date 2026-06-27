@@ -117,7 +117,7 @@ class Agent:
     def build_messages(ctx: AgentContext) -> List[Message]:
         msgs: List[Message] = [Message("system", ctx.system_prompt)]
         msgs += ctx.history
-        block = getattr(ctx, "context_block", "")
+        block = ctx.context_block
         if block:
             msgs.append(Message("system", block))
         msgs.append(render_current_turn(ctx.current_turn, ctx.attachments, ctx.hints, ctx.run_vars))

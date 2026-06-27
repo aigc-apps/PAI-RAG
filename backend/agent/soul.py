@@ -7,7 +7,7 @@ class Soul(BaseModel):
     """The configurable persona of an agent: who it is and how it behaves.
 
     Kept separate from the stable "engine" prompt (tool protocol + safety),
-    which `render_system_prompt` adds. Every field is data, so a custom agent is
+    which `render_stable_system_prompt` adds. Every field is data, so a custom agent is
     a Soul override — no code change.
     """
 
