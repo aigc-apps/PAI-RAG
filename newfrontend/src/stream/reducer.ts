@@ -1,5 +1,5 @@
 import type { ResponseStreamEvent } from "openai/resources/responses/responses";
-import type { ChatMessage } from "../types";
+import type { ChatMessage, ToolUse } from "../types";
 
 export interface StreamState {
   message: ChatMessage;
@@ -18,9 +18,16 @@ export function initialStreamState(id: string): StreamState {
       reasoningStatus: "idle",
       status: "streaming",
       lastSequenceNumber: 0,
+      toolCalls: [],
     },
     lastSequenceNumber: 0,
   };
+}
+
+function callIdOf(e: Record<string, unknown>): string {
+  const item = e.item as { call_id?: string; id?: string } | undefined;
+  const raw = (e.call_id as string) || item?.call_id || (e.item_id as string) || item?.id || "";
+  return raw.startsWith("fc_") ? raw.slice(3) : raw;
 }
 
 // Narrow helper: read a field off a loosely-typed event without fighting the
@@ -81,6 +88,35 @@ function reduceCore(state: StreamState, event: ResponseStreamEvent): StreamState
         return { ...state, message: { ...msg, reasoningStatus: "done" } };
       }
       return state;
+    }
+
+    case "response.output_item.added": {
+      const item = e.item as { type?: string; name?: string } | undefined;
+      if (item?.type === "function_call") {
+        const id = callIdOf(e);
+        return { ...state, message: { ...msg, toolCalls: [...msg.toolCalls,
+          { id, name: item.name || "", arguments: "", status: "running" } as ToolUse] } };
+      }
+      return state;
+    }
+    case "response.function_call_arguments.delta": {
+      const id = callIdOf(e);
+      return { ...state, message: { ...msg, toolCalls: msg.toolCalls.map(t =>
+        t.id === id ? { ...t, arguments: t.arguments + String(e.delta ?? "") } : t) } };
+    }
+    case "response.function_call_arguments.done": {
+      const id = callIdOf(e);
+      return { ...state, message: { ...msg, toolCalls: msg.toolCalls.map(t =>
+        t.id === id ? { ...t, name: (e.name as string) || t.name,
+          arguments: String(e.arguments ?? t.arguments) } : t) } };
+    }
+    case "response.tool_result": {
+      const id = callIdOf(e);
+      const ok = e.ok !== false;
+      return { ...state, message: { ...msg, toolCalls: msg.toolCalls.map(t =>
+        t.id === id ? { ...t, status: ok ? "done" : "error",
+          output: ok ? String(e.output ?? "") : t.output,
+          error: ok ? t.error : String(e.output ?? e.error ?? "") } : t) } };
     }
 
     case "response.completed":

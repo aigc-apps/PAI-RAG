@@ -11,6 +11,7 @@ function msg(over: Partial<ChatMessage>): ChatMessage {
     reasoning: "",
     reasoningStatus: "idle",
     status: "completed",
+    toolCalls: [],
     ...over,
   };
 }

@@ -33,6 +33,7 @@ describe("App", () => {
           reasoning: "",
           reasoningStatus: "idle",
           status: "completed",
+          toolCalls: [],
         },
       ],
     });

@@ -105,8 +105,8 @@ describe("useResponsesChat (resilient)", () => {
     // seed a half-streamed assistant message in the store
     useChatStore.setState({
       messages: [
-        { id: "u", role: "user", text: "q", reasoning: "", reasoningStatus: "idle", status: "completed" },
-        { id: "resp_5", role: "assistant", text: "par", reasoning: "", reasoningStatus: "idle", status: "streaming", responseId: "resp_5", lastSequenceNumber: 4 },
+        { id: "u", role: "user", text: "q", reasoning: "", reasoningStatus: "idle", status: "completed", toolCalls: [] },
+        { id: "resp_5", role: "assistant", text: "par", reasoning: "", reasoningStatus: "idle", status: "streaming", responseId: "resp_5", lastSequenceNumber: 4, toolCalls: [] },
       ],
     });
     (responsesApi.streamResume as any).mockReturnValue(
@@ -126,7 +126,7 @@ describe("useResponsesChat (resilient)", () => {
 
   it("resumeIfInterrupted is a no-op when the last message is not streaming", async () => {
     useChatStore.setState({
-      messages: [{ id: "a", role: "assistant", text: "done", reasoning: "", reasoningStatus: "idle", status: "completed", responseId: "r" }],
+      messages: [{ id: "a", role: "assistant", text: "done", reasoning: "", reasoningStatus: "idle", status: "completed", responseId: "r", toolCalls: [] }],
     });
     const { result } = renderHook(() => useResponsesChat());
     await act(async () => { await result.current.resumeIfInterrupted(); });

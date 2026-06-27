@@ -14,6 +14,7 @@ describe("chat store", () => {
       reasoning: "",
       reasoningStatus: "idle",
       status: "completed",
+      toolCalls: [],
     });
     s.appendMessage({
       id: "a1",
@@ -22,6 +23,7 @@ describe("chat store", () => {
       reasoning: "",
       reasoningStatus: "idle",
       status: "streaming",
+      toolCalls: [],
     });
     useChatStore.getState().updateLast({ text: "hello", status: "completed" });
     const msgs = useChatStore.getState().messages;
@@ -69,6 +71,18 @@ describe("chat store", () => {
 });
 
 describe("normalizeHistoryMessages", () => {
+  it("normalizeHistoryMessages maps tool_calls", () => {
+    const out = normalizeHistoryMessages({
+      id: "c", title: null, created_at: null, updated_at: null, latest_response_id: "r1",
+      messages: [{ role: "assistant", text: "a", reasoning: "", response_id: "r1",
+        previous_response_id: null, status: "completed",
+        tool_calls: [{ call_id: "c1", name: "web_fetch", arguments: "{}", output: "PAGE" }] } as never],
+    });
+    expect(out[0].toolCalls).toEqual([
+      { id: "c1", name: "web_fetch", arguments: "{}", status: "done", output: "PAGE" },
+    ]);
+  });
+
   it("fills ids, camelCases, and sets reasoningStatus", () => {
     const out = normalizeHistoryMessages({
       id: "c",

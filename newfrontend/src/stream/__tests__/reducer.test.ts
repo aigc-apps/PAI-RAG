@@ -123,6 +123,37 @@ describe("reduceStreamEvent", () => {
   });
 });
 
+describe("reduceStreamEvent — tools", () => {
+  it("captures a tool call and its result", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, { type: "response.created", response: { id: "r1", conversation: { id: "c1" } } } as any);
+    s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "web_fetch", call_id: "c1" } } as any);
+    s = reduceStreamEvent(s, { type: "response.function_call_arguments.delta", item_id: "fc_c1", delta: '{"url":' } as any);
+    s = reduceStreamEvent(s, { type: "response.function_call_arguments.done", item_id: "fc_c1", name: "web_fetch", arguments: '{"url":"x"}' } as any);
+    s = reduceStreamEvent(s, { type: "response.tool_result", call_id: "c1", output: "PAGE", ok: true } as any);
+    s = reduceStreamEvent(s, { type: "response.output_text.delta", delta: "done" } as any);
+    expect(s.message.toolCalls).toHaveLength(1);
+    const t = s.message.toolCalls[0];
+    expect(t.name).toBe("web_fetch");
+    expect(t.arguments).toBe('{"url":"x"}');
+    expect(t.output).toBe("PAGE");
+    expect(t.status).toBe("done");
+    expect(s.message.text).toBe("done");
+  });
+
+  it("marks a failed tool result as error", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "web_fetch", call_id: "c1" } } as any);
+    s = reduceStreamEvent(s, { type: "response.tool_result", call_id: "c1", output: "boom", ok: false } as any);
+    expect(s.message.toolCalls[0].status).toBe("error");
+    expect(s.message.toolCalls[0].error).toBe("boom");
+  });
+
+  it("initial message has an empty toolCalls array", () => {
+    expect(initialStreamState("x").message.toolCalls).toEqual([]);
+  });
+});
+
 describe("reduceStreamEvent — resilience", () => {
   const withSeq = (ev: any, n: number) => ({ ...ev, sequence_number: n });
 

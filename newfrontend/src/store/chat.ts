@@ -8,6 +8,12 @@ interface WireHistoryMessage {
   response_id: string;
   previous_response_id?: string | null;
   status?: ChatMessage["status"];
+  tool_calls?: Array<{
+    call_id: string;
+    name: string;
+    arguments?: string;
+    output?: string;
+  }>;
 }
 
 export function normalizeHistoryMessages(
@@ -25,6 +31,10 @@ export function normalizeHistoryMessages(
       status: r.status ?? "completed",
       responseId: r.response_id,
       previousResponseId: r.previous_response_id ?? undefined,
+      toolCalls: (r.tool_calls ?? []).map((tc) => ({
+        id: tc.call_id, name: tc.name, arguments: tc.arguments ?? "",
+        status: "done" as const, output: tc.output ?? "",
+      })),
     };
   });
 }

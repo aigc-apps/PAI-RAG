@@ -86,6 +86,7 @@ export function useResponsesChat() {
         reasoning: "",
         reasoningStatus: "idle",
         status: "completed",
+        toolCalls: [],
       };
       const assistantMsg: ChatMessage = {
         ...initialStreamState(tempId("assistant")).message,

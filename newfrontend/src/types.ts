@@ -6,6 +6,15 @@ export type MessageStatus =
   | "cancelled";
 export type ReasoningStatus = "idle" | "streaming" | "done";
 
+export interface ToolUse {
+  id: string;
+  name: string;
+  arguments: string;
+  status: "running" | "done" | "error";
+  output?: string;
+  error?: string;
+}
+
 export interface ChatMessage {
   /** local list key; equals responseId for assistant turns once known */
   id: string;
@@ -20,6 +29,7 @@ export interface ChatMessage {
   usage?: { input: number; output: number; total: number };
   /** highest response.* sequence_number folded so far (resume cursor) */
   lastSequenceNumber?: number;
+  toolCalls: ToolUse[];
 }
 
 export interface ConversationSummary {
