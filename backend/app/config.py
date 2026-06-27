@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     skills_dir: str = ""
     models_path: str = "models.yaml"
     memory_inject_limit: int = 30
+    memory_enabled: bool = False
+    memory_model: str = ""
 
 
 def get_settings() -> Settings:

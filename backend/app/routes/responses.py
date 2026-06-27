@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import time
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -7,6 +8,7 @@ from app.schemas import ResponsesRequest
 from app.builder import build_context
 from app.deps import AppState, get_state
 from app.store.base import Item, StoredResponse
+from app.memory import update_user_memory, make_complete
 from api.protocol.responses_serializer import (
     serialize_response_sync,
     serialize_response_stream,
@@ -73,6 +75,34 @@ async def _persist(
     await state.store.touch_conversation(conversation_id, last_response_id=response_id)
 
 
+def _schedule_memory_update(state, request, current_turn, store_items, response_id):
+    uid = request.resolved_user_id
+    if not (getattr(state, "memory_enabled", False) and request.memory and uid):
+        return
+    user_text = current_turn.content if isinstance(current_turn.content, str) else ""
+    assistant_text = ""
+    for d in store_items:
+        if d.get("type") == "message" and d.get("role") == "assistant":
+            assistant_text = (d.get("content") or {}).get("text", "")
+    # Resolve the LLM used for memory extraction: memory_model (if routed) else the
+    # request's model client (router) else state.llm.
+    llm = None
+    if state.router is not None:
+        model_id = getattr(state, "memory_model", "") or request.model
+        try:
+            llm = state.router.get_llm(model_id)
+        except Exception:
+            llm = None
+    if llm is None:
+        llm = state.llm
+    if llm is None:
+        return
+    asyncio.create_task(update_user_memory(
+        state.store, uid, user_text, assistant_text, make_complete(llm),
+        source_response_id=response_id,
+    ))
+
+
 @router.post("/v1/responses")
 async def create_response(
     request: ResponsesRequest,
@@ -122,6 +152,7 @@ async def create_response(
                 state, request, ctx.current_turn, response_id, conversation_id,
                 sink["items"], status, r.get("usage"), r.get("error"),
             )
+            _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id)
 
         run = state.runs.start(
             events=events, model=request.model, response_id=response_id,
@@ -168,6 +199,7 @@ async def create_response(
                     r.get("usage"),
                     r.get("error"),
                 )
+                _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id)
 
         return StreamingResponse(gen(), media_type="text/event-stream")
 
@@ -189,6 +221,7 @@ async def create_response(
             resp_dict.get("usage"),
             resp_dict.get("error"),
         )
+        _schedule_memory_update(state, request, ctx.current_turn, store_items, response_id)
     return JSONResponse(resp_dict)
 
 

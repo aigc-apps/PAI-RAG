@@ -13,6 +13,7 @@ from app.routes.responses import router as responses_router
 from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
 from app.routes.models import router as models_router
+from app.routes.users import router as users_router
 from agent.soul import Soul
 from agent.tools.defaults import build_default_registry
 from agent.tools.skills import load_skills
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     app.state.app_state = AppState(
         store=store, llm=_build_llm(settings), default_model=settings.default_model,
         soul=soul, registry=registry, router=provider_router,
+        memory_enabled=settings.memory_enabled,
     )
     yield
 
@@ -61,3 +63,4 @@ app.include_router(responses_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
 app.include_router(models_router)
+app.include_router(users_router)

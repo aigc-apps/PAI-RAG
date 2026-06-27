@@ -22,6 +22,7 @@ class ResponsesRequest(BaseModel):
     soul: Optional[Dict[str, Any]] = None
     user: Optional[str] = None
     safety_identifier: Optional[str] = None
+    memory: bool = True
 
     @property
     def resolved_user_id(self) -> Optional[str]:

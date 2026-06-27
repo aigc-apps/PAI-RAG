@@ -21,6 +21,7 @@ class AppState:
     registry: ToolRegistry = field(default_factory=ToolRegistry)
     runs: RunManager = field(default_factory=RunManager)
     router: Optional[ProviderRouter] = None
+    memory_enabled: bool = False
 
     def make_agent(self, llm=None, context_window: Optional[int] = None,
                    max_output_tokens: Optional[int] = None) -> Agent:
