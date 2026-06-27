@@ -13,7 +13,6 @@
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.10",
     "lucide-react": "^0.503.0",
-    "openai": "^5.0.0",
     "react": "^19.1.2",
     "react-dom": "^19.1.2",
     "react-markdown": "^10.1.0",

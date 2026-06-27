@@ -1,5 +1,6 @@
-import type { ResponseStreamEvent } from "openai/resources/responses/responses";
 import type { ChatMessage, ToolUse } from "../types";
+
+type StreamEvent = Record<string, unknown>;
 
 export interface StreamState {
   message: ChatMessage;
@@ -30,13 +31,12 @@ function callIdOf(e: Record<string, unknown>): string {
   return raw.startsWith("fc_") ? raw.slice(3) : raw;
 }
 
-// Narrow helper: read a field off a loosely-typed event without fighting the
-// SDK's giant discriminated union in every branch.
-function f(event: ResponseStreamEvent): Record<string, unknown> {
-  return event as unknown as Record<string, unknown>;
+// Narrow helper: identity cast kept for symmetry with call sites.
+function f(event: StreamEvent): StreamEvent {
+  return event;
 }
 
-function reduceCore(state: StreamState, event: ResponseStreamEvent): StreamState {
+function reduceCore(state: StreamState, event: StreamEvent): StreamState {
   const e = f(event);
   const msg = state.message;
 
@@ -186,7 +186,7 @@ function reduceCore(state: StreamState, event: ResponseStreamEvent): StreamState
 
 export function reduceStreamEvent(
   state: StreamState,
-  event: ResponseStreamEvent
+  event: StreamEvent
 ): StreamState {
   const e = f(event);
   const next = reduceCore(state, event);
