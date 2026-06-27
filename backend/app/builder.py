@@ -119,6 +119,13 @@ async def build_context(
         effective_soul, tool_names=tool_names, project_context=project_context
     )
 
+    summary = ""
+    if conversation_id:
+        conv = await store.get_conversation(conversation_id)
+        if conv is not None and conv.summary:
+            summary = conv.summary
+            history_items = [it for it in history_items if it.seq > conv.summarized_seq]
+
     memories: List[str] = []
     uid = request.resolved_user_id
     if uid:
@@ -126,11 +133,12 @@ async def build_context(
     instructions = "\n\n".join(s for s in [
         (effective_soul.extra_instructions or "").strip(), (request.instructions or "").strip()
     ] if s)
-    context_block = render_context_block(memories=memories, instructions=instructions)
+    context_block = render_context_block(memories=memories, summary=summary, instructions=instructions)
 
+    history = items_to_messages(history_items)
     ctx = AgentContext(
         system_prompt=system_prompt,
-        history=items_to_messages(history_items),
+        history=history,
         current_turn=_input_to_turn(request.input),
         attachments=[],
         hints=[],
