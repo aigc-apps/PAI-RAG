@@ -41,11 +41,11 @@ export function Composer({
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4">
-      <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] shadow-sm px-4 py-3 flex items-end gap-2">
+      <div className="bg-[var(--bg-elevated)] border border-[var(--border-strong)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] px-3 py-2 flex items-end gap-2 focus-within:border-[var(--accent)] transition-colors">
         <textarea
           ref={textareaRef}
           className="flex-1 resize-none border-0 outline-none bg-transparent text-[var(--text)] placeholder:text-[var(--text-faint)] py-0.5 leading-6"
-          placeholder="Message the agent…"
+          placeholder="Message Aria…"
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
@@ -59,7 +59,8 @@ export function Composer({
             type="button"
             aria-label="Stop"
             onClick={onStop}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)]"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[var(--accent-fg)] hover:opacity-90"
+            style={{ background: "var(--accent-grad)" }}
           >
             <Square className="h-4 w-4" />
           </button>
@@ -68,7 +69,8 @@ export function Composer({
             type="button"
             aria-label="Send"
             onClick={submit}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] disabled:opacity-30"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[var(--accent-fg)] hover:opacity-90 disabled:opacity-40"
+            style={{ background: "var(--accent-grad)" }}
             disabled={!value.trim()}
           >
             <ArrowUp className="h-4 w-4" />

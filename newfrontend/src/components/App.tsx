@@ -6,7 +6,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-[var(--bg)]">
       {sidebarOpen && <Sidebar />}
       <main className="flex flex-1 flex-col min-w-0">
         <ChatView onToggleSidebar={() => setSidebarOpen((o) => !o)} />
