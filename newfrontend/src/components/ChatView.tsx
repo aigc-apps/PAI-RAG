@@ -5,6 +5,7 @@ import { useResponsesChat } from "../hooks/useResponsesChat";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 import { ModelSelector } from "./ModelSelector";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const model = useChatStore((s) => s.model);
@@ -43,6 +44,7 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
         )}
         <ModelSelector model={model} onChange={setModel} />
         <div className="flex-1" />
+        <ThemeToggle />
       </div>
 
       {/* Main area: empty state or messages + composer */}

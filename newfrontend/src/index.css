@@ -1,32 +1,46 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 :root {
-  --bg: #ffffff;
-  --bg-sidebar: #f9f9f9;
-  --bg-elevated: #ffffff;
-  --text: #0d0d0d;
-  --text-muted: #676767;
-  --text-faint: #9b9b9b;
-  --border: #e5e5e5;
-  --border-strong: #d9d9d9;
-  --user-bubble: #f4f4f4;
-  --tool-bg: #f7f7f8;
-  --accent: #0d0d0d;
-  --accent-fg: #ffffff;
-  --danger: #e02e2e;
-  --active: #ececec;
+  --bg:#ffffff; --bg-elevated:#ffffff; --surface:#f7f7fb; --surface-2:#eceef5;
+  --text:#15151a; --text-muted:#5b5d6b; --text-faint:#9a9cab;
+  --border:#e8e8f0; --border-strong:#d7d8e3;
+  --accent:#6d5efc; --accent-hover:#5b4ef0; --accent-soft:#eceafe; --accent-fg:#ffffff;
+  --user-bubble:#f0f0f7; --tool-bg:#f7f7fb; --danger:#e5484d;
+  --shadow-sm:0 1px 2px rgba(20,20,40,.06);
+  --shadow:0 1px 2px rgba(20,20,40,.05), 0 10px 30px rgba(20,20,40,.08);
+  --radius:14px; --radius-sm:10px; --radius-lg:22px;
+  --accent-grad:linear-gradient(135deg,#6d5efc,#9b7bff);
+}
+:root[data-theme="dark"] {
+  --bg:#0f1117; --bg-elevated:#171a23; --surface:#171a23; --surface-2:#1f2330;
+  --text:#e7e8ee; --text-muted:#a4a7b5; --text-faint:#6b6e7e;
+  --border:#262a36; --border-strong:#313644;
+  --accent:#7c6cff; --accent-hover:#8f82ff; --accent-soft:#20203c; --accent-fg:#ffffff;
+  --user-bubble:#232838; --tool-bg:#14171f; --danger:#ff6b6b;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.4);
 }
 
-html, body, #root { height: 100%; margin: 0; }
+html, body, #root { height:100%; margin:0; }
+* { box-sizing:border-box; }
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-  font-size: 16px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
+  background:var(--bg); color:var(--text);
+  font-family:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  transition:background-color .15s ease, color .15s ease;
 }
-* { box-sizing: border-box; }
-.scrollbar-thin::-webkit-scrollbar { width: 8px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+.scrollbar-thin::-webkit-scrollbar { width:8px; height:8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background:var(--text-faint); }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes msg-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  .animate-msg-in { animation:msg-in .25s ease both; }
+  @keyframes shimmer { 0% { background-position:-200% 0; } 100% { background-position:200% 0; } }
+  .shimmer-text {
+    background:linear-gradient(90deg,var(--text-faint),var(--accent),var(--text-faint));
+    background-size:200% 100%; -webkit-background-clip:text; background-clip:text;
+    color:transparent; animation:shimmer 2s linear infinite;
+  }
+}
