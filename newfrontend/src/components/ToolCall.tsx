@@ -46,7 +46,7 @@ export function ToolCall({ tool }: { tool: ToolUse }) {
             <div className="mb-1 text-xs font-medium text-[var(--text-muted)]">
               {tool.status === "error" ? "Error" : "Result"}
             </div>
-            <pre className="font-mono text-xs max-h-64 overflow-auto whitespace-pre-wrap break-all">
+            <pre className="font-mono text-xs bg-[var(--surface-2)] rounded-[var(--radius-sm)] p-2 max-h-64 overflow-auto whitespace-pre-wrap break-all">
               {tool.status === "error" ? tool.error : tool.output}
             </pre>
           </div>
