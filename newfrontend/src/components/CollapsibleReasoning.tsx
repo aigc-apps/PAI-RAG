@@ -31,9 +31,13 @@ export function CollapsibleReasoning({
         <ChevronRight
           className={cn("h-4 w-4 transition-transform", open && "rotate-90")}
         />
-        <span>{status === "streaming" ? "Thinking…" : "Thought"}</span>
+        {status === "streaming" ? (
+          <span className="shimmer-text">Thinking…</span>
+        ) : (
+          <span className="text-[var(--text-muted)]">Thought</span>
+        )}
       </Collapsible.Trigger>
-      <Collapsible.Content className="mt-1 border-l-2 border-[var(--border)] pl-3 text-sm text-[var(--text-muted)] whitespace-pre-wrap">
+      <Collapsible.Content className="mt-1 border-l-2 border-[var(--accent)]/40 pl-3 text-sm text-[var(--text-muted)] whitespace-pre-wrap">
         {reasoning}
       </Collapsible.Content>
     </Collapsible.Root>

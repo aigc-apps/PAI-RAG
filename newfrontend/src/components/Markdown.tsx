@@ -89,7 +89,7 @@ export function Markdown({ content }: { content: string }) {
             if (!isBlock) {
               return (
                 <code
-                  className="rounded bg-[var(--tool-bg)] px-1 py-0.5 font-mono text-sm"
+                  className="rounded bg-[var(--surface-2)] px-1 py-0.5 font-mono text-sm"
                   {...props}
                 >
                   {children}

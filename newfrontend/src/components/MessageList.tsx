@@ -17,7 +17,7 @@ export function MessageList({ onRegenerate }: { onRegenerate: () => void }) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-6">
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 space-y-7">
         {messages.map((m, i) =>
           m.role === "user" ? (
             <UserMessage key={m.id} message={m} />

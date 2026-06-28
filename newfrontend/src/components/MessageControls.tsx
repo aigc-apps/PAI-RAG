@@ -22,7 +22,7 @@ export function MessageControls({
         type="button"
         aria-label="Copy"
         onClick={copy}
-        className="hover:text-[var(--text)] transition-colors"
+        className="text-[var(--text-faint)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] rounded-md p-1.5 transition-colors"
       >
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </button>
@@ -31,7 +31,7 @@ export function MessageControls({
           type="button"
           aria-label="Regenerate"
           onClick={onRegenerate}
-          className="hover:text-[var(--text)] transition-colors"
+          className="text-[var(--text-faint)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] rounded-md p-1.5 transition-colors"
         >
           <RefreshCw className="h-4 w-4" />
         </button>
