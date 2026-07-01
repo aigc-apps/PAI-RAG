@@ -13,9 +13,31 @@ from app.summarizer import maybe_summarize_conversation
 from api.protocol.responses_serializer import (
     serialize_response_sync,
     serialize_response_stream,
+    make_failed_sse,
 )
 
 router = APIRouter()
+
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+}
+
+
+def _error(status: int, message: str):
+    """OpenAI-shaped error JSON response (``{"error": {message, type, ...}}``)."""
+    return JSONResponse(
+        status_code=status,
+        content={
+            "error": {
+                "message": message,
+                "type": "invalid_request_error" if status < 500 else "server_error",
+                "param": None,
+                "code": None,
+            }
+        },
+    )
 
 
 def _rid() -> str:
@@ -139,7 +161,7 @@ async def create_response(
         try:
             cfg = state.router.get_config(request.model)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"unknown model: {request.model}")
+            return _error(404, f"unknown model: {request.model}")
 
     tools_ok = cfg.supports_tools if cfg is not None else True
     try:
@@ -148,15 +170,20 @@ async def create_response(
         ctx, conversation_id = await build_context(
             request, state.store, soul=state.soul,
             registry=(state.registry if tools_ok else None),
+            agent_config=state.agent_config,
             project_context=getattr(state, "project_context", ""),
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return _error(400, str(e))
 
     response_id = _rid()
     if state.router is not None and cfg is not None:
+        try:
+            llm = state.router.get_llm(request.model)
+        except RuntimeError as e:
+            return _error(503, str(e))
         agent = state.make_agent(
-            llm=state.router.get_llm(request.model),
+            llm=llm,
             context_window=cfg.context_window,
             max_output_tokens=cfg.max_output_tokens,
         )
@@ -184,6 +211,7 @@ async def create_response(
             return StreamingResponse(
                 state.runs.subscribe(run, starting_after=0),
                 media_type="text/event-stream",
+                headers=_SSE_HEADERS,
             )
         return JSONResponse(
             {
@@ -200,14 +228,27 @@ async def create_response(
 
         async def gen():
             sink = {}
-            async for chunk in serialize_response_stream(
-                events,
-                model=request.model,
-                response_id=response_id,
-                conversation_id=conversation_id,
-                sink=sink,
-            ):
-                yield chunk
+            try:
+                async for chunk in serialize_response_stream(
+                    events,
+                    model=request.model,
+                    response_id=response_id,
+                    conversation_id=conversation_id,
+                    sink=sink,
+                ):
+                    yield chunk
+            except Exception as e:
+                yield make_failed_sse(
+                    response_id, request.model, conversation_id, str(e),
+                )
+                if not sink.get("response"):
+                    sink["response"] = {
+                        "id": response_id,
+                        "status": "failed",
+                        "error": {"code": "server_error", "message": str(e)},
+                        "usage": None,
+                    }
+                    sink["items"] = []
             if request.store and sink.get("response"):
                 r = sink["response"]
                 await _persist(
@@ -224,7 +265,7 @@ async def create_response(
                 _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id)
                 _schedule_summary(state, request, conversation_id)
 
-        return StreamingResponse(gen(), media_type="text/event-stream")
+        return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
     resp_dict, store_items = await serialize_response_sync(
         events,
@@ -263,6 +304,7 @@ async def get_response(
         return StreamingResponse(
             state.runs.subscribe(run, starting_after=starting_after),
             media_type="text/event-stream",
+            headers=_SSE_HEADERS,
         )
     stored = await state.store.get_response(response_id)
     if stored is None:

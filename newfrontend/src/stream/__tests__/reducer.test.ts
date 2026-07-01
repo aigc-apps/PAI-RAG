@@ -92,15 +92,30 @@ describe("reduceStreamEvent", () => {
     expect(s.message.error).toContain("kaboom");
   });
 
-  it("ignores function_call events (tool UI out of scope)", () => {
+  it("keeps tool arguments separate from final text", () => {
     const s = fold([
       created("resp_6", "c"),
-      { type: "response.function_call_arguments.delta", delta: '{"a":1}' },
-      { type: "response.function_call_arguments.done", arguments: '{"a":1}', name: "get" },
+      {
+        type: "response.output_item.added",
+        item: { id: "fc_c1", type: "function_call", name: "get", call_id: "c1" },
+      },
+      { type: "response.function_call_arguments.delta", item_id: "fc_c1", delta: '{"a":1}' },
+      { type: "response.function_call_arguments.done", item_id: "fc_c1", arguments: '{"a":1}', name: "get" },
       textDelta("done"),
       completed("resp_6", "c"),
     ]);
     expect(s.message.text).toBe("done");
+    expect(s.message.toolCalls).toHaveLength(1);
+    expect(s.message.toolCalls[0].arguments).toBe('{"a":1}');
+  });
+
+  it("does not duplicate a tool call when output_item.added is replayed", () => {
+    const ev = {
+      type: "response.output_item.added",
+      item: { id: "fc_c1", type: "function_call", name: "get", call_id: "c1" },
+    };
+    const s = fold([ev, ev]);
+    expect(s.message.toolCalls).toHaveLength(1);
   });
 
   it("reasoning_summary_text.done also flips reasoning to done", () => {

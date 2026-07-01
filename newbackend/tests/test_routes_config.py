@@ -1,0 +1,162 @@
+import os
+import sys
+import io
+import zipfile
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+import yaml
+
+from app.deps import AppState
+from app.agent_config import AgentConfigDocument, apply_runtime_status
+from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
+from app.routes.config import router as config_router
+from app.store.memory import InMemoryStore
+
+
+def _client(tmp_path, monkeypatch):
+    config_path = str(tmp_path / "config.yaml")
+    monkeypatch.setenv("CONFIG_PATH", config_path)
+    monkeypatch.setenv("MODELS_PATH", config_path)
+    cat = ModelCatalog(
+        default_model="local/fast",
+        providers=[
+            ProviderConfig(
+                name="local",
+                base_url="http://localhost:8000/v1",
+                models=[ModelSpec(id="fast")],
+            )
+        ],
+    )
+    app = FastAPI()
+    app.state.app_state = AppState(
+        store=InMemoryStore(),
+        llm=None,
+        default_model="local/fast",
+        router=ProviderRouter(cat),
+    )
+    app.include_router(config_router)
+    return TestClient(app)
+
+
+def test_get_setup_returns_default_config(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    body = c.get("/v1/setup").json()
+    assert body["setup"]["completed"] is False
+    caps = {item["id"]: item for item in body["capabilities"]}
+    assert caps["knowledge"]["status"] == "ready"
+    assert caps["search"]["status"] in {"disabled", "missing_config"}
+    assert any(p["id"] == "llm.default" for p in body["providers"])
+    assert body["default_agent"] == "main"
+    assert body["agents"][0]["id"] == "main"
+    assert body["agents"][0]["model"] == "local/fast"
+    assert body["models"]["default_model"] == "openai/gpt-4o-mini"
+    assert "skill.web_research" not in {item["id"] for item in body["capabilities"]}
+
+
+def test_put_setup_persists_completion(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.put(
+        "/v1/setup",
+        json={
+            "completed": True,
+            "mode": "local_first",
+            "skipped_steps": ["search", "sandbox"],
+        },
+    )
+    assert r.status_code == 200
+    body = c.get("/v1/setup").json()
+    assert body["setup"]["completed"] is True
+    assert body["setup"]["mode"] == "local_first"
+    assert body["setup"]["completed_at"]
+
+
+def test_config_yaml_roundtrip_and_registry_reload(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    body = c.get("/v1/config.yaml")
+    assert body.status_code == 200
+    text = body.text
+    assert "models:" in text
+    assert "capabilities:" in text
+    assert "agents:" in text
+    config = yaml.safe_load(text)
+    search = next(cap for cap in config["capabilities"] if cap["id"] == "search")
+    search["enabled"] = True
+    search_provider = next(provider for provider in config["providers"] if provider["id"] == "search.default")
+    search_provider["settings"]["provider"] = "tavily"
+    search_provider["settings"]["api_key"] = "tvly-test"
+    r = c.put("/v1/config.yaml", json={"yaml": yaml.safe_dump(config, sort_keys=False)})
+    assert r.status_code == 200
+    doc = r.json()
+    search = next(cap for cap in doc["capabilities"] if cap["id"] == "search")
+    assert search["permission"] == "auto"
+    assert search["status"] == "ready"
+
+
+def test_runtime_status_discovers_local_skill_packages(tmp_path):
+    skill_dir = tmp_path / "skills" / "review"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "skill.yaml").write_text(
+        "id: review\n"
+        "name: Review Skill\n"
+        "description: Review documents.\n"
+        "permissions:\n"
+        "  tools: [knowledge_search]\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "SKILL.md").write_text("Review carefully.", encoding="utf-8")
+    doc = AgentConfigDocument(**{
+        "skills": {"root": str(tmp_path / "skills")}
+    })
+    out = apply_runtime_status(doc, type("Settings", (), {"openai_api_key": "", "default_model": "m", "search_provider": "none", "search_api_key": "", "search_endpoint": ""})(), None)
+    skill = next(cap for cap in out.capabilities if cap.id == "skill.review")
+    assert skill.name == "Review Skill"
+    assert skill.settings["source"] == "local"
+    assert skill.dependencies == ["knowledge"]
+
+
+def test_upload_and_install_skill_zip(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    config = yaml.safe_load(c.get("/v1/config.yaml").text)
+    config["skills"]["root"] = str(tmp_path / "skills")
+    config["skills"]["install"]["upload_root"] = str(tmp_path / "uploads")
+    assert c.put("/v1/config.yaml", json={"yaml": yaml.safe_dump(config, sort_keys=False)}).status_code == 200
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr(
+            "demo/skill.yaml",
+            "id: demo\n"
+            "name: Demo Skill\n"
+            "version: 1.0.0\n"
+            "description: Demo install.\n",
+        )
+        zf.writestr("demo/SKILL.md", "Follow demo instructions.")
+    archive.seek(0)
+
+    denied = c.post(
+        "/v1/skills/uploads",
+        files={"file": ("demo.zip", archive.getvalue(), "application/zip")},
+    )
+    assert denied.status_code == 403
+
+    upload = c.post(
+        "/v1/skills/uploads",
+        headers={"X-Admin": "true"},
+        files={"file": ("demo.zip", archive.getvalue(), "application/zip")},
+    )
+    assert upload.status_code == 200
+    upload_id = upload.json()["upload_id"]
+
+    install = c.post(
+        "/v1/skills/install",
+        headers={"X-Admin": "true"},
+        json={"source": {"type": "zip_upload", "upload_id": upload_id}},
+    )
+    assert install.status_code == 200
+    body = install.json()
+    assert body["result"]["id"] == "skill.demo"
+    skill = next(cap for cap in body["config"]["capabilities"] if cap["id"] == "skill.demo")
+    assert skill["name"] == "Demo Skill"
+    assert skill["status"] == "ready"

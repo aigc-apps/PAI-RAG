@@ -1,34 +1,37 @@
+[dependency-groups]
+dev = [
+  "pytest>=8.0"
+]
+
 [project]
 name = "newbackend"
 version = "0.1.0"
 description = "Lean agent service — the clean base for PAI-RAG's agent core (migrated from backend/)."
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
-    "openai>=2.0",
-    "httpx>=0.27",
-    "loguru>=0.7",
-    "pydantic>=2.7",
-    "pydantic-settings>=2.5",
-    "sqlmodel>=0.0.22",
-    "sqlalchemy>=2.0",
-    "aiosqlite>=0.20",
-    "pyyaml>=6.0",
-    "tenacity>=8.0",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "openai>=2.0",
+  "httpx>=0.27",
+  "loguru>=0.7",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.5",
+  "sqlmodel>=0.0.22",
+  "sqlalchemy[asyncio]>=2.0", # [asyncio] pulls greenlet, required by aiosqlite/sqlmodel async
+  "aiosqlite>=0.20",
+  "pyyaml>=6.0",
+  "python-multipart>=0.0.9",
+  "tenacity>=8.0"
 ]
 
-[dependency-groups]
-dev = [
-    "pytest>=8.0",
-]
-
-# This is a runnable service, not a distributable package — uv manages the env only.
-[tool.uv]
-package = false
+[tool.pytest]
 
 [tool.pytest.ini_options]
 # Flat layout: the packages (app/, agent/, api/, common/, memory/, utils/) live at the
 # project root, so add it to sys.path for imports during tests.
 pythonpath = ["."]
 testpaths = ["tests"]
+
+# This is a runnable service, not a distributable package — uv manages the env only.
+[tool.uv]
+package = false

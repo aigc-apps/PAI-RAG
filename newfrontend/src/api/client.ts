@@ -20,7 +20,14 @@ export function streamResponse(
       body: JSON.stringify({ ...params, store: true, stream: true }),
       signal,
     });
-    if (!res.ok || !res.body) throw new Error(`stream failed: ${res.status}`);
+    if (!res.ok || !res.body) {
+      let message = `stream failed: ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body?.error?.message) message = body.error.message;
+      } catch { /* response body not JSON */ }
+      throw new Error(message);
+    }
     yield* parseSSE(res.body);
   })();
 }

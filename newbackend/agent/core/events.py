@@ -31,6 +31,13 @@ class ToolStarted(BaseModel):
     name: str
 
 
+class ToolArgumentsDelta(BaseModel):
+    type: Literal["tool.arguments.delta"] = "tool.arguments.delta"
+    call_id: str
+    name: str
+    delta: str
+
+
 class ToolCompleted(BaseModel):
     type: Literal["tool.completed"] = "tool.completed"
     call_id: str
@@ -60,6 +67,6 @@ class RunFailed(BaseModel):
 
 
 AgentEvent = Union[
-    RunStarted, TextDelta, ReasoningDelta, ToolStarted,
+    RunStarted, TextDelta, ReasoningDelta, ToolStarted, ToolArgumentsDelta,
     ToolCompleted, ToolResult, RunCompleted, RunFailed,
 ]

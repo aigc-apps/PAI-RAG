@@ -9,7 +9,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("ModelSelector", () => {
   it("renders fetched models", async () => {
-    (api.listModels as any).mockResolvedValue(["fast", "smart"]);
+    (api.listModels as any).mockResolvedValue({ ids: ["fast", "smart"], default: "fast" });
     render(<ModelSelector model="fast" onChange={() => {}} />);
     await waitFor(() => expect(screen.getByRole("option", { name: "smart" })).toBeInTheDocument());
     expect(screen.getByRole("option", { name: "fast" })).toBeInTheDocument();
@@ -21,5 +21,12 @@ describe("ModelSelector", () => {
     await waitFor(() =>
       expect(screen.getByRole("option", { name: "gpt-4o-mini" })).toBeInTheDocument()
     );
+  });
+
+  it("adopts the backend default when the current model is not in the catalog", async () => {
+    const onChange = vi.fn();
+    (api.listModels as any).mockResolvedValue({ ids: ["fast", "smart"], default: "fast" });
+    render(<ModelSelector model="stale/old" onChange={onChange} />);
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith("fast"));
   });
 });

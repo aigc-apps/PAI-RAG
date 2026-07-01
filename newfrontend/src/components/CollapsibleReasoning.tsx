@@ -13,7 +13,6 @@ export function CollapsibleReasoning({
 }) {
   const [open, setOpen] = useState(status === "streaming");
 
-  // Auto-open while streaming, auto-collapse when reasoning finishes.
   useEffect(() => {
     if (status === "streaming") setOpen(true);
     else if (status === "done") setOpen(false);
@@ -27,17 +26,17 @@ export function CollapsibleReasoning({
       onOpenChange={setOpen}
       className="mb-2 w-full"
     >
-      <Collapsible.Trigger className="flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text)]">
+      <Collapsible.Trigger className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">
         <ChevronRight
-          className={cn("h-4 w-4 transition-transform", open && "rotate-90")}
+          className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
         />
         {status === "streaming" ? (
-          <span className="shimmer-text">Thinking…</span>
+          <span className="shimmer-text font-medium">Thinking…</span>
         ) : (
-          <span className="text-[var(--text-muted)]">Thought</span>
+          <span className="text-[var(--text-faint)]">Thought process</span>
         )}
       </Collapsible.Trigger>
-      <Collapsible.Content className="mt-1 border-l-2 border-[var(--accent)]/40 pl-3 text-sm text-[var(--text-muted)] whitespace-pre-wrap">
+      <Collapsible.Content className="mt-1 border-l-2 border-[var(--border-strong)] pl-3 text-xs text-[var(--text-muted)] whitespace-pre-wrap leading-6">
         {reasoning}
       </Collapsible.Content>
     </Collapsible.Root>

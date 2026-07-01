@@ -16,12 +16,56 @@ uv run pytest -q             # run the test suite (currently 165 tests)
 uv run uvicorn app.lean_main:app --reload --port 8000   # run the service
 ```
 
-Configure a model provider (optional — falls back to the OpenAI env vars):
+Configure the unified agent config:
 
 ```bash
-cp models.yaml.example models.yaml   # edit; keys are referenced by env-var NAME
-export OPENAI_API_KEY=sk-...          # or whichever provider key your catalog references
+vim data/config.yaml                  # edit models, agents, tools, skills, providers
+export OPENAI_API_KEY=sk-...          # or whichever provider key your config references
 ```
+
+Enable cloud sandbox execution by filling `providers[].id=sandbox.default` in
+`data/config.yaml`. The backend talks to the configured sandbox provider through
+a small async provider abstraction, so production deployments can use a direct
+REST gateway or an optional SDK-backed adapter without changing the
+`code_sandbox` tool contract.
+
+```bash
+export AGENTRUN_SANDBOX_API_KEY=...   # optional gateway auth token
+```
+
+`sandbox.default.settings` supports AgentRun `template_name`, user/tenant/conversation
+isolation, idle timeout, execution timeout up to 30 seconds, cwd, OSS mounts for custom skills, and NAS mounts
+for user files; the agent sees this as the `code_sandbox` tool once the sandbox
+capability is enabled.
+
+The default REST gateway contract follows the AgentRun sandbox shape:
+
+- `POST /sandboxes` creates or returns a scoped sandbox instance.
+- `POST /sandboxes/{sandbox_id}/contexts/execute` runs code in a sandbox context.
+- `POST /sandboxes/{sandbox_id}/stop` releases an idle sandbox instance.
+
+Enable custom skills by placing skill packages under the configured skill root:
+
+```text
+data/skills/report-writer/
+  skill.yaml
+  SKILL.md
+  resources/
+  scripts/
+```
+
+```yaml
+skills:
+  root: ./data/skills
+  mount:
+    mount_root: /mnt/skills
+```
+
+Each package's `skill.yaml` declares metadata, triggers, and required tools;
+`SKILL.md` contains the model-facing workflow. Matching enabled skills are
+loaded into the per-turn context as `# Active Skills`. The active agent's
+enabled skills also determine the read-only skill mounts attached to its
+sandbox scope.
 
 ## What it does
 
@@ -33,7 +77,7 @@ Features already built (each has a design + plan under `../docs/superpowers/`):
   into a **stable, cacheable system prompt**; `+ project context` layer.
 - **Tools** — a tight default set (`current_datetime`, `web_fetch`, `web_search`) behind a
   `ToolRegistry`, extensible via **local skills** and **MCP** adapters.
-- **Model providers** — a reloadable `models.yaml` catalog routes each request to the right
+- **Model providers** — a reloadable `data/config.yaml` `models:` section routes each request to the right
   provider/client with per-model capabilities (`GET /v1/models`, `POST /v1/models/reload`).
 - **Resilient streaming** — `background:true` detaches the run so it survives disconnects;
   **resume** (`GET /v1/responses/{id}?stream=true&starting_after=N`) and server-side
@@ -64,7 +108,7 @@ Features already built (each has a design + plan under `../docs/superpowers/`):
 newbackend/
   pyproject.toml          # uv project: deps + pytest config (pythonpath=["."])
   uv.lock                 # pinned, reproducible env (no heavy ML deps)
-  models.yaml.example     # provider catalog template (copy to models.yaml)
+  data/config.yaml        # unified config: models, agents, providers, capabilities
   app/                    # the service
     lean_main.py          # FastAPI app + lifespan (builds AppState: store, llm, soul, registry, router, …)
     config.py             # Settings (env-driven)
@@ -72,7 +116,7 @@ newbackend/
     schemas.py            # ResponsesRequest
     builder.py            # build_context: assembles AgentContext (stable prompt + volatile block + history)
     llm.py                # LeanLLM (streaming wrapper over AsyncOpenAI)
-    providers.py          # ProviderRouter + model catalog (models.yaml)
+    providers.py          # ProviderRouter + model catalog (config.yaml models section)
     memory.py             # user-memory extraction/consolidation pipeline
     summarizer.py         # rolling conversation summary pipeline
     runs.py               # RunManager (detached background runs, resume, cancel)
@@ -98,8 +142,7 @@ newbackend/
 
 | Var | Default | Purpose |
 |---|---|---|
-| `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `DEFAULT_MODEL` | OpenAI / "" / `gpt-4o-mini` | Fallback single-provider config when no `models.yaml` |
-| `MODELS_PATH` | `models.yaml` | Provider catalog file (else synthesized from the above) |
+| `CONFIG_PATH` / `MODELS_PATH` | `./data/config.yaml` / `./data/config.yaml` | Unified config file; both point to the same YAML during development |
 | `DB_URL` / `STORE_BACKEND` | `sqlite+aiosqlite:///./data/agent.db` / `sql` | Store backend (`sql` \| `memory`) |
 | `AGENT_NAME` / `AGENT_ROLE` | `Aria` / general assistant | Default SOUL identity |
 | `PROJECT_CONTEXT` | "" | Static project context injected into the stable system prompt |

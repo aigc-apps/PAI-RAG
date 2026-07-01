@@ -32,3 +32,6 @@ from db.models.knowledgebase.vector_table_mapping import VectorTableMappingEntit
 from db.models.file.file import FileEntity, FileTextContentEntity
 from db.models.file.upload_session import FileUploadSessionEntity
 from db.models.file.chunk import FileChunkEntity
+from db.models.knowledge.wiki_page import WikiPageEntity
+from db.models.knowledge.compiled_page import CompiledPageEntity
+from db.models.knowledge.suggestion import SuggestionEntity

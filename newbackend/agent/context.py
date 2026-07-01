@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List
+from typing import Any, Dict, List, Optional
 from utils.time_utils import get_current_time_str
 from agent.message import Message
 
@@ -30,3 +30,9 @@ class AgentContext:
     tools: object  # ToolBox; typed loosely to avoid an import cycle
     run_vars: RunVars
     context_block: str = ""
+    user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
+    metadata: Dict[str, str] = field(default_factory=dict)
+    agent_id: str = "main"
+    skill_mounts: List[Dict[str, Any]] = field(default_factory=list)
+    skill_fingerprint: str = "none"

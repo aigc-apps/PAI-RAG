@@ -7,6 +7,7 @@ from agent.core.events import (
     TextDelta,
     ReasoningDelta,
     ToolStarted,
+    ToolArgumentsDelta,
     ToolCompleted,
     ToolResult,
     RunCompleted,
@@ -83,6 +84,7 @@ class _Assembler:
         self.usage = None
         self.status = "completed"
         self.error: Optional[ResponseError] = None
+        self.tool_results: List[Dict] = []
 
     def _msg_item_id(self) -> str:
         return f"msg_{self.response_id}"
@@ -129,6 +131,11 @@ class _Assembler:
                 },
             }
         )
+        self.tool_results.append({
+            "call_id": call_id,
+            "output": output if output is not None else (error or ""),
+            "ok": error is None,
+        })
 
     def on_failed(self, message: str):
         self.status = "failed"
@@ -227,7 +234,10 @@ async def serialize_response_sync(
             asm.on_failed(ev.message)
         # RunStarted, ToolStarted: no sync effect
     asm.finalize(usage)
-    return asm.to_response().model_dump(mode="json"), asm.store_items
+    resp = asm.to_response().model_dump(mode="json")
+    if asm.tool_results:
+        resp["tool_results"] = asm.tool_results
+    return resp, asm.store_items
 
 
 def _sse(event) -> str:
@@ -236,6 +246,38 @@ def _sse(event) -> str:
 
 def _sse_obj(obj: dict) -> str:
     return f"data: {_json.dumps(obj, ensure_ascii=False)}\n\n"
+
+
+def make_failed_sse(
+    response_id: str,
+    model: str,
+    conversation_id: Optional[str],
+    message: str,
+    seq: int = 0,
+) -> str:
+    """Build a standalone ``response.failed`` SSE chunk for error recovery.
+
+    Used when the stream itself crashes (not a ``RunFailed`` agent event) so
+    subscribers always see a terminal event instead of a silent disconnect.
+    """
+    resp = Response(
+        id=response_id,
+        created_at=time.time(),
+        model=model,
+        object="response",
+        output=[],
+        parallel_tool_calls=False,
+        tool_choice="auto",
+        tools=[],
+        status="failed",
+        usage=None,
+        error=ResponseError(code="server_error", message=message),
+        previous_response_id=None,
+        conversation={"id": conversation_id} if conversation_id else None,
+    )
+    return _sse(ResponseFailedEvent(
+        response=resp, sequence_number=seq, type="response.failed",
+    ))
 
 
 class _Cancelled(Exception):
@@ -312,6 +354,7 @@ async def serialize_response_stream(
     msg_index = 0
     msg_item_id = asm._msg_item_id()
     tool_indices: Dict[str, int] = {}  # call_id -> output_index
+    tool_argument_lengths: Dict[str, int] = {}
     reasoning_index = None
     reasoning_open = False
     rs_id = f"rs_{response_id}"
@@ -476,6 +519,42 @@ async def serialize_response_stream(
                     type="response.output_item.added",
                 )
             )
+        elif isinstance(ev, ToolArgumentsDelta):
+            if reasoning_open:
+                for chunk in close_reasoning():
+                    yield chunk
+                reasoning_open = False
+            idx = tool_indices.get(ev.call_id)
+            if idx is None:
+                idx = alloc_index()
+                tool_indices[ev.call_id] = idx
+                yield _sse(
+                    ResponseOutputItemAddedEvent(
+                        item=ResponseFunctionToolCall(
+                            id=f"fc_{ev.call_id}",
+                            call_id=ev.call_id,
+                            name=ev.name,
+                            arguments="",
+                            type="function_call",
+                            status="in_progress",
+                        ),
+                        output_index=idx,
+                        sequence_number=nxt(),
+                        type="response.output_item.added",
+                    )
+                )
+            tool_argument_lengths[ev.call_id] = (
+                tool_argument_lengths.get(ev.call_id, 0) + len(ev.delta)
+            )
+            yield _sse(
+                ResponseFunctionCallArgumentsDeltaEvent(
+                    delta=ev.delta,
+                    item_id=f"fc_{ev.call_id}",
+                    output_index=idx,
+                    sequence_number=nxt(),
+                    type="response.function_call_arguments.delta",
+                )
+            )
         elif isinstance(ev, ToolCompleted):
             if reasoning_open:
                 for chunk in close_reasoning():
@@ -502,15 +581,18 @@ async def serialize_response_stream(
                         type="response.output_item.added",
                     )
                 )
-            yield _sse(
-                ResponseFunctionCallArgumentsDeltaEvent(
-                    delta=ev.arguments or "",
-                    item_id=f"fc_{ev.call_id}",
-                    output_index=idx,
-                    sequence_number=nxt(),
-                    type="response.function_call_arguments.delta",
+            already_sent = tool_argument_lengths.get(ev.call_id, 0)
+            remaining_arguments = (ev.arguments or "")[already_sent:]
+            if remaining_arguments:
+                yield _sse(
+                    ResponseFunctionCallArgumentsDeltaEvent(
+                        delta=remaining_arguments,
+                        item_id=f"fc_{ev.call_id}",
+                        output_index=idx,
+                        sequence_number=nxt(),
+                        type="response.function_call_arguments.delta",
+                    )
                 )
-            )
             yield _sse(
                 ResponseFunctionCallArgumentsDoneEvent(
                     arguments=ev.arguments or "",
@@ -629,4 +711,6 @@ async def serialize_response_stream(
         )
 
     sink["response"] = final.model_dump(mode="json")
+    if asm.tool_results:
+        sink["response"]["tool_results"] = asm.tool_results
     sink["items"] = asm.store_items

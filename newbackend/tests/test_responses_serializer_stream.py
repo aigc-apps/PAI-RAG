@@ -7,6 +7,7 @@ from agent.core.events import (
     TextDelta,
     ReasoningDelta,
     ToolStarted,
+    ToolArgumentsDelta,
     ToolCompleted,
     ToolResult,
     RunCompleted,
@@ -103,6 +104,42 @@ def test_stream_tool_call_events():
             e for e in evs if e.type == "response.function_call_arguments.done"
         )
         assert done.arguments == '{"x":1}' and done.name == "get"
+
+    asyncio.run(run())
+
+
+def test_stream_tool_call_argument_deltas_are_not_duplicated():
+    async def run():
+        sink = {}
+        gen = serialize_response_stream(
+            _events(
+                [
+                    RunStarted(response_id="resp_tool_delta"),
+                    ToolStarted(call_id="c1", name="get"),
+                    ToolArgumentsDelta(call_id="c1", name="get", delta='{"x":'),
+                    ToolArgumentsDelta(call_id="c1", name="get", delta="1}"),
+                    ToolCompleted(call_id="c1", name="get", arguments='{"x":1}'),
+                    ToolResult(call_id="c1", name="get", ok=True, output="42"),
+                    TextDelta(text="ok"),
+                    RunCompleted(usage=Usage(input=1, output=1, total=2)),
+                ]
+            ),
+            model="m",
+            response_id="resp_tool_delta",
+            conversation_id=None,
+            sink=sink,
+        )
+        evs = _parse([c async for c in gen])
+        argument_text = "".join(
+            e.delta
+            for e in evs
+            if e.type == "response.function_call_arguments.delta"
+        )
+        assert argument_text == '{"x":1}'
+        done = next(
+            e for e in evs if e.type == "response.function_call_arguments.done"
+        )
+        assert done.arguments == '{"x":1}'
 
     asyncio.run(run())
 

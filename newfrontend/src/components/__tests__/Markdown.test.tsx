@@ -8,4 +8,10 @@ describe("Markdown", () => {
     expect(screen.getByRole("heading", { name: "Title" })).toBeInTheDocument();
     expect(screen.getByText("bold")).toBeInTheDocument();
   });
+
+  it("renders text fences as output blocks", () => {
+    render(<Markdown content={"```text\nhello world!\n```"} />);
+    expect(screen.getByText("Output")).toBeInTheDocument();
+    expect(screen.getByText("hello world!")).toBeInTheDocument();
+  });
 });

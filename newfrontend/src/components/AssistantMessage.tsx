@@ -1,8 +1,7 @@
 import type { ChatMessage } from "../types";
 import { Markdown } from "./Markdown";
-import { CollapsibleReasoning } from "./CollapsibleReasoning";
 import { MessageControls } from "./MessageControls";
-import { ToolCall } from "./ToolCall";
+import { AgentActivity } from "./AgentActivity";
 
 export function AssistantMessage({
   message,
@@ -15,32 +14,28 @@ export function AssistantMessage({
     message.status === "completed" || message.status === "cancelled";
   return (
     <div className="flex gap-3 animate-msg-in">
-      {/* Aurora avatar dot */}
-      <div
-        className="h-7 w-7 rounded-full shrink-0 mt-0.5"
-        style={{ background: "var(--accent-grad)" }}
-      />
-      {/* Content column */}
+      <div className="h-6 w-6 rounded-[var(--radius-sm)] shrink-0 mt-0.5 bg-[var(--surface-3)] flex items-center justify-center">
+        <span className="text-xs font-bold text-[var(--text-muted)]">A</span>
+      </div>
       <div className="flex-1 min-w-0">
-        <CollapsibleReasoning
+        <AgentActivity
           reasoning={message.reasoning}
-          status={message.reasoningStatus}
+          reasoningStatus={message.reasoningStatus}
+          tools={message.toolCalls}
+          messageStatus={message.status}
         />
-        {message.toolCalls.map((t) => (
-          <ToolCall key={t.id} tool={t} />
-        ))}
         {message.status === "failed" ? (
-          <div className="rounded-[var(--radius)] bg-[var(--danger)]/10 text-[var(--danger)] px-3 py-2">
+          <div className="rounded-[var(--radius-sm)] border border-[var(--danger)]/30 bg-[var(--danger)]/5 text-[var(--danger)] px-3 py-2 text-sm">
             {message.error || "Something went wrong."}
           </div>
         ) : (
           message.text && <Markdown content={message.text} />
         )}
         {message.status === "stopped" && (
-          <div className="mt-1 text-xs italic text-[var(--text-faint)]">stopped</div>
+          <div className="mt-1 text-xs text-[var(--text-faint)]">stopped</div>
         )}
         {message.status === "cancelled" && (
-          <div className="mt-1 text-xs italic text-[var(--text-faint)]">cancelled</div>
+          <div className="mt-1 text-xs text-[var(--text-faint)]">cancelled</div>
         )}
         {showControls && (
           <MessageControls text={message.text} onRegenerate={onRegenerate} />

@@ -69,7 +69,7 @@ class AgentMessageManager:
         try:
             self.tokenizer = get_tokenizer()
         except Exception:
-            logger.warning("Tokenizer unavailable; using length-based token estimate.")
+            logger.info("Tokenizer unavailable; using length-based token estimate.")
             self.tokenizer = None
         logger.info(
             f"AgentMessageManager initialized: context_window={context_window}, "

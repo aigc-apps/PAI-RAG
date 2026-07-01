@@ -35,6 +35,11 @@ from service.thread.thread_service import ThreadService
 from service.thread.message_service import MessageService
 from service.agent.agent_service import AgentService
 from service.model.bailian_model_service import BailianModelService
+from service.knowledge.wiki_page_service import WikiPageService
+from service.knowledge.compiled_page_service import CompiledPageService
+from service.knowledge.suggestion_service import SuggestionService
+from service.knowledge.knowledge_query_service import KnowledgeQueryService
+from service.knowledge.knowledge_event_handler import KnowledgeEventHandler
 
 from fastapi import Header, HTTPException
 from typing import Optional
@@ -684,6 +689,41 @@ async def get_agent_service(
         file_resource_service_getter=file_resource_service_getter,
         faq_config_service_getter=faq_config_service_getter,
     )
+
+
+async def get_wiki_page_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> WikiPageService:
+    """FastAPI dependency injection for WikiPageService (Layer 0: Human Wiki)."""
+    return WikiPageService(session)
+
+
+async def get_compiled_page_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> CompiledPageService:
+    """FastAPI dependency injection for CompiledPageService (Layer 2: Agent KB)."""
+    return CompiledPageService(session)
+
+
+async def get_suggestion_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> SuggestionService:
+    """FastAPI dependency injection for SuggestionService (Suggestions Queue)."""
+    return SuggestionService(session)
+
+
+async def get_knowledge_query_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> KnowledgeQueryService:
+    """FastAPI dependency injection for KnowledgeQueryService (Layer 3: Query)."""
+    return KnowledgeQueryService(session)
+
+
+async def get_knowledge_event_handler(
+    session: AsyncSession = Depends(get_db_session),
+) -> KnowledgeEventHandler:
+    """FastAPI dependency injection for KnowledgeEventHandler (Data Flow)."""
+    return KnowledgeEventHandler(session)
 
 
 async def get_message_service(

@@ -4,6 +4,7 @@ import sys, os, asyncio
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.schemas import ResponsesRequest
 from app.builder import build_context, items_to_messages
+from app.agent_config import AgentConfigDocument
 from app.store.memory import InMemoryStore
 from app.store.base import Item, StoredResponse
 
@@ -31,6 +32,59 @@ def test_build_context_from_string_input():
         assert "# Identity" in ctx.system_prompt
         assert ctx.history == []
         assert conv_id is not None
+
+    asyncio.run(run())
+
+
+def test_build_context_injects_matching_custom_skill(tmp_path):
+    skill_dir = tmp_path / "writer"
+    skill_dir.mkdir()
+    (skill_dir / "skill.yaml").write_text(
+        "id: writer\n"
+        "name: Writer\n"
+        "description: Write articles.\n"
+        "triggers:\n"
+        "  keywords: [article]\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "SKILL.md").write_text("Always produce an outline first.", encoding="utf-8")
+
+    async def run():
+        doc = AgentConfigDocument(**{
+            "skills": {
+                "root": str(tmp_path),
+                "mount": {"mount_root": "/mnt/skills"},
+            },
+            "agents": [{
+                "id": "main",
+                "name": "Main",
+                "skills": {"enabled": ["skill.writer"]},
+            }],
+            "capabilities": [{
+                "id": "skill.writer",
+                "kind": "skill",
+                "name": "Writer",
+                "enabled": True,
+                "status": "ready",
+            }],
+        })
+        ctx, _ = await build_context(
+            ResponsesRequest(model="m", input="write an article about agents"),
+            InMemoryStore(),
+            agent_config=doc,
+        )
+        assert "# Active Skills" in ctx.context_block
+        assert "Always produce an outline first." in ctx.context_block
+        assert ctx.agent_id == "main"
+        assert ctx.skill_mounts == [{
+            "id": "skill.writer",
+            "version": "0.0.0",
+            "source_path": str(skill_dir),
+            "mount_path": "/mnt/skills/writer",
+            "read_only": True,
+            "oss": {},
+        }]
+        assert ctx.skill_fingerprint != "none"
 
     asyncio.run(run())
 

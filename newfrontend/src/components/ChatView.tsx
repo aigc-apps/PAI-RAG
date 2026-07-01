@@ -15,12 +15,11 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
   const { send, stop, regenerate, isStreaming, resumeIfInterrupted } =
     useResponsesChat();
 
-  // Resume an interrupted in-flight answer when the tab/network comes back.
   useEffect(() => {
     const tryResume = () => {
       if (document.visibilityState === "visible") void resumeIfInterrupted();
     };
-    tryResume(); // also on mount (no-op unless a streaming message exists)
+    tryResume();
     document.addEventListener("visibilitychange", tryResume);
     window.addEventListener("online", tryResume);
     return () => {
@@ -31,16 +30,16 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
 
   return (
     <div className="flex h-full flex-col">
-      {/* Glassy translucent top bar */}
-      <div className="h-14 flex items-center gap-1 px-3 border-b border-[var(--border)] flex-shrink-0 backdrop-blur bg-[var(--bg)]/80">
+      {/* Minimal top bar */}
+      <div className="h-12 flex items-center gap-1 px-3 border-b border-[var(--border)] flex-shrink-0 bg-[var(--bg)]">
         {onToggleSidebar && (
           <button
             type="button"
             aria-label="Toggle sidebar"
             onClick={onToggleSidebar}
-            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] transition-colors"
+            className="rounded-[var(--radius-sm)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors"
           >
-            <PanelLeft className="h-5 w-5" />
+            <PanelLeft className="h-4 w-4" />
           </button>
         )}
         <div className="flex-1" />
@@ -51,9 +50,9 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
       {/* Main area: empty state or messages + composer */}
       {messages.length === 0 ? (
         <div className="flex-1 grid place-items-center px-4 pb-8">
-          <div className="flex flex-col items-center gap-6 w-full max-w-2xl">
+          <div className="flex flex-col items-center gap-5 w-full max-w-2xl">
             <BrandMark size="lg" />
-            <h1 className="text-2xl font-semibold text-[var(--text)]">
+            <h1 className="text-xl font-semibold text-[var(--text)] tracking-tight">
               How can I help today?
             </h1>
             <div className="w-full">
@@ -64,7 +63,7 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
       ) : (
         <>
           <MessageList onRegenerate={regenerate} />
-          <div className="flex-shrink-0 py-3">
+          <div className="flex-shrink-0 border-t border-[var(--border)] bg-[var(--bg)] py-3">
             <Composer onSend={send} onStop={stop} isStreaming={isStreaming} />
           </div>
         </>

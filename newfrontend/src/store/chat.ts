@@ -57,7 +57,7 @@ interface ChatState {
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   status: "idle",
-  model: "gpt-4o-mini",
+  model: "",
   conversationId: undefined,
   lastResponseId: undefined,
 

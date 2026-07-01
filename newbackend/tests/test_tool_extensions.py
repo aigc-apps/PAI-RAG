@@ -2,6 +2,12 @@ import sys, os, asyncio
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from agent.tools.registry import ToolRegistry
 from agent.tools.skills import load_skills
+from agent.custom_skills import (
+    discover_skill_packages,
+    render_skill_instructions,
+    resolve_skill_mounts,
+    skill_mount_fingerprint,
+)
 from agent.tools.mcp import mcp_tool_to_tool, register_mcp_tools
 
 
@@ -34,6 +40,66 @@ def test_load_skills_registers_tools(tmp_path):
 def test_load_skills_missing_dir_is_noop():
     reg = ToolRegistry()
     assert load_skills("/no/such/dir", reg) == []
+
+
+def test_discover_skill_packages_and_render_matching_instructions(tmp_path):
+    skill_dir = tmp_path / "report"
+    skill_dir.mkdir()
+    (skill_dir / "skill.yaml").write_text(
+        "id: report\n"
+        "name: Report Writer\n"
+        "version: 1.2.0\n"
+        "description: Write structured reports.\n"
+        "triggers:\n"
+        "  keywords: [report]\n"
+        "permissions:\n"
+        "  tools: [knowledge_search]\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "SKILL.md").write_text("Use concise sections.", encoding="utf-8")
+
+    packages = discover_skill_packages([{"type": "local", "path": str(tmp_path)}])
+    assert [package.capability_id for package in packages] == ["skill.report"]
+    rendered = render_skill_instructions(
+        packages=packages,
+        enabled_ids=["skill.report"],
+        query="make a report",
+    )
+    assert "# Active Skills" in rendered
+    assert "Use concise sections." in rendered
+
+
+def test_resolve_skill_mounts_with_oss_config(tmp_path):
+    skill_dir = tmp_path / "report"
+    skill_dir.mkdir()
+    (skill_dir / "skill.yaml").write_text(
+        "id: report\n"
+        "name: Report Writer\n"
+        "version: 1.2.0\n",
+        encoding="utf-8",
+    )
+    packages = discover_skill_packages([{"type": "local", "path": str(tmp_path)}])
+    skill_config = type("SkillConfig", (), {
+        "mount": {
+            "mount_root": "/mnt/skills",
+            "oss": {
+                "bucketName": "agent-skills",
+                "endpoint": "oss-cn-hangzhou.aliyuncs.com",
+                "bucketPathPrefix": "skills",
+            },
+        }
+    })()
+
+    mounts = resolve_skill_mounts(
+        packages=packages,
+        enabled_ids=["skill.report"],
+        skill_config=skill_config,
+    )
+
+    assert mounts[0].to_dict()["mount_path"] == "/mnt/skills/report"
+    assert mounts[0].oss["bucketPath"] == "/skills/report@1.2.0"
+    assert mounts[0].oss["mountDir"] == "/mnt/skills/report"
+    assert skill_mount_fingerprint(mounts) != "none"
 
 
 def test_mcp_tool_to_tool_maps_schema_and_calls_client():

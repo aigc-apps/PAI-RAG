@@ -94,6 +94,24 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
       const item = e.item as { type?: string; name?: string } | undefined;
       if (item?.type === "function_call") {
         const id = callIdOf(e);
+        const existing = msg.toolCalls.find((t) => t.id === id);
+        if (existing) {
+          return {
+            ...state,
+            message: {
+              ...msg,
+              toolCalls: msg.toolCalls.map((t) =>
+                t.id === id
+                  ? {
+                      ...t,
+                      name: item.name || t.name,
+                      status: t.status === "done" ? t.status : "running",
+                    }
+                  : t
+              ),
+            },
+          };
+        }
         return { ...state, message: { ...msg, toolCalls: [...msg.toolCalls,
           { id, name: item.name || "", arguments: "", status: "running" } as ToolUse] } };
       }

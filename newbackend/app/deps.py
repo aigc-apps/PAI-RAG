@@ -21,6 +21,7 @@ class AppState:
     registry: ToolRegistry = field(default_factory=ToolRegistry)
     runs: RunManager = field(default_factory=RunManager)
     router: Optional[ProviderRouter] = None
+    agent_config: object = None
     memory_enabled: bool = False
     memory_model: str = ""
     summary_enabled: bool = False

@@ -3,6 +3,13 @@ from typing import List, Optional, Tuple
 
 MEMORY_INJECT_LIMIT = 30
 from agent.context import AgentContext, RunVars
+from agent.custom_skills import (
+    discover_skill_packages,
+    render_skill_instructions,
+    resolve_skill_mounts,
+    skill_mount_fingerprint,
+    skill_sources,
+)
 from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
 from agent.tools.registry import ToolRegistry
@@ -78,6 +85,7 @@ async def build_context(
     *,
     soul: Soul = DEFAULT_SOUL,
     registry: Optional[ToolRegistry] = None,
+    agent_config=None,
     project_context: str = "",
 ) -> Tuple[AgentContext, Optional[str]]:
     """Resolve prior history via the store and assemble the AgentContext.
@@ -130,20 +138,105 @@ async def build_context(
     uid = request.resolved_user_id
     if uid:
         memories = [m.text for m in await store.list_memories(uid, limit=MEMORY_INJECT_LIMIT)]
-    instructions = "\n\n".join(s for s in [
-        (effective_soul.extra_instructions or "").strip(), (request.instructions or "").strip()
-    ] if s)
+    current_turn = _input_to_turn(request.input)
+    agent_profile = _resolve_agent_profile(agent_config, request)
+    enabled_skill_ids = _enabled_skill_ids(agent_config, agent_profile)
+    skill_packages = _skill_packages(agent_config)
+    skill_instructions = _active_skill_instructions(
+        packages=skill_packages,
+        enabled_ids=enabled_skill_ids,
+        current_turn=current_turn,
+    )
+    skill_mounts = (
+        resolve_skill_mounts(
+            packages=skill_packages,
+            enabled_ids=enabled_skill_ids,
+            skill_config=getattr(agent_config, "skills", None),
+        )
+        if agent_config is not None
+        else []
+    )
+    instructions = "\n\n".join(
+        s
+        for s in [
+            (effective_soul.extra_instructions or "").strip(),
+            (request.instructions or "").strip(),
+            skill_instructions.strip(),
+        ]
+        if s
+    )
     context_block = render_context_block(memories=memories, summary=summary, instructions=instructions)
 
     history = items_to_messages(history_items)
     ctx = AgentContext(
         system_prompt=system_prompt,
         history=history,
-        current_turn=_input_to_turn(request.input),
+        current_turn=current_turn,
         attachments=[],
         hints=[],
         tools=toolbox,
         run_vars=RunVars(),
         context_block=context_block,
+        user_id=request.resolved_user_id,
+        conversation_id=conversation_id,
+        metadata=dict(request.metadata or {}),
+        agent_id=_agent_id(agent_config, agent_profile),
+        skill_mounts=[mount.to_dict() for mount in skill_mounts],
+        skill_fingerprint=skill_mount_fingerprint(skill_mounts),
     )
     return ctx, conversation_id
+
+
+def _resolve_agent_profile(agent_config, request: ResponsesRequest):
+    if agent_config is None:
+        return None
+    agents = getattr(agent_config, "agents", []) or []
+    requested_id = request.agent_id or (request.metadata or {}).get("agent_id")
+    agent_id = requested_id or getattr(agent_config, "default_agent", "main")
+    return next((item for item in agents if item.id == agent_id), agents[0] if agents else None)
+
+
+def _agent_id(agent_config, agent_profile) -> str:
+    if agent_profile is not None:
+        return getattr(agent_profile, "id", None) or "main"
+    if agent_config is not None:
+        return getattr(agent_config, "default_agent", "main")
+    return "main"
+
+
+def _skill_packages(agent_config) -> list:
+    if agent_config is None:
+        return []
+    return discover_skill_packages(skill_sources(getattr(agent_config, "skills", None)))
+
+
+def _enabled_skill_ids(agent_config, agent_profile) -> List[str]:
+    if agent_config is None or agent_profile is None:
+        return []
+    caps = {
+        cap.id: cap
+        for cap in (getattr(agent_config, "capabilities", []) or [])
+        if getattr(cap, "kind", "") == "skill"
+        and getattr(cap, "enabled", False)
+        and getattr(cap, "status", "ready") in {"ready", "untested"}
+    }
+    return [
+        skill_id
+        for skill_id in getattr(agent_profile.skills, "enabled", [])
+        if skill_id in caps
+    ]
+
+
+def _active_skill_instructions(*, packages: list, enabled_ids: List[str], current_turn: Message) -> str:
+    if not packages or not enabled_ids:
+        return ""
+    query = (
+        current_turn.content
+        if isinstance(current_turn.content, str)
+        else str(current_turn.content or "")
+    )
+    return render_skill_instructions(
+        packages=packages,
+        enabled_ids=enabled_ids,
+        query=query,
+    )

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from app.store.memory import InMemoryStore
 from app.deps import AppState
-from app.providers import ModelConfig, ModelCatalog, ProviderRouter
+from app.providers import ModelSpec, ProviderConfig, ModelCatalog, ProviderRouter
 from app.routes.responses import router as responses_router
 from common.llm.models import TextChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
@@ -27,27 +27,31 @@ def _echo(tag):
 
 
 def _router():
-    cat = ModelCatalog(default_model="fast", models=[
-        ModelConfig(id="fast", provider="x", base_url="u", api_key="k", supports_tools=True),
-        ModelConfig(id="smart", provider="y", base_url="u", api_key="k", supports_tools=False),
+    cat = ModelCatalog(default_model="x/fast", providers=[
+        ProviderConfig(name="x", base_url="u", api_key="k", models=[
+            ModelSpec(id="fast", supports_tools=True),
+        ]),
+        ProviderConfig(name="y", base_url="u", api_key="k", models=[
+            ModelSpec(id="smart", supports_tools=False),
+        ]),
     ])
     r = ProviderRouter(cat)
-    r.register_llm("fast", _echo("FAST"))
-    r.register_llm("smart", _echo("SMART"))
+    r.register_llm("x/fast", _echo("FAST"))
+    r.register_llm("y/smart", _echo("SMART"))
     return r
 
 
 def _client(router):
     app = FastAPI()
-    app.state.app_state = AppState(store=InMemoryStore(), llm=None, default_model="fast", router=router)
+    app.state.app_state = AppState(store=InMemoryStore(), llm=None, default_model="x/fast", router=router)
     app.include_router(responses_router)
     return TestClient(app)
 
 
 def test_request_model_routes_to_the_right_client():
     c = _client(_router())
-    fast = c.post("/v1/responses", json={"input": "hi", "stream": False, "model": "fast"}).json()
-    smart = c.post("/v1/responses", json={"input": "hi", "stream": False, "model": "smart"}).json()
+    fast = c.post("/v1/responses", json={"input": "hi", "stream": False, "model": "x/fast"}).json()
+    smart = c.post("/v1/responses", json={"input": "hi", "stream": False, "model": "y/smart"}).json()
     assert fast["output"][0]["content"][0]["text"].startswith("FAST:")
     assert smart["output"][0]["content"][0]["text"].startswith("SMART:")
 
@@ -62,6 +66,20 @@ def test_unknown_model_returns_404():
     c = _client(_router())
     r = c.post("/v1/responses", json={"input": "hi", "stream": False, "model": "ghost"})
     assert r.status_code == 404
+
+
+def test_request_to_provider_with_missing_key_returns_503(monkeypatch):
+    # A provider whose api_key_env is unset stays in the catalog (switchable),
+    # but actually using it surfaces a clear 503 instead of a 500.
+    monkeypatch.delenv("MISSING_KEY", raising=False)
+    cat = ModelCatalog(default_model="x/ok", providers=[
+        ProviderConfig(name="x", base_url="u", api_key="k", models=[ModelSpec(id="ok")]),
+        ProviderConfig(name="y", base_url="u", api_key_env="MISSING_KEY", models=[ModelSpec(id="nokey")]),
+    ])
+    c = _client(ProviderRouter(cat))
+    r = c.post("/v1/responses", json={"input": "hi", "stream": False, "model": "y/nokey"})
+    assert r.status_code == 503
+    assert "MISSING_KEY" in r.json()["error"]["message"]
 
 
 def test_supports_tools_false_advertises_no_tools():
@@ -79,10 +97,10 @@ def test_supports_tools_false_advertises_no_tools():
 
     async def run():
         # mimic the route's gating decision
-        cfg = router.get_config("smart")
+        cfg = router.get_config("y/smart")
         reg = build_default_registry(_S())
         ctx, _ = await build_context(
-            ResponsesRequest(model="smart", input="hi"), InMemoryStore(),
+            ResponsesRequest(model="y/smart", input="hi"), InMemoryStore(),
             registry=(reg if cfg.supports_tools else None),
         )
         assert ctx.tools.tools == []

@@ -16,8 +16,8 @@ export function MessageList({ onRegenerate }: { onRegenerate: () => void }) {
     .lastIndexOf("assistant");
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 space-y-7">
+    <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <div className="mx-auto w-full max-w-3xl px-6 py-8 space-y-6">
         {messages.map((m, i) =>
           m.role === "user" ? (
             <UserMessage key={m.id} message={m} />

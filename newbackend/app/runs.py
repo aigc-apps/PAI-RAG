@@ -3,7 +3,7 @@ import asyncio
 import time
 from typing import AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from loguru import logger
-from api.protocol.responses_serializer import serialize_response_stream
+from api.protocol.responses_serializer import serialize_response_stream, make_failed_sse
 
 RETENTION_SECONDS = 300
 
@@ -84,6 +84,18 @@ class RunManager:
         except Exception:  # noqa: BLE001 — a broken run must still finalize
             logger.exception(f"run {run.response_id} pump failed")
             status = "failed"
+            await run.append(make_failed_sse(
+                run.response_id, run.model, run.conversation_id,
+                "stream interrupted",
+            ))
+            if not sink.get("response"):
+                sink["response"] = {
+                    "id": run.response_id,
+                    "status": "failed",
+                    "error": {"code": "server_error", "message": "stream interrupted"},
+                    "usage": None,
+                }
+                sink["items"] = []
         finally:
             try:
                 if sink.get("response"):

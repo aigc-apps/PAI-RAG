@@ -21,7 +21,12 @@ export function streamResume(
       { signal }
     );
     if (!res.ok || !res.body) {
-      throw new Error(`resume failed: ${res.status}`);
+      let message = `resume failed: ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body?.error?.message) message = body.error.message;
+      } catch { /* response body not JSON */ }
+      throw new Error(message);
     }
     yield* parseSSE(res.body);
   })();

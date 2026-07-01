@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
     openai_base_url: str = "https://api.openai.com/v1"
     openai_api_key: str = ""
-    default_model: str = "gpt-4o-mini"
+    default_model: str = "openai/gpt-4o-mini"
     db_url: str = "sqlite+aiosqlite:///./data/agent.db"
     store_backend: str = "sql"   # "sql" | "memory"
     agent_name: str = "Aria"
@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     search_api_key: str = ""
     search_endpoint: str = ""
     skills_dir: str = ""
-    models_path: str = "models.yaml"
+    config_path: str = "./data/config.yaml"
+    models_path: str = "./data/config.yaml"
+    app_env: str = "development"
     memory_inject_limit: int = 30
     memory_enabled: bool = False
     memory_model: str = ""

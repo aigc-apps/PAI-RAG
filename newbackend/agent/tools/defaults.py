@@ -5,10 +5,14 @@ from agent.tools.registry import ToolRegistry
 from agent.tools.builtin.datetime_tool import make_current_datetime_tool
 from agent.tools.builtin.web_fetch import make_web_fetch_tool
 from agent.tools.builtin.web_search import make_web_search_tool, SearchProvider
+from agent.tools.builtin.code_sandbox import make_code_sandbox_tool
+from agent.tools.builtin.install_skill import make_install_skill_tool
+from agent.tools.search_providers import make_search_provider
+from agent.tools.sandbox_providers import make_sandbox_provider
 
 
 def build_default_registry(
-    settings, *, search_provider: Optional[SearchProvider] = None
+    settings, *, search_provider: Optional[SearchProvider] = None, agent_config=None
 ) -> ToolRegistry:
     """Assemble the default registry. current_datetime + web_fetch always; web_search
     only when a provider is injected or `settings.search_provider != "none"`."""
@@ -17,10 +21,23 @@ def build_default_registry(
     reg.register(make_web_fetch_tool())
 
     provider = search_provider
+    if provider is None:
+        provider = make_search_provider(agent_config)
     if provider is None and getattr(settings, "search_provider", "none") != "none":
         provider = _provider_from_settings(settings)
     if provider is not None:
         reg.register(make_web_search_tool(provider))
+
+    sandbox_provider = make_sandbox_provider(agent_config)
+    if sandbox_provider is not None:
+        reg.register(
+            make_code_sandbox_tool(
+                sandbox_provider,
+                default_timeout=sandbox_provider.default_timeout_seconds,
+            )
+        )
+    if _capability_enabled(agent_config, "install_skill"):
+        reg.register(make_install_skill_tool(settings, agent_config))
     return reg
 
 
@@ -33,3 +50,12 @@ def _provider_from_settings(settings) -> Optional[SearchProvider]:
         "but no live provider is wired yet; web_search disabled."
     )
     return None
+
+
+def _capability_enabled(agent_config, capability_id: str) -> bool:
+    if agent_config is None:
+        return False
+    for cap in getattr(agent_config, "capabilities", []) or []:
+        if cap.id == capability_id:
+            return bool(cap.enabled and cap.permission != "disabled")
+    return False

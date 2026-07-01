@@ -5,10 +5,30 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from fastapi.testclient import TestClient
 
 
-def test_app_boots_in_memory_and_serves(monkeypatch):
+def test_app_boots_in_memory_and_serves(monkeypatch, tmp_path):
+    # Hermetic provider catalog: a keyless local "test" provider so the router
+    # exposes a usable default model without any real credentials. The echo LLM
+    # is registered under the router's default_model_id — the same id the
+    # /v1/responses route resolves to — so no real API client is ever built.
+    catalog = tmp_path / "config.yaml"
+    catalog.write_text(
+        "models:\n"
+        "  default_model: test/echo\n"
+        "  providers:\n"
+        "    - name: test\n"
+        "      base_url: http://test.local/v1\n"
+        '      api_key_env: ""\n'
+        "      models:\n"
+        "        - id: echo\n"
+    )
+    monkeypatch.setenv("MODELS_PATH", str(catalog))
     monkeypatch.setenv("STORE_BACKEND", "memory")
-    monkeypatch.setenv("OPENAI_API_KEY", "test")
-    monkeypatch.setenv("DEFAULT_MODEL", "m")
+    # No OPENAI_API_KEY set: boot must succeed using the catalog's `test`
+    # provider alone — the legacy openai fallback client is skipped when its
+    # key is absent (see _build_llm), so deployments configuring only a
+    # non-OpenAI provider boot without OpenAI credentials.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("DEFAULT_MODEL", "test/echo")
     import importlib
 
     # The legacy heavy app is `app.main`; the lean service is `app.lean_main`.
@@ -43,11 +63,12 @@ def test_app_boots_in_memory_and_serves(monkeypatch):
         echo = _EchoLLM()
         c.app.state.app_state.llm = echo
         # When a ProviderRouter is wired, the responses route uses router.get_llm()
-        # rather than state.llm; register the fake LLM so no real API call is made.
-        if c.app.state.app_state.router is not None:
-            c.app.state.app_state.router.register_llm(
-                c.app.state.app_state.default_model, echo
-            )
+        # rather than state.llm; register the fake LLM under the router's default
+        # (the id the route resolves to when the request omits `model`) so no real
+        # API call is made.
+        router = c.app.state.app_state.router
+        if router is not None:
+            router.register_llm(router.default_model_id, echo)
         r = c.post("/v1/responses", json={"input": "hi", "stream": False})
         assert r.status_code == 200
         body = r.json()
