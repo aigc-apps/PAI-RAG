@@ -75,6 +75,33 @@ body {
   font-family: "Fira Code", "Consolas", "Courier New", monospace;
 }
 
+/* Shared content column — keeps the message flow and composer aligned on one
+   stable max width so the reading focus doesn't drift on wide screens. */
+.chat-container {
+  width: 100%;
+  max-width: 820px;
+  margin-inline: auto;
+}
+
+/* Reusable icon-button affordance: clear hover + a focus-visible ring so
+   keyboard users see where they are. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }

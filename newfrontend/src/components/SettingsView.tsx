@@ -293,8 +293,11 @@ export function SettingsView({
                 try {
                   await saveYaml(yamlText);
                   toast.success("Saved YAML");
-                } catch {
-                  toast.error("Invalid YAML or save failed");
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : "Invalid YAML or save failed";
+                  toast.error(msg);
+                  // eslint-disable-next-line no-console
+                  console.error("save yaml failed:", msg);
                 }
               }}
             />
@@ -1188,8 +1191,15 @@ function SandboxConfigDialog({
 
   const saveSandbox = async () => {
     setError("");
-    if (!endpoint.trim() || !templateName.trim() || (!accountId.trim() && !accountIdEnv.trim())) {
-      setError("Gateway endpoint, template name, and account id are required");
+    // Backend contract: template_name + api_key (direct or env) + account_id
+    // (direct or env) are required. The gateway endpoint is optional — when
+    // omitted the backend auto-derives it from account_id + region.
+    if (
+      !templateName.trim() ||
+      (!apiKey.trim() && !apiKeyEnv.trim()) ||
+      (!accountId.trim() && !accountIdEnv.trim())
+    ) {
+      setError("Template name, API key, and account id are required");
       return;
     }
 
@@ -1261,10 +1271,15 @@ function SandboxConfigDialog({
               <input
                 aria-label="Sandbox gateway endpoint"
                 value={endpoint}
-                placeholder="https://sandbox-gateway.internal"
+                placeholder="Auto-derived from account id if empty"
                 onChange={(event) => setEndpoint(event.target.value)}
                 className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
               />
+              {!endpoint.trim() && accountId.trim() && (
+                <span className="mt-1 block text-xs text-[var(--text-muted)]">
+                  Will use https://{accountId}.agentrun-data.cn-hangzhou.aliyuncs.com
+                </span>
+              )}
             </Field>
             <Field label="Template name">
               <input
@@ -1280,7 +1295,7 @@ function SandboxConfigDialog({
                 aria-label="Sandbox gateway API key"
                 value={apiKey}
                 type="password"
-                placeholder={provider?.secret_configured ? "Already configured" : "Optional"}
+                placeholder={provider?.secret_configured ? "Already configured" : "Optional if env is set"}
                 onChange={(event) => setApiKey(event.target.value)}
                 className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
               />

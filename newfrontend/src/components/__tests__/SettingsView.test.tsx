@@ -121,4 +121,47 @@ describe("SettingsView", () => {
     expect(agent.tools.include).toContain("code_sandbox");
     expect(agent.tools.exclude).not.toContain("code_sandbox");
   });
+
+  it("saves with endpoint empty (auto-derived by backend)", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // Leave gateway endpoint empty — backend auto-derives from account id.
+    await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
+    // api_key_env + account_id_env are pre-filled in baseDoc, satisfying the
+    // required trio (template_name + api_key + account_id) without an endpoint.
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const provider = saved.providers.find((item) => item.id === "sandbox.default");
+    expect(provider?.settings.endpoint).toBe("");
+    expect(provider?.settings.template_name).toBe("code-template");
+  });
+
+  it("blocks save when api key and env are both missing", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
+    await user.clear(screen.getByLabelText("Sandbox gateway API key env"));
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+  });
 });

@@ -12,14 +12,14 @@ describe("MessageControls", () => {
 
   it("copies text to the clipboard", async () => {
     render(<MessageControls text="hello world" />);
-    await userEvent.click(screen.getByRole("button", { name: /copy/i }));
+    await userEvent.click(screen.getByRole("button", { name: /复制/ }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("hello world");
   });
 
   it("calls onRegenerate when provided", async () => {
     const onRegenerate = vi.fn();
     render(<MessageControls text="x" onRegenerate={onRegenerate} />);
-    await userEvent.click(screen.getByRole("button", { name: /regenerate/i }));
+    await userEvent.click(screen.getByRole("button", { name: /重新生成/ }));
     expect(onRegenerate).toHaveBeenCalled();
   });
 });

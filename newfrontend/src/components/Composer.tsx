@@ -38,7 +38,7 @@ export function Composer({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4">
+    <div className="chat-container px-4">
       <div className="flex items-end gap-2 border border-[var(--border)] rounded-[var(--radius-lg)] bg-[var(--bg-elevated)] px-3 py-2 focus-within:border-[var(--border-strong)] transition-colors">
         <textarea
           ref={textareaRef}

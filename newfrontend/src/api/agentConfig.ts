@@ -100,7 +100,20 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
     let message = `request failed: ${res.status}`;
     try {
       const body = await res.json();
-      if (body?.error?.message) message = body.error.message;
+      if (body?.error?.message) {
+        message = body.error.message;
+      } else if (typeof body?.detail === "string") {
+        // FastAPI HTTPException(detail=...) shape.
+        message = body.detail;
+      } else if (Array.isArray(body?.detail)) {
+        // Pydantic validation error list.
+        message = body.detail
+          .map((e: { loc?: unknown[]; msg?: string }) => {
+            const loc = Array.isArray(e?.loc) ? e.loc.join(".") : "?";
+            return `${loc}: ${e?.msg ?? ""}`;
+          })
+          .join("; ");
+      }
     } catch {
       /* response body not JSON */
     }

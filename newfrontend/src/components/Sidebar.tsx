@@ -70,8 +70,9 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
           <button
             type="button"
             aria-label="Open settings"
+            title="设置"
             onClick={onOpenSettings}
-            className="rounded-[var(--radius-sm)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors"
+            className="icon-btn p-1.5 text-[var(--text-muted)] hover:text-[var(--text)]"
           >
             <Settings2 className="h-4 w-4" />
           </button>
@@ -83,40 +84,52 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
           type="button"
           aria-label="New chat"
           onClick={newChat}
-          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] bg-[var(--bg)] hover:bg-[var(--surface-2)] transition-colors"
+          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm font-medium text-[var(--text)] shadow-[var(--shadow-sm)] hover:bg-[var(--surface-2)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
         >
           <Plus className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
-          New chat
+          新建对话
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 pb-2">
         {items.length === 0 ? (
           <div className="px-2 py-4 text-xs text-[var(--text-faint)]">
-            No conversations yet
+            暂无对话
           </div>
         ) : (
-          items.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => openConversation(c.id)}
-              className={cn(
-                "group flex cursor-pointer items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors",
-                selectedId === c.id &&
-                  "bg-[var(--surface-2)] text-[var(--text)] font-medium"
-              )}
-            >
-              <span className="truncate">{c.title || "Untitled"}</span>
-              <button
-                type="button"
-                aria-label="Delete conversation"
-                onClick={(e) => onDelete(e, c.id)}
-                className="invisible flex-shrink-0 text-[var(--text-faint)] group-hover:visible hover:text-[var(--danger)]"
+          items.map((c) => {
+            const selected = selectedId === c.id;
+            return (
+              <div
+                key={c.id}
+                onClick={() => openConversation(c.id)}
+                title={c.title || "Untitled"}
+                className={cn(
+                  "group relative flex cursor-pointer items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-sm transition-colors",
+                  selected
+                    ? "bg-[var(--surface-2)] text-[var(--text)] font-medium"
+                    : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                )}
               >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))
+                {selected && (
+                  <span
+                    className="absolute left-0 top-1/2 h-5 -translate-y-1/2 w-[3px] rounded-r bg-[var(--accent)]"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="truncate">{c.title || "Untitled"}</span>
+                <button
+                  type="button"
+                  aria-label="删除对话"
+                  title="删除对话"
+                  onClick={(e) => onDelete(e, c.id)}
+                  className="invisible flex-shrink-0 rounded p-1 text-[var(--text-faint)] group-hover:visible hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })
         )}
       </div>
     </aside>

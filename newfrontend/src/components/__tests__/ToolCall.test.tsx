@@ -14,6 +14,6 @@ describe("ToolCall", () => {
   it("shows an error status", () => {
     render(<ToolCall tool={{ id: "c1", name: "web_fetch", arguments: "{}", status: "error", error: "boom" }} />);
     expect(screen.getByText("web_fetch")).toBeInTheDocument();
-    expect(screen.getByText(/error/i)).toBeInTheDocument();
+    expect(screen.getByText("工具执行失败")).toBeInTheDocument();
   });
 });

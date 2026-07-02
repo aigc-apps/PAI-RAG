@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { ChevronRight, Circle, ListChecks } from "lucide-react";
+import { ChevronRight, Circle, ListChecks, AlertTriangle } from "lucide-react";
 import type { ReasoningStatus, ToolUse } from "../types";
 import { cn } from "../lib/cn";
 import { ToolCall } from "./ToolCall";
@@ -33,31 +33,52 @@ export function AgentActivity({
 
   const failedTools = tools.filter((tool) => tool.status === "error").length;
   const runningTools = tools.filter((tool) => tool.status === "running").length;
-  const toolSummary = hasTools
-    ? `${tools.length} tool${tools.length === 1 ? "" : "s"}${
-        runningTools ? ` running ${runningTools}` : ""
-      }${failedTools ? ` failed ${failedTools}` : ""}`
-    : "reasoning";
-  const label = active ? "Working" : "Activity";
+  const doneTools = tools.filter((tool) => tool.status === "done").length;
+
+  // A concise status chip summarising the tool run state.
+  let badge: { label: string; tone: string } | null = null;
+  if (failedTools > 0)
+    badge = { label: `失败 ${failedTools}`, tone: "text-[var(--danger)]" };
+  else if (runningTools > 0)
+    badge = { label: "运行中", tone: "text-[var(--accent)]" };
+  else if (hasTools)
+    badge = { label: `完成 ${doneTools}/${tools.length}`, tone: "text-[var(--success)]" };
+
+  const label = active ? "工作中" : "执行记录";
 
   return (
     <Collapsible.Root open={open} onOpenChange={setOpen} className="mb-2 w-full">
-      <Collapsible.Trigger className="group flex max-w-full items-center gap-2 py-1 text-xs text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-          <ChevronRight
-            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
-          />
-        </span>
+      <Collapsible.Trigger
+        className={cn(
+          "group flex w-full items-center gap-2 rounded-[var(--radius-sm)] border px-2.5 py-1.5 text-xs transition-colors",
+          failedTools > 0
+            ? "border-[var(--danger)]/25 bg-[var(--danger)]/5 hover:bg-[var(--danger)]/10"
+            : "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)]"
+        )}
+      >
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 text-[var(--text-faint)] transition-transform group-hover:text-[var(--text-muted)]",
+            open && "rotate-90"
+          )}
+        />
         {active ? (
           <Circle className="h-2 w-2 shrink-0 fill-[var(--accent)] text-[var(--accent)] pulse-dot" />
+        ) : failedTools > 0 ? (
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-[var(--danger)]" />
         ) : (
           <ListChecks className="h-3.5 w-3.5 shrink-0 text-[var(--text-faint)] group-hover:text-[var(--text-muted)]" />
         )}
-        <span className={cn("font-medium", active && "shimmer-text")}>
-          {label}
-        </span>
+        <span className={cn("font-medium", active && "shimmer-text")}>{label}</span>
         <span className="text-[var(--text-faint)]">·</span>
-        <span className="truncate">{toolSummary}</span>
+        <span className="truncate text-[var(--text-muted)]">
+          {hasTools ? `${tools.length} 个工具` : "推理"}
+        </span>
+        {badge && (
+          <span className={cn("ml-auto shrink-0 text-xs font-semibold", badge.tone)}>
+            {badge.label}
+          </span>
+        )}
       </Collapsible.Trigger>
       <Collapsible.Content className="ml-[9px] mt-1 border-l border-[var(--border)] pl-4">
         {hasReasoning && (
