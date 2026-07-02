@@ -82,7 +82,7 @@ def test_build_context_injects_matching_custom_skill(tmp_path):
             "source_path": str(skill_dir),
             "mount_path": "/mnt/skills/writer",
             "read_only": True,
-            "oss": {},
+            "nas": {},
         }]
         assert ctx.skill_fingerprint != "none"
 

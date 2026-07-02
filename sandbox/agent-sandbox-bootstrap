@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# PAI-RAG sandbox startup validation.
+#
+# Runs as the container ENTRYPOINT. Verifies the three contract mounts
+# (/mnt/system, /mnt/skills, /mnt/user) are present and readable by the
+# runtime uid (1000), and that /mnt/user is writable, then execs the base
+# image's CMD. A missing mount fails fast with a contract-version marker so
+# the agent service's 404/error surfaces a clear cause instead of a silent
+# misconfiguration.
+set -euo pipefail
+
+CONTRACT_VERSION="1"
+SYSTEM_PATH="${AGENT_SYSTEM_PATH:-/mnt/system}"
+SKILL_PATH="${AGENT_SKILL_PATH:-/mnt/skills}"
+USER_PATH="${AGENT_USER_PATH:-/mnt/user}"
+
+fail() {
+  echo "[agent-sandbox-bootstrap] FAIL ($*). contract v${CONTRACT_VERSION}" >&2
+  exit 1
+}
+
+check_readable() {
+  local dir="$1"
+  local label="$2"
+  [ -d "$dir" ] || fail "contract mount $label ($dir) is missing"
+  [ -r "$dir" ] || fail "contract mount $label ($dir) is not readable by uid $(id -u)"
+}
+
+check_readable "$SYSTEM_PATH" "system"
+check_readable "$SKILL_PATH" "skills"
+check_readable "$USER_PATH" "user"
+
+if [ ! -w "$USER_PATH" ]; then
+  echo "[agent-sandbox-bootstrap] WARN: user path ($USER_PATH) is not writable by uid $(id -u). contract v${CONTRACT_VERSION}" >&2
+fi
+
+echo "[agent-sandbox-bootstrap] ok: mounts present (system/skills/user). contract v${CONTRACT_VERSION}"
+
+# Hand off to the base image's startup chain. FC uses the image ENTRYPOINT as
+# the start command and passes CMD as its args. Our Dockerfile sets CMD to the
+# base code-interpreter chain (entrypoint.sh -> process-compose); if a template
+# is ever registered without CMD (or the platform clears args), fall back to
+# that same chain so the instance stays alive instead of exiting 0 (which FC
+# reports as "Function instance exited unexpectedly"). Override via
+# SANDBOX_BASE_ENTRYPOINT / SANDBOX_BASE_CMD if the base image changes.
+if [ "$#" -eq 0 ]; then
+  # shellcheck disable=SC2086 # intentional word-splitting of the default cmd
+  set -- "${SANDBOX_BASE_ENTRYPOINT:-/usr/local/bin/entrypoint.sh}" ${SANDBOX_BASE_CMD:-process-compose up --tui=false --no-server}
+fi
+exec "$@"

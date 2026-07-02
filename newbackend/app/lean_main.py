@@ -1,6 +1,15 @@
 from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
+
+# Load .env into os.environ before anything reads settings or secrets. This
+# must run at import time, ahead of get_settings()/provider/sandbox code that
+# resolves AGENTRUN_*/OPENAI_API_KEY via os.environ.get. pydantic-settings'
+# env_file would only fill Settings fields, not os.environ, so we use
+# load_dotenv() to cover both.
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from app.config import get_settings

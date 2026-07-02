@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 from loguru import logger
@@ -146,8 +146,13 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
     """REST gateway provider for Alibaba Cloud AgentRun sandboxes.
 
     This is the production-friendly path: the agent service calls a small
-    internal gateway, while the gateway handles Alibaba Cloud auth/signing,
-    AgentRun sandbox creation, dynamic OSS/NAS mounts, and hard cleanup.
+    internal gateway (or the AgentRun data endpoint directly), which handles
+    Alibaba Cloud auth/signing, AgentRun sandbox creation, dynamic OSS/NAS
+    mounts, and hard cleanup.
+
+    Required settings: template_name, api_key, account_id. The gateway endpoint
+    is optional; when omitted it is derived as
+    `https://{account_id}.agentrun-data.{region}.aliyuncs.com`.
 
     Default gateway contract:
       POST {endpoint}/sandboxes
@@ -157,10 +162,16 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
 
     def __init__(self, settings: Dict[str, Any]):
         super().__init__(settings)
-        self.endpoint = str(settings.get("endpoint") or "").rstrip("/")
         self.api_key = _setting_or_env(settings, "api_key", "api_key_env")
         self.api_key_header = str(settings.get("api_key_header") or "X-API-Key")
         self.parent_id = _setting_or_env(settings, "account_id", "account_id_env")
+        # Gateway endpoint is optional: if not set, derive the AgentRun data
+        # endpoint from the account id and region.
+        endpoint = str(settings.get("endpoint") or "").rstrip("/")
+        if not endpoint:
+            region = str(settings.get("region") or settings.get("region_id") or "cn-hangzhou")
+            endpoint = f"https://{self.parent_id}.agentrun-data.{region}.aliyuncs.com"
+        self.endpoint = endpoint
         self.request_timeout = float(settings.get("request_timeout_seconds") or 60)
         self.create_path = str(settings.get("create_path") or "/sandboxes")
         self.execute_path = str(
@@ -171,6 +182,26 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         self.health_check_interval_seconds = int(
             settings.get("health_check_interval_seconds") or 0
         )
+        # Per-user /mnt/user NAS mount. The remote path is templated from the
+        # tool scope so each user lands in an isolated NAS subdirectory.
+        nas_user_cfg = settings.get("nas_config") or {}
+        if not isinstance(nas_user_cfg, dict):
+            nas_user_cfg = {}
+        self.nas_user_id = int(nas_user_cfg.get("user_id") or 1000)
+        self.nas_group_id = int(nas_user_cfg.get("group_id") or 1000)
+        self.nas_user_server_addr = str(
+            nas_user_cfg.get("user_server_addr") or nas_user_cfg.get("server_addr") or ""
+        )
+        self.nas_user_remote_path_template = str(
+            nas_user_cfg.get("user_remote_path_template") or "/users/{user_id}"
+        )
+        self.nas_user_read_only = bool(nas_user_cfg.get("user_read_only", False))
+        # Runtime env-var contract injected via the platform `envs` field. Only
+        # the AGENT_* marker vars + session/user ids are injected here; PATH and
+        # PYTHONPATH stay image-side (flat `envs` map cannot interpolate).
+        self.inject_env_contract = bool(settings.get("inject_env_contract", True))
+        extra_envs = settings.get("extra_envs") or {}
+        self.extra_envs = {str(k): str(v) for k, v in extra_envs.items()} if isinstance(extra_envs, dict) else {}
         self._async_lock = asyncio.Lock()
 
     async def run_code(
@@ -252,12 +283,28 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
                 "sandbox REST provider requires Alibaba Cloud account id: "
                 "set settings.account_id or AGENTRUN_ACCOUNT_ID"
             )
+        scope = get_current_tool_scope()
         payload = _compact_dict({
             "templateName": self.template_name,
+            "templateType": self.template_type or None,
             "sandboxId": _scoped_sandbox_id(self.settings, scope_key),
-            "ossMountConfig": _skill_oss_mount_config(),
+            "nasConfig": _build_nas_config(self, scope, scope_key),
+            "envs": _build_env_contract(self, scope, scope_key),
         })
-        body = await self._request_async("POST", self.create_path, json=payload)
+        try:
+            body = await self._request_async("POST", self.create_path, json=payload)
+        except SandboxUnavailable as exc:
+            # Create returned 404/410 — almost always a config mismatch, not a
+            # stale-cache situation. Surface the gateway body + the values we
+            # sent so the operator can see which of template_name / account_id
+            # / region to check (a "template not found" here usually means the
+            # template doesn't exist under this account_id in this region).
+            raise RuntimeError(
+                f"sandbox create failed (template={self.template_name!r}, "
+                f"account_id={self.parent_id!r}): {exc}. "
+                f"Verify settings.template_name and settings.account_id match a "
+                f"template registered in AgentRun under that account (and region)."
+            ) from exc
         sandbox_id = _extract_sandbox_id(body)
         if not sandbox_id:
             raise RuntimeError("sandbox REST create response missing sandboxId")
@@ -265,7 +312,7 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             "sandbox REST created sandboxId={} scope={} skill_mounts={}",
             sandbox_id,
             scope_key,
-            len(get_current_tool_scope().skill_mounts),
+            len(scope.skill_mounts),
         )
         return str(sandbox_id)
 
@@ -330,27 +377,35 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             headers["X-Acs-Parent-Id"] = self.parent_id
         url = f"{self.endpoint}{path if path.startswith('/') else '/' + path}"
         logger.info(
-            "sandbox REST request {} {} headers={}",
+            "sandbox REST request {} {} headers={} body={}",
             method,
             url,
             _mask_headers(headers),
+            _mask_body(json) if json is not None else None,
         )
         async with httpx.AsyncClient(timeout=self.request_timeout) as client:
             resp = await client.request(method, url, headers=headers, json=json)
             try:
                 resp.raise_for_status()
             except httpx.HTTPStatusError as exc:
+                body_text = _response_text(exc.response)
                 logger.warning(
                     "sandbox REST request failed status={} method={} url={} headers={} body={}",
                     exc.response.status_code,
                     method,
                     url,
                     _mask_headers(headers),
-                    _response_text(exc.response),
+                    body_text,
                 )
                 if exc.response.status_code in {404, 410}:
-                    raise SandboxUnavailable("cached sandbox is no longer available") from exc
-                raise
+                    raise SandboxUnavailable(
+                        f"cached sandbox is no longer available: "
+                        f"{method} {path} -> {exc.response.status_code} {body_text[:300]}"
+                    ) from exc
+                raise RuntimeError(
+                    f"sandbox REST {method} {path} failed: "
+                    f"{exc.response.status_code} {body_text[:300]}"
+                ) from exc
             if not resp.content:
                 return {}
             body = resp.json()
@@ -595,15 +650,75 @@ def _append_agent_scope(base: str, scope) -> str:
     return ":".join(parts)
 
 
-def _skill_oss_mount_config() -> Optional[Dict[str, Any]]:
-    mount_points = [
-        mount.get("oss")
-        for mount in get_current_tool_scope().skill_mounts
-        if isinstance(mount, dict) and mount.get("oss")
-    ]
+def _build_nas_config(provider: "AgentRunRestSandboxProvider", scope, scope_key: str) -> Optional[Dict[str, Any]]:
+    """Build the nasConfig payload: per-skill read-only mounts under
+    /mnt/skills/<id> plus a per-user read-write mount at /mnt/user. All
+    mountPoints share userId/groupId (default 1000). Returns None when no
+    mountPoints apply so the field is omitted from the create payload."""
+    mount_points: List[Dict[str, Any]] = []
+    for mount in scope.skill_mounts:
+        if not isinstance(mount, dict):
+            continue
+        nas = mount.get("nas")
+        if not isinstance(nas, dict) or not nas.get("serverAddr"):
+            continue
+        mount_points.append({
+            "serverAddr": nas["serverAddr"],
+            "mountDir": nas.get("mountDir"),
+            "readOnly": bool(nas.get("readOnly", True)),
+        })
+    # Per-user /mnt/user mount: remote path is templated from the user id so
+    # each user lands in an isolated NAS subdirectory.
+    if provider.nas_user_server_addr:
+        user_id = scope.user_id or _scope_fallback_id(scope_key)
+        remote_path = provider.nas_user_remote_path_template.format(user_id=user_id)
+        mount_points.append({
+            "serverAddr": _join_nas_server_addr(provider.nas_user_server_addr, remote_path),
+            "mountDir": "/mnt/user",
+            "readOnly": provider.nas_user_read_only,
+        })
     if not mount_points:
         return None
-    return {"mountPoints": mount_points}
+    return {
+        "userId": provider.nas_user_id,
+        "groupId": provider.nas_group_id,
+        "mountPoints": mount_points,
+    }
+
+
+def _build_env_contract(provider: "AgentRunRestSandboxProvider", scope, scope_key: str) -> Optional[Dict[str, str]]:
+    """Inject the AGENT_* runtime contract via the platform `envs` field. PATH
+    and PYTHONPATH are intentionally not set here (the flat string map cannot
+    interpolate); they are baked into the sandbox image."""
+    if not provider.inject_env_contract:
+        return None
+    envs: Dict[str, str] = {
+        "AGENT_SYSTEM_PATH": "/mnt/system",
+        "AGENT_SKILL_PATH": "/mnt/skills",
+        "AGENT_USER_PATH": "/mnt/user",
+        "AGENT_USER_ID": str(scope.user_id or ""),
+        "AGENT_SESSION_ID": scope_key,
+    }
+    envs.update(provider.extra_envs)
+    return envs
+
+
+def _join_nas_server_addr(server_addr: str, remote_path: str) -> str:
+    """Combine a NAS server address and a remote path into a serverAddr value
+    of the form '<server>:/<path>'. Accepts 'host:/', 'host:/<path>', or a bare
+    host as the server_addr input."""
+    remote = remote_path if remote_path.startswith("/") else "/" + remote_path
+    if server_addr.endswith(":/"):
+        return f"{server_addr}{remote.lstrip('/')}"
+    if ":/" in server_addr:
+        return f"{server_addr.rstrip('/')}{remote}"
+    return f"{server_addr}:{remote}"
+
+
+def _scope_fallback_id(scope_key: str) -> str:
+    """Stable fallback identifier when scope.user_id is absent."""
+    import hashlib
+    return hashlib.sha256(scope_key.encode("utf-8")).hexdigest()[:16]
 
 
 def _scoped_sandbox_id(settings: Dict[str, Any], scope_key: str) -> Optional[str]:
@@ -628,9 +743,12 @@ def make_sandbox_provider(agent_config) -> Optional[ScopedSandboxProvider]:
     settings = dict(provider.settings or {})
     provider_name = str(settings.get("provider") or "none")
     if provider_name == "agentrun_rest":
+        # Only template, api_key, and account_id are required. The gateway
+        # endpoint is optional and auto-derived from account_id + region when
+        # not supplied.
         if not (
-            settings.get("endpoint")
-            and settings.get("template_name")
+            settings.get("template_name")
+            and _configured(settings, "api_key", "api_key_env")
             and _configured(settings, "account_id", "account_id_env")
         ):
             return None

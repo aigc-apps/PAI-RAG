@@ -173,6 +173,7 @@ def test_default_registry_includes_configured_agentrun_rest_sandbox():
                 "provider": "agentrun_rest",
                 "endpoint": "https://sandbox-gateway.example.com",
                 "template_name": "code-template",
+                "api_key": "secret",
                 "account_id": "acct-1",
             },
             "used_by": ["sandbox"],
@@ -188,6 +189,42 @@ def test_default_registry_includes_configured_agentrun_rest_sandbox():
     })
     reg = build_default_registry(_Settings(), agent_config=doc)
     assert "code_sandbox" in reg.names()
+
+
+def test_agentrun_rest_provider_derives_endpoint_from_account_id():
+    provider = AgentRunRestSandboxProvider({
+        "template_name": "code-template",
+        "api_key": "secret",
+        "account_id": "acct-1",
+        "region": "cn-hangzhou",
+    })
+    assert provider.endpoint == "https://acct-1.agentrun-data.cn-hangzhou.aliyuncs.com"
+
+
+def test_agentrun_rest_provider_skipped_without_api_key():
+    doc = AgentConfigDocument(**{
+        "providers": [{
+            "id": "sandbox.default",
+            "type": "sandbox",
+            "name": "AgentRun REST",
+            "settings": {
+                "provider": "agentrun_rest",
+                "template_name": "code-template",
+                "account_id": "acct-1",
+            },
+            "used_by": ["sandbox"],
+        }],
+        "capabilities": [{
+            "id": "sandbox",
+            "kind": "core_tool",
+            "name": "Sandbox",
+            "enabled": True,
+            "permission": "auto",
+            "provider_refs": ["sandbox.default"],
+        }],
+    })
+    reg = build_default_registry(_Settings(), agent_config=doc)
+    assert "code_sandbox" not in reg.names()
 
 
 def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
@@ -233,8 +270,13 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
         "template_name": "code-template",
         "api_key": "secret",
         "account_id": "acct-1",
-        "oss_mount_config": {"mount_points": []},
-        "nas_config": {"mount_points": []},
+        "nas_config": {
+            "user_id": 1000,
+            "group_id": 1000,
+            "user_server_addr": "nas-cn-hangzhou.aliyuncs.com:/",
+            "user_remote_path_template": "/users/{user_id}",
+            "user_read_only": False,
+        },
     })
     token = set_current_tool_scope(ToolScope(
         user_id="u1",
@@ -243,10 +285,9 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
         skill_fingerprint="skills123",
         skill_mounts=[{
             "id": "skill.writer",
-            "oss": {
-                "bucketName": "agent-skills",
-                "bucketPath": "/skills/writer@1.0.0",
-                "endpoint": "oss-cn-hangzhou.aliyuncs.com",
+            "nas": {
+                "serverAddr": "nas-cn-hangzhou.aliyuncs.com:/skills/writer@1.0.0",
+                "remotePath": "/skills/writer@1.0.0",
                 "mountDir": "/mnt/skills/writer",
                 "readOnly": True,
             },
@@ -264,14 +305,29 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
     assert create[1] == "https://gateway.test/sandboxes"
     assert create[3] == {
         "templateName": "code-template",
-        "ossMountConfig": {
-            "mountPoints": [{
-                "bucketName": "agent-skills",
-                "bucketPath": "/skills/writer@1.0.0",
-                "endpoint": "oss-cn-hangzhou.aliyuncs.com",
-                "mountDir": "/mnt/skills/writer",
-                "readOnly": True,
-            }]
+        "templateType": "CodeInterpreter",
+        "nasConfig": {
+            "userId": 1000,
+            "groupId": 1000,
+            "mountPoints": [
+                {
+                    "serverAddr": "nas-cn-hangzhou.aliyuncs.com:/skills/writer@1.0.0",
+                    "mountDir": "/mnt/skills/writer",
+                    "readOnly": True,
+                },
+                {
+                    "serverAddr": "nas-cn-hangzhou.aliyuncs.com:/users/u1",
+                    "mountDir": "/mnt/user",
+                    "readOnly": False,
+                },
+            ],
+        },
+        "envs": {
+            "AGENT_SYSTEM_PATH": "/mnt/system",
+            "AGENT_SKILL_PATH": "/mnt/skills",
+            "AGENT_USER_PATH": "/mnt/user",
+            "AGENT_USER_ID": "u1",
+            "AGENT_SESSION_ID": "conversation:c1:agent:main:skills:skills123",
         },
     }
     assert execute[0] == "POST"
@@ -395,6 +451,96 @@ def test_agentrun_rest_provider_recreates_expired_cached_sandbox(monkeypatch):
     assert len(execute_calls) == 2
     assert execute_calls[0][1] == "https://gateway.test/sandboxes/sb-1/contexts/execute"
     assert execute_calls[1][1] == "https://gateway.test/sandboxes/sb-2/contexts/execute"
+
+
+def _make_fake_rest_client(requests):
+    class _Resp:
+        content = b"{}"
+
+        def __init__(self, body):
+            self._body = body
+            self.status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def request(self, method, url, headers=None, json=None):
+            requests.append((method, url, json or {}))
+            if url.endswith("/sandboxes"):
+                return _Resp({"code": "SUCCESS", "data": {"sandboxId": "sb-x"}})
+            return _Resp({"stdout": "ok", "stderr": "", "exit_code": 0})
+
+    return _Client
+
+
+def test_agentrun_rest_provider_omits_nasconfig_and_envs_when_disabled(monkeypatch):
+    requests = []
+    monkeypatch.setattr(
+        "agent.tools.sandbox_providers.httpx.AsyncClient",
+        _make_fake_rest_client(requests),
+    )
+    provider = AgentRunRestSandboxProvider({
+        "endpoint": "https://gateway.test",
+        "template_name": "code-template",
+        "account_id": "acct-1",
+        "inject_env_contract": False,
+    })
+    token = set_current_tool_scope(ToolScope(user_id="u1"))
+    try:
+        asyncio.run(provider.run_code(code="print(1)", language="python", timeout=3))
+    finally:
+        reset_current_tool_scope(token)
+
+    create_payload = requests[0][2]
+    assert "nasConfig" not in create_payload
+    assert "envs" not in create_payload
+    assert create_payload["templateName"] == "code-template"
+
+
+def test_agentrun_rest_provider_user_path_fallback_without_user_id(monkeypatch):
+    requests = []
+    monkeypatch.setattr(
+        "agent.tools.sandbox_providers.httpx.AsyncClient",
+        _make_fake_rest_client(requests),
+    )
+    provider = AgentRunRestSandboxProvider({
+        "endpoint": "https://gateway.test",
+        "template_name": "code-template",
+        "account_id": "acct-1",
+        "nas_config": {
+            "user_server_addr": "nas-cn-hangzhou.aliyuncs.com:/",
+            "user_remote_path_template": "/users/{user_id}",
+        },
+    })
+    # No user_id, no conversation_id -> scope falls back to anonymous; the user
+    # NAS remote path must still be templated from a stable fallback id.
+    token = set_current_tool_scope(ToolScope())
+    try:
+        asyncio.run(provider.run_code(code="print(1)", language="python", timeout=3))
+    finally:
+        reset_current_tool_scope(token)
+
+    create_payload = requests[0][2]
+    nas = create_payload["nasConfig"]
+    user_mount = nas["mountPoints"][-1]
+    assert user_mount["mountDir"] == "/mnt/user"
+    assert user_mount["readOnly"] is False
+    assert user_mount["serverAddr"].startswith("nas-cn-hangzhou.aliyuncs.com:/users/")
+    assert user_mount["serverAddr"] != "nas-cn-hangzhou.aliyuncs.com:/users/"
+    assert create_payload["envs"]["AGENT_USER_ID"] == ""
 
 
 def test_install_skill_tool_requires_admin(monkeypatch, tmp_path):

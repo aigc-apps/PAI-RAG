@@ -21,6 +21,7 @@ dependencies = [
   "aiosqlite>=0.20",
   "pyyaml>=6.0",
   "python-multipart>=0.0.9",
+  "python-dotenv>=1.0",
   "tenacity>=8.0"
 ]
 

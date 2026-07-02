@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
+from loguru import logger
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -148,10 +149,41 @@ async def update_agent_config_yaml(
     try:
         doc = AgentConfigDocument(**(yaml.safe_load(payload.yaml) or {}))
     except Exception as exc:
+        logger.warning("PUT /v1/config.yaml rejected YAML: {}\n--- payload ---\n{}", exc, payload.yaml)
         raise HTTPException(status_code=400, detail=f"invalid config YAML: {exc}") from exc
     _preserve_masked_secrets(doc, load_agent_config(_path()))
     _save_and_reload(_path(), doc, state)
     return JSONResponse(_runtime_doc(state).model_dump(mode="json"))
+
+
+@router.post("/v1/config/reload-env")
+async def reload_env(state: AppState = Depends(get_state)):
+    """Re-read .env into os.environ and rebuild runtime objects so env-derived
+    settings take effect without a process restart.
+
+    `load_dotenv` only runs once at import (app/lean_main.py), so editing .env
+    while the server runs does nothing until this is called (or the process
+    restarts). `override=True` makes changed .env values win over the stale
+    os.environ entries populated at boot. After refreshing env, the tool
+    registry (sandbox provider reads api_key/account_id from os.environ at
+    construction), the LLM provider router, and the runtime agent config are
+    rebuilt. Safe to call repeatedly."""
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    settings = get_settings()
+    doc = load_agent_config(settings.config_path)
+    # Refresh the LLM provider router too — its API keys are env-derived.
+    try:
+        from app.providers import ModelCatalog, ProviderRouter
+        if doc.models:
+            catalog = ModelCatalog(**doc.models)
+            state.router = ProviderRouter(catalog, path=settings.models_path)
+    except Exception as exc:
+        logger.warning("reload-env: provider router rebuild skipped: {}", exc)
+    state.registry = build_default_registry(settings, agent_config=doc)
+    state.agent_config = apply_runtime_status(doc, settings, state.router)
+    logger.info("reload-env: .env reloaded, registry + router + agent_config rebuilt")
+    return JSONResponse({"ok": True})
 
 
 @router.post("/v1/config/search/test")

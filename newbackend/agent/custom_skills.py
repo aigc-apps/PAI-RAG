@@ -39,7 +39,7 @@ class SkillMount:
     source_path: str
     mount_path: str
     read_only: bool = True
-    oss: Dict[str, Any] = field(default_factory=dict)
+    nas: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -48,7 +48,7 @@ class SkillMount:
             "source_path": self.source_path,
             "mount_path": self.mount_path,
             "read_only": self.read_only,
-            "oss": self.oss,
+            "nas": self.nas,
         }
 
 
@@ -84,13 +84,13 @@ def resolve_skill_mounts(
     enabled = {_normalize_skill_id(item) for item in enabled_ids}
     mount_cfg = getattr(skill_config, "mount", {}) or {}
     mount_root = str(mount_cfg.get("mount_root") or "/mnt/skills").rstrip("/")
-    oss_cfg = mount_cfg.get("oss") if isinstance(mount_cfg.get("oss"), dict) else {}
+    nas_cfg = mount_cfg.get("nas") if isinstance(mount_cfg.get("nas"), dict) else {}
     mounts: List[SkillMount] = []
     for package in packages:
         if _normalize_skill_id(package.capability_id) not in enabled:
             continue
         mount_path = f"{mount_root}/{package.mount_id}"
-        oss = _skill_oss_mount(package, mount_path, oss_cfg)
+        nas = _skill_nas_mount(package, mount_path, nas_cfg)
         mounts.append(
             SkillMount(
                 id=package.capability_id,
@@ -98,7 +98,7 @@ def resolve_skill_mounts(
                 source_path=package.path,
                 mount_path=mount_path,
                 read_only=True,
-                oss=oss,
+                nas=nas,
             )
         )
     return mounts
@@ -113,7 +113,7 @@ def skill_mount_fingerprint(mounts: List[SkillMount]) -> str:
             "version": mount.version,
             "source_path": mount.source_path,
             "mount_path": mount.mount_path,
-            "oss": mount.oss,
+            "nas": mount.nas,
         }
         for mount in sorted(mounts, key=lambda item: item.id)
     ]
@@ -205,17 +205,24 @@ def _normalize_skill_id(skill_id: str) -> str:
     return skill_id if skill_id.startswith("skill.") else f"skill.{skill_id}"
 
 
-def _skill_oss_mount(package: SkillPackage, mount_path: str, oss_cfg: Dict[str, Any]) -> Dict[str, Any]:
-    bucket_name = oss_cfg.get("bucketName") or oss_cfg.get("bucket_name")
-    endpoint = oss_cfg.get("endpoint")
-    if not bucket_name or not endpoint:
+def _skill_nas_mount(package: SkillPackage, mount_path: str, nas_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    server_addr = nas_cfg.get("serverAddr") or nas_cfg.get("server_addr")
+    if not server_addr:
         return {}
-    prefix = str(oss_cfg.get("bucketPathPrefix") or oss_cfg.get("bucket_path_prefix") or "skills").strip("/")
-    bucket_path = f"/{prefix}/{package.mount_id}@{package.version}".replace("//", "/")
+    prefix = str(nas_cfg.get("remotePathPrefix") or nas_cfg.get("remote_path_prefix") or "skills").strip("/")
+    # Remote path on the NAS filesystem, e.g. "/skills/writer@1.0.0".
+    remote_path = f"/{prefix}/{package.mount_id}@{package.version}".replace("//", "/")
+    # serverAddr is the NAS mount point with the remote path appended, e.g.
+    # "xxxx.nas.aliyuncs.com:/skills/writer@1.0.0".
+    if server_addr.endswith(":/"):
+        full_server_addr = f"{server_addr}{remote_path.lstrip('/')}"
+    elif ":/" in server_addr:
+        full_server_addr = f"{server_addr.rstrip('/')}/{remote_path.lstrip('/')}"
+    else:
+        full_server_addr = f"{server_addr}:{remote_path}"
     return {
-        "bucketName": bucket_name,
-        "bucketPath": bucket_path,
-        "endpoint": endpoint,
+        "serverAddr": full_server_addr,
+        "remotePath": remote_path,
         "mountDir": mount_path,
-        "readOnly": bool(oss_cfg.get("readOnly", oss_cfg.get("read_only", True))),
+        "readOnly": bool(nas_cfg.get("readOnly", nas_cfg.get("read_only", True))),
     }

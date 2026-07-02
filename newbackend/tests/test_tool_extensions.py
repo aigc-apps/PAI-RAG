@@ -69,7 +69,7 @@ def test_discover_skill_packages_and_render_matching_instructions(tmp_path):
     assert "Use concise sections." in rendered
 
 
-def test_resolve_skill_mounts_with_oss_config(tmp_path):
+def test_resolve_skill_mounts_with_nas_config(tmp_path):
     skill_dir = tmp_path / "report"
     skill_dir.mkdir()
     (skill_dir / "skill.yaml").write_text(
@@ -82,10 +82,10 @@ def test_resolve_skill_mounts_with_oss_config(tmp_path):
     skill_config = type("SkillConfig", (), {
         "mount": {
             "mount_root": "/mnt/skills",
-            "oss": {
-                "bucketName": "agent-skills",
-                "endpoint": "oss-cn-hangzhou.aliyuncs.com",
-                "bucketPathPrefix": "skills",
+            "nas": {
+                "server_addr": "nas-cn-hangzhou.aliyuncs.com:/",
+                "remote_path_prefix": "skills",
+                "read_only": True,
             },
         }
     })()
@@ -97,8 +97,10 @@ def test_resolve_skill_mounts_with_oss_config(tmp_path):
     )
 
     assert mounts[0].to_dict()["mount_path"] == "/mnt/skills/report"
-    assert mounts[0].oss["bucketPath"] == "/skills/report@1.2.0"
-    assert mounts[0].oss["mountDir"] == "/mnt/skills/report"
+    assert mounts[0].nas["remotePath"] == "/skills/report@1.2.0"
+    assert mounts[0].nas["mountDir"] == "/mnt/skills/report"
+    assert mounts[0].nas["serverAddr"] == "nas-cn-hangzhou.aliyuncs.com:/skills/report@1.2.0"
+    assert mounts[0].nas["readOnly"] is True
     assert skill_mount_fingerprint(mounts) != "none"
 
 

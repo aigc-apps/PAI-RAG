@@ -25,9 +25,13 @@ dependency environments.
 
 ```yaml
 skills:
-  root: ./data/skills
+  root: ./data/skills        # deployed on a NAS filesystem shared read-only with sandboxes
   mount:
     mount_root: /mnt/skills
+    nas:
+      server_addr: xxxx.nas.aliyuncs.com:/
+      remote_path_prefix: skills
+      read_only: true
   install:
     enabled: true
     admin_only: true
@@ -46,6 +50,24 @@ skills:
     runtime_install_enabled: false
     build_timeout_seconds: 600
   installed: []
+```
+
+The sandbox provider (`sandbox.default`) carries the per-user NAS mount and
+the env-var contract:
+
+```yaml
+providers:
+  - id: sandbox.default
+    settings:
+      provider: agentrun_rest
+      nas_config:
+        user_id: 1000
+        group_id: 1000
+        user_server_addr: xxxx.nas.aliyuncs.com:/
+        user_remote_path_template: /users/{user_id}
+        user_read_only: false
+      inject_env_contract: true
+      extra_envs: {}
 ```
 
 Agents choose from installed skills:
@@ -139,21 +161,89 @@ First implementation status:
 
 ## Sandbox Mounting
 
-The active agent determines mounts:
+Three runtime paths are contracted inside the sandbox:
+
+```text
+/mnt/system   # agent-level shared, read-only; heavy deps baked into the sandbox image
+/mnt/skills   # agent-level shared, read-only skill packages
+/mnt/user     # per-user isolated, writable (outputs, memory)
+```
+
+The active agent determines skill mounts:
 
 ```text
 agent.skills.enabled -> SkillMount[]
 ```
 
-For each enabled and ready skill:
+For each enabled and ready skill, the backend emits a NAS mount point:
 
 ```text
-/mnt/skills/<skill-id>
+/mnt/skills/<skill-id>  <- nas: <server>:/skills/<skill-id>@<version>  (read-only)
 ```
 
-When an external object store is configured, the backend emits dynamic OSS mount
-points during sandbox creation. Empty mount configs are omitted to avoid provider
-validation errors.
+Plus one per-user mount:
+
+```text
+/mnt/user  <- nas: <server>:/users/<user_id>  (read-write)
+```
+
+All mount points share `userId/groupId = 1000` (the platform default for NAS
+mounts) at the `nasConfig` top level. `mountDir` values must not collide; skill
+mounts are leaf dirs under `/mnt/skills/<id>` and the user mount is `/mnt/user`,
+so they never overlap. Empty mount configs are omitted from the create payload
+to avoid provider validation errors.
+
+Skill content lives on the NAS filesystem. `install_skill` writes packages to
+`skills.root`, which is deployed on the same NAS the sandbox mounts read-only —
+so no separate upload/sync step is needed. The sandbox sees only the enabled
+skills' mount points (per-skill mount points, not a shared root), preserving
+enabled-only visibility across agents sharing the NAS.
+
+## Runtime Env Contract
+
+AgentRun accepts an `envs` field on sandbox creation (string map, per-sandbox,
+inherited by all processes including the execution kernel). The backend injects
+the `AGENT_*` marker vars:
+
+```text
+AGENT_SYSTEM_PATH=/mnt/system
+AGENT_SKILL_PATH=/mnt/skills
+AGENT_USER_PATH=/mnt/user
+AGENT_USER_ID=<scope.user_id>
+AGENT_SESSION_ID=<scope_key>
+```
+
+`PATH` and `PYTHONPATH` are intentionally NOT injected here — the flat string
+map cannot interpolate, and setting them would clobber the image default. They
+are baked into the sandbox image (see below). `extra_envs` merges user-supplied
+values; `inject_env_contract: false` disables injection when the image bakes
+the full contract.
+
+## Sandbox Image Contract
+
+The sandbox image is an AgentRun template. The build recipe lives in this repo
+at `sandbox/` (`Dockerfile` + `agent-sandbox-bootstrap` + `README.md`); the
+image itself is built and registered in AgentRun outside the agent service. It
+must fulfill the runtime contract so the `AGENT_*` vars resolve:
+
+```dockerfile
+RUN mkdir -p /mnt/system /mnt/skills /mnt/user \
+ && chown -R 1000:1000 /mnt/user
+ENV AGENT_SYSTEM_PATH=/mnt/system
+ENV AGENT_SKILL_PATH=/mnt/skills
+ENV AGENT_USER_PATH=/mnt/user
+ENV AGENT_ENV_PATH=/mnt/system/skill-envs/current
+ENV PATH=/mnt/system/skill-envs/current/bin:/mnt/system/bin:${PATH}
+ENV VIRTUAL_ENV=/mnt/system/skill-envs/current
+# Do NOT put /mnt/skills on PYTHONPATH globally (cross-skill name collisions);
+# invoke skill scripts by absolute path.
+```
+
+`/mnt/system`, `/mnt/skills`, `/mnt/user` are pre-created as empty dirs only —
+actual content comes from dynamic NAS mounts at sandbox start, never baked in.
+A bootstrap script (`/usr/local/bin/agent-sandbox-bootstrap`) should validate on
+start that the three mounts exist and are readable by uid 1000, and fail fast
+with a contract-version marker if a mount is missing.
 
 ## User Roles
 

@@ -60,7 +60,12 @@ class AgentSkillsConfig(BaseModel):
 
 class SkillLibraryConfig(BaseModel):
     root: str = "./data/skills"
-    mount: Dict[str, Any] = Field(default_factory=lambda: {"mount_root": "/mnt/skills"})
+    mount: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "mount_root": "/mnt/skills",
+            "nas": {"server_addr": "", "remote_path_prefix": "skills", "read_only": True},
+        }
+    )
     install: Dict[str, Any] = Field(
         default_factory=lambda: {
             "enabled": True,
@@ -125,7 +130,10 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             }
         ],
     },
-    skills=SkillLibraryConfig(root="./data/skills", mount={"mount_root": "/mnt/skills"}),
+    skills=SkillLibraryConfig(
+        root="./data/skills",
+        mount={"mount_root": "/mnt/skills", "nas": {"server_addr": "", "remote_path_prefix": "skills", "read_only": True}},
+    ),
     default_agent="main",
     agents=[
         AgentProfile(
@@ -209,12 +217,15 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                 "create_path": "/sandboxes",
                 "execute_path": "/sandboxes/{sandbox_id}/contexts/execute",
                 "stop_path": "/sandboxes/{sandbox_id}/stop",
-                "oss_mount_config": {
-                    "mount_points": []
-                },
                 "nas_config": {
-                    "mount_points": []
+                    "user_id": 1000,
+                    "group_id": 1000,
+                    "user_server_addr": "",
+                    "user_remote_path_template": "/users/{user_id}",
+                    "user_read_only": False,
                 },
+                "inject_env_contract": True,
+                "extra_envs": {},
             },
             used_by=["sandbox"],
         ),
@@ -446,9 +457,14 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         sandbox_provider_name = sandbox_settings.get("provider")
         configured = False
         if sandbox_provider_name == "agentrun_rest":
+            # Mirror make_sandbox_provider's gate: template_name + api_key +
+            # account_id are required. The gateway endpoint is optional and
+            # auto-derived from account_id + region, so don't gate status on it
+            # (an empty endpoint would otherwise mislabel a working provider as
+            # missing_config).
             configured = bool(
-                sandbox_settings.get("endpoint")
-                and sandbox_settings.get("template_name")
+                sandbox_settings.get("template_name")
+                and _setting_configured(sandbox_settings, "api_key", "api_key_env")
                 and _setting_configured(sandbox_settings, "account_id", "account_id_env")
             )
         elif sandbox_provider_name == "agentrun":
