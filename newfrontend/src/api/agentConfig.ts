@@ -95,6 +95,12 @@ export interface SkillInstallResult {
   config: AgentConfigDocument;
 }
 
+export interface SkillEnableResult {
+  ok: boolean;
+  result: Record<string, unknown>;
+  config: AgentConfigDocument;
+}
+
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `request failed: ${res.status}`;
@@ -201,6 +207,20 @@ export async function installSkill(payload: {
 }): Promise<SkillInstallResult> {
   return jsonOrThrow(
     await fetch("/v1/skills/install", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin": "true" },
+      body: JSON.stringify(payload),
+    })
+  );
+}
+
+export async function enableSkillForAgent(payload: {
+  skill_id: string;
+  agent_id?: string;
+  enabled?: boolean;
+}): Promise<SkillEnableResult> {
+  return jsonOrThrow(
+    await fetch("/v1/skills/enable", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Admin": "true" },
       body: JSON.stringify(payload),

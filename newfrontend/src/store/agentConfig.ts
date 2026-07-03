@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   getAgentConfig,
   getAgentConfigYaml,
+  enableSkillForAgent,
   getSetup,
   installSkill,
   saveAgentConfig,
@@ -31,6 +32,11 @@ interface AgentConfigState {
     enable_for_agent?: string;
     enable_after_build?: boolean;
     overwrite?: boolean;
+  }) => Promise<AgentConfigDocument>;
+  enableSkillForAgent: (payload: {
+    skill_id: string;
+    agent_id?: string;
+    enabled?: boolean;
   }) => Promise<AgentConfigDocument>;
 }
 
@@ -119,6 +125,19 @@ export const useAgentConfigStore = create<AgentConfigState>((set) => ({
       return result.config;
     } catch (err) {
       const error = err instanceof Error ? err.message : "skill install failed";
+      set({ error, loading: false });
+      throw err;
+    }
+  },
+
+  enableSkillForAgent: async (payload) => {
+    set({ loading: true, error: undefined });
+    try {
+      const result = await enableSkillForAgent(payload);
+      set({ doc: result.config, loading: false });
+      return result.config;
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "skill enable failed";
       set({ error, loading: false });
       throw err;
     }
