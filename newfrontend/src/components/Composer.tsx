@@ -31,6 +31,10 @@ export function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // While an IME (e.g. Chinese/Japanese) is composing, Enter confirms the
+    // candidate selection — it must not send the message. isComposing covers
+    // modern browsers; keyCode 229 is the legacy fallback some IMEs still emit.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!isStreaming) submit();
