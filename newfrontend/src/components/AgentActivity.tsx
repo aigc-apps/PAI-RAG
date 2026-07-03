@@ -87,7 +87,7 @@ export function AgentActivity({
       <Collapsible.Content className="ml-[9px] mt-1 border-l border-[var(--border)] pl-4">
         {hasReasoning && (
           <div className="mb-2 whitespace-pre-wrap text-xs leading-6 text-[var(--text-muted)]">
-            {reasoning}
+            {reasoning.trimEnd()}
           </div>
         )}
         {steps.map((step, i) =>
@@ -98,7 +98,7 @@ export function AgentActivity({
               key={`text-${i}`}
               className="mb-2 whitespace-pre-wrap text-xs leading-6 text-[var(--text-muted)]"
             >
-              {step.text}
+              {step.text.trimEnd()}
             </div>
           )
         )}
