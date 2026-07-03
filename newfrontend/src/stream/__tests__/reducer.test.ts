@@ -169,6 +169,51 @@ describe("reduceStreamEvent — tools", () => {
   });
 });
 
+describe("reduceStreamEvent — narration vs final answer", () => {
+  const toolAdded = (callId: string, name: string) => ({
+    type: "response.output_item.added",
+    item: { id: `fc_${callId}`, type: "function_call", name, call_id: callId },
+  });
+
+  it("narration before a tool call is not part of the final answer text", () => {
+    const s = fold([
+      created("resp_n1", "c"),
+      textDelta("我先加载技能。"),
+      toolAdded("c1", "load_skill"),
+      { type: "response.tool_result", call_id: "c1", output: "OK", ok: true },
+      textDelta("这是最终答案。"),
+      completed("resp_n1", "c"),
+    ]);
+    // `text` holds only the trailing run — the answer — not the narration.
+    expect(s.message.text).toBe("这是最终答案。");
+    // The timeline keeps everything in order: narration, tool, answer.
+    expect(s.message.steps).toEqual([
+      { kind: "text", text: "我先加载技能。" },
+      { kind: "tool", id: "c1" },
+      { kind: "text", text: "这是最终答案。" },
+    ]);
+  });
+
+  it("while a tool is still running there is no final answer yet", () => {
+    const s = fold([
+      created("resp_n2", "c"),
+      textDelta("正在处理…"),
+      toolAdded("c1", "load_skill"),
+    ]);
+    expect(s.message.text).toBe("");
+    expect(s.message.steps).toEqual([
+      { kind: "text", text: "正在处理…" },
+      { kind: "tool", id: "c1" },
+    ]);
+  });
+
+  it("a plain answer with no tools is a single text step", () => {
+    const s = fold([created("resp_n3", "c"), textDelta("hi "), textDelta("there")]);
+    expect(s.message.text).toBe("hi there");
+    expect(s.message.steps).toEqual([{ kind: "text", text: "hi there" }]);
+  });
+});
+
 describe("reduceStreamEvent — resilience", () => {
   const withSeq = (ev: any, n: number) => ({ ...ev, sequence_number: n });
 

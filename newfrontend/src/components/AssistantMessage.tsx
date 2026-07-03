@@ -1,5 +1,6 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import type { ChatMessage } from "../types";
+import { deriveAssistantView } from "../stream/assistantView";
 import { Markdown } from "./Markdown";
 import { MessageControls } from "./MessageControls";
 import { AgentActivity } from "./AgentActivity";
@@ -14,6 +15,7 @@ export function AssistantMessage({
   const showControls =
     message.status === "completed" || message.status === "cancelled";
   const failed = message.status === "failed";
+  const { activitySteps, bodyText } = deriveAssistantView(message);
   return (
     <div className="flex gap-3 animate-msg-in">
       <div className="h-6 w-6 rounded-[var(--radius-sm)] shrink-0 mt-0.5 bg-[var(--surface-3)] flex items-center justify-center">
@@ -23,7 +25,7 @@ export function AssistantMessage({
         <AgentActivity
           reasoning={message.reasoning}
           reasoningStatus={message.reasoningStatus}
-          tools={message.toolCalls}
+          steps={activitySteps}
           messageStatus={message.status}
         />
         {failed ? (
@@ -47,7 +49,7 @@ export function AssistantMessage({
             )}
           </div>
         ) : (
-          message.text && <Markdown content={message.text} />
+          bodyText && <Markdown content={bodyText} />
         )}
         {message.status === "stopped" && (
           <div className="mt-1 text-xs text-[var(--text-faint)]">已停止</div>
@@ -56,7 +58,7 @@ export function AssistantMessage({
           <div className="mt-1 text-xs text-[var(--text-faint)]">已取消</div>
         )}
         {showControls && (
-          <MessageControls text={message.text} onRegenerate={onRegenerate} />
+          <MessageControls text={bodyText} onRegenerate={onRegenerate} />
         )}
       </div>
     </div>

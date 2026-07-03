@@ -1,23 +1,27 @@
 import { useEffect, useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { ChevronRight, Circle, ListChecks, AlertTriangle } from "lucide-react";
-import type { ReasoningStatus, ToolUse } from "../types";
+import type { ReasoningStatus } from "../types";
+import type { ResolvedStep } from "../stream/assistantView";
 import { cn } from "../lib/cn";
 import { ToolCall } from "./ToolCall";
 
 export function AgentActivity({
   reasoning,
   reasoningStatus,
-  tools,
+  steps,
   messageStatus,
 }: {
   reasoning: string;
   reasoningStatus: ReasoningStatus;
-  tools: ToolUse[];
+  /** Ordered narration + tool timeline (the final answer is split out upstream). */
+  steps: ResolvedStep[];
   messageStatus: "streaming" | "completed" | "failed" | "stopped" | "cancelled";
 }) {
   const hasReasoning = Boolean(reasoning);
+  const tools = steps.flatMap((s) => (s.kind === "tool" ? [s.tool] : []));
   const hasTools = tools.length > 0;
+  const hasSteps = steps.length > 0;
   const active =
     messageStatus === "streaming" ||
     reasoningStatus === "streaming" ||
@@ -29,7 +33,7 @@ export function AgentActivity({
     else setOpen(false);
   }, [active]);
 
-  if (!hasReasoning && !hasTools) return null;
+  if (!hasReasoning && !hasSteps) return null;
 
   const failedTools = tools.filter((tool) => tool.status === "error").length;
   const runningTools = tools.filter((tool) => tool.status === "running").length;
@@ -86,9 +90,18 @@ export function AgentActivity({
             {reasoning}
           </div>
         )}
-        {tools.map((tool) => (
-          <ToolCall key={tool.id} tool={tool} />
-        ))}
+        {steps.map((step, i) =>
+          step.kind === "tool" ? (
+            <ToolCall key={step.tool.id} tool={step.tool} />
+          ) : (
+            <div
+              key={`text-${i}`}
+              className="mb-2 whitespace-pre-wrap text-xs leading-6 text-[var(--text-muted)]"
+            >
+              {step.text}
+            </div>
+          )
+        )}
       </Collapsible.Content>
     </Collapsible.Root>
   );

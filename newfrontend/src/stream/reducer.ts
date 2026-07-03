@@ -1,4 +1,4 @@
-import type { ChatMessage, ToolUse } from "../types";
+import type { AssistantStep, ChatMessage, ToolUse } from "../types";
 
 type StreamEvent = Record<string, unknown>;
 
@@ -20,9 +20,16 @@ export function initialStreamState(id: string): StreamState {
       status: "streaming",
       lastSequenceNumber: 0,
       toolCalls: [],
+      steps: [],
     },
     lastSequenceNumber: 0,
   };
+}
+
+/** The final answer is the trailing text run — text after the last tool call. */
+function finalAnswer(steps: AssistantStep[]): string {
+  const last = steps[steps.length - 1];
+  return last && last.kind === "text" ? last.text : "";
 }
 
 function callIdOf(e: Record<string, unknown>): string {
@@ -60,9 +67,27 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
     }
 
     case "response.output_text.delta": {
+      const delta = String(e.delta ?? "");
+      if (!delta) return state;
+      // Append to the open text run, or start a new one if a tool call closed
+      // the previous run. Keep `text` pointed at the trailing run so it always
+      // holds the final answer (earlier runs are interstitial narration).
+      const steps = (msg.steps ?? []).slice();
+      // Resume path: a reconstructed bubble may carry prior `text` with no steps
+      // yet. Seed the open run from it so the resumed delta continues the answer
+      // instead of replacing it.
+      if (steps.length === 0 && msg.text) {
+        steps.push({ kind: "text", text: msg.text });
+      }
+      const last = steps[steps.length - 1];
+      if (last && last.kind === "text") {
+        steps[steps.length - 1] = { kind: "text", text: last.text + delta };
+      } else {
+        steps.push({ kind: "text", text: delta });
+      }
       return {
         ...state,
-        message: { ...msg, text: msg.text + String(e.delta ?? "") },
+        message: { ...msg, steps, text: finalAnswer(steps) },
       };
     }
 
@@ -112,8 +137,21 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
             },
           };
         }
-        return { ...state, message: { ...msg, toolCalls: [...msg.toolCalls,
-          { id, name: item.name || "", arguments: "", status: "running" } as ToolUse] } };
+        // New tool call closes the open text run: prior prose was narration,
+        // and the timeline records the tool at its true chronological position.
+        const steps: AssistantStep[] = [...(msg.steps ?? []), { kind: "tool", id }];
+        return {
+          ...state,
+          message: {
+            ...msg,
+            toolCalls: [
+              ...msg.toolCalls,
+              { id, name: item.name || "", arguments: "", status: "running" } as ToolUse,
+            ],
+            steps,
+            text: finalAnswer(steps),
+          },
+        };
       }
       return state;
     }

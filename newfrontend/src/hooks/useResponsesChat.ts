@@ -21,6 +21,7 @@ function patchFromState(s: StreamState): Partial<ChatMessage> {
     reasoning: s.message.reasoning,
     reasoningStatus: s.message.reasoningStatus,
     toolCalls: s.message.toolCalls,
+    steps: s.message.steps,
     status: s.message.status,
     responseId: s.message.responseId,
     usage: s.message.usage,
