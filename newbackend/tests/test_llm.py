@@ -221,6 +221,70 @@ def test_astream_think_tags_split():
     asyncio.run(run())
 
 
+def test_reasoning_content_split_even_without_enable_thinking():
+    """The bug: a model (e.g. Qwen3) emits reasoning even when enable_thinking is
+    off (the deployed default), and it was leaking into the answer body. Reasoning
+    must be split unconditionally."""
+    async def run():
+        chunks = [
+            _FakeChunk([_FakeChoice(_FakeDelta(reasoning_content="pondering"))]),
+            _FakeChunk([_FakeChoice(_FakeDelta(content="final answer"))]),
+            _FakeChunk(
+                [_FakeChoice(_FakeDelta())],
+                usage=CompletionUsage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            ),
+        ]
+        llm = LeanLLM(base_url="x", api_key="x", model="m")  # enable_thinking defaults False
+        llm.client = _FakeClient(chunks)
+        out = [c async for c in await llm.astream(messages=[], tools=[])]
+        reasoning = "".join(c.reasoning_delta for c in out if isinstance(c, ReasoningChunk))
+        answer = "".join(
+            c.delta for c in out if isinstance(c, TextChunk) and not isinstance(c, ReasoningChunk)
+        )
+        assert reasoning == "pondering"
+        assert answer == "final answer"
+
+    asyncio.run(run())
+
+
+def test_think_tags_split_even_without_enable_thinking():
+    async def run():
+        chunks = [
+            _FakeChunk([_FakeChoice(_FakeDelta(content="<think>reasoning</think>hi"))]),
+        ]
+        llm = LeanLLM(base_url="x", api_key="x", model="m")
+        llm.client = _FakeClient(chunks)
+        out = [c async for c in await llm.astream(messages=[], tools=[])]
+        reasoning = "".join(c.reasoning_delta for c in out if isinstance(c, ReasoningChunk))
+        answer = "".join(
+            c.delta for c in out if isinstance(c, TextChunk) and not isinstance(c, ReasoningChunk)
+        )
+        # One delta carrying both the reasoning tail and the answer head must keep
+        # BOTH — the answer after </think> is not dropped.
+        assert reasoning == "reasoning"
+        assert answer == "hi"
+
+    asyncio.run(run())
+
+
+def test_plain_text_is_never_treated_as_reasoning():
+    """Safety: a model that never emits reasoning_content or <think> must have all
+    of its output routed to the answer, never to reasoning."""
+    async def run():
+        chunks = [
+            _FakeChunk([_FakeChoice(_FakeDelta(content="just "))]),
+            _FakeChunk([_FakeChoice(_FakeDelta(content="a normal answer"))]),
+        ]
+        llm = LeanLLM(base_url="x", api_key="x", model="m")
+        llm.client = _FakeClient(chunks)
+        out = [c async for c in await llm.astream(messages=[], tools=[])]
+        assert not any(isinstance(c, ReasoningChunk) for c in out)
+        answer = "".join(c.delta for c in out if isinstance(c, TextChunk))
+        assert answer == "just a normal answer"
+
+    asyncio.run(run())
+
+
 def test_enable_thinking_passed_to_api():
     async def run():
         chunks = [
