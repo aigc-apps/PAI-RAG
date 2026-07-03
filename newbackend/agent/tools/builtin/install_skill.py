@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from agent.custom_skills import SkillPackage
+from agent.custom_skills import SkillPackage, load_skill_package
 from agent.tools.base import Tool
 
 
@@ -255,37 +255,34 @@ def _extract_zip_safe(archive: Path, target: Path) -> None:
 
 
 def _find_skill_dir(root: Path) -> Path:
-    if (root / "skill.yaml").is_file():
+    # A skill package is a directory with either skill.yaml (platform manifest)
+    # or SKILL.md (Agent Skills standard). Either at root or in a single wrapper
+    # subdir; >1 package requires an explicit source.path.
+    if (root / "skill.yaml").is_file() or (root / "SKILL.md").is_file():
         return root
-    manifests = sorted(root.glob("*/skill.yaml"))
-    if len(manifests) == 1:
-        return manifests[0].parent
-    if not manifests:
-        raise ValueError("skill package missing skill.yaml")
+    candidates = sorted(root.glob("*/skill.yaml")) + sorted(root.glob("*/SKILL.md"))
+    dirs = []
+    for manifest in candidates:
+        parent = manifest.parent
+        if parent not in dirs:
+            dirs.append(parent)
+    if len(dirs) == 1:
+        return dirs[0]
+    if not dirs:
+        raise ValueError("skill package missing skill.yaml or SKILL.md")
     raise ValueError("archive/repo path contains multiple skill packages; specify source.path")
 
 
 def _read_skill_package(path: Path) -> SkillPackage:
-    manifest = path / "skill.yaml"
-    data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError("skill.yaml must be a mapping")
-    skill_id = str(data.get("id") or path.name).strip()
-    if not skill_id:
-        raise ValueError("skill.yaml missing id")
+    package = load_skill_package(path)
+    if package is None:
+        raise ValueError("skill package missing skill.yaml or SKILL.md")
+    skill_id = package.id
     if "/" in skill_id or "\\" in skill_id or ".." in skill_id:
         raise ValueError("skill id must be a simple package id")
-    entry = data.get("entry") if isinstance(data.get("entry"), dict) else {}
-    instructions = str(entry.get("instructions") or "SKILL.md")
-    if not (path / instructions).is_file():
-        raise ValueError(f"skill instructions file not found: {instructions}")
-    return SkillPackage(
-        id=skill_id,
-        name=str(data.get("name") or skill_id),
-        version=str(data.get("version") or "0.0.0"),
-        description=str(data.get("description") or ""),
-        path=str(path),
-    )
+    if not package.instructions.strip():
+        raise ValueError("skill instructions file not found or empty")
+    return package
 
 
 def _dependency_summary(path: Path) -> Dict[str, Any]:
@@ -293,9 +290,10 @@ def _dependency_summary(path: Path) -> Dict[str, Any]:
     package_json = path / "package.json"
     runtime = {}
     manifest = path / "skill.yaml"
-    data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
-    if isinstance(data, dict) and isinstance(data.get("runtime"), dict):
-        runtime = data["runtime"]
+    if manifest.is_file():
+        data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+        if isinstance(data, dict) and isinstance(data.get("runtime"), dict):
+            runtime = data["runtime"]
     return {
         "has_dependencies": requirements.is_file() or package_json.is_file() or bool(runtime),
         "python": {"requirements": "requirements.txt"} if requirements.is_file() else {},

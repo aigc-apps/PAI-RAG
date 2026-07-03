@@ -19,9 +19,10 @@ from app.agent_config import (
     load_agent_config,
     mask_secrets,
     save_agent_config,
+    set_agent_skill_enabled,
 )
 from app.config import get_settings
-from app.deps import AppState, get_state
+from app.deps import AppState, get_state, reload_app_state
 from agent.tools.defaults import build_default_registry
 from agent.tools.builtin.install_skill import _install_skill_sync
 
@@ -42,6 +43,12 @@ class SkillInstallPayload(BaseModel):
     enable_for_agent: Optional[str] = None
     enable_after_build: bool = False
     overwrite: bool = False
+
+
+class SkillEnablePayload(BaseModel):
+    skill_id: str
+    agent_id: Optional[str] = None
+    enabled: bool = True
 
 
 def _path() -> str:
@@ -70,7 +77,11 @@ def _save_and_reload(path: str, doc: AgentConfigDocument, state: AppState) -> No
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"invalid models config: {exc}") from exc
     save_agent_config(path, doc)
-    state.registry = build_default_registry(settings, agent_config=doc)
+    state.registry = build_default_registry(
+        settings,
+        agent_config=doc,
+        on_config_change=lambda: reload_app_state(state, settings),
+    )
     if catalog is not None and state.router is not None:
         state.router.reload(catalog)
     state.agent_config = apply_runtime_status(doc, settings, state.router)
@@ -180,7 +191,11 @@ async def reload_env(state: AppState = Depends(get_state)):
             state.router = ProviderRouter(catalog, path=settings.models_path)
     except Exception as exc:
         logger.warning("reload-env: provider router rebuild skipped: {}", exc)
-    state.registry = build_default_registry(settings, agent_config=doc)
+    state.registry = build_default_registry(
+        settings,
+        agent_config=doc,
+        on_config_change=lambda: reload_app_state(state, settings),
+    )
     state.agent_config = apply_runtime_status(doc, settings, state.router)
     logger.info("reload-env: .env reloaded, registry + router + agent_config rebuilt")
     return JSONResponse({"ok": True})
@@ -278,18 +293,53 @@ async def install_skill(
         and result.get("status") == "ready"
         and result.get("id")
     ):
-        for agent in doc.agents:
-            if agent.id != payload.enable_for_agent:
-                continue
-            if result["id"] not in agent.skills.enabled:
-                agent.skills.enabled.append(str(result["id"]))
-            break
+        runtime = apply_runtime_status(doc, settings, state.router)
+        try:
+            set_agent_skill_enabled(
+                doc,
+                agent_id=str(payload.enable_for_agent),
+                skill_id=str(result["id"]),
+                enabled=True,
+                capabilities=runtime.capabilities,
+            )
+        except ValueError as exc:
+            logger.warning("install: enable_for_agent skipped: {}", exc)
     _save_and_reload(path, doc, state)
     runtime = _runtime_doc(state)
     return JSONResponse({
         "ok": True,
         "result": result,
         "config": runtime.model_dump(mode="json"),
+    })
+
+
+@router.post("/v1/skills/enable")
+async def enable_skill_for_agent(
+    payload: SkillEnablePayload,
+    state: AppState = Depends(get_state),
+    x_admin: Optional[str] = Header(default=None),
+):
+    _require_admin_header(x_admin)
+    settings = get_settings()
+    path = _path()
+    doc = load_agent_config(path)
+    target_agent = payload.agent_id or doc.default_agent
+    runtime = apply_runtime_status(doc, settings, state.router)
+    try:
+        result = set_agent_skill_enabled(
+            doc,
+            agent_id=str(target_agent),
+            skill_id=payload.skill_id,
+            enabled=payload.enabled,
+            capabilities=runtime.capabilities,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _save_and_reload(path, doc, state)
+    return JSONResponse({
+        "ok": True,
+        "result": result,
+        "config": _runtime_doc(state).model_dump(mode="json"),
     })
 
 

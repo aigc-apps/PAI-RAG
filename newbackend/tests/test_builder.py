@@ -73,8 +73,11 @@ def test_build_context_injects_matching_custom_skill(tmp_path):
             InMemoryStore(),
             agent_config=doc,
         )
-        assert "# Active Skills" in ctx.context_block
-        assert "Always produce an outline first." in ctx.context_block
+        # Progressive disclosure: only the L1 catalog is injected. The full skill
+        # body is NOT preloaded — the agent pulls it on demand via load_skill.
+        assert "# Available Skills" in ctx.context_block
+        assert "Writer" in ctx.context_block
+        assert "Always produce an outline first." not in ctx.context_block
         assert ctx.agent_id == "main"
         assert ctx.skill_mounts == [{
             "id": "skill.writer",
@@ -85,6 +88,49 @@ def test_build_context_injects_matching_custom_skill(tmp_path):
             "nas": {},
         }]
         assert ctx.skill_fingerprint != "none"
+
+    asyncio.run(run())
+
+
+def test_build_context_catalogs_skill_md_only_skill_without_query_match(tmp_path):
+    """The bug: a community SKILL.md-only skill (no trigger keywords) was invisible
+    to the agent when the query didn't substring-match its English name/desc. The
+    always-injected catalog must surface it regardless."""
+    skill_dir = tmp_path / "architecture-diagram"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: architecture-diagram\n"
+        "description: Create architecture diagrams as HTML+SVG files.\n---\n\nDraw boxes.\n",
+        encoding="utf-8",
+    )
+
+    async def run():
+        doc = AgentConfigDocument(**{
+            "skills": {"root": str(tmp_path), "mount": {"mount_root": "/mnt/skills"}},
+            "agents": [{
+                "id": "main",
+                "name": "Main",
+                "skills": {"enabled": ["skill.architecture-diagram"]},
+            }],
+            "capabilities": [{
+                "id": "skill.architecture-diagram",
+                "kind": "skill",
+                "name": "architecture-diagram",
+                "enabled": True,
+                "status": "ready",
+            }],
+        })
+        # A cross-language query that matches nothing in the skill's English text.
+        ctx, _ = await build_context(
+            ResponsesRequest(model="m", input="你有哪些技能"),
+            InMemoryStore(),
+            agent_config=doc,
+        )
+        assert "# Available Skills" in ctx.context_block
+        assert "architecture-diagram" in ctx.context_block
+        assert "Create architecture diagrams" in ctx.context_block
+        # No query match -> full instructions NOT injected, only the catalog line.
+        assert "Draw boxes." not in ctx.context_block
 
     asyncio.run(run())
 

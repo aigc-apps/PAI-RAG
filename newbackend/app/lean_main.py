@@ -13,7 +13,7 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from app.config import get_settings
-from app.deps import AppState
+from app.deps import AppState, reload_app_state
 from app.db import make_engine, create_all
 from app.store.memory import InMemoryStore
 from app.store.sql import SqlStore
@@ -66,7 +66,14 @@ async def lifespan(app: FastAPI):
         store = SqlStore(engine)
     soul = Soul(name=settings.agent_name, role=settings.agent_role)
     agent_config = load_agent_config(settings.config_path)
-    registry = build_default_registry(settings, agent_config=agent_config)
+    # Wire the control-plane reloader lazily: it reads app.state.app_state on
+    # call (set just below), so tools like enable_skill_for_agent can refresh the
+    # live registry + agent_config from boot without a restart.
+    registry = build_default_registry(
+        settings,
+        agent_config=agent_config,
+        on_config_change=lambda: reload_app_state(app.state.app_state, settings),
+    )
     if settings.skills_dir:
         load_skills(settings.skills_dir, registry)
     catalog = load_catalog(settings.models_path, settings)

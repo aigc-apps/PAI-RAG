@@ -27,7 +27,7 @@ Enable cloud sandbox execution by filling `providers[].id=sandbox.default` in
 `data/config.yaml`. The backend talks to the configured sandbox provider through
 a small async provider abstraction, so production deployments can use a direct
 REST gateway or an optional SDK-backed adapter without changing the
-`code_sandbox` tool contract.
+`code_interpreter` tool contract.
 
 ```bash
 export AGENTRUN_SANDBOX_API_KEY=...   # optional gateway auth token
@@ -35,7 +35,7 @@ export AGENTRUN_SANDBOX_API_KEY=...   # optional gateway auth token
 
 `sandbox.default.settings` supports AgentRun `template_name`, user/tenant/conversation
 isolation, idle timeout, execution timeout up to 30 seconds, cwd, OSS mounts for custom skills, and NAS mounts
-for user files; the agent sees this as the `code_sandbox` tool once the sandbox
+for user files; the agent sees this as the `code_interpreter` tool once the sandbox
 capability is enabled.
 
 The default REST gateway contract follows the AgentRun sandbox shape:

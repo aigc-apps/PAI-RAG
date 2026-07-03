@@ -20,7 +20,7 @@ class SandboxProvider(Protocol):
 
 def _format_result(result: Dict[str, Any]) -> str:
     if "error" in result:
-        return f"code_sandbox failed: {result['error']}"
+        return f"code_interpreter failed: {result['error']}"
     stdout = str(result.get("stdout") or "")
     stderr = str(result.get("stderr") or "")
     exit_code = result.get("exit_code", result.get("exitCode", 0))
@@ -34,7 +34,7 @@ def _format_result(result: Dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def make_code_sandbox_tool(provider: SandboxProvider, *, default_timeout: int = 60) -> Tool:
+def make_code_interpreter_tool(provider: SandboxProvider, *, default_timeout: int = 60) -> Tool:
     async def fn(
         code: str,
         language: str = "python",
@@ -52,10 +52,10 @@ def make_code_sandbox_tool(provider: SandboxProvider, *, default_timeout: int = 
             )
             return _format_result(result)
         except Exception as ex:
-            return f"code_sandbox failed: {ex}"
+            return f"code_interpreter failed: {ex}"
 
     return Tool(
-        name="code_sandbox",
+        name="code_interpreter",
         description=(
             "Execute Python or JavaScript code in an isolated cloud sandbox. "
             "Use it for data analysis, file processing, calculations, and code "

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import yaml
 from loguru import logger
@@ -61,8 +62,18 @@ def discover_skill_packages(sources: Iterable[Dict[str, Any]]) -> List[SkillPack
         root = Path(str(source.get("path") or "")).expanduser()
         if not root.exists() or not root.is_dir():
             continue
-        for manifest in sorted(root.glob("*/skill.yaml")):
-            package = _load_skill_package(manifest)
+        # A skill package is a direct subdirectory with either a skill.yaml
+        # (platform manifest) or a SKILL.md (Agent Skills standard). A dir with
+        # both (e.g. the demo skill) is loaded once.
+        candidate_dirs: List[Path] = []
+        candidate_dirs.extend(manifest.parent for manifest in sorted(root.glob("*/skill.yaml")))
+        candidate_dirs.extend(skill_md.parent for skill_md in sorted(root.glob("*/SKILL.md")))
+        seen_dirs: set[Path] = set()
+        for skill_dir in candidate_dirs:
+            if skill_dir in seen_dirs:
+                continue
+            seen_dirs.add(skill_dir)
+            package = load_skill_package(skill_dir)
             if package is None or package.id in seen:
                 continue
             seen.add(package.id)
@@ -121,84 +132,221 @@ def skill_mount_fingerprint(mounts: List[SkillMount]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def render_skill_instructions(
+def render_skill_catalog(
     *,
     packages: List[SkillPackage],
     enabled_ids: Iterable[str],
-    query: str,
-    max_skills: int = 3,
 ) -> str:
+    """Always-injected catalog of the agent's enabled skills (name + description
+    + capability id) — Level 1 of Agent Skills progressive disclosure. The agent
+    always knows *which* skills it has and when to reach for them; the full
+    instructions (L2) load on demand via the ``load_skill`` tool and bundled files
+    (L3) via ``read_skill_resource``. Nothing here is gated on a lexical query
+    match, so a community SKILL.md-only skill with no trigger keywords is still
+    visible (the old substring-match gate made such skills invisible)."""
     enabled = {_normalize_skill_id(item) for item in enabled_ids}
-    selected = [
-        package
-        for package in packages
-        if _normalize_skill_id(package.capability_id) in enabled
-        and _skill_matches(package, query)
-    ][:max_skills]
+    selected = sorted(
+        (p for p in packages if _normalize_skill_id(p.capability_id) in enabled),
+        key=lambda p: p.capability_id,
+    )
     if not selected:
         return ""
-    blocks = []
+    lines = [
+        "# Available Skills",
+        "You have the following task-specific skills. Each entry below is only a "
+        "one-line summary. When a request calls for one, first call the `load_skill` "
+        "tool with its id to load the full step-by-step instructions, then follow "
+        "them — do not attempt the task from the summary alone. Skills may bundle "
+        "extra files (templates, references, scripts); `load_skill` lists them and "
+        "you read them with `read_skill_resource`.",
+        "",
+    ]
     for package in selected:
-        body = package.instructions.strip()
-        if not body:
-            body = package.description.strip()
-        if not body:
+        description = package.description.strip() or "(no description)"
+        lines.append(f"- **{package.name}** (`{package.capability_id}`): {description}")
+    return "\n".join(lines)
+
+
+# Files that are the manifest/instructions themselves — not user-facing bundled
+# resources — so they are hidden from the read_skill_resource file listing.
+_SKILL_META_FILES = {"skill.yaml", "skill.yml", "SKILL.md", "SKILL.MD"}
+_SKILL_SKIP_DIRS = {".git", "__pycache__", ".DS_Store", "node_modules", ".venv"}
+
+
+def list_skill_files(source_path: str, *, max_files: int = 200) -> List[str]:
+    """Relative POSIX paths of the bundled files inside a skill package
+    (templates, references, scripts) — everything except the manifest/instruction
+    files. Used to advertise Level-3 resources the agent can read on demand."""
+    root = Path(source_path)
+    if not root.is_dir():
+        return []
+    out: List[str] = []
+    for path in sorted(root.rglob("*")):
+        if len(out) >= max_files:
+            break
+        if not path.is_file():
             continue
-        blocks.append(
-            f"## {package.name} ({package.capability_id})\n"
-            f"Version: {package.version}\n"
-            f"Source: {package.path}\n\n"
-            f"{body}"
+        rel = path.relative_to(root)
+        if any(part in _SKILL_SKIP_DIRS for part in rel.parts):
+            continue
+        if rel.name in _SKILL_META_FILES and len(rel.parts) == 1:
+            continue
+        out.append(rel.as_posix())
+    return out
+
+
+def render_skill_detail(package: SkillPackage) -> str:
+    """The Level-2 payload returned by the ``load_skill`` tool: the skill's full
+    instructions plus a manifest of the bundled files the agent can read via
+    ``read_skill_resource``. This is loaded on demand — never preloaded into every
+    turn — so context stays lean until a skill is actually needed."""
+    body = package.instructions.strip() or package.description.strip()
+    parts = [
+        f"# Skill: {package.name} (`{package.capability_id}`)",
+        f"Version: {package.version}",
+        "",
+        body,
+    ]
+    files = list_skill_files(package.path)
+    if files:
+        parts.append("")
+        parts.append(
+            "## Bundled files\n"
+            f'Read any of these with `read_skill_resource("{package.capability_id}", "<path>")`:'
         )
-    if not blocks:
-        return ""
-    return "# Active Skills\nUse these task-specific skill instructions when relevant.\n\n" + "\n\n".join(blocks)
+        parts.extend(f"- {rel}" for rel in files)
+    return "\n".join(parts)
 
 
-def _load_skill_package(manifest: Path) -> Optional[SkillPackage]:
-    try:
-        data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+def find_enabled_skill_mount(
+    skill_mounts: Iterable[Dict[str, Any]], skill_id: str
+) -> Optional[Dict[str, Any]]:
+    """Resolve a caller-supplied skill id against the enabled mounts on the tool
+    scope. Accepts both ``foo`` and ``skill.foo``. Returns the mount dict (with
+    ``source_path``) or None when the skill is not enabled for this agent — this
+    is the enablement/authorization gate for load_skill / read_skill_resource."""
+    target = _normalize_skill_id(str(skill_id).strip())
+    for mount in skill_mounts or []:
+        if not isinstance(mount, dict):
+            continue
+        if _normalize_skill_id(str(mount.get("id") or "")) == target:
+            return mount
+    return None
+
+
+def load_skill_package(skill_dir: Path) -> Optional[SkillPackage]:
+    """Load a skill package from a directory containing either ``skill.yaml``
+    (platform manifest, authoritative) or ``SKILL.md`` (Agent Skills standard
+    frontmatter). Returns None when the directory is not a skill package.
+
+    Merge rule: ``skill.yaml`` overrides ``SKILL.md`` frontmatter for the fields
+    it declares; the SKILL.md body is the instruction text unless skill.yaml's
+    ``entry.instructions`` points elsewhere. A SKILL.md-only package synthesizes
+    id/name/version/permissions from its frontmatter (spec-aligned), so community
+    skills install without a platform manifest.
+    """
+    skill_yaml = skill_dir / "skill.yaml"
+    skill_md = skill_dir / "SKILL.md"
+    fm, md_body = _parse_skill_md(skill_md) if skill_md.is_file() else ({}, "")
+    if skill_yaml.is_file():
+        try:
+            data = yaml.safe_load(skill_yaml.read_text(encoding="utf-8")) or {}
+        except Exception as exc:
+            logger.warning("failed to load skill.yaml {}: {}", skill_yaml, exc)
+            return None
         if not isinstance(data, dict):
             return None
-        skill_id = str(data.get("id") or manifest.parent.name).strip()
-        if not skill_id:
+        skill_id = str(
+            data.get("id") or _slugify(fm.get("name")) or skill_dir.name
+        ).strip()
+        if not _valid_skill_id(skill_id):
+            logger.warning("invalid skill id in {}: {}", skill_yaml, skill_id)
             return None
-        entry = (data.get("entry") or {}).get("instructions") if isinstance(data.get("entry"), dict) else None
-        instruction_file = manifest.parent / str(entry or "SKILL.md")
-        instructions = ""
-        if instruction_file.exists() and instruction_file.is_file():
-            instructions = instruction_file.read_text(encoding="utf-8")
+        entry = data.get("entry") if isinstance(data.get("entry"), dict) else {}
+        instructions_file = str(entry.get("instructions") or "SKILL.md")
+        instructions = _read_instructions(skill_dir, instructions_file, md_body)
+        metadata = fm.get("metadata") if isinstance(fm, dict) else {}
+        meta_version = metadata.get("version") if isinstance(metadata, dict) else None
         return SkillPackage(
             id=skill_id,
-            name=str(data.get("name") or skill_id),
-            version=str(data.get("version") or "0.0.0"),
-            description=str(data.get("description") or ""),
+            name=str(data.get("name") or fm.get("name") or skill_id),
+            version=str(data.get("version") or meta_version or "0.0.0"),
+            description=str(data.get("description") or fm.get("description") or ""),
             instructions=instructions,
-            path=str(manifest.parent),
+            path=str(skill_dir),
             triggers=data.get("triggers") if isinstance(data.get("triggers"), dict) else {},
             permissions=data.get("permissions") if isinstance(data.get("permissions"), dict) else {},
             resources=[str(item) for item in (data.get("resources") or [])],
             scripts=[str(item) for item in (data.get("scripts") or [])],
         )
-    except Exception as exc:
-        logger.warning("failed to load skill package {}: {}", manifest, exc)
-        return None
+    if skill_md.is_file():
+        skill_id = _slugify(fm.get("name")) or skill_dir.name
+        if not _valid_skill_id(skill_id):
+            logger.warning("invalid skill id from SKILL.md {}: {}", skill_md, skill_id)
+            return None
+        metadata = fm.get("metadata") if isinstance(fm, dict) else {}
+        meta_version = metadata.get("version") if isinstance(metadata, dict) else None
+        allowed_tools = fm.get("allowed-tools")
+        permissions = (
+            {"tools": [str(t) for t in allowed_tools]}
+            if isinstance(allowed_tools, list)
+            else {}
+        )
+        return SkillPackage(
+            id=skill_id,
+            name=str(fm.get("name") or skill_id),
+            version=str(meta_version or "0.0.0"),
+            description=str(fm.get("description") or ""),
+            instructions=md_body,
+            path=str(skill_dir),
+            triggers={},
+            permissions=permissions,
+            resources=[],
+            scripts=[],
+        )
+    return None
 
 
-def _skill_matches(package: SkillPackage, query: str) -> bool:
-    query_l = query.lower()
-    keywords = package.triggers.get("keywords") or []
-    if isinstance(keywords, list):
-        for keyword in keywords:
-            if str(keyword).lower() in query_l:
-                return True
-    intents = package.triggers.get("intents") or []
-    if isinstance(intents, list):
-        for intent in intents:
-            if str(intent).replace("_", " ").lower() in query_l:
-                return True
-    text = f"{package.name} {package.description}".lower()
-    return any(part and part in query_l for part in text.split())
+def _parse_skill_md(path: Path) -> Tuple[Dict[str, Any], str]:
+    """Split a SKILL.md into (frontmatter_dict, body). The whole file is body
+    when there is no leading ``---`` frontmatter block."""
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        return {}, text
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {}, text
+    try:
+        fm = yaml.safe_load(parts[1]) or {}
+    except Exception:
+        return {}, text
+    if not isinstance(fm, dict):
+        return {}, text
+    return fm, parts[2].lstrip("\n")
+
+
+def _read_instructions(skill_dir: Path, instructions_file: str, md_body: str) -> str:
+    """Read the instruction text for a skill.yaml-declared entry. When the entry
+    is SKILL.md, reuse the already-parsed body; otherwise read the named file."""
+    if instructions_file in ("SKILL.md", "SKILL.MD"):
+        return md_body
+    path = skill_dir / instructions_file
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return ""
+
+
+def _slugify(value: Any) -> str:
+    """Lowercase, runs of non-[a-z0-9] -> single '-', strip edges. Maps an
+    Agent Skills frontmatter ``name`` to a safe mount/capability id."""
+    if not value:
+        return ""
+    text = re.sub(r"[^a-z0-9]+", "-", str(value).lower())
+    return text.strip("-")
+
+
+def _valid_skill_id(skill_id: str) -> bool:
+    return bool(skill_id) and "/" not in skill_id and "\\" not in skill_id and ".." not in skill_id
 
 
 def _normalize_skill_id(skill_id: str) -> str:

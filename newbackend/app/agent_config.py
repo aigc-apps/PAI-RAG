@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Literal, Optional
 import yaml
 from pydantic import BaseModel, Field
 
-from agent.custom_skills import discover_skill_packages, skill_sources
+from agent.custom_skills import _normalize_skill_id, discover_skill_packages, skill_sources
 
 
 Permission = Literal["disabled", "ask", "auto", "admin"]
@@ -149,7 +149,7 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "web_search",
                     "knowledge_search",
                 ],
-                exclude=["code_sandbox"],
+                exclude=["code_interpreter", "shell"],
             ),
             skills=AgentSkillsConfig(
                 enabled=["skill.writing", "skill.knowledge_qa"]
@@ -216,6 +216,7 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                 "cwd": "/home/user",
                 "create_path": "/sandboxes",
                 "execute_path": "/sandboxes/{sandbox_id}/contexts/execute",
+                "cmd_path": "/sandboxes/{sandbox_id}/processes/cmd",
                 "stop_path": "/sandboxes/{sandbox_id}/stop",
                 "nas_config": {
                     "user_id": 1000,
@@ -266,6 +267,16 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             kind="core_tool",
             name="Install Skill",
             description="Admin-only tool for installing skill packages from zip upload, URL, or Git.",
+            enabled=False,
+            permission="admin",
+            status="disabled",
+            settings={"control_plane": True},
+        ),
+        CapabilityConfig(
+            id="enable_skill_for_agent",
+            kind="core_tool",
+            name="Enable Skill For Agent",
+            description="Admin-only tool for enabling or disabling an installed, ready skill for an agent.",
             enabled=False,
             permission="admin",
             status="disabled",
@@ -498,7 +509,7 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         if cap.kind != "skill":
             if not cap.enabled:
                 cap.status = "disabled"
-            elif cap.id == "install_skill":
+            elif cap.id in ("install_skill", "enable_skill_for_agent"):
                 cap.status = "ready"
                 cap.error = None
             continue
@@ -552,11 +563,66 @@ def _merge_discovered_skills(doc: AgentConfigDocument) -> None:
             })
 
 
+def set_agent_skill_enabled(
+    doc: AgentConfigDocument,
+    *,
+    agent_id: str,
+    skill_id: str,
+    enabled: bool = True,
+    capabilities: Optional[List[CapabilityConfig]] = None,
+) -> Dict[str, Any]:
+    """Enable or disable an installed skill for one agent (pure mutation on ``doc``).
+
+    Validates the agent exists and — when enabling — that the skill capability is
+    present and ``ready``. Pass ``capabilities`` from a runtime doc
+    (``apply_runtime_status`` output) so freshly discovered skills and computed
+    statuses are visible; it defaults to ``doc.capabilities``. The mutation is
+    always applied to ``doc.agents`` regardless of the ``capabilities`` source.
+    Raises ``ValueError`` on an unknown agent/skill or a not-ready skill.
+    Idempotent: re-enabling an already-enabled skill just reports ``changed=False``.
+    """
+    normalized = _normalize_skill_id(str(skill_id))
+    agent = next((item for item in doc.agents if item.id == agent_id), None)
+    if agent is None:
+        known = ", ".join(item.id for item in doc.agents) or "(none)"
+        raise ValueError(f"unknown agent '{agent_id}'; known agents: {known}")
+    caps = capabilities if capabilities is not None else doc.capabilities
+    cap = next(
+        (c for c in caps if c.kind == "skill" and _normalize_skill_id(c.id) == normalized),
+        None,
+    )
+    if cap is None:
+        raise ValueError(f"unknown skill '{normalized}'; install it before enabling")
+    if enabled and cap.status != "ready":
+        raise ValueError(
+            f"skill '{normalized}' is not ready (status={cap.status}); "
+            "build dependencies before enabling"
+        )
+    current = list(agent.skills.enabled)
+    changed = False
+    if enabled and normalized not in current:
+        current.append(normalized)
+        changed = True
+    elif not enabled and normalized in current:
+        current = [item for item in current if item != normalized]
+        changed = True
+    agent.skills.enabled = current
+    return {
+        "agent_id": agent_id,
+        "skill_id": normalized,
+        "enabled": enabled,
+        "changed": changed,
+        "skill_status": cap.status,
+        "agent_enabled_skills": current,
+    }
+
+
 def _skill_tool_dependencies(permissions: Dict[str, Any]) -> List[str]:
     mapped = {
         "web_search": "search",
         "knowledge_search": "knowledge",
-        "code_sandbox": "sandbox",
+        "code_interpreter": "sandbox",
+        "shell": "sandbox",
     }
     tools = permissions.get("tools") or []
     if not isinstance(tools, list):

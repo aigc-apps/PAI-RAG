@@ -5,7 +5,7 @@ MEMORY_INJECT_LIMIT = 30
 from agent.context import AgentContext, RunVars
 from agent.custom_skills import (
     discover_skill_packages,
-    render_skill_instructions,
+    render_skill_catalog,
     resolve_skill_mounts,
     skill_mount_fingerprint,
     skill_sources,
@@ -228,15 +228,12 @@ def _enabled_skill_ids(agent_config, agent_profile) -> List[str]:
 
 
 def _active_skill_instructions(*, packages: list, enabled_ids: List[str], current_turn: Message) -> str:
+    """Level-1 progressive disclosure: always inject the catalog (name +
+    description + id) of the agent's enabled skills so it knows which skills it
+    has and when to reach for one. Full instructions (L2) and bundled files (L3)
+    are loaded on demand by the agent via the load_skill / read_skill_resource
+    tools — never preloaded into every turn, and never gated on a lexical query
+    match (which failed cross-language and for trigger-less community skills)."""
     if not packages or not enabled_ids:
         return ""
-    query = (
-        current_turn.content
-        if isinstance(current_turn.content, str)
-        else str(current_turn.content or "")
-    )
-    return render_skill_instructions(
-        packages=packages,
-        enabled_ids=enabled_ids,
-        query=query,
-    )
+    return render_skill_catalog(packages=packages, enabled_ids=enabled_ids)

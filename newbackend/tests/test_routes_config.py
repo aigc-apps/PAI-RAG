@@ -117,8 +117,33 @@ def test_runtime_status_discovers_local_skill_packages(tmp_path):
     assert skill.dependencies == ["knowledge"]
 
 
-def test_upload_and_install_skill_zip(tmp_path, monkeypatch):
-    c = _client(tmp_path, monkeypatch)
+def test_runtime_status_discovers_skill_md_only_package(tmp_path):
+    """A community SKILL.md-only skill is discovered as a capability, with
+    dependencies derived from its frontmatter allowed-tools."""
+    skill_dir = tmp_path / "skills" / "pdf-form"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: pdf-form\n"
+        "description: Fill and extract PDF form fields.\n"
+        "allowed-tools:\n"
+        "  - knowledge_search\n"
+        "  - code_interpreter\n"
+        "---\n\n# PDF Form\n\nExtract fields first.\n",
+        encoding="utf-8",
+    )
+    doc = AgentConfigDocument(**{
+        "skills": {"root": str(tmp_path / "skills")}
+    })
+    out = apply_runtime_status(doc, type("Settings", (), {"openai_api_key": "", "default_model": "m", "search_provider": "none", "search_api_key": "", "search_endpoint": ""})(), None)
+    skill = next(cap for cap in out.capabilities if cap.id == "skill.pdf-form")
+    assert skill.name == "pdf-form"
+    assert skill.settings["source"] == "local"
+    # allowed-tools [knowledge_search, code_interpreter] -> capability deps [knowledge, sandbox]
+    assert skill.dependencies == ["knowledge", "sandbox"]
+
+
+def _install_demo_skill(c, tmp_path):
     config = yaml.safe_load(c.get("/v1/config.yaml").text)
     config["skills"]["root"] = str(tmp_path / "skills")
     config["skills"]["install"]["upload_root"] = str(tmp_path / "uploads")
@@ -160,3 +185,53 @@ def test_upload_and_install_skill_zip(tmp_path, monkeypatch):
     skill = next(cap for cap in body["config"]["capabilities"] if cap["id"] == "skill.demo")
     assert skill["name"] == "Demo Skill"
     assert skill["status"] == "ready"
+
+
+def test_upload_and_install_skill_zip(tmp_path, monkeypatch):
+    _install_demo_skill(_client(tmp_path, monkeypatch), tmp_path)
+
+
+def test_enable_skill_for_agent_endpoint(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    _install_demo_skill(c, tmp_path)
+
+    # Admin gate.
+    denied = c.post("/v1/skills/enable", json={"skill_id": "skill.demo"})
+    assert denied.status_code == 403
+
+    # Unknown skill is rejected.
+    bad = c.post(
+        "/v1/skills/enable",
+        headers={"X-Admin": "true"},
+        json={"skill_id": "skill.nope"},
+    )
+    assert bad.status_code == 400
+
+    # Enable the ready skill for the default agent.
+    ok = c.post(
+        "/v1/skills/enable",
+        headers={"X-Admin": "true"},
+        json={"skill_id": "demo"},
+    )
+    assert ok.status_code == 200
+    payload = ok.json()
+    assert payload["result"]["enabled"] is True
+    assert payload["result"]["changed"] is True
+    agent = next(a for a in payload["config"]["agents"] if a["id"] == "main")
+    assert "skill.demo" in agent["skills"]["enabled"]
+
+    # Idempotent re-enable + disable round-trip.
+    again = c.post(
+        "/v1/skills/enable",
+        headers={"X-Admin": "true"},
+        json={"skill_id": "skill.demo"},
+    )
+    assert again.json()["result"]["changed"] is False
+
+    off = c.post(
+        "/v1/skills/enable",
+        headers={"X-Admin": "true"},
+        json={"skill_id": "skill.demo", "enabled": False},
+    )
+    agent = next(a for a in off.json()["config"]["agents"] if a["id"] == "main")
+    assert "skill.demo" not in agent["skills"]["enabled"]

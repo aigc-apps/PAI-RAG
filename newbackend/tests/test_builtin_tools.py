@@ -4,8 +4,17 @@ import httpx
 from agent.tools.builtin.datetime_tool import make_current_datetime_tool
 from agent.tools.builtin.web_fetch import make_web_fetch_tool
 from agent.tools.builtin.web_search import make_web_search_tool
-from agent.tools.builtin.code_sandbox import make_code_sandbox_tool
-from agent.tools.builtin.install_skill import make_install_skill_tool, _validate_source_allowed
+from agent.tools.builtin.code_interpreter import make_code_interpreter_tool
+from agent.tools.builtin.shell import make_shell_tool
+from agent.tools.builtin.install_skill import (
+    make_install_skill_tool,
+    _validate_source_allowed,
+    _find_skill_dir,
+    _read_skill_package,
+    _dependency_summary,
+)
+from agent.tools.builtin.load_skill import make_load_skill_tool
+from agent.tools.builtin.read_skill_resource import make_read_skill_resource_tool
 from agent.tools.defaults import build_default_registry
 from agent.message import ToolCall
 from agent.tools.base import ToolBox
@@ -88,12 +97,53 @@ class _FakeSandboxProvider:
             "exit_code": 0,
         }
 
+    async def run_command(self, *, command, cwd=None, timeout=None):
+        return {
+            "stdout": f"$ {command} @ {cwd or ''}",
+            "stderr": "",
+            "exit_code": 0,
+            "cwd": cwd or "/home/user",
+        }
 
-def test_code_sandbox_formats_provider_result():
-    t = make_code_sandbox_tool(_FakeSandboxProvider(), default_timeout=12)
+
+def test_code_interpreter_formats_provider_result():
+    t = make_code_interpreter_tool(_FakeSandboxProvider(), default_timeout=12)
     out = asyncio.run(t.fn(code="print(1)", cwd="/home/user"))
     assert '"exit_code": 0' in out
     assert "python:print(1):12:/home/user" in out
+
+
+def test_shell_tool_formats_provider_result():
+    t = make_shell_tool(_FakeSandboxProvider(), default_timeout=12)
+    out = asyncio.run(t.fn(command="ls -la", cwd="/home/user"))
+    assert '"exit_code": 0' in out
+    assert "$ ls -la @ /home/user" in out
+    assert '"cwd": "/home/user"' in out
+
+
+def test_shell_tool_reports_nonzero_exit():
+    class _Boom:
+        default_timeout_seconds = 12
+
+        async def run_command(self, *, command, cwd=None, timeout=None):
+            return {"stdout": "", "stderr": "not found", "exit_code": 127}
+
+    t = make_shell_tool(_Boom(), default_timeout=12)
+    out = asyncio.run(t.fn(command="nope"))
+    assert '"exit_code": 127' in out
+    assert "not found" in out
+
+
+def test_shell_tool_returns_error_string_on_provider_failure():
+    class _Boom:
+        default_timeout_seconds = 12
+
+        async def run_command(self, *, command, cwd=None, timeout=None):
+            raise RuntimeError("sandbox gone")
+
+    t = make_shell_tool(_Boom(), default_timeout=12)
+    out = asyncio.run(t.fn(command="ls"))
+    assert out.startswith("shell failed:")
 
 
 class _Settings:
@@ -160,7 +210,8 @@ def test_default_registry_includes_configured_agentrun_sandbox(monkeypatch):
         }],
     })
     reg = build_default_registry(_Settings(), agent_config=doc)
-    assert "code_sandbox" in reg.names()
+    assert "code_interpreter" in reg.names()
+    assert "shell" in reg.names()
 
 
 def test_default_registry_includes_configured_agentrun_rest_sandbox():
@@ -188,7 +239,8 @@ def test_default_registry_includes_configured_agentrun_rest_sandbox():
         }],
     })
     reg = build_default_registry(_Settings(), agent_config=doc)
-    assert "code_sandbox" in reg.names()
+    assert "code_interpreter" in reg.names()
+    assert "shell" in reg.names()
 
 
 def test_agentrun_rest_provider_derives_endpoint_from_account_id():
@@ -224,7 +276,8 @@ def test_agentrun_rest_provider_skipped_without_api_key():
         }],
     })
     reg = build_default_registry(_Settings(), agent_config=doc)
-    assert "code_sandbox" not in reg.names()
+    assert "code_interpreter" not in reg.names()
+    assert "shell" not in reg.names()
 
 
 def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
@@ -453,6 +506,129 @@ def test_agentrun_rest_provider_recreates_expired_cached_sandbox(monkeypatch):
     assert execute_calls[1][1] == "https://gateway.test/sandboxes/sb-2/contexts/execute"
 
 
+def test_agentrun_rest_provider_runs_shell_command(monkeypatch):
+    requests = []
+
+    class _Resp:
+        content = b"{}"
+
+        def __init__(self, body, status_code=200):
+            self._body = body
+            self.status_code = status_code
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def request(self, method, url, headers=None, json=None):
+            requests.append((method, url, headers or {}, json or {}))
+            if url.endswith("/sandboxes"):
+                return _Resp({"code": "SUCCESS", "data": {"sandboxId": "sb-cmd"}})
+            if url.endswith("/processes/cmd"):
+                return _Resp({
+                    "executionId": "tty_exec_001",
+                    "status": "completed",
+                    "result": {
+                        "exitCode": 0,
+                        "stdout": "total 24\ndrwxr-xr-x 3 user user 4096 Jan 15 10:30 .",
+                        "stderr": "",
+                        "cwd": "/home/user",
+                        "executionTimeMs": 150,
+                    },
+                    "executionTimeMs": 150,
+                })
+            return _Resp({})
+
+    monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
+    provider = AgentRunRestSandboxProvider({
+        "endpoint": "https://gateway.test",
+        "template_name": "code-template",
+        "api_key": "secret",
+        "account_id": "acct-1",
+    })
+    token = set_current_tool_scope(ToolScope(user_id="u1"))
+    try:
+        result = asyncio.run(provider.run_command(command="ls -la", cwd="/home/user"))
+    finally:
+        reset_current_tool_scope(token)
+
+    assert result["stdout"].startswith("total 24")
+    assert result["stderr"] == ""
+    assert result["exit_code"] == 0
+    cmd = requests[-1]
+    assert cmd[0] == "POST"
+    assert cmd[1] == "https://gateway.test/sandboxes/sb-cmd/processes/cmd"
+    assert cmd[2]["X-Acs-Parent-Id"] == "acct-1"
+    # processes/cmd takes only {command, cwd} — no timeout/contextId fields.
+    assert set(cmd[3].keys()) == {"command", "cwd"}
+    assert cmd[3]["command"] == "ls -la"
+    assert cmd[3]["cwd"] == "/home/user"
+
+
+def test_agentrun_rest_provider_shell_command_failure_status(monkeypatch):
+    requests = []
+
+    class _Resp:
+        content = b"{}"
+
+        def __init__(self, body):
+            self._body = body
+            self.status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def request(self, method, url, headers=None, json=None):
+            requests.append((method, url, json or {}))
+            if url.endswith("/sandboxes"):
+                return _Resp({"code": "SUCCESS", "data": {"sandboxId": "sb-fail"}})
+            return _Resp({
+                "status": "timeout",
+                "result": {"exitCode": 0, "stdout": "", "stderr": ""},
+            })
+
+    monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
+    provider = AgentRunRestSandboxProvider({
+        "endpoint": "https://gateway.test",
+        "template_name": "code-template",
+        "api_key": "secret",
+        "account_id": "acct-1",
+    })
+    token = set_current_tool_scope(ToolScope(user_id="u1"))
+    try:
+        result = asyncio.run(provider.run_command(command="sleep 999", cwd="/home/user"))
+    finally:
+        reset_current_tool_scope(token)
+
+    # Non-terminal status with zero exitCode must still surface as a failure.
+    assert result["exit_code"] == 1
+
+
 def _make_fake_rest_client(requests):
     class _Resp:
         content = b"{}"
@@ -571,6 +747,66 @@ def test_install_skill_tool_requires_admin(monkeypatch, tmp_path):
     assert len(calls) == 1
 
 
+def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path):
+    from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
+    from app.agent_config import load_agent_config
+
+    config_path = str(tmp_path / "config.yaml")
+    settings = type("Settings", (), {"config_path": config_path})()
+    reloaded = []
+    doc = load_agent_config(config_path)  # -> DEFAULT_DOCUMENT (agent "main", skill.writing ready+enabled)
+    tool = make_enable_skill_for_agent_tool(
+        settings, doc, on_config_change=lambda: reloaded.append(True)
+    )
+    box = ToolBox([tool])
+
+    def _call(args, role):
+        tc = ToolCall(id="c", name="enable_skill_for_agent", arguments=args)
+        return asyncio.run(box.dispatch(tc, scope=ToolScope(metadata={"role": role})))
+
+    # Non-admin is blocked before any mutation.
+    denied = _call('{"skill_id":"skill.writing","enabled":false}', "user")
+    assert not denied.ok
+    assert "requires admin permission" in denied.error
+    assert reloaded == []
+
+    # Admin disables the (default-enabled) skill: a real change, persisted + reloaded.
+    off = _call('{"skill_id":"skill.writing","enabled":false}', "admin")
+    assert off.ok
+    assert '"changed": true' in off.content
+    assert '"runtime_reloaded": true' in off.content
+    persisted = load_agent_config(config_path)
+    assert "skill.writing" not in next(a for a in persisted.agents if a.id == "main").skills.enabled
+
+    # Admin re-enables it.
+    on = _call('{"skill_id":"skill.writing"}', "admin")
+    assert on.ok
+    assert '"changed": true' in on.content
+    persisted = load_agent_config(config_path)
+    assert "skill.writing" in next(a for a in persisted.agents if a.id == "main").skills.enabled
+    assert reloaded == [True, True]
+
+
+def test_enable_skill_for_agent_tool_rejects_not_ready_skill(tmp_path):
+    from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
+    from app.agent_config import load_agent_config
+
+    config_path = str(tmp_path / "config.yaml")
+    settings = type("Settings", (), {"config_path": config_path})()
+    doc = load_agent_config(config_path)
+    # skill.data_analysis depends on the (disabled) sandbox capability -> not ready.
+    tool = make_enable_skill_for_agent_tool(settings, doc)
+    box = ToolBox([tool])
+    tc = ToolCall(
+        id="call_2",
+        name="enable_skill_for_agent",
+        arguments='{"skill_id":"skill.data_analysis"}',
+    )
+    result = asyncio.run(box.dispatch(tc, scope=ToolScope(metadata={"role": "admin"})))
+    assert not result.ok
+    assert "not ready" in result.error
+
+
 def test_install_skill_url_git_disabled_in_production():
     install_config = {
         "allow_sources": ["zip_upload", "url", "git"],
@@ -583,5 +819,171 @@ def test_install_skill_url_git_disabled_in_production():
             assert source_type in str(exc)
         else:
             raise AssertionError(f"{source_type} should be disabled in production")
-
     _validate_source_allowed("zip_upload", install_config, "production")
+
+
+def test_install_finds_and_reads_skill_md_only_package(tmp_path):
+    """A community skill shipped as just SKILL.md (no skill.yaml) must be
+    located by _find_skill_dir and read by _read_skill_package."""
+    wrapper = tmp_path / "archive-root"
+    pkg = wrapper / "skill-creator"
+    pkg.mkdir(parents=True)
+    (pkg / "SKILL.md").write_text(
+        "---\n"
+        "name: skill-creator\n"
+        "description: Create new skills.\n"
+        "metadata:\n  version: \"1.4.0\"\n"
+        "---\n\n# Skill Creator\n\nDraft, eval, iterate.\n",
+        encoding="utf-8",
+    )
+
+    found = _find_skill_dir(wrapper)
+    assert found == pkg
+    package = _read_skill_package(found)
+    assert package.capability_id == "skill.skill-creator"
+    assert package.name == "skill-creator"
+    assert package.version == "1.4.0"
+    assert "Draft, eval, iterate." in package.instructions
+    # No skill.yaml -> runtime block absent, but no crash.
+    deps = _dependency_summary(pkg)
+    assert deps["runtime"] == {}
+    assert deps["has_dependencies"] is False
+
+
+def test_install_rejects_dir_with_no_manifest(tmp_path):
+    bad = tmp_path / "not-a-skill"
+    bad.mkdir()
+    (bad / "README.md").write_text("nothing here", encoding="utf-8")
+    try:
+        _find_skill_dir(tmp_path)
+    except ValueError as exc:
+        assert "skill.yaml or SKILL.md" in str(exc)
+    else:
+        raise AssertionError("expected missing-manifest error")
+
+
+# --- Progressive-disclosure skill tools: load_skill + read_skill_resource ---
+
+def _make_skill(tmp_path, skill_id="architecture-diagram"):
+    skill_dir = tmp_path / skill_id
+    (skill_dir / "resources").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {skill_id}\ndescription: Draw diagrams.\n---\n\n"
+        "Copy the template at resources/template.html.\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "resources" / "template.html").write_text(
+        "<html>TEMPLATE</html>", encoding="utf-8"
+    )
+    return skill_dir
+
+
+def _scope_with_skill(skill_dir, skill_id="architecture-diagram"):
+    return ToolScope(
+        user_id="u1",
+        agent_id="main",
+        skill_mounts=[{
+            "id": f"skill.{skill_id}",
+            "version": "0.0.0",
+            "source_path": str(skill_dir),
+            "mount_path": f"/mnt/skills/{skill_id}",
+        }],
+    )
+
+
+def test_load_skill_returns_full_instructions_and_file_manifest(tmp_path):
+    skill_dir = _make_skill(tmp_path)
+    tool = make_load_skill_tool()
+    token = set_current_tool_scope(_scope_with_skill(skill_dir))
+    try:
+        out = asyncio.run(tool.fn(skill_id="skill.architecture-diagram"))
+    finally:
+        reset_current_tool_scope(token)
+    assert "# Skill: architecture-diagram" in out
+    assert "Copy the template at resources/template.html." in out
+    assert "resources/template.html" in out  # bundled-file manifest
+
+
+def test_load_skill_accepts_id_without_prefix(tmp_path):
+    skill_dir = _make_skill(tmp_path)
+    tool = make_load_skill_tool()
+    token = set_current_tool_scope(_scope_with_skill(skill_dir))
+    try:
+        out = asyncio.run(tool.fn(skill_id="architecture-diagram"))
+    finally:
+        reset_current_tool_scope(token)
+    assert "# Skill: architecture-diagram" in out
+
+
+def test_load_skill_rejects_skill_not_enabled_for_agent(tmp_path):
+    skill_dir = _make_skill(tmp_path)
+    tool = make_load_skill_tool()
+    token = set_current_tool_scope(_scope_with_skill(skill_dir))
+    try:
+        out = asyncio.run(tool.fn(skill_id="skill.other"))
+    finally:
+        reset_current_tool_scope(token)
+    assert "not an available skill" in out
+    assert "skill.architecture-diagram" in out  # lists what IS available
+
+
+def test_read_skill_resource_reads_bundled_file(tmp_path):
+    skill_dir = _make_skill(tmp_path)
+    tool = make_read_skill_resource_tool()
+    token = set_current_tool_scope(_scope_with_skill(skill_dir))
+    try:
+        out = asyncio.run(tool.fn(
+            skill_id="skill.architecture-diagram", path="resources/template.html"
+        ))
+    finally:
+        reset_current_tool_scope(token)
+    assert out == "<html>TEMPLATE</html>"
+
+
+def test_read_skill_resource_blocks_path_traversal(tmp_path):
+    skill_dir = _make_skill(tmp_path)
+    # A secret sibling file outside the skill dir.
+    (tmp_path / "secret.txt").write_text("TOP SECRET", encoding="utf-8")
+    tool = make_read_skill_resource_tool()
+    token = set_current_tool_scope(_scope_with_skill(skill_dir))
+    try:
+        out = asyncio.run(tool.fn(
+            skill_id="skill.architecture-diagram", path="../secret.txt"
+        ))
+    finally:
+        reset_current_tool_scope(token)
+    assert "escapes the skill directory" in out
+    assert "TOP SECRET" not in out
+
+
+def test_read_skill_resource_rejects_skill_not_enabled(tmp_path):
+    skill_dir = _make_skill(tmp_path)
+    tool = make_read_skill_resource_tool()
+    token = set_current_tool_scope(_scope_with_skill(skill_dir))
+    try:
+        out = asyncio.run(tool.fn(skill_id="skill.other", path="resources/template.html"))
+    finally:
+        reset_current_tool_scope(token)
+    assert "not an available skill" in out
+
+
+def test_read_skill_resource_missing_file(tmp_path):
+    skill_dir = _make_skill(tmp_path)
+    tool = make_read_skill_resource_tool()
+    token = set_current_tool_scope(_scope_with_skill(skill_dir))
+    try:
+        out = asyncio.run(tool.fn(
+            skill_id="skill.architecture-diagram", path="resources/nope.txt"
+        ))
+    finally:
+        reset_current_tool_scope(token)
+    assert "is not a file" in out
+
+
+def test_skill_tools_registered_when_skills_configured(tmp_path):
+    doc = AgentConfigDocument(**{"skills": {"root": str(tmp_path)}})
+    reg = build_default_registry(
+        type("S", (), {"search_provider": "none"})(), agent_config=doc
+    )
+    assert "load_skill" in reg.names()
+    assert "read_skill_resource" in reg.names()

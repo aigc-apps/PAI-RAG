@@ -65,6 +65,21 @@ class ScopedSandboxProvider:
             cwd or self.cwd,
         )
 
+    async def run_command(
+        self,
+        *,
+        command: str,
+        cwd: Optional[str] = None,
+        timeout: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        return await asyncio.to_thread(
+            self._run_command_sync,
+            self._scope_key(),
+            command,
+            timeout or self.default_timeout_seconds,
+            cwd or self.cwd,
+        )
+
     def _run_code_sync(
         self,
         scope_key: str,
@@ -82,6 +97,22 @@ class ScopedSandboxProvider:
             language=language,
             timeout=timeout,
             context_id=context_id,
+            cwd=cwd,
+        )
+
+    def _run_command_sync(
+        self,
+        scope_key: str,
+        command: str,
+        timeout: int,
+        cwd: str,
+    ) -> Dict[str, Any]:
+        handle = self._ensure_sandbox(scope_key)
+        return self._execute_command(
+            handle,
+            scope_key=scope_key,
+            command=command,
+            timeout=timeout,
             cwd=cwd,
         )
 
@@ -138,6 +169,17 @@ class ScopedSandboxProvider:
     ) -> Dict[str, Any]:
         raise NotImplementedError
 
+    def _execute_command(
+        self,
+        handle,
+        *,
+        scope_key: str,
+        command: str,
+        timeout: int,
+        cwd: str,
+    ) -> Dict[str, Any]:
+        raise NotImplementedError
+
     def _stop_sandbox(self, handle) -> None:
         raise NotImplementedError
 
@@ -157,6 +199,7 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
     Default gateway contract:
       POST {endpoint}/sandboxes
       POST {endpoint}/sandboxes/{sandbox_id}/contexts/execute
+      POST {endpoint}/sandboxes/{sandbox_id}/processes/cmd
       POST {endpoint}/sandboxes/{sandbox_id}/stop
     """
 
@@ -176,6 +219,9 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         self.create_path = str(settings.get("create_path") or "/sandboxes")
         self.execute_path = str(
             settings.get("execute_path") or "/sandboxes/{sandbox_id}/contexts/execute"
+        )
+        self.cmd_path = str(
+            settings.get("cmd_path") or "/sandboxes/{sandbox_id}/processes/cmd"
         )
         self.stop_path = str(settings.get("stop_path") or "/sandboxes/{sandbox_id}/stop")
         self.health_path = str(settings.get("health_path") or "")
@@ -235,6 +281,34 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
                 language=language,
                 timeout=timeout or self.default_timeout_seconds,
                 context_id=context_id,
+                cwd=cwd or self.cwd,
+            )
+
+    async def run_command(
+        self,
+        *,
+        command: str,
+        cwd: Optional[str] = None,
+        timeout: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        scope_key = self._scope_key()
+        handle = await self._ensure_sandbox_async(scope_key)
+        try:
+            return await self._execute_command_async(
+                handle,
+                scope_key=scope_key,
+                command=command,
+                timeout=timeout or self.default_timeout_seconds,
+                cwd=cwd or self.cwd,
+            )
+        except SandboxUnavailable:
+            await self._discard_sandbox_async(scope_key, handle)
+            handle = await self._ensure_sandbox_async(scope_key)
+            return await self._execute_command_async(
+                handle,
+                scope_key=scope_key,
+                command=command,
+                timeout=timeout or self.default_timeout_seconds,
                 cwd=cwd or self.cwd,
             )
 
@@ -366,6 +440,28 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         )
         return _normalize_execution_result(body)
 
+    async def _execute_command_async(
+        self,
+        handle,
+        *,
+        scope_key: str,
+        command: str,
+        timeout: int,
+        cwd: str,
+    ) -> Dict[str, Any]:
+        # AgentRun's processes/cmd route takes only {command, cwd}; the gateway
+        # enforces a hard 30s ceiling regardless of the requested timeout.
+        path = self.cmd_path.format(sandbox_id=handle)
+        body = await self._request_async(
+            "POST",
+            path,
+            json=_compact_dict({
+                "command": command,
+                "cwd": cwd,
+            }),
+        )
+        return _normalize_command_result(body)
+
     async def _stop_sandbox_async(self, handle) -> None:
         await self._request_async("POST", self.stop_path.format(sandbox_id=handle), json=None)
 
@@ -430,6 +526,17 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         language: str,
         timeout: int,
         context_id: Optional[str],
+        cwd: str,
+    ) -> Dict[str, Any]:
+        raise RuntimeError("agentrun_rest provider is async-only")
+
+    def _execute_command(
+        self,
+        handle,
+        *,
+        scope_key: str,
+        command: str,
+        timeout: int,
         cwd: str,
     ) -> Dict[str, Any]:
         raise RuntimeError("agentrun_rest provider is async-only")
@@ -516,6 +623,18 @@ class AgentRunSdkSandboxProvider(ScopedSandboxProvider):
                     logger.debug(f"delete sandbox context failed: {exc}")
         return _normalize_execution_result(result)
 
+    def _execute_command(
+        self,
+        handle,
+        *,
+        scope_key: str,
+        command: str,
+        timeout: int,
+        cwd: str,
+    ) -> Dict[str, Any]:
+        result = handle.commands.run(command=command, timeout=timeout, cwd=cwd)
+        return _normalize_command_result(result)
+
     def _stop_sandbox(self, handle) -> None:
         handle.stop()
 
@@ -552,6 +671,34 @@ def _normalize_execution_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "stderr": result.get("stderr", ""),
         "exit_code": result.get("exit_code", result.get("exitCode", 0)),
         "artifacts": result.get("artifacts"),
+        "raw": result,
+    }
+
+
+def _normalize_command_result(result: Any) -> Dict[str, Any]:
+    """Normalize a processes/cmd result from either the REST gateway or the SDK.
+
+    REST shape: ``{executionId, status, result: {exitCode, stdout, stderr,
+    cwd, executionTimeMs}, executionTimeMs}``. SDK shape: a CommandResult-like
+    object (pydantic model or dict) with ``exit_code/exitCode, stdout, stderr``.
+    """
+    if hasattr(result, "model_dump"):
+        result = result.model_dump()
+    if not isinstance(result, dict):
+        return {"stdout": "", "stderr": str(result), "exit_code": 1, "raw": result}
+    status = result.get("status")
+    inner = result.get("result")
+    if isinstance(inner, dict):
+        result = inner
+    exit_code = result.get("exit_code", result.get("exitCode", 0))
+    # A non-terminal status (e.g. "timeout", "error") with a zero exit code must
+    # still surface as a failure to the model.
+    if status not in (None, "", "completed", "ok", "success") and not exit_code:
+        exit_code = 1
+    return {
+        "stdout": str(result.get("stdout") or ""),
+        "stderr": str(result.get("stderr") or ""),
+        "exit_code": exit_code,
         "raw": result,
     }
 

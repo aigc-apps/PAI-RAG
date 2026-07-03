@@ -17,7 +17,7 @@ dependency environments.
 - **Skill env**: A prebuilt dependency environment for the current agent's
   enabled skills, for example `/mnt/skill-envs/<env_fingerprint>`.
 - **Runtime tool**: A normal tool available during user requests, such as
-  `web_search`, `knowledge_search`, and `code_sandbox`.
+  `web_search`, `knowledge_search`, and `code_interpreter`.
 - **Control-plane tool**: An admin-only tool that changes platform state, such
   as `install_skill`, `rebuild_skill_env`, and `enable_skill_for_agent`.
 
@@ -86,13 +86,23 @@ agents:
 in tool dispatch using request metadata, so prompt instructions alone cannot
 grant access.
 
-The Settings UI uses two control-plane HTTP endpoints:
+The Settings UI uses three control-plane HTTP endpoints:
 
 - `POST /v1/skills/uploads`: Admin-only multipart upload for a skill zip. Returns
   an `upload_id`.
 - `POST /v1/skills/install`: Admin-only install action. Accepts
   `zip_upload`, `url`, or `git` sources and refreshes the runtime config after
   install.
+- `POST /v1/skills/enable`: Admin-only enable/disable of an installed, `ready`
+  skill for one agent (`{skill_id, agent_id?, enabled?}`; `agent_id` defaults to
+  the platform default agent). Rejects unknown or not-ready skills and refreshes
+  the runtime config after the change.
+
+Each endpoint has a matching admin-only control-plane tool (`install_skill`,
+`enable_skill_for_agent`) gated by `permission="admin"` in tool dispatch, so an
+operator/admin agent can drive the same actions. The tools persist to the agent
+config on disk and reload the running registry + agent config in place (via the
+`on_config_change` reloader) so changes take effect without a restart.
 
 Allowed source types:
 
@@ -156,6 +166,9 @@ First implementation status:
 
 - `install_skill` installs the skill package and reports whether dependency
   build is required.
+- `enable_skill_for_agent` enables/disables an installed, `ready` skill for an
+  agent (control-plane tool + `POST /v1/skills/enable`), blocking not-ready
+  skills so an agent never mounts a skill whose dependencies are unbuilt.
 - Dependency build execution is reserved for `rebuild_skill_env`.
 - Runtime install remains disabled.
 
@@ -244,6 +257,39 @@ actual content comes from dynamic NAS mounts at sandbox start, never baked in.
 A bootstrap script (`/usr/local/bin/agent-sandbox-bootstrap`) should validate on
 start that the three mounts exist and are readable by uid 1000, and fail fast
 with a contract-version marker if a mount is missing.
+
+## Progressive Disclosure (how skills reach the model)
+
+Skills follow the Agent Skills three-level progressive-disclosure model so the
+context stays lean until a skill is actually needed. Nothing is gated on a
+lexical query match (the earlier `_skill_matches` substring/keyword gate failed
+for cross-language queries and for community `SKILL.md`-only skills that carry no
+trigger keywords — those skills were effectively invisible to the agent).
+
+- **L1 — catalog (always injected).** `render_skill_catalog` emits a one-line
+  `name + description + capability_id` entry for every skill enabled on the
+  current agent, into the per-turn `context_block`. This is what makes the agent
+  *aware* of its skills. The catalog text instructs the model to call
+  `load_skill` before acting. Cost is ~1 line per skill.
+- **L2 — full instructions (on demand).** The `load_skill(skill_id)` tool returns
+  the skill's complete `SKILL.md` body plus a manifest of its bundled files. The
+  model decides when to load, based on the L1 catalog — far more reliable than
+  the host guessing by substring. Loaded text lives in the tool-result history,
+  so it is naturally sticky across the turn's tool loop without being re-injected
+  every turn.
+- **L3 — bundled resources (on demand).** The `read_skill_resource(skill_id,
+  path)` tool reads one bundled file (template, reference, script) from the skill
+  directory. It is **host-side and path-jailed** to the skill's `source_path`, so
+  it works with no sandbox and no NAS — important because the local `source_path`
+  is never bind-mounted (only NAS-backed mounts with a `serverAddr` bind at
+  `/mnt/skills/<id>`), so a sandbox `cat /mnt/skills/...` only works on a NAS
+  deployment while `read_skill_resource` always works.
+
+Both `load_skill` and `read_skill_resource` are read-only and authorize against
+`ToolScope.skill_mounts` — the per-request set of mounts already filtered to the
+skills enabled for this agent. A request for a skill not on that list is refused
+with the list of available ids. They are registered whenever a skill source is
+configured (`skill_sources(agent_config.skills)` is non-empty).
 
 ## User Roles
 
