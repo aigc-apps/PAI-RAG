@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, ConversationDetail } from "../types";
+import type { ChatMessage, ConversationDetail, FileArtifact } from "../types";
 
 interface WireHistoryMessage {
   role: "user" | "assistant";
@@ -13,6 +13,7 @@ interface WireHistoryMessage {
     name: string;
     arguments?: string;
     output?: string;
+    files?: FileArtifact[];
   }>;
 }
 
@@ -34,6 +35,7 @@ export function normalizeHistoryMessages(
       toolCalls: (r.tool_calls ?? []).map((tc) => ({
         id: tc.call_id, name: tc.name, arguments: tc.arguments ?? "",
         status: "done" as const, output: tc.output ?? "",
+        files: tc.files && tc.files.length ? tc.files : undefined,
       })),
     };
   });

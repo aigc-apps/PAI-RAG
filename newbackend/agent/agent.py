@@ -256,7 +256,8 @@ class Agent:
                               if result.message.content else result.message.content)
                     messages.append(Message("tool", content=capped, tool_call_id=tc.id))
                     yield ToolResult(call_id=tc.id, name=tc.name, ok=result.ok,
-                                     output=result.content, error=result.error)
+                                     output=result.content, error=result.error,
+                                     files=result.files)
                     if ctx.tools.is_return_direct(tc.name) and result.ok:
                         direct = _format_return_direct(result.content)
                         if direct:

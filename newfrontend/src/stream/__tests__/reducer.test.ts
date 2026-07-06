@@ -164,6 +164,28 @@ describe("reduceStreamEvent — tools", () => {
     expect(s.message.toolCalls[0].error).toBe("boom");
   });
 
+  it("folds file artifacts from a tool result onto the tool", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "publish_artifact", call_id: "c1" } } as any);
+    s = reduceStreamEvent(s, {
+      type: "response.tool_result",
+      call_id: "c1",
+      output: "Published report.md",
+      ok: true,
+      files: [{ id: "tok1", name: "report.md", mime: "text/markdown", size: 12, kind: "markdown" }],
+    } as any);
+    const t = s.message.toolCalls[0];
+    expect(t.files).toHaveLength(1);
+    expect(t.files?.[0]).toMatchObject({ id: "tok1", name: "report.md", kind: "markdown" });
+  });
+
+  it("leaves files undefined when the result carries none", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "web_fetch", call_id: "c1" } } as any);
+    s = reduceStreamEvent(s, { type: "response.tool_result", call_id: "c1", output: "PAGE", ok: true, files: [] } as any);
+    expect(s.message.toolCalls[0].files).toBeUndefined();
+  });
+
   it("initial message has an empty toolCalls array", () => {
     expect(initialStreamState("x").message.toolCalls).toEqual([]);
   });

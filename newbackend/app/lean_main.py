@@ -25,6 +25,7 @@ from app.routes.conversations import router as conversations_router
 from app.routes.models import router as models_router
 from app.routes.users import router as users_router
 from app.routes.config import router as config_router
+from app.routes.files import router as files_router
 from app.agent_config import apply_runtime_status, load_agent_config
 from agent.soul import Soul
 from agent.tools.defaults import build_default_registry
@@ -133,3 +134,4 @@ app.include_router(conversations_router)
 app.include_router(models_router)
 app.include_router(users_router)
 app.include_router(config_router)
+app.include_router(files_router)

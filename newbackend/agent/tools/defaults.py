@@ -7,6 +7,7 @@ from agent.tools.builtin.web_fetch import make_web_fetch_tool
 from agent.tools.builtin.web_search import make_web_search_tool, SearchProvider
 from agent.tools.builtin.code_interpreter import make_code_interpreter_tool
 from agent.tools.builtin.shell import make_shell_tool
+from agent.tools.builtin.publish_artifact import make_publish_artifact_tool
 from agent.tools.builtin.install_skill import make_install_skill_tool
 from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
 from agent.tools.builtin.load_skill import make_load_skill_tool
@@ -38,6 +39,10 @@ def build_default_registry(
         reg.register(make_web_search_tool(provider))
 
     sandbox_provider = make_sandbox_provider(agent_config)
+    # Stash the warm provider on the registry so the /v1/files serve endpoint can
+    # read artifact bytes back from the live sandbox when no backend NAS mount is
+    # configured (best-effort fallback path).
+    reg.sandbox_provider = sandbox_provider
     if sandbox_provider is not None:
         # The sandbox is an MCP-like provider that exposes several tools over one
         # warm instance: code_interpreter (run_code) and shell (run_command) share
@@ -55,6 +60,11 @@ def build_default_registry(
                 default_timeout=sandbox_provider.default_timeout_seconds,
             )
         )
+        # publish_artifact surfaces sandbox files to the frontend. Only useful
+        # when the signing secret is configured (else it would refuse at call
+        # time); gate registration on it to keep the tool list clean.
+        if getattr(settings, "files_url_secret", ""):
+            reg.register(make_publish_artifact_tool(sandbox_provider, settings))
     # Progressive-disclosure skill loading (read-only, safe): the always-injected
     # catalog shows only summaries; load_skill pulls a skill's full instructions on
     # demand and read_skill_resource reads its bundled files (host-side, path-jailed,

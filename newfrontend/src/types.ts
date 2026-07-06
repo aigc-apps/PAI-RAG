@@ -6,6 +6,18 @@ export type MessageStatus =
   | "cancelled";
 export type ReasoningStatus = "idle" | "streaming" | "done";
 
+/**
+ * A file the agent surfaced from the sandbox (via publish_artifact). `id` is a
+ * signed token fetched from `/v1/files/{id}`; `kind` drives preview-vs-download.
+ */
+export interface FileArtifact {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  kind: "image" | "markdown" | "html" | "text" | "file";
+}
+
 export interface ToolUse {
   id: string;
   name: string;
@@ -13,6 +25,8 @@ export interface ToolUse {
   status: "running" | "done" | "error";
   output?: string;
   error?: string;
+  /** Structured file artifacts this tool produced (separate from `output`). */
+  files?: FileArtifact[];
 }
 
 /**

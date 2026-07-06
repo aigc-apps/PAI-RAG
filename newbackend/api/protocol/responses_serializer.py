@@ -119,7 +119,11 @@ class _Assembler:
         )
 
     def on_tool_result(
-        self, call_id: str, output: Optional[str], error: Optional[str]
+        self,
+        call_id: str,
+        output: Optional[str],
+        error: Optional[str],
+        files: Optional[List[Dict]] = None,
     ):
         self.store_items.append(
             {
@@ -128,6 +132,7 @@ class _Assembler:
                 "content": {
                     "call_id": call_id,
                     "output": output if output is not None else (error or ""),
+                    "files": files or [],
                 },
             }
         )
@@ -135,6 +140,7 @@ class _Assembler:
             "call_id": call_id,
             "output": output if output is not None else (error or ""),
             "ok": error is None,
+            "files": files or [],
         })
 
     def on_failed(self, message: str):
@@ -227,7 +233,7 @@ async def serialize_response_sync(
         elif isinstance(ev, ToolCompleted):
             asm.on_tool_completed(ev.call_id, ev.name, ev.arguments)
         elif isinstance(ev, ToolResult):
-            asm.on_tool_result(ev.call_id, ev.output, ev.error)
+            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files)
         elif isinstance(ev, RunCompleted):
             usage = ev.usage
         elif isinstance(ev, RunFailed):
@@ -619,12 +625,13 @@ async def serialize_response_stream(
                 )
             )
         elif isinstance(ev, ToolResult):
-            asm.on_tool_result(ev.call_id, ev.output, ev.error)
+            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files)
             yield _sse_obj({
                 "type": "response.tool_result",
                 "call_id": ev.call_id,
                 "output": ev.output if ev.output is not None else (ev.error or ""),
                 "ok": ev.ok,
+                "files": ev.files or [],
                 "sequence_number": nxt(),
             })
         elif isinstance(ev, RunCompleted):

@@ -54,14 +54,15 @@ def group_conversation_messages(
         # turn has a response row but no assistant message item -> empty text.
         if resp is not None or assistant_item is not None or reasoning_item is not None:
             fcalls = [i for i in group if i.type == "function_call"]
-            outputs = {i.content.get("call_id"): i.content.get("output", "")
+            outputs = {i.content.get("call_id"): i.content
                        for i in group if i.type == "function_call_output"}
             tool_calls = [
                 {
                     "call_id": c.content.get("call_id", ""),
                     "name": c.content.get("name", ""),
                     "arguments": c.content.get("arguments", "") or "",
-                    "output": outputs.get(c.content.get("call_id"), ""),
+                    "output": (outputs.get(c.content.get("call_id")) or {}).get("output", ""),
+                    "files": (outputs.get(c.content.get("call_id")) or {}).get("files", []),
                 }
                 for c in fcalls
             ]

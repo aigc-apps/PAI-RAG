@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 from pydantic import BaseModel
 
 
@@ -52,6 +52,8 @@ class ToolResult(BaseModel):
     ok: bool
     output: Optional[str] = None
     error: Optional[str] = None
+    # Structured file artifacts, kept separate from `output` (the LLM-facing str).
+    files: Optional[List[dict]] = None
 
 
 class RunCompleted(BaseModel):

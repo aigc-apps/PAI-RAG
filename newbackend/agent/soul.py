@@ -71,6 +71,22 @@ _TOOL_PROTOCOL = (
     "action at a time, and stop once the request is satisfied."
 )
 
+# Only added when publish_artifact is registered. Without it, models tend to
+# write a file in the sandbox and then merely describe it or print its path,
+# which the user cannot open. This tells the model to hand the file to the UI.
+_FILE_OUTPUT_GUIDANCE = (
+    "When you create a file the user should see or keep — a report, chart, "
+    "image, HTML page, diagram, or data export — save it under /mnt/user "
+    "(the durable per-user directory, also available as $AGENT_USER_PATH in the "
+    "sandbox) and then call publish_artifact with its path. That surfaces the "
+    "file in the UI: markdown, images, and HTML preview in a side panel, other "
+    "types get a download link. Do not just print the sandbox path or offer to "
+    "paste the file's contents — publish it so the user can actually open it. "
+    "The sandbox has no network the user's browser can reach, so never start a "
+    "web server (e.g. python -m http.server) or point the user at a localhost "
+    "URL; publish_artifact is the only way to surface a file."
+)
+
 
 def render_stable_system_prompt(
     soul: Soul, *, tool_names: List[str], project_context: str = ""
@@ -92,6 +108,8 @@ def render_stable_system_prompt(
     tools_section = "# Tools\n" + _TOOL_PROTOCOL
     if tool_names:
         tools_section += "\n\nTools available this session: " + ", ".join(tool_names) + "."
+        if "publish_artifact" in tool_names:
+            tools_section += "\n\n" + _FILE_OUTPUT_GUIDANCE
     else:
         tools_section += "\n\nYou have no tools enabled in this session; answer from your own knowledge."
     parts.append(tools_section)

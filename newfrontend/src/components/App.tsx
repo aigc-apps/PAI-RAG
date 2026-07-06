@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { ChatView } from "./ChatView";
 import { SetupWizard } from "./SetupWizard";
 import { SettingsView } from "./SettingsView";
+import { PreviewPanel } from "./PreviewPanel";
 import { useAgentConfigStore } from "../store/agentConfig";
 
 export function App() {
@@ -39,6 +40,7 @@ export function App() {
       <main className="flex flex-1 flex-col min-w-0">
         <ChatView onToggleSidebar={() => setSidebarOpen((o) => !o)} />
       </main>
+      <PreviewPanel />
     </div>
   );
 }

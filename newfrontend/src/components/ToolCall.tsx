@@ -1,8 +1,60 @@
 import { useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { AlertTriangle, Check, X, ChevronRight } from "lucide-react";
-import type { ToolUse } from "../types";
+import {
+  AlertTriangle,
+  Check,
+  X,
+  ChevronRight,
+  FileText,
+  FileCode,
+  Image as ImageIcon,
+  File as FileIcon,
+  Download,
+} from "lucide-react";
+import type { FileArtifact, ToolUse } from "../types";
 import { cn } from "../lib/cn";
+import { fileUrl, humanSize } from "../lib/files";
+import { usePreviewStore } from "../store/preview";
+
+function ArtifactIcon({ kind }: { kind: FileArtifact["kind"] }) {
+  const cls = "h-3.5 w-3.5 shrink-0";
+  if (kind === "image") return <ImageIcon className={cls} />;
+  if (kind === "html") return <FileCode className={cls} />;
+  if (kind === "markdown" || kind === "text") return <FileText className={cls} />;
+  return <FileIcon className={cls} />;
+}
+
+function ArtifactChips({ files }: { files: FileArtifact[] }) {
+  const open = usePreviewStore((s) => s.open);
+  return (
+    <div className="flex flex-wrap gap-1.5 px-3 py-2">
+      {files.map((f) => {
+        const label = (
+          <>
+            <ArtifactIcon kind={f.kind} />
+            <span className="truncate max-w-[180px]">{f.name}</span>
+            {f.size >= 0 && (
+              <span className="text-[var(--text-faint)]">{humanSize(f.size)}</span>
+            )}
+          </>
+        );
+        const base =
+          "inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--surface-2)] hover:border-[var(--accent)]/40 transition-colors";
+        // Non-previewable files download directly; previewable ones open the panel.
+        return f.kind === "file" ? (
+          <a key={f.id} href={fileUrl(f.id)} download={f.name} className={base}>
+            {label}
+            <Download className="h-3 w-3 text-[var(--text-faint)]" />
+          </a>
+        ) : (
+          <button key={f.id} type="button" onClick={() => open(f)} className={base}>
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function StatusDot({ status }: { status: ToolUse["status"] }) {
   if (status === "running")
@@ -60,6 +112,11 @@ export function ToolCall({ tool }: { tool: ToolUse }) {
           )}
         />
       </Collapsible.Trigger>
+      {tool.files && tool.files.length > 0 && (
+        <div className="border-t border-[var(--border)] bg-[var(--surface)]">
+          <ArtifactChips files={tool.files} />
+        </div>
+      )}
       <Collapsible.Content className="border-t border-[var(--border)] bg-[var(--surface)] px-3 pb-3 pt-2">
         <div className="mb-2">
           <div className="mb-1 text-xs font-medium text-[var(--text-muted)]">参数</div>

@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     summary_keep_recent: int = 20
     summary_batch: int = 20
     project_context: str = ""
+    # Sandbox file artifacts. `files_url_secret` signs the /v1/files tokens
+    # (feature is off / fails closed when empty). `files_nas_local_root` is the
+    # backend host's mount of the same NAS export the sandbox sees at /mnt/user;
+    # empty => serve by reading bytes back from the live sandbox instead.
+    files_url_secret: str = ""
+    files_nas_local_root: str = ""
+    files_max_bytes: int = 25 * 1024 * 1024
 
 
 def get_settings() -> Settings:

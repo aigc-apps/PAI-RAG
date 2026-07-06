@@ -27,6 +27,15 @@ def test_stable_prompt_has_persona_tools_safety_not_memory_or_instructions():
     assert "# Memory" not in out and "# Additional instructions" not in out
 
 
+def test_publish_artifact_guidance_only_when_tool_enabled():
+    without = render_stable_system_prompt(DEFAULT_SOUL, tool_names=["web_fetch"])
+    assert "publish_artifact" not in without
+    with_tool = render_stable_system_prompt(
+        DEFAULT_SOUL, tool_names=["web_fetch", "publish_artifact"]
+    )
+    assert "publish_artifact" in with_tool and "/mnt/user" in with_tool
+
+
 def test_stable_prompt_lists_no_tools_when_empty_and_project_when_set():
     assert "no tools" in render_stable_system_prompt(DEFAULT_SOUL, tool_names=[]).lower()
     out = render_stable_system_prompt(DEFAULT_SOUL, tool_names=[], project_context="Repo: PAI-RAG")

@@ -92,7 +92,7 @@ def test_assistant_message_carries_tool_calls():
     assistant = msgs[1]
     assert assistant["role"] == "assistant" and assistant["text"] == "here it is"
     assert assistant["tool_calls"] == [
-        {"call_id": "c1", "name": "web_fetch", "arguments": "{\"url\":\"x\"}", "output": "PAGE"}
+        {"call_id": "c1", "name": "web_fetch", "arguments": "{\"url\":\"x\"}", "output": "PAGE", "files": []}
     ]
     # a tool-less turn still has an empty list
     plain = group_conversation_messages(

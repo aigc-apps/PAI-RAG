@@ -11,6 +11,9 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: Dict[str, Tool] = {}
+        # Set by build_default_registry when a sandbox provider is configured, so
+        # the /v1/files endpoint can reuse the same warm session for readback.
+        self.sandbox_provider: Optional[object] = None
 
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools:

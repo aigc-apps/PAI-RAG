@@ -1,4 +1,4 @@
-import type { AssistantStep, ChatMessage, ToolUse } from "../types";
+import type { AssistantStep, ChatMessage, FileArtifact, ToolUse } from "../types";
 
 type StreamEvent = Record<string, unknown>;
 
@@ -169,10 +169,12 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
     case "response.tool_result": {
       const id = callIdOf(e);
       const ok = e.ok !== false;
+      const files = Array.isArray(e.files) ? (e.files as FileArtifact[]) : undefined;
       return { ...state, message: { ...msg, toolCalls: msg.toolCalls.map(t =>
         t.id === id ? { ...t, status: ok ? "done" : "error",
           output: ok ? String(e.output ?? "") : t.output,
-          error: ok ? t.error : String(e.output ?? e.error ?? "") } : t) } };
+          error: ok ? t.error : String(e.output ?? e.error ?? ""),
+          files: files && files.length ? files : t.files } : t) } };
     }
 
     case "response.completed":
