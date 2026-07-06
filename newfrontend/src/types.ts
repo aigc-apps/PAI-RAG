@@ -27,6 +27,10 @@ export interface ToolUse {
   error?: string;
   /** Structured file artifacts this tool produced (separate from `output`). */
   files?: FileArtifact[];
+  /** Client clock (ms) when the tool call first appeared; used to derive duration. */
+  startedAt?: number;
+  /** Elapsed time (ms) from the call appearing to its result, when known. */
+  durationMs?: number;
 }
 
 /**

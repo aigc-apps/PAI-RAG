@@ -179,6 +179,16 @@ describe("reduceStreamEvent — tools", () => {
     expect(t.files?.[0]).toMatchObject({ id: "tok1", name: "report.md", kind: "markdown" });
   });
 
+  it("records a tool's elapsed time from added to result", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "web_fetch", call_id: "c1" } } as any);
+    expect(s.message.toolCalls[0].startedAt).toBeTypeOf("number");
+    s = reduceStreamEvent(s, { type: "response.tool_result", call_id: "c1", output: "PAGE", ok: true } as any);
+    const d = s.message.toolCalls[0].durationMs;
+    expect(d).toBeTypeOf("number");
+    expect(d as number).toBeGreaterThanOrEqual(0);
+  });
+
   it("leaves files undefined when the result carries none", () => {
     let s = initialStreamState("tmp");
     s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "web_fetch", call_id: "c1" } } as any);

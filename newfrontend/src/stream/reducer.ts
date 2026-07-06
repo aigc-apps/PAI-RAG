@@ -146,7 +146,13 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
             ...msg,
             toolCalls: [
               ...msg.toolCalls,
-              { id, name: item.name || "", arguments: "", status: "running" } as ToolUse,
+              {
+                id,
+                name: item.name || "",
+                arguments: "",
+                status: "running",
+                startedAt: Date.now(),
+              } as ToolUse,
             ],
             steps,
             text: finalAnswer(steps),
@@ -174,7 +180,8 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
         t.id === id ? { ...t, status: ok ? "done" : "error",
           output: ok ? String(e.output ?? "") : t.output,
           error: ok ? t.error : String(e.output ?? e.error ?? ""),
-          files: files && files.length ? files : t.files } : t) } };
+          files: files && files.length ? files : t.files,
+          durationMs: t.startedAt != null ? Date.now() - t.startedAt : t.durationMs } : t) } };
     }
 
     case "response.completed":

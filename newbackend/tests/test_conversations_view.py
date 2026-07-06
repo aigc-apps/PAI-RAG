@@ -80,6 +80,18 @@ def test_function_call_items_are_skipped():
     assert msgs[1]["text"] == "done"
 
 
+def test_assistant_message_carries_usage():
+    items = _items([
+        ("message", "user", {"text": "hi"}, "resp_1"),
+        ("message", "assistant", {"text": "yo"}, "resp_1"),
+    ])
+    usage = {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+    resps = [StoredResponse(id="resp_1", model="m", status="completed",
+                            conversation_id="c", usage=usage)]
+    msgs = group_conversation_messages(items, resps)
+    assert msgs[1]["usage"] == usage
+
+
 def test_assistant_message_carries_tool_calls():
     items = _items([
         ("message", "user", {"text": "fetch x"}, "resp_1"),

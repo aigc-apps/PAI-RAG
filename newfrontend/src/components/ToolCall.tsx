@@ -32,6 +32,14 @@ const STATUS_TONE: Record<ToolUse["status"], string> = {
   error: "text-[var(--danger)]",
 };
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const m = Math.floor(ms / 60_000);
+  const s = Math.round((ms % 60_000) / 1000);
+  return `${m}m${s}s`;
+}
+
 export function ToolCall({ tool }: { tool: ToolUse }) {
   // Errors auto-expand so the failure is visible without an extra click.
   const [open, setOpen] = useState(tool.status === "error");
@@ -53,6 +61,11 @@ export function ToolCall({ tool }: { tool: ToolUse }) {
         <span className={cn("text-xs font-medium ml-1", STATUS_TONE[tool.status])}>
           {STATUS_WORD[tool.status]}
         </span>
+        {tool.durationMs != null && tool.status !== "running" && (
+          <span className="text-xs text-[var(--text-faint)]">
+            {formatDuration(tool.durationMs)}
+          </span>
+        )}
         <ChevronRight
           className={cn(
             "h-3.5 w-3.5 ml-auto shrink-0 text-[var(--text-faint)] transition-transform group-hover:text-[var(--text-muted)]",

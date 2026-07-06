@@ -1,11 +1,14 @@
 import { Copy, RefreshCw, Check } from "lucide-react";
 import { useState } from "react";
+import type { ChatMessage } from "../types";
 
 export function MessageControls({
   text,
+  usage,
   onRegenerate,
 }: {
   text: string;
+  usage?: ChatMessage["usage"];
   onRegenerate?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -37,6 +40,14 @@ export function MessageControls({
         >
           <RefreshCw className="h-3.5 w-3.5" />
         </button>
+      )}
+      {usage && usage.total > 0 && (
+        <span
+          className="ml-1 self-center text-xs text-[var(--text-faint)]"
+          title={`输入 ${usage.input.toLocaleString()} · 输出 ${usage.output.toLocaleString()} tokens`}
+        >
+          {usage.total.toLocaleString()} tokens
+        </span>
       )}
     </div>
   );

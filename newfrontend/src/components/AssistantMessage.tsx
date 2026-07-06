@@ -61,7 +61,11 @@ export function AssistantMessage({
           <div className="mt-1 text-xs text-[var(--text-faint)]">已取消</div>
         )}
         {showControls && (
-          <MessageControls text={bodyText} onRegenerate={onRegenerate} />
+          <MessageControls
+            text={bodyText}
+            usage={message.usage}
+            onRegenerate={onRegenerate}
+          />
         )}
       </div>
     </div>

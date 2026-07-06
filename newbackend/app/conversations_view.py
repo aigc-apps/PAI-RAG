@@ -75,6 +75,7 @@ def group_conversation_messages(
                     "previous_response_id": resp.previous_response_id if resp else None,
                     "status": resp.status if resp else "completed",
                     "tool_calls": tool_calls,
+                    "usage": resp.usage if resp else None,
                 }
             )
     return messages

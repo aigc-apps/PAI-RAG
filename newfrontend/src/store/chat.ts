@@ -15,6 +15,11 @@ interface WireHistoryMessage {
     output?: string;
     files?: FileArtifact[];
   }>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+  } | null;
 }
 
 export function normalizeHistoryMessages(
@@ -37,6 +42,13 @@ export function normalizeHistoryMessages(
         status: "done" as const, output: tc.output ?? "",
         files: tc.files && tc.files.length ? tc.files : undefined,
       })),
+      usage: r.usage
+        ? {
+            input: r.usage.input_tokens ?? 0,
+            output: r.usage.output_tokens ?? 0,
+            total: r.usage.total_tokens ?? 0,
+          }
+        : undefined,
     };
   });
 }
