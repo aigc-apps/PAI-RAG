@@ -4,6 +4,7 @@ import { deriveAssistantView } from "../stream/assistantView";
 import { Markdown } from "./Markdown";
 import { MessageControls } from "./MessageControls";
 import { AgentActivity } from "./AgentActivity";
+import { MessageArtifacts } from "./MessageArtifacts";
 
 export function AssistantMessage({
   message,
@@ -16,6 +17,7 @@ export function AssistantMessage({
     message.status === "completed" || message.status === "cancelled";
   const failed = message.status === "failed";
   const { activitySteps, bodyText } = deriveAssistantView(message);
+  const files = message.toolCalls.flatMap((t) => t.files ?? []);
   return (
     <div className="flex gap-3 animate-msg-in">
       <div className="h-6 w-6 rounded-[var(--radius-sm)] shrink-0 mt-0.5 bg-[var(--surface-3)] flex items-center justify-center">
@@ -51,6 +53,7 @@ export function AssistantMessage({
         ) : (
           bodyText && <Markdown content={bodyText} />
         )}
+        {!failed && files.length > 0 && <MessageArtifacts files={files} />}
         {message.status === "stopped" && (
           <div className="mt-1 text-xs text-[var(--text-faint)]">已停止</div>
         )}

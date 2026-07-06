@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Download, Loader2, X } from "lucide-react";
 import type { FileArtifact } from "../types";
+import { cn } from "../lib/cn";
 import { fileUrl, humanSize } from "../lib/files";
 import { usePreviewStore } from "../store/preview";
+import { ArtifactIcon } from "./ArtifactIcon";
 import { Markdown } from "./Markdown";
 
 /** Fetches an artifact's text body (for markdown / text kinds). */
@@ -115,9 +117,49 @@ function PreviewBody({ artifact }: { artifact: FileArtifact }) {
   );
 }
 
+/** Horizontal, scrollable strip to switch between a message's artifacts.
+ * Rendered only when there is more than one. */
+function ArtifactSwitcher({
+  items,
+  activeId,
+  onSelect,
+}: {
+  items: FileArtifact[];
+  activeId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--border)] px-2 py-1.5">
+      {items.map((f) => {
+        const active = f.id === activeId;
+        return (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => onSelect(f.id)}
+            title={f.name}
+            className={cn(
+              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-sm)] px-2 py-1 text-xs transition-colors",
+              active
+                ? "bg-[var(--surface-3)] text-[var(--text)]"
+                : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+            )}
+          >
+            <ArtifactIcon kind={f.kind} className="h-3.5 w-3.5 shrink-0" />
+            <span className="max-w-[140px] truncate">{f.name}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function PreviewPanel() {
-  const artifact = usePreviewStore((s) => s.active);
+  const items = usePreviewStore((s) => s.items);
+  const activeId = usePreviewStore((s) => s.activeId);
+  const setActive = usePreviewStore((s) => s.setActive);
   const close = usePreviewStore((s) => s.close);
+  const artifact = items.find((i) => i.id === activeId) ?? items[0];
   if (!artifact) return null;
 
   return (
@@ -150,8 +192,12 @@ export function PreviewPanel() {
           </button>
         </div>
       </header>
+      {items.length > 1 && (
+        <ArtifactSwitcher items={items} activeId={artifact.id} onSelect={setActive} />
+      )}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <PreviewBody artifact={artifact} />
+        {/* key on id so per-artifact fetch/state resets cleanly on switch */}
+        <PreviewBody key={artifact.id} artifact={artifact} />
       </div>
     </aside>
   );
