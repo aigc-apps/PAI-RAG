@@ -980,10 +980,23 @@ def test_read_skill_resource_missing_file(tmp_path):
     assert "is not a file" in out
 
 
-def test_skill_tools_registered_when_skills_configured(tmp_path):
-    doc = AgentConfigDocument(**{"skills": {"root": str(tmp_path)}})
-    reg = build_default_registry(
-        type("S", (), {"search_provider": "none"})(), agent_config=doc
+def test_skill_tools_registered_only_when_a_skill_package_exists(tmp_path):
+    settings = type("S", (), {"search_provider": "none"})()
+    # A configured-but-empty skills root must NOT expose load_skill — with an
+    # empty catalog the model hallucinates a skill id and calls it.
+    empty = AgentConfigDocument(**{"skills": {"root": str(tmp_path)}})
+    reg = build_default_registry(settings, agent_config=empty)
+    assert "load_skill" not in reg.names()
+    assert "read_skill_resource" not in reg.names()
+
+    # Once a real skill package is present, the tools are registered.
+    skill_dir = tmp_path / "demo"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: Demo Skill\ndescription: does demo things\n---\nbody\n",
+        encoding="utf-8",
     )
+    doc = AgentConfigDocument(**{"skills": {"root": str(tmp_path)}})
+    reg = build_default_registry(settings, agent_config=doc)
     assert "load_skill" in reg.names()
     assert "read_skill_resource" in reg.names()

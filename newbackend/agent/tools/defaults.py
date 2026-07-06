@@ -14,7 +14,7 @@ from agent.tools.builtin.load_skill import make_load_skill_tool
 from agent.tools.builtin.read_skill_resource import make_read_skill_resource_tool
 from agent.tools.search_providers import make_search_provider
 from agent.tools.sandbox_providers import make_sandbox_provider
-from agent.custom_skills import skill_sources
+from agent.custom_skills import discover_skill_packages, skill_sources
 
 
 def build_default_registry(
@@ -68,8 +68,13 @@ def build_default_registry(
     # Progressive-disclosure skill loading (read-only, safe): the always-injected
     # catalog shows only summaries; load_skill pulls a skill's full instructions on
     # demand and read_skill_resource reads its bundled files (host-side, path-jailed,
-    # no sandbox needed). Registered whenever any skill source is configured.
-    if agent_config is not None and skill_sources(getattr(agent_config, "skills", None)):
+    # no sandbox needed). Gate on at least one skill package actually being
+    # discovered — a configured-but-empty skills dir must NOT expose load_skill,
+    # or the model, seeing the tool with an empty catalog, will hallucinate a
+    # skill id (e.g. "skill.frontend-design") and call it. No skills → no tool.
+    if agent_config is not None and discover_skill_packages(
+        skill_sources(getattr(agent_config, "skills", None))
+    ):
         reg.register(make_load_skill_tool())
         reg.register(make_read_skill_resource_tool())
     if _capability_enabled(agent_config, "install_skill"):
