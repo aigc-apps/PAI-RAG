@@ -33,4 +33,13 @@ describe("preview store", () => {
     usePreviewStore.getState().open([]);
     expect(usePreviewStore.getState().activeId).toBeNull();
   });
+
+  it("expanded defaults false, toggles, and resets on close", () => {
+    usePreviewStore.getState().open([A, B]);
+    expect(usePreviewStore.getState().expanded).toBe(false);
+    usePreviewStore.getState().toggleExpanded();
+    expect(usePreviewStore.getState().expanded).toBe(true);
+    usePreviewStore.getState().close();
+    expect(usePreviewStore.getState().expanded).toBe(false);
+  });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, Loader2, X } from "lucide-react";
+import { Download, Loader2, Maximize2, Minimize2, X } from "lucide-react";
 import type { FileArtifact } from "../types";
 import { cn } from "../lib/cn";
 import { fileUrl, humanSize } from "../lib/files";
@@ -158,12 +158,19 @@ export function PreviewPanel() {
   const items = usePreviewStore((s) => s.items);
   const activeId = usePreviewStore((s) => s.activeId);
   const setActive = usePreviewStore((s) => s.setActive);
+  const expanded = usePreviewStore((s) => s.expanded);
+  const toggleExpanded = usePreviewStore((s) => s.toggleExpanded);
   const close = usePreviewStore((s) => s.close);
   const artifact = items.find((i) => i.id === activeId) ?? items[0];
   if (!artifact) return null;
 
   return (
-    <aside className="flex w-[42%] min-w-[320px] max-w-[720px] flex-col border-l border-[var(--border)] bg-[var(--surface)]">
+    <aside
+      className={cn(
+        "flex flex-col border-l border-[var(--border)] bg-[var(--surface)]",
+        expanded ? "flex-1 min-w-0" : "w-[42%] min-w-[320px] max-w-[720px]"
+      )}
+    >
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border)] px-3">
         <span className="truncate text-sm font-medium text-[var(--text)]" title={artifact.name}>
           {artifact.name}
@@ -182,6 +189,18 @@ export function PreviewPanel() {
           >
             <Download className="h-4 w-4" />
           </a>
+          <button
+            type="button"
+            aria-label={expanded ? "还原" : "最大化"}
+            onClick={toggleExpanded}
+            className="rounded-[var(--radius-sm)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+          >
+            {expanded ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </button>
           <button
             type="button"
             aria-label="关闭预览"

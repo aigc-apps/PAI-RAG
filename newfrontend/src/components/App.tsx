@@ -6,6 +6,8 @@ import { SetupWizard } from "./SetupWizard";
 import { SettingsView } from "./SettingsView";
 import { PreviewPanel } from "./PreviewPanel";
 import { useAgentConfigStore } from "../store/agentConfig";
+import { usePreviewStore } from "../store/preview";
+import { cn } from "../lib/cn";
 
 export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -13,6 +15,7 @@ export function App() {
   const doc = useAgentConfigStore((s) => s.doc);
   const loading = useAgentConfigStore((s) => s.loading);
   const loadSetup = useAgentConfigStore((s) => s.loadSetup);
+  const previewExpanded = usePreviewStore((s) => s.expanded);
 
   useEffect(() => {
     void loadSetup();
@@ -37,7 +40,7 @@ export function App() {
   return (
     <div className="flex h-full bg-[var(--bg)]">
       {sidebarOpen && <Sidebar onOpenSettings={() => setView("settings")} />}
-      <main className="flex flex-1 flex-col min-w-0">
+      <main className={cn("flex flex-1 flex-col min-w-0", previewExpanded && "hidden")}>
         <ChatView onToggleSidebar={() => setSidebarOpen((o) => !o)} />
       </main>
       <PreviewPanel />
