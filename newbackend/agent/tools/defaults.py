@@ -83,6 +83,15 @@ def build_default_registry(
         reg.register(
             make_enable_skill_for_agent_tool(settings, agent_config, on_config_change=on_config_change)
         )
+    names = reg.names()
+    logger.info(
+        "tool registry built: {} tools [{}] | publish_artifact={} (files_url_secret={}, sandbox={})",
+        len(names),
+        ", ".join(sorted(names)),
+        "publish_artifact" in names,
+        bool(getattr(settings, "files_url_secret", "")),
+        reg.sandbox_provider is not None,
+    )
     return reg
 
 
