@@ -30,3 +30,25 @@ def test_budgeting_without_tokenizer(monkeypatch):
     # estimate still returns a positive int via the length fallback
     n = mgr.estimate_msg_tokens({"role": "user", "content": "hello world this is some text"})
     assert isinstance(n, int) and n > 0
+
+
+def test_cap_tool_result_structural_without_tokenizer(monkeypatch):
+    import json as _json
+    import agent.budgeting as b
+    monkeypatch.setattr(b, "get_tokenizer", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
+    mgr = b.AgentMessageManager(context_window=110000, max_output_tokens=8000)
+    mgr.max_tool_result_tokens = 100  # force the truncation path
+
+    payload = _json.dumps({
+        "exit_code": 0,
+        "rows": [{"i": i, "blob": "q" * 200} for i in range(300)],
+        "TotalCount": 300,
+    })
+    out = mgr.cap_tool_result(payload)
+    assert out != payload
+    assert out.endswith(b.TOOL_RESULT_TRUNCATED_MARKER)   # structural path reuses the marker
+    assert len(out) < len(payload)                        # far smaller
+    assert "TotalCount" in out                            # tail survives (head-only would drop it)
+
+    # content already under the cap is returned untouched
+    assert mgr.cap_tool_result("tiny result") == "tiny result"
