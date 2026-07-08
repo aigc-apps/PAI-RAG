@@ -38,6 +38,10 @@ TRUNCATED_MARKER = "\n...[content truncated]"
 # ~4 chars/token heuristic used when no tokenizer is available (lean mode).
 CHARS_PER_TOKEN = 4
 
+# Compact JSON separators (no space after ',' / ':') — drops the pretty-print
+# whitespace of the original and squeezes separators. Lossless for the model.
+_SEP = (",", ":")
+
 # --- tunable thresholds ---------------------------------------------------- #
 STRING_MAX_CHARS = 100   # strings longer than this get head/tail truncated
 STRING_HEAD_RATIO = 0.8  # 8:2 head:tail split
@@ -120,7 +124,7 @@ def _shrink(node: Any, depth: int = 0) -> Any:
     """Recursively shrink a parsed-JSON value by the structural rules."""
     if depth >= MAX_DEPTH:
         try:
-            dumped = json.dumps(node, ensure_ascii=False)
+            dumped = json.dumps(node, ensure_ascii=False, separators=_SEP)
         except (TypeError, ValueError):
             dumped = str(node)
         return _str_head_tail(dumped)
@@ -134,7 +138,8 @@ def _shrink(node: Any, depth: int = 0) -> Any:
             if parsed is not _MISSING:
                 # Re-serialize the shrunk structure back into the string slot,
                 # keeping the document's shape (value stays a string).
-                return json.dumps(_shrink(parsed, depth + 1), ensure_ascii=False)
+                return json.dumps(_shrink(parsed, depth + 1),
+                                  ensure_ascii=False, separators=_SEP)
         return _str_head_tail(node)
 
     if isinstance(node, list):
@@ -184,7 +189,7 @@ def smart_truncate(content: str, max_tokens: int, tokenizer: Any = None) -> str:
     if obj is _MISSING:
         return _text_head_tail(content, max_tokens, tokenizer) + TRUNCATED_MARKER
 
-    shrunk = json.dumps(_shrink(obj), ensure_ascii=False)
+    shrunk = json.dumps(_shrink(obj), ensure_ascii=False, separators=_SEP)
     if _estimate(shrunk, tokenizer) > max_tokens:
         shrunk = _text_head_tail(shrunk, max_tokens, tokenizer)
     return shrunk + TRUNCATED_MARKER
