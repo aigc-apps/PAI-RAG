@@ -65,6 +65,7 @@ export function MessageList({ onRegenerate }: { onRegenerate: () => void }) {
               <AssistantMessage
                 key={m.id}
                 message={m}
+                isLast={i === lastAssistantIndex}
                 onRegenerate={i === lastAssistantIndex ? onRegenerate : undefined}
               />
             )

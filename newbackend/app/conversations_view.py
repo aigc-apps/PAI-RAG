@@ -63,6 +63,9 @@ def group_conversation_messages(
                     "arguments": c.content.get("arguments", "") or "",
                     "output": (outputs.get(c.content.get("call_id")) or {}).get("output", ""),
                     "files": (outputs.get(c.content.get("call_id")) or {}).get("files", []),
+                    # Persisted HITL notice (e.g. aliyun authorization card); None
+                    # for ordinary tools and pre-change history.
+                    "notice": (outputs.get(c.content.get("call_id")) or {}).get("notice"),
                 }
                 for c in fcalls
             ]

@@ -6,6 +6,7 @@ from app.store.memory import InMemoryStore
 from app.deps import AppState
 from app.routes.responses import router as responses_router
 from app.routes.conversations import router as conversations_router
+from tests.authutil import apply_auth
 from common.llm.models import TextChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
 
@@ -39,14 +40,17 @@ def _client():
     app.state.app_state = AppState(store=InMemoryStore(), llm=_EchoLLM(), default_model="m")
     app.include_router(responses_router)
     app.include_router(conversations_router)
-    return TestClient(app)
+    # Authenticated as u1; identity is server-derived, not from the request body.
+    return TestClient(apply_auth(app, user_id="u1", role="user"))
 
 
-def test_list_conversations_filtered_by_user():
+def test_list_conversations_scoped_to_authenticated_user():
     c = _client()
-    c.post("/v1/responses", json={"input": "alpha", "stream": False, "user_id": "u1"})
-    c.post("/v1/responses", json={"input": "beta", "stream": False, "user_id": "u2"})
-    data = c.get("/v1/conversations", params={"user_id": "u1"}).json()["data"]
+    c.post("/v1/responses", json={"input": "alpha", "stream": False})
+    # Another user's conversation, seeded directly, must not appear in u1's list.
+    import asyncio
+    asyncio.run(c.app.state.app_state.store.ensure_conversation("conv_other", "u2", "beta"))
+    data = c.get("/v1/conversations").json()["data"]
     assert len(data) == 1
     assert data[0]["title"] == "alpha"
     assert "last_response_id" in data[0] and "updated_at" in data[0]

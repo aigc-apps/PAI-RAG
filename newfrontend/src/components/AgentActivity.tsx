@@ -92,6 +92,9 @@ export function AgentActivity({
         )}
         {steps.map((step, i) =>
           step.kind === "tool" ? (
+            // The HITL authorization card renders at the message level (always
+            // visible), not here — this panel collapses/unmounts once the turn
+            // ends. So the failing tool stays a plain ToolCall in the log.
             <ToolCall key={step.tool.id} tool={step.tool} />
           ) : (
             <div

@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 import yaml
 from loguru import logger
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from app.agent_config import (
@@ -21,8 +21,10 @@ from app.agent_config import (
     save_agent_config,
     set_agent_skill_enabled,
 )
+from app.auth import require_admin
 from app.config import get_settings
 from app.deps import AppState, get_state, reload_app_state
+from app.store.base import User
 from agent.tools.defaults import build_default_registry
 from agent.tools.builtin.install_skill import _install_skill_sync
 
@@ -101,13 +103,15 @@ def _preserve_masked_secrets(doc: AgentConfigDocument, current: AgentConfigDocum
 
 
 @router.get("/v1/setup")
-async def get_setup(state: AppState = Depends(get_state)):
+async def get_setup(state: AppState = Depends(get_state),
+                    admin: User = Depends(require_admin)):
     doc = _runtime_doc(state)
     return JSONResponse(doc.model_dump(mode="json"))
 
 
 @router.put("/v1/setup")
-async def update_setup(payload: SetupConfig, state: AppState = Depends(get_state)):
+async def update_setup(payload: SetupConfig, state: AppState = Depends(get_state),
+                       admin: User = Depends(require_admin)):
     path = _path()
     doc = load_agent_config(path)
     doc.setup = payload
@@ -118,7 +122,8 @@ async def update_setup(payload: SetupConfig, state: AppState = Depends(get_state
 
 
 @router.get("/v1/config")
-async def get_agent_config(state: AppState = Depends(get_state)):
+async def get_agent_config(state: AppState = Depends(get_state),
+                           admin: User = Depends(require_admin)):
     return JSONResponse(_runtime_doc(state).model_dump(mode="json"))
 
 
@@ -126,6 +131,7 @@ async def get_agent_config(state: AppState = Depends(get_state)):
 async def update_agent_config(
     payload: AgentConfigDocument,
     state: AppState = Depends(get_state),
+    admin: User = Depends(require_admin),
 ):
     path = _path()
     existing = load_agent_config(path)
@@ -142,7 +148,8 @@ async def update_agent_config(
 
 
 @router.get("/v1/config.yaml")
-async def get_agent_config_yaml(state: AppState = Depends(get_state)):
+async def get_agent_config_yaml(state: AppState = Depends(get_state),
+                                admin: User = Depends(require_admin)):
     doc = _runtime_doc(state, mask=True)
     body = yaml.safe_dump(
         doc.model_dump(mode="json"),
@@ -156,6 +163,7 @@ async def get_agent_config_yaml(state: AppState = Depends(get_state)):
 async def update_agent_config_yaml(
     payload: YamlPayload,
     state: AppState = Depends(get_state),
+    admin: User = Depends(require_admin),
 ):
     try:
         doc = AgentConfigDocument(**(yaml.safe_load(payload.yaml) or {}))
@@ -168,7 +176,8 @@ async def update_agent_config_yaml(
 
 
 @router.post("/v1/config/reload-env")
-async def reload_env(state: AppState = Depends(get_state)):
+async def reload_env(state: AppState = Depends(get_state),
+                     admin: User = Depends(require_admin)):
     """Re-read .env into os.environ and rebuild runtime objects so env-derived
     settings take effect without a process restart.
 
@@ -205,6 +214,7 @@ async def reload_env(state: AppState = Depends(get_state)):
 async def test_search_provider(
     payload: SearchTestPayload,
     state: AppState = Depends(get_state),
+    admin: User = Depends(require_admin),
 ):
     tool = state.registry.get("web_search")
     if tool is None:
@@ -216,9 +226,8 @@ async def test_search_provider(
 @router.post("/v1/skills/uploads")
 async def upload_skill_zip(
     file: UploadFile = File(...),
-    x_admin: Optional[str] = Header(default=None),
+    admin: User = Depends(require_admin),
 ):
-    _require_admin_header(x_admin)
     doc = load_agent_config(_path())
     upload_root = Path(str(doc.skills.install.get("upload_root") or "./data/skill-uploads"))
     upload_root.mkdir(parents=True, exist_ok=True)
@@ -250,9 +259,8 @@ async def upload_skill_zip(
 async def install_skill(
     payload: SkillInstallPayload,
     state: AppState = Depends(get_state),
-    x_admin: Optional[str] = Header(default=None),
+    admin: User = Depends(require_admin),
 ):
-    _require_admin_header(x_admin)
     settings = get_settings()
     path = _path()
     doc = load_agent_config(path)
@@ -317,9 +325,8 @@ async def install_skill(
 async def enable_skill_for_agent(
     payload: SkillEnablePayload,
     state: AppState = Depends(get_state),
-    x_admin: Optional[str] = Header(default=None),
+    admin: User = Depends(require_admin),
 ):
-    _require_admin_header(x_admin)
     settings = get_settings()
     path = _path()
     doc = load_agent_config(path)
@@ -341,8 +348,3 @@ async def enable_skill_for_agent(
         "result": result,
         "config": _runtime_doc(state).model_dump(mode="json"),
     })
-
-
-def _require_admin_header(value: Optional[str]) -> None:
-    if str(value or "").lower() not in {"1", "true", "yes", "admin"}:
-        raise HTTPException(status_code=403, detail="admin permission required")

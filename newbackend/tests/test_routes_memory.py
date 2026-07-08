@@ -6,6 +6,7 @@ from app.store.memory import InMemoryStore
 from app.deps import AppState
 from app.routes.responses import router as responses_router
 from app.routes.users import router as users_router
+from tests.authutil import apply_auth
 from common.llm.models import TextChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
 
@@ -37,7 +38,8 @@ def _app(memory_enabled=True):
     )
     app.include_router(responses_router)
     app.include_router(users_router)
-    return app
+    # Authenticated as u1 so the persisted memory and the /users/u1 path align.
+    return apply_auth(app, user_id="u1", role="user")
 
 
 def test_stored_turn_populates_user_memory_then_injects_it():

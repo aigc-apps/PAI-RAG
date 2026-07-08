@@ -9,7 +9,9 @@ from typing import Any, Dict, List, Optional
 class ToolScope:
     user_id: Optional[str] = None
     conversation_id: Optional[str] = None
-    metadata: Dict[str, str] = field(default_factory=dict)
+    # Mostly str->str; may also carry a nested "aliyun_sandbox_env" dict that the
+    # sandbox provider merges into the create-time env contract.
+    metadata: Dict[str, Any] = field(default_factory=dict)
     agent_id: str = "main"
     skill_mounts: List[Dict[str, Any]] = field(default_factory=list)
     skill_fingerprint: str = "none"

@@ -5,12 +5,15 @@ import { Markdown } from "./Markdown";
 import { MessageControls } from "./MessageControls";
 import { AgentActivity } from "./AgentActivity";
 import { MessageArtifacts } from "./MessageArtifacts";
+import { AliyunAuthToolCard } from "./AliyunAuthToolCard";
 
 export function AssistantMessage({
   message,
+  isLast = false,
   onRegenerate,
 }: {
   message: ChatMessage;
+  isLast?: boolean;
   onRegenerate?: () => void;
 }) {
   const showControls =
@@ -18,6 +21,10 @@ export function AssistantMessage({
   const failed = message.status === "failed";
   const { activitySteps, bodyText } = deriveAssistantView(message);
   const files = message.toolCalls.flatMap((t) => t.files ?? []);
+  // HITL: tools that paused the turn and need the user. Rendered here at the
+  // message level so the card stays visible after the turn ends (the activity
+  // panel collapses/unmounts its content once inactive).
+  const hitlTools = message.toolCalls.filter((t) => t.notice?.interrupt);
   return (
     <div className="flex gap-3 animate-msg-in">
       <div className="h-6 w-6 rounded-[var(--radius-sm)] shrink-0 mt-0.5 bg-[var(--surface-3)] flex items-center justify-center">
@@ -53,6 +60,12 @@ export function AssistantMessage({
         ) : (
           bodyText && <Markdown content={bodyText} />
         )}
+        {/* When this is not the latest assistant message a later turn exists, so
+            the HITL was already handled → render the card as a read-only record. */}
+        {!failed &&
+          hitlTools.map((t) => (
+            <AliyunAuthToolCard key={t.id} tool={t} historical={!isLast} />
+          ))}
         {!failed && files.length > 0 && <MessageArtifacts files={files} />}
         {message.status === "stopped" && (
           <div className="mt-1 text-xs text-[var(--text-faint)]">已停止</div>

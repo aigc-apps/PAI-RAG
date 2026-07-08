@@ -108,6 +108,38 @@ def end_artifact_capture(token: Token) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Contextvar collector: a single structured "notice" a tool can surface beside
+# its string return (e.g. "aliyun authorization required"). Unlike artifacts it
+# is a single slot (last write wins) and is stream-only — never persisted — so a
+# reloaded conversation doesn't replay a stale prompt.
+# ---------------------------------------------------------------------------
+
+_pending_notice: ContextVar[Optional[dict]] = ContextVar("pending_tool_notice", default=None)
+
+
+def begin_notice_capture() -> Token:
+    return _pending_notice.set(None)
+
+
+def emit_tool_notice(notice: dict) -> None:
+    """Record a structured notice for the currently running tool call. Only the
+    most recent one survives; a no-op outside an active capture."""
+    _pending_notice.set(notice)
+
+
+def drain_tool_notice() -> Optional[dict]:
+    """Return and clear the notice captured for the current tool call."""
+    notice = _pending_notice.get()
+    if notice is not None:
+        _pending_notice.set(None)
+    return notice
+
+
+def end_notice_capture(token: Token) -> None:
+    _pending_notice.reset(token)
+
+
+# ---------------------------------------------------------------------------
 # Stateless signed token: artifact id <-> (scope + path) claim
 # ---------------------------------------------------------------------------
 

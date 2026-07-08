@@ -124,16 +124,23 @@ class _Assembler:
         output: Optional[str],
         error: Optional[str],
         files: Optional[List[Dict]] = None,
+        notice: Optional[Dict] = None,
     ):
+        content: Dict = {
+            "call_id": call_id,
+            "output": output if output is not None else (error or ""),
+            "files": files or [],
+        }
+        # Persist the HITL notice (e.g. aliyun authorization card) so a reloaded
+        # thread re-renders the interaction. The UI renders a resolved card as a
+        # read-only record when a later turn exists (see AliyunAuthToolCard).
+        if notice:
+            content["notice"] = notice
         self.store_items.append(
             {
                 "type": "function_call_output",
                 "role": None,
-                "content": {
-                    "call_id": call_id,
-                    "output": output if output is not None else (error or ""),
-                    "files": files or [],
-                },
+                "content": content,
             }
         )
         self.tool_results.append({
@@ -233,7 +240,7 @@ async def serialize_response_sync(
         elif isinstance(ev, ToolCompleted):
             asm.on_tool_completed(ev.call_id, ev.name, ev.arguments)
         elif isinstance(ev, ToolResult):
-            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files)
+            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files, ev.notice)
         elif isinstance(ev, RunCompleted):
             usage = ev.usage
         elif isinstance(ev, RunFailed):
@@ -625,15 +632,22 @@ async def serialize_response_stream(
                 )
             )
         elif isinstance(ev, ToolResult):
-            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files)
-            yield _sse_obj({
+            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files, ev.notice)
+            sse_tool_result = {
                 "type": "response.tool_result",
                 "call_id": ev.call_id,
                 "output": ev.output if ev.output is not None else (ev.error or ""),
                 "ok": ev.ok,
                 "files": ev.files or [],
                 "sequence_number": nxt(),
-            })
+            }
+            # Structured HITL notice (e.g. aliyun authorization card): streamed
+            # here for the live card AND persisted via on_tool_result above, so a
+            # reloaded thread re-renders the interaction (resolved cards render
+            # read-only — see AliyunAuthToolCard).
+            if ev.notice:
+                sse_tool_result["notice"] = ev.notice
+            yield _sse_obj(sse_tool_result)
         elif isinstance(ev, RunCompleted):
             usage = ev.usage
         elif isinstance(ev, RunFailed):

@@ -2,11 +2,13 @@ import { useEffect } from "react";
 import { PanelLeft } from "lucide-react";
 import { useChatStore } from "../store/chat";
 import { useConversationsStore } from "../store/conversations";
+import { useComposer } from "../store/composer";
 import { useResponsesChat } from "../hooks/useResponsesChat";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 import { ModelSelector } from "./ModelSelector";
 import { ThemeToggle } from "./ThemeToggle";
+import { UserMenu } from "./UserMenu";
 import { BrandMark } from "./Sidebar";
 
 export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
@@ -17,6 +19,13 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
   const selectedId = useConversationsStore((s) => s.selectedId);
   const { send, stop, regenerate, isStreaming, resumeIfInterrupted } =
     useResponsesChat();
+
+  // Expose send() globally so the inline HITL card/dialog can resume a paused
+  // turn (send a "继续" message) after the user authorizes.
+  useEffect(() => {
+    useComposer.getState().setSubmit(send);
+    return () => useComposer.getState().setSubmit(null);
+  }, [send]);
 
   const currentTitle = (() => {
     if (!selectedId) return null;
@@ -61,6 +70,7 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
         </div>
         <ModelSelector model={model} onChange={setModel} />
         <ThemeToggle />
+        <UserMenu />
       </div>
 
       {/* Main area: empty state or messages + composer */}

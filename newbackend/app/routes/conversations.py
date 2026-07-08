@@ -2,7 +2,9 @@ from __future__ import annotations
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from app.auth import require_user
 from app.deps import AppState, get_state
+from app.store.base import User
 from app.conversations_view import group_conversation_messages
 
 router = APIRouter()
@@ -14,12 +16,14 @@ def _iso(dt) -> Optional[str]:
 
 @router.get("/v1/conversations")
 async def list_conversations(
-    user_id: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
     state: AppState = Depends(get_state),
+    user: User = Depends(require_user),
 ):
-    convs = await state.store.list_conversations(user_id=user_id, limit=limit, offset=offset)
+    # Scope to the authenticated user — a client can no longer list another
+    # user's conversations by passing their user_id.
+    convs = await state.store.list_conversations(user_id=user.id, limit=limit, offset=offset)
     return JSONResponse(
         {
             "data": [
@@ -37,9 +41,11 @@ async def list_conversations(
 
 
 @router.get("/v1/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str, state: AppState = Depends(get_state)):
+async def get_conversation(conversation_id: str, state: AppState = Depends(get_state),
+                           user: User = Depends(require_user)):
     conv = await state.store.get_conversation(conversation_id)
-    if conv is None:
+    if conv is None or conv.user_id != user.id:
+        # 404 (not 403) so a probe can't distinguish "not yours" from "absent".
         raise HTTPException(status_code=404, detail="conversation not found")
     items = await state.store.get_conversation_items(conversation_id)
     responses = await state.store.list_conversation_responses(conversation_id)
@@ -57,9 +63,10 @@ async def get_conversation(conversation_id: str, state: AppState = Depends(get_s
 
 
 @router.delete("/v1/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str, state: AppState = Depends(get_state)):
+async def delete_conversation(conversation_id: str, state: AppState = Depends(get_state),
+                              user: User = Depends(require_user)):
     conv = await state.store.get_conversation(conversation_id)
-    if conv is None:
+    if conv is None or conv.user_id != user.id:
         raise HTTPException(status_code=404, detail="conversation not found")
     await state.store.delete_conversation(conversation_id)
     return JSONResponse(

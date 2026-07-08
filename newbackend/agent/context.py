@@ -32,7 +32,9 @@ class AgentContext:
     context_block: str = ""
     user_id: Optional[str] = None
     conversation_id: Optional[str] = None
-    metadata: Dict[str, str] = field(default_factory=dict)
+    # Mostly str->str, but may carry a nested value (e.g. "aliyun_sandbox_env":
+    # {ALIBABACLOUD_*}) that the sandbox provider reads at create time.
+    metadata: Dict[str, Any] = field(default_factory=dict)
     agent_id: str = "main"
     skill_mounts: List[Dict[str, Any]] = field(default_factory=list)
     skill_fingerprint: str = "none"

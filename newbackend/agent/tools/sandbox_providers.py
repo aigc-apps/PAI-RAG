@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import datetime
+import json
 import os
+import shlex
 import threading
 import time
 from dataclasses import dataclass
@@ -18,6 +22,9 @@ class _SandboxSession:
     handle: Any
     last_used: float
     last_checked: float = 0.0
+    # Epoch seconds when the STS creds last injected into this sandbox expire
+    # (None when no expiring creds were injected). Drives pre-expiry re-inject.
+    env_expires_at: Optional[float] = None
 
 
 class SandboxUnavailable(RuntimeError):
@@ -318,24 +325,57 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             await self._reap_idle_async(now)
             session = self._sessions.get(scope_key)
             if session is None:
-                session = _SandboxSession(
-                    handle=await self._create_sandbox_async(scope_key),
-                    last_used=now,
-                    last_checked=now,
-                )
-                self._sessions[scope_key] = session
-            elif await self._should_check_health_async(session, now):
-                if await self._sandbox_alive_async(session.handle):
-                    session.last_checked = now
-                else:
-                    session = _SandboxSession(
-                        handle=await self._create_sandbox_async(scope_key),
-                        last_used=now,
-                        last_checked=now,
-                    )
-                    self._sessions[scope_key] = session
+                session = await self._new_session_async(scope_key, now)
+            else:
+                if await self._should_check_health_async(session, now):
+                    if await self._sandbox_alive_async(session.handle):
+                        session.last_checked = now
+                    else:
+                        session = await self._new_session_async(scope_key, now)
+                # A reused, still-alive sandbox keeps whatever STS creds were last
+                # written into it. Re-inject fresh creds before they expire so a
+                # long-running conversation never hits InvalidSecurityToken.Expired.
+                await self._maybe_refresh_env_async(session, scope_key)
             session.last_used = now
             return str(session.handle)
+
+    async def _new_session_async(self, scope_key: str, now: float) -> "_SandboxSession":
+        session = _SandboxSession(
+            handle=await self._create_sandbox_async(scope_key),
+            last_used=now,
+            last_checked=now,
+            env_expires_at=_env_contract_expiry(_build_env_contract(
+                self, get_current_tool_scope(), scope_key)),
+        )
+        self._sessions[scope_key] = session
+        return session
+
+    async def _maybe_refresh_env_async(self, session: "_SandboxSession", scope_key: str) -> None:
+        # Already holding creds that are valid well past the refresh margin → nothing
+        # to do. (env_expires_at is None means the sandbox has no STS creds yet — a
+        # sandbox created while the user was unbound — so we fall through and check
+        # whether this turn's scope can now supply them.)
+        if (session.env_expires_at is not None
+                and time.time() < session.env_expires_at - _ENV_REFRESH_MARGIN_SECONDS):
+            return
+        # Rebuild from the current turn's scope, which carries a freshly minted
+        # token (the builder re-assumes each turn). new_expiry is None when the
+        # scope still has no expiring creds (user hasn't authorized yet) — leave the
+        # sandbox as-is rather than run a pointless bootstrap.
+        env_contract = _build_env_contract(self, get_current_tool_scope(), scope_key)
+        new_expiry = _env_contract_expiry(env_contract)
+        if new_expiry is None:
+            return
+        # Covers both cases: creds nearing expiry are replaced, and a sandbox that
+        # started credential-less gets its first injection once the user authorizes
+        # mid-session (so the very next turn's aliyun calls just work).
+        first_injection = session.env_expires_at is None
+        await self._bootstrap_env_async(str(session.handle), env_contract)
+        session.env_expires_at = new_expiry
+        logger.info(
+            "sandbox STS creds {} sandboxId={} scope={}",
+            "injected" if first_injection else "re-injected", session.handle, scope_key,
+        )
 
     async def _reap_idle_async(self, now: float) -> None:
         expired = [
@@ -358,12 +398,17 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
                 "set settings.account_id or AGENTRUN_ACCOUNT_ID"
             )
         scope = get_current_tool_scope()
+        env_contract = _build_env_contract(self, scope, scope_key)
         payload = _compact_dict({
             "templateName": self.template_name,
             "templateType": self.template_type or None,
             "sandboxId": _scoped_sandbox_id(self.settings, scope_key),
             "nasConfig": _build_nas_config(self, scope, scope_key),
-            "envs": _build_env_contract(self, scope, scope_key),
+            # NOTE: AgentRun's CreateSandbox input has no `envs` field — this is
+            # ignored by the platform and kept only for forward-compat. The env
+            # contract is delivered by _bootstrap_env_async below (writes
+            # ~/.bash_env + ~/.aliyun/config.json inside the started sandbox).
+            "envs": env_contract,
         })
         try:
             body = await self._request_async("POST", self.create_path, json=payload)
@@ -388,7 +433,36 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             scope_key,
             len(scope.skill_mounts),
         )
+        await self._bootstrap_env_async(str(sandbox_id), env_contract)
         return str(sandbox_id)
+
+    async def _bootstrap_env_async(
+        self, sandbox_id: str, env_contract: Optional[Dict[str, str]]
+    ) -> None:
+        """Deliver the runtime env contract into a freshly-created sandbox.
+
+        AgentRun's CreateSandbox has no `envs` field, so the create-time contract
+        never reaches the FC container. Instead we run one command right after
+        create that writes the vars into ~/.bash_env (sourced by every
+        non-interactive shell via the image's BASH_ENV hook) and, when Aliyun STS
+        session creds are present, an `authz` StsToken profile into
+        ~/.aliyun/config.json so the baked aliyun CLI authenticates flag-free.
+        Best-effort: a failure here leaves the sandbox usable for non-credentialed
+        work, so we log and continue rather than failing sandbox creation."""
+        command = _env_bootstrap_command(env_contract)
+        if not command:
+            return
+        try:
+            await self._request_async(
+                "POST",
+                self.cmd_path.format(sandbox_id=sandbox_id),
+                json=_compact_dict({"command": command, "cwd": self.cwd}),
+                sensitive=True,
+            )
+        except Exception as exc:  # pragma: no cover - network/gateway failure path
+            logger.warning(
+                "sandbox env bootstrap failed sandboxId={}: {}", sandbox_id, exc
+            )
 
     async def _should_check_health_async(self, session: _SandboxSession, now: float) -> bool:
         return bool(
@@ -465,19 +539,32 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
     async def _stop_sandbox_async(self, handle) -> None:
         await self._request_async("POST", self.stop_path.format(sandbox_id=handle), json=None)
 
-    async def _request_async(self, method: str, path: str, *, json: Optional[Dict[str, Any]]):
+    async def _request_async(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Optional[Dict[str, Any]],
+        sensitive: bool = False,
+    ):
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers[self.api_key_header] = self.api_key
         if self.parent_id:
             headers["X-Acs-Parent-Id"] = self.parent_id
         url = f"{self.endpoint}{path if path.startswith('/') else '/' + path}"
+        # `sensitive` bodies (the env-bootstrap write) carry credentials inside a
+        # non-secret-named `command` string that _mask_body cannot see into, so
+        # redact the whole body rather than log it.
+        logged_body = (
+            "<redacted>" if sensitive else (_mask_body(json) if json is not None else None)
+        )
         logger.info(
             "sandbox REST request {} {} headers={} body={}",
             method,
             url,
             _mask_headers(headers),
-            _mask_body(json) if json is not None else None,
+            logged_body,
         )
         async with httpx.AsyncClient(timeout=self.request_timeout) as client:
             resp = await client.request(method, url, headers=headers, json=json)
@@ -761,11 +848,23 @@ def _compact_dict(value: Dict[str, Any]) -> Dict[str, Any]:
     return {key: item for key, item in value.items() if item is not None}
 
 
+# Case-insensitive markers for keys whose values are secrets and must never be
+# logged in cleartext. Matched against the alphanumeric-normalized key, so this
+# covers apiKey/api_key, accessKeySecret, securityToken, AND the injected sandbox
+# session vars ALIBABACLOUD_ACCESS_KEY_ID/_SECRET / ALIBABACLOUD_SECURITY_TOKEN.
+_SECRET_KEY_MARKERS = ("secret", "token", "password", "accesskey", "apikey")
+
+
+def _is_secret_key(key: Any) -> bool:
+    normalized = "".join(ch for ch in str(key).lower() if ch.isalnum())
+    return any(marker in normalized for marker in _SECRET_KEY_MARKERS)
+
+
 def _mask_body(value: Any) -> Any:
     if isinstance(value, dict):
         masked = {}
         for key, item in value.items():
-            if key in {"apiKey", "api_key", "accessKeySecret", "securityToken"}:
+            if _is_secret_key(key):
                 masked[key] = _mask_secret(str(item))
             else:
                 masked[key] = _mask_body(item)
@@ -847,7 +946,119 @@ def _build_env_contract(provider: "AgentRunRestSandboxProvider", scope, scope_ke
         "AGENT_SESSION_ID": scope_key,
     }
     envs.update(provider.extra_envs)
+    # Per-user Aliyun session credentials carried on the scope. The secret + token
+    # keys are redacted in create-payload logs by _mask_body / _is_secret_key.
+    extra = scope.metadata.get("aliyun_sandbox_env")
+    if isinstance(extra, dict):
+        envs.update({str(k): str(v) for k, v in extra.items()})
     return envs
+
+
+# Marker block bounding our exports in ~/.bash_env so a re-bootstrap on sandbox
+# recreate replaces (rather than appends to) the previous contract.
+_BASH_ENV_BEGIN = "# >>> agent env contract >>>"
+_BASH_ENV_END = "# <<< agent env contract <<<"
+
+# Re-inject STS creds this many seconds before the injected token expires.
+_ENV_REFRESH_MARGIN_SECONDS = 300
+
+
+def _parse_iso_expiry(value: Any) -> Optional[float]:
+    """Parse an ISO8601 timestamp (e.g. AssumeRole's '2026-07-08T09:20:00Z')
+    into epoch seconds. Returns None on anything unparseable."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.timestamp()
+
+
+def _env_contract_expiry(env_contract: Optional[Dict[str, str]]) -> Optional[float]:
+    """Epoch expiry of the STS creds in an env contract, or None if it carries
+    no expiring session credentials."""
+    if not env_contract:
+        return None
+    return _parse_iso_expiry(env_contract.get("ALIBABACLOUD_SESSION_EXPIRATION"))
+
+
+def _env_bootstrap_command(env_contract: Optional[Dict[str, str]]) -> Optional[str]:
+    """Build a single shell command that installs the env contract inside the
+    sandbox. AgentRun's CreateSandbox has no `envs` field, so the contract is
+    delivered post-create by writing ~/.bash_env (picked up by the image's
+    BASH_ENV hook on every non-interactive shell) and, when STS session creds are
+    present, an `authz` StsToken profile in ~/.aliyun/config.json (the CLI reads
+    the `current` profile, ignoring env vars, so a file is the only reliable way).
+
+    The whole payload is base64-wrapped so no credential appears as plaintext in
+    the command string (which is also logged with sensitive=True redaction)."""
+    if not env_contract:
+        return None
+    py = _ENV_BOOTSTRAP_PY.replace("__ENVS_JSON__", json.dumps(json.dumps(env_contract)))
+    blob = base64.b64encode(py.encode("utf-8")).decode("ascii")
+    return f"printf %s {shlex.quote(blob)} | base64 -d | python3 -"
+
+
+# Runs inside the sandbox (base64-piped to `python3 -`). Writes the shell env
+# contract and merges the Aliyun CLI StsToken profile. Kept dependency-free
+# (stdlib only) since it runs against the sandbox's own interpreter.
+_ENV_BOOTSTRAP_PY = r'''
+import json, os, shlex
+envs = json.loads(__ENVS_JSON__)
+home = os.path.expanduser("~")
+
+# 1) Shell env for non-interactive bash (image sets BASH_ENV=~/.bash_env).
+be = os.path.join(home, ".bash_env")
+try:
+    with open(be, "r", encoding="utf-8") as fh:
+        text = fh.read()
+except OSError:
+    text = ""
+begin, end = "# >>> agent env contract >>>", "# <<< agent env contract <<<"
+if begin in text and end in text:
+    text = text.split(begin)[0] + text.split(end, 1)[1]
+block = [begin] + ["export %s=%s" % (k, shlex.quote(str(v))) for k, v in envs.items()] + [end]
+text = (text.rstrip("\n") + "\n" if text.strip() else "") + "\n".join(block) + "\n"
+with open(be, "w", encoding="utf-8") as fh:
+    fh.write(text)
+
+# 2) Aliyun CLI StsToken profile so `aliyun`/EAS work without flags.
+ak = envs.get("ALIBABACLOUD_ACCESS_KEY_ID")
+sk = envs.get("ALIBABACLOUD_ACCESS_KEY_SECRET")
+tok = envs.get("ALIBABACLOUD_SECURITY_TOKEN")
+if ak and sk and tok:
+    cfgdir = os.path.join(home, ".aliyun")
+    os.makedirs(cfgdir, exist_ok=True)
+    cfgp = os.path.join(cfgdir, "config.json")
+    try:
+        with open(cfgp, "r", encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except Exception:
+        cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    profiles = [p for p in cfg.get("profiles", [])
+                if isinstance(p, dict) and p.get("name") != "authz"]
+    profiles.append({
+        "name": "authz",
+        "mode": "StsToken",
+        "access_key_id": ak,
+        "access_key_secret": sk,
+        "sts_token": tok,
+        "region_id": envs.get("ALIBABACLOUD_REGION_ID") or "cn-hangzhou",
+    })
+    cfg["profiles"] = profiles
+    cfg["current"] = "authz"
+    with open(cfgp, "w", encoding="utf-8") as fh:
+        json.dump(cfg, fh)
+    os.chmod(cfgp, 0o600)
+'''
 
 
 def _join_nas_server_addr(server_addr: str, remote_path: str) -> str:

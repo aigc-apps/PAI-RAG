@@ -1,0 +1,91 @@
+# NOTE: `${DEVELOPER_ACCOUNT_ID}` is substituted with the configured
+# ALIYUN_DEVELOPER_ACCOUNT_ID when served via GET /v1/aliyun/ros-template.yaml.
+# If you publish this file statically instead, replace the placeholder yourself.
+ROSTemplateFormatVersion: '2015-09-01'
+Description: >-
+  为 PAI 助手创建跨账号 RAM 角色，信任开发者账号 ${DEVELOPER_ACCOUNT_ID}，
+  并授予 PAI/EAS 完全访问权限。创建完成后请到「输出」页复制 GeneratedRoleArn
+  回填到应用中完成授权。
+  Creates a cross-account RAM role trusting the PAI assistant developer account
+  (${DEVELOPER_ACCOUNT_ID}) with full PAI/EAS access. Copy GeneratedRoleArn
+  from the Outputs tab back into the app to finish authorization.
+
+Parameters:
+  ExternalId:
+    Type: String
+    # Baked in as the Default by GET /v1/aliyun/ros-template.yaml?external_id=...
+    # so the create form is pre-filled — the path-style ROS console ignores
+    # top-level parameter query params, so a per-user Default is the only reliable
+    # way to prefill. Do not edit; it must match what the app uses at AssumeRole.
+    Default: '${EXTERNAL_ID}'
+    Label:
+      en: External ID
+      zh-cn: 外部ID
+    Description: >-
+      由应用生成的外部ID，用于防止混淆代理人问题，请勿修改。
+      App-generated external id (confused-deputy guard). Do not modify.
+  RoleName:
+    Type: String
+    # Baked in as the Default by GET /v1/aliyun/ros-template.yaml?role_name=...
+    # (per-user, so multiple users binding the same account don't collide).
+    Default: '${ROLE_NAME}'
+    Label:
+      en: Role name
+      zh-cn: 角色名称
+    Description: >-
+      由应用生成的角色名称，请勿修改。RAM 角色是主账号级的，每个使用者用独立名称
+      以免同一账号下多人绑定时相互覆盖。
+      App-generated role name (per-user, so multiple users binding the same
+      account don't collide). Do not modify.
+
+Resources:
+  PaiCrossAccountRole:
+    Type: ALIYUN::RAM::Role
+    Properties:
+      RoleName:
+        Ref: RoleName
+      Description: 'Allow the PAI assistant full access to this account''s PAI/EAS.'
+      # 12h — the max a RAM role allows. Longer sessions mean the sandbox
+      # re-mints STS creds less often (it always refreshes before expiry).
+      # Roles created with the old 3600 value keep working: assume_role falls
+      # back to a 1h request when a role rejects the longer duration.
+      MaxSessionDuration: 43200
+      # Trust policy = WHO may assume this role (not what it can do). The Principal
+      # `acs:ram::<account>:root` is Aliyun's ARN for the whole developer ACCOUNT as
+      # a trusted caller — it does NOT grant root/admin power. Assuming still
+      # requires (a) a RAM identity in that account with sts:AssumeRole, and (b) the
+      # per-user ExternalId below. What the role can actually DO is the Policies block.
+      AssumeRolePolicyDocument:
+        Version: '1'
+        Statement:
+          - Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              RAM:
+                - 'acs:ram::${DEVELOPER_ACCOUNT_ID}:root'
+            Condition:
+              StringEquals:
+                'sts:ExternalId':
+                  Ref: ExternalId
+      # Permission policy = WHAT the assumed role can do in this account.
+      Policies:
+        - PolicyName: pai-eas-fullaccess
+          PolicyDocument:
+            Version: '1'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'pai:*'
+                  - 'eas:*'
+                Resource:
+                  - '*'
+
+Outputs:
+  GeneratedRoleArn:
+    Description: >-
+      请复制此 Role ARN 回填到应用中完成授权。
+      Copy this Role ARN back into the app to complete authorization.
+    Value:
+      Fn::GetAtt:
+        - PaiCrossAccountRole
+        - Arn

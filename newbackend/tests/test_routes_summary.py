@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.store.memory import InMemoryStore
 from app.deps import AppState
 from app.routes.responses import router as responses_router
+from tests.authutil import apply_auth
 from common.llm.models import TextChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
 
@@ -31,7 +32,7 @@ def _client():
         summary_enabled=True, summary_keep_recent=1, summary_batch=1,
     )
     app.include_router(responses_router)
-    return TestClient(app)
+    return TestClient(apply_auth(app))
 
 
 def test_long_conversation_gets_rolling_summary():
@@ -67,7 +68,7 @@ def test_summary_disabled_writes_no_summary():
                                    summary_enabled=False)
     app.include_router(responses_router)
     import asyncio
-    with TestClient(app) as c:
+    with TestClient(apply_auth(app)) as c:
         conv_id = None
         rid = None
         for i in range(4):

@@ -10,6 +10,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from agent.custom_skills import _normalize_skill_id, discover_skill_packages, skill_sources
+from agent.integrations import aliyun_sts
 
 
 Permission = Literal["disabled", "ask", "auto", "admin"]
@@ -19,7 +20,7 @@ ProviderStatus = Literal["untested", "healthy", "missing_config", "error"]
 
 class ProviderConfig(BaseModel):
     id: str
-    type: Literal["llm", "search", "embedding", "rerank", "vectordb", "sandbox"]
+    type: Literal["llm", "search", "embedding", "rerank", "vectordb", "sandbox", "cloud_auth"]
     name: str
     status: ProviderStatus = "untested"
     settings: Dict[str, Any] = Field(default_factory=dict)
@@ -230,6 +231,20 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             },
             used_by=["sandbox"],
         ),
+        ProviderConfig(
+            id="aliyun_pai.default",
+            type="cloud_auth",
+            # Runtime values (developer account, region, HMAC secret, ROS template
+            # URL) are sourced from Settings/env — kept out of these settings so
+            # there's a single source of truth. Only the developer base-cred env
+            # var names live here (the one deployment knob not in Settings).
+            name="Aliyun PAI cross-account",
+            settings={
+                "base_access_key_id_env": "AGENTRUN_ACCESS_KEY_ID",
+                "base_access_key_secret_env": "AGENTRUN_ACCESS_KEY_SECRET",
+            },
+            used_by=["aliyun_pai"],
+        ),
     ],
     capabilities=[
         CapabilityConfig(
@@ -261,6 +276,15 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             permission="disabled",
             provider_refs=["sandbox.default"],
             settings={"runtime": "local", "network": False},
+        ),
+        CapabilityConfig(
+            id="aliyun_pai",
+            kind="core_tool",
+            name="PAI Authorization",
+            description="Query a customer's Aliyun PAI/EAS status via a cross-account role.",
+            enabled=False,
+            permission="auto",
+            provider_refs=["aliyun_pai.default"],
         ),
         CapabilityConfig(
             id="install_skill",
@@ -503,6 +527,38 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         )
         sandbox.error = None if sandbox.status == "ready" else (
             sandbox_provider.error if sandbox_provider else "Sandbox provider is not configured"
+        )
+
+    pai_provider = providers.get("aliyun_pai.default")
+    pai = caps.get("aliyun_pai")
+    if pai_provider is not None:
+        pai_settings = pai_provider.settings or {}
+        # Mirror the authorize route's runtime prerequisites exactly (same env-var
+        # names via read_base_creds), so status can't disagree with behavior.
+        base_ak, base_sk = aliyun_sts.read_base_creds(pai_settings)
+        configured = bool(
+            getattr(settings, "aliyun_authz_secret", "")
+            and aliyun_sts.configured_ros_template_url(
+                pai_settings, getattr(settings, "aliyun_ros_template_url", ""))
+            and base_ak and base_sk
+        )
+        pai_provider.status = (
+            "healthy" if pai and pai.enabled and configured
+            else "missing_config" if pai and pai.enabled
+            else "untested"
+        )
+        pai_provider.error = None if pai_provider.status != "missing_config" else (
+            "Set ALIYUN_AUTHZ_SECRET, upload the ROS template (ros_template_url), and configure base AK/SK"
+        )
+    if pai is not None:
+        pai.status = (
+            "ready"
+            if pai.enabled and pai_provider and pai_provider.status == "healthy"
+            else "missing_config" if pai.enabled
+            else "disabled"
+        )
+        pai.error = None if pai.status == "ready" else (
+            pai_provider.error if pai_provider else "Aliyun PAI provider is not configured"
         )
 
     for cap in out.capabilities:

@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict, Optional, Protocol
 
 from agent.tools.base import Tool
+from agent.tools.builtin._aliyun_notice import maybe_emit_aliyun_notice
 
 
 class ShellSandboxProvider(Protocol):
@@ -23,7 +24,7 @@ class ShellSandboxProvider(Protocol):
     ) -> Dict[str, Any]: ...
 
 
-def _format_result(result: Dict[str, Any]) -> str:
+def _format_result(result: Dict[str, Any], hint: Optional[str] = None) -> str:
     if "error" in result:
         return f"shell failed: {result['error']}"
     payload = {
@@ -33,6 +34,9 @@ def _format_result(result: Dict[str, Any]) -> str:
     }
     if result.get("cwd"):
         payload["cwd"] = result["cwd"]
+    if hint:
+        # Reactive guidance (e.g. aliyun authorization surfaced to the user).
+        payload["hint"] = hint
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -48,7 +52,8 @@ def make_shell_tool(provider: ShellSandboxProvider, *, default_timeout: int = 30
                 cwd=cwd,
                 timeout=timeout,
             )
-            return _format_result(result)
+            hint = maybe_emit_aliyun_notice(command, result)
+            return _format_result(result, hint)
         except Exception as ex:
             return f"shell failed: {ex}"
 

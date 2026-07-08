@@ -1,9 +1,7 @@
-import { getUserId } from "./user";
-
-/** Same-origin URL for a sandbox artifact, scoped to the current user. Vite
- * proxies `/v1` to the backend in dev. */
+/** Same-origin URL for a sandbox artifact. The backend derives ownership from
+ * the session cookie, so no user_id is passed. Vite proxies `/v1` in dev. */
 export function fileUrl(id: string): string {
-  return `/v1/files/${encodeURIComponent(id)}?user_id=${encodeURIComponent(getUserId())}`;
+  return `/v1/files/${encodeURIComponent(id)}`;
 }
 
 export function humanSize(n: number): string {

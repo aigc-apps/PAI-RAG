@@ -35,8 +35,31 @@ def test_stream_emits_tool_result_event():
         assert len(tr) == 1
         assert tr[0]["call_id"] == "c1" and tr[0]["output"] == "PAGE TEXT" and tr[0]["ok"] is True
         assert isinstance(tr[0]["sequence_number"], int)
+        # a tool result with no notice omits the key entirely
+        assert "notice" not in tr[0]
         # the function_call args.done event still precedes it
         types = [e["type"] for e in evs]
         assert "response.function_call_arguments.done" in types
         assert types.index("response.function_call_arguments.done") < types.index("response.tool_result")
+    asyncio.run(run())
+
+
+def test_stream_passes_through_tool_notice():
+    async def _events_with_notice():
+        yield RunStarted(response_id="resp_1", conversation_id="conv_1")
+        yield ToolStarted(call_id="c1", name="shell")
+        yield ToolCompleted(call_id="c1", name="shell", arguments='{"command":"aliyun sts x"}')
+        yield ToolResult(call_id="c1", name="shell", ok=True, output="{...}",
+                         notice={"kind": "aliyun_authorization", "bound": False,
+                                 "error_code": "InvalidSecurityToken.Expired"})
+        yield RunCompleted(usage=Usage(input=1, output=1, total=2))
+
+    async def run():
+        chunks = [c async for c in serialize_response_stream(
+            _events_with_notice(), model="m", response_id="resp_1",
+            conversation_id="conv_1", sink={})]
+        tr = [e for e in _parse(chunks) if e.get("type") == "response.tool_result"]
+        assert len(tr) == 1
+        assert tr[0]["notice"]["kind"] == "aliyun_authorization"
+        assert tr[0]["notice"]["bound"] is False
     asyncio.run(run())

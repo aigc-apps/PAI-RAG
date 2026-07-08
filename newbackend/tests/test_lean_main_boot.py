@@ -29,6 +29,7 @@ def test_app_boots_in_memory_and_serves(monkeypatch, tmp_path):
     # non-OpenAI provider boot without OpenAI credentials.
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("DEFAULT_MODEL", "test/echo")
+    monkeypatch.setenv("JWT_SECRET", "boot-test-secret")
     import importlib
 
     # The legacy heavy app is `app.main`; the lean service is `app.lean_main`.
@@ -69,6 +70,11 @@ def test_app_boots_in_memory_and_serves(monkeypatch, tmp_path):
         router = c.app.state.app_state.router
         if router is not None:
             router.register_llm(router.default_model_id, echo)
+        # First-run bootstrap creates the admin and sets the auth cookie on the
+        # client, exercising the real auth stack; /v1/responses now requires it.
+        boot = c.post("/v1/auth/bootstrap",
+                      json={"email": "admin@example.com", "password": "password123"})
+        assert boot.status_code == 200
         r = c.post("/v1/responses", json={"input": "hi", "stream": False})
         assert r.status_code == 200
         body = r.json()

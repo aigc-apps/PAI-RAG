@@ -19,6 +19,7 @@ from app.store.memory import InMemoryStore
 from app.store.sql import SqlStore
 from app.llm import LeanLLM
 from app.providers import ProviderRouter, load_catalog
+from app.routes.auth import router as auth_router
 from app.routes.responses import router as responses_router
 from app.routes.chat import router as chat_router
 from app.routes.conversations import router as conversations_router
@@ -26,6 +27,7 @@ from app.routes.models import router as models_router
 from app.routes.users import router as users_router
 from app.routes.config import router as config_router
 from app.routes.files import router as files_router
+from app.routes.aliyun import router as aliyun_router
 from app.agent_config import apply_runtime_status, load_agent_config
 from agent.soul import Soul
 from agent.tools.defaults import build_default_registry
@@ -128,6 +130,7 @@ async def _unhandled_error_handler(_request: Request, exc: Exception):
     )
 
 
+app.include_router(auth_router)
 app.include_router(responses_router)
 app.include_router(chat_router)
 app.include_router(conversations_router)
@@ -135,3 +138,4 @@ app.include_router(models_router)
 app.include_router(users_router)
 app.include_router(config_router)
 app.include_router(files_router)
+app.include_router(aliyun_router)

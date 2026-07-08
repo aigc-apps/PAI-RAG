@@ -146,6 +146,102 @@ def test_shell_tool_returns_error_string_on_provider_failure():
     assert out.startswith("shell failed:")
 
 
+class _AliyunProvider:
+    """A sandbox whose aliyun command fails with a caller-supplied error blob."""
+
+    default_timeout_seconds = 12
+
+    def __init__(self, *, stderr, exit_code=1):
+        self._stderr = stderr
+        self._exit_code = exit_code
+
+    async def run_command(self, *, command, cwd=None, timeout=None):
+        return {"stdout": "", "stderr": self._stderr, "exit_code": self._exit_code}
+
+
+def _dispatch_shell(provider, command, metadata):
+    tool = make_shell_tool(provider, default_timeout=12)
+    box = ToolBox([tool])
+    import json as _json
+    tc = ToolCall(id="c1", name="shell", arguments=_json.dumps({"command": command}))
+    return asyncio.run(box.dispatch(tc, scope=ToolScope(metadata=metadata)))
+
+
+_EXPIRED = "ERROR: SDK.ServerError\nErrorCode: InvalidSecurityToken.Expired\nMessage: token expired"
+_NOPERM = "ERROR: SDK.ServerError\nErrorCode: NoPermission\nMessage: You are not authorized to do this"
+
+
+def test_shell_emits_aliyun_notice_when_unbound(monkeypatch):
+    res = _dispatch_shell(
+        _AliyunProvider(stderr=_EXPIRED), "aliyun sts GetCallerIdentity",
+        {"aliyun_authz_available": True, "aliyun_bound": False})
+    assert res.notice == {
+        "kind": "aliyun_authorization", "bound": False,
+        "error_code": "InvalidSecurityToken.Expired", "interrupt": True}
+    assert "授权" in res.content  # pause guidance folded into the model-facing str
+
+
+def test_shell_emits_aliyun_notice_when_cli_not_configured():
+    # The unbound sandbox has no ~/.aliyun/config.json; `aliyun configure list`
+    # fails with a bare loader error (no ErrorCode:). Must still surface the card
+    # and steer the model away from self-configuring the CLI.
+    stderr = ("ERROR: load configure failed: stat /home/user/.aliyun/config.json: "
+              "no such file or directory")
+    res = _dispatch_shell(
+        _AliyunProvider(stderr=stderr), "aliyun configure list",
+        {"aliyun_authz_available": True, "aliyun_bound": False})
+    assert res.notice["kind"] == "aliyun_authorization"
+    assert res.notice["bound"] is False
+    assert "configure" in res.content  # tells the model NOT to run `aliyun configure`
+
+
+def test_shell_emits_aliyun_notice_when_bound():
+    res = _dispatch_shell(
+        _AliyunProvider(stderr=_EXPIRED), "aliyun pai list",
+        {"aliyun_authz_available": True, "aliyun_bound": True})
+    assert res.notice["bound"] is True
+
+
+def test_shell_notice_marks_interrupt_for_hitl_halt():
+    # Both bound and unbound credential failures must flag interrupt so the agent
+    # loop halts and yields to the user (HITL), rather than re-entering the LLM.
+    for bound in (False, True):
+        res = _dispatch_shell(
+            _AliyunProvider(stderr=_EXPIRED), "aliyun sts GetCallerIdentity",
+            {"aliyun_authz_available": True, "aliyun_bound": bound})
+        assert res.notice["interrupt"] is True
+
+
+def test_shell_no_notice_when_authz_unavailable():
+    res = _dispatch_shell(
+        _AliyunProvider(stderr=_EXPIRED), "aliyun sts GetCallerIdentity",
+        {"aliyun_authz_available": False})
+    assert res.notice is None
+
+
+def test_shell_permission_error_explains_but_no_card():
+    res = _dispatch_shell(
+        _AliyunProvider(stderr=_NOPERM), "aliyun pai list",
+        {"aliyun_authz_available": True, "aliyun_bound": True})
+    assert res.notice is None
+    assert "权限" in res.content
+
+
+def test_shell_no_notice_for_non_aliyun_command():
+    res = _dispatch_shell(
+        _AliyunProvider(stderr=_EXPIRED), "echo aliyun && false",
+        {"aliyun_authz_available": True, "aliyun_bound": False})
+    # The token appears in an echo argument, not as an invocation → no card.
+    assert res.notice is None
+
+
+def test_shell_no_notice_on_successful_aliyun_command():
+    res = _dispatch_shell(
+        _AliyunProvider(stderr="", exit_code=0), "aliyun sts GetCallerIdentity",
+        {"aliyun_authz_available": True, "aliyun_bound": False})
+    assert res.notice is None
+
+
 class _Settings:
     search_provider = "none"
 
@@ -353,7 +449,14 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
 
     assert result["stdout"] == "ok"
     create = requests[0]
-    execute = requests[1]
+    # After create, the provider runs one env-contract bootstrap command
+    # (AgentRun's CreateSandbox has no `envs` field), then the actual execute.
+    bootstrap = requests[1]
+    execute = requests[2]
+    assert bootstrap[0] == "POST"
+    assert bootstrap[1] == "https://gateway.test/sandboxes/sb-doc-create/processes/cmd"
+    assert bootstrap[3]["command"].endswith("| base64 -d | python3 -")
+    assert "AGENT_USER_ID" not in bootstrap[3]["command"]  # base64-wrapped, no plaintext
     assert create[0] == "POST"
     assert create[1] == "https://gateway.test/sandboxes"
     assert create[3] == {
@@ -390,6 +493,170 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
     assert "Authorization" not in execute[2]
     assert execute[3]["timeout"] == 30
     assert execute[3]["scope_key"] == "conversation:c1:agent:main:skills:skills123"
+
+
+def test_parse_iso_expiry_and_contract_expiry():
+    from agent.tools.sandbox_providers import _parse_iso_expiry, _env_contract_expiry
+    import datetime as _dt
+
+    # Z-suffixed UTC (AssumeRole's format) and explicit offset both parse.
+    z = _parse_iso_expiry("2026-07-08T09:20:00Z")
+    off = _parse_iso_expiry("2026-07-08T09:20:00+00:00")
+    assert z is not None and abs(z - off) < 1e-6
+    assert _parse_iso_expiry("garbage") is None
+    assert _parse_iso_expiry(None) is None
+    # Contract expiry reads the session-expiration key; absent → None.
+    assert _env_contract_expiry({"ALIBABACLOUD_SESSION_EXPIRATION": "2026-07-08T09:20:00Z"}) == z
+    assert _env_contract_expiry({"AGENT_USER_ID": "u1"}) is None
+    assert _env_contract_expiry(None) is None
+
+
+def _rest_provider_with_recorder(monkeypatch):
+    """A REST provider whose transport records every request, for env-injection tests."""
+    requests = []
+
+    class _Resp:
+        content = b"{}"
+
+        def __init__(self, body):
+            self._body = body
+            self.status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def request(self, method, url, headers=None, json=None):
+            requests.append((method, url, headers or {}, json or {}))
+            if url.endswith("/sandboxes"):
+                return _Resp({"code": "SUCCESS", "data": {"sandboxId": "sb-1"}})
+            return _Resp({"results": [{"type": "stdout", "text": "ok"},
+                                      {"type": "endOfExecution", "status": "ok"}]})
+
+    monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
+    provider = AgentRunRestSandboxProvider({
+        "endpoint": "https://gateway.test",
+        "template_name": "code-template",
+        "api_key": "secret",
+        "account_id": "acct-1",
+    })
+    return provider, requests
+
+
+def _bootstrap_cmds(requests):
+    return [r for r in requests
+            if r[1].endswith("/processes/cmd")
+            and "base64 -d | python3 -" in r[3].get("command", "")]
+
+
+def _aliyun_scope(expiration_iso):
+    return ToolScope(
+        user_id="u1", conversation_id="c1", agent_id="main", skill_fingerprint="fp",
+        metadata={"aliyun_sandbox_env": {
+            "ALIBABACLOUD_ACCESS_KEY_ID": "STS.a",
+            "ALIBABACLOUD_ACCESS_KEY_SECRET": "s",
+            "ALIBABACLOUD_SECURITY_TOKEN": "t",
+            "ALIBABACLOUD_REGION_ID": "cn-hangzhou",
+            "ALIBABACLOUD_SESSION_EXPIRATION": expiration_iso,
+        }},
+    )
+
+
+def _iso_in(seconds_from_now):
+    import datetime as _dt
+    return (_dt.datetime.now(_dt.timezone.utc)
+            + _dt.timedelta(seconds=seconds_from_now)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_sandbox_reinjects_sts_creds_before_expiry(monkeypatch):
+    provider, requests = _rest_provider_with_recorder(monkeypatch)
+
+    # 1) First command creates the sandbox with a token that expires soon (inside
+    #    the 5-min refresh margin), so its recorded expiry is already "near".
+    token = set_current_tool_scope(_aliyun_scope(_iso_in(60)))
+    try:
+        asyncio.run(provider.run_command(command="echo one"))
+    finally:
+        reset_current_tool_scope(token)
+    assert len(_bootstrap_cmds(requests)) == 1  # create-time bootstrap
+
+    # 2) Next turn carries a freshly minted token (far expiry). Because the
+    #    installed token was near expiry, the reused sandbox is re-injected.
+    token = set_current_tool_scope(_aliyun_scope(_iso_in(43200)))
+    try:
+        asyncio.run(provider.run_command(command="echo two"))
+    finally:
+        reset_current_tool_scope(token)
+    assert len(_bootstrap_cmds(requests)) == 2  # refreshed before expiry
+
+    # 3) Now the installed token is far from expiry → no further re-injection.
+    token = set_current_tool_scope(_aliyun_scope(_iso_in(43200)))
+    try:
+        asyncio.run(provider.run_command(command="echo three"))
+    finally:
+        reset_current_tool_scope(token)
+    assert len(_bootstrap_cmds(requests)) == 2  # unchanged
+
+
+def test_sandbox_no_refresh_without_expiring_creds(monkeypatch):
+    provider, requests = _rest_provider_with_recorder(monkeypatch)
+    # Scope with no aliyun creds → base contract only, no expiry, never refreshes.
+    scope = ToolScope(user_id="u1", conversation_id="c1", agent_id="main",
+                      skill_fingerprint="fp")
+    token = set_current_tool_scope(scope)
+    try:
+        asyncio.run(provider.run_command(command="echo one"))
+        asyncio.run(provider.run_command(command="echo two"))
+    finally:
+        reset_current_tool_scope(token)
+    # One create-time bootstrap (base AGENT_* vars), no expiry-driven refresh.
+    assert len(_bootstrap_cmds(requests)) == 1
+
+
+def test_sandbox_injects_sts_creds_after_mid_session_authorization(monkeypatch):
+    provider, requests = _rest_provider_with_recorder(monkeypatch)
+
+    # 1) Sandbox created while the user is unbound: scope carries no aliyun creds,
+    #    so the create-time bootstrap writes only the base AGENT_* contract and the
+    #    session records no expiry (env_expires_at stays None).
+    unbound = ToolScope(user_id="u1", conversation_id="c1", agent_id="main",
+                        skill_fingerprint="fp")
+    token = set_current_tool_scope(unbound)
+    try:
+        asyncio.run(provider.run_command(command="echo one"))
+    finally:
+        reset_current_tool_scope(token)
+    assert len(_bootstrap_cmds(requests)) == 1  # create-time, no creds yet
+
+    # 2) User authorizes mid-session → this turn's scope carries freshly minted
+    #    creds. The warm, credential-less sandbox (same scope key) gets its FIRST
+    #    injection so the very next aliyun call works — without recreating it.
+    token = set_current_tool_scope(_aliyun_scope(_iso_in(43200)))
+    try:
+        asyncio.run(provider.run_command(command="echo two"))
+    finally:
+        reset_current_tool_scope(token)
+    assert len(_bootstrap_cmds(requests)) == 2  # first injection after authorize
+
+    # 3) Creds now far from expiry → no redundant re-injection.
+    token = set_current_tool_scope(_aliyun_scope(_iso_in(43200)))
+    try:
+        asyncio.run(provider.run_command(command="echo three"))
+    finally:
+        reset_current_tool_scope(token)
+    assert len(_bootstrap_cmds(requests)) == 2  # unchanged
 
 
 def test_agentrun_rest_provider_reuses_user_session(monkeypatch):

@@ -3,7 +3,6 @@ import { renderHook, act } from "@testing-library/react";
 
 vi.mock("../../api/client", () => ({ streamResponse: vi.fn() }));
 vi.mock("../../api/responses", () => ({ cancelResponse: vi.fn(), streamResume: vi.fn() }));
-vi.mock("../../lib/user", () => ({ getUserId: () => "u1" }));
 vi.mock("../../store/conversations", () => ({
   useConversationsStore: { getState: () => ({ refresh: vi.fn() }) },
 }));
@@ -44,7 +43,8 @@ describe("useResponsesChat (resilient)", () => {
     expect(st.lastResponseId).toBe("resp_1");
     const params = (client.streamResponse as any).mock.calls[0][0];
     expect(params.background).toBe(true);
-    expect(params.user_id).toBe("u1");
+    // Identity is server-derived from the session; no user_id is sent.
+    expect(params.user_id).toBeUndefined();
   });
 
   it("stop cancels server-side once the response id is known", async () => {

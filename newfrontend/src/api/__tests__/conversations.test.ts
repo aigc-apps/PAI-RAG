@@ -16,7 +16,7 @@ function mockFetch(json: unknown, ok = true, status = 200) {
 describe("conversations api", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("lists conversations for a user", async () => {
+  it("lists conversations for the session user", async () => {
     const fetchMock = mockFetch({
       data: [
         {
@@ -29,12 +29,13 @@ describe("conversations api", () => {
       ],
     });
     vi.stubGlobal("fetch", fetchMock);
-    const out = await listConversations("u1");
+    const out = await listConversations();
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe("c1");
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toContain("/v1/conversations");
-    expect(url).toContain("user_id=u1");
+    // Identity is server-derived; no user_id leaks into the query.
+    expect(url).not.toContain("user_id");
   });
 
   it("gets a conversation detail", async () => {

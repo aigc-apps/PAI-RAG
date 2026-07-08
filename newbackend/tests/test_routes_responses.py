@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.store.memory import InMemoryStore
 from app.routes.responses import router as responses_router
 from app.deps import AppState
+from tests.authutil import apply_auth, TEST_USER_ID
 from common.llm.models import TextChunk, ErrorChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
 
@@ -43,7 +44,7 @@ def _client():
         store=InMemoryStore(), llm=_EchoLLM(), default_model="m"
     )
     app.include_router(responses_router)
-    return TestClient(app)
+    return TestClient(apply_auth(app))
 
 
 class _FailLLM:
@@ -62,7 +63,7 @@ def _fail_client():
         store=InMemoryStore(), llm=_FailLLM(), default_model="m"
     )
     app.include_router(responses_router)
-    return TestClient(app)
+    return TestClient(apply_auth(app))
 
 
 def test_failed_run_persists_status_and_error():
@@ -183,7 +184,7 @@ def test_stored_turn_creates_listable_conversation_with_title_and_user():
     body = c.post("/v1/responses", json={
         "input": "what is the capital of France?",
         "stream": False,
-        "user_id": "u_42",
+        "user_id": "u_42",  # spoofed body id — ignored; identity comes from the token
     }).json()
     conv_id = body["conversation"]["id"]
     # the conversation is now a real, retrievable row via the responses' app_state store
@@ -196,7 +197,7 @@ def test_stored_turn_creates_listable_conversation_with_title_and_user():
         conv = await state.store.get_conversation(conv_id)
         assert conv is not None
         assert conv.title == "what is the capital of France?"
-        assert conv.user_id == "u_42"
+        assert conv.user_id == TEST_USER_ID   # token identity, not the body's u_42
         assert conv.last_response_id == body["id"]
     asyncio.run(_read())
 
@@ -253,8 +254,9 @@ def test_second_turn_keeps_title_and_advances_last_response_id():
     asyncio.run(_read())
 
 
-def test_stored_items_and_conversation_carry_resolved_user_id():
+def test_stored_items_and_conversation_carry_authenticated_user_id():
     c = _client()
+    # A client-supplied alias must NOT win — identity is the authenticated user.
     body = c.post("/v1/responses", json={"input": "hello", "stream": False, "user": "u_alias"}).json()
     conv_id = body["conversation"]["id"]
     import asyncio
@@ -262,8 +264,8 @@ def test_stored_items_and_conversation_carry_resolved_user_id():
     async def _read():
         store = c.app.state.app_state.store
         conv = await store.get_conversation(conv_id)
-        assert conv.user_id == "u_alias"           # alias resolved
-        assert await store.get_user("u_alias") is not None  # user ensured
+        assert conv.user_id == TEST_USER_ID
+        assert await store.get_user(TEST_USER_ID) is not None  # user ensured
         items = await store.get_conversation_items(conv_id)
-        assert items and all(it.user_id == "u_alias" for it in items)
+        assert items and all(it.user_id == TEST_USER_ID for it in items)
     asyncio.run(_read())

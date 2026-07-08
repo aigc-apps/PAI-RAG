@@ -36,6 +36,21 @@ def test_publish_artifact_guidance_only_when_tool_enabled():
     assert "publish_artifact" in with_tool and "/mnt/user" in with_tool
 
 
+def test_aliyun_cli_guidance_only_when_capability_and_shell_present():
+    # Gated on both the capability flag and a sandbox shell tool.
+    assert "aliyun" not in render_stable_system_prompt(
+        DEFAULT_SOUL, tool_names=["shell"]).lower()
+    assert "aliyun" not in render_stable_system_prompt(
+        DEFAULT_SOUL, tool_names=["web_fetch"], aliyun_pai_enabled=True).lower()
+    on = render_stable_system_prompt(
+        DEFAULT_SOUL, tool_names=["shell"], aliyun_pai_enabled=True)
+    assert "aliyun" in on.lower()
+    # Steers the model away from self-configuring the CLI.
+    assert "aliyun configure" in on
+    # Tells the model not to discard stderr, so auth errors stay diagnosable.
+    assert "2>/dev/null" in on
+
+
 def test_stable_prompt_lists_no_tools_when_empty_and_project_when_set():
     assert "no tools" in render_stable_system_prompt(DEFAULT_SOUL, tool_names=[]).lower()
     out = render_stable_system_prompt(DEFAULT_SOUL, tool_names=[], project_context="Repo: PAI-RAG")

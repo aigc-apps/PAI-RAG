@@ -27,8 +27,10 @@ from agent.tools.scope import (
     reset_current_tool_scope,
     set_current_tool_scope,
 )
+from app.auth import require_user
 from app.config import get_settings
 from app.deps import AppState, get_state
+from app.store.base import User
 
 router = APIRouter()
 
@@ -43,8 +45,8 @@ def _content_disposition(kind: str, name: str) -> str:
 @router.get("/v1/files/{artifact_id}")
 async def get_file(
     artifact_id: str,
-    user_id: str,
     state: AppState = Depends(get_state),
+    user: User = Depends(require_user),
 ):
     settings = get_settings()
     secret = str(getattr(settings, "files_url_secret", "") or "")
@@ -54,7 +56,9 @@ async def get_file(
         claim = verify_artifact_token(artifact_id, secret=secret)
     except ArtifactTokenError:
         raise HTTPException(status_code=403, detail="invalid file token")
-    if not claim.user_id or claim.user_id != user_id:
+    # Identity comes from the authenticated session (cookie flows on <img> loads),
+    # not a client-supplied query param — the token must belong to the caller.
+    if not claim.user_id or claim.user_id != user.id:
         raise HTTPException(status_code=403, detail="file token does not match user")
 
     max_bytes = int(getattr(settings, "files_max_bytes", 25 * 1024 * 1024))

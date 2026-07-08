@@ -1,7 +1,9 @@
 from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from app.auth import require_admin
 from app.deps import AppState, get_state
+from app.store.base import User
 
 router = APIRouter()
 
@@ -31,7 +33,8 @@ async def list_models(state: AppState = Depends(get_state)):
 
 
 @router.post("/v1/models/reload")
-async def reload_models(state: AppState = Depends(get_state)):
+async def reload_models(state: AppState = Depends(get_state),
+                        admin: User = Depends(require_admin)):
     if state.router is None:
         raise HTTPException(status_code=400, detail="no model router configured")
     try:

@@ -39,6 +39,16 @@ class UserRow(SQLModel, table=True):
     __tablename__ = "users"
     id: str = Field(primary_key=True, max_length=64)
     display_name: Optional[str] = Field(default=None, max_length=200)
+    # Auth identity. `id` (uuid) stays the ownership key for conversations /
+    # memories / aliyun bindings; `email` is only the login handle. `status` is
+    # invited (link issued, no password yet) -> active -> disabled. Nullable
+    # because pre-auth rows and freshly-invited users have no password/email yet.
+    email: Optional[str] = Field(default=None, index=True, unique=True, max_length=320)
+    password_hash: Optional[str] = Field(default=None, max_length=512)
+    role: str = Field(default="user", max_length=16)          # admin | user
+    status: str = Field(default="active", max_length=16)      # invited | active | disabled
+    invite_token_hash: Optional[str] = Field(default=None, max_length=128)
+    invite_expires_at: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=_now)
     meta: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
 

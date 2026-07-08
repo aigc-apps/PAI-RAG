@@ -7,7 +7,6 @@ vi.mock("../../api/conversations", () => ({
   deleteConversation: vi.fn(),
 }));
 vi.mock("../../api/client", () => ({ streamResponse: vi.fn() }));
-vi.mock("../../lib/user", () => ({ getUserId: () => "u1" }));
 vi.mock("../../api/models", () => ({
   listModels: vi.fn().mockResolvedValue({ ids: [], default: "" }),
 }));
@@ -32,15 +31,29 @@ vi.mock("../../api/agentConfig", () => ({
   }),
   saveSetup: vi.fn(),
   saveAgentConfig: vi.fn(),
+  // UserMenu probes this on mount.
+  getAliyunStatus: vi.fn().mockResolvedValue({
+    configured: false, bound: false, region: "", external_id: null,
+  }),
 }));
 
 import { App } from "../App";
 import { useChatStore } from "../../store/chat";
 import { useAgentConfigStore } from "../../store/agentConfig";
+import { useAuthStore } from "../../store/auth";
 
 beforeEach(() => {
   useChatStore.getState().reset();
   useAgentConfigStore.setState({ doc: undefined, loading: false, error: undefined });
+  // Start authenticated as an admin with a no-op hydrate so the guards fall
+  // straight through to the chat surface.
+  useAuthStore.setState({
+    user: { id: "u1", email: "admin@example.com", role: "admin", status: "active", display_name: null },
+    phase: "authenticated",
+    isAdmin: true,
+    bootstrapNeeded: false,
+    hydrate: async () => {},
+  });
 });
 
 describe("App", () => {

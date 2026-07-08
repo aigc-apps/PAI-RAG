@@ -40,6 +40,47 @@ describe("AssistantMessage toolCalls", () => {
   });
 });
 
+describe("AssistantMessage aliyun authorization notice (HITL)", () => {
+  const hitlMsg = () => msg({
+    status: "completed", // activity panel is inactive → collapsed/unmounted
+    text: "已暂停,等待授权",
+    toolCalls: [{
+      id: "c1", name: "shell", arguments: '{"command":"aliyun sts x"}', status: "error",
+      output: "{}", notice: { kind: "aliyun_authorization", bound: false, interrupt: true },
+    }],
+  });
+
+  it("renders an actionable card at the message level when it is the latest turn (paused, awaiting auth)", () => {
+    render(<AssistantMessage message={hitlMsg()} isLast />);
+    // The card stays visible (message level), not buried in the collapsed panel.
+    expect(screen.getByText("需要阿里云授权才能继续")).toBeInTheDocument();
+    expect(screen.getByText("去授权")).toBeInTheDocument();
+    expect(screen.queryByText("已处理")).not.toBeInTheDocument();
+    // The persisted pause explanation is shown as the answer body.
+    expect(screen.getByText("已暂停,等待授权")).toBeInTheDocument();
+  });
+
+  it("renders a read-only record when a later turn exists (reloaded, already handled)", () => {
+    render(<AssistantMessage message={hitlMsg()} isLast={false} />);
+    // Still visible so the interaction stays in the transcript…
+    expect(screen.getByText("需要阿里云授权才能继续")).toBeInTheDocument();
+    expect(screen.getByText("已处理")).toBeInTheDocument();
+    // …but the actions are gone (it was already resolved by a following turn).
+    expect(screen.queryByText("去授权")).not.toBeInTheDocument();
+  });
+
+  it("does not render the card for a notice lacking interrupt", () => {
+    render(<AssistantMessage message={msg({
+      status: "completed",
+      toolCalls: [{
+        id: "c1", name: "shell", arguments: "{}", status: "error",
+        notice: { kind: "aliyun_authorization", bound: false },
+      }],
+    })} />);
+    expect(screen.queryByText("需要阿里云授权才能继续")).not.toBeInTheDocument();
+  });
+});
+
 describe("AssistantMessage cancelled", () => {
   beforeEach(() => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });

@@ -14,6 +14,7 @@ from app.agent_config import AgentConfigDocument, apply_runtime_status
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
 from app.routes.config import router as config_router
 from app.store.memory import InMemoryStore
+from tests.authutil import apply_auth
 
 
 def _client(tmp_path, monkeypatch):
@@ -38,7 +39,7 @@ def _client(tmp_path, monkeypatch):
         router=ProviderRouter(cat),
     )
     app.include_router(config_router)
-    return TestClient(app)
+    return TestClient(apply_auth(app))
 
 
 def test_get_setup_returns_default_config(tmp_path, monkeypatch):
@@ -160,15 +161,8 @@ def _install_demo_skill(c, tmp_path):
         zf.writestr("demo/SKILL.md", "Follow demo instructions.")
     archive.seek(0)
 
-    denied = c.post(
-        "/v1/skills/uploads",
-        files={"file": ("demo.zip", archive.getvalue(), "application/zip")},
-    )
-    assert denied.status_code == 403
-
     upload = c.post(
         "/v1/skills/uploads",
-        headers={"X-Admin": "true"},
         files={"file": ("demo.zip", archive.getvalue(), "application/zip")},
     )
     assert upload.status_code == 200
@@ -176,7 +170,6 @@ def _install_demo_skill(c, tmp_path):
 
     install = c.post(
         "/v1/skills/install",
-        headers={"X-Admin": "true"},
         json={"source": {"type": "zip_upload", "upload_id": upload_id}},
     )
     assert install.status_code == 200
@@ -195,14 +188,9 @@ def test_enable_skill_for_agent_endpoint(tmp_path, monkeypatch):
     c = _client(tmp_path, monkeypatch)
     _install_demo_skill(c, tmp_path)
 
-    # Admin gate.
-    denied = c.post("/v1/skills/enable", json={"skill_id": "skill.demo"})
-    assert denied.status_code == 403
-
     # Unknown skill is rejected.
     bad = c.post(
         "/v1/skills/enable",
-        headers={"X-Admin": "true"},
         json={"skill_id": "skill.nope"},
     )
     assert bad.status_code == 400
@@ -210,7 +198,6 @@ def test_enable_skill_for_agent_endpoint(tmp_path, monkeypatch):
     # Enable the ready skill for the default agent.
     ok = c.post(
         "/v1/skills/enable",
-        headers={"X-Admin": "true"},
         json={"skill_id": "demo"},
     )
     assert ok.status_code == 200
@@ -223,14 +210,12 @@ def test_enable_skill_for_agent_endpoint(tmp_path, monkeypatch):
     # Idempotent re-enable + disable round-trip.
     again = c.post(
         "/v1/skills/enable",
-        headers={"X-Admin": "true"},
         json={"skill_id": "skill.demo"},
     )
     assert again.json()["result"]["changed"] is False
 
     off = c.post(
         "/v1/skills/enable",
-        headers={"X-Admin": "true"},
         json={"skill_id": "skill.demo", "enabled": False},
     )
     agent = next(a for a in off.json()["config"]["agents"] if a["id"] == "main")

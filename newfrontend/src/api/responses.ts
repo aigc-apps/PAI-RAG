@@ -1,7 +1,8 @@
 import { parseSSE } from "../lib/sse";
+import { apiFetch } from "../lib/apiFetch";
 
 export async function cancelResponse(id: string): Promise<void> {
-  const res = await fetch(`/v1/responses/${encodeURIComponent(id)}/cancel`, {
+  const res = await apiFetch(`/v1/responses/${encodeURIComponent(id)}/cancel`, {
     method: "POST",
   });
   // 404 == the run already finished/unknown server-side — treat as a no-op.
@@ -16,7 +17,7 @@ export function streamResume(
   signal: AbortSignal
 ): AsyncIterable<unknown> {
   return (async function* () {
-    const res = await fetch(
+    const res = await apiFetch(
       `/v1/responses/${encodeURIComponent(id)}?stream=true&starting_after=${startingAfter}`,
       { signal }
     );

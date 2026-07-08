@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import type { ConversationSummary } from "../types";
 import { listConversations, deleteConversation } from "../api/conversations";
-import { getUserId } from "../lib/user";
 
 interface ConversationsState {
   items: ConversationSummary[];
@@ -17,7 +16,7 @@ export const useConversationsStore = create<ConversationsState>((set) => ({
   selectedId: undefined,
 
   refresh: async () => {
-    const items = await listConversations(getUserId());
+    const items = await listConversations();
     set({ items });
   },
 

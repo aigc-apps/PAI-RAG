@@ -6,6 +6,7 @@ from app.store.memory import InMemoryStore
 from app.deps import AppState
 from app.providers import ModelSpec, ProviderConfig, ModelCatalog, ProviderRouter
 from app.routes.responses import router as responses_router
+from tests.authutil import apply_auth
 from common.llm.models import TextChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
 
@@ -45,7 +46,7 @@ def _client(router):
     app = FastAPI()
     app.state.app_state = AppState(store=InMemoryStore(), llm=None, default_model="x/fast", router=router)
     app.include_router(responses_router)
-    return TestClient(app)
+    return TestClient(apply_auth(app))
 
 
 def test_request_model_routes_to_the_right_client():
@@ -111,7 +112,7 @@ def test_no_router_path_unchanged():
     app = FastAPI()
     app.state.app_state = AppState(store=InMemoryStore(), llm=_echo("ECHO"), default_model="m")
     app.include_router(responses_router)
-    c = TestClient(app)
+    c = TestClient(apply_auth(app))
     body = c.post("/v1/responses", json={"input": "hi", "stream": False}).json()
     assert body["status"] == "completed"
     assert body["output"][0]["content"][0]["text"].startswith("ECHO:")

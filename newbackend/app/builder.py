@@ -1,5 +1,8 @@
 from __future__ import annotations
+import asyncio
 from typing import List, Optional, Tuple
+
+from loguru import logger
 
 MEMORY_INJECT_LIMIT = 30
 from agent.context import AgentContext, RunVars
@@ -87,12 +90,19 @@ async def build_context(
     registry: Optional[ToolRegistry] = None,
     agent_config=None,
     project_context: str = "",
+    authenticated_user_id: Optional[str] = None,
 ) -> Tuple[AgentContext, Optional[str]]:
     """Resolve prior history via the store and assemble the AgentContext.
     Composes the effective soul (default <- request.soul <- instructions) into a
     layered system prompt. Selects tools from the registry governed by
     soul.tools_enabled; registry=None keeps empty-ToolBox behavior.
-    Raises ValueError on previous_response_id/conversation conflict (-> HTTP 400)."""
+    Raises ValueError on previous_response_id/conversation conflict (-> HTTP 400).
+
+    ``authenticated_user_id`` (the JWT ``sub``) is the source of truth for
+    identity — memory injection, the per-user Aliyun sandbox creds, and
+    ``ctx.user_id`` all use it, so a client can never impersonate another user by
+    stuffing a ``user_id`` into the request body. Falls back to the request's
+    self-declared id only when unauthenticated (e.g. internal callers)."""
     history_items: List[Item] = []
     conversation_id = request.conversation
     if request.previous_response_id or request.conversation:
@@ -124,7 +134,8 @@ async def build_context(
     tool_names = [t.name for t in toolbox.tools]
 
     system_prompt = render_stable_system_prompt(
-        effective_soul, tool_names=tool_names, project_context=project_context
+        effective_soul, tool_names=tool_names, project_context=project_context,
+        aliyun_pai_enabled=_aliyun_pai_enabled(agent_config),
     )
 
     summary = ""
@@ -135,7 +146,7 @@ async def build_context(
             history_items = [it for it in history_items if it.seq > conv.summarized_seq]
 
     memories: List[str] = []
-    uid = request.resolved_user_id
+    uid = authenticated_user_id or request.resolved_user_id
     if uid:
         memories = [m.text for m in await store.list_memories(uid, limit=MEMORY_INJECT_LIMIT)]
     current_turn = _input_to_turn(request.input)
@@ -167,6 +178,15 @@ async def build_context(
     )
     context_block = render_context_block(memories=memories, summary=summary, instructions=instructions)
 
+    metadata = dict(request.metadata or {})
+    aliyun_env = await _resolve_aliyun_sandbox_env(store, agent_config, uid)
+    if aliyun_env:
+        metadata["aliyun_sandbox_env"] = aliyun_env
+    # Flags for the reactive authorization card the shell tool surfaces when an
+    # aliyun CLI call fails: whether authz is usable here at all, and whether this
+    # user is already bound (drives "去授权" vs "重新校验/重新授权").
+    metadata.update(await _resolve_aliyun_flags(store, agent_config, uid))
+
     history = items_to_messages(history_items)
     ctx = AgentContext(
         system_prompt=system_prompt,
@@ -177,14 +197,125 @@ async def build_context(
         tools=toolbox,
         run_vars=RunVars(),
         context_block=context_block,
-        user_id=request.resolved_user_id,
+        user_id=uid,
         conversation_id=conversation_id,
-        metadata=dict(request.metadata or {}),
+        metadata=metadata,
         agent_id=_agent_id(agent_config, agent_profile),
         skill_mounts=[mount.to_dict() for mount in skill_mounts],
         skill_fingerprint=skill_mount_fingerprint(skill_mounts),
     )
     return ctx, conversation_id
+
+
+def _aliyun_pai_enabled(agent_config) -> bool:
+    for cap in (getattr(agent_config, "capabilities", []) or []):
+        if getattr(cap, "id", "") == "aliyun_pai":
+            return bool(getattr(cap, "enabled", False))
+    return False
+
+
+async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
+    """Cheap booleans (no AssumeRole) for the reactive authorization card.
+
+    ``aliyun_authz_available`` = the aliyun_pai capability is enabled AND the
+    deployment can actually run an authorization (HMAC secret, developer base
+    AK/SK, and a resolvable ROS template — explicit URL or a self-hostable
+    developer account id). ``aliyun_bound`` = this user has a stored binding,
+    even if minting creds later fails (e.g. a deleted role) — so the card can
+    offer "re-verify" instead of a fresh "authorize". Returns ``{}`` when authz
+    isn't available, so the shell tool never surfaces a card that can't work.
+    """
+    if not uid or not _aliyun_pai_enabled(agent_config):
+        return {}
+    try:
+        from agent.integrations import aliyun_sts
+        from app.config import get_settings
+
+        settings = get_settings()
+        base_ak, base_sk = aliyun_sts.read_base_creds(aliyun_sts.provider_settings(agent_config))
+        available = bool(
+            settings.aliyun_authz_secret
+            and base_ak and base_sk
+            and (settings.aliyun_ros_template_url or settings.aliyun_developer_account_id)
+        )
+        if not available:
+            return {}
+        user = await store.get_user(uid)
+        binding = (user.meta or {}).get("aliyun_pai") if user else None
+        return {
+            "aliyun_authz_available": True,
+            "aliyun_bound": bool(binding and binding.get("role_arn")),
+        }
+    except Exception as exc:  # never break context build over a UX hint
+        logger.warning("aliyun authz flags unavailable: {}", exc)
+        return {}
+
+
+async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
+    """Best-effort per-user Aliyun session env for the sandbox.
+
+    If the user has authorized PAI access (a stored role binding) and the
+    capability is enabled, AssumeRole to mint temp creds (up to 12h) and return
+    the three ALIBABACLOUD_* env vars plus region hints and the token expiry.
+    NEVER raises — any failure (no binding, expired trust, missing CLI/creds)
+    returns {} so sandbox creation is unaffected. The sandbox provider re-injects
+    fresh creds before ALIBABACLOUD_SESSION_EXPIRATION so long sessions never see
+    an expired token.
+    """
+    if not uid or not _aliyun_pai_enabled(agent_config):
+        return {}
+    try:
+        from agent.integrations import aliyun_sts
+        from app.config import get_settings
+
+        settings = get_settings()
+        if not settings.aliyun_authz_secret:
+            return {}
+        user = await store.get_user(uid)
+        binding = (user.meta or {}).get("aliyun_pai") if user else None
+        if not binding or not binding.get("role_arn"):
+            return {}
+        pai_settings = aliyun_sts.provider_settings(agent_config)
+        base_ak, base_sk = aliyun_sts.read_base_creds(pai_settings)
+        if not (base_ak and base_sk):
+            return {}
+        # STS AssumeRole is region-agnostic (endpoint selection only); the minted
+        # token works in every region. Prefer the binding's default/service region,
+        # falling back to legacy single-region bindings, then the configured region.
+        default_region = (
+            binding.get("default_region")
+            or binding.get("region")
+            or aliyun_sts.configured_region(pai_settings, settings.aliyun_default_region)
+        )
+        creds = await asyncio.to_thread(
+            aliyun_sts.assume_role,
+            binding["role_arn"],
+            binding.get("external_id")
+            or aliyun_sts.derive_external_id(
+                uid,
+                secret=settings.aliyun_authz_secret,
+                prefix=aliyun_sts.configured_external_id_prefix(pai_settings),
+            ),
+            region=default_region,
+            base_ak=base_ak, base_sk=base_sk,
+            account_id=settings.aliyun_developer_account_id,
+            duration_seconds=aliyun_sts.configured_assume_duration_seconds(pai_settings),
+        )
+        env = aliyun_sts.to_sandbox_env(creds)
+        # Region hints for the agent: a sane default plus the discovered regions so
+        # it knows where the customer's PAI services live (token is valid in all).
+        env["ALIBABACLOUD_REGION_ID"] = default_region
+        available = binding.get("service_regions") or binding.get("regions") or []
+        if available:
+            env["PAI_AVAILABLE_REGIONS"] = ",".join(available)
+        # Token expiry (ISO8601) so the sandbox provider can re-inject fresh creds
+        # into a long-lived cached sandbox before this token expires.
+        if creds.expiration:
+            env["ALIBABACLOUD_SESSION_EXPIRATION"] = creds.expiration
+        return env
+    except Exception as exc:  # noqa: BLE001 — injection is strictly best-effort
+        logger.warning("aliyun sandbox env skipped for user={}: {}", uid, exc)
+        return {}
 
 
 def _resolve_agent_profile(agent_config, request: ResponsesRequest):

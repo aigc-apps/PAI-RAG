@@ -246,6 +246,39 @@ def test_stream_reasoning_summary_envelope_before_message():
     asyncio.run(run())
 
 
+def test_stream_persists_tool_notice_on_output_item():
+    """A HITL notice (e.g. aliyun authorization) rides the function_call_output
+    store item so a reloaded thread can re-render the card. A tool without a
+    notice omits the key entirely."""
+    async def run():
+        sink = {}
+        notice = {"kind": "aliyun_authorization", "bound": False, "interrupt": True}
+        gen = serialize_response_stream(
+            _events(
+                [
+                    RunStarted(response_id="resp_n"),
+                    ToolStarted(call_id="c1", name="shell"),
+                    ToolCompleted(call_id="c1", name="shell", arguments="{}"),
+                    ToolResult(call_id="c1", name="shell", ok=False,
+                               error="denied", notice=notice),
+                    ToolStarted(call_id="c2", name="get"),
+                    ToolCompleted(call_id="c2", name="get", arguments="{}"),
+                    ToolResult(call_id="c2", name="get", ok=True, output="42"),
+                    TextDelta(text="paused"),
+                    RunCompleted(usage=Usage(input=1, output=1, total=2)),
+                ]
+            ),
+            model="m", response_id="resp_n", conversation_id=None, sink=sink,
+        )
+        _ = [c async for c in gen]
+        outputs = {it["content"]["call_id"]: it["content"]
+                   for it in sink["items"] if it["type"] == "function_call_output"}
+        assert outputs["c1"]["notice"] == notice
+        assert "notice" not in outputs["c2"]  # plain tool: key omitted
+
+    asyncio.run(run())
+
+
 def test_stream_failure_emits_failed_event():
     async def run():
         sink = {}

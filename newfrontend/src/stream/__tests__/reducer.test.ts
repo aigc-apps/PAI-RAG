@@ -179,6 +179,20 @@ describe("reduceStreamEvent — tools", () => {
     expect(t.files?.[0]).toMatchObject({ id: "tok1", name: "report.md", kind: "markdown" });
   });
 
+  it("folds a stream-only notice from a tool result onto the tool", () => {
+    let s = initialStreamState("tmp");
+    s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "shell", call_id: "c1" } } as any);
+    s = reduceStreamEvent(s, {
+      type: "response.tool_result",
+      call_id: "c1",
+      output: '{"exit_code":1}',
+      ok: true,
+      notice: { kind: "aliyun_authorization", bound: false, error_code: "InvalidSecurityToken.Expired", interrupt: true },
+    } as any);
+    const t = s.message.toolCalls[0];
+    expect(t.notice).toMatchObject({ kind: "aliyun_authorization", bound: false, interrupt: true });
+  });
+
   it("records a tool's elapsed time from added to result", () => {
     let s = initialStreamState("tmp");
     s = reduceStreamEvent(s, { type: "response.output_item.added", item: { id: "fc_c1", type: "function_call", name: "web_fetch", call_id: "c1" } } as any);

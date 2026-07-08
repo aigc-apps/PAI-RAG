@@ -104,7 +104,8 @@ def test_assistant_message_carries_tool_calls():
     assistant = msgs[1]
     assert assistant["role"] == "assistant" and assistant["text"] == "here it is"
     assert assistant["tool_calls"] == [
-        {"call_id": "c1", "name": "web_fetch", "arguments": "{\"url\":\"x\"}", "output": "PAGE", "files": []}
+        {"call_id": "c1", "name": "web_fetch", "arguments": "{\"url\":\"x\"}",
+         "output": "PAGE", "files": [], "notice": None}
     ]
     # a tool-less turn still has an empty list
     plain = group_conversation_messages(
@@ -112,3 +113,25 @@ def test_assistant_message_carries_tool_calls():
                 ("message", "assistant", {"text": "yo"}, "r2")]),
         [StoredResponse(id="r2", model="m", status="completed", conversation_id="c")])
     assert plain[1]["tool_calls"] == []
+
+
+def test_tool_call_carries_persisted_hitl_notice():
+    notice = {"kind": "aliyun_authorization", "bound": False, "interrupt": True}
+    items = _items([
+        ("message", "user", {"text": "run aliyun"}, "resp_1"),
+        ("function_call", None, {"call_id": "c1", "name": "shell", "arguments": "{}"}, "resp_1"),
+        ("function_call_output", None,
+         {"call_id": "c1", "output": "denied", "notice": notice}, "resp_1"),
+        ("message", "assistant", {"text": "已暂停"}, "resp_1"),
+    ])
+    resps = [StoredResponse(id="resp_1", model="m", status="completed", conversation_id="c")]
+    msgs = group_conversation_messages(items, resps)
+    assert msgs[1]["tool_calls"][0]["notice"] == notice
+    # a tool without a persisted notice surfaces None (not a KeyError)
+    plain = group_conversation_messages(
+        _items([("message", "user", {"text": "x"}, "r2"),
+                ("function_call", None, {"call_id": "c1", "name": "get", "arguments": "{}"}, "r2"),
+                ("function_call_output", None, {"call_id": "c1", "output": "42"}, "r2"),
+                ("message", "assistant", {"text": "y"}, "r2")]),
+        [StoredResponse(id="r2", model="m", status="completed", conversation_id="c")])
+    assert plain[1]["tool_calls"][0]["notice"] is None

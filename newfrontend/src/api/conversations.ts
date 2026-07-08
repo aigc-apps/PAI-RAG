@@ -1,4 +1,5 @@
 import type { ConversationDetail, ConversationSummary } from "../types";
+import { apiFetch } from "../lib/apiFetch";
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -7,12 +8,10 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function listConversations(
-  userId: string
-): Promise<ConversationSummary[]> {
-  const res = await fetch(
-    `/v1/conversations?user_id=${encodeURIComponent(userId)}`
-  );
+// Identity is derived server-side from the session cookie; the client no longer
+// passes a user_id (doing so could not impersonate anyone anyway).
+export async function listConversations(): Promise<ConversationSummary[]> {
+  const res = await apiFetch("/v1/conversations");
   const body = await jsonOrThrow<{ data: ConversationSummary[] }>(res);
   return body.data;
 }
@@ -20,12 +19,12 @@ export async function listConversations(
 export async function getConversation(
   id: string
 ): Promise<ConversationDetail> {
-  const res = await fetch(`/v1/conversations/${encodeURIComponent(id)}`);
+  const res = await apiFetch(`/v1/conversations/${encodeURIComponent(id)}`);
   return jsonOrThrow<ConversationDetail>(res);
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  const res = await fetch(`/v1/conversations/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/v1/conversations/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!res.ok) {

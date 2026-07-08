@@ -83,6 +83,17 @@ describe("normalizeHistoryMessages", () => {
     ]);
   });
 
+  it("reconstructs a persisted HITL notice onto the tool call", () => {
+    const notice = { kind: "aliyun_authorization", bound: false, interrupt: true };
+    const out = normalizeHistoryMessages({
+      id: "c", title: null, created_at: null, updated_at: null, latest_response_id: "r1",
+      messages: [{ role: "assistant", text: "已暂停", reasoning: "", response_id: "r1",
+        previous_response_id: null, status: "completed",
+        tool_calls: [{ call_id: "c1", name: "shell", arguments: "{}", output: "denied", notice }] } as never],
+    });
+    expect(out[0].toolCalls[0].notice).toEqual(notice);
+  });
+
   it("fills ids, camelCases, and sets reasoningStatus", () => {
     const out = normalizeHistoryMessages({
       id: "c",

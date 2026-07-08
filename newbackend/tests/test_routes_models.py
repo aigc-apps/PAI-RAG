@@ -6,13 +6,14 @@ from app.store.memory import InMemoryStore
 from app.deps import AppState
 from app.providers import ModelSpec, ProviderConfig, ModelCatalog, ProviderRouter
 from app.routes.models import router as models_router
+from tests.authutil import apply_auth
 
 
 def _client(router):
     app = FastAPI()
     app.state.app_state = AppState(store=InMemoryStore(), llm=None, default_model="x/fast", router=router)
     app.include_router(models_router)
-    return TestClient(app)
+    return TestClient(apply_auth(app))
 
 
 def test_list_models_returns_catalog():
@@ -110,5 +111,5 @@ def test_reload_without_router_400():
     app = FastAPI()
     app.state.app_state = AppState(store=InMemoryStore(), llm=None, default_model="m")
     app.include_router(models_router)
-    c = TestClient(app)
+    c = TestClient(apply_auth(app))
     assert c.post("/v1/models/reload").status_code == 400

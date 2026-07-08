@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, ConversationDetail, FileArtifact } from "../types";
+import type { ChatMessage, ConversationDetail, FileArtifact, ToolNotice } from "../types";
 
 interface WireHistoryMessage {
   role: "user" | "assistant";
@@ -14,6 +14,7 @@ interface WireHistoryMessage {
     arguments?: string;
     output?: string;
     files?: FileArtifact[];
+    notice?: ToolNotice;
   }>;
   usage?: {
     input_tokens?: number;
@@ -41,6 +42,7 @@ export function normalizeHistoryMessages(
         id: tc.call_id, name: tc.name, arguments: tc.arguments ?? "",
         status: "done" as const, output: tc.output ?? "",
         files: tc.files && tc.files.length ? tc.files : undefined,
+        notice: tc.notice ?? undefined,
       })),
       usage: r.usage
         ? {

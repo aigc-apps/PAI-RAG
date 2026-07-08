@@ -54,6 +54,9 @@ class ToolResult(BaseModel):
     error: Optional[str] = None
     # Structured file artifacts, kept separate from `output` (the LLM-facing str).
     files: Optional[List[dict]] = None
+    # A single structured UI notice (e.g. an aliyun authorization card). Streamed
+    # to the frontend but never persisted.
+    notice: Optional[dict] = None
 
 
 class RunCompleted(BaseModel):

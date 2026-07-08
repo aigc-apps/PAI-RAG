@@ -10,6 +10,7 @@ from agent.tools.artifacts import sign_artifact_token
 from app.deps import AppState
 from app.routes.files import router as files_router
 from app.store.memory import InMemoryStore
+from tests.authutil import apply_auth
 
 SECRET = "route-test-secret"
 
@@ -24,7 +25,8 @@ def _client(tmp_path, monkeypatch, *, max_bytes=None):
     app = FastAPI()
     app.state.app_state = AppState(store=InMemoryStore(), llm=None, default_model="x")
     app.include_router(files_router)
-    return TestClient(app), nas_root
+    # Authenticated as u1; the file token must belong to this user.
+    return TestClient(apply_auth(app, user_id="u1", role="user")), nas_root
 
 
 def _write(nas_root, rel, content: bytes):
@@ -68,9 +70,10 @@ def test_bad_signature_403(tmp_path, monkeypatch):
 
 
 def test_wrong_user_403(tmp_path, monkeypatch):
+    # Token minted for u2 but the caller is authenticated as u1 → rejected.
     c, nas = _client(tmp_path, monkeypatch)
     _write(nas, "report.md", b"x")
-    r = c.get(f"/v1/files/{_tok('report.md')}", params={"user_id": "u2"})
+    r = c.get(f"/v1/files/{_tok('report.md', user='u2')}")
     assert r.status_code == 403
 
 

@@ -17,7 +17,7 @@ describe("streamResponse", () => {
     vi.stubGlobal("fetch", fetchMock);
     const out: any[] = [];
     for await (const e of streamResponse(
-      { model: "m", input: "hi", user_id: "u1", background: true } as any,
+      { model: "m", input: "hi", background: true },
       new AbortController().signal)) out.push(e);
     expect(out.map((e) => e.type)).toEqual(["response.created", "response.completed"]);
     const [url, init] = fetchMock.mock.calls[0];

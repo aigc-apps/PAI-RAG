@@ -4,7 +4,6 @@ vi.mock("../../api/conversations", () => ({
   listConversations: vi.fn(),
   deleteConversation: vi.fn(),
 }));
-vi.mock("../../lib/user", () => ({ getUserId: () => "u1" }));
 
 import { useConversationsStore } from "../conversations";
 import * as api from "../../api/conversations";
@@ -15,12 +14,12 @@ beforeEach(() => {
 });
 
 describe("conversations store", () => {
-  it("refresh loads the list for the current user", async () => {
+  it("refresh loads the list for the session user", async () => {
     (api.listConversations as any).mockResolvedValue([
       { id: "c1", title: "a", created_at: null, updated_at: null, last_response_id: "r1" },
     ]);
     await useConversationsStore.getState().refresh();
-    expect(api.listConversations).toHaveBeenCalledWith("u1");
+    expect(api.listConversations).toHaveBeenCalledWith();
     expect(useConversationsStore.getState().items).toHaveLength(1);
   });
 

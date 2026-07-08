@@ -6,6 +6,7 @@ from app.store.memory import InMemoryStore
 from app.deps import AppState
 from app.routes.responses import router as responses_router
 from app.routes.conversations import router as conversations_router
+from tests.authutil import apply_auth
 from common.llm.models import TextChunk
 from openai.types.chat.chat_completion_chunk import CompletionUsage
 
@@ -29,7 +30,7 @@ def _client():
     app.state.app_state = AppState(store=InMemoryStore(), llm=_EchoLLM(), default_model="m")
     app.include_router(responses_router)
     app.include_router(conversations_router)
-    return TestClient(app)
+    return TestClient(apply_auth(app))
 
 
 def test_background_stream_emits_events_and_persists():
@@ -127,7 +128,7 @@ def test_cancel_persists_cancelled_partial_and_lists_conversation():
     # Use TestClient as a context manager so the anyio portal persists across all
     # requests.  This ensures c.post(cancel) runs in the SAME event loop as _pump,
     # making run.cancel.set() reliably wake _pump without cross-loop issues.
-    with TestClient(_app) as c:
+    with TestClient(apply_auth(_app)) as c:
         def _cancel_when_ready():
             # Poll RunManager._runs directly (no stream-read needed to find the rid).
             for _ in range(200):

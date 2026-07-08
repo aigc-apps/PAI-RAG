@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { streamResponse } from "../api/client";
 import { cancelResponse, streamResume } from "../api/responses";
-import { getUserId } from "../lib/user";
 import { useChatStore } from "../store/chat";
 import { useConversationsStore } from "../store/conversations";
 import {
@@ -106,11 +105,10 @@ export function useResponsesChat() {
           {
             model: chat.model,
             input: trimmed,
-            user_id: getUserId(),
             conversation: chat.conversationId,
             previous_response_id: chat.lastResponseId,
             background: true,
-          } as never,
+          },
           controller.signal
         );
         state = await consume(stream, state);

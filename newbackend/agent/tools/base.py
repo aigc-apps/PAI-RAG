@@ -7,8 +7,11 @@ from loguru import logger
 from agent.message import Message, ToolCall
 from agent.tools.artifacts import (
     begin_artifact_capture,
+    begin_notice_capture,
     drain_artifacts,
+    drain_tool_notice,
     end_artifact_capture,
+    end_notice_capture,
 )
 from agent.tools.scope import ToolScope, reset_current_tool_scope, set_current_tool_scope
 from utils.json_utils import parse_tool_arguments
@@ -48,6 +51,9 @@ class ToolResult:
     # ride the event/SSE separately from `content` — the model only sees the
     # short string in `content`, never the bytes.
     files: Optional[List[dict]] = None
+    # A single structured UI notice the tool surfaced (e.g. an "aliyun
+    # authorization required" card). Stream-only, never persisted.
+    notice: Optional[dict] = None
 
     @property
     def ok(self) -> bool:
@@ -108,6 +114,7 @@ class ToolBox:
             )
         token = set_current_tool_scope(scope or ToolScope())
         artifact_token = begin_artifact_capture()
+        notice_token = begin_notice_capture()
         try:
             if tool.permission == "admin" and not get_current_scope_admin():
                 raise PermissionError(f"{tc.name} requires admin permission")
@@ -122,6 +129,7 @@ class ToolBox:
                 name=tc.name,
                 tool_call=tc,
                 files=files,
+                notice=drain_tool_notice(),
             )
         except RetryError as re:
             logger.error(f"Tool call failed after retries: {traceback.format_exc()}")
@@ -130,6 +138,8 @@ class ToolBox:
             logger.error(f"Tool call failed: {traceback.format_exc()}")
             err = f"Tool call failed: {ex}"
         finally:
+            notice = drain_tool_notice()
+            end_notice_capture(notice_token)
             end_artifact_capture(artifact_token)
             reset_current_tool_scope(token)
         return ToolResult(
@@ -138,6 +148,7 @@ class ToolBox:
             error=err,
             name=tc.name,
             tool_call=tc,
+            notice=notice,
         )
 
 

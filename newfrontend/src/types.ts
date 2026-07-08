@@ -18,6 +18,28 @@ export interface FileArtifact {
   kind: "image" | "markdown" | "html" | "text" | "file";
 }
 
+/**
+ * A structured, stream-only notice a tool surfaced beside its text output.
+ * Currently only the aliyun authorization card: emitted when an `aliyun` CLI
+ * call in the sandbox fails with a credential-class error. `bound` tells the
+ * card whether to offer "去授权" (unbound) or "重新校验/重新授权" (bound).
+ * Never persisted — a reloaded conversation won't replay it.
+ */
+export interface AliyunAuthNotice {
+  kind: "aliyun_authorization";
+  bound: boolean;
+  error_code?: string;
+  /**
+   * Human-in-the-loop marker. When true, the agent turn paused here and handed
+   * control to the user — the card is a "waiting for you" affordance, not a
+   * passive log entry. Resolving it (authorize / re-verify) offers a "继续"
+   * button that resumes the agent.
+   */
+  interrupt?: boolean;
+}
+
+export type ToolNotice = AliyunAuthNotice;
+
 export interface ToolUse {
   id: string;
   name: string;
@@ -27,6 +49,8 @@ export interface ToolUse {
   error?: string;
   /** Structured file artifacts this tool produced (separate from `output`). */
   files?: FileArtifact[];
+  /** Structured UI notice this tool surfaced (e.g. an authorization card). */
+  notice?: ToolNotice;
   /** Client clock (ms) when the tool call first appeared; used to derive duration. */
   startedAt?: number;
   /** Elapsed time (ms) from the call appearing to its result, when known. */

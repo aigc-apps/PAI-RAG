@@ -5,9 +5,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.schemas import ResponsesRequest
+from app.auth import require_user
 from app.builder import build_context
 from app.deps import AppState, get_state
-from app.store.base import Item, StoredResponse
+from app.store.base import Item, StoredResponse, User
 from app.memory import update_user_memory, make_complete
 from app.summarizer import maybe_summarize_conversation
 from api.protocol.responses_serializer import (
@@ -44,6 +45,17 @@ def _rid() -> str:
     return f"resp_{uuid.uuid4().hex}"
 
 
+async def _owns_response(state: AppState, stored: StoredResponse, user: User) -> bool:
+    """A response belongs to whoever owns its conversation. Ownership is strict
+    even for admins — admin authority is over the control plane, not other users'
+    private chats. A response with no conversation can't be attributed, so it is
+    treated as not owned."""
+    if not stored.conversation_id:
+        return False
+    conv = await state.store.get_conversation(stored.conversation_id)
+    return conv is not None and conv.user_id == user.id
+
+
 def _user_input_items(current_turn, response_id: str, user_id=None) -> list:
     """The user's turn, stored as a message item (history source of truth).
 
@@ -71,8 +83,9 @@ async def _persist(
     status: str,
     usage: dict | None,
     error: dict | None = None,
+    *,
+    uid: str | None = None,
 ):
-    uid = request.resolved_user_id
     if uid:
         await state.store.ensure_user(uid)
     await state.store.ensure_conversation(
@@ -98,8 +111,7 @@ async def _persist(
     await state.store.touch_conversation(conversation_id, last_response_id=response_id)
 
 
-def _schedule_memory_update(state, request, current_turn, store_items, response_id):
-    uid = request.resolved_user_id
+def _schedule_memory_update(state, request, current_turn, store_items, response_id, uid=None):
     if not (getattr(state, "memory_enabled", False) and request.memory and uid):
         return
     user_text = current_turn.content if isinstance(current_turn.content, str) else ""
@@ -150,6 +162,7 @@ async def create_response(
     request: ResponsesRequest,
     req: Request,
     state: AppState = Depends(get_state),
+    user: User = Depends(require_user),
 ):
     if not request.model:
         request.model = (
@@ -172,6 +185,7 @@ async def create_response(
             registry=(state.registry if tools_ok else None),
             agent_config=state.agent_config,
             project_context=getattr(state, "project_context", ""),
+            authenticated_user_id=user.id,
         )
     except ValueError as e:
         return _error(400, str(e))
@@ -198,14 +212,14 @@ async def create_response(
             r = sink["response"]
             await _persist(
                 state, request, ctx.current_turn, response_id, conversation_id,
-                sink["items"], status, r.get("usage"), r.get("error"),
+                sink["items"], status, r.get("usage"), r.get("error"), uid=user.id,
             )
-            _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id)
+            _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id, user.id)
             _schedule_summary(state, request, conversation_id)
 
         run = state.runs.start(
             events=events, model=request.model, response_id=response_id,
-            conversation_id=conversation_id, persist=_persist_run,
+            conversation_id=conversation_id, persist=_persist_run, user_id=user.id,
         )
         if request.stream:
             return StreamingResponse(
@@ -261,8 +275,9 @@ async def create_response(
                     r["status"],
                     r.get("usage"),
                     r.get("error"),
+                    uid=user.id,
                 )
-                _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id)
+                _schedule_memory_update(state, request, ctx.current_turn, sink["items"], response_id, user.id)
                 _schedule_summary(state, request, conversation_id)
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
@@ -284,8 +299,9 @@ async def create_response(
             resp_dict["status"],
             resp_dict.get("usage"),
             resp_dict.get("error"),
+            uid=user.id,
         )
-        _schedule_memory_update(state, request, ctx.current_turn, store_items, response_id)
+        _schedule_memory_update(state, request, ctx.current_turn, store_items, response_id, user.id)
         _schedule_summary(state, request, conversation_id)
     return JSONResponse(resp_dict)
 
@@ -296,10 +312,14 @@ async def get_response(
     stream: bool = False,
     starting_after: int = 0,
     state: AppState = Depends(get_state),
+    user: User = Depends(require_user),
 ):
     if stream:
         run = state.runs.get(response_id)
         if run is None:
+            raise HTTPException(status_code=409, detail="run not resumable")
+        if run.user_id != user.id:
+            # Don't leak another user's live stream; 409 mirrors the not-found path.
             raise HTTPException(status_code=409, detail="run not resumable")
         return StreamingResponse(
             state.runs.subscribe(run, starting_after=starting_after),
@@ -307,7 +327,7 @@ async def get_response(
             headers=_SSE_HEADERS,
         )
     stored = await state.store.get_response(response_id)
-    if stored is None:
+    if stored is None or not await _owns_response(state, stored, user):
         raise HTTPException(status_code=404, detail="response not found")
     return JSONResponse(
         {
@@ -327,10 +347,11 @@ async def get_response(
 
 @router.delete("/v1/responses/{response_id}")
 async def delete_response(
-    response_id: str, state: AppState = Depends(get_state)
+    response_id: str, state: AppState = Depends(get_state),
+    user: User = Depends(require_user),
 ):
     stored = await state.store.get_response(response_id)
-    if stored is None:
+    if stored is None or not await _owns_response(state, stored, user):
         raise HTTPException(status_code=404, detail="response not found")
     await state.store.delete_response(response_id)
     return JSONResponse(
@@ -339,14 +360,19 @@ async def delete_response(
 
 
 @router.post("/v1/responses/{response_id}/cancel")
-async def cancel_response(response_id: str, state: AppState = Depends(get_state)):
-    if await state.runs.cancel(response_id):
-        return JSONResponse(
-            {"id": response_id, "object": "response.cancel", "status": "cancelling"}
-        )
+async def cancel_response(response_id: str, state: AppState = Depends(get_state),
+                          user: User = Depends(require_user)):
+    run = state.runs.get(response_id)
+    if run is not None:
+        if run.user_id != user.id:
+            raise HTTPException(status_code=404, detail="response not found")
+        if await state.runs.cancel(response_id):
+            return JSONResponse(
+                {"id": response_id, "object": "response.cancel", "status": "cancelling"}
+            )
     # no live run: report the stored status if we have it, else 404
     stored = await state.store.get_response(response_id)
-    if stored is None:
+    if stored is None or not await _owns_response(state, stored, user):
         raise HTTPException(status_code=404, detail="response not found")
     return JSONResponse(
         {"id": response_id, "object": "response.cancel", "status": stored.status}

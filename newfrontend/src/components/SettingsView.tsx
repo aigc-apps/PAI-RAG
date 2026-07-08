@@ -6,6 +6,7 @@ import {
   Database,
   GitBranch,
   Globe2,
+  ShieldCheck,
   Settings2,
   Terminal,
   Upload,
@@ -21,9 +22,11 @@ import type {
 } from "../api/agentConfig";
 import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
+import { useAliyunDialog } from "../store/aliyunDialog";
+import { UsersPanel } from "./UsersPanel";
 import { ThemeToggle } from "./ThemeToggle";
 
-type Tab = "agents" | "tools" | "skills" | "providers" | "yaml";
+type Tab = "agents" | "tools" | "skills" | "providers" | "users" | "yaml";
 
 function statusClass(status: string) {
   if (status === "ready" || status === "healthy") return "text-[var(--success)]";
@@ -51,6 +54,7 @@ function iconFor(id: string) {
   if (id === "search") return <Globe2 className="h-4 w-4" />;
   if (id === "knowledge") return <Database className="h-4 w-4" />;
   if (id === "sandbox") return <Terminal className="h-4 w-4" />;
+  if (id === "aliyun_pai") return <ShieldCheck className="h-4 w-4" />;
   return <Wrench className="h-4 w-4" />;
 }
 
@@ -63,7 +67,9 @@ function displayToolName(id: string) {
 
 function systemTools(doc: AgentConfigDocument) {
   const core = doc.capabilities
-    .filter((cap) => cap.kind === "core_tool")
+    // aliyun_pai is a deployment capability (governs sandbox credential
+    // injection), not a callable tool an agent selects — skip it here.
+    .filter((cap) => cap.kind === "core_tool" && cap.id !== "aliyun_pai")
     .map((cap) => ({
       id: displayToolName(cap.id),
       sourceId: cap.id,
@@ -115,6 +121,7 @@ export function SettingsView({
   const [agentId, setAgentId] = useState(doc.default_agent || doc.agents[0]?.id || "main");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sandboxOpen, setSandboxOpen] = useState(false);
+  const showAliyunDialog = useAliyunDialog((s) => s.show);
   const [skillInstallOpen, setSkillInstallOpen] = useState(false);
   const [yamlText, setYamlText] = useState("");
   const [testingSearch, setTestingSearch] = useState(false);
@@ -202,6 +209,7 @@ export function SettingsView({
     { id: "tools", label: "Tools" },
     { id: "skills", label: "Skills" },
     { id: "providers", label: "Providers" },
+    { id: "users", label: "Users" },
     { id: "yaml", label: "YAML" },
   ];
 
@@ -266,6 +274,7 @@ export function SettingsView({
               loading={loading}
               onConfigureSearch={() => setSearchOpen(true)}
               onConfigureSandbox={() => setSandboxOpen(true)}
+              onConfigureAliyun={() => showAliyunDialog()}
               onPatchCapability={patchCapability}
             />
           )}
@@ -282,6 +291,8 @@ export function SettingsView({
           {tab === "providers" && (
             <ProvidersPanel doc={doc} onEditYaml={openYaml} />
           )}
+
+          {tab === "users" && <UsersPanel />}
 
           {tab === "yaml" && (
             <YamlPanel
@@ -544,12 +555,14 @@ function ToolsPanel({
   loading,
   onConfigureSearch,
   onConfigureSandbox,
+  onConfigureAliyun,
   onPatchCapability,
 }: {
   tools: CapabilityConfig[];
   loading: boolean;
   onConfigureSearch: () => void;
   onConfigureSandbox: () => void;
+  onConfigureAliyun: () => void;
   onPatchCapability: (id: string, patch: Partial<CapabilityConfig>) => Promise<void>;
 }) {
   return (
@@ -618,6 +631,15 @@ function ToolsPanel({
                   className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
                 >
                   Configure
+                </button>
+              )}
+              {cap.id === "aliyun_pai" && (
+                <button
+                  type="button"
+                  onClick={onConfigureAliyun}
+                  className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+                >
+                  Authorize
                 </button>
               )}
             </div>
