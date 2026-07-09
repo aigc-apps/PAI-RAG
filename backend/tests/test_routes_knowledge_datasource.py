@@ -13,6 +13,7 @@ from app.datasource.adapters.llms_txt import parse_llms_txt, parse_product_title
 from app.datasource.url_guard import UrlNotAllowed, validate_public_url
 from app.db import create_all, make_engine
 from app.deps import AppState
+from app.jobs import JobQueue, register_knowledge_handlers
 from app.knowledge import KnowledgeService
 from app.routes.knowledge import router as knowledge_router
 from app.store.base import User
@@ -220,12 +221,16 @@ def test_create_rejects_bad_config(monkeypatch):
 def _client(*, user_id="u_owner", role="admin", db_url="sqlite+aiosqlite:///:memory:"):
     engine = make_engine(db_url)
     asyncio.run(create_all(engine))
+    knowledge = KnowledgeService(engine)
+    queue = JobQueue(engine, concurrency=1)
+    register_knowledge_handlers(queue, knowledge)
     app = FastAPI()
     app.state.app_state = AppState(
         store=InMemoryStore(),
         llm=None,
         default_model="test/echo",
-        knowledge=KnowledgeService(engine),
+        knowledge=knowledge,
+        jobs=queue,
     )
     app.include_router(knowledge_router)
     apply_auth(app, user_id=user_id, role=role)
@@ -280,11 +285,10 @@ def test_datasource_crud_routes():
 
 
 def test_sync_route_accepts_and_returns_202():
-    # The sync endpoint is fire-and-forget: it validates permission/state
-    # synchronously and returns 202. The ingestion itself is covered end-to-end
-    # by the service-level tests above (the fire-and-forget task cannot be driven
-    # to completion under Starlette's synchronous TestClient portal loop, so here
-    # we stub it to a no-op and assert only the route's contract).
+    # The sync endpoint validates permission/state synchronously, enqueues a
+    # durable kb_sync job, and returns 202. The ingestion itself is covered
+    # end-to-end by the service-level tests above; here we stub sync to a no-op
+    # (the job is enqueued but never drained) and assert only the route contract.
     c = _client()
     kb = _create_kb(c)
 

@@ -22,6 +22,7 @@ class AppState:
     runs: RunManager = field(default_factory=RunManager)
     router: Optional[ProviderRouter] = None
     knowledge: object = None
+    jobs: object = None  # JobQueue — the durable background worker pool
     agent_config: object = None
     memory_enabled: bool = False
     memory_model: str = ""

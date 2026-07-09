@@ -31,6 +31,7 @@ from app.routes.aliyun import router as aliyun_router
 from app.routes.knowledge import router as knowledge_router
 from app.routes.agents import router as agents_router
 from app.knowledge import KnowledgeService
+from app.jobs import JobQueue, register_knowledge_handlers
 from app.search_engine import build_search_engine
 from app.agent_config import apply_runtime_status, load_agent_config
 from agent.soul import Soul
@@ -101,11 +102,23 @@ async def lifespan(app: FastAPI):
     if settings.skills_dir:
         load_skills(settings.skills_dir, registry)
     runtime_agent_config = apply_runtime_status(agent_config, settings, provider_router)
+    # Durable background job queue: KB ingest/sync run here, off the request path,
+    # surviving restarts. Recover any jobs a prior process left mid-run, then start
+    # the worker pool.
+    jobs = JobQueue(
+        engine,
+        concurrency=settings.job_worker_concurrency,
+        default_max_attempts=settings.job_max_attempts,
+    )
+    register_knowledge_handlers(jobs, knowledge)
+    await jobs.recover_orphans()
+    jobs.start()
     app.state.app_state = AppState(
         store=store, llm=_build_llm(settings), default_model=settings.default_model,
         soul=soul, registry=registry, router=provider_router,
         agent_config=runtime_agent_config,
         knowledge=knowledge,
+        jobs=jobs,
         memory_enabled=settings.memory_enabled,
         memory_model=settings.memory_model,
         summary_enabled=settings.summary_enabled,
@@ -113,7 +126,11 @@ async def lifespan(app: FastAPI):
         summary_batch=settings.summary_batch,
         project_context=settings.project_context,
     )
-    yield
+    try:
+        yield
+    finally:
+        # Stop the worker pool cleanly on shutdown (no shutdown hook existed before).
+        await jobs.stop()
 
 
 app = FastAPI(title="Lean Agent Service", lifespan=lifespan)

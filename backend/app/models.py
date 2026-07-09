@@ -177,6 +177,42 @@ class KnowledgeIngestionJobRow(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_now)
 
 
+class BackgroundJobRow(SQLModel, table=True):
+    """Generic durable work queue — the execution substrate for deferred work.
+
+    Distinct from ``knowledge_ingestion_jobs`` (which is a per-document audit log
+    of ingestion history): this is the claimable queue a worker pool drains.
+    ``kind`` dispatches to a handler; ``payload`` carries its args. Designed to be
+    reused by future producers (a cron scheduler sets ``run_after``; a HITL
+    approval flips a ``waiting`` job back to ``queued``) — see app/jobs.py.
+    """
+
+    __tablename__ = "background_jobs"
+    id: str = Field(primary_key=True, max_length=64)
+    kind: str = Field(index=True, max_length=64)         # kb_ingest | kb_sync | ...
+    # queued | running | waiting | succeeded | failed.
+    # `waiting` is non-terminal and NOT claimable — reserved for a run that is
+    # parked awaiting a human (HITL); an external event returns it to `queued`.
+    status: str = Field(default="queued", index=True, max_length=32)
+    payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    result: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    error: Optional[str] = Field(default=None, sa_column=Column(Text))
+    attempts: int = Field(default=0)
+    max_attempts: int = Field(default=3)
+    # Earliest time the job may be claimed. NULL = immediately. A future scheduler
+    # sets this for delayed / one-shot runs; retry/backoff also uses it.
+    run_after: Optional[datetime] = Field(default=None, index=True)
+    priority: int = Field(default=0)                     # lower runs first
+    worker_id: Optional[str] = Field(default=None, max_length=64)   # lease holder
+    claimed_at: Optional[datetime] = Field(default=None)
+    kb_id: Optional[str] = Field(default=None, index=True, max_length=64)
+    created_by: Optional[str] = Field(default=None, index=True, max_length=64)
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+    started_at: Optional[datetime] = Field(default=None)
+    finished_at: Optional[datetime] = Field(default=None)
+
+
 class KnowledgeDataSourceRow(SQLModel, table=True):
     """A configured data source feeding a knowledge base (e.g. an Aliyun docs
     ``llms.txt`` manifest). Aggregate sync state is stored inline — the backend

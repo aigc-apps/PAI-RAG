@@ -27,6 +27,13 @@ def make_engine(db_url: str) -> AsyncEngine:
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
+    if db_url.startswith("sqlite"):
+        # busy_timeout lets a writer wait out a peer's lock instead of failing
+        # immediately with "database is locked" — needed now the background
+        # worker pool can attempt concurrent writes against the same file.
+        return create_async_engine(
+            db_url, future=True, connect_args={"timeout": 30}
+        )
     return create_async_engine(db_url, future=True)
 
 

@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     invite_ttl_hours: int = 72
     cookie_secure: bool = False
     admin_bootstrap_token: str = ""
+    # Max size of a single knowledge-base file upload, in MB. Enforced by the
+    # upload endpoint (413 when exceeded) before extraction runs.
+    knowledge_upload_max_mb: int = 20
+    # Background job queue. `job_worker_concurrency` is how many jobs the in-process
+    # worker pool runs at once — the win is overlapping embedding round-trips, not
+    # DB writes (which serialize on SQLite). Lower to 1 if a SQLite deployment sees
+    # write contention. `job_max_attempts` bounds retries before a job is failed.
+    job_worker_concurrency: int = 4
+    job_max_attempts: int = 3
 
 
 def get_settings() -> Settings:

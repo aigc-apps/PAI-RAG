@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.db import create_all, make_engine
 from app.deps import AppState
+from app.jobs import JobQueue, register_knowledge_handlers
 from app.knowledge import KnowledgeService
 from app.routes.knowledge import router as knowledge_router
 from app.store.memory import InMemoryStore
@@ -18,16 +19,29 @@ from tests.authutil import apply_auth
 def _client(*, user_id="u_owner", role="admin"):
     engine = make_engine("sqlite+aiosqlite:///:memory:")
     asyncio.run(create_all(engine))
+    knowledge = KnowledgeService(engine)
+    # Import now enqueues; the worker pool isn't started in tests — we drain
+    # synchronously via _drain() so ingestion is observed deterministically.
+    queue = JobQueue(engine, concurrency=1)
+    register_knowledge_handlers(queue, knowledge)
     app = FastAPI()
     app.state.app_state = AppState(
         store=InMemoryStore(),
         llm=None,
         default_model="test/echo",
-        knowledge=KnowledgeService(engine),
+        knowledge=knowledge,
+        jobs=queue,
     )
     app.include_router(knowledge_router)
     apply_auth(app, user_id=user_id, role=role)
     return TestClient(app)
+
+
+def _drain(c: TestClient) -> int:
+    """Run all queued jobs to completion in-loop; returns the count processed.
+    StaticPool shares the one in-memory connection across the create_all, request,
+    and drain event loops."""
+    return asyncio.run(c.app.state.app_state.jobs.run_until_empty())
 
 
 def _create_kb(c: TestClient):
@@ -62,14 +76,18 @@ def test_knowledge_base_import_search_and_fetch():
             "category": "product-docs",
         },
     )
-    assert imported.status_code == 200, imported.text
+    assert imported.status_code == 202, imported.text
     doc = imported.json()["document"]
-    assert doc["status"] == "indexed"
-    assert doc["chunk_count"] >= 1
+    assert doc["status"] == "processing"
 
+    # ingestion runs on the queue; drain it, then the doc is indexed with chunks
+    assert _drain(c) == 1
     docs = c.get(f"/v1/knowledge-bases/{kb['id']}/documents", params={"tag": "eas"})
     assert docs.status_code == 200
-    assert docs.json()["data"][0]["title"] == "EAS Quickstart"
+    indexed = docs.json()["data"][0]
+    assert indexed["title"] == "EAS Quickstart"
+    assert indexed["status"] == "indexed"
+    assert indexed["chunk_count"] >= 1
 
     chunks = c.get(f"/v1/knowledge-bases/{kb['id']}/chunks")
     assert chunks.status_code == 200
@@ -111,7 +129,8 @@ def test_private_kb_is_not_queryable_by_other_user():
         f"/v1/knowledge-bases/{kb['id']}/documents/import",
         json={"title": "Secret", "content": "private deployment note"},
     )
-    assert r.status_code == 200
+    assert r.status_code == 202
+    assert _drain(owner) == 1
 
     other = TestClient(owner.app)
     apply_auth(other.app, user_id="u_other", role="user")
@@ -132,6 +151,7 @@ def test_disable_chunk_removes_it_from_search():
         f"/v1/knowledge-bases/{kb['id']}/documents/import",
         json={"title": "Billing", "content": "billing token unique-delete-me"},
     )
+    assert _drain(c) == 1
     chunks = c.get(f"/v1/knowledge-bases/{kb['id']}/chunks").json()["data"]
     chunk_id = chunks[0]["id"]
     assert c.post(

@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowLeft, Bot, Check, Copy, Database, Eye, Globe, Info, Loader2, Pencil, Plus,
-  RefreshCw, Search, Trash2, TriangleAlert, X,
+  RefreshCw, Search, Trash2, TriangleAlert, Upload, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createDataSource, createKnowledgeBase, deleteDataSource, deleteKnowledgeBase,
-  getSearchEngine, importKnowledgeDocument, listDataSources, listKnowledgeBases,
-  listKnowledgeChunks, listKnowledgeDocuments, searchKnowledge, syncDataSource,
-  updateDataSource, updateKnowledgeBase,
+  getSearchEngine, getUploadSupport, importKnowledgeDocument, listDataSources,
+  listKnowledgeBases, listKnowledgeChunks, listKnowledgeDocuments, searchKnowledge,
+  syncDataSource, updateDataSource, updateKnowledgeBase, uploadKnowledgeDocument,
   type KnowledgeBase, type KnowledgeBasePatch, type KnowledgeChunk,
   type KnowledgeDataSource, type KnowledgeDocument, type KnowledgeHit,
   type SearchEngineStatus,
@@ -39,8 +39,8 @@ const retrievalOf = (kb: KnowledgeBase) => ({
 
 const STATUS_ZH: Record<string, string> = {
   ready: "就绪", empty: "待索引", indexed: "已索引", active: "启用",
-  failed: "失败", has_errors: "有错误", disabled: "已停用", deleted: "已删除",
-  website: "website", upload: "upload", text: "text",
+  processing: "处理中", failed: "失败", has_errors: "有错误", disabled: "已停用", deleted: "已删除",
+  website: "website", upload: "upload", text: "text", file: "file",
   // data source sync states
   idle: "未同步", syncing: "同步中", succeeded: "已同步", partial: "部分成功",
   llms_txt: "阿里云文档",
@@ -53,7 +53,7 @@ function statusClass(status: string) {
     return "border-[var(--danger)]/35 bg-[var(--danger)]/10 text-[var(--danger)]";
   if (status === "partial")
     return "border-[var(--warning)]/40 bg-[var(--warning)]/10 text-[var(--warning)]";
-  if (status === "syncing")
+  if (status === "syncing" || status === "processing")
     return "border-[var(--accent)]/35 bg-[var(--accent-soft)] text-[var(--accent)]";
   return "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-muted)]";
 }
@@ -852,6 +852,15 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
   const refresh = () => load({ append: false });
   const hasMore = docs.length < total;
 
+  // poll while any doc is still processing (queued/running ingest job); refresh
+  // the KB counts once it settles to indexed. Mirrors the datasource poller.
+  useEffect(() => {
+    if (!docs.some((d) => d.status === "processing")) return;
+    const t = setTimeout(async () => { await refresh(); void onChanged(); }, 2500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs]);
+
   return (
     <div className="space-y-3.5">
       <div className="flex flex-wrap items-center gap-2.5">
@@ -996,6 +1005,14 @@ function ImportDrawer({ kb, open, onClose, onDone }: {
 }) {
   const [form, setForm] = useState({ title: "", uri: "", tags: "", content: "" });
   const [busy, setBusy] = useState(false);
+  const [accept, setAccept] = useState<string>("");
+  const [maxMb, setMaxMb] = useState<number>(20);
+  useEffect(() => {
+    if (!open) return;
+    getUploadSupport()
+      .then((s) => { setAccept(s.extensions.join(",")); setMaxMb(s.max_mb); })
+      .catch(() => {});
+  }, [open]);
   const submit = async () => {
     if (!form.title.trim() || !form.content.trim()) return;
     setBusy(true);
@@ -1013,6 +1030,22 @@ function ImportDrawer({ kb, open, onClose, onDone }: {
     } catch (e) { toast.error(e instanceof Error ? e.message : "导入失败"); }
     finally { setBusy(false); }
   };
+  const upload = async (file: File) => {
+    if (file.size > maxMb * 1024 * 1024) {
+      toast.error(`文件超过 ${maxMb}MB 上限`);
+      return;
+    }
+    setBusy(true);
+    try {
+      await uploadKnowledgeDocument(kb.id, file, {
+        title: form.title.trim() || undefined,
+        tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+      });
+      toast.success("已上传并索引");
+      await onDone();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "上传失败"); }
+    finally { setBusy(false); }
+  };
   return (
     <Drawer open={open} title="导入文档" onClose={onClose}
       footer={<>
@@ -1021,6 +1054,21 @@ function ImportDrawer({ kb, open, onClose, onDone }: {
           {busy && <Loader2 className="h-4 w-4 animate-spin" />} 导入并索引
         </button>
       </>}>
+      <Field label="上传文件" hint={accept ? `支持 ${accept}（≤${maxMb}MB）` : "PDF / Word / PPT / Excel / 文本等"}>
+        <label className={cn(BTN_GHOST, "w-full cursor-pointer")}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          选择文件上传
+          <input type="file" accept={accept || undefined} className="hidden" disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void upload(f);
+            }} />
+        </label>
+      </Field>
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
+        <div className="h-px flex-1 bg-[var(--border)]" />或手动粘贴<div className="h-px flex-1 bg-[var(--border)]" />
+      </div>
       <Field label="标题"><input className={INPUT} value={form.title} onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))} placeholder="文档标题" /></Field>
       <Field label="来源 URL / OSS URI" hint="可选，留空作为纯文本">
         <input className={cn(INPUT, "font-mono text-xs")} value={form.uri} onChange={(e) => setForm((s) => ({ ...s, uri: e.target.value }))} placeholder="https://…" />

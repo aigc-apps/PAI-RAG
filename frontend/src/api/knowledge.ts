@@ -209,13 +209,41 @@ export async function importKnowledgeDocument(
     tags?: string[];
     category?: string;
   }
-): Promise<{ document: KnowledgeDocument }> {
-  return parseJson<{ document: KnowledgeDocument }>(
+): Promise<{ document: KnowledgeDocument; job_id: string }> {
+  // 202: the document comes back as `processing`; the background worker ingests
+  // and flips it to `indexed`. Poll the document list to observe the transition.
+  return parseJson<{ document: KnowledgeDocument; job_id: string }>(
     await apiFetch(`/v1/knowledge-bases/${kbId}/documents/import`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     })
+  );
+}
+
+export async function uploadKnowledgeDocument(
+  kbId: string,
+  file: File,
+  meta?: { title?: string; tags?: string[]; category?: string }
+): Promise<{ document: KnowledgeDocument; job_id: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  if (meta?.title) form.append("title", meta.title);
+  if (meta?.tags && meta.tags.length) form.append("tags", meta.tags.join(","));
+  if (meta?.category) form.append("category", meta.category);
+  // No Content-Type header — the browser sets multipart/form-data + boundary.
+  // 202: document returns `processing`; worker ingests → `indexed` (poll to observe).
+  return parseJson<{ document: KnowledgeDocument; job_id: string }>(
+    await apiFetch(`/v1/knowledge-bases/${kbId}/documents/upload`, {
+      method: "POST",
+      body: form,
+    })
+  );
+}
+
+export async function getUploadSupport(): Promise<{ extensions: string[]; max_mb: number }> {
+  return parseJson<{ extensions: string[]; max_mb: number }>(
+    await apiFetch("/v1/knowledge/upload-support")
   );
 }
 

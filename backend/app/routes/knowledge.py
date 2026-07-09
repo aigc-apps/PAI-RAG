@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.auth import require_user
+from app.config import Settings, get_settings
 from app.deps import AppState, get_state
+from app.extractors import SUPPORTED_EXTENSIONS, extract_to_markdown
 from app.knowledge import KnowledgeService
 from app.store.base import User
 
 router = APIRouter()
-
-# Keep strong references to fire-and-forget sync tasks so they are not
-# garbage-collected mid-run (asyncio only holds a weak reference).
-_sync_tasks: set[asyncio.Task] = set()
 
 
 def get_knowledge_service(state: AppState = Depends(get_state)) -> KnowledgeService:
@@ -23,6 +22,29 @@ def get_knowledge_service(state: AppState = Depends(get_state)) -> KnowledgeServ
     if svc is None:
         raise HTTPException(status_code=503, detail="knowledge service is not configured")
     return svc
+
+
+def get_job_queue(state: AppState = Depends(get_state)):
+    queue = getattr(state, "jobs", None)
+    if queue is None:
+        raise HTTPException(status_code=503, detail="job queue is not configured")
+    return queue
+
+
+def _stable_uri(uri: Optional[str], content: str) -> str:
+    """The uri a document dedupes on — mirrors import_text_document so a
+    pre-created ``processing`` stub and the worker's later ingest agree on the
+    same row. Explicit uri wins; otherwise a stable hash of the content."""
+    if uri:
+        return uri
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    return f"text://{digest[:16]}"
+
+
+def _user_payload(user: User) -> dict:
+    """Serialize the acting user into a job payload so the worker runs the
+    ingest under the same identity (permission checks re-run in the handler)."""
+    return {"user_id": user.id, "user_email": user.email, "user_role": user.role}
 
 
 def _dump(row) -> dict:
@@ -201,20 +223,102 @@ async def delete_knowledge_base(
     return {"ok": True}
 
 
-@router.post("/v1/knowledge-bases/{kb_id}/documents/import")
+@router.post("/v1/knowledge-bases/{kb_id}/documents/import", status_code=202)
 async def import_text_document(
     kb_id: str,
     payload: ImportTextDocumentPayload,
     user: User = Depends(require_user),
     svc: KnowledgeService = Depends(get_knowledge_service),
+    queue=Depends(get_job_queue),
 ):
+    """Enqueue a text document for ingestion. Returns a ``processing`` document
+    immediately; the background worker chunks/embeds/indexes it (poll the
+    document to see it flip to ``indexed``)."""
+    uri = _stable_uri(payload.uri, payload.content)
     try:
-        doc, job = await svc.import_text_document(kb_id, user=user, **payload.model_dump())
+        doc = await svc.create_pending_document(
+            kb_id, user=user, title=payload.title, uri=uri,
+            source_type=payload.source_type, mime_type=payload.mime_type,
+            tags=payload.tags, category=payload.category,
+        )
     except PermissionError as exc:
         raise _not_found(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"document": _dump(doc), "job": _dump(job)}
+    job_id = await queue.enqueue(
+        kind="kb_ingest", kb_id=kb_id, created_by=user.id,
+        payload={**payload.model_dump(), "uri": uri, "kb_id": kb_id, **_user_payload(user)},
+    )
+    return {"document": _dump(doc), "job_id": job_id}
+
+
+@router.get("/v1/knowledge/upload-support")
+async def upload_support(
+    user: User = Depends(require_user),
+    settings: Settings = Depends(get_settings),
+):
+    """Formats and size limit the upload endpoint accepts (drives the UI)."""
+    return {
+        "extensions": sorted(SUPPORTED_EXTENSIONS),
+        "max_mb": settings.knowledge_upload_max_mb,
+    }
+
+
+@router.post("/v1/knowledge-bases/{kb_id}/documents/upload")
+async def upload_document(
+    kb_id: str,
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(default=None),
+    tags: Optional[str] = Form(default=None),
+    category: Optional[str] = Form(default=None),
+    user: User = Depends(require_user),
+    svc: KnowledgeService = Depends(get_knowledge_service),
+    settings: Settings = Depends(get_settings),
+    queue=Depends(get_job_queue),
+):
+    """Upload a file, extract it to Markdown, and enqueue it for ingestion.
+
+    Supported types are extractors.SUPPORTED_EXTENSIONS: plain text/Markdown are
+    decoded directly; everything else goes through markitdown (needs the
+    `parsers` extra). Extraction runs in-request (fast); the slow chunk/embed/index
+    is deferred to the background worker. Returns a ``processing`` document.
+    """
+    data = await file.read()
+    max_bytes = settings.knowledge_upload_max_mb * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"file exceeds the {settings.knowledge_upload_max_mb} MB upload limit",
+        )
+
+    try:
+        markdown = await asyncio.to_thread(extract_to_markdown, file.filename or "", data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    tag_list = [t.strip() for t in (tags or "").split(",") if t.strip()]
+    doc_title = title or file.filename or "uploaded file"
+    uri = _stable_uri(f"file://{file.filename}" if file.filename else None, markdown)
+    mime_type = file.content_type or "text/markdown"
+    try:
+        doc = await svc.create_pending_document(
+            kb_id, user=user, title=doc_title, uri=uri,
+            source_type="file", mime_type=mime_type,
+            tags=tag_list, category=category,
+        )
+    except PermissionError as exc:
+        raise _not_found(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    job_id = await queue.enqueue(
+        kind="kb_ingest", kb_id=kb_id, created_by=user.id,
+        payload={
+            "kb_id": kb_id, "title": doc_title, "content": markdown, "uri": uri,
+            "source_type": "file", "mime_type": mime_type,
+            "tags": tag_list, "category": category, **_user_payload(user),
+        },
+    )
+    return {"document": _dump(doc), "job_id": job_id}
 
 
 @router.get("/v1/knowledge-bases/{kb_id}/documents")
@@ -505,9 +609,11 @@ async def sync_data_source(
     ds_id: str,
     user: User = Depends(require_user),
     svc: KnowledgeService = Depends(get_knowledge_service),
+    queue=Depends(get_job_queue),
 ):
     # Pre-flight synchronously so permission / not-found / disabled errors reach
-    # the caller; the actual sync runs fire-and-forget and is polled via GET.
+    # the caller; the sync itself runs as a durable queued job (survives restart,
+    # retried on failure) and is polled via GET.
     try:
         await svc.get_kb(kb_id, user=user, require_manage=True)
         row = await svc.get_data_source(kb_id, ds_id, user=user)
@@ -518,7 +624,8 @@ async def sync_data_source(
     if row.status == "syncing":
         raise HTTPException(status_code=409, detail="a sync is already in progress")
 
-    task = asyncio.create_task(svc.sync_data_source(kb_id, ds_id, user=user))
-    _sync_tasks.add(task)
-    task.add_done_callback(_sync_tasks.discard)
-    return {"ok": True, "status": "syncing", "data_source": _dump(row)}
+    job_id = await queue.enqueue(
+        kind="kb_sync", kb_id=kb_id, created_by=user.id,
+        payload={"kb_id": kb_id, "ds_id": ds_id, **_user_payload(user)},
+    )
+    return {"ok": True, "status": "syncing", "data_source": _dump(row), "job_id": job_id}

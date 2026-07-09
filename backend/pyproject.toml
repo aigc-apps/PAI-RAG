@@ -30,6 +30,13 @@ dependencies = [
   "asyncpg>=0.29",
 ]
 
+[project.optional-dependencies]
+# File-upload parsers for the knowledge base. Kept OUT of the lean base: default
+# `uv sync` skips them, so pdf/docx/pptx/xlsx/etc. ingestion needs
+# `uv sync --extra parsers`. markitdown is imported lazily (never at module top)
+# so the service boots — and .txt/.md uploads work — without this extra.
+parsers = ["markitdown[pdf,docx,pptx,xlsx]>=0.1"]
+
 [tool.pytest]
 
 [tool.pytest.ini_options]

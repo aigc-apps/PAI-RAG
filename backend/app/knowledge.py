@@ -319,6 +319,63 @@ class KnowledgeService:
             except Exception as ex:
                 logger.warning(f"[search] delete_kb failed for {kb_id}: {ex!r}")
 
+    async def create_pending_document(
+        self,
+        kb_id: str,
+        *,
+        user: User,
+        title: str,
+        uri: Optional[str] = None,
+        source_type: str = "file",
+        source_id: Optional[str] = None,
+        mime_type: str = "text/markdown",
+        tags: Optional[list[str]] = None,
+        category: Optional[str] = None,
+    ) -> KnowledgeDocumentRow:
+        """Upsert a document row in ``status="processing"`` before its content is
+        ingested — so an enqueued upload/import shows up in the UI immediately.
+
+        Deduped by ``(kb_id, uri)`` the same way ``import_text_document`` is, so the
+        background worker's later ``import_text_document`` reuses this exact row
+        (finds it as ``existing``) and flips it to ``indexed``.
+        """
+        async with AsyncSession(self._engine) as s:
+            kb = await s.get(KnowledgeBaseRow, kb_id)
+            if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
+                raise PermissionError("knowledge base edit permission required")
+            stable_uri = uri or f"pending://{_uuid('doc')}"
+            existing = (
+                await s.exec(
+                    select(KnowledgeDocumentRow).where(
+                        KnowledgeDocumentRow.kb_id == kb_id,
+                        KnowledgeDocumentRow.uri == stable_uri,
+                        KnowledgeDocumentRow.deleted_at.is_(None),
+                    )
+                )
+            ).first()
+            doc = existing or KnowledgeDocumentRow(
+                id=_uuid("doc"),
+                kb_id=kb_id,
+                uri=stable_uri,
+                source_type=source_type,
+                title=title or stable_uri,
+                created_by=user.id,
+            )
+            if source_id is not None:
+                doc.source_id = source_id
+            doc.source_type = source_type
+            doc.title = title or doc.title or stable_uri
+            doc.mime_type = mime_type or "text/markdown"
+            doc.tags = tags or []
+            doc.category = category
+            doc.status = "processing"
+            doc.updated_by = user.id
+            doc.updated_at = now_utc()
+            s.add(doc)
+            await s.commit()
+            await s.refresh(doc)
+            return doc
+
     async def import_text_document(
         self,
         kb_id: str,

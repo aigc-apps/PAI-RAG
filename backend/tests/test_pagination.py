@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.db import create_all, make_engine
 from app.deps import AppState
+from app.jobs import JobQueue, register_knowledge_handlers
 from app.knowledge import KnowledgeService
 from app.routes.knowledge import router as knowledge_router
 from app.store.memory import InMemoryStore
@@ -22,10 +23,13 @@ from tests.authutil import apply_auth
 def _client(*, user_id="u_owner", role="admin"):
     engine = make_engine("sqlite+aiosqlite:///:memory:")
     asyncio.run(create_all(engine))
+    knowledge = KnowledgeService(engine)
+    queue = JobQueue(engine, concurrency=1)
+    register_knowledge_handlers(queue, knowledge)
     app = FastAPI()
     app.state.app_state = AppState(
         store=InMemoryStore(), llm=None, default_model="test/echo",
-        knowledge=KnowledgeService(engine),
+        knowledge=knowledge, jobs=queue,
     )
     app.include_router(knowledge_router)
     apply_auth(app, user_id=user_id, role=role)
@@ -39,9 +43,11 @@ def _kb(c):
 
 
 def _import(c, kb_id, title, content, **kw):
+    # Import enqueues; drain the queue so ingestion completes before we assert.
     r = c.post(f"/v1/knowledge-bases/{kb_id}/documents/import",
                json={"title": title, "content": content, **kw})
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
+    asyncio.run(c.app.state.app_state.jobs.run_until_empty())
     return r.json()["document"]
 
 
