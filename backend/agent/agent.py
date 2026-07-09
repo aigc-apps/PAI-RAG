@@ -10,10 +10,11 @@ from agent.context import AgentContext, Attachment, RunVars
 from agent.message import Message
 from agent.budgeting import AgentMessageManager
 from agent.message import ToolCall
+from agent.tools.scope import ToolScope
 from common.llm.models import ReasoningChunk, ErrorChunk
 from agent.core.events import (
-    RunStarted, TextDelta, ReasoningDelta, ToolStarted, ToolCompleted,
-    ToolResult, RunCompleted, RunFailed, Usage,
+    RunStarted, TextDelta, ReasoningDelta, ToolStarted, ToolArgumentsDelta,
+    ToolCompleted, ToolResult, RunCompleted, RunFailed, Usage,
 )
 from utils.constants import try_get_int_env
 try:
@@ -40,6 +41,16 @@ except Exception:  # lean mode: no trace extension / opentelemetry
 MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20)
 # 流式调用的"空闲超时":超过该秒数没有收到任何分片(package)即超时(非总时长)
 LLM_STREAM_IDLE_TIMEOUT = try_get_int_env("LLM_STREAM_IDLE_TIMEOUT_SECONDS", 30)
+
+# Human-in-the-loop pause. When a tool result carries a notice with
+# ``interrupt: true`` (e.g. the aliyun authorization card), the run stops after
+# the current tool batch and hands control to the user instead of re-entering
+# the LLM. This deterministic assistant line IS persisted (the notice/card is
+# stream-only), so a reloaded conversation still explains the paused state.
+_HITL_PAUSE_TEXT = (
+    "我需要访问你的阿里云资源,但当前授权无法使用(尚未授权或凭证已失效)。请在上方的授权卡片"
+    "或右上角头像菜单里完成阿里云授权,然后点击卡片上的「继续」按钮(或直接回复「继续」),我会接着执行。"
+)
 
 
 async def _iter_with_idle_timeout(stream, timeout: int):
@@ -121,7 +132,7 @@ class Agent:
         if block:
             msgs.append(Message("system", block))
         msgs.append(render_current_turn(ctx.current_turn, ctx.attachments, ctx.hints, ctx.run_vars))
-        logger.info("[agent] model input: %d msgs", len(msgs))
+        logger.info("[agent] model input: {} msgs", len(msgs))
         return msgs
 
     async def _stream_turn(self, messages, tools, sink):
@@ -132,6 +143,8 @@ class Agent:
         wire = [m.to_wire() for m in messages]
         stream = await self.llm.astream(messages=wire, tools=tools.openai_schema() if tools else [])
         text, tool_calls = "", []
+        started_tool_calls = sink.setdefault("started_tool_calls", set())
+        argument_lengths = sink.setdefault("tool_argument_lengths", {})
         try:
             async for chunk in _iter_with_idle_timeout(stream, LLM_STREAM_IDLE_TIMEOUT):
                 if isinstance(chunk, ErrorChunk):
@@ -141,6 +154,26 @@ class Agent:
                     return
                 if chunk.tool_calls:
                     tool_calls = chunk.tool_calls
+                    for raw in tool_calls:
+                        if raw.type != "function" or raw.id is None or raw.function is None:
+                            continue
+                        name = raw.function.name or ""
+                        if not name:
+                            continue
+                        if tools is None or not tools.get(name):
+                            continue
+                        if raw.id not in started_tool_calls:
+                            started_tool_calls.add(raw.id)
+                            yield ToolStarted(call_id=raw.id, name=name)
+                        arguments = raw.function.arguments or ""
+                        previous_len = argument_lengths.get(raw.id, 0)
+                        if len(arguments) > previous_len:
+                            argument_lengths[raw.id] = len(arguments)
+                            yield ToolArgumentsDelta(
+                                call_id=raw.id,
+                                name=name,
+                                delta=arguments[previous_len:],
+                            )
                 if chunk.usage:
                     sink["usage"] = Usage(input=chunk.usage.prompt_tokens or 0,
                                           output=chunk.usage.completion_tokens or 0,
@@ -171,7 +204,13 @@ class Agent:
             usage = Usage()
             for _step in range(self.max_steps):
                 messages = self.budget.fit(messages)
-                sink = {"last": ("", []), "error": None, "usage": None}
+                sink = {
+                    "last": ("", []),
+                    "error": None,
+                    "usage": None,
+                    "started_tool_calls": set(),
+                    "tool_argument_lengths": {},
+                }
                 async for ev in self._stream_turn(messages, ctx.tools, sink):
                     yield ev
                 if sink["usage"]:
@@ -207,22 +246,47 @@ class Agent:
                     continue
 
                 for raw, tc in pairs:
-                    yield ToolStarted(call_id=tc.id, name=tc.name)
+                    if tc.id not in sink["started_tool_calls"]:
+                        yield ToolStarted(call_id=tc.id, name=tc.name)
                     yield ToolCompleted(call_id=tc.id, name=tc.name, arguments=tc.arguments)
+                interrupt_seen = False
                 for idx, (raw, tc) in enumerate(pairs):
-                    result = await ctx.tools.dispatch(tc)
+                    result = await ctx.tools.dispatch(
+                        tc,
+                        scope=ToolScope(
+                            user_id=ctx.user_id,
+                            conversation_id=ctx.conversation_id,
+                            metadata=ctx.metadata,
+                            agent_id=ctx.agent_id,
+                            skill_mounts=ctx.skill_mounts,
+                            skill_fingerprint=ctx.skill_fingerprint,
+                        ),
+                    )
                     messages.append(Message("assistant", text if idx == 0 else None, tool_calls=[tc]))
                     capped = (self.budget.cap_tool_result(result.message.content)
                               if result.message.content else result.message.content)
                     messages.append(Message("tool", content=capped, tool_call_id=tc.id))
                     yield ToolResult(call_id=tc.id, name=tc.name, ok=result.ok,
-                                     output=result.content, error=result.error)
+                                     output=result.content, error=result.error,
+                                     files=result.files, notice=result.notice)
+                    if result.notice and result.notice.get("interrupt"):
+                        interrupt_seen = True
                     if ctx.tools.is_return_direct(tc.name) and result.ok:
                         direct = _format_return_direct(result.content)
                         if direct:
                             yield TextDelta(text=direct)
                         yield RunCompleted(usage=usage, finish_reason="stop")
                         return
+
+                # Human-in-the-loop: a tool asked to pause and yield to the user.
+                # We finish the whole tool batch first (every function_call keeps
+                # its paired function_call_output, so history stays replay-safe),
+                # then stop instead of re-entering the LLM.
+                if interrupt_seen:
+                    yield TextDelta(text=_HITL_PAUSE_TEXT)
+                    messages.append(Message("assistant", _HITL_PAUSE_TEXT))
+                    yield RunCompleted(usage=usage, finish_reason="awaiting_user")
+                    return
             yield RunCompleted(usage=usage, finish_reason="max_steps")
 
         return gen()

@@ -21,6 +21,8 @@ class AppState:
     registry: ToolRegistry = field(default_factory=ToolRegistry)
     runs: RunManager = field(default_factory=RunManager)
     router: Optional[ProviderRouter] = None
+    knowledge: object = None
+    agent_config: object = None
     memory_enabled: bool = False
     memory_model: str = ""
     summary_enabled: bool = False
@@ -44,3 +46,27 @@ class AppState:
 
 def get_state(request: Request) -> AppState:
     return request.app.state.app_state
+
+
+def reload_app_state(state: AppState, settings) -> None:
+    """Re-read the agent config from disk and rebuild the runtime registry +
+    agent_config on ``state`` so control-plane changes (skill install/enable) take
+    effect for subsequent requests without a process restart.
+
+    The rebuilt registry is wired with this same reloader as ``on_config_change``
+    so control-plane tools (e.g. ``enable_skill_for_agent``) keep refreshing the
+    live state after each mutation. Imported lazily to avoid an import cycle with
+    ``app.agent_config`` / ``agent.tools.defaults``."""
+    from app.agent_config import apply_runtime_status, load_agent_config
+    from agent.tools.defaults import build_default_registry
+
+    doc = load_agent_config(settings.config_path)
+    state.registry = build_default_registry(
+        settings,
+        agent_config=doc,
+        on_config_change=lambda: reload_app_state(state, settings),
+        # Preserve knowledge_search across control-plane reloads by rebinding the
+        # already-live KnowledgeService (created at boot in lean_main).
+        knowledge_service=state.knowledge,
+    )
+    state.agent_config = apply_runtime_status(doc, settings, state.router)

@@ -1,11 +1,13 @@
 from __future__ import annotations
 import asyncio
+import json as _json
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 from agent.core.events import (
     TextDelta,
     ReasoningDelta,
     ToolStarted,
+    ToolArgumentsDelta,
     ToolCompleted,
     ToolResult,
     RunCompleted,
@@ -82,6 +84,7 @@ class _Assembler:
         self.usage = None
         self.status = "completed"
         self.error: Optional[ResponseError] = None
+        self.tool_results: List[Dict] = []
 
     def _msg_item_id(self) -> str:
         return f"msg_{self.response_id}"
@@ -116,18 +119,36 @@ class _Assembler:
         )
 
     def on_tool_result(
-        self, call_id: str, output: Optional[str], error: Optional[str]
+        self,
+        call_id: str,
+        output: Optional[str],
+        error: Optional[str],
+        files: Optional[List[Dict]] = None,
+        notice: Optional[Dict] = None,
     ):
+        content: Dict = {
+            "call_id": call_id,
+            "output": output if output is not None else (error or ""),
+            "files": files or [],
+        }
+        # Persist the HITL notice (e.g. aliyun authorization card) so a reloaded
+        # thread re-renders the interaction. The UI renders a resolved card as a
+        # read-only record when a later turn exists (see AliyunAuthToolCard).
+        if notice:
+            content["notice"] = notice
         self.store_items.append(
             {
                 "type": "function_call_output",
                 "role": None,
-                "content": {
-                    "call_id": call_id,
-                    "output": output if output is not None else (error or ""),
-                },
+                "content": content,
             }
         )
+        self.tool_results.append({
+            "call_id": call_id,
+            "output": output if output is not None else (error or ""),
+            "ok": error is None,
+            "files": files or [],
+        })
 
     def on_failed(self, message: str):
         self.status = "failed"
@@ -219,18 +240,57 @@ async def serialize_response_sync(
         elif isinstance(ev, ToolCompleted):
             asm.on_tool_completed(ev.call_id, ev.name, ev.arguments)
         elif isinstance(ev, ToolResult):
-            asm.on_tool_result(ev.call_id, ev.output, ev.error)
+            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files, ev.notice)
         elif isinstance(ev, RunCompleted):
             usage = ev.usage
         elif isinstance(ev, RunFailed):
             asm.on_failed(ev.message)
         # RunStarted, ToolStarted: no sync effect
     asm.finalize(usage)
-    return asm.to_response().model_dump(mode="json"), asm.store_items
+    resp = asm.to_response().model_dump(mode="json")
+    if asm.tool_results:
+        resp["tool_results"] = asm.tool_results
+    return resp, asm.store_items
 
 
 def _sse(event) -> str:
     return f"data: {event.model_dump_json()}\n\n"
+
+
+def _sse_obj(obj: dict) -> str:
+    return f"data: {_json.dumps(obj, ensure_ascii=False)}\n\n"
+
+
+def make_failed_sse(
+    response_id: str,
+    model: str,
+    conversation_id: Optional[str],
+    message: str,
+    seq: int = 0,
+) -> str:
+    """Build a standalone ``response.failed`` SSE chunk for error recovery.
+
+    Used when the stream itself crashes (not a ``RunFailed`` agent event) so
+    subscribers always see a terminal event instead of a silent disconnect.
+    """
+    resp = Response(
+        id=response_id,
+        created_at=time.time(),
+        model=model,
+        object="response",
+        output=[],
+        parallel_tool_calls=False,
+        tool_choice="auto",
+        tools=[],
+        status="failed",
+        usage=None,
+        error=ResponseError(code="server_error", message=message),
+        previous_response_id=None,
+        conversation={"id": conversation_id} if conversation_id else None,
+    )
+    return _sse(ResponseFailedEvent(
+        response=resp, sequence_number=seq, type="response.failed",
+    ))
 
 
 class _Cancelled(Exception):
@@ -307,6 +367,7 @@ async def serialize_response_stream(
     msg_index = 0
     msg_item_id = asm._msg_item_id()
     tool_indices: Dict[str, int] = {}  # call_id -> output_index
+    tool_argument_lengths: Dict[str, int] = {}
     reasoning_index = None
     reasoning_open = False
     rs_id = f"rs_{response_id}"
@@ -471,6 +532,42 @@ async def serialize_response_stream(
                     type="response.output_item.added",
                 )
             )
+        elif isinstance(ev, ToolArgumentsDelta):
+            if reasoning_open:
+                for chunk in close_reasoning():
+                    yield chunk
+                reasoning_open = False
+            idx = tool_indices.get(ev.call_id)
+            if idx is None:
+                idx = alloc_index()
+                tool_indices[ev.call_id] = idx
+                yield _sse(
+                    ResponseOutputItemAddedEvent(
+                        item=ResponseFunctionToolCall(
+                            id=f"fc_{ev.call_id}",
+                            call_id=ev.call_id,
+                            name=ev.name,
+                            arguments="",
+                            type="function_call",
+                            status="in_progress",
+                        ),
+                        output_index=idx,
+                        sequence_number=nxt(),
+                        type="response.output_item.added",
+                    )
+                )
+            tool_argument_lengths[ev.call_id] = (
+                tool_argument_lengths.get(ev.call_id, 0) + len(ev.delta)
+            )
+            yield _sse(
+                ResponseFunctionCallArgumentsDeltaEvent(
+                    delta=ev.delta,
+                    item_id=f"fc_{ev.call_id}",
+                    output_index=idx,
+                    sequence_number=nxt(),
+                    type="response.function_call_arguments.delta",
+                )
+            )
         elif isinstance(ev, ToolCompleted):
             if reasoning_open:
                 for chunk in close_reasoning():
@@ -497,15 +594,18 @@ async def serialize_response_stream(
                         type="response.output_item.added",
                     )
                 )
-            yield _sse(
-                ResponseFunctionCallArgumentsDeltaEvent(
-                    delta=ev.arguments or "",
-                    item_id=f"fc_{ev.call_id}",
-                    output_index=idx,
-                    sequence_number=nxt(),
-                    type="response.function_call_arguments.delta",
+            already_sent = tool_argument_lengths.get(ev.call_id, 0)
+            remaining_arguments = (ev.arguments or "")[already_sent:]
+            if remaining_arguments:
+                yield _sse(
+                    ResponseFunctionCallArgumentsDeltaEvent(
+                        delta=remaining_arguments,
+                        item_id=f"fc_{ev.call_id}",
+                        output_index=idx,
+                        sequence_number=nxt(),
+                        type="response.function_call_arguments.delta",
+                    )
                 )
-            )
             yield _sse(
                 ResponseFunctionCallArgumentsDoneEvent(
                     arguments=ev.arguments or "",
@@ -532,7 +632,22 @@ async def serialize_response_stream(
                 )
             )
         elif isinstance(ev, ToolResult):
-            asm.on_tool_result(ev.call_id, ev.output, ev.error)
+            asm.on_tool_result(ev.call_id, ev.output, ev.error, ev.files, ev.notice)
+            sse_tool_result = {
+                "type": "response.tool_result",
+                "call_id": ev.call_id,
+                "output": ev.output if ev.output is not None else (ev.error or ""),
+                "ok": ev.ok,
+                "files": ev.files or [],
+                "sequence_number": nxt(),
+            }
+            # Structured HITL notice (e.g. aliyun authorization card): streamed
+            # here for the live card AND persisted via on_tool_result above, so a
+            # reloaded thread re-renders the interaction (resolved cards render
+            # read-only — see AliyunAuthToolCard).
+            if ev.notice:
+                sse_tool_result["notice"] = ev.notice
+            yield _sse_obj(sse_tool_result)
         elif isinstance(ev, RunCompleted):
             usage = ev.usage
         elif isinstance(ev, RunFailed):
@@ -617,4 +732,6 @@ async def serialize_response_stream(
         )
 
     sink["response"] = final.model_dump(mode="json")
+    if asm.tool_results:
+        sink["response"]["tool_results"] = asm.tool_results
     sink["items"] = asm.store_items

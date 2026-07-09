@@ -53,6 +53,22 @@ def group_conversation_messages(
         # turn (has a response row, or any assistant/reasoning content). A failed
         # turn has a response row but no assistant message item -> empty text.
         if resp is not None or assistant_item is not None or reasoning_item is not None:
+            fcalls = [i for i in group if i.type == "function_call"]
+            outputs = {i.content.get("call_id"): i.content
+                       for i in group if i.type == "function_call_output"}
+            tool_calls = [
+                {
+                    "call_id": c.content.get("call_id", ""),
+                    "name": c.content.get("name", ""),
+                    "arguments": c.content.get("arguments", "") or "",
+                    "output": (outputs.get(c.content.get("call_id")) or {}).get("output", ""),
+                    "files": (outputs.get(c.content.get("call_id")) or {}).get("files", []),
+                    # Persisted HITL notice (e.g. aliyun authorization card); None
+                    # for ordinary tools and pre-change history.
+                    "notice": (outputs.get(c.content.get("call_id")) or {}).get("notice"),
+                }
+                for c in fcalls
+            ]
             messages.append(
                 {
                     "role": "assistant",
@@ -61,6 +77,8 @@ def group_conversation_messages(
                     "response_id": key,
                     "previous_response_id": resp.previous_response_id if resp else None,
                     "status": resp.status if resp else "completed",
+                    "tool_calls": tool_calls,
+                    "usage": resp.usage if resp else None,
                 }
             )
     return messages

@@ -9,13 +9,14 @@ class ResponsesRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     model: Optional[str] = None
+    agent_id: Optional[str] = None
     input: Union[str, List[Dict[str, Any]]] = ""
     instructions: Optional[str] = None
     previous_response_id: Optional[str] = None
     conversation: Optional[str] = None
     user_id: Optional[str] = None
     store: bool = True
-    stream: bool = False
+    stream: bool = True
     background: bool = False
     metadata: Optional[Dict[str, str]] = None
     tools: Optional[List[Dict[str, Any]]] = None

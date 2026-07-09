@@ -1,10 +1,24 @@
 from __future__ import annotations
 from typing import List, Optional
 from sqlalchemy import func, delete
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import Conversation as ConvRow, ConversationItem as ItemRow, MemoryRow, ResponseRow, UserRow
-from app.store.base import Conversation, Item, MemoryItem, StoredResponse, User, _now
+from app.store.base import Conversation, Item, MemoryItem, StoredResponse, User, UserAuth, _now, _uuid
+
+
+def _to_user(row: UserRow) -> User:
+    return User(id=row.id, display_name=row.display_name, email=row.email,
+                role=row.role, status=row.status,
+                created_at=row.created_at, meta=row.meta or {})
+
+
+def _to_user_auth(row: UserRow) -> UserAuth:
+    return UserAuth(id=row.id, email=row.email, role=row.role, status=row.status,
+                    password_hash=row.password_hash,
+                    invite_token_hash=row.invite_token_hash,
+                    invite_expires_at=row.invite_expires_at)
 
 
 def _to_mem(row: MemoryRow) -> MemoryItem:
@@ -82,6 +96,27 @@ class SqlStore:
             await s.exec(delete(ResponseRow).where(ResponseRow.id == response_id))
             await s.commit()
 
+    async def truncate_last_turn(self, conversation_id: str,
+                                 response_id: str) -> Optional[str]:
+        """Drop the last turn (its response + items) and rewind the conversation
+        anchor to the response's previous_response_id. Only valid for the current
+        last response. Returns the new anchor (None when it was the first turn)."""
+        async with AsyncSession(self._engine) as s:
+            conv = await s.get(ConvRow, conversation_id)
+            if conv is None:
+                raise KeyError(conversation_id)
+            resp = await s.get(ResponseRow, response_id)
+            if resp is None or conv.last_response_id != response_id:
+                raise ValueError("not the conversation's last response")
+            prev = resp.previous_response_id
+            await s.exec(delete(ItemRow).where(ItemRow.response_id == response_id))
+            await s.exec(delete(ResponseRow).where(ResponseRow.id == response_id))
+            conv.last_response_id = prev
+            conv.updated_at = _now()
+            s.add(conv)
+            await s.commit()
+        return prev
+
     async def resolve_history(self, previous_response_id: Optional[str],
                               conversation: Optional[str]) -> List[Item]:
         conv_id = conversation
@@ -148,16 +183,101 @@ class SqlStore:
                 s.add(row)
                 await s.commit()
                 await s.refresh(row)
-            return User(id=row.id, display_name=row.display_name,
-                        created_at=row.created_at, meta=row.meta or {})
+            return _to_user(row)
 
     async def get_user(self, user_id) -> Optional[User]:
         async with AsyncSession(self._engine) as s:
             row = await s.get(UserRow, user_id)
-        if row is None:
-            return None
-        return User(id=row.id, display_name=row.display_name,
-                    created_at=row.created_at, meta=row.meta or {})
+        return _to_user(row) if row is not None else None
+
+    async def update_user_meta(self, user_id, patch) -> User:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(UserRow, user_id)
+            if row is None:
+                row = UserRow(id=user_id)
+                s.add(row)
+            meta = dict(row.meta or {})
+            meta.update(patch)  # shallow top-level merge; value None keeps the key as null
+            row.meta = meta
+            # SQLAlchemy does not track in-place JSON mutation; force the update.
+            flag_modified(row, "meta")
+            await s.commit()
+            await s.refresh(row)
+            return _to_user(row)
+
+    # --- auth ---
+    async def count_users(self) -> int:
+        async with AsyncSession(self._engine) as s:
+            return int((await s.exec(select(func.count()).select_from(UserRow))).one())
+
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        async with AsyncSession(self._engine) as s:
+            row = (await s.exec(select(UserRow).where(UserRow.email == email))).first()
+        return _to_user(row) if row is not None else None
+
+    async def get_user_auth(self, email: str) -> Optional[UserAuth]:
+        async with AsyncSession(self._engine) as s:
+            row = (await s.exec(select(UserRow).where(UserRow.email == email))).first()
+        return _to_user_auth(row) if row is not None else None
+
+    async def get_user_auth_by_invite(self, invite_token_hash: str) -> Optional[UserAuth]:
+        async with AsyncSession(self._engine) as s:
+            row = (await s.exec(
+                select(UserRow).where(UserRow.invite_token_hash == invite_token_hash))).first()
+        return _to_user_auth(row) if row is not None else None
+
+    async def create_user(self, *, email, role, status, password_hash=None,
+                          invite_token_hash=None, invite_expires_at=None,
+                          display_name=None) -> User:
+        async with AsyncSession(self._engine) as s:
+            row = UserRow(id=_uuid("user"), email=email, role=role, status=status,
+                          password_hash=password_hash, invite_token_hash=invite_token_hash,
+                          invite_expires_at=invite_expires_at, display_name=display_name)
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return _to_user(row)
+
+    async def set_user_password(self, user_id: str, password_hash: str) -> Optional[User]:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(UserRow, user_id)
+            if row is None:
+                return None
+            row.password_hash = password_hash
+            row.status = "active"
+            row.invite_token_hash = None
+            row.invite_expires_at = None
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return _to_user(row)
+
+    async def set_user_status(self, user_id: str, status: str) -> Optional[User]:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(UserRow, user_id)
+            if row is None:
+                return None
+            row.status = status
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return _to_user(row)
+
+    async def set_user_role(self, user_id: str, role: str) -> Optional[User]:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(UserRow, user_id)
+            if row is None:
+                return None
+            row.role = role
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return _to_user(row)
+
+    async def list_users(self) -> List[User]:
+        async with AsyncSession(self._engine) as s:
+            rows = (await s.exec(select(UserRow).order_by(UserRow.created_at))).all()
+        return [_to_user(r) for r in rows]
 
     async def delete_conversation(self, conversation_id) -> None:
         async with AsyncSession(self._engine) as s:

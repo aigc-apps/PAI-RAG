@@ -3,7 +3,7 @@ import asyncio
 import time
 from typing import AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from loguru import logger
-from api.protocol.responses_serializer import serialize_response_stream
+from api.protocol.responses_serializer import serialize_response_stream, make_failed_sse
 
 RETENTION_SECONDS = 300
 
@@ -19,10 +19,12 @@ class Run:
     ``starting_after=N`` maps directly to buffer index ``N``.
     """
 
-    def __init__(self, response_id: str, conversation_id: str, model: str):
+    def __init__(self, response_id: str, conversation_id: str, model: str,
+                 user_id: Optional[str] = None):
         self.response_id = response_id
         self.conversation_id = conversation_id
         self.model = model
+        self.user_id = user_id
         self.status = "in_progress"
         self.events: List[str] = []
         self.cancel = asyncio.Event()
@@ -64,9 +66,10 @@ class RunManager:
             self._runs.pop(rid, None)
 
     def start(self, *, events, model: str, response_id: str,
-              conversation_id: str, persist: PersistFn) -> Run:
+              conversation_id: str, persist: PersistFn,
+              user_id: Optional[str] = None) -> Run:
         self._evict_expired()
-        run = Run(response_id, conversation_id, model)
+        run = Run(response_id, conversation_id, model, user_id=user_id)
         self._runs[response_id] = run
         run.task = asyncio.create_task(self._pump(run, events, persist))
         return run
@@ -84,6 +87,18 @@ class RunManager:
         except Exception:  # noqa: BLE001 — a broken run must still finalize
             logger.exception(f"run {run.response_id} pump failed")
             status = "failed"
+            await run.append(make_failed_sse(
+                run.response_id, run.model, run.conversation_id,
+                "stream interrupted",
+            ))
+            if not sink.get("response"):
+                sink["response"] = {
+                    "id": run.response_id,
+                    "status": "failed",
+                    "error": {"code": "server_error", "message": "stream interrupted"},
+                    "usage": None,
+                }
+                sink["items"] = []
         finally:
             try:
                 if sink.get("response"):

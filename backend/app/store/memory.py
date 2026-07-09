@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
-from app.store.base import Conversation, Item, MemoryItem, StoredResponse, User, _now
+from app.store.base import Conversation, Item, MemoryItem, StoredResponse, User, UserAuth, _now, _uuid
 
 
 class InMemoryStore:
@@ -9,6 +9,9 @@ class InMemoryStore:
         self._items: Dict[str, List[Item]] = {}
         self._responses: Dict[str, StoredResponse] = {}
         self._users: Dict[str, User] = {}
+        # user_id -> credential view (password_hash / invite token), kept out of
+        # the public User so it never leaks through get_user.
+        self._auth: Dict[str, UserAuth] = {}
         self._memories: Dict[str, MemoryItem] = {}
 
     async def create_conversation(self, user_id: Optional[str] = None) -> Conversation:
@@ -40,6 +43,26 @@ class InMemoryStore:
 
     async def delete_response(self, response_id: str) -> None:
         self._responses.pop(response_id, None)
+
+    async def truncate_last_turn(self, conversation_id: str,
+                                 response_id: str) -> Optional[str]:
+        """Drop the last turn (its response + every item tagged with it) and
+        rewind the conversation anchor to that response's previous_response_id.
+        Only valid for the conversation's current last response — enforced so a
+        mid-thread removal can't fork the chain. Returns the new anchor (None
+        when the removed turn was the first)."""
+        conv = self._convs.get(conversation_id)
+        if conv is None:
+            raise KeyError(conversation_id)
+        resp = self._responses.get(response_id)
+        if resp is None or conv.last_response_id != response_id:
+            raise ValueError("not the conversation's last response")
+        log = self._items.get(conversation_id, [])
+        self._items[conversation_id] = [it for it in log if it.response_id != response_id]
+        self._responses.pop(response_id, None)
+        conv.last_response_id = resp.previous_response_id
+        conv.updated_at = _now()
+        return resp.previous_response_id
 
     async def resolve_history(self, previous_response_id, conversation) -> List[Item]:
         conv_id = conversation
@@ -93,6 +116,77 @@ class InMemoryStore:
 
     async def get_user(self, user_id) -> Optional[User]:
         return self._users.get(user_id)
+
+    async def update_user_meta(self, user_id, patch) -> User:
+        u = self._users.get(user_id)
+        if u is None:
+            u = User(id=user_id)
+            self._users[user_id] = u
+        meta = dict(u.meta or {})
+        meta.update(patch)
+        u.meta = meta
+        return u
+
+    # --- auth ---
+    async def count_users(self) -> int:
+        return len(self._users)
+
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        return next((u for u in self._users.values() if u.email == email), None)
+
+    async def get_user_auth(self, email: str) -> Optional[UserAuth]:
+        u = await self.get_user_by_email(email)
+        return self._auth.get(u.id) if u is not None else None
+
+    async def get_user_auth_by_invite(self, invite_token_hash: str) -> Optional[UserAuth]:
+        return next((a for a in self._auth.values()
+                     if a.invite_token_hash == invite_token_hash), None)
+
+    async def create_user(self, *, email, role, status, password_hash=None,
+                          invite_token_hash=None, invite_expires_at=None,
+                          display_name=None) -> User:
+        uid = _uuid("user")
+        u = User(id=uid, display_name=display_name, email=email, role=role, status=status)
+        self._users[uid] = u
+        self._auth[uid] = UserAuth(id=uid, email=email, role=role, status=status,
+                                   password_hash=password_hash,
+                                   invite_token_hash=invite_token_hash,
+                                   invite_expires_at=invite_expires_at)
+        return u
+
+    async def set_user_password(self, user_id: str, password_hash: str) -> Optional[User]:
+        u = self._users.get(user_id)
+        if u is None:
+            return None
+        u.status = "active"
+        a = self._auth.setdefault(user_id, UserAuth(id=user_id, email=u.email, role=u.role,
+                                                     status=u.status, password_hash=None))
+        a.password_hash = password_hash
+        a.status = "active"
+        a.invite_token_hash = None
+        a.invite_expires_at = None
+        return u
+
+    async def set_user_status(self, user_id: str, status: str) -> Optional[User]:
+        u = self._users.get(user_id)
+        if u is None:
+            return None
+        u.status = status
+        if user_id in self._auth:
+            self._auth[user_id].status = status
+        return u
+
+    async def set_user_role(self, user_id: str, role: str) -> Optional[User]:
+        u = self._users.get(user_id)
+        if u is None:
+            return None
+        u.role = role
+        if user_id in self._auth:
+            self._auth[user_id].role = role
+        return u
+
+    async def list_users(self) -> List[User]:
+        return sorted(self._users.values(), key=lambda u: u.created_at)
 
     async def delete_conversation(self, conversation_id) -> None:
         self._convs.pop(conversation_id, None)

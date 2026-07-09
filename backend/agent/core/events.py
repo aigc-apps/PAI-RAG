@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 from pydantic import BaseModel
 
 
@@ -31,6 +31,13 @@ class ToolStarted(BaseModel):
     name: str
 
 
+class ToolArgumentsDelta(BaseModel):
+    type: Literal["tool.arguments.delta"] = "tool.arguments.delta"
+    call_id: str
+    name: str
+    delta: str
+
+
 class ToolCompleted(BaseModel):
     type: Literal["tool.completed"] = "tool.completed"
     call_id: str
@@ -45,6 +52,11 @@ class ToolResult(BaseModel):
     ok: bool
     output: Optional[str] = None
     error: Optional[str] = None
+    # Structured file artifacts, kept separate from `output` (the LLM-facing str).
+    files: Optional[List[dict]] = None
+    # A single structured UI notice (e.g. an aliyun authorization card). Streamed
+    # to the frontend but never persisted.
+    notice: Optional[dict] = None
 
 
 class RunCompleted(BaseModel):
@@ -60,6 +72,6 @@ class RunFailed(BaseModel):
 
 
 AgentEvent = Union[
-    RunStarted, TextDelta, ReasoningDelta, ToolStarted,
+    RunStarted, TextDelta, ReasoningDelta, ToolStarted, ToolArgumentsDelta,
     ToolCompleted, ToolResult, RunCompleted, RunFailed,
 ]

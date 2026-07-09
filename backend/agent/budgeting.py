@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from loguru import logger
 from memory.utils import estimate_tokens_in_text, truncate, get_tokenizer
 from common.llm.models import DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
+from agent.tool_result_truncation import smart_truncate
 
 
 TOOL_RESULT_TRUNCATED_MARKER = "\n...[content truncated]"
@@ -69,7 +70,7 @@ class AgentMessageManager:
         try:
             self.tokenizer = get_tokenizer()
         except Exception:
-            logger.warning("Tokenizer unavailable; using length-based token estimate.")
+            logger.info("Tokenizer unavailable; using length-based token estimate.")
             self.tokenizer = None
         logger.info(
             f"AgentMessageManager initialized: context_window={context_window}, "
@@ -100,15 +101,16 @@ class AgentMessageManager:
         tokens = _estimate_tokens(content, self.tokenizer)
         if tokens <= self.max_tool_result_tokens:
             return content
-        truncated_text, _ = _truncate(
-            content,
-            max_token=self.max_tool_result_tokens,
-            tokenizer=self.tokenizer,
+        # Structural truncation: keep head+tail and JSON shape instead of the
+        # head-only cut, so the model still sees how the result ended.
+        truncated_text = smart_truncate(
+            content, self.max_tool_result_tokens, self.tokenizer
         )
         logger.info(
-            f"Tool result truncated from {tokens} to ~{self.max_tool_result_tokens} tokens"
+            f"Tool result truncated from {tokens} to "
+            f"~{_estimate_tokens(truncated_text, self.tokenizer)} tokens (structural)"
         )
-        return truncated_text + TOOL_RESULT_TRUNCATED_MARKER
+        return truncated_text
 
     def group_messages(self, messages: List[dict]) -> List[MessageGroup]:
         groups = []

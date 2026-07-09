@@ -4,7 +4,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from agent.context import AgentContext, RunVars
 from agent.message import from_thread
 from agent.tools.base import ToolBox
+from app.auth import require_user
 from app.deps import AppState, get_state
+from app.store.base import User
 from api.protocol.chat_serializer import (
     serialize_chat_stream,
     serialize_chat_sync_with_effects,
@@ -25,7 +27,8 @@ class ChatRequest(BaseModel):
 
 @router.post("/v1/chat/completions")
 async def chat_completions(
-    request: ChatRequest, state: AppState = Depends(get_state)
+    request: ChatRequest, state: AppState = Depends(get_state),
+    user: User = Depends(require_user),
 ):
     model = request.model or state.default_model
     msgs = from_thread(request.messages)

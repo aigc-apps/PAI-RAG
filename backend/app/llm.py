@@ -18,6 +18,36 @@ DEFAULT_TIMEOUT = 120
 DEFAULT_MAX_RETRIES = 2
 
 
+def _split_think(text: str, in_think: bool):
+    """Split a content delta into ``(reasoning, answer, still_in_think)`` by
+    scanning for ``<think>``/``</think>`` tags. Text counts as reasoning only
+    while strictly inside a block, so a model that never emits the tags passes
+    through untouched (all answer). ``in_think`` threads the open/closed state
+    across chunks. Tags split across chunk boundaries are not recombined — the
+    dedicated ``reasoning_content`` field is preferred when the model offers it."""
+    reasoning, answer = "", ""
+    while text:
+        if in_think:
+            end = text.find(THINK_END_TAG)
+            if end == -1:
+                reasoning += text
+                text = ""
+            else:
+                reasoning += text[:end]
+                text = text[end + len(THINK_END_TAG):]
+                in_think = False
+        else:
+            start = text.find(THINK_START_TAG)
+            if start == -1:
+                answer += text
+                text = ""
+            else:
+                answer += text[:start]
+                text = text[start + len(THINK_START_TAG):]
+                in_think = True
+    return reasoning, answer, in_think
+
+
 class LeanLLM:
     """Minimal streaming client over openai.AsyncOpenAI emitting the agent's chunk
     contract (TextChunk / ReasoningChunk / ErrorChunk). No model registry, no dashscope.
@@ -59,7 +89,7 @@ class LeanLLM:
 
         async def gen():
             tool_calls = []
-            is_reasoning = True
+            in_think_block = False
             has_reasoning_content = False
             try:
                 stream = await self.client.chat.completions.create(
@@ -94,55 +124,43 @@ class LeanLLM:
                         else ""
                     )
 
-                    if self.enable_thinking:
-                        reasoning_delta = ""
-                        reasoning_content = (
-                            getattr(delta_obj, "reasoning_content", None)
-                            if delta_obj
-                            else None
+                    # Split reasoning off UNCONDITIONALLY — never gate this on the
+                    # request-side enable_thinking hint. A model can emit reasoning
+                    # via a dedicated `reasoning_content` field (DeepSeek/GLM/Qwen)
+                    # or inline as <think>...</think> whether or not we asked for
+                    # it, and it must land in the reasoning channel, not the answer
+                    # body. Detection triggers only on that field or real
+                    # <think>/</think> tags, so a model that never thinks is
+                    # unaffected.
+                    reasoning_delta = ""
+                    reasoning_content = (
+                        getattr(delta_obj, "reasoning_content", None)
+                        if delta_obj
+                        else None
+                    )
+                    if reasoning_content:
+                        has_reasoning_content = True
+                        reasoning_delta = reasoning_content
+                    elif content and not has_reasoning_content:
+                        reasoning_delta, content, in_think_block = _split_think(
+                            content, in_think_block
                         )
-                        if reasoning_content:
-                            # Model emits a dedicated reasoning_content field.
-                            has_reasoning_content = True
-                            reasoning_delta = reasoning_content
-                        elif content:
-                            # Model inlines reasoning via <think>...</think>.
-                            if has_reasoning_content:
-                                is_reasoning = False
-                            if is_reasoning:
-                                end_pos = content.find(THINK_END_TAG)
-                                if end_pos != -1:
-                                    reasoning_delta = content[:end_pos]
-                                    content = content[
-                                        end_pos + len(THINK_END_TAG):
-                                    ]
-                                    is_reasoning = False
-                                else:
-                                    reasoning_delta = content.replace(
-                                        THINK_START_TAG, ""
-                                    )
-                                    content = ""
 
-                        if content or tool_calls:
-                            yield TextChunk(
-                                delta=content,
-                                tool_calls=tool_calls,
-                                usage=usage,
-                            )
-                        elif reasoning_delta:
-                            yield ReasoningChunk(
-                                delta=content,
-                                reasoning_delta=reasoning_delta,
-                                tool_calls=tool_calls,
-                                usage=usage,
-                            )
-                        elif usage is not None:
-                            yield TextChunk(
-                                delta=content,
-                                tool_calls=tool_calls,
-                                usage=usage,
-                            )
-                    elif content or tool_calls or usage is not None:
+                    # Emit reasoning and answer as SEPARATE chunks: the agent routes
+                    # a chunk to reasoning XOR text, so a single chunk carrying both
+                    # a </think> boundary's reasoning tail and its answer head would
+                    # otherwise drop the answer.
+                    if reasoning_delta:
+                        yield ReasoningChunk(
+                            delta="",
+                            reasoning_delta=reasoning_delta,
+                            tool_calls=tool_calls,
+                            usage=usage,
+                        )
+                        usage = None
+                    if content or usage is not None or (
+                        tool_calls and not reasoning_delta
+                    ):
                         yield TextChunk(
                             delta=content, tool_calls=tool_calls, usage=usage
                         )

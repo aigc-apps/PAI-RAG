@@ -11,7 +11,7 @@ class Soul(BaseModel):
     a Soul override — no code change.
     """
 
-    name: str = "Aria"
+    name: str = "MiniAgent"
     role: str = "a general-purpose AI assistant"
     identity: str = (
         "You help people think, find information, and get work done. You are "
@@ -71,9 +71,43 @@ _TOOL_PROTOCOL = (
     "action at a time, and stop once the request is satisfied."
 )
 
+# Only added when publish_artifact is registered. Without it, models tend to
+# write a file in the sandbox and then merely describe it or print its path,
+# which the user cannot open. This tells the model to hand the file to the UI.
+_FILE_OUTPUT_GUIDANCE = (
+    "When you create a file the user should see or keep — a report, chart, "
+    "image, HTML page, diagram, or data export — save it under /mnt/user "
+    "(the durable per-user directory, also available as $AGENT_USER_PATH in the "
+    "sandbox) and then call publish_artifact with its path. That surfaces the "
+    "file in the UI: markdown, images, and HTML preview in a side panel, other "
+    "types get a download link. Do not just print the sandbox path or offer to "
+    "paste the file's contents — publish it so the user can actually open it. "
+    "The sandbox has no network the user's browser can reach, so never start a "
+    "web server (e.g. python -m http.server) or point the user at a localhost "
+    "URL; publish_artifact is the only way to surface a file."
+)
+
+
+_ALIYUN_CLI_GUIDANCE = (
+    "This user has connected an Alibaba Cloud (阿里云) account. You can run the "
+    "`aliyun` CLI in the sandbox (via the shell tool) to view or operate their "
+    "cloud resources — PAI, EAS, and related services. Their cloud identity is "
+    "injected into the sandbox automatically (temporary STS credentials, via the "
+    "environment and a pre-configured CLI profile), so run `aliyun ...` commands "
+    "directly. Do NOT run `aliyun configure`, edit ~/.aliyun/config.json, or set "
+    "access keys yourself — credentials are managed for you and any manual setup "
+    "will be wrong. If an aliyun command fails with a credential or authorization "
+    "error, authorization is a one-click action the user performs in their own "
+    "cloud account (the UI shows them a card) — you cannot do it for them, so stop "
+    "and let them authorize rather than retrying or trying to configure the CLI. "
+    "Do NOT discard stderr when running aliyun (avoid `2>/dev/null` and the like): "
+    "the error text is what identifies an authorization problem, so keep it visible."
+)
+
 
 def render_stable_system_prompt(
-    soul: Soul, *, tool_names: List[str], project_context: str = ""
+    soul: Soul, *, tool_names: List[str], project_context: str = "",
+    aliyun_pai_enabled: bool = False,
 ) -> str:
     """Stable, cacheable layer: persona + project + tool protocol + safety.
     Excludes volatile content (memory, per-request instructions, conversation summary)."""
@@ -92,6 +126,10 @@ def render_stable_system_prompt(
     tools_section = "# Tools\n" + _TOOL_PROTOCOL
     if tool_names:
         tools_section += "\n\nTools available this session: " + ", ".join(tool_names) + "."
+        if "publish_artifact" in tool_names:
+            tools_section += "\n\n" + _FILE_OUTPUT_GUIDANCE
+        if aliyun_pai_enabled and "shell" in tool_names:
+            tools_section += "\n\n" + _ALIYUN_CLI_GUIDANCE
     else:
         tools_section += "\n\nYou have no tools enabled in this session; answer from your own knowledge."
     parts.append(tools_section)
