@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pytest
 from app.providers import (
-    ModelSpec, ProviderConfig, ModelCatalog, load_catalog, ProviderRouter,
+    ModelConfig, ModelSpec, ProviderConfig, ModelCatalog, load_catalog, ProviderRouter,
 )
 
 
@@ -318,3 +318,54 @@ def test_default_model_must_be_chat_type():
     ])
     with pytest.raises(ValueError, match="must be a chat model"):
         ProviderRouter(cat)
+
+
+# --------------------------------------------------------------------------- #
+# base_url resolution in ModelConfig.from_provider
+# --------------------------------------------------------------------------- #
+_DASH_EMBED = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
+_DASH_RERANK = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
+
+
+def test_dashscope_native_embedding_defaults_base_url():
+    # protocol=dashscope embedding with no base_url → the fixed native endpoint,
+    # NOT the provider's compatible-mode root.
+    p = ProviderConfig(name="dashscope", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1", api_key="k",
+                       models=[ModelSpec(id="text-embedding-v4", type="embedding", protocol="dashscope", dimension=1024)])
+    cfg = ModelConfig.from_provider(p, p.models[0])
+    assert cfg.base_url == _DASH_EMBED
+
+
+def test_dashscope_native_rerank_defaults_base_url():
+    p = ProviderConfig(name="dashscope", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1", api_key="k",
+                       models=[ModelSpec(id="qwen3-rerank", type="rerank", protocol="dashscope")])
+    cfg = ModelConfig.from_provider(p, p.models[0])
+    assert cfg.base_url == _DASH_RERANK
+
+
+def test_explicit_base_url_overrides_dashscope_default():
+    # An explicit URL (e.g. a proxied endpoint) always wins over the native default.
+    p = ProviderConfig(name="dashscope", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1", api_key="k",
+                       models=[ModelSpec(id="emb", type="embedding", protocol="dashscope", dimension=1024,
+                                         base_url="https://proxy.internal/embed")])
+    cfg = ModelConfig.from_provider(p, p.models[0])
+    assert cfg.base_url == "https://proxy.internal/embed"
+
+
+def test_openai_compatible_embedding_inherits_provider_base_url():
+    # No native default for openai-protocol models — inherit the provider /v1 root
+    # (the OpenAI-compatible client appends /embeddings itself).
+    p = ProviderConfig(name="siliconflow", base_url="https://api.siliconflow.cn/v1", api_key="k",
+                       models=[ModelSpec(id="bge-m3", type="embedding", dimension=1024)])
+    cfg = ModelConfig.from_provider(p, p.models[0])
+    assert cfg.protocol == "openai"
+    assert cfg.base_url == "https://api.siliconflow.cn/v1"
+
+
+def test_dashscope_chat_has_no_native_default():
+    # Chat models have no native embedding/rerank endpoint — they inherit the
+    # provider's (openai-compatible) root even under protocol=dashscope.
+    p = ProviderConfig(name="dashscope", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1", api_key="k",
+                       models=[ModelSpec(id="qwen3.7-plus", type="chat", protocol="dashscope")])
+    cfg = ModelConfig.from_provider(p, p.models[0])
+    assert cfg.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"

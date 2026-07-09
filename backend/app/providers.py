@@ -12,6 +12,16 @@ ModelType = Literal["chat", "embedding", "rerank"]
 # Ignored for chat models — those always stream through LeanLLM (openai).
 ModelProtocol = Literal["openai", "dashscope"]
 
+# DashScope's native embedding/rerank services live at fixed, well-known
+# endpoints — the URL never varies per model, only the `model` id in the request
+# body does. So a `protocol: dashscope` embedding/rerank model can omit `base_url`
+# and inherit the right native endpoint by type. (Chat has no native default: it
+# always streams through the provider's openai-compatible /v1 root.)
+_DASHSCOPE_NATIVE_DEFAULTS = {
+    "embedding": "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding",
+    "rerank": "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+}
+
 
 class ModelSpec(BaseModel):
     """Per-model parameters nested under a provider. Connection-level params
@@ -95,13 +105,20 @@ class ModelConfig(BaseModel):
 
     @classmethod
     def from_provider(cls, p: ProviderConfig, m: ModelSpec) -> "ModelConfig":
+        # base_url precedence: explicit model URL > DashScope-native default (for
+        # protocol=dashscope embedding/rerank) > the provider's connection root.
+        # The native default spares users from pasting the fixed service endpoint
+        # and avoids the footgun of silently inheriting the compatible-mode /v1 URL
+        # (wrong for the native client, which POSTs to base_url directly).
+        base_url = m.base_url
+        if not base_url and m.protocol == "dashscope":
+            base_url = _DASHSCOPE_NATIVE_DEFAULTS.get(m.type)
         return cls(
             id=m.id,
             provider=p.name,
             type=m.type,
             protocol=m.protocol,
-            # model-level base_url overrides the provider's (native endpoints).
-            base_url=m.base_url or p.base_url,
+            base_url=base_url or p.base_url,
             api_key_env=p.api_key_env,
             api_key=p.api_key,
             context_window=m.context_window,
