@@ -15,6 +15,7 @@ from agent.tools.builtin.read_skill_resource import make_read_skill_resource_too
 from agent.tools.builtin.knowledge import make_knowledge_search_tool
 from agent.tools.builtin.view_file import make_view_file_tool
 from agent.tools.builtin.grep_file import make_grep_file_tool
+from agent.tools.builtin.list_kbs import make_list_kbs_tool
 from agent.tools.search_providers import make_search_provider
 from agent.tools.sandbox_providers import make_sandbox_provider
 from agent.custom_skills import discover_skill_packages, skill_sources
@@ -44,6 +45,9 @@ def build_default_registry(
         # out the KB read surface alongside the semantic knowledge_search. Same gate.
         reg.register(make_view_file_tool(knowledge_service))
         reg.register(make_grep_file_tool(knowledge_service))
+        # list_knowledge_bases lets the model discover which bases exist (and their
+        # ids) so it can scope knowledge_search/grep_file to specific ones.
+        reg.register(make_list_kbs_tool(knowledge_service))
 
     provider = search_provider
     if provider is None:

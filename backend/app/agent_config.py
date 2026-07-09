@@ -178,6 +178,7 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "knowledge_search",
                     "view_file",
                     "grep_file",
+                    "list_knowledge_bases",
                 ],
                 exclude=["code_interpreter", "shell"],
             ),
@@ -729,6 +730,7 @@ def _skill_tool_dependencies(permissions: Dict[str, Any]) -> List[str]:
         "knowledge_search": "knowledge",
         "view_file": "knowledge",
         "grep_file": "knowledge",
+        "list_knowledge_bases": "knowledge",
         "code_interpreter": "sandbox",
         "shell": "sandbox",
     }

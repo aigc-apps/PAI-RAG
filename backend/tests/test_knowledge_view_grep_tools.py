@@ -21,6 +21,7 @@ import pytest
 
 from agent.tools.builtin.view_file import make_view_file_tool
 from agent.tools.builtin.grep_file import make_grep_file_tool
+from agent.tools.builtin.list_kbs import make_list_kbs_tool
 from agent.tools.scope import ToolScope, set_current_tool_scope, reset_current_tool_scope
 from app.db import create_all, make_engine
 from app.knowledge import KnowledgeService
@@ -162,6 +163,27 @@ def test_grep_file_hides_other_users_private_kb():
     # Even naming the KB explicitly must not leak (get_kb rejects → skipped).
     out2 = _run(OTHER, lambda: grep.fn(query="ERR_x7abc", kb_ids=[kb.id]))
     assert "No chunk contains" in out2
+
+
+# --------------------------------------------------------------------------- #
+# list_knowledge_bases
+# --------------------------------------------------------------------------- #
+def test_list_kbs_shows_accessible_bases_with_ids():
+    svc, kb, doc = _seed()
+    tool = make_list_kbs_tool(svc)
+    out = _run(ADMIN, lambda: tool.fn())
+    assert kb.id in out  # the id the model needs for kb_ids scoping
+    assert "Ops KB" in out
+    assert "1 docs" in out  # size surfaced so the model can skip empty bases
+
+
+def test_list_kbs_hides_other_users_private_base():
+    svc, kb, doc = _seed()
+    tool = make_list_kbs_tool(svc)
+    out = _run(OTHER, lambda: tool.fn())
+    # OTHER can't see ADMIN's private base → the friendly "none" message, no leak.
+    assert kb.id not in out
+    assert "No knowledge bases" in out
 
 
 # --------------------------------------------------------------------------- #
