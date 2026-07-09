@@ -77,12 +77,17 @@ async def lifespan(app: FastAPI):
         store = SqlStore(engine)
     soul = Soul(name=settings.agent_name, role=settings.agent_role)
     agent_config = load_agent_config(settings.config_path)
+    # Router before KnowledgeService: the KB service resolves its embedder/reranker
+    # through the router (ingest + query). One router instance, stored on AppState.
+    catalog = load_catalog(settings.models_path, settings)
+    provider_router = ProviderRouter(catalog, path=settings.models_path)
     # Built before the registry so knowledge_search can bind to it; the same
     # instance is stored on AppState below and reused for the REST query routes.
     knowledge = KnowledgeService(
         engine,
         search_engine=build_search_engine(settings, engine),
         fallback_to_local=(settings.search_engine != "elasticsearch"),
+        router=provider_router,
     )
     # Wire the control-plane reloader lazily: it reads app.state.app_state on
     # call (set just below), so tools like enable_skill_for_agent can refresh the
@@ -95,8 +100,6 @@ async def lifespan(app: FastAPI):
     )
     if settings.skills_dir:
         load_skills(settings.skills_dir, registry)
-    catalog = load_catalog(settings.models_path, settings)
-    provider_router = ProviderRouter(catalog, path=settings.models_path)
     runtime_agent_config = apply_runtime_status(agent_config, settings, provider_router)
     app.state.app_state = AppState(
         store=store, llm=_build_llm(settings), default_model=settings.default_model,

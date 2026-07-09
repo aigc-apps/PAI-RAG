@@ -68,6 +68,7 @@ class SearchEngine(Protocol):
         self, *, kb_ids: list[str], query: str, mode: str = "hybrid",
         offset: int = 0, limit: int = 6, score_threshold: float = 0.0,
         dimension: int = 64, filters: Optional[dict] = None,
+        query_vector: Optional[list[float]] = None,
     ) -> tuple[list[SearchHit], int]: ...
 
     name: str
@@ -93,7 +94,7 @@ class LocalSearchEngine:
 
     async def search(
         self, *, kb_ids, query, mode="hybrid", offset=0, limit=6,
-        score_threshold=0.0, dimension=64, filters=None,
+        score_threshold=0.0, dimension=64, filters=None, query_vector=None,
     ) -> tuple[list[SearchHit], int]:
         # Imported lazily to avoid an import cycle (knowledge imports this module
         # at load time for SearchHit; these helpers live in knowledge).
@@ -102,7 +103,11 @@ class LocalSearchEngine:
         filters = filters or {}
         if not kb_ids or not query.strip():
             return [], 0
-        qvec = embed_text(query, dimension=64)
+        # Prefer the caller-supplied query vector (embedded with the KB's own
+        # embedder, so it matches the stored chunk vectors). Only fall back to
+        # the local hash embedding — at the KB's true dimension, not a hardcoded
+        # 64 — when no vector was threaded in (direct/legacy callers).
+        qvec = query_vector if query_vector is not None else embed_text(query, dimension=dimension)
         async with AsyncSession(self._engine) as s:
             stmt = (
                 select(KnowledgeChunkRow, KnowledgeDocumentRow)
@@ -323,7 +328,7 @@ class ElasticsearchEngine:
 
     async def search(
         self, *, kb_ids, query, mode="hybrid", offset=0, limit=6,
-        score_threshold=0.0, dimension=64, filters=None,
+        score_threshold=0.0, dimension=64, filters=None, query_vector=None,
     ) -> tuple[list[SearchHit], int]:
         filters = filters or {}
         if not kb_ids or not query.strip():
@@ -341,9 +346,12 @@ class ElasticsearchEngine:
             # vector-only still needs the filter applied to the base query
             body["query"] = {"bool": {"filter": clauses}}
         if mode in ("vector", "hybrid"):
-            from app.knowledge import embed_text
+            if query_vector is not None:
+                qvec = query_vector
+            else:
+                from app.knowledge import embed_text
 
-            qvec = embed_text(query, dimension=dimension)
+                qvec = embed_text(query, dimension=dimension)
             body["knn"] = {
                 "field": "embedding",
                 "query_vector": qvec,

@@ -181,12 +181,16 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             id="embedding.default",
             type="embedding",
             name="Embedding provider",
+            # References a model in the `models:` catalog (single credential
+            # source). config.yaml overrides this.
+            settings={"model": "dashscope/text-embedding-v4"},
             used_by=["knowledge"],
         ),
         ProviderConfig(
             id="rerank.default",
             type="rerank",
             name="Rerank provider",
+            settings={"model": "dashscope/qwen3-rerank", "top_n": 5},
             used_by=["knowledge"],
         ),
         ProviderConfig(
@@ -444,6 +448,31 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         for agent in out.agents:
             if not agent.model:
                 agent.model = str(llm.settings.get("default_model") or "")
+
+    # embedding.default / rerank.default reference a catalogued model by id and
+    # share that provider's credentials (Dify/RAGFlow shape). Healthy iff the
+    # referenced model resolves to the right type and its key is ready/keyless.
+    for slot_id, want_type in (("embedding.default", "embedding"), ("rerank.default", "rerank")):
+        prov = providers.get(slot_id)
+        if prov is None:
+            continue
+        model_id = prov.settings.get("model")
+        ready = False
+        if router is not None and model_id:
+            try:
+                cfg = router.get_config(model_id)
+                if cfg.type != want_type:
+                    raise ValueError(f"model '{model_id}' is not a {want_type} model")
+                ready = bool(cfg.resolve_key() or not cfg.api_key_env)
+                prov.settings.update({"provider": cfg.provider, "base_url": cfg.base_url})
+                if cfg.dimension is not None:
+                    prov.settings.setdefault("dimension", cfg.dimension)
+                prov.secret_configured = bool(cfg.resolve_key())
+                prov.error = None
+            except Exception as exc:
+                prov.error = str(exc)
+                prov.secret_configured = False
+        prov.status = "healthy" if ready else "missing_config"
 
     search_provider = providers.get("search.default")
     search_cap = caps.get("search")

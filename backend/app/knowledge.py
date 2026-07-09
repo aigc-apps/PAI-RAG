@@ -15,6 +15,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.datasource.registry import get_adapter, supported_source_types
 from app.datasource.schema import SourceDocument
+from app.retrieval_models import build_embedder
 from app.search_engine import LocalSearchEngine, SearchHit
 from app.models import (
     KnowledgeBaseRow,
@@ -137,7 +138,7 @@ def _merge(defaults: dict, override: Optional[dict]) -> dict:
 
 
 class KnowledgeService:
-    def __init__(self, engine, search_engine=None, fallback_to_local: bool = True):
+    def __init__(self, engine, search_engine=None, fallback_to_local: bool = True, router=None):
         self._engine = engine
         # The local SQL scan is always available as a degradation target. The
         # primary engine (ES when configured) serves queries and receives the
@@ -146,6 +147,35 @@ class KnowledgeService:
         self._local = LocalSearchEngine(engine)
         self._search = search_engine or self._local
         self._fallback_to_local = fallback_to_local
+        # ProviderRouter — resolves a KB's embedder (ingest + query) and reranker.
+        # Optional: without it every KB embeds with the local hash (old behaviour),
+        # keeping offline/test paths network-free.
+        self._router = router
+
+    def _resolve_default_embedding(self) -> dict:
+        """The embedding_config a new KB gets when the caller doesn't specify one.
+
+        If a healthy embedding model is catalogued (its key resolves) — DashScope
+        native or any openai-compatible provider — freeze the KB onto it;
+        otherwise fall back to the local hash embedder. Recorded at creation and
+        never changed afterward (see ``update_kb``)."""
+        router = self._router
+        if router is not None:
+            model_id = router.default_model_id_of_type("embedding")
+            if model_id:
+                try:
+                    cfg = router.get_config(model_id)
+                    key = cfg.resolve_key()
+                    if key or not cfg.api_key_env:
+                        return {
+                            "provider_id": cfg.provider,
+                            "model": model_id,
+                            "dimension": int(cfg.dimension or 1024),
+                            "normalize": True,
+                        }
+                except Exception as ex:  # pragma: no cover - defensive
+                    logger.warning(f"[knowledge] default embedding resolution failed: {ex!r}")
+        return dict(DEFAULT_EMBEDDING_CONFIG)
 
     async def create_kb(
         self,
@@ -162,8 +192,17 @@ class KnowledgeService:
         rerank_config: Optional[dict] = None,
     ) -> KnowledgeBaseRow:
         kb_id = _uuid("kb")
-        embedding = _merge(DEFAULT_EMBEDDING_CONFIG, embedding_config)
+        # embedding is frozen at creation. An explicit config wins; otherwise pick
+        # the catalogued DashScope embedder when healthy, else the local hash.
+        if embedding_config is not None:
+            embedding = _merge(DEFAULT_EMBEDDING_CONFIG, embedding_config)
+        else:
+            embedding = self._resolve_default_embedding()
         vector = _merge(DEFAULT_VECTOR_STORE_CONFIG, vector_store_config)
+        # Keep the vector store's declared dimension in step with the embedder
+        # (the ES mapping reads embedding_config, but keep both coherent).
+        if not (vector_store_config and "dimension" in vector_store_config):
+            vector["dimension"] = int(embedding.get("dimension") or 64)
         vector.setdefault("namespace", kb_id)
         vector.setdefault("index_name", f"{kb_id}_vectors_v1")
         parser = _merge(DEFAULT_PARSER_CONFIG, default_parser_config)
@@ -237,13 +276,18 @@ class KnowledgeService:
             kb = await s.get(KnowledgeBaseRow, kb_id)
             if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
                 raise PermissionError("knowledge base edit permission required")
+            # embedding is frozen at creation — changing it would strand every
+            # already-ingested chunk vector (no reindex path). Reject explicitly.
+            if patch.get("embedding_config") is not None:
+                raise ValueError(
+                    "embedding_config is immutable after knowledge base creation"
+                )
             for key in ("name", "description", "visibility"):
                 if key in patch and patch[key] is not None:
                     setattr(kb, key, patch[key])
             for key in (
                 "default_parser_config",
                 "default_retrieval_config",
-                "embedding_config",
                 "vector_store_config",
                 "keyword_index_config",
                 "rerank_config",
@@ -313,12 +357,18 @@ class KnowledgeService:
             doc_id = existing.id if existing else _uuid("doc")
             await s.exec(delete(KnowledgeChunkRow).where(KnowledgeChunkRow.document_id == doc_id))
             parser = _merge(DEFAULT_PARSER_CONFIG, kb.default_parser_config)
-            dimension = int((kb.embedding_config or {}).get("dimension") or 64)
             chunks = chunk_text(
                 content,
                 chunk_size=int(parser.get("chunk_size") or 1000),
                 chunk_overlap=int(parser.get("chunk_overlap") or 150),
             )
+            # Embed every chunk body with the KB's frozen embedder (batched by the
+            # embedder itself — DashScope caps at 10/req). Same embedder is used at
+            # query time, so ingest and query vectors are always comparable.
+            embedder = build_embedder(kb.embedding_config, self._router)
+            chunk_vectors = await embedder.embed(
+                [body for body, _s, _e in chunks], text_type="document"
+            ) if chunks else []
             indexed_at = now_utc()
             if existing is None:
                 doc = KnowledgeDocumentRow(
@@ -353,7 +403,7 @@ class KnowledgeService:
             for idx, (body, start, end) in enumerate(chunks):
                 chunk_id = _uuid("chk")
                 chunk_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
-                embedding = embed_text(body, dimension=dimension)
+                embedding = chunk_vectors[idx] if idx < len(chunk_vectors) else []
                 s.add(
                     KnowledgeChunkRow(
                         id=chunk_id,
@@ -541,10 +591,12 @@ class KnowledgeService:
         filters = filters or {}
         allowed_kbs: list[str] = []
         dimension = 64
+        first_kb: Optional[KnowledgeBaseRow] = None
         for kb_id in kb_ids:
             try:
                 kb = await self.get_kb(kb_id, user=user)
                 if not allowed_kbs:
+                    first_kb = kb
                     dimension = int((kb.embedding_config or {}).get("dimension") or 64)
                 allowed_kbs.append(kb_id)
             except PermissionError:
@@ -553,20 +605,66 @@ class KnowledgeService:
             return [], 0
         limit = max(1, min(int(top_k or 6), 50))
         offset = max(0, int(offset or 0))
+        # Cross-KB search over heterogeneous embedders isn't supported: the query
+        # is embedded once, with the FIRST allowed KB's embedder, and that vector
+        # is compared against every KB's chunks. Same-embedder KBs are the norm.
+        query_vector = None
+        if mode in ("vector", "hybrid") and first_kb is not None:
+            try:
+                embedder = build_embedder(first_kb.embedding_config, self._router)
+                vecs = await embedder.embed([query], text_type="query")
+                query_vector = vecs[0] if vecs else None
+            except Exception as ex:
+                logger.warning(f"[search] query embedding failed ({ex!r}); engine will fall back")
+                query_vector = None
+        # Rerank is a query-time step (toggle via rerank_config.enabled). When on,
+        # over-fetch a candidate pool, rerank it, and trim to the requested page.
+        rerank_cfg = (first_kb.rerank_config if first_kb else None) or {}
+        rerank_on = bool(rerank_cfg.get("enabled")) and self._router is not None
+        fetch_limit = max(limit * 4, 50) if rerank_on else limit
         kwargs = dict(
-            kb_ids=allowed_kbs, query=query, mode=mode, offset=offset, limit=limit,
+            kb_ids=allowed_kbs, query=query, mode=mode, offset=offset, limit=fetch_limit,
             score_threshold=score_threshold, dimension=dimension, filters=filters,
+            query_vector=query_vector,
         )
         engine = self._search
         if engine is self._local:
-            return await self._local.search(**kwargs)
-        try:
-            return await engine.search(**kwargs)
-        except Exception as ex:
-            if self._fallback_to_local:
+            hits, total = await self._local.search(**kwargs)
+        else:
+            try:
+                hits, total = await engine.search(**kwargs)
+            except Exception as ex:
+                if not self._fallback_to_local:
+                    raise
                 logger.warning(f"[search] primary engine '{getattr(engine, 'name', '?')}' failed ({ex!r}); falling back to local")
-                return await self._local.search(**kwargs)
-            raise
+                hits, total = await self._local.search(**kwargs)
+        if rerank_on and hits:
+            hits = await self._rerank_hits(query, hits, limit, rerank_cfg)
+        return hits[:limit], total
+
+    async def _rerank_hits(self, query, hits, limit, rerank_cfg) -> list[SearchHit]:
+        """Reorder a candidate window with a DashScope reranker, best-effort:
+        any failure returns the original order (trimmed). Overwrites each hit's
+        ``score`` with the reranker's relevance score."""
+        model_id = rerank_cfg.get("model") or self._router.default_model_id_of_type("rerank")
+        if not model_id:
+            return hits[:limit]
+        top_n = int(rerank_cfg.get("top_n") or limit)
+        try:
+            reranker = self._router.get_reranker(model_id)
+            ranked = await reranker.rerank(query, [h.text for h in hits], top_n=top_n)
+        except Exception as ex:
+            logger.warning(f"[rerank] '{model_id}' failed ({ex!r}); keeping original order")
+            return hits[:limit]
+        if not ranked:
+            return hits[:limit]
+        out: list[SearchHit] = []
+        for idx, score in ranked:
+            if 0 <= idx < len(hits):
+                hit = hits[idx]
+                hit.score = round(float(score), 6)
+                out.append(hit)
+        return out[:limit]
 
     async def reindex_kb(self, kb_id: str, *, user: User) -> dict:
         """Admin: (re)build the search-engine index for a KB from its current

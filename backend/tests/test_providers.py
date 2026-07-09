@@ -200,3 +200,121 @@ def test_load_catalog_fallback_uses_default_unified_config():
     assert p0.name == "openai"
     assert p0.base_url == "https://api.openai.com/v1"
     assert p0.models[0].id == "gpt-4o-mini"
+
+
+# --------------------------------------------------------------------------- #
+# Typed models: embedding + rerank in the same provider (Dify/RAGFlow shape)
+# --------------------------------------------------------------------------- #
+def _typed_catalog(**overrides):
+    emb_key = overrides.get("emb_api_key", "k")
+    return ModelCatalog(
+        default_model="dashscope/chat",
+        providers=[
+            ProviderConfig(
+                name="dashscope",
+                base_url="https://ds/compatible-mode/v1",
+                api_key=emb_key,
+                models=[
+                    ModelSpec(id="chat"),
+                    ModelSpec(
+                        id="text-embedding-v4", type="embedding", protocol="dashscope",
+                        dimension=1024, base_url="https://ds/emb",
+                    ),
+                    ModelSpec(id="qwen3-rerank", type="rerank", protocol="dashscope",
+                              base_url="https://ds/rr"),
+                ],
+            )
+        ],
+    )
+
+
+def test_typed_model_config_carries_type_dimension_and_base_url_override():
+    r = ProviderRouter(_typed_catalog())
+    emb = r.get_config("dashscope/text-embedding-v4")
+    assert emb.type == "embedding" and emb.dimension == 1024
+    assert emb.base_url == "https://ds/emb"          # model-level override
+    chat = r.get_config("dashscope/chat")
+    assert chat.type == "chat" and chat.base_url == "https://ds/compatible-mode/v1"
+
+
+def test_get_embedder_builds_caches_and_type_checks():
+    r = ProviderRouter(_typed_catalog())
+    emb = r.get_embedder("dashscope/text-embedding-v4")
+    assert emb.model == "text-embedding-v4" and emb.dimension == 1024
+    assert emb.base_url == "https://ds/emb" and emb.api_key == "k"
+    assert r.get_embedder("dashscope/text-embedding-v4") is emb  # cached
+    with pytest.raises(ValueError, match="not an embedding model"):
+        r.get_embedder("dashscope/chat")
+
+
+def test_get_reranker_builds_and_type_checks():
+    r = ProviderRouter(_typed_catalog())
+    rr = r.get_reranker("dashscope/qwen3-rerank")
+    assert rr.model == "qwen3-rerank" and rr.base_url == "https://ds/rr"
+    with pytest.raises(ValueError, match="not a rerank model"):
+        r.get_reranker("dashscope/chat")
+
+
+def test_get_embedder_missing_key_raises(monkeypatch):
+    monkeypatch.delenv("DS_ABSENT", raising=False)
+    cat = ModelCatalog(default_model="dashscope/chat", providers=[
+        ProviderConfig(name="dashscope", base_url="u", api_key_env="DS_ABSENT", models=[
+            ModelSpec(id="chat"),
+            ModelSpec(id="emb", type="embedding", dimension=8),
+        ]),
+    ])
+    r = ProviderRouter(cat)
+    with pytest.raises(RuntimeError, match="requires env var 'DS_ABSENT'"):
+        r.get_embedder("dashscope/emb")
+
+
+def test_get_embedder_and_reranker_pick_protocol():
+    from app.retrieval_models import (
+        DashScopeEmbedder, DashScopeReranker,
+        OpenAICompatibleEmbedder, OpenAICompatibleReranker,
+    )
+    cat = ModelCatalog(default_model="p/chat", providers=[
+        ProviderConfig(name="dashscope", base_url="https://ds/compatible-mode/v1", api_key="k", models=[
+            ModelSpec(id="emb-native", type="embedding", protocol="dashscope", dimension=1024,
+                      base_url="https://ds/native/emb"),
+            ModelSpec(id="rr-native", type="rerank", protocol="dashscope", base_url="https://ds/native/rr"),
+        ]),
+        ProviderConfig(name="vendor", base_url="https://api.vendor.com/v1", api_key="k2", models=[
+            ModelSpec(id="emb-compat", type="embedding", dimension=512),   # protocol defaults openai
+            ModelSpec(id="rr-compat", type="rerank"),
+        ]),
+        ProviderConfig(name="p", base_url="u", api_key="k3", models=[ModelSpec(id="chat")]),
+    ])
+    r = ProviderRouter(cat)
+    native_emb = r.get_embedder("dashscope/emb-native")
+    compat_emb = r.get_embedder("vendor/emb-compat")
+    assert isinstance(native_emb, DashScopeEmbedder)
+    assert isinstance(compat_emb, OpenAICompatibleEmbedder)
+    assert compat_emb.url == "https://api.vendor.com/v1/embeddings" and compat_emb.dimension == 512
+    assert isinstance(r.get_reranker("dashscope/rr-native"), DashScopeReranker)
+    compat_rr = r.get_reranker("vendor/rr-compat")
+    assert isinstance(compat_rr, OpenAICompatibleReranker)
+    assert compat_rr.url == "https://api.vendor.com/v1/rerank"
+
+
+def test_default_model_id_of_type():
+    r = ProviderRouter(_typed_catalog())
+    assert r.default_model_id_of_type("embedding") == "dashscope/text-embedding-v4"
+    assert r.default_model_id_of_type("rerank") == "dashscope/qwen3-rerank"
+    assert r.default_model_id_of_type("chat") == "dashscope/chat"
+
+
+def test_get_llm_rejects_non_chat_model():
+    r = ProviderRouter(_typed_catalog())
+    with pytest.raises(ValueError, match="not a chat model"):
+        r.get_llm("dashscope/text-embedding-v4")
+
+
+def test_default_model_must_be_chat_type():
+    cat = ModelCatalog(default_model="dashscope/emb", providers=[
+        ProviderConfig(name="dashscope", base_url="u", api_key="k", models=[
+            ModelSpec(id="emb", type="embedding", dimension=8),
+        ]),
+    ])
+    with pytest.raises(ValueError, match="must be a chat model"):
+        ProviderRouter(cat)

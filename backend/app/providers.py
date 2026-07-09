@@ -1,22 +1,40 @@
 from __future__ import annotations
 import os
-from typing import List, Optional
+from typing import List, Literal, Optional
 import yaml
 from pydantic import BaseModel
 from app.llm import LeanLLM
+
+ModelType = Literal["chat", "embedding", "rerank"]
+# Wire protocol for embedding/rerank clients. `openai` is the compatible shape
+# (POST {base_url}/embeddings | /rerank) used by everyone else; `dashscope` is
+# Alibaba's native services protocol (a full per-model endpoint + nested body).
+# Ignored for chat models — those always stream through LeanLLM (openai).
+ModelProtocol = Literal["openai", "dashscope"]
 
 
 class ModelSpec(BaseModel):
     """Per-model parameters nested under a provider. Connection-level params
     (base_url, api_key) live on the owning ProviderConfig, so a model only
-    carries what actually varies within a provider's catalogue."""
+    carries what actually varies within a provider's catalogue.
+
+    `type` groups the catalogue the way Dify/RAGFlow do — one provider owns the
+    credentials, its models are chat / embedding / rerank. `protocol` selects the
+    embedding/rerank wire format (openai-compatible vs DashScope-native).
+    `base_url` overrides the provider's connection URL per model (a DashScope
+    native endpoint is a full URL; an openai-compatible model normally inherits
+    the provider's `/v1` root). `dimension` is the embedding vector width."""
 
     id: str
+    type: ModelType = "chat"
+    protocol: ModelProtocol = "openai"
     context_window: int = 128000
     max_output_tokens: int = 8000
     supports_tools: bool = True
     supports_reasoning: bool = False
     temperature: Optional[float] = None
+    dimension: Optional[int] = None
+    base_url: Optional[str] = None
 
 
 class ProviderConfig(BaseModel):
@@ -52,6 +70,8 @@ class ModelConfig(BaseModel):
 
     id: str
     provider: str
+    type: ModelType = "chat"
+    protocol: ModelProtocol = "openai"
     base_url: str
     api_key_env: Optional[str] = None
     api_key: Optional[str] = None
@@ -60,6 +80,7 @@ class ModelConfig(BaseModel):
     supports_tools: bool = True
     supports_reasoning: bool = False
     temperature: Optional[float] = None
+    dimension: Optional[int] = None
 
     @property
     def qualified_id(self) -> str:
@@ -77,7 +98,10 @@ class ModelConfig(BaseModel):
         return cls(
             id=m.id,
             provider=p.name,
-            base_url=p.base_url,
+            type=m.type,
+            protocol=m.protocol,
+            # model-level base_url overrides the provider's (native endpoints).
+            base_url=m.base_url or p.base_url,
             api_key_env=p.api_key_env,
             api_key=p.api_key,
             context_window=m.context_window,
@@ -85,6 +109,7 @@ class ModelConfig(BaseModel):
             supports_tools=m.supports_tools,
             supports_reasoning=m.supports_reasoning,
             temperature=m.temperature,
+            dimension=m.dimension,
         )
 
 
@@ -164,6 +189,11 @@ class ProviderRouter:
                 f"default_model '{catalog.default_model}' is not defined in "
                 f"model catalog; available models: {available}"
             )
+        if new_configs[catalog.default_model].type != "chat":
+            raise ValueError(
+                f"default_model '{catalog.default_model}' must be a chat model, "
+                f"not '{new_configs[catalog.default_model].type}'"
+            )
         self._configs = new_configs
         self._default = catalog.default_model
         # Preserve warm clients only for configs that are byte-for-byte unchanged.
@@ -179,21 +209,29 @@ class ProviderRouter:
             raise KeyError(model_id)
         return cfg
 
-    def get_llm(self, model_id: str):
-        if model_id in self._clients:
-            return self._clients[model_id]
-        cfg = self.get_config(model_id)
+    def _resolve_key(self, cfg: ModelConfig) -> str:
+        """Resolve the API key for a model, or raise the same actionable error
+        get_llm has always raised when a required env var is unset. Keyless
+        providers get the "EMPTY" sentinel (AsyncOpenAI / httpx need non-empty)."""
         key = cfg.resolve_key()
         if not key:
             if cfg.api_key_env:
-                # A key was required for this provider but its env var is unset.
-                # Validate the *used* provider at use time with a clear message
-                # rather than dropping it from the catalog at load.
                 raise RuntimeError(
                     f"provider '{cfg.provider}' requires env var "
                     f"'{cfg.api_key_env}' to be set (model '{cfg.id}')"
                 )
-            key = "EMPTY"  # keyless / local provider — AsyncOpenAI needs non-empty
+            key = "EMPTY"
+        return key
+
+    def get_llm(self, model_id: str):
+        if model_id in self._clients:
+            return self._clients[model_id]
+        cfg = self.get_config(model_id)
+        if cfg.type != "chat":
+            raise ValueError(
+                f"model '{model_id}' is a {cfg.type} model, not a chat model"
+            )
+        key = self._resolve_key(cfg)
         llm = LeanLLM(
             base_url=cfg.base_url,
             api_key=key,
@@ -205,9 +243,64 @@ class ProviderRouter:
         self._clients[model_id] = llm
         return llm
 
+    def get_embedder(self, model_id: str):
+        """Build (and cache) a DashScope-native embedder for an embedding model.
+        Cached in the same warm-client map as LLMs, so it's preserved across a
+        reload when its ModelConfig is byte-for-byte unchanged."""
+        if model_id in self._clients:
+            return self._clients[model_id]
+        cfg = self.get_config(model_id)
+        if cfg.type != "embedding":
+            raise ValueError(
+                f"model '{model_id}' is a {cfg.type} model, not an embedding model"
+            )
+        from app.retrieval_models import DashScopeEmbedder, OpenAICompatibleEmbedder
+
+        key = self._resolve_key(cfg)
+        if cfg.protocol == "dashscope":
+            emb = DashScopeEmbedder(
+                base_url=cfg.base_url, api_key=key, model=cfg.id,
+                dimension=cfg.dimension or 1024,
+            )
+        else:
+            emb = OpenAICompatibleEmbedder(
+                base_url=cfg.base_url, api_key=key, model=cfg.id,
+                dimension=cfg.dimension,
+            )
+        self._clients[model_id] = emb
+        return emb
+
+    def get_reranker(self, model_id: str):
+        """Build (and cache) a DashScope-native reranker for a rerank model."""
+        if model_id in self._clients:
+            return self._clients[model_id]
+        cfg = self.get_config(model_id)
+        if cfg.type != "rerank":
+            raise ValueError(
+                f"model '{model_id}' is a {cfg.type} model, not a rerank model"
+            )
+        from app.retrieval_models import DashScopeReranker, OpenAICompatibleReranker
+
+        key = self._resolve_key(cfg)
+        if cfg.protocol == "dashscope":
+            rr = DashScopeReranker(base_url=cfg.base_url, api_key=key, model=cfg.id)
+        else:
+            rr = OpenAICompatibleReranker(base_url=cfg.base_url, api_key=key, model=cfg.id)
+        self._clients[model_id] = rr
+        return rr
+
     def register_llm(self, model_id: str, llm) -> None:
-        """Inject a client (test seam; also a warm-override)."""
+        """Inject a client (test seam; also a warm-override). Works for LLMs,
+        embedders and rerankers alike — they share the warm-client map."""
         self._clients[model_id] = llm
+
+    def default_model_id_of_type(self, model_type: ModelType) -> Optional[str]:
+        """First catalogued model of a given type (used as a fallback when a KB
+        or rerank step needs a default embedder/reranker). None if none exist."""
+        for mid, cfg in self._configs.items():
+            if cfg.type == model_type:
+                return mid
+        return None
 
     @property
     def default_model_id(self) -> str:
