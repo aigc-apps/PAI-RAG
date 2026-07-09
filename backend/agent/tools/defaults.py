@@ -13,6 +13,8 @@ from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
 from agent.tools.builtin.load_skill import make_load_skill_tool
 from agent.tools.builtin.read_skill_resource import make_read_skill_resource_tool
 from agent.tools.builtin.knowledge import make_knowledge_search_tool
+from agent.tools.builtin.view_file import make_view_file_tool
+from agent.tools.builtin.grep_file import make_grep_file_tool
 from agent.tools.search_providers import make_search_provider
 from agent.tools.sandbox_providers import make_sandbox_provider
 from agent.custom_skills import discover_skill_packages, skill_sources
@@ -38,6 +40,10 @@ def build_default_registry(
     # agents opt in via tools.include ("knowledge_search").
     if knowledge_service is not None:
         reg.register(make_knowledge_search_tool(knowledge_service))
+        # view_file (read a whole doc/chunk) + grep_file (exact literal match) round
+        # out the KB read surface alongside the semantic knowledge_search. Same gate.
+        reg.register(make_view_file_tool(knowledge_service))
+        reg.register(make_grep_file_tool(knowledge_service))
 
     provider = search_provider
     if provider is None:

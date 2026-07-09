@@ -70,4 +70,10 @@ def reload_app_state(state: AppState, settings) -> None:
         # already-live KnowledgeService (created at boot in lean_main).
         knowledge_service=state.knowledge,
     )
+    # Vector-store selection is global (knowledgebase.vectordb). The registry
+    # rebuild above doesn't touch the live search engine, so rebuild it here from
+    # the fresh doc — this is what makes a Settings-UI vectordb change apply
+    # without a restart (PUT /v1/config funnels through here via _save_and_reload).
+    if state.knowledge is not None and hasattr(state.knowledge, "rebuild_search_engine"):
+        state.knowledge.rebuild_search_engine(doc.knowledgebase.vectordb)
     state.agent_config = apply_runtime_status(doc, settings, state.router)

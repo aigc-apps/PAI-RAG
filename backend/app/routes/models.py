@@ -11,10 +11,18 @@ router = APIRouter()
 def _to_data(state: AppState):
     if state.router is not None:
         return [
-            {"id": m.qualified_id, "object": "model", "created": 0, "owned_by": m.provider}
+            {
+                "id": m.qualified_id,
+                "object": "model",
+                "created": 0,
+                "owned_by": m.provider,
+                "type": m.type,
+                "dimension": m.dimension,
+            }
             for m in state.router.list_models()
         ]
-    return [{"id": state.default_model, "object": "model", "created": 0, "owned_by": "openai"}]
+    return [{"id": state.default_model, "object": "model", "created": 0,
+             "owned_by": "openai", "type": "chat", "dimension": None}]
 
 
 def _default_model_id(state: AppState) -> str:
@@ -23,13 +31,21 @@ def _default_model_id(state: AppState) -> str:
     return state.default_model
 
 
-@router.get("/v1/models")
-async def list_models(state: AppState = Depends(get_state)):
-    return JSONResponse({
+def _envelope(state: AppState, **extra) -> dict:
+    router = state.router
+    return {
         "object": "list",
         "default": _default_model_id(state),
+        "default_embedding": router.default_embedding_model_id if router else None,
+        "default_rerank": router.default_rerank_model_id if router else None,
         "data": _to_data(state),
-    })
+        **extra,
+    }
+
+
+@router.get("/v1/models")
+async def list_models(state: AppState = Depends(get_state)):
+    return JSONResponse(_envelope(state))
 
 
 @router.post("/v1/models/reload")
@@ -41,9 +57,4 @@ async def reload_models(state: AppState = Depends(get_state),
         state.router.reload_from_disk()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    return JSONResponse({
-        "object": "list",
-        "reloaded": True,
-        "default": _default_model_id(state),
-        "data": _to_data(state),
-    })
+    return JSONResponse(_envelope(state, reloaded=True))

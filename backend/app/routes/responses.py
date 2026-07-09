@@ -1,14 +1,13 @@
 from __future__ import annotations
 import asyncio
 import time
-import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.schemas import ResponsesRequest
 from app.auth import require_user
 from app.builder import build_context, resolve_agent_model
 from app.deps import AppState, get_state
-from app.store.base import Item, StoredResponse, User
+from app.store.base import Item, StoredResponse, User, new_id
 from app.memory import update_user_memory, make_complete
 from app.summarizer import maybe_summarize_conversation
 from api.protocol.responses_serializer import (
@@ -42,7 +41,7 @@ def _error(status: int, message: str):
 
 
 def _rid() -> str:
-    return f"resp_{uuid.uuid4().hex}"
+    return new_id("resp")
 
 
 async def _owns_response(state: AppState, stored: StoredResponse, user: User) -> bool:

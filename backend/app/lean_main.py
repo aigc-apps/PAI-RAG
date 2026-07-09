@@ -84,10 +84,14 @@ async def lifespan(app: FastAPI):
     provider_router = ProviderRouter(catalog, path=settings.models_path)
     # Built before the registry so knowledge_search can bind to it; the same
     # instance is stored on AppState below and reused for the REST query routes.
+    # Global vector-store selection lives in knowledgebase.vectordb (see
+    # agent_config). ES degrades to local on outage (fallback_to_local) so a
+    # transient ES failure doesn't hard-fail retrieval.
+    vectordb = agent_config.knowledgebase.vectordb
     knowledge = KnowledgeService(
         engine,
-        search_engine=build_search_engine(settings, engine),
-        fallback_to_local=(settings.search_engine != "elasticsearch"),
+        search_engine=build_search_engine(settings, engine, vectordb=vectordb),
+        fallback_to_local=(vectordb.engine != "local"),
         router=provider_router,
     )
     # Wire the control-plane reloader lazily: it reads app.state.app_state on

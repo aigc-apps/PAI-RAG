@@ -96,6 +96,25 @@ def test_config_yaml_roundtrip_and_registry_reload(tmp_path, monkeypatch):
     assert search["status"] == "ready"
 
 
+def test_vectordb_secret_roundtrip_masked_and_preserved(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    doc = c.get("/v1/config").json()
+    # default section is local
+    assert doc["knowledgebase"]["vectordb"]["engine"] == "local"
+    doc["knowledgebase"]["vectordb"].update({
+        "engine": "elasticsearch", "url": "http://es:9200", "api_key": "real-key",
+    })
+    saved = c.put("/v1/config", json=doc).json()
+    vdb = saved["knowledgebase"]["vectordb"]
+    assert vdb["engine"] == "elasticsearch" and vdb["url"] == "http://es:9200"
+    assert vdb["api_key"] == "********"      # masked on the way out
+    assert vdb["status"] == "healthy"        # real key was graded healthy
+    # Re-save the masked placeholder — the real key must be preserved, not blanked.
+    vdb2 = c.put("/v1/config", json=saved).json()["knowledgebase"]["vectordb"]
+    assert vdb2["status"] == "healthy"
+    assert vdb2["secret_configured"] is True
+
+
 def test_runtime_status_discovers_local_skill_packages(tmp_path):
     skill_dir = tmp_path / "skills" / "review"
     skill_dir.mkdir(parents=True)

@@ -7,9 +7,10 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from app.agent_config import VectorDBConfig
 from app.db import create_all, make_engine
 from app.knowledge import KnowledgeService
-from app.search_engine import ElasticsearchEngine, LocalSearchEngine
+from app.search_engine import ElasticsearchEngine, LocalSearchEngine, build_search_engine
 from app.store.base import User
 
 ADMIN = User(id="u_admin", email="a@x.io", role="admin")
@@ -172,7 +173,7 @@ def test_es_hybrid_search_dsl_has_knn_and_bm25():
     body = fake.search_calls[0]["body"]
     # BM25 clause
     must = body["query"]["bool"]["must"]
-    assert must[0]["multi_match"]["fields"] == ["text", "title^2"]
+    assert must[0]["multi_match"]["fields"] == ["text", "title^2", "heading^1.5"]
     # kNN clause present in the SAME body (native hybrid)
     assert body["knn"]["field"] == "embedding"
     assert len(body["knn"]["query_vector"]) == 64
@@ -251,3 +252,63 @@ def test_forced_es_mode_raises_without_fallback():
 
     err = asyncio.run(scenario())
     assert err == "es unreachable"
+
+
+# --------------------------------------------------------------------------- #
+# build_search_engine: driven by the global knowledgebase.vectordb section
+# --------------------------------------------------------------------------- #
+def test_build_search_engine_from_vectordb_elasticsearch():
+    cfg = VectorDBConfig(engine="elasticsearch", url="http://es:9200", api_key="k")
+    eng = build_search_engine(None, "sql_engine_sentinel", vectordb=cfg)
+    assert isinstance(eng, ElasticsearchEngine)
+    assert eng._url == "http://es:9200"
+    assert eng._api_key == "k"
+
+
+def test_build_search_engine_from_vectordb_local():
+    cfg = VectorDBConfig(engine="local")
+    eng = build_search_engine(None, "sql_engine_sentinel", vectordb=cfg)
+    assert isinstance(eng, LocalSearchEngine)
+
+
+def test_build_search_engine_elasticsearch_without_url_falls_back_local():
+    cfg = VectorDBConfig(engine="elasticsearch", url="")  # misconfigured
+    eng = build_search_engine(None, "sql_engine_sentinel", vectordb=cfg)
+    assert isinstance(eng, LocalSearchEngine)
+
+
+def test_build_search_engine_vectordb_none_uses_env_settings():
+    # Legacy path: no section supplied → read Settings.search_engine / elasticsearch_url.
+    settings = type("S", (), {"search_engine": "auto", "elasticsearch_url": ""})()
+    eng = build_search_engine(settings, "sql_engine_sentinel", vectordb=None)
+    assert isinstance(eng, LocalSearchEngine)
+
+
+def test_from_vectordb_config_resolves_password_from_env():
+    os.environ["_TEST_ES_PW"] = "sekret"
+    try:
+        cfg = VectorDBConfig(
+            engine="elasticsearch", url="http://es:9200",
+            username="elastic", password_env="_TEST_ES_PW",
+        )
+        eng = ElasticsearchEngine.from_vectordb_config(cfg)
+        assert eng._username == "elastic"
+        assert eng._password == "sekret"
+    finally:
+        os.environ.pop("_TEST_ES_PW", None)
+
+
+def test_rebuild_search_engine_swaps_primary():
+    async def scenario():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        svc = KnowledgeService(engine)  # starts local
+        assert svc._search.name == "local"
+        svc.rebuild_search_engine(
+            VectorDBConfig(engine="elasticsearch", url="http://es:9200", api_key="k")
+        )
+        return svc._search.name, svc._fallback_to_local
+
+    name, fallback = asyncio.run(scenario())
+    assert name == "elasticsearch"
+    assert fallback is True  # ES degrades to local on outage

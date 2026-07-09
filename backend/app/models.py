@@ -156,6 +156,26 @@ class KnowledgeChunkRow(SQLModel, table=True):
     deleted_at: Optional[datetime] = Field(default=None, index=True)
 
 
+class KnowledgeDocumentContentRow(SQLModel, table=True):
+    """The exact ingested text of a document, stored once (1:1 with a document).
+
+    Kept in its own table — not a column on ``knowledge_documents`` — so the hot
+    ``list_documents`` scan (which selects every document column) never drags the
+    full body along; ``view_file`` loads it only when it actually reads a file.
+    Lets full-document reads return the original verbatim instead of re-stitching
+    overlapping chunks."""
+    __tablename__ = "knowledge_document_contents"
+    document_id: str = Field(primary_key=True, max_length=64)
+    kb_id: str = Field(index=True, max_length=64)
+    text: str = Field(sa_column=Column(Text))
+    content_hash: str = Field(default="", max_length=128)
+    char_len: int = Field(default=0)
+    # Over-long documents are stored capped at MAX_STORED_CONTENT_CHARS; this flags
+    # that the persisted ``text`` is a prefix and deeper text lives only in chunks.
+    truncated: bool = Field(default=False)
+    updated_at: datetime = Field(default_factory=_now)
+
+
 class KnowledgeIngestionJobRow(SQLModel, table=True):
     __tablename__ = "knowledge_ingestion_jobs"
     id: str = Field(primary_key=True, max_length=64)

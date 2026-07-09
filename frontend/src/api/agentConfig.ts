@@ -37,6 +37,28 @@ export interface SetupConfig {
   skipped_steps: string[];
 }
 
+// Global vector-store selection (singleton — not per-KB). Secrets mask to
+// "********" on read; leave a masked field untouched to preserve the stored value.
+export interface VectorDBConfig {
+  engine: "local" | "elasticsearch";
+  url: string;
+  index_prefix: string;
+  api_key: string;
+  api_key_env: string;
+  username: string;
+  password: string;
+  password_env: string;
+  verify_certs: boolean;
+  timeout: number;
+  status: ProviderStatus;
+  secret_configured: boolean;
+  error?: string | null;
+}
+
+export interface KnowledgeBaseConfig {
+  vectordb: VectorDBConfig;
+}
+
 export interface AgentToolsConfig {
   include: string[];
   exclude: string[];
@@ -69,6 +91,7 @@ export interface AgentProfile {
 export interface AgentConfigDocument {
   setup: SetupConfig;
   models: Record<string, unknown>;
+  knowledgebase: KnowledgeBaseConfig;
   skills: SkillLibraryConfig;
   default_agent: string;
   agents: AgentProfile[];

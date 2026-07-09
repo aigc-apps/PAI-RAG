@@ -20,6 +20,7 @@ Permission scoping is NOT done here — callers pass an already-authorized
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Protocol
 
@@ -126,7 +127,12 @@ class LocalSearchEngine:
             if not matches_filters(doc, filters):
                 continue
             v_score = cosine(qvec, list(chunk.embedding or []))
-            k_score = keyword_score(query, chunk.text)
+            # Fold the heading breadcrumb into the keyword-scored text so a section
+            # title (which isn't repeated in every chunk body) still matches.
+            heading = " > ".join(chunk.heading_path or [])
+            k_score = keyword_score(
+                query, f"{heading}\n{chunk.text}" if heading else chunk.text
+            )
             if mode == "vector":
                 score = v_score
             elif mode == "keyword":
@@ -177,6 +183,7 @@ def _mapping(dimension: int) -> dict:
             "chunk_index": {"type": "integer"},
             "text": {"type": "text", "analyzer": "kb_text"},
             "title": {"type": "text", "analyzer": "kb_text", "fields": {"raw": {"type": "keyword"}}},
+            "heading": {"type": "text", "analyzer": "kb_text"},
             "source_uri": {"type": "keyword"},
             "source_type": {"type": "keyword"},
             "category": {"type": "keyword"},
@@ -222,6 +229,22 @@ class ElasticsearchEngine:
             index_prefix=settings.elasticsearch_index_prefix,
             verify_certs=settings.elasticsearch_verify_certs,
             timeout=settings.elasticsearch_timeout,
+            client_factory=client_factory,
+        )
+
+    @classmethod
+    def from_vectordb_config(cls, cfg, client_factory=None) -> "ElasticsearchEngine":
+        """Build from the global ``knowledgebase.vectordb`` config section
+        (``app.agent_config.VectorDBConfig``). Secrets resolve inline first, then
+        by env-var name (``*_env``), mirroring the search/sandbox providers."""
+        return cls(
+            cfg.url,
+            api_key=cfg.api_key or os.environ.get(cfg.api_key_env or "", ""),
+            username=cfg.username,
+            password=cfg.password or os.environ.get(cfg.password_env or "", ""),
+            index_prefix=cfg.index_prefix or "kb",
+            verify_certs=cfg.verify_certs,
+            timeout=cfg.timeout,
             client_factory=client_factory,
         )
 
@@ -288,6 +311,7 @@ class ElasticsearchEngine:
                 "chunk_index": c.get("chunk_index", 0),
                 "text": c.get("text", ""),
                 "title": doc.title or "",
+                "heading": " > ".join(c.get("heading_path") or []),
                 "source_uri": doc.uri or "",
                 "source_type": doc.source_type or "",
                 "category": doc.category,
@@ -339,7 +363,7 @@ class ElasticsearchEngine:
             body["query"] = {
                 "bool": {
                     "filter": clauses,
-                    "must": [{"multi_match": {"query": query, "fields": ["text", "title^2"]}}],
+                    "must": [{"multi_match": {"query": query, "fields": ["text", "title^2", "heading^1.5"]}}],
                 }
             }
         else:
@@ -391,11 +415,24 @@ class ElasticsearchEngine:
         return hits, total
 
 
-def build_search_engine(settings, sql_engine) -> SearchEngine:
-    """Pick the primary engine from settings. ``KnowledgeService`` supplies the
-    local fallback separately, so this only decides the primary."""
-    mode = getattr(settings, "search_engine", "auto") or "auto"
+def build_search_engine(settings, sql_engine, *, vectordb=None) -> SearchEngine:
+    """Pick the primary engine. ``KnowledgeService`` supplies the local fallback
+    separately, so this only decides the primary.
+
+    The global ``knowledgebase.vectordb`` config section (``vectordb``) is
+    authoritative when supplied: ``engine == "elasticsearch"`` with a non-empty
+    ``url`` builds an ES engine, anything else stays local. When ``vectordb`` is
+    ``None`` (e.g. offline/test callers), fall back to the legacy env-driven
+    ``Settings.search_engine`` / ``elasticsearch_*`` path for backward compat."""
     local = LocalSearchEngine(sql_engine)
+    if vectordb is not None:
+        if vectordb.engine == "elasticsearch" and vectordb.url:
+            logger.info(f"[search] primary engine = elasticsearch ({vectordb.url})")
+            return ElasticsearchEngine.from_vectordb_config(vectordb)
+        if vectordb.engine == "elasticsearch":
+            logger.warning("[search] knowledgebase.vectordb.engine=elasticsearch but url is empty; using local")
+        return local
+    mode = getattr(settings, "search_engine", "auto") or "auto"
     if mode == "local":
         return local
     url = getattr(settings, "elasticsearch_url", "")

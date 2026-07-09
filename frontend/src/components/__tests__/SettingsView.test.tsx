@@ -8,6 +8,22 @@ import type { AgentConfigDocument } from "../../api/agentConfig";
 const baseDoc: AgentConfigDocument = {
   setup: { completed: true, skipped_steps: [] },
   models: {},
+  knowledgebase: {
+    vectordb: {
+      engine: "local",
+      url: "",
+      index_prefix: "kb",
+      api_key: "",
+      api_key_env: "",
+      username: "",
+      password: "",
+      password_env: "",
+      verify_certs: true,
+      timeout: 30,
+      status: "healthy",
+      secret_configured: false,
+    },
+  },
   skills: { root: "./data/skills", mount: { mount_root: "/mnt/skills" } },
   default_agent: "main",
   agents: [
@@ -49,6 +65,18 @@ const baseDoc: AgentConfigDocument = {
     },
   ],
   capabilities: [
+    {
+      id: "knowledge",
+      kind: "core_tool",
+      name: "Knowledge Base",
+      description: "Retrieve from local documents.",
+      enabled: true,
+      permission: "auto",
+      status: "ready",
+      dependencies: [],
+      provider_refs: [],
+      settings: { mode: "local" },
+    },
     {
       id: "sandbox",
       kind: "core_tool",
@@ -163,5 +191,30 @@ describe("SettingsView", () => {
 
     expect(save).not.toHaveBeenCalled();
     expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+  });
+
+  it("configures the global elasticsearch vector database", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("button", { name: "Vector DB" }));
+
+    // ES fields are hidden until the engine is elasticsearch.
+    expect(screen.queryByLabelText("URL")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Engine"), "elasticsearch");
+    await user.type(screen.getByLabelText("URL"), "https://es:9200");
+    await user.type(screen.getByLabelText("API Key"), "es-secret");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.knowledgebase.vectordb.engine).toBe("elasticsearch");
+    expect(saved.knowledgebase.vectordb.url).toBe("https://es:9200");
+    expect(saved.knowledgebase.vectordb.api_key).toBe("es-secret");
   });
 });

@@ -369,3 +369,52 @@ def test_dashscope_chat_has_no_native_default():
                        models=[ModelSpec(id="qwen3.7-plus", type="chat", protocol="dashscope")])
     cfg = ModelConfig.from_provider(p, p.models[0])
     assert cfg.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+
+# ---- Catalog-level embedding/rerank defaults (default_embedding_model / _rerank) ----
+
+def _defaults_catalog(**kw):
+    return ModelCatalog(
+        default_model="dashscope/chat",
+        providers=[
+            ProviderConfig(name="dashscope", base_url="https://ds/v1", api_key="k", models=[
+                ModelSpec(id="chat"),
+                ModelSpec(id="emb-a", type="embedding", dimension=1024),
+                ModelSpec(id="emb-b", type="embedding", dimension=512),
+                ModelSpec(id="rr-a", type="rerank"),
+            ]),
+        ],
+        **kw,
+    )
+
+
+def test_explicit_default_embedding_and_rerank_win():
+    r = ProviderRouter(_defaults_catalog(
+        default_embedding_model="dashscope/emb-b",
+        default_rerank_model="dashscope/rr-a",
+    ))
+    assert r.default_model_id_of_type("embedding") == "dashscope/emb-b"
+    assert r.default_rerank_model_id == "dashscope/rr-a"
+    assert r.default_embedding_model_id == "dashscope/emb-b"
+
+
+def test_default_of_type_falls_back_to_first_when_unset():
+    # No explicit defaults -> first catalogued model of that type (insertion order).
+    r = ProviderRouter(_defaults_catalog())
+    assert r.default_model_id_of_type("embedding") == "dashscope/emb-a"
+    assert r.default_model_id_of_type("rerank") == "dashscope/rr-a"
+
+
+def test_default_embedding_absent_id_raises():
+    with pytest.raises(ValueError, match="default_embedding_model"):
+        ProviderRouter(_defaults_catalog(default_embedding_model="dashscope/nope"))
+
+
+def test_default_embedding_wrong_type_raises():
+    with pytest.raises(ValueError, match="must be a embedding model"):
+        ProviderRouter(_defaults_catalog(default_embedding_model="dashscope/chat"))
+
+
+def test_default_rerank_wrong_type_raises():
+    with pytest.raises(ValueError, match="must be a rerank model"):
+        ProviderRouter(_defaults_catalog(default_rerank_model="dashscope/emb-a"))

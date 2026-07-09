@@ -53,11 +53,19 @@ def _format(hits, *, query: str) -> str:
         src = h.source_uri or h.document_id
         lines.append(f"[{i}] {title}  (score {h.score:.3f})")
         lines.append(f"    source: {src}")
+        # Surface the (short) document id so the model can hand it straight to
+        # view_file (read the whole file) or grep_file (find an exact term in it);
+        # the chunk id opens this exact passage in situ via view_file locate.
+        lines.append(f"    doc: {h.document_id}")
+        if getattr(h, "chunk_id", None):
+            lines.append(f"    chunk: {h.chunk_id}")
         lines.append(f"    {text}")
         lines.append("")
     lines.append(
         "Cite sources by their [n] / title when answering, and say so plainly "
-        "if the passages do not contain the answer."
+        "if the passages do not contain the answer. To read a full document use "
+        "view_file with its doc id; to open a passage in context use "
+        "view_file(chunk_id=…, mode=\"locate\"); for an exact term use grep_file."
     )
     return "\n".join(lines).rstrip()
 

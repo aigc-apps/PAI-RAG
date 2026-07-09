@@ -5,7 +5,10 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import Conversation as ConvRow, ConversationItem as ItemRow, MemoryRow, ResponseRow, UserRow
-from app.store.base import Conversation, Item, MemoryItem, StoredResponse, User, UserAuth, _now, _uuid
+from app.store.base import (
+    Conversation, Item, MemoryItem, StoredResponse, User, UserAuth,
+    _now, _uuid, with_id_retry,
+)
 
 
 def _to_user(row: UserRow) -> User:
@@ -229,14 +232,17 @@ class SqlStore:
     async def create_user(self, *, email, role, status, password_hash=None,
                           invite_token_hash=None, invite_expires_at=None,
                           display_name=None) -> User:
-        async with AsyncSession(self._engine) as s:
-            row = UserRow(id=_uuid("user"), email=email, role=role, status=status,
-                          password_hash=password_hash, invite_token_hash=invite_token_hash,
-                          invite_expires_at=invite_expires_at, display_name=display_name)
-            s.add(row)
-            await s.commit()
-            await s.refresh(row)
-            return _to_user(row)
+        async def work() -> User:
+            async with AsyncSession(self._engine) as s:
+                row = UserRow(id=_uuid("user"), email=email, role=role, status=status,
+                              password_hash=password_hash, invite_token_hash=invite_token_hash,
+                              invite_expires_at=invite_expires_at, display_name=display_name)
+                s.add(row)
+                await s.commit()
+                await s.refresh(row)
+                return _to_user(row)
+
+        return await with_id_retry(work)
 
     async def set_user_password(self, user_id: str, password_hash: str) -> Optional[User]:
         async with AsyncSession(self._engine) as s:

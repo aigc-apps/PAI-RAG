@@ -132,6 +132,12 @@ class ModelConfig(BaseModel):
 
 class ModelCatalog(BaseModel):
     default_model: str
+    # Fallback embedding/rerank model a new KB inherits when the caller doesn't
+    # choose one (mirrors `default_model` for chat). Optional: when unset the
+    # router falls back to the first catalogued model of that type. A qualified
+    # id ("provider/model") that must resolve to a model of the matching type.
+    default_embedding_model: Optional[str] = None
+    default_rerank_model: Optional[str] = None
     providers: List[ProviderConfig]
 
     def flatten(self) -> List[ModelConfig]:
@@ -171,6 +177,8 @@ class ProviderRouter:
         self._configs: dict = {}
         self._clients: dict = {}
         self._default = ""
+        self._default_embedding: Optional[str] = None
+        self._default_rerank: Optional[str] = None
         self._apply(catalog)
 
     def _apply(self, catalog: ModelCatalog) -> None:
@@ -211,8 +219,29 @@ class ProviderRouter:
                 f"default_model '{catalog.default_model}' must be a chat model, "
                 f"not '{new_configs[catalog.default_model].type}'"
             )
+        # Validate the optional embedding/rerank defaults the same way: if set,
+        # the id must be catalogued and of the matching type.
+        for field, want_type in (
+            (catalog.default_embedding_model, "embedding"),
+            (catalog.default_rerank_model, "rerank"),
+        ):
+            if field is None:
+                continue
+            if field not in new_configs:
+                available = ", ".join(sorted(new_configs))
+                raise ValueError(
+                    f"default_{want_type}_model '{field}' is not defined in "
+                    f"model catalog; available models: {available}"
+                )
+            if new_configs[field].type != want_type:
+                raise ValueError(
+                    f"default_{want_type}_model '{field}' must be a {want_type} "
+                    f"model, not '{new_configs[field].type}'"
+                )
         self._configs = new_configs
         self._default = catalog.default_model
+        self._default_embedding = catalog.default_embedding_model
+        self._default_rerank = catalog.default_rerank_model
         # Preserve warm clients only for configs that are byte-for-byte unchanged.
         self._clients = {
             mid: client
@@ -312,8 +341,16 @@ class ProviderRouter:
         self._clients[model_id] = llm
 
     def default_model_id_of_type(self, model_type: ModelType) -> Optional[str]:
-        """First catalogued model of a given type (used as a fallback when a KB
-        or rerank step needs a default embedder/reranker). None if none exist."""
+        """The default model of a given type used when a KB or rerank step needs
+        one. Prefers the catalog's explicit ``default_embedding_model`` /
+        ``default_rerank_model``; falls back to the first catalogued model of that
+        type when unset. None if none exist."""
+        explicit = {
+            "embedding": self._default_embedding,
+            "rerank": self._default_rerank,
+        }.get(model_type)
+        if explicit:
+            return explicit
         for mid, cfg in self._configs.items():
             if cfg.type == model_type:
                 return mid
@@ -322,6 +359,14 @@ class ProviderRouter:
     @property
     def default_model_id(self) -> str:
         return self._default
+
+    @property
+    def default_embedding_model_id(self) -> Optional[str]:
+        return self.default_model_id_of_type("embedding")
+
+    @property
+    def default_rerank_model_id(self) -> Optional[str]:
+        return self.default_model_id_of_type("rerank")
 
     def list_models(self) -> List[ModelConfig]:
         return list(self._configs.values())

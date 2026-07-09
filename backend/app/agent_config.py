@@ -29,6 +29,32 @@ class ProviderConfig(BaseModel):
     used_by: List[str] = Field(default_factory=list)
 
 
+class VectorDBConfig(BaseModel):
+    """Global vector-store selection for knowledge bases. A singleton setting (not
+    per-KB), so it lives here rather than in the ``providers[]`` registry. ``local``
+    uses the built-in SQL scan; ``elasticsearch`` needs connection info. Secrets may
+    be inline (masked on read) or referenced by env-var name via ``*_env``."""
+
+    engine: Literal["local", "elasticsearch"] = "local"
+    url: str = ""
+    index_prefix: str = "kb"
+    api_key: str = ""
+    api_key_env: str = ""
+    username: str = ""
+    password: str = ""
+    password_env: str = ""
+    verify_certs: bool = True
+    timeout: int = 30
+    # Runtime-graded (by apply_runtime_status), not user-authored.
+    status: ProviderStatus = "untested"
+    secret_configured: bool = False
+    error: Optional[str] = None
+
+
+class KnowledgeBaseConfig(BaseModel):
+    vectordb: VectorDBConfig = Field(default_factory=VectorDBConfig)
+
+
 class CapabilityConfig(BaseModel):
     id: str
     kind: Literal["core_tool", "skill"]
@@ -105,6 +131,7 @@ class AgentProfile(BaseModel):
 class AgentConfigDocument(BaseModel):
     setup: SetupConfig = Field(default_factory=SetupConfig)
     models: Dict[str, Any] = Field(default_factory=dict)
+    knowledgebase: KnowledgeBaseConfig = Field(default_factory=KnowledgeBaseConfig)
     skills: SkillLibraryConfig = Field(default_factory=SkillLibraryConfig)
     default_agent: str = "main"
     agents: List[AgentProfile] = Field(default_factory=list)
@@ -149,6 +176,8 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "web_fetch",
                     "web_search",
                     "knowledge_search",
+                    "view_file",
+                    "grep_file",
                 ],
                 exclude=["code_interpreter", "shell"],
             ),
@@ -176,28 +205,6 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                 "max_results": 5,
             },
             used_by=["search"],
-        ),
-        ProviderConfig(
-            id="embedding.default",
-            type="embedding",
-            name="Embedding provider",
-            # References a model in the `models:` catalog (single credential
-            # source). config.yaml overrides this.
-            settings={"model": "dashscope/text-embedding-v4"},
-            used_by=["knowledge"],
-        ),
-        ProviderConfig(
-            id="rerank.default",
-            type="rerank",
-            name="Rerank provider",
-            settings={"model": "dashscope/qwen3-rerank", "top_n": 5},
-            used_by=["knowledge"],
-        ),
-        ProviderConfig(
-            id="vectordb.default",
-            type="vectordb",
-            name="Vector DB provider",
-            used_by=["knowledge"],
         ),
         ProviderConfig(
             id="sandbox.default",
@@ -268,7 +275,7 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             enabled=True,
             permission="auto",
             status="ready",
-            provider_refs=["embedding.default", "rerank.default", "vectordb.default"],
+            provider_refs=[],
             settings={"mode": "local"},
         ),
         CapabilityConfig(
@@ -354,6 +361,10 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
         merged["models"] = raw["models"]
     if isinstance(raw.get("skills"), dict):
         merged["skills"].update(raw["skills"])
+    kb_raw = raw.get("knowledgebase")
+    if isinstance(kb_raw, dict) and isinstance(kb_raw.get("vectordb"), dict):
+        # Overlay onto the defaults so fields added later still get sane defaults.
+        merged["knowledgebase"]["vectordb"].update(kb_raw["vectordb"])
 
     for collection in ("agents", "providers", "capabilities"):
         by_id = {item["id"]: item for item in merged[collection]}
@@ -416,6 +427,11 @@ def mask_secrets(doc: AgentConfigDocument) -> AgentConfigDocument:
         for key in ("api_key", "access_key_id", "access_key_secret", "security_token"):
             if provider.settings.get(key):
                 provider.settings[key] = "********"
+    vectordb = out.knowledgebase.vectordb
+    if vectordb.api_key:
+        vectordb.api_key = "********"
+    if vectordb.password:
+        vectordb.password = "********"
     return out
 
 
@@ -449,30 +465,35 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
             if not agent.model:
                 agent.model = str(llm.settings.get("default_model") or "")
 
-    # embedding.default / rerank.default reference a catalogued model by id and
-    # share that provider's credentials (Dify/RAGFlow shape). Healthy iff the
-    # referenced model resolves to the right type and its key is ready/keyless.
-    for slot_id, want_type in (("embedding.default", "embedding"), ("rerank.default", "rerank")):
-        prov = providers.get(slot_id)
-        if prov is None:
-            continue
-        model_id = prov.settings.get("model")
-        ready = False
-        if router is not None and model_id:
-            try:
-                cfg = router.get_config(model_id)
-                if cfg.type != want_type:
-                    raise ValueError(f"model '{model_id}' is not a {want_type} model")
-                ready = bool(cfg.resolve_key() or not cfg.api_key_env)
-                prov.settings.update({"provider": cfg.provider, "base_url": cfg.base_url})
-                if cfg.dimension is not None:
-                    prov.settings.setdefault("dimension", cfg.dimension)
-                prov.secret_configured = bool(cfg.resolve_key())
-                prov.error = None
-            except Exception as exc:
-                prov.error = str(exc)
-                prov.secret_configured = False
-        prov.status = "healthy" if ready else "missing_config"
+    # The KB embedder/reranker default now lives in the model catalog
+    # (default_embedding_model / default_rerank_model); there are no
+    # embedding.default / rerank.default provider slots to reconcile here.
+
+    # Global vector-store selection (knowledgebase.vectordb, a singleton config
+    # section — not a provider slot). Grade its status so the Settings panel and
+    # the knowledge capability can show whether ES is reachable/configured.
+    vectordb = out.knowledgebase.vectordb
+    if vectordb.engine == "elasticsearch":
+        vdb_settings = vectordb.model_dump()
+        api_key_ok = _setting_configured(vdb_settings, "api_key", "api_key_env")
+        basic_ok = bool(vectordb.username) and _setting_configured(
+            vdb_settings, "password", "password_env"
+        )
+        secret_ok = api_key_ok or basic_ok
+        vectordb.secret_configured = secret_ok
+        if vectordb.url and secret_ok:
+            vectordb.status = "healthy"
+            vectordb.error = None
+        else:
+            vectordb.status = "missing_config"
+            vectordb.error = (
+                "Set the Elasticsearch URL and an API key (or username + password)"
+            )
+    else:
+        vectordb.engine = "local"
+        vectordb.status = "healthy"
+        vectordb.secret_configured = False
+        vectordb.error = None
 
     search_provider = providers.get("search.default")
     search_cap = caps.get("search")
@@ -706,6 +727,8 @@ def _skill_tool_dependencies(permissions: Dict[str, Any]) -> List[str]:
     mapped = {
         "web_search": "search",
         "knowledge_search": "knowledge",
+        "view_file": "knowledge",
+        "grep_file": "knowledge",
         "code_interpreter": "sandbox",
         "shell": "sandbox",
     }

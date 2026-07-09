@@ -21,11 +21,12 @@ from app.models import (
     KnowledgeBaseRow,
     KnowledgeChunkRow,
     KnowledgeDataSourceRow,
+    KnowledgeDocumentContentRow,
     KnowledgeDocumentRow,
     KnowledgeIndexVersionRow,
     KnowledgeIngestionJobRow,
 )
-from app.store.base import User, _uuid
+from app.store.base import User, _uuid, with_id_retry
 
 
 DEFAULT_EMBEDDING_CONFIG = {
@@ -112,6 +113,13 @@ def keyword_score(query: str, text: str) -> float:
     return hits / len(q)
 
 
+# Cap the verbatim copy we persist per document. ~200k chars ≈ 80 pages of prose
+# or a whole CJK chapter — covers virtually every real document. Over-long docs
+# store this prefix (flagged ``truncated``); their deeper text still lives in
+# chunks. Tunable; can be promoted to a setting later.
+MAX_STORED_CONTENT_CHARS = 200_000
+
+
 def chunk_text(text: str, *, chunk_size: int, chunk_overlap: int) -> list[tuple[str, int, int]]:
     text = (text or "").strip()
     if not text:
@@ -129,6 +137,108 @@ def chunk_text(text: str, *, chunk_size: int, chunk_overlap: int) -> list[tuple[
             break
         start = max(0, end - chunk_overlap)
     return chunks
+
+
+# ATX markdown heading: 1–6 leading '#', then the title. Used to split markdown by
+# section so each chunk carries its heading path (ancestor titles).
+_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.*\S)[ \t]*$")
+
+
+def _looks_like_markdown(text: str, mime_type: str) -> bool:
+    if mime_type and "markdown" in mime_type.lower():
+        return True
+    # No explicit markdown mime, but an ATX heading present → treat as structured.
+    return bool(re.search(r"(?m)^#{1,6}[ \t]+\S", text or ""))
+
+
+def _window_span(
+    base: str, start: int, end: int, *, chunk_size: int, chunk_overlap: int, heading_path: list
+) -> list[dict]:
+    """Sliding-window ``base[start:end]`` into chunk dicts, keeping offsets into the
+    original ``base`` (so char_start/char_end stay aligned with the stored content).
+    A span that fits in one window yields a single chunk."""
+    chunk_size = max(100, int(chunk_size or 1000))
+    chunk_overlap = max(0, min(int(chunk_overlap or 0), chunk_size // 2))
+    out: list[dict] = []
+    pos = start
+    while pos < end:
+        stop = min(end, pos + chunk_size)
+        seg = base[pos:stop]
+        body = seg.strip()
+        if body:
+            lead = len(seg) - len(seg.lstrip())
+            cs = pos + lead
+            out.append(
+                {
+                    "text": body,
+                    "char_start": cs,
+                    "char_end": cs + len(body),
+                    "heading_path": list(heading_path),
+                }
+            )
+        if stop >= end:
+            break
+        pos = max(pos + 1, stop - chunk_overlap)
+    return out
+
+
+def split_document(
+    text: str, *, mime_type: str = "text/plain", chunk_size: int, chunk_overlap: int
+) -> list[dict]:
+    """Split a document into chunk dicts ``{text, char_start, char_end, heading_path}``.
+
+    Markdown (by mime type or a detected ATX heading) is split at heading
+    boundaries so each chunk records its ancestor-heading path; over-long sections
+    are still windowed to ``chunk_size``. Plain text falls back to a fixed-size
+    sliding window with an empty heading_path. Offsets index the *stripped* text —
+    the same base persisted by ``import_text_document`` — so locate/view align."""
+    base = (text or "").strip()
+    if not base:
+        return []
+    if not _looks_like_markdown(base, mime_type):
+        return _window_span(
+            base, 0, len(base), chunk_size=chunk_size, chunk_overlap=chunk_overlap, heading_path=[]
+        )
+    # Markdown: carve contiguous sections at heading boundaries, tracking a heading
+    # stack so each section knows its full ancestor path.
+    sections: list[tuple[int, int, list]] = []
+    stack: list[tuple[int, str]] = []
+    cur_start = 0
+    cur_path: list = []
+    pos = 0
+    for line in base.splitlines(keepends=True):
+        m = _HEADING_RE.match(line)
+        if m:
+            if pos > cur_start:
+                sections.append((cur_start, pos, list(cur_path)))
+            level = len(m.group(1))
+            title = m.group(2).strip()
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            stack.append((level, title))
+            cur_path = [t for _lvl, t in stack]
+            cur_start = pos
+        pos += len(line)
+    if pos > cur_start:
+        sections.append((cur_start, pos, list(cur_path)))
+    out: list[dict] = []
+    for s, e, path in sections:
+        out.extend(
+            _window_span(
+                base, s, e, chunk_size=chunk_size, chunk_overlap=chunk_overlap, heading_path=path
+            )
+        )
+    return out
+
+
+def _embed_input(title: str, heading_path: list, body: str) -> str:
+    """Context-enriched text to *embed* (not to store): document title + heading
+    breadcrumb prepended to the chunk body. Empty parts are dropped so plain-text
+    chunks (no headings) just get the title, and an untitled doc gets the body."""
+    context = "\n".join(
+        p for p in (title or "", " > ".join(heading_path or [])) if p
+    )
+    return f"{context}\n\n{body}" if context else body
 
 
 def _merge(defaults: dict, override: Optional[dict]) -> dict:
@@ -151,6 +261,24 @@ class KnowledgeService:
         # Optional: without it every KB embeds with the local hash (old behaviour),
         # keeping offline/test paths network-free.
         self._router = router
+
+    def set_search_engine(self, search_engine, *, fallback_to_local: bool = True) -> None:
+        """Swap the primary search engine at runtime (keeps the local fallback).
+
+        ``self._local`` is left intact so degradation still works."""
+        self._search = search_engine or self._local
+        self._fallback_to_local = fallback_to_local
+
+    def rebuild_search_engine(self, vectordb) -> None:
+        """Rebuild the primary engine from the global ``knowledgebase.vectordb``
+        config section and swap it in. Called on config reload so a saved
+        vector-store change takes effect without a process restart."""
+        from app.search_engine import build_search_engine
+
+        self.set_search_engine(
+            build_search_engine(None, self._engine, vectordb=vectordb),
+            fallback_to_local=(vectordb.engine != "local"),
+        )
 
     def _resolve_default_embedding(self) -> dict:
         """The embedding_config a new KB gets when the caller doesn't specify one.
@@ -177,6 +305,43 @@ class KnowledgeService:
                     logger.warning(f"[knowledge] default embedding resolution failed: {ex!r}")
         return dict(DEFAULT_EMBEDDING_CONFIG)
 
+    def embedding_config_for(self, model_id: str) -> dict:
+        """Resolve a caller-chosen embedding model id into the frozen
+        embedding_config a KB stores. Validates the id is catalogued and is an
+        embedding model; raises ValueError otherwise (surfaced as HTTP 400)."""
+        if self._router is None:
+            raise ValueError("no model catalog configured; cannot select an embedding model")
+        try:
+            cfg = self._router.get_config(model_id)
+        except KeyError:
+            raise ValueError(f"unknown embedding model '{model_id}'")
+        if cfg.type != "embedding":
+            raise ValueError(f"model '{model_id}' is a {cfg.type} model, not an embedding model")
+        return {
+            "provider_id": cfg.provider,
+            "model": model_id,
+            "dimension": int(cfg.dimension or 1024),
+            "normalize": True,
+        }
+
+    def rerank_config_for(self, model_id: str, *, top_n: int = 5) -> dict:
+        """Resolve a caller-chosen rerank model id into a rerank_config. Validates
+        the id is catalogued and is a rerank model; raises ValueError otherwise."""
+        if self._router is None:
+            raise ValueError("no model catalog configured; cannot select a rerank model")
+        try:
+            cfg = self._router.get_config(model_id)
+        except KeyError:
+            raise ValueError(f"unknown rerank model '{model_id}'")
+        if cfg.type != "rerank":
+            raise ValueError(f"model '{model_id}' is a {cfg.type} model, not a rerank model")
+        return {
+            "enabled": True,
+            "provider_id": cfg.provider,
+            "model": model_id,
+            "top_n": int(top_n),
+        }
+
     async def create_kb(
         self,
         *,
@@ -191,57 +356,65 @@ class KnowledgeService:
         keyword_index_config: Optional[dict] = None,
         rerank_config: Optional[dict] = None,
     ) -> KnowledgeBaseRow:
-        kb_id = _uuid("kb")
         # embedding is frozen at creation. An explicit config wins; otherwise pick
         # the catalogued DashScope embedder when healthy, else the local hash.
         if embedding_config is not None:
             embedding = _merge(DEFAULT_EMBEDDING_CONFIG, embedding_config)
         else:
             embedding = self._resolve_default_embedding()
-        vector = _merge(DEFAULT_VECTOR_STORE_CONFIG, vector_store_config)
-        # Keep the vector store's declared dimension in step with the embedder
-        # (the ES mapping reads embedding_config, but keep both coherent).
-        if not (vector_store_config and "dimension" in vector_store_config):
-            vector["dimension"] = int(embedding.get("dimension") or 64)
-        vector.setdefault("namespace", kb_id)
-        vector.setdefault("index_name", f"{kb_id}_vectors_v1")
         parser = _merge(DEFAULT_PARSER_CONFIG, default_parser_config)
         retrieval = _merge(DEFAULT_RETRIEVAL_CONFIG, default_retrieval_config)
-        async with AsyncSession(self._engine) as s:
-            kb = KnowledgeBaseRow(
-                id=kb_id,
-                name=name,
-                description=description or "",
-                owner_user_id=user.id,
-                visibility=visibility,
-                default_parser_config=parser,
-                default_retrieval_config=retrieval,
-                embedding_config=embedding,
-                vector_store_config=vector,
-                keyword_index_config=_merge(DEFAULT_KEYWORD_INDEX_CONFIG, keyword_index_config),
-                rerank_config=_merge(DEFAULT_RERANK_CONFIG, rerank_config),
-            )
-            idx = KnowledgeIndexVersionRow(
-                id=_uuid("idx"),
-                kb_id=kb_id,
-                version=1,
-                status="active",
-                embedding_provider_id=str(embedding.get("provider_id") or "local_hash"),
-                embedding_model=str(embedding.get("model") or "local-hash-v1"),
-                embedding_dimension=int(embedding.get("dimension") or 64),
-                vector_store_provider_id=str(vector.get("provider_id") or "local_sql"),
-                vector_index_name=str(vector.get("index_name") or f"{kb_id}_vectors_v1"),
-                vector_namespace=str(vector.get("namespace") or kb_id),
-                keyword_index_name=f"{kb_id}_keyword_v1",
-                created_by=user.id,
-                activated_at=now_utc(),
-            )
-            kb.active_index_version_id = idx.id
-            s.add(kb)
-            s.add(idx)
-            await s.commit()
-            await s.refresh(kb)
-            return kb
+        keyword = _merge(DEFAULT_KEYWORD_INDEX_CONFIG, keyword_index_config)
+        rerank = _merge(DEFAULT_RERANK_CONFIG, rerank_config)
+
+        async def work() -> KnowledgeBaseRow:
+            kb_id = _uuid("kb")
+            # Fresh copy per attempt so setdefault of the kb_id-derived namespace
+            # tracks a regenerated id on retry.
+            vector = _merge(DEFAULT_VECTOR_STORE_CONFIG, vector_store_config)
+            # Keep the vector store's declared dimension in step with the embedder
+            # (the ES mapping reads embedding_config, but keep both coherent).
+            if not (vector_store_config and "dimension" in vector_store_config):
+                vector["dimension"] = int(embedding.get("dimension") or 64)
+            vector.setdefault("namespace", kb_id)
+            vector.setdefault("index_name", f"{kb_id}_vectors_v1")
+            async with AsyncSession(self._engine) as s:
+                kb = KnowledgeBaseRow(
+                    id=kb_id,
+                    name=name,
+                    description=description or "",
+                    owner_user_id=user.id,
+                    visibility=visibility,
+                    default_parser_config=parser,
+                    default_retrieval_config=retrieval,
+                    embedding_config=embedding,
+                    vector_store_config=vector,
+                    keyword_index_config=keyword,
+                    rerank_config=rerank,
+                )
+                idx = KnowledgeIndexVersionRow(
+                    id=_uuid("idx"),
+                    kb_id=kb_id,
+                    version=1,
+                    status="active",
+                    embedding_provider_id=str(embedding.get("provider_id") or "local_hash"),
+                    embedding_model=str(embedding.get("model") or "local-hash-v1"),
+                    embedding_dimension=int(embedding.get("dimension") or 64),
+                    vector_store_provider_id=str(vector.get("provider_id") or "local_sql"),
+                    vector_index_name=str(vector.get("index_name") or f"{kb_id}_vectors_v1"),
+                    vector_namespace=str(vector.get("namespace") or kb_id),
+                    keyword_index_name=f"{kb_id}_keyword_v1",
+                    created_by=user.id,
+                    activated_at=now_utc(),
+                )
+                kb.active_index_version_id = idx.id
+                s.add(kb)
+                s.add(idx)
+                await s.commit()
+                await s.refresh(kb)
+                return kb
+
+        return await with_id_retry(work)
 
     async def list_kbs(self, *, user: User) -> list[KnowledgeBaseRow]:
         async with AsyncSession(self._engine) as s:
@@ -339,42 +512,45 @@ class KnowledgeService:
         background worker's later ``import_text_document`` reuses this exact row
         (finds it as ``existing``) and flips it to ``indexed``.
         """
-        async with AsyncSession(self._engine) as s:
-            kb = await s.get(KnowledgeBaseRow, kb_id)
-            if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
-                raise PermissionError("knowledge base edit permission required")
-            stable_uri = uri or f"pending://{_uuid('doc')}"
-            existing = (
-                await s.exec(
-                    select(KnowledgeDocumentRow).where(
-                        KnowledgeDocumentRow.kb_id == kb_id,
-                        KnowledgeDocumentRow.uri == stable_uri,
-                        KnowledgeDocumentRow.deleted_at.is_(None),
+        async def work() -> KnowledgeDocumentRow:
+            async with AsyncSession(self._engine) as s:
+                kb = await s.get(KnowledgeBaseRow, kb_id)
+                if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
+                    raise PermissionError("knowledge base edit permission required")
+                stable_uri = uri or f"pending://{_uuid('doc')}"
+                existing = (
+                    await s.exec(
+                        select(KnowledgeDocumentRow).where(
+                            KnowledgeDocumentRow.kb_id == kb_id,
+                            KnowledgeDocumentRow.uri == stable_uri,
+                            KnowledgeDocumentRow.deleted_at.is_(None),
+                        )
                     )
+                ).first()
+                doc = existing or KnowledgeDocumentRow(
+                    id=_uuid("doc"),
+                    kb_id=kb_id,
+                    uri=stable_uri,
+                    source_type=source_type,
+                    title=title or stable_uri,
+                    created_by=user.id,
                 )
-            ).first()
-            doc = existing or KnowledgeDocumentRow(
-                id=_uuid("doc"),
-                kb_id=kb_id,
-                uri=stable_uri,
-                source_type=source_type,
-                title=title or stable_uri,
-                created_by=user.id,
-            )
-            if source_id is not None:
-                doc.source_id = source_id
-            doc.source_type = source_type
-            doc.title = title or doc.title or stable_uri
-            doc.mime_type = mime_type or "text/markdown"
-            doc.tags = tags or []
-            doc.category = category
-            doc.status = "processing"
-            doc.updated_by = user.id
-            doc.updated_at = now_utc()
-            s.add(doc)
-            await s.commit()
-            await s.refresh(doc)
-            return doc
+                if source_id is not None:
+                    doc.source_id = source_id
+                doc.source_type = source_type
+                doc.title = title or doc.title or stable_uri
+                doc.mime_type = mime_type or "text/markdown"
+                doc.tags = tags or []
+                doc.category = category
+                doc.status = "processing"
+                doc.updated_by = user.id
+                doc.updated_at = now_utc()
+                s.add(doc)
+                await s.commit()
+                await s.refresh(doc)
+                return doc
+
+        return await with_id_retry(work)
 
     async def import_text_document(
         self,
@@ -393,117 +569,172 @@ class KnowledgeService:
         custom_metadata: Optional[dict] = None,
         trigger_type: str = "manual",
     ) -> tuple[KnowledgeDocumentRow, KnowledgeIngestionJobRow]:
-        async with AsyncSession(self._engine) as s:
-            kb = await s.get(KnowledgeBaseRow, kb_id)
+        content = content or ""
+        if not content.strip():
+            raise ValueError("content is required")
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        stable_uri = uri or f"text://{digest[:16]}"
+        # Resolve the KB + do the expensive chunk/embed ONCE, outside the retry:
+        # only the row write (and its ids) is re-run on the ~never collision.
+        async with AsyncSession(self._engine) as s0:
+            kb = await s0.get(KnowledgeBaseRow, kb_id)
             if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
                 raise PermissionError("knowledge base edit permission required")
-            content = content or ""
-            if not content.strip():
-                raise ValueError("content is required")
-            digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
-            stable_uri = uri or f"text://{digest[:16]}"
-            existing = (
-                await s.exec(
-                    select(KnowledgeDocumentRow).where(
-                        KnowledgeDocumentRow.kb_id == kb_id,
-                        KnowledgeDocumentRow.uri == stable_uri,
-                        KnowledgeDocumentRow.deleted_at.is_(None),
+        parser = _merge(DEFAULT_PARSER_CONFIG, kb.default_parser_config)
+        # Structure-aware split: markdown carries a heading_path per chunk; plain
+        # text is a fixed-size window. Offsets index the stripped text (below).
+        chunks = split_document(
+            content,
+            mime_type=mime_type or "text/plain",
+            chunk_size=int(parser.get("chunk_size") or 1000),
+            chunk_overlap=int(parser.get("chunk_overlap") or 150),
+        )
+        # Verbatim copy to persist (1:1 content row). Strip so its offsets align
+        # with chunk char_start/char_end (split_document strips first too), then cap
+        # — over-long docs keep the prefix and flag ``truncated``.
+        stored_full = content.strip()
+        stored_text = stored_full[:MAX_STORED_CONTENT_CHARS]
+        stored_truncated = len(stored_full) > MAX_STORED_CONTENT_CHARS
+        # Embed a context-enriched representation (document title + heading path
+        # prepended to the body) while STORING the raw body in the chunk row. The
+        # richer input lifts recall on both the local cosine and ES kNN paths (both
+        # score the stored vector); view_file/grep stay clean on the raw text.
+        doc_title = title or stable_uri
+        embedder = build_embedder(kb.embedding_config, self._router)
+        chunk_vectors = await embedder.embed(
+            [_embed_input(doc_title, ch["heading_path"], ch["text"]) for ch in chunks],
+            text_type="document",
+        ) if chunks else []
+        active_index_version_id = kb.active_index_version_id
+
+        async def work() -> tuple[KnowledgeDocumentRow, KnowledgeIngestionJobRow, list[dict]]:
+            async with AsyncSession(self._engine) as s:
+                kb_row = await s.get(KnowledgeBaseRow, kb_id)
+                if kb_row is None or kb_row.deleted_at is not None:
+                    raise PermissionError("knowledge base edit permission required")
+                existing = (
+                    await s.exec(
+                        select(KnowledgeDocumentRow).where(
+                            KnowledgeDocumentRow.kb_id == kb_id,
+                            KnowledgeDocumentRow.uri == stable_uri,
+                            KnowledgeDocumentRow.deleted_at.is_(None),
+                        )
                     )
-                )
-            ).first()
-            doc_id = existing.id if existing else _uuid("doc")
-            await s.exec(delete(KnowledgeChunkRow).where(KnowledgeChunkRow.document_id == doc_id))
-            parser = _merge(DEFAULT_PARSER_CONFIG, kb.default_parser_config)
-            chunks = chunk_text(
-                content,
-                chunk_size=int(parser.get("chunk_size") or 1000),
-                chunk_overlap=int(parser.get("chunk_overlap") or 150),
-            )
-            # Embed every chunk body with the KB's frozen embedder (batched by the
-            # embedder itself — DashScope caps at 10/req). Same embedder is used at
-            # query time, so ingest and query vectors are always comparable.
-            embedder = build_embedder(kb.embedding_config, self._router)
-            chunk_vectors = await embedder.embed(
-                [body for body, _s, _e in chunks], text_type="document"
-            ) if chunks else []
-            indexed_at = now_utc()
-            if existing is None:
-                doc = KnowledgeDocumentRow(
-                    id=doc_id,
-                    kb_id=kb_id,
-                    uri=stable_uri,
-                    source_type=source_type,
-                    title=title or stable_uri,
-                    created_by=user.id,
-                )
-            else:
-                doc = existing
-            if source_id is not None:
-                doc.source_id = source_id
-            doc.source_type = source_type
-            doc.title = title or doc.title or stable_uri
-            doc.description = description or ""
-            doc.mime_type = mime_type or "text/plain"
-            doc.size_bytes = len(content.encode("utf-8"))
-            doc.content_hash = digest
-            doc.tags = tags or []
-            doc.category = category
-            doc.custom_metadata = custom_metadata or {}
-            doc.system_metadata = {"content_preview": content[:500]}
-            doc.status = "indexed"
-            doc.chunk_count = len(chunks)
-            doc.indexed_at = indexed_at
-            doc.updated_by = user.id
-            doc.updated_at = indexed_at
-            s.add(doc)
-            es_chunks: list[dict] = []
-            for idx, (body, start, end) in enumerate(chunks):
-                chunk_id = _uuid("chk")
-                chunk_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
-                embedding = chunk_vectors[idx] if idx < len(chunk_vectors) else []
-                s.add(
-                    KnowledgeChunkRow(
-                        id=chunk_id,
+                ).first()
+                doc_id = existing.id if existing else _uuid("doc")
+                await s.exec(delete(KnowledgeChunkRow).where(KnowledgeChunkRow.document_id == doc_id))
+                indexed_at = now_utc()
+                if existing is None:
+                    doc = KnowledgeDocumentRow(
+                        id=doc_id,
                         kb_id=kb_id,
-                        document_id=doc_id,
-                        chunk_index=idx,
-                        text=body,
-                        text_hash=chunk_hash,
-                        char_start=start,
-                        char_end=end,
-                        token_count=len(_tokens(body)),
-                        chunk_metadata={
-                            "title": doc.title,
-                            "source_uri": stable_uri,
-                            "source_type": source_type,
-                            "tags": tags or [],
-                            "category": category,
-                        },
-                        embedding=embedding,
-                        embedding_ref=f"{kb.active_index_version_id}:{chunk_id}",
-                        indexed_at=indexed_at,
+                        uri=stable_uri,
+                        source_type=source_type,
+                        title=title or stable_uri,
+                        created_by=user.id,
+                    )
+                else:
+                    doc = existing
+                if source_id is not None:
+                    doc.source_id = source_id
+                doc.source_type = source_type
+                doc.title = title or doc.title or stable_uri
+                doc.description = description or ""
+                doc.mime_type = mime_type or "text/plain"
+                doc.size_bytes = len(content.encode("utf-8"))
+                doc.content_hash = digest
+                doc.tags = tags or []
+                doc.category = category
+                doc.custom_metadata = custom_metadata or {}
+                doc.system_metadata = {"content_preview": content[:500]}
+                doc.status = "indexed"
+                doc.chunk_count = len(chunks)
+                doc.indexed_at = indexed_at
+                doc.updated_by = user.id
+                doc.updated_at = indexed_at
+                s.add(doc)
+                # Persist the exact ingested text (1:1) so full-document reads
+                # return it verbatim instead of re-stitching overlapping chunks.
+                # Upsert: drop any prior content row for this doc, then insert.
+                await s.exec(
+                    delete(KnowledgeDocumentContentRow).where(
+                        KnowledgeDocumentContentRow.document_id == doc_id
                     )
                 )
-                es_chunks.append({"chunk_id": chunk_id, "chunk_index": idx, "text": body, "embedding": embedding})
-            job = KnowledgeIngestionJobRow(
-                id=_uuid("job"),
-                kb_id=kb_id,
-                source_id=source_id,
-                document_id=doc_id,
-                type="import",
-                trigger_type=trigger_type,
-                triggered_by=user.id,
-                status="completed",
-                total_count=1,
-                succeeded_count=1,
-                started_at=indexed_at,
-                finished_at=indexed_at,
-            )
-            s.add(job)
-            await self._refresh_counts(s, kb)
-            await s.commit()
-            await s.refresh(doc)
-            await s.refresh(job)
+                s.add(
+                    KnowledgeDocumentContentRow(
+                        document_id=doc_id,
+                        kb_id=kb_id,
+                        text=stored_text,
+                        content_hash=digest,
+                        char_len=len(stored_text),
+                        truncated=stored_truncated,
+                        updated_at=indexed_at,
+                    )
+                )
+                es_chunks: list[dict] = []
+                for idx, ch in enumerate(chunks):
+                    body = ch["text"]
+                    heading_path = ch.get("heading_path") or []
+                    chunk_id = _uuid("chk")
+                    chunk_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
+                    embedding = chunk_vectors[idx] if idx < len(chunk_vectors) else []
+                    s.add(
+                        KnowledgeChunkRow(
+                            id=chunk_id,
+                            kb_id=kb_id,
+                            document_id=doc_id,
+                            chunk_index=idx,
+                            text=body,
+                            text_hash=chunk_hash,
+                            heading_path=heading_path,
+                            char_start=ch.get("char_start"),
+                            char_end=ch.get("char_end"),
+                            token_count=len(_tokens(body)),
+                            chunk_metadata={
+                                "title": doc.title,
+                                "source_uri": stable_uri,
+                                "source_type": source_type,
+                                "tags": tags or [],
+                                "category": category,
+                                "heading_path": heading_path,
+                            },
+                            embedding=embedding,
+                            embedding_ref=f"{active_index_version_id}:{chunk_id}",
+                            indexed_at=indexed_at,
+                        )
+                    )
+                    es_chunks.append(
+                        {
+                            "chunk_id": chunk_id,
+                            "chunk_index": idx,
+                            "text": body,
+                            "heading_path": heading_path,
+                            "embedding": embedding,
+                        }
+                    )
+                job = KnowledgeIngestionJobRow(
+                    id=_uuid("job"),
+                    kb_id=kb_id,
+                    source_id=source_id,
+                    document_id=doc_id,
+                    type="import",
+                    trigger_type=trigger_type,
+                    triggered_by=user.id,
+                    status="completed",
+                    total_count=1,
+                    succeeded_count=1,
+                    started_at=indexed_at,
+                    finished_at=indexed_at,
+                )
+                s.add(job)
+                await self._refresh_counts(s, kb_row)
+                await s.commit()
+                await s.refresh(doc)
+                await s.refresh(job)
+                return doc, job, es_chunks
+
+        doc, job, es_chunks = await with_id_retry(work)
         # Mirror into the search engine (ES) best-effort — SQL is the source of
         # truth, so an ES outage must not fail ingestion. No-op for local.
         await self._index_chunks_best_effort(kb, doc, es_chunks)
@@ -802,22 +1033,67 @@ class KnowledgeService:
         self,
         *,
         user: User,
-        kb_id: str,
+        kb_id: Optional[str] = None,
         document_id: Optional[str] = None,
         chunk_id: Optional[str] = None,
         mode: str = "full_doc",
         max_chars: int = 6000,
         offset: int = 0,
     ) -> dict:
-        await self.get_kb(kb_id, user=user)
         max_chars = max(1, min(int(max_chars or 6000), 50000))
         offset = max(0, int(offset or 0))
+        # kb_id may be omitted (agent tools pass only the short doc/chunk id):
+        # resolve it from the target row, then permission-check like any read.
+        if not kb_id:
+            async with AsyncSession(self._engine) as s0:
+                if chunk_id:
+                    row = await s0.get(KnowledgeChunkRow, chunk_id)
+                    if row is None or row.deleted_at is not None:
+                        raise LookupError("chunk not found")
+                elif document_id:
+                    row = await s0.get(KnowledgeDocumentRow, document_id)
+                    if row is None or row.deleted_at is not None:
+                        raise LookupError("document not found")
+                else:
+                    raise LookupError("document_id or chunk_id is required")
+                kb_id = row.kb_id
+        await self.get_kb(kb_id, user=user)
         async with AsyncSession(self._engine) as s:
             if chunk_id:
                 chunk = await s.get(KnowledgeChunkRow, chunk_id)
                 if chunk is None or chunk.kb_id != kb_id or chunk.deleted_at is not None:
                     raise LookupError("chunk not found")
                 doc = await s.get(KnowledgeDocumentRow, chunk.document_id)
+                if mode == "locate":
+                    # Open the full document at this chunk's position, with a little
+                    # preceding context, so a search hit lands in situ. Windowed via
+                    # SQL substr; falls back to the chunk's own text when the stored
+                    # copy is missing or the position is past its (capped) end.
+                    back = 400
+                    start = max(0, int(chunk.char_start or 0) - back)
+                    win = (
+                        await s.exec(
+                            select(
+                                func.substr(
+                                    KnowledgeDocumentContentRow.text,
+                                    start + 1,
+                                    max_chars,
+                                )
+                            ).where(
+                                KnowledgeDocumentContentRow.document_id
+                                == chunk.document_id
+                            )
+                        )
+                    ).first()
+                    text = win if win else chunk.text
+                    return {
+                        "kb_id": kb_id,
+                        "document_id": chunk.document_id,
+                        "chunk_id": chunk.id,
+                        "title": doc.title if doc else "",
+                        "char_start": chunk.char_start,
+                        "text": text,
+                    }
                 if mode == "chunk_neighbors":
                     rows = (
                         await s.exec(
@@ -844,6 +1120,49 @@ class KnowledgeService:
             doc = await s.get(KnowledgeDocumentRow, document_id)
             if doc is None or doc.kb_id != kb_id or doc.deleted_at is not None:
                 raise LookupError("document not found")
+            # Prefer the exact ingested text when it was stored (1:1 content row);
+            # fall back to stitching chunks for documents ingested before content
+            # was persisted. Stitching duplicates chunk-overlap regions, so it is a
+            # readable approximation, not byte-faithful.
+            #
+            # Read only the requested window: SQL substr slices in the database so a
+            # huge document never loads whole into memory. substr is 1-indexed on
+            # both SQLite and Postgres; a NULL scalar means no content row → stitch.
+            meta = (
+                await s.exec(
+                    select(
+                        KnowledgeDocumentContentRow.char_len,
+                        KnowledgeDocumentContentRow.truncated,
+                    ).where(KnowledgeDocumentContentRow.document_id == document_id)
+                )
+            ).first()
+            if meta is not None:
+                char_len, truncated = int(meta[0] or 0), bool(meta[1])
+                window = (
+                    await s.exec(
+                        select(
+                            func.substr(
+                                KnowledgeDocumentContentRow.text, offset + 1, max_chars
+                            )
+                        ).where(
+                            KnowledgeDocumentContentRow.document_id == document_id
+                        )
+                    )
+                ).first()
+                text = window or ""
+                note = ""
+                if truncated and offset + len(text) >= char_len:
+                    note = (
+                        f"\n\n[stored copy ends at {char_len} chars; this document "
+                        "was truncated — deeper text is available only via its chunks]"
+                    )
+                return {
+                    "kb_id": kb_id,
+                    "document_id": doc.id,
+                    "title": doc.title,
+                    "source_uri": doc.uri,
+                    "text": text + note,
+                }
             rows = (
                 await s.exec(
                     select(KnowledgeChunkRow).where(
@@ -861,6 +1180,62 @@ class KnowledgeService:
                 "source_uri": doc.uri,
                 "text": text[offset: offset + max_chars],
             }
+
+    async def grep_chunks(
+        self,
+        *,
+        user: User,
+        query: str,
+        kb_ids: Optional[list[str]] = None,
+        document_id: Optional[str] = None,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Literal, case-insensitive substring search across chunk text — the
+        exact-match complement to the tokenized BM25/vector ``search``. Reuses the
+        ``list_chunks`` substring path (``LIKE '%query%'``) per accessible KB and
+        merges. Permission-scoped identically to ``knowledge_search``: without
+        ``kb_ids`` it greps every KB the caller may query.
+
+        Returns dicts ``{kb_id, document_id, chunk_id, title, chunk_index, text}`` —
+        the chunk's own ``chunk_metadata.title`` when present, else the document
+        title. ``chunk_id`` lets the caller open the hit with ``view_file`` locate.
+        """
+        q = (query or "").strip()
+        if not q:
+            return []
+        limit = max(1, min(int(limit or 20), 50))
+        targets = list(kb_ids) if kb_ids else [kb.id for kb in await self.list_kbs(user=user)]
+        # Titles for the matched documents (chunk_metadata carries one, but fall
+        # back to the document row so a match always names its file).
+        out: list[dict] = []
+        for kb_id in targets:
+            if len(out) >= limit:
+                break
+            try:
+                rows, _total = await self.list_chunks(
+                    kb_id,
+                    user=user,
+                    document_id=document_id,
+                    query=q,
+                    limit=limit - len(out),
+                )
+            except PermissionError:
+                continue  # a stale/forbidden kb id in an explicit list — skip it
+            for c in rows:
+                meta = c.chunk_metadata or {}
+                out.append(
+                    {
+                        "kb_id": c.kb_id,
+                        "document_id": c.document_id,
+                        "chunk_id": c.id,
+                        "title": meta.get("title") or "",
+                        "chunk_index": c.chunk_index,
+                        "text": c.text or "",
+                    }
+                )
+                if len(out) >= limit:
+                    break
+        return out
 
     async def set_chunk_status(
         self,
@@ -916,25 +1291,29 @@ class KnowledgeService:
             raise ValueError("name is required")
         source_key = _slugify(name) or _slugify(source_type) or "source"
         self._validate_source_config(source_type, source_key, source_config or {})
-        async with AsyncSession(self._engine) as s:
-            kb = await s.get(KnowledgeBaseRow, kb_id)
-            if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
-                raise PermissionError("knowledge base edit permission required")
-            ds = KnowledgeDataSourceRow(
-                id=_uuid("ds"),
-                kb_id=kb_id,
-                name=name,
-                source_key=source_key,
-                source_type=source_type,
-                source_config=source_config or {},
-                enabled=enabled,
-                sync_schedule=sync_schedule,
-                created_by=user.id,
-            )
-            s.add(ds)
-            await s.commit()
-            await s.refresh(ds)
-            return ds
+
+        async def work() -> KnowledgeDataSourceRow:
+            async with AsyncSession(self._engine) as s:
+                kb = await s.get(KnowledgeBaseRow, kb_id)
+                if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
+                    raise PermissionError("knowledge base edit permission required")
+                ds = KnowledgeDataSourceRow(
+                    id=_uuid("ds"),
+                    kb_id=kb_id,
+                    name=name,
+                    source_key=source_key,
+                    source_type=source_type,
+                    source_config=source_config or {},
+                    enabled=enabled,
+                    sync_schedule=sync_schedule,
+                    created_by=user.id,
+                )
+                s.add(ds)
+                await s.commit()
+                await s.refresh(ds)
+                return ds
+
+        return await with_id_retry(work)
 
     async def list_data_sources(self, kb_id: str, *, user: User) -> list[KnowledgeDataSourceRow]:
         await self.get_kb(kb_id, user=user)

@@ -13,6 +13,7 @@ import {
   type KnowledgeDataSource, type KnowledgeDocument, type KnowledgeHit,
   type SearchEngineStatus,
 } from "../api/knowledge";
+import { listModels, modelsByType, type ModelInfo } from "../api/models";
 import { cn } from "../lib/cn";
 import { copyText } from "../lib/clipboard";
 
@@ -36,6 +37,37 @@ const retrievalOf = (kb: KnowledgeBase) => ({
   score_threshold: num(kb.default_retrieval_config?.score_threshold, 0),
   force_citation: kb.default_retrieval_config?.force_citation ?? true,
 });
+
+// Load the embedding/rerank model catalog once for the create/config pickers.
+// Empty lists (no models configured) → callers fall back to the local defaults.
+interface ModelCatalog {
+  embedding: ModelInfo[];
+  rerank: ModelInfo[];
+  defaultEmbedding: string | null;
+  defaultRerank: string | null;
+}
+function useModelCatalog(enabled: boolean): ModelCatalog {
+  const [cat, setCat] = useState<ModelCatalog>({
+    embedding: [], rerank: [], defaultEmbedding: null, defaultRerank: null,
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    listModels()
+      .then((c) => {
+        if (!alive) return;
+        setCat({
+          embedding: modelsByType(c, "embedding"),
+          rerank: modelsByType(c, "rerank"),
+          defaultEmbedding: c.defaultEmbedding,
+          defaultRerank: c.defaultRerank,
+        });
+      })
+      .catch(() => { /* keep empty → local defaults */ });
+    return () => { alive = false; };
+  }, [enabled]);
+  return cat;
+}
 
 const STATUS_ZH: Record<string, string> = {
   ready: "就绪", empty: "待索引", indexed: "已索引", active: "启用",
@@ -439,14 +471,22 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
   const [forceCite, setForceCite] = useState(initRet.force_citation);
   const [saving, setSaving] = useState(false);
 
+  // rerank is mutable. Select value "" = 关闭; a model id = enabled with that model.
+  const initRerank = (kb.rerank_config?.enabled ? str(kb.rerank_config?.model, "") : "");
+  const initRerankTopN = num(kb.rerank_config?.top_n, 5);
+  const [rerankModel, setRerankModel] = useState(initRerank);
+  const [rerankTopN, setRerankTopN] = useState(initRerankTopN);
+  const cat = useModelCatalog(true);
+
   const emb = kb.embedding_config ?? {};
   const vec = kb.vector_store_config ?? {};
 
+  const rerankDirty = rerankModel !== initRerank || (!!rerankModel && rerankTopN !== initRerankTopN);
   const dirty =
     name !== kb.name || description !== (kb.description ?? "") || visibility !== kb.visibility ||
     chunkSize !== initParser.chunk_size || chunkOverlap !== initParser.chunk_overlap ||
     mode !== initRet.mode || topK !== initRet.top_k ||
-    threshold !== initRet.score_threshold || forceCite !== initRet.force_citation;
+    threshold !== initRet.score_threshold || forceCite !== initRet.force_citation || rerankDirty;
   const indexAffecting = chunkSize !== initParser.chunk_size || chunkOverlap !== initParser.chunk_overlap;
 
   const reset = () => {
@@ -454,6 +494,7 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
     setChunkSize(initParser.chunk_size); setChunkOverlap(initParser.chunk_overlap);
     setMode(initRet.mode); setTopK(initRet.top_k);
     setThreshold(initRet.score_threshold); setForceCite(initRet.force_citation);
+    setRerankModel(initRerank); setRerankTopN(initRerankTopN);
   };
 
   const save = async () => {
@@ -464,6 +505,10 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
         default_parser_config: { chunk_size: chunkSize, chunk_overlap: chunkOverlap },
         default_retrieval_config: { mode, top_k: topK, score_threshold: threshold, force_citation: forceCite },
       };
+      if (rerankDirty) {
+        if (rerankModel) { patch.rerank_model = rerankModel; patch.rerank_top_n = rerankTopN; }
+        else patch.rerank_enabled = false;
+      }
       await updateKnowledgeBase(kb.id, patch);
       toast.success("配置已保存");
       await onSaved();
@@ -491,11 +536,11 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
         </div>
       </div>
 
-      {/* provider-sourced, read-only this phase */}
+      {/* Embedding (frozen at creation) + vector engine — read-only */}
       <div className={CARD}>
         <div className="mb-1 flex items-center gap-2">
-          <h3 className="text-sm font-semibold">Embedding · 向量引擎 · Reranker</h3>
-          <span className="ml-auto rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] text-[var(--text-muted)]">接入 Provider 后可选</span>
+          <h3 className="text-sm font-semibold">Embedding · 向量引擎</h3>
+          <span className="ml-auto rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] text-[var(--text-muted)]">创建时固定</span>
         </div>
         <div className="mt-3 grid gap-x-5 md:grid-cols-2">
           <div>
@@ -506,13 +551,40 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
           <div>
             <KV k="向量引擎" v={str(vec.provider_id, "local_sql")} />
             <KV k="距离度量" v={str(vec.metric, "cosine")} />
-            <KV k="Reranker" v={kb.rerank_config?.enabled ? "启用" : "关闭"} />
           </div>
         </div>
-        <div className="mt-3 flex items-start gap-2 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3 py-2.5 text-[12.5px] text-[var(--accent)]">
-          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-          <div>当前使用内置 <b>local</b> 引擎。在 <b>设置 → Providers</b> 配置 embedding / rerank / vectordb 类型的 Provider 后，这里将可切换外部模型（切换需重建索引）。</div>
+        <p className="mt-3 text-[11px] text-[var(--text-faint)]">Embedding 模型在创建时固定，更换需重建索引（暂未开放）。</p>
+      </div>
+
+      {/* Reranker — editable */}
+      <div className={CARD}>
+        <h3 className="text-sm font-semibold">Reranker</h3>
+        <p className="mt-0.5 text-xs text-[var(--text-faint)]">对召回结果重排序；随时可调整，下一次查询即生效。</p>
+        <div className="mt-3 flex flex-wrap items-end gap-5">
+          <div className="min-w-[220px] flex-1">
+            <Field label="重排模型">
+              <select className={INPUT} value={rerankModel} onChange={(e) => setRerankModel(e.target.value)}>
+                <option value="">关闭</option>
+                {/* keep the current model selectable even if the catalog hasn't loaded it */}
+                {rerankModel && !cat.rerank.some((m) => m.id === rerankModel) && (
+                  <option value={rerankModel}>{rerankModel}</option>
+                )}
+                {cat.rerank.map((m) => (
+                  <option key={m.id} value={m.id}>{m.id}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          {rerankModel && (
+            <div className="w-24"><Field label="top_n">
+              <input type="number" className={cn(INPUT, "font-mono")} value={rerankTopN}
+                onChange={(e) => setRerankTopN(Math.max(1, Number(e.target.value) || 1))} />
+            </Field></div>
+          )}
         </div>
+        {rerankModel && cat.rerank.length === 0 && (
+          <p className="mt-2 text-[11px] text-[var(--text-faint)]">当前已启用 {rerankModel}。</p>
+        )}
       </div>
 
       {/* chunking */}
@@ -1304,7 +1376,11 @@ function CreateDrawer({ open, onClose, onCreated }: {
   const [visibility, setVisibility] = useState("private");
   const [chunkSize, setChunkSize] = useState(1000);
   const [chunkOverlap, setChunkOverlap] = useState(150);
+  const [embeddingModel, setEmbeddingModel] = useState("");  // "" → catalog default
+  const [rerankModel, setRerankModel] = useState("");        // "" → disabled
   const [busy, setBusy] = useState(false);
+  const cat = useModelCatalog(open);
+  const hasEmbedding = cat.embedding.length > 0;
 
   const submit = async () => {
     if (!name.trim()) return;
@@ -1313,9 +1389,12 @@ function CreateDrawer({ open, onClose, onCreated }: {
       const kb = await createKnowledgeBase({
         name: name.trim(), description: description.trim(), visibility,
         default_parser_config: { chunk_size: chunkSize, chunk_overlap: chunkOverlap },
+        ...(embeddingModel ? { embedding_model: embeddingModel } : {}),
+        ...(rerankModel ? { rerank_model: rerankModel } : {}),
       });
       setName(""); setDescription(""); setVisibility("private");
       setChunkSize(1000); setChunkOverlap(150);
+      setEmbeddingModel(""); setRerankModel("");
       toast.success("知识库已创建");
       onCreated(kb.id);
     } catch (e) { toast.error(e instanceof Error ? e.message : "创建失败"); }
@@ -1343,10 +1422,28 @@ function CreateDrawer({ open, onClose, onCreated }: {
         <Field label="chunk_size"><input type="number" className={cn(INPUT, "font-mono")} value={chunkSize} onChange={(e) => setChunkSize(Math.max(100, Number(e.target.value) || 0))} /></Field>
         <Field label="chunk_overlap"><input type="number" className={cn(INPUT, "font-mono")} value={chunkOverlap} onChange={(e) => setChunkOverlap(Math.max(0, Number(e.target.value) || 0))} /></Field>
       </div>
-      <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--text-muted)]">
-        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-        <div>创建后使用内置 <b>local</b> embedding 与 local_sql 向量库。接入外部 Provider 后可在「配置」中切换。</div>
-      </div>
+      <Field label="Embedding 模型">
+        <select className={INPUT} value={embeddingModel} onChange={(e) => setEmbeddingModel(e.target.value)} disabled={!hasEmbedding}>
+          <option value="">
+            {hasEmbedding
+              ? `默认${cat.defaultEmbedding ? ` — ${cat.defaultEmbedding}` : ""}`
+              : "内置 local 向量（未配置外部模型）"}
+          </option>
+          {cat.embedding.map((m) => (
+            <option key={m.id} value={m.id}>{m.id}{m.dimension ? ` · ${m.dimension}d` : ""}</option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-[var(--text-faint)]">创建后不可更改（切换需重建索引）。</p>
+      </Field>
+      <Field label="Reranker（可选）">
+        <select className={INPUT} value={rerankModel} onChange={(e) => setRerankModel(e.target.value)}>
+          <option value="">不启用</option>
+          {cat.rerank.map((m) => (
+            <option key={m.id} value={m.id}>{m.id}</option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-[var(--text-faint)]">创建后可在「配置」中调整或关闭。</p>
+      </Field>
     </Drawer>
   );
 }

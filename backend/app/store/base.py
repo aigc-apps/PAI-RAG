@@ -1,12 +1,43 @@
 from __future__ import annotations
-import uuid
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional, Protocol
+from typing import Awaitable, Callable, List, Optional, Protocol, TypeVar
+
+from sqlalchemy.exc import IntegrityError
+
+# Base58 (Bitcoin/Flickr): omits 0 O I l to avoid visual/LLM ambiguity.
+_ID_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_ID_SIZE = 11  # 58**11 ≈ 2**64.4 — collision-safe, DB unique index is the backstop.
 
 
-def _uuid(prefix: str) -> str:
-    return f"{prefix}_{uuid.uuid4().hex}"
+def new_id(prefix: str) -> str:
+    """Short, collision-safe id: ``prefix_`` + 11 Base58 chars (e.g. ``doc_7Kf9Qw2mAbc``).
+
+    Short enough to hand to a model as a tool argument without inviting a
+    mis-copied character; ``secrets.choice`` is uniform (no modulo bias)."""
+    return f"{prefix}_{''.join(secrets.choice(_ID_ALPHABET) for _ in range(_ID_SIZE))}"
+
+
+# Back-compat alias — existing call sites import/use ``_uuid``.
+_uuid = new_id
+
+T = TypeVar("T")
+
+
+async def with_id_retry(work: Callable[[], Awaitable[T]], *, attempts: int = 3) -> T:
+    """Run an async unit-of-work that builds rows with fresh ``new_id()``s and commits.
+
+    Retry on a PK/unique collision — the DB index makes correctness guaranteed,
+    not merely probable. Each attempt uses a fresh ``AsyncSession`` (a failed one
+    is poisoned), so ``work`` must open its own session and regenerate its ids."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return await work()
+        except IntegrityError:
+            if attempt == attempts:
+                raise
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def new_conversation_id() -> str:

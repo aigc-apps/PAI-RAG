@@ -71,10 +71,14 @@ class KnowledgeBaseCreate(BaseModel):
     visibility: str = "private"
     default_parser_config: dict[str, Any] = Field(default_factory=dict)
     default_retrieval_config: dict[str, Any] = Field(default_factory=dict)
-    embedding_config: dict[str, Any] = Field(default_factory=dict)
+    # Caller-chosen models by qualified id ("provider/model"). embedding is frozen
+    # at creation; when omitted the KB inherits the catalog default embedder.
+    # rerank is optional (omitted → disabled) and changeable later via PATCH.
+    embedding_model: Optional[str] = None
+    rerank_model: Optional[str] = None
+    rerank_top_n: int = 5
     vector_store_config: dict[str, Any] = Field(default_factory=dict)
     keyword_index_config: dict[str, Any] = Field(default_factory=dict)
-    rerank_config: dict[str, Any] = Field(default_factory=dict)
 
 
 class KnowledgeBasePatch(BaseModel):
@@ -83,10 +87,12 @@ class KnowledgeBasePatch(BaseModel):
     visibility: Optional[str] = None
     default_parser_config: Optional[dict[str, Any]] = None
     default_retrieval_config: Optional[dict[str, Any]] = None
-    embedding_config: Optional[dict[str, Any]] = None
     vector_store_config: Optional[dict[str, Any]] = None
     keyword_index_config: Optional[dict[str, Any]] = None
-    rerank_config: Optional[dict[str, Any]] = None
+    # embedding is immutable after creation — not patchable. rerank is mutable.
+    rerank_model: Optional[str] = None
+    rerank_enabled: Optional[bool] = None
+    rerank_top_n: Optional[int] = None
 
 
 class ImportTextDocumentPayload(BaseModel):
@@ -175,7 +181,35 @@ async def create_knowledge_base(
     user: User = Depends(require_user),
     svc: KnowledgeService = Depends(get_knowledge_service),
 ):
-    row = await svc.create_kb(user=user, **payload.model_dump())
+    # Resolve caller-chosen model ids into the stored config dicts. When
+    # embedding_model is omitted, embedding_config=None triggers the KB's default
+    # embedder resolution (catalog default → local hash); passing {} would pin
+    # local hash regardless of the catalog.
+    try:
+        embedding_config = (
+            svc.embedding_config_for(payload.embedding_model)
+            if payload.embedding_model
+            else None
+        )
+        rerank_config = (
+            svc.rerank_config_for(payload.rerank_model, top_n=payload.rerank_top_n)
+            if payload.rerank_model
+            else None
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    row = await svc.create_kb(
+        user=user,
+        name=payload.name,
+        description=payload.description,
+        visibility=payload.visibility,
+        default_parser_config=payload.default_parser_config,
+        default_retrieval_config=payload.default_retrieval_config,
+        embedding_config=embedding_config,
+        vector_store_config=payload.vector_store_config,
+        keyword_index_config=payload.keyword_index_config,
+        rerank_config=rerank_config,
+    )
     return _dump(row)
 
 
@@ -199,12 +233,28 @@ async def update_knowledge_base(
     user: User = Depends(require_user),
     svc: KnowledgeService = Depends(get_knowledge_service),
 ):
+    patch: dict[str, Any] = payload.model_dump(
+        exclude_unset=True,
+        exclude={"rerank_model", "rerank_enabled", "rerank_top_n"},
+    )
+    # Compose a rerank_config patch from the friendly fields. update_kb merges it
+    # into the KB's existing rerank_config, so a partial dict is enough (e.g.
+    # toggle enabled without re-sending the model).
     try:
-        row = await svc.update_kb(
-            kb_id,
-            user=user,
-            patch=payload.model_dump(exclude_unset=True),
-        )
+        rerank_patch: dict[str, Any] = {}
+        if payload.rerank_model is not None:
+            rerank_patch = svc.rerank_config_for(
+                payload.rerank_model, top_n=payload.rerank_top_n or 5
+            )
+        if payload.rerank_enabled is not None:
+            rerank_patch["enabled"] = payload.rerank_enabled
+        if payload.rerank_top_n is not None:
+            rerank_patch["top_n"] = payload.rerank_top_n
+        if rerank_patch:
+            patch["rerank_config"] = rerank_patch
+        row = await svc.update_kb(kb_id, user=user, patch=patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise _not_found(exc) from exc
     return _dump(row)

@@ -160,7 +160,11 @@ export async function createKnowledgeBase(payload: {
   visibility?: string;
   default_parser_config?: Partial<ParserConfig>;
   default_retrieval_config?: Partial<RetrievalConfig>;
-  rerank_config?: Partial<RerankConfig>;
+  // Chosen models by qualified id ("provider/model"). embedding is frozen at
+  // creation (omit → inherit the catalog default); rerank is optional.
+  embedding_model?: string;
+  rerank_model?: string;
+  rerank_top_n?: number;
 }): Promise<KnowledgeBase> {
   return parseJson<KnowledgeBase>(
     await apiFetch("/v1/knowledge-bases", {
@@ -177,7 +181,10 @@ export type KnowledgeBasePatch = Partial<{
   visibility: string;
   default_parser_config: Partial<ParserConfig>;
   default_retrieval_config: Partial<RetrievalConfig>;
-  rerank_config: Partial<RerankConfig>;
+  // embedding is immutable after creation. rerank is mutable via friendly fields.
+  rerank_model: string;
+  rerank_enabled: boolean;
+  rerank_top_n: number;
 }>;
 
 export async function updateKnowledgeBase(

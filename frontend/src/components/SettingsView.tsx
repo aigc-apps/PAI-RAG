@@ -121,6 +121,7 @@ export function SettingsView({
   const [agentId, setAgentId] = useState(doc.default_agent || doc.agents[0]?.id || "main");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sandboxOpen, setSandboxOpen] = useState(false);
+  const [vectordbOpen, setVectordbOpen] = useState(false);
   const showAliyunDialog = useAliyunDialog((s) => s.show);
   const [skillInstallOpen, setSkillInstallOpen] = useState(false);
   const [yamlText, setYamlText] = useState("");
@@ -275,6 +276,7 @@ export function SettingsView({
               onConfigureSearch={() => setSearchOpen(true)}
               onConfigureSandbox={() => setSandboxOpen(true)}
               onConfigureAliyun={() => showAliyunDialog()}
+              onConfigureVectorDB={() => setVectordbOpen(true)}
               onPatchCapability={patchCapability}
             />
           )}
@@ -346,6 +348,22 @@ export function SettingsView({
               setSandboxOpen(false);
             } catch {
               toast.error("Could not save sandbox configuration");
+            }
+          }}
+        />
+      )}
+
+      {vectordbOpen && (
+        <VectorDBConfigDialog
+          doc={doc}
+          loading={loading}
+          onClose={() => setVectordbOpen(false)}
+          onSave={async (next) => {
+            try {
+              await save(next);
+              setVectordbOpen(false);
+            } catch {
+              toast.error("Could not save vector database configuration");
             }
           }}
         />
@@ -556,6 +574,7 @@ function ToolsPanel({
   onConfigureSearch,
   onConfigureSandbox,
   onConfigureAliyun,
+  onConfigureVectorDB,
   onPatchCapability,
 }: {
   tools: CapabilityConfig[];
@@ -563,6 +582,7 @@ function ToolsPanel({
   onConfigureSearch: () => void;
   onConfigureSandbox: () => void;
   onConfigureAliyun: () => void;
+  onConfigureVectorDB: () => void;
   onPatchCapability: (id: string, patch: Partial<CapabilityConfig>) => Promise<void>;
 }) {
   return (
@@ -631,6 +651,15 @@ function ToolsPanel({
                   className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
                 >
                   Configure
+                </button>
+              )}
+              {cap.id === "knowledge" && (
+                <button
+                  type="button"
+                  onClick={onConfigureVectorDB}
+                  className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+                >
+                  Vector DB
                 </button>
               )}
               {cap.id === "aliyun_pai" && (
@@ -1177,6 +1206,199 @@ function SearchConfigDialog({
             type="button"
             disabled={loading}
             onClick={saveSearch}
+            className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VectorDBConfigDialog({
+  doc,
+  loading,
+  onClose,
+  onSave,
+}: {
+  doc: AgentConfigDocument;
+  loading: boolean;
+  onClose: () => void;
+  onSave: (doc: AgentConfigDocument) => Promise<void>;
+}) {
+  const vdb = doc.knowledgebase.vectordb;
+  const [engine, setEngine] = useState<"local" | "elasticsearch">(vdb.engine);
+  const [url, setUrl] = useState(vdb.url);
+  const [indexPrefix, setIndexPrefix] = useState(vdb.index_prefix || "kb");
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyEnv, setApiKeyEnv] = useState(vdb.api_key_env);
+  const [username, setUsername] = useState(vdb.username);
+  const [password, setPassword] = useState("");
+  const [passwordEnv, setPasswordEnv] = useState(vdb.password_env);
+  const [verifyCerts, setVerifyCerts] = useState(vdb.verify_certs);
+  const [timeout, setTimeoutValue] = useState(String(vdb.timeout ?? 30));
+
+  const saveVectorDB = async () => {
+    const next: AgentConfigDocument = {
+      ...doc,
+      knowledgebase: {
+        ...doc.knowledgebase,
+        vectordb: {
+          // Spread first so untouched masked secrets ("********") flow through and
+          // the backend restores them; only override api_key/password when typed.
+          ...vdb,
+          engine,
+          url,
+          index_prefix: indexPrefix,
+          api_key_env: apiKeyEnv,
+          username,
+          password_env: passwordEnv,
+          verify_certs: verifyCerts,
+          timeout: Number(timeout) || 30,
+          ...(apiKey ? { api_key: apiKey } : {}),
+          ...(password ? { password } : {}),
+        },
+      },
+    };
+    await onSave(next);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
+      <div className="w-full max-w-xl rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] shadow-xl">
+        <div className="flex h-11 items-center border-b border-[var(--border)] px-4">
+          <div className="text-sm font-semibold">Configure Vector Database</div>
+          <button
+            type="button"
+            aria-label="Close vector database configuration"
+            onClick={onClose}
+            className="ml-auto rounded-[var(--radius-sm)] p-1 text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Engine</span>
+            <select
+              value={engine}
+              onChange={(event) => setEngine(event.target.value as "local" | "elasticsearch")}
+              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+            >
+              <option value="local">本地 (local)</option>
+              <option value="elasticsearch">Elasticsearch</option>
+            </select>
+          </label>
+
+          {engine === "elasticsearch" && (
+            <>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">URL</span>
+                <input
+                  value={url}
+                  placeholder="https://es-host:9200"
+                  onChange={(event) => setUrl(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Index Prefix</span>
+                <input
+                  value={indexPrefix}
+                  placeholder="kb"
+                  onChange={(event) => setIndexPrefix(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
+                认证：填写 API Key，或用户名 + 密码（二选一，优先使用 API Key）。密钥可直接填写或用环境变量名引用。
+              </div>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">API Key</span>
+                <input
+                  value={apiKey}
+                  type="password"
+                  placeholder={vdb.api_key ? "Already configured" : "Paste key or use env below"}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">API Key Env</span>
+                <input
+                  value={apiKeyEnv}
+                  placeholder="ELASTICSEARCH_API_KEY"
+                  onChange={(event) => setApiKeyEnv(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Username</span>
+                <input
+                  value={username}
+                  placeholder="elastic"
+                  onChange={(event) => setUsername(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Password</span>
+                <input
+                  value={password}
+                  type="password"
+                  placeholder={vdb.password ? "Already configured" : "Paste password or use env below"}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Password Env</span>
+                <input
+                  value={passwordEnv}
+                  placeholder="ELASTICSEARCH_PASSWORD"
+                  onChange={(event) => setPasswordEnv(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={verifyCerts}
+                  onChange={(event) => setVerifyCerts(event.target.checked)}
+                  className="h-4 w-4"
+                />
+                <span className="text-xs font-medium text-[var(--text-muted)]">Verify TLS certificates</span>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Timeout (seconds)</span>
+                <input
+                  value={timeout}
+                  type="number"
+                  min={1}
+                  onChange={(event) => setTimeoutValue(event.target.value)}
+                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+            </>
+          )}
+
+          <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
+            向量引擎为全局设置。切换引擎或连接后，已建知识库需重新索引才能在新的存储中检索。
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-[var(--border)] px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-[var(--radius-sm)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={saveVectorDB}
             className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
           >
             Save

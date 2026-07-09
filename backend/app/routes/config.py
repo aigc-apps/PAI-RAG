@@ -100,6 +100,12 @@ def _preserve_masked_secrets(doc: AgentConfigDocument, current: AgentConfigDocum
                 provider.settings[key] = existing.settings[key]
             else:
                 provider.settings.pop(key, None)
+    # knowledgebase.vectordb is a typed section (not a provider); restore masked
+    # ES secrets from the on-disk config so a re-save of "********" doesn't blank them.
+    vdb, cur_vdb = doc.knowledgebase.vectordb, current.knowledgebase.vectordb
+    for key in ("api_key", "password"):
+        if getattr(vdb, key) == "********":
+            setattr(vdb, key, getattr(cur_vdb, key, "") or "")
 
 
 @router.get("/v1/setup")
@@ -137,6 +143,7 @@ async def update_agent_config(
     existing = load_agent_config(path)
     existing.setup = payload.setup
     existing.models = payload.models
+    existing.knowledgebase = payload.knowledgebase
     existing.skills = payload.skills
     existing.default_agent = payload.default_agent
     existing.agents = payload.agents

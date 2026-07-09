@@ -8,12 +8,13 @@ vi.mock("../../api/conversations", () => ({
 }));
 vi.mock("../../api/client", () => ({ streamResponse: vi.fn() }));
 vi.mock("../../api/models", () => ({
-  listModels: vi.fn().mockResolvedValue({ ids: [], default: "" }),
+  listModels: vi.fn().mockResolvedValue({ ids: [], default: "", models: [], defaultEmbedding: null, defaultRerank: null }),
 }));
 vi.mock("../../api/agentConfig", () => ({
   getSetup: vi.fn().mockResolvedValue({
     setup: { completed: true, skipped_steps: [] },
     models: {},
+    knowledgebase: { vectordb: { engine: "local", url: "", index_prefix: "kb", api_key: "", api_key_env: "", username: "", password: "", password_env: "", verify_certs: true, timeout: 30, status: "healthy", secret_configured: false } },
     skills: { root: "./data/skills", mount: { mount_root: "/mnt/skills" } },
     default_agent: "main",
     agents: [],

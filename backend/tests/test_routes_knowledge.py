@@ -164,3 +164,111 @@ def test_disable_chunk_removes_it_from_search():
     )
     assert search.status_code == 200
     assert search.json()["data"] == []
+
+
+# ---- Embedding/rerank model selection at KB create + update ----
+
+from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
+
+
+def _router():
+    cat = ModelCatalog(
+        default_model="dashscope/qwen3.7-plus",
+        default_embedding_model="dashscope/text-embedding-v4",
+        default_rerank_model="dashscope/qwen3-rerank",
+        providers=[
+            ProviderConfig(name="dashscope", base_url="https://ds/v1", api_key="k", models=[
+                ModelSpec(id="qwen3.7-plus"),
+                ModelSpec(id="text-embedding-v4", type="embedding", protocol="dashscope", dimension=1024),
+                ModelSpec(id="qwen3-rerank", type="rerank", protocol="dashscope"),
+            ]),
+        ],
+    )
+    return ProviderRouter(cat)
+
+
+def _client_with_router(*, user_id="u_owner", role="admin"):
+    engine = make_engine("sqlite+aiosqlite:///:memory:")
+    asyncio.run(create_all(engine))
+    knowledge = KnowledgeService(engine, router=_router())
+    queue = JobQueue(engine, concurrency=1)
+    register_knowledge_handlers(queue, knowledge)
+    app = FastAPI()
+    app.state.app_state = AppState(
+        store=InMemoryStore(), llm=None, default_model="test/echo",
+        knowledge=knowledge, jobs=queue,
+    )
+    app.include_router(knowledge_router)
+    apply_auth(app, user_id=user_id, role=role)
+    return TestClient(app)
+
+
+def test_create_kb_with_embedding_model_freezes_config():
+    c = _client_with_router()
+    r = c.post("/v1/knowledge-bases", json={
+        "name": "KB", "embedding_model": "dashscope/text-embedding-v4"})
+    assert r.status_code == 200, r.text
+    emb = r.json()["embedding_config"]
+    assert emb["model"] == "dashscope/text-embedding-v4"
+    assert emb["provider_id"] == "dashscope"
+    assert emb["dimension"] == 1024
+
+
+def test_create_kb_default_embedding_uses_catalog_when_router_present():
+    # No embedding_model chosen -> inherits the catalog default (not local hash).
+    c = _client_with_router()
+    r = c.post("/v1/knowledge-bases", json={"name": "KB"})
+    assert r.status_code == 200, r.text
+    assert r.json()["embedding_config"]["model"] == "dashscope/text-embedding-v4"
+
+
+def test_create_kb_default_embedding_is_local_hash_without_router():
+    c = _client()  # no router configured
+    r = c.post("/v1/knowledge-bases", json={"name": "KB"})
+    assert r.status_code == 200, r.text
+    assert r.json()["embedding_config"]["model"] == "local-hash-v1"
+
+
+def test_create_kb_unknown_embedding_model_400():
+    c = _client_with_router()
+    r = c.post("/v1/knowledge-bases", json={"name": "KB", "embedding_model": "dashscope/nope"})
+    assert r.status_code == 400
+    assert "unknown embedding model" in r.json()["detail"]
+
+
+def test_create_kb_wrong_type_embedding_model_400():
+    c = _client_with_router()
+    r = c.post("/v1/knowledge-bases", json={"name": "KB", "embedding_model": "dashscope/qwen3-rerank"})
+    assert r.status_code == 400
+    assert "not an embedding model" in r.json()["detail"]
+
+
+def test_update_kb_rerank_model_and_toggle():
+    c = _client_with_router()
+    kb = c.post("/v1/knowledge-bases", json={"name": "KB"}).json()
+    # rerank off by default
+    assert kb["rerank_config"].get("enabled") in (False, None)
+
+    # choose a rerank model
+    r = c.patch(f"/v1/knowledge-bases/{kb['id']}", json={
+        "rerank_model": "dashscope/qwen3-rerank", "rerank_top_n": 8})
+    assert r.status_code == 200, r.text
+    rc = r.json()["rerank_config"]
+    assert rc["enabled"] is True
+    assert rc["model"] == "dashscope/qwen3-rerank"
+    assert rc["top_n"] == 8
+
+    # disable without re-sending the model (merge keeps the model)
+    r2 = c.patch(f"/v1/knowledge-bases/{kb['id']}", json={"rerank_enabled": False})
+    assert r2.status_code == 200, r2.text
+    rc2 = r2.json()["rerank_config"]
+    assert rc2["enabled"] is False
+    assert rc2["model"] == "dashscope/qwen3-rerank"
+
+
+def test_update_kb_bad_rerank_model_400():
+    c = _client_with_router()
+    kb = c.post("/v1/knowledge-bases", json={"name": "KB"}).json()
+    r = c.patch(f"/v1/knowledge-bases/{kb['id']}", json={"rerank_model": "dashscope/text-embedding-v4"})
+    assert r.status_code == 400
+    assert "not a rerank model" in r.json()["detail"]

@@ -143,7 +143,7 @@ def test_stream_path_persists_and_is_retrievable():
         raw = "".join(chunk for chunk in r.iter_text())
     # extract the response id from the SSE payloads
     import json, re
-    ids = re.findall(r'"id":\s*"(resp_[0-9a-f]+)"', raw)
+    ids = re.findall(r'"id":\s*"(resp_[1-9A-HJ-NP-Za-km-z]+)"', raw)
     assert ids, "no response id in stream"
     rid = ids[0]
     got = c.get(f"/v1/responses/{rid}")
