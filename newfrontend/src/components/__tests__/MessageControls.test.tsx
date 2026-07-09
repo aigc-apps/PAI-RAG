@@ -5,6 +5,12 @@ import { MessageControls } from "../MessageControls";
 
 describe("MessageControls", () => {
   beforeEach(() => {
+    // copyText() only uses navigator.clipboard in a secure context; jsdom
+    // reports isSecureContext=false, so force it on to exercise that path.
+    Object.defineProperty(window, "isSecureContext", {
+      value: true,
+      configurable: true,
+    });
     Object.assign(navigator, {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
     });

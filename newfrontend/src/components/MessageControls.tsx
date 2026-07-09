@@ -1,5 +1,7 @@
 import { Copy, RefreshCw, Check } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { copyText } from "../lib/clipboard";
 import type { ChatMessage } from "../types";
 
 export function MessageControls({
@@ -14,9 +16,12 @@ export function MessageControls({
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+    if (await copyText(text)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } else {
+      toast.error("复制失败");
+    }
   };
 
   return (

@@ -1,0 +1,125 @@
+"""End-to-end test for the agent-facing knowledge_search tool.
+
+Exercises the online query path the way the agent hits it: build a live
+KnowledgeService, ingest docs, set a ToolScope (as the run loop does per turn),
+invoke the tool fn, and assert formatting + permission scoping.
+"""
+
+import asyncio
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from agent.tools.builtin.knowledge import make_knowledge_search_tool
+from agent.tools.scope import ToolScope, reset_current_tool_scope, set_current_tool_scope
+from app.db import create_all, make_engine
+from app.knowledge import KnowledgeService
+from app.store.base import User
+
+
+ALICE = User(id="u_alice", email="alice@x.io", role="user")
+BOB = User(id="u_bob", email="bob@x.io", role="user")
+
+
+async def _seed():
+    engine = make_engine("sqlite+aiosqlite:///:memory:")
+    await create_all(engine)
+    svc = KnowledgeService(engine)
+
+    # A public KB anyone can query.
+    pub = await svc.create_kb(user=ALICE, name="Public Docs", visibility="public")
+    await svc.import_text_document(
+        pub.id, user=ALICE, title="安装指南",
+        content="安装 PAI 平台需要先配置环境变量，然后运行安装脚本完成部署。",
+        uri="docs/install",
+    )
+    # A private KB only Alice can query.
+    priv = await svc.create_kb(user=ALICE, name="Alice Secret", visibility="private")
+    await svc.import_text_document(
+        priv.id, user=ALICE, title="机密调优",
+        content="机密的性能调优参数与内部基准数据。",
+        uri="docs/secret-tuning",
+    )
+    return svc, pub, priv
+
+
+def test_knowledge_search_returns_ranked_snippets_with_sources():
+    async def scenario():
+        svc, pub, _priv = await _seed()
+        tool = make_knowledge_search_tool(svc)
+        out = await tool.fn(query="安装 PAI")
+        return out
+
+    token = set_current_tool_scope(ToolScope(user_id=ALICE.id, metadata={"role": "user"}))
+    try:
+        out = asyncio.run(scenario())
+    finally:
+        reset_current_tool_scope(token)
+
+    assert "安装指南" in out
+    assert "docs/install" in out  # source cited
+    assert "score" in out
+
+
+def test_knowledge_search_respects_kb_visibility():
+    """Bob (not the owner) must not retrieve passages from Alice's private KB,
+    even though the private doc is the strongest lexical match for the query."""
+    async def scenario():
+        svc, _pub, _priv = await _seed()
+        tool = make_knowledge_search_tool(svc)
+        bob_view = None
+        alice_view = None
+
+        tok_b = set_current_tool_scope(ToolScope(user_id=BOB.id, metadata={"role": "user"}))
+        try:
+            bob_view = await tool.fn(query="机密 调优")
+        finally:
+            reset_current_tool_scope(tok_b)
+
+        tok_a = set_current_tool_scope(ToolScope(user_id=ALICE.id, metadata={"role": "user"}))
+        try:
+            alice_view = await tool.fn(query="机密 调优")
+        finally:
+            reset_current_tool_scope(tok_a)
+        return bob_view, alice_view
+
+    bob_view, alice_view = asyncio.run(scenario())
+    assert "机密调优" not in bob_view          # private doc hidden from Bob
+    assert "机密调优" in alice_view            # owner can retrieve it
+
+
+def test_knowledge_search_explicit_kb_ids_scope():
+    async def scenario():
+        svc, pub, priv = await _seed()
+        tool = make_knowledge_search_tool(svc)
+        tok = set_current_tool_scope(ToolScope(user_id=ALICE.id, metadata={"role": "user"}))
+        try:
+            # restrict to the public KB → the private tuning doc must not appear
+            out = await tool.fn(query="调优", kb_ids=[pub.id])
+        finally:
+            reset_current_tool_scope(tok)
+        return out
+
+    out = asyncio.run(scenario())
+    assert "机密调优" not in out
+
+
+def test_knowledge_search_empty_and_no_kb_messages():
+    async def scenario():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        svc = KnowledgeService(engine)
+        tool = make_knowledge_search_tool(svc)
+
+        tok = set_current_tool_scope(ToolScope(user_id="nobody", metadata={"role": "user"}))
+        try:
+            no_kb = await tool.fn(query="anything")
+            blank = await tool.fn(query="   ")
+        finally:
+            reset_current_tool_scope(tok)
+        return no_kb, blank
+
+    no_kb, blank = asyncio.run(scenario())
+    assert "No knowledge bases" in no_kb
+    assert "non-empty" in blank

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { streamResponse } from "../api/client";
 import { cancelResponse, streamResume } from "../api/responses";
+import { truncateLastTurn } from "../api/conversations";
 import { useChatStore } from "../store/chat";
 import { useConversationsStore } from "../store/conversations";
 import {
@@ -104,6 +105,7 @@ export function useResponsesChat() {
         const stream = streamResponse(
           {
             model: chat.model,
+            agent_id: chat.agentId || undefined,
             input: trimmed,
             conversation: chat.conversationId,
             previous_response_id: chat.lastResponseId,
@@ -145,7 +147,48 @@ export function useResponsesChat() {
   }, []);
 
   const regenerate = useCallback(async () => {
-    if (lastInput.current) await send(lastInput.current);
+    if (sendInFlight.current || resuming.current) return;
+    // Re-run the most recent user turn. Source the prompt from the store's last
+    // user message rather than the in-memory `lastInput` ref — the ref is only
+    // populated by an in-session send(), so after a reload or opening a saved
+    // conversation it is empty and the button would silently no-op.
+    const chat = useChatStore.getState();
+    const msgs = chat.messages;
+    let userIdx = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "user" && msgs[i].text.trim()) {
+        userIdx = i;
+        break;
+      }
+    }
+    const text = (userIdx >= 0 ? msgs[userIdx].text : lastInput.current).trim();
+    if (!text) return;
+
+    // The server keeps the full transcript, so to truly regenerate (replace the
+    // last answer, not append a duplicate turn) we drop the last turn on the
+    // server first, then re-run the same prompt. If that fails (turn already
+    // gone / not the tail / never persisted) we fall back to a plain resend.
+    let respId: string | undefined;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "assistant" && msgs[i].responseId) {
+        respId = msgs[i].responseId;
+        break;
+      }
+    }
+    if (chat.conversationId && respId && userIdx >= 0) {
+      try {
+        const { previous_response_id } = await truncateLastTurn(
+          chat.conversationId,
+          respId
+        );
+        useChatStore
+          .getState()
+          .dropLastTurn(userIdx, previous_response_id ?? undefined);
+      } catch {
+        // couldn't truncate — leave messages as-is and just resend (appends)
+      }
+    }
+    await send(text);
   }, [send]);
 
   const resumeIfInterrupted = useCallback(async () => {

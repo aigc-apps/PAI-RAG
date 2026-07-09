@@ -118,16 +118,18 @@ async def build_context(
     if conversation_id is None:
         conversation_id = new_conversation_id()
 
+    # Resolve the selected agent profile up front — it steers the persona name,
+    # the toolbox, and the extra instructions below. None when no agent_config
+    # (unit tests) or no matching profile, in which case behavior is unchanged.
+    agent_profile = _resolve_agent_profile(agent_config, request)
+
     override = dict(request.soul or {})
+    if agent_profile is not None and getattr(agent_profile, "name", ""):
+        override.setdefault("name", agent_profile.name)
     effective_soul = soul.merge(override)
 
     if registry is not None:
-        selected = (
-            effective_soul.tools_enabled
-            if effective_soul.tools_enabled is not None
-            else registry.names()
-        )
-        toolbox = registry.build_toolbox(selected)
+        toolbox = registry.build_toolbox(_select_tool_names(registry, effective_soul, agent_profile))
     else:
         toolbox = ToolBox([])
 
@@ -150,7 +152,6 @@ async def build_context(
     if uid:
         memories = [m.text for m in await store.list_memories(uid, limit=MEMORY_INJECT_LIMIT)]
     current_turn = _input_to_turn(request.input)
-    agent_profile = _resolve_agent_profile(agent_config, request)
     enabled_skill_ids = _enabled_skill_ids(agent_config, agent_profile)
     skill_packages = _skill_packages(agent_config)
     skill_instructions = _active_skill_instructions(
@@ -167,10 +168,12 @@ async def build_context(
         if agent_config is not None
         else []
     )
+    profile_instructions = (getattr(agent_profile, "instructions", "") or "").strip() if agent_profile else ""
     instructions = "\n\n".join(
         s
         for s in [
             (effective_soul.extra_instructions or "").strip(),
+            profile_instructions,
             (request.instructions or "").strip(),
             skill_instructions.strip(),
         ]
@@ -325,6 +328,29 @@ def _resolve_agent_profile(agent_config, request: ResponsesRequest):
     requested_id = request.agent_id or (request.metadata or {}).get("agent_id")
     agent_id = requested_id or getattr(agent_config, "default_agent", "main")
     return next((item for item in agents if item.id == agent_id), agents[0] if agents else None)
+
+
+def _select_tool_names(registry, soul, agent_profile) -> List[str]:
+    """Effective toolbox = the soul's base selection, then narrowed by the agent
+    profile's include/exclude. ``include`` (when non-empty) restricts to that set;
+    ``exclude`` always subtracts. No profile → unchanged soul/registry behavior."""
+    available = registry.names()
+    base = soul.tools_enabled if soul.tools_enabled is not None else available
+    tools_cfg = getattr(agent_profile, "tools", None) if agent_profile is not None else None
+    include = list(getattr(tools_cfg, "include", []) or [])
+    exclude = set(getattr(tools_cfg, "exclude", []) or [])
+    if include:
+        base = [n for n in include if n in available]
+    return [n for n in base if n not in exclude]
+
+
+def resolve_agent_model(agent_config, request: ResponsesRequest) -> Optional[str]:
+    """The model the selected agent profile pins, if any — used by the route to
+    default ``request.model`` before the client's own choice/override."""
+    profile = _resolve_agent_profile(agent_config, request)
+    if profile is not None:
+        return (getattr(profile, "model", "") or "") or None
+    return None
 
 
 def _agent_id(agent_config, agent_profile) -> str:

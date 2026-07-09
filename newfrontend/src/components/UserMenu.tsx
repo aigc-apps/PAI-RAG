@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { KeyRound, LogOut, ShieldCheck } from "lucide-react";
+import { ChevronsUpDown, KeyRound, LogOut, Settings2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "../store/auth";
 import { changePassword } from "../api/auth";
@@ -75,7 +75,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function UserMenu() {
+export function UserMenu({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [open, setOpen] = useState(false);
@@ -105,20 +105,47 @@ export function UserMenu() {
           type="button"
           aria-label="Account menu"
           onClick={() => setOpen((o) => !o)}
-          className="grid h-7 w-7 place-items-center rounded-full bg-[var(--accent)]/15 text-xs font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/25"
+          className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-left hover:bg-[var(--surface-2)]"
         >
-          {initialOf(user?.email)}
+          <span className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-[var(--accent)]/15 text-xs font-semibold text-[var(--accent)]">
+            {initialOf(user?.email)}
+          </span>
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-sm font-medium text-[var(--text)]">
+              {user?.email ?? "Account"}
+            </span>
+            {user?.role && (
+              <span className="block truncate text-xs capitalize text-[var(--text-muted)]">
+                {user.role}
+              </span>
+            )}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
         </button>
 
         {open && (
           <>
             {/* click-away backdrop */}
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-xl">
+            {/* Opens upward + left-aligned — the menu lives at the bottom-left of the sidebar. */}
+            <div className="absolute left-0 bottom-full z-50 mb-2 w-56 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-xl">
               <div className="border-b border-[var(--border)] px-3 py-2">
                 <div className="truncate text-sm font-medium">{user?.email ?? "Account"}</div>
                 <div className="text-xs capitalize text-[var(--text-muted)]">{user?.role}</div>
               </div>
+              {onOpenSettings && (
+                <button
+                  type="button"
+                  className={itemCls}
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenSettings();
+                  }}
+                >
+                  <Settings2 className="h-4 w-4 text-[var(--text-muted)]" />
+                  Settings
+                </button>
+              )}
               <button
                 type="button"
                 className={itemCls}

@@ -12,6 +12,7 @@ from agent.tools.builtin.install_skill import make_install_skill_tool
 from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
 from agent.tools.builtin.load_skill import make_load_skill_tool
 from agent.tools.builtin.read_skill_resource import make_read_skill_resource_tool
+from agent.tools.builtin.knowledge import make_knowledge_search_tool
 from agent.tools.search_providers import make_search_provider
 from agent.tools.sandbox_providers import make_sandbox_provider
 from agent.custom_skills import discover_skill_packages, skill_sources
@@ -23,12 +24,20 @@ def build_default_registry(
     search_provider: Optional[SearchProvider] = None,
     agent_config=None,
     on_config_change: Optional[Callable[[], Any]] = None,
+    knowledge_service=None,
 ) -> ToolRegistry:
     """Assemble the default registry. current_datetime + web_fetch always; web_search
-    only when a provider is injected or `settings.search_provider != "none"`."""
+    only when a provider is injected or `settings.search_provider != "none"`;
+    knowledge_search only when a live KnowledgeService is passed in."""
     reg = ToolRegistry()
     reg.register(make_current_datetime_tool())
     reg.register(make_web_fetch_tool())
+
+    # knowledge_search: the agent's online query path into the KB. Registered only
+    # when the host wires in a live KnowledgeService (lean_main / reload_app_state);
+    # agents opt in via tools.include ("knowledge_search").
+    if knowledge_service is not None:
+        reg.register(make_knowledge_search_tool(knowledge_service))
 
     provider = search_provider
     if provider is None:

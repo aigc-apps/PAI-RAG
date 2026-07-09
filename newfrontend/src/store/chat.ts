@@ -59,13 +59,16 @@ interface ChatState {
   messages: ChatMessage[];
   status: "idle" | "streaming";
   model: string;
+  agentId: string;
   conversationId?: string;
   lastResponseId?: string;
   appendMessage: (m: ChatMessage) => void;
   updateLast: (patch: Partial<ChatMessage>) => void;
   setStatus: (status: "idle" | "streaming") => void;
   setModel: (model: string) => void;
+  setAgent: (agentId: string) => void;
   setAnchors: (a: { conversationId?: string; lastResponseId?: string }) => void;
+  dropLastTurn: (fromIndex: number, lastResponseId?: string) => void;
   loadHistory: (detail: ConversationDetail) => void;
   reset: () => void;
 }
@@ -74,6 +77,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   status: "idle",
   model: "",
+  agentId: "",
   conversationId: undefined,
   lastResponseId: undefined,
 
@@ -92,10 +96,20 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setStatus: (status) => set({ status }),
   setModel: (model) => set({ model }),
+  setAgent: (agentId) => set({ agentId }),
   setAnchors: ({ conversationId, lastResponseId }) =>
     set((s) => ({
       conversationId: conversationId ?? s.conversationId,
       lastResponseId: lastResponseId ?? s.lastResponseId,
+    })),
+
+  // Regenerate support: drop the last turn (user + assistant from fromIndex on)
+  // and rewind the response anchor. Unlike setAnchors this WRITES the anchor
+  // verbatim, so it can clear it to undefined when the first turn is removed.
+  dropLastTurn: (fromIndex, lastResponseId) =>
+    set((s) => ({
+      messages: s.messages.slice(0, fromIndex),
+      lastResponseId,
     })),
 
   loadHistory: (detail) =>

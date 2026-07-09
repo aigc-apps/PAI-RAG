@@ -25,6 +25,7 @@ dependencies = [
   "tenacity>=8.0",
   "pyjwt>=2.13.0",
   "argon2-cffi>=25.1.0",
+  "elasticsearch>=8,<9",
 ]
 
 [tool.pytest]

@@ -28,6 +28,10 @@ from app.routes.users import router as users_router
 from app.routes.config import router as config_router
 from app.routes.files import router as files_router
 from app.routes.aliyun import router as aliyun_router
+from app.routes.knowledge import router as knowledge_router
+from app.routes.agents import router as agents_router
+from app.knowledge import KnowledgeService
+from app.search_engine import build_search_engine
 from app.agent_config import apply_runtime_status, load_agent_config
 from agent.soul import Soul
 from agent.tools.defaults import build_default_registry
@@ -53,8 +57,11 @@ def _build_llm(settings) -> LeanLLM | None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    engine = None
     if settings.store_backend == "memory":
         store = InMemoryStore()
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
     else:
         # ensure the data dir exists for file-based sqlite
         if (
@@ -69,6 +76,13 @@ async def lifespan(app: FastAPI):
         store = SqlStore(engine)
     soul = Soul(name=settings.agent_name, role=settings.agent_role)
     agent_config = load_agent_config(settings.config_path)
+    # Built before the registry so knowledge_search can bind to it; the same
+    # instance is stored on AppState below and reused for the REST query routes.
+    knowledge = KnowledgeService(
+        engine,
+        search_engine=build_search_engine(settings, engine),
+        fallback_to_local=(settings.search_engine != "elasticsearch"),
+    )
     # Wire the control-plane reloader lazily: it reads app.state.app_state on
     # call (set just below), so tools like enable_skill_for_agent can refresh the
     # live registry + agent_config from boot without a restart.
@@ -76,6 +90,7 @@ async def lifespan(app: FastAPI):
         settings,
         agent_config=agent_config,
         on_config_change=lambda: reload_app_state(app.state.app_state, settings),
+        knowledge_service=knowledge,
     )
     if settings.skills_dir:
         load_skills(settings.skills_dir, registry)
@@ -86,6 +101,7 @@ async def lifespan(app: FastAPI):
         store=store, llm=_build_llm(settings), default_model=settings.default_model,
         soul=soul, registry=registry, router=provider_router,
         agent_config=runtime_agent_config,
+        knowledge=knowledge,
         memory_enabled=settings.memory_enabled,
         memory_model=settings.memory_model,
         summary_enabled=settings.summary_enabled,
@@ -139,3 +155,5 @@ app.include_router(users_router)
 app.include_router(config_router)
 app.include_router(files_router)
 app.include_router(aliyun_router)
+app.include_router(knowledge_router)
+app.include_router(agents_router)

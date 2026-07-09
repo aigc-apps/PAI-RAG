@@ -7,8 +7,8 @@ import { useResponsesChat } from "../hooks/useResponsesChat";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 import { ModelSelector } from "./ModelSelector";
+import { AgentSelector } from "./AgentSelector";
 import { ThemeToggle } from "./ThemeToggle";
-import { UserMenu } from "./UserMenu";
 import { BrandMark } from "./Sidebar";
 
 export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
@@ -68,9 +68,9 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
             </span>
           )}
         </div>
+        <AgentSelector />
         <ModelSelector model={model} onChange={setModel} />
         <ThemeToggle />
-        <UserMenu />
       </div>
 
       {/* Main area: empty state or messages + composer */}

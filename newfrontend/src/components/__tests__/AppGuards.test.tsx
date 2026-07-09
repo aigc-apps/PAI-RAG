@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 vi.mock("../../api/conversations", () => ({
   listConversations: vi.fn().mockResolvedValue([]),
@@ -62,7 +62,7 @@ describe("App auth guards", () => {
     expect(await screen.findByRole("button", { name: /sign in/i })).toBeInTheDocument();
   });
 
-  it("hides the settings gear for a regular user", async () => {
+  it("hides Settings inside the account menu for a regular user", async () => {
     setAuth({
       phase: "authenticated",
       isAdmin: false,
@@ -71,19 +71,20 @@ describe("App auth guards", () => {
     render(<App />);
     // Chat surface is up…
     expect(await screen.findByRole("textbox")).toBeInTheDocument();
-    // …but no admin control.
-    expect(screen.queryByRole("button", { name: /open settings/i })).toBeNull();
+    // …open the bottom-left account menu — a non-admin sees no Settings item.
+    fireEvent.click(await screen.findByRole("button", { name: /account menu/i }));
+    await screen.findByText(/sign out/i);
+    expect(screen.queryByText(/^settings$/i)).toBeNull();
   });
 
-  it("shows the settings gear for an admin", async () => {
+  it("shows Settings inside the account menu for an admin", async () => {
     setAuth({
       phase: "authenticated",
       isAdmin: true,
       user: { id: "a1", email: "a@b.com", role: "admin", status: "active", display_name: null },
     });
     render(<App />);
-    expect(
-      await screen.findByRole("button", { name: /open settings/i })
-    ).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /account menu/i }));
+    expect(await screen.findByText(/^settings$/i)).toBeInTheDocument();
   });
 });

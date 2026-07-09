@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.schemas import ResponsesRequest
 from app.auth import require_user
-from app.builder import build_context
+from app.builder import build_context, resolve_agent_model
 from app.deps import AppState, get_state
 from app.store.base import Item, StoredResponse, User
 from app.memory import update_user_memory, make_complete
@@ -165,7 +165,16 @@ async def create_response(
     user: User = Depends(require_user),
 ):
     if not request.model:
-        request.model = (
+        # Prefer the selected agent's pinned model, but only when the router can
+        # actually serve it — a profile referencing a since-removed model must not
+        # 404 the request; fall back to the router/app default instead.
+        candidate = resolve_agent_model(state.agent_config, request)
+        if candidate and state.router is not None:
+            try:
+                state.router.get_config(candidate)
+            except KeyError:
+                candidate = None
+        request.model = candidate or (
             state.router.default_model_id if state.router is not None else state.default_model
         )
 

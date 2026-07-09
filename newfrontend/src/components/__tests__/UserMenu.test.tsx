@@ -19,15 +19,30 @@ beforeEach(() => {
 });
 
 describe("UserMenu", () => {
-  it("shows the account initial and opens the menu with all actions", async () => {
+  it("shows the account row and opens the menu with all actions", async () => {
     render(<UserMenu />);
-    // Avatar shows the first letter of the email.
-    const avatar = screen.getByRole("button", { name: /account menu/i });
-    expect(avatar.textContent).toBe("A");
-    fireEvent.click(avatar);
+    // The whole row is the trigger: avatar initial + email are both inside it.
+    const trigger = screen.getByRole("button", { name: /account menu/i });
+    expect(trigger).toHaveTextContent("A");
+    expect(trigger).toHaveTextContent("amy@example.com");
+    fireEvent.click(trigger);
     expect(await screen.findByText(/aliyun authorization/i)).toBeInTheDocument();
     expect(screen.getByText(/change password/i)).toBeInTheDocument();
     expect(screen.getByText(/sign out/i)).toBeInTheDocument();
+  });
+
+  it("shows Settings only when onOpenSettings is provided, and invokes it", async () => {
+    const { unmount } = render(<UserMenu />);
+    fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+    await screen.findByText(/sign out/i);
+    expect(screen.queryByText(/^settings$/i)).not.toBeInTheDocument();
+    unmount();
+
+    const onOpenSettings = vi.fn();
+    render(<UserMenu onOpenSettings={onOpenSettings} />);
+    fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+    fireEvent.click(await screen.findByText(/^settings$/i));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
   it("calls logout from the menu", async () => {

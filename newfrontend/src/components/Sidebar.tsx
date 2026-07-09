@@ -1,27 +1,40 @@
 import { useEffect } from "react";
-import { Plus, Settings2, Trash2 } from "lucide-react";
+import { Database, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useConversationsStore } from "../store/conversations";
 import { useChatStore } from "../store/chat";
+import { useAgentsStore } from "../store/agents";
 import { getConversation } from "../api/conversations";
 import { cn } from "../lib/cn";
+import { UserMenu } from "./UserMenu";
 
 export function BrandMark({ size = "sm" }: { size?: "sm" | "lg" }) {
   const dotCls = size === "lg" ? "h-7 w-7" : "h-5 w-5";
   const textCls = size === "lg" ? "text-xl" : "text-sm";
+  const agents = useAgentsStore((s) => s.agents);
+  const defaultAgent = useAgentsStore((s) => s.defaultAgent);
+  const agentId = useChatStore((s) => s.agentId);
+  const name =
+    agents.find((a) => a.id === (agentId || defaultAgent))?.name || "MiniAgent";
   return (
     <div className="flex items-center gap-2">
       <span
         className={`${dotCls} rounded-[var(--radius-sm)] flex-shrink-0 bg-[var(--surface-3)]`}
       />
       <span className={`${textCls} font-semibold tracking-tight text-[var(--text)]`}>
-        Aria
+        {name}
       </span>
     </div>
   );
 }
 
-export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
+export function Sidebar({
+  onOpenSettings,
+  onOpenKnowledge,
+}: {
+  onOpenSettings?: () => void;
+  onOpenKnowledge?: () => void;
+}) {
   const items = useConversationsStore((s) => s.items);
   const selectedId = useConversationsStore((s) => s.selectedId);
   const refresh = useConversationsStore((s) => s.refresh);
@@ -65,18 +78,6 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
     <aside className="flex w-[240px] flex-col border-r border-[var(--border)] bg-[var(--surface)] h-full flex-shrink-0">
       <div className="flex items-center gap-2 px-4 h-12 border-b border-[var(--border)] flex-shrink-0">
         <BrandMark />
-        <div className="flex-1" />
-        {onOpenSettings && (
-          <button
-            type="button"
-            aria-label="Open settings"
-            title="设置"
-            onClick={onOpenSettings}
-            className="icon-btn p-1.5 text-[var(--text-muted)] hover:text-[var(--text)]"
-          >
-            <Settings2 className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       <div className="px-3 pt-3">
@@ -89,6 +90,17 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
           <Plus className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
           新建对话
         </button>
+        {onOpenKnowledge && (
+          <button
+            type="button"
+            aria-label="Open knowledge"
+            onClick={onOpenKnowledge}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
+          >
+            <Database className="h-4 w-4 flex-shrink-0" />
+            知识库
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 pb-2">
@@ -131,6 +143,11 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
             );
           })
         )}
+      </div>
+
+      {/* Account + settings, pinned to the bottom-left */}
+      <div className="border-t border-[var(--border)] p-2 flex-shrink-0">
+        <UserMenu onOpenSettings={onOpenSettings} />
       </div>
     </aside>
   );

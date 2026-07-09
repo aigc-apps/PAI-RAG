@@ -88,3 +88,67 @@ def test_delete_conversation():
     assert c.delete(f"/v1/conversations/{conv_id}").status_code == 200
     assert c.get(f"/v1/conversations/{conv_id}").status_code == 404
     assert c.delete(f"/v1/conversations/{conv_id}").status_code == 404
+
+
+def test_truncate_last_turn_removes_tail_and_rewinds_anchor():
+    c = _client()
+    first = c.post("/v1/responses", json={"input": "q1", "stream": False}).json()
+    conv_id = first["conversation"]["id"]
+    second = c.post("/v1/responses", json={
+        "input": "q2", "stream": False,
+        "previous_response_id": first["id"], "conversation": conv_id,
+    }).json()
+
+    # Regenerate the 2nd turn: drop it, anchor rewinds to the 1st response.
+    r = c.post(f"/v1/conversations/{conv_id}/truncate", json={"response_id": second["id"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["previous_response_id"] == first["id"]
+
+    detail = c.get(f"/v1/conversations/{conv_id}").json()
+    assert [m["role"] for m in detail["messages"]] == ["user", "assistant"]
+    assert detail["messages"][0]["text"] == "q1"
+    assert detail["latest_response_id"] == first["id"]
+
+    # Re-running the prompt now appends a single fresh turn (no duplicate q2).
+    third = c.post("/v1/responses", json={
+        "input": "q2", "stream": False,
+        "previous_response_id": first["id"], "conversation": conv_id,
+    }).json()
+    detail2 = c.get(f"/v1/conversations/{conv_id}").json()
+    assert [m["role"] for m in detail2["messages"]] == ["user", "assistant", "user", "assistant"]
+    assert detail2["latest_response_id"] == third["id"]
+
+
+def test_truncate_first_turn_clears_anchor():
+    c = _client()
+    first = c.post("/v1/responses", json={"input": "only", "stream": False}).json()
+    conv_id = first["conversation"]["id"]
+    r = c.post(f"/v1/conversations/{conv_id}/truncate", json={"response_id": first["id"]})
+    assert r.status_code == 200
+    assert r.json()["previous_response_id"] is None
+    detail = c.get(f"/v1/conversations/{conv_id}").json()
+    assert detail["messages"] == []
+    assert detail["latest_response_id"] is None
+
+
+def test_truncate_rejects_non_tail_response():
+    c = _client()
+    first = c.post("/v1/responses", json={"input": "q1", "stream": False}).json()
+    conv_id = first["conversation"]["id"]
+    c.post("/v1/responses", json={
+        "input": "q2", "stream": False,
+        "previous_response_id": first["id"], "conversation": conv_id,
+    })
+    # first is no longer the tail -> 409, transcript untouched.
+    r = c.post(f"/v1/conversations/{conv_id}/truncate", json={"response_id": first["id"]})
+    assert r.status_code == 409
+    detail = c.get(f"/v1/conversations/{conv_id}").json()
+    assert len(detail["messages"]) == 4
+
+
+def test_truncate_foreign_conversation_404():
+    c = _client()
+    import asyncio
+    asyncio.run(c.app.state.app_state.store.ensure_conversation("conv_other", "u2", "beta"))
+    r = c.post("/v1/conversations/conv_other/truncate", json={"response_id": "resp_x"})
+    assert r.status_code == 404

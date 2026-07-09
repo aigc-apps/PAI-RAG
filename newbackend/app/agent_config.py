@@ -139,7 +139,7 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
     agents=[
         AgentProfile(
             id="main",
-            name="Main",
+            name="MiniAgent",
             description="General-purpose assistant using the default model and safe core tools.",
             model="",
             instructions="",

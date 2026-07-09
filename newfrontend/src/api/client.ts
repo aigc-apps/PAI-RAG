@@ -3,6 +3,7 @@ import { apiFetch } from "../lib/apiFetch";
 
 export interface ResponseStreamParams {
   model: string;
+  agent_id?: string;
   input: string;
   conversation?: string;
   previous_response_id?: string;

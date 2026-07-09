@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, Check } from "lucide-react";
+import { copyText } from "../lib/clipboard";
 
 const plainOutputLanguages = new Set(["text", "txt", "plain", "plaintext", "output", "console"]);
 
@@ -13,7 +14,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   const label = isPlainOutput ? "Output" : language;
 
   const copy = async () => {
-    await navigator.clipboard.writeText(code);
+    if (!(await copyText(code))) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

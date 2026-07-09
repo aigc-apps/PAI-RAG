@@ -21,6 +21,7 @@ class AppState:
     registry: ToolRegistry = field(default_factory=ToolRegistry)
     runs: RunManager = field(default_factory=RunManager)
     router: Optional[ProviderRouter] = None
+    knowledge: object = None
     agent_config: object = None
     memory_enabled: bool = False
     memory_model: str = ""
@@ -64,5 +65,8 @@ def reload_app_state(state: AppState, settings) -> None:
         settings,
         agent_config=doc,
         on_config_change=lambda: reload_app_state(state, settings),
+        # Preserve knowledge_search across control-plane reloads by rebinding the
+        # already-live KnowledgeService (created at boot in lean_main).
+        knowledge_service=state.knowledge,
     )
     state.agent_config = apply_runtime_status(doc, settings, state.router)

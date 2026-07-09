@@ -104,6 +104,47 @@ def test_delete_conversation_cascades(make_store):
 
 
 @pytest.mark.parametrize("make_store", STORES)
+def test_truncate_last_turn_removes_items_and_rewinds(make_store):
+    async def run():
+        st = await make_store()
+        await st.ensure_conversation("conv_1", user_id="u1", title="t")
+        # turn 1 -> resp_1, turn 2 -> resp_2 (previous = resp_1)
+        await st.append_items("conv_1", [
+            Item(type="message", role="user", content={"text": "q1"}, response_id="resp_1"),
+            Item(type="message", role="assistant", content={"text": "a1"}, response_id="resp_1"),
+        ])
+        await st.save_response(StoredResponse(id="resp_1", conversation_id="conv_1", model="m", status="completed"))
+        await st.append_items("conv_1", [
+            Item(type="message", role="user", content={"text": "q2"}, response_id="resp_2"),
+            Item(type="message", role="assistant", content={"text": "a2"}, response_id="resp_2"),
+        ])
+        await st.save_response(StoredResponse(id="resp_2", conversation_id="conv_1",
+                                              previous_response_id="resp_1", model="m", status="completed"))
+        await st.touch_conversation("conv_1", last_response_id="resp_2")
+
+        # Non-tail removal is rejected; nothing changes.
+        with pytest.raises(ValueError):
+            await st.truncate_last_turn("conv_1", "resp_1")
+        # Unknown conversation raises KeyError.
+        with pytest.raises(KeyError):
+            await st.truncate_last_turn("nope", "resp_2")
+
+        prev = await st.truncate_last_turn("conv_1", "resp_2")
+        assert prev == "resp_1"
+        items = await st.get_conversation_items("conv_1")
+        assert [i.response_id for i in items] == ["resp_1", "resp_1"]
+        assert await st.get_response("resp_2") is None
+        conv = await st.get_conversation("conv_1")
+        assert conv.last_response_id == "resp_1"
+
+        # Removing the (now) first/only turn clears the anchor.
+        assert await st.truncate_last_turn("conv_1", "resp_1") is None
+        assert await st.get_conversation_items("conv_1") == []
+        assert (await st.get_conversation("conv_1")).last_response_id is None
+    _run(run)
+
+
+@pytest.mark.parametrize("make_store", STORES)
 def test_get_conversation_absent_returns_none(make_store):
     async def run():
         st = await make_store()

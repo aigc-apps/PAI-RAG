@@ -11,7 +11,7 @@ class Soul(BaseModel):
     a Soul override — no code change.
     """
 
-    name: str = "Aria"
+    name: str = "MiniAgent"
     role: str = "a general-purpose AI assistant"
     identity: str = (
         "You help people think, find information, and get work done. You are "

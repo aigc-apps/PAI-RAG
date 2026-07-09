@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { ChatView } from "./ChatView";
 import { SetupWizard } from "./SetupWizard";
 import { SettingsView } from "./SettingsView";
+import { KnowledgeView } from "./KnowledgeView";
 import { PreviewPanel } from "./PreviewPanel";
 import { AliyunAuthDialog } from "./AliyunAuthDialog";
 import { LoginView, CreateAdminView, AcceptInviteView } from "./AuthViews";
@@ -30,7 +31,7 @@ function readInviteToken(): string {
 
 export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [view, setView] = useState<"chat" | "settings">("chat");
+  const [view, setView] = useState<"chat" | "settings" | "knowledge">("chat");
   const [inviteToken, setInviteToken] = useState(readInviteToken);
 
   const phase = useAuthStore((s) => s.phase);
@@ -84,10 +85,20 @@ export function App() {
     }
   }
 
+  // Knowledge-base management is an admin-only surface (mirrors Settings): a
+  // non-admin never gets the entry point, and a stray view state falls through
+  // to chat.
+  if (view === "knowledge" && isAdmin) {
+    return <KnowledgeView onBack={() => setView("chat")} />;
+  }
+
   return (
     <div className="flex h-full bg-[var(--bg)]">
       {sidebarOpen && (
-        <Sidebar onOpenSettings={isAdmin ? () => setView("settings") : undefined} />
+        <Sidebar
+          onOpenSettings={isAdmin ? () => setView("settings") : undefined}
+          onOpenKnowledge={isAdmin ? () => setView("knowledge") : undefined}
+        />
       )}
       <main className={cn("flex flex-1 flex-col min-w-0", previewExpanded && "hidden")}>
         <ChatView onToggleSidebar={() => setSidebarOpen((o) => !o)} />

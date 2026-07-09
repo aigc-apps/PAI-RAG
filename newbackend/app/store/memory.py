@@ -44,6 +44,26 @@ class InMemoryStore:
     async def delete_response(self, response_id: str) -> None:
         self._responses.pop(response_id, None)
 
+    async def truncate_last_turn(self, conversation_id: str,
+                                 response_id: str) -> Optional[str]:
+        """Drop the last turn (its response + every item tagged with it) and
+        rewind the conversation anchor to that response's previous_response_id.
+        Only valid for the conversation's current last response — enforced so a
+        mid-thread removal can't fork the chain. Returns the new anchor (None
+        when the removed turn was the first)."""
+        conv = self._convs.get(conversation_id)
+        if conv is None:
+            raise KeyError(conversation_id)
+        resp = self._responses.get(response_id)
+        if resp is None or conv.last_response_id != response_id:
+            raise ValueError("not the conversation's last response")
+        log = self._items.get(conversation_id, [])
+        self._items[conversation_id] = [it for it in log if it.response_id != response_id]
+        self._responses.pop(response_id, None)
+        conv.last_response_id = resp.previous_response_id
+        conv.updated_at = _now()
+        return resp.previous_response_id
+
     async def resolve_history(self, previous_response_id, conversation) -> List[Item]:
         conv_id = conversation
         if previous_response_id:

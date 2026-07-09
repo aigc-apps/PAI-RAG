@@ -11,6 +11,7 @@ import {
 } from "../api/auth";
 import { useAuthStore } from "../store/auth";
 import { cn } from "../lib/cn";
+import { copyText } from "../lib/clipboard";
 
 export function UsersPanel() {
   const me = useAuthStore((s) => s.user);
@@ -53,10 +54,9 @@ export function UsersPanel() {
   };
 
   const copyLink = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    if (await copyText(url)) {
       toast.success("Invite link copied");
-    } catch {
+    } else {
       toast.error("Could not copy — select and copy manually");
     }
   };

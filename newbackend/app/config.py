@@ -9,11 +9,24 @@ class Settings(BaseSettings):
     default_model: str = "openai/gpt-4o-mini"
     db_url: str = "sqlite+aiosqlite:///./data/agent.db"
     store_backend: str = "sql"   # "sql" | "memory"
-    agent_name: str = "Aria"
+    agent_name: str = "MiniAgent"
     agent_role: str = "a general-purpose AI assistant"
     search_provider: str = "none"
     search_api_key: str = ""
     search_endpoint: str = ""
+    # Knowledge-base retrieval engine. "auto" uses Elasticsearch when
+    # `elasticsearch_url` is set (falling back to the local SQL scan if ES is
+    # unreachable), "elasticsearch" forces ES (errors when unavailable), "local"
+    # forces the built-in scan. ES gives real BM25 full-text + dense_vector kNN
+    # hybrid retrieval; the local engine is the zero-dependency dev/test default.
+    search_engine: str = "auto"   # "auto" | "elasticsearch" | "local"
+    elasticsearch_url: str = ""
+    elasticsearch_api_key: str = ""
+    elasticsearch_username: str = ""
+    elasticsearch_password: str = ""
+    elasticsearch_index_prefix: str = "kb"
+    elasticsearch_verify_certs: bool = True
+    elasticsearch_timeout: int = 30
     skills_dir: str = ""
     config_path: str = "./data/config.yaml"
     models_path: str = "./data/config.yaml"

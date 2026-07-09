@@ -96,6 +96,27 @@ class SqlStore:
             await s.exec(delete(ResponseRow).where(ResponseRow.id == response_id))
             await s.commit()
 
+    async def truncate_last_turn(self, conversation_id: str,
+                                 response_id: str) -> Optional[str]:
+        """Drop the last turn (its response + items) and rewind the conversation
+        anchor to the response's previous_response_id. Only valid for the current
+        last response. Returns the new anchor (None when it was the first turn)."""
+        async with AsyncSession(self._engine) as s:
+            conv = await s.get(ConvRow, conversation_id)
+            if conv is None:
+                raise KeyError(conversation_id)
+            resp = await s.get(ResponseRow, response_id)
+            if resp is None or conv.last_response_id != response_id:
+                raise ValueError("not the conversation's last response")
+            prev = resp.previous_response_id
+            await s.exec(delete(ItemRow).where(ItemRow.response_id == response_id))
+            await s.exec(delete(ResponseRow).where(ResponseRow.id == response_id))
+            conv.last_response_id = prev
+            conv.updated_at = _now()
+            s.add(conv)
+            await s.commit()
+        return prev
+
     async def resolve_history(self, previous_response_id: Optional[str],
                               conversation: Optional[str]) -> List[Item]:
         conv_id = conversation

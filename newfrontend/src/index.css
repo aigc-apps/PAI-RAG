@@ -24,6 +24,7 @@
   --tool-bg: #f9fafb;
   --danger: #dc2626;
   --success: #16a34a;
+  --warning: #b45309;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
   --radius: 6px;
@@ -54,6 +55,7 @@
   --tool-bg: #14171f;
   --danger: #f87171;
   --success: #4ade80;
+  --warning: #fbbf24;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
 }
