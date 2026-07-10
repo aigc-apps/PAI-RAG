@@ -179,8 +179,14 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "view_file",
                     "grep_file",
                     "list_knowledge_bases",
+                    # Sandbox execution + its file-surfacing companion. All three are
+                    # intersected with what's actually registered, so they stay off
+                    # until the sandbox.default provider (and files_url_secret, for
+                    # publish_artifact) are configured.
+                    "code_interpreter",
+                    "shell",
+                    "publish_artifact",
                 ],
-                exclude=["code_interpreter", "shell"],
             ),
             skills=AgentSkillsConfig(
                 enabled=["skill.writing", "skill.knowledge_qa"]
