@@ -1,6 +1,6 @@
 from __future__ import annotations
 import asyncio
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 from loguru import logger
 
@@ -128,8 +128,23 @@ async def build_context(
         override.setdefault("name", agent_profile.name)
     effective_soul = soul.merge(override)
 
+    # The skill catalog (L1, injected below) and the skill-loader tools are the two
+    # halves of progressive disclosure and must be coupled: whenever the catalog is
+    # present (the agent has enabled, discovered skills) the model is told to call
+    # load_skill, so those tools have to be in the toolbox even under an
+    # include-whitelist that lists only the agent's domain tools. Computed here so the
+    # force-set can be threaded into tool selection.
+    skill_packages = _skill_packages(agent_config)
+    enabled_skill_ids = _enabled_skill_ids(agent_config, agent_profile)
+    skills_active = bool(skill_packages and enabled_skill_ids)
+
     if registry is not None:
-        toolbox = registry.build_toolbox(_select_tool_names(registry, effective_soul, agent_profile))
+        toolbox = registry.build_toolbox(
+            _select_tool_names(
+                registry, effective_soul, agent_profile,
+                force=_SKILL_LOADER_TOOLS if skills_active else (),
+            )
+        )
     else:
         toolbox = ToolBox([])
 
@@ -152,8 +167,6 @@ async def build_context(
     if uid:
         memories = [m.text for m in await store.list_memories(uid, limit=MEMORY_INJECT_LIMIT)]
     current_turn = _input_to_turn(request.input)
-    enabled_skill_ids = _enabled_skill_ids(agent_config, agent_profile)
-    skill_packages = _skill_packages(agent_config)
     skill_instructions = _active_skill_instructions(
         packages=skill_packages,
         enabled_ids=enabled_skill_ids,
@@ -330,10 +343,22 @@ def _resolve_agent_profile(agent_config, request: ResponsesRequest):
     return next((item for item in agents if item.id == agent_id), agents[0] if agents else None)
 
 
-def _select_tool_names(registry, soul, agent_profile) -> List[str]:
+# The execute half of progressive disclosure. Coupled to catalog injection in
+# build_context: forced into the toolbox iff the agent has active skills, so an
+# include-whitelist or exclude can't strip the tool the catalog tells the model to
+# call. See _select_tool_names(force=...).
+_SKILL_LOADER_TOOLS = ("load_skill", "read_skill_resource")
+
+
+def _select_tool_names(registry, soul, agent_profile, *, force: Iterable[str] = ()) -> List[str]:
     """Effective toolbox = the soul's base selection, then narrowed by the agent
     profile's include/exclude. ``include`` (when non-empty) restricts to that set;
-    ``exclude`` always subtracts. No profile → unchanged soul/registry behavior."""
+    ``exclude`` always subtracts. No profile → unchanged soul/registry behavior.
+
+    ``force`` names tools a capability requires that must survive the include/exclude
+    filter (e.g. the skill loaders, which pair with an injected catalog) — added when
+    actually registered, so a catalog never advertises a filtered-out tool. Appended
+    last, preserving the configured selection's order."""
     available = registry.names()
     base = soul.tools_enabled if soul.tools_enabled is not None else available
     tools_cfg = getattr(agent_profile, "tools", None) if agent_profile is not None else None
@@ -341,7 +366,11 @@ def _select_tool_names(registry, soul, agent_profile) -> List[str]:
     exclude = set(getattr(tools_cfg, "exclude", []) or [])
     if include:
         base = [n for n in include if n in available]
-    return [n for n in base if n not in exclude]
+    selected = [n for n in base if n not in exclude]
+    for name in force:
+        if name in available and name not in selected:
+            selected.append(name)
+    return selected
 
 
 def resolve_agent_model(agent_config, request: ResponsesRequest) -> Optional[str]:
