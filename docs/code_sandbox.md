@@ -76,6 +76,14 @@ Code 沙箱会在 AI 助手需要执行代码时自动启用。当用户请求�
 
 AI 助手会自动调用 Code 沙箱工具来执行相应的 Python 代码。
 
+## 代码层（/mnt/code，可选）
+沙箱内除 `/mnt/system`（共享只读）、`/mnt/skills`（技能包只读）、`/mnt/user`（用户可写）三层挂载外，还可挂载**只读代码层 `/mnt/code`**：一个共享 NAS 导出，其下每个子目录是一个源码仓库。配置后：
+
+- 沙箱内暴露环境变量 `AGENT_CODE_PATH=/mnt/code`；
+- 当**知识库回答不了、而问题关乎本系统自身代码行为**时，助手会 `ls /mnt/code` 查看可用仓库，再用 shell / code_interpreter 以 grep、cat 探索源码作为兜底（只读，不会修改）。
+
+启用方式：给 `sandbox.default` 的 `nas_config` 填 `code_server_addr`（部署时经 config.yaml 覆盖），可选 `code_remote_path`（默认 `/code`）、`code_read_only`（默认 `true`）。不填即不挂载、助手也不会收到相关提示。部署侧需沙箱镜像预建 `/mnt/code` 目录并挂上只读代码 NAS。完整挂载契约见 [`docs/design/skill_install_mount_dependencies.md`](design/skill_install_mount_dependencies.md)。
+
 ## 使用案例
 ![](images/code_sandbox/code_sandbox_example.jpg)
 

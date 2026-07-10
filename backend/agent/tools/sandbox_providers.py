@@ -249,6 +249,13 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             nas_user_cfg.get("user_remote_path_template") or "/users/{user_id}"
         )
         self.nas_user_read_only = bool(nas_user_cfg.get("user_read_only", False))
+        # Read-only code layer at /mnt/code: a single NAS export whose
+        # subdirectories are source repositories the agent can explore when the
+        # knowledge base can't answer. Enabled purely by configuring
+        # `code_server_addr`; empty => the layer (mount + AGENT_CODE_PATH) is off.
+        self.nas_code_server_addr = str(nas_user_cfg.get("code_server_addr") or "")
+        self.nas_code_remote_path = str(nas_user_cfg.get("code_remote_path") or "/code")
+        self.nas_code_read_only = bool(nas_user_cfg.get("code_read_only", True))
         # Runtime env-var contract injected via the platform `envs` field. Only
         # the AGENT_* marker vars + session/user ids are injected here; PATH and
         # PYTHONPATH stay image-side (flat `envs` map cannot interpolate).
@@ -917,9 +924,10 @@ def _append_agent_scope(base: str, scope) -> str:
 
 def _build_nas_config(provider: "AgentRunRestSandboxProvider", scope, scope_key: str) -> Optional[Dict[str, Any]]:
     """Build the nasConfig payload: per-skill read-only mounts under
-    /mnt/skills/<id> plus a per-user read-write mount at /mnt/user. All
-    mountPoints share userId/groupId (default 1000). Returns None when no
-    mountPoints apply so the field is omitted from the create payload."""
+    /mnt/skills/<id>, a per-user read-write mount at /mnt/user, and (when
+    configured) a read-only code layer at /mnt/code. All mountPoints share
+    userId/groupId (default 1000). Returns None when no mountPoints apply so the
+    field is omitted from the create payload."""
     mount_points: List[Dict[str, Any]] = []
     for mount in scope.skill_mounts:
         if not isinstance(mount, dict):
@@ -941,6 +949,15 @@ def _build_nas_config(provider: "AgentRunRestSandboxProvider", scope, scope_key:
             "serverAddr": _join_nas_server_addr(provider.nas_user_server_addr, remote_path),
             "mountDir": "/mnt/user",
             "readOnly": provider.nas_user_read_only,
+        })
+    # Read-only code layer at /mnt/code (single shared export; repos are its
+    # subdirectories). Configured => mounted for everyone; omitted otherwise.
+    if provider.nas_code_server_addr:
+        mount_points.append({
+            "serverAddr": _join_nas_server_addr(
+                provider.nas_code_server_addr, provider.nas_code_remote_path),
+            "mountDir": "/mnt/code",
+            "readOnly": provider.nas_code_read_only,
         })
     if not mount_points:
         return None
@@ -964,6 +981,10 @@ def _build_env_contract(provider: "AgentRunRestSandboxProvider", scope, scope_ke
         "AGENT_USER_ID": str(scope.user_id or ""),
         "AGENT_SESSION_ID": scope_key,
     }
+    # Only advertise the code layer when it is actually mounted, so the agent
+    # never sees AGENT_CODE_PATH for a /mnt/code that does not exist.
+    if provider.nas_code_server_addr:
+        envs["AGENT_CODE_PATH"] = "/mnt/code"
     envs.update(provider.extra_envs)
     # Per-user Aliyun session credentials carried on the scope. The secret + token
     # keys are redacted in create-payload logs by _mask_body / _is_secret_key.

@@ -5,6 +5,12 @@ import { SettingsView } from "../SettingsView";
 import { useAgentConfigStore } from "../../store/agentConfig";
 import type { AgentConfigDocument } from "../../api/agentConfig";
 
+const generateCodeManifest = vi.fn();
+vi.mock("../../api/agentConfig", async (importActual) => ({
+  ...(await importActual<typeof import("../../api/agentConfig")>()),
+  generateCodeManifest: (agentId: string) => generateCodeManifest(agentId),
+}));
+
 const baseDoc: AgentConfigDocument = {
   setup: { completed: true, skipped_steps: [] },
   models: {},
@@ -33,6 +39,7 @@ const baseDoc: AgentConfigDocument = {
       description: "",
       model: "",
       instructions: "",
+      code_manifest: "",
       tools: { include: ["current_datetime"], exclude: ["code_sandbox"] },
       skills: { enabled: [] },
       settings: {},
@@ -92,8 +99,17 @@ const baseDoc: AgentConfigDocument = {
   ],
 };
 
+// A doc with the sandbox capability turned on, so the code-manifest section renders.
+const sandboxOnDoc: AgentConfigDocument = {
+  ...baseDoc,
+  capabilities: baseDoc.capabilities.map((c) =>
+    c.id === "sandbox" ? { ...c, enabled: true, permission: "auto", status: "ready" } : c
+  ),
+};
+
 describe("SettingsView", () => {
   beforeEach(() => {
+    generateCodeManifest.mockReset();
     useAgentConfigStore.setState({
       doc: baseDoc,
       loading: false,
@@ -215,5 +231,33 @@ describe("SettingsView", () => {
     expect(saved.knowledgebase.vectordb.engine).toBe("elasticsearch");
     expect(saved.knowledgebase.vectordb.url).toBe("https://es:9200");
     expect(saved.knowledgebase.vectordb.api_key).toBe("es-secret");
+  });
+
+  it("hides the code manifest section when the sandbox capability is off", () => {
+    // baseDoc has sandbox capability disabled; the Agents tab is the default.
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+    expect(screen.queryByText("代码库配置单")).not.toBeInTheDocument();
+  });
+
+  it("generates a code manifest and saves it onto the agent", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    generateCodeManifest.mockResolvedValue({ manifest: "- repo-a — the API server" });
+
+    render(<SettingsView doc={sandboxOnDoc} onBack={vi.fn()} />);
+
+    // Section is visible once sandbox is enabled.
+    expect(screen.getByText("代码库配置单")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /AI 生成/ }));
+
+    expect(generateCodeManifest).toHaveBeenCalledWith("main");
+    // Generated text lands in the textarea...
+    expect(await screen.findByDisplayValue("- repo-a — the API server")).toBeInTheDocument();
+    // ...and is committed via the whole-doc save.
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].code_manifest).toBe("- repo-a — the API server");
   });
 });

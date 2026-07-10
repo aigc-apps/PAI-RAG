@@ -149,3 +149,79 @@ def test_agents_endpoint_falls_back_to_default_when_no_config():
     body = r.json()
     assert body["agents"] == [{"id": "main", "name": "MiniAgent", "description": "", "model": ""}]
     assert body["default_agent"] == "main"
+
+
+# --- POST /v1/agents/{id}/code-manifest/generate --------------------------- #
+def _manifest_client(state, *, role="admin"):
+    app = FastAPI()
+    app.state.app_state = state
+    app.include_router(agents_router)
+    apply_auth(app, user_id="u1", role=role)
+    return TestClient(app)
+
+
+def test_code_manifest_generate_409_when_layer_unconfigured():
+    # registry defaults to a bare ToolRegistry with no sandbox_provider -> 409.
+    state = AppState(
+        store=InMemoryStore(), llm=None, default_model="test/echo",
+        agent_config=_cfg([AgentProfile(id="main", name="Main")]),
+    )
+    c = _manifest_client(state)
+    r = c.post("/v1/agents/main/code-manifest/generate")
+    assert r.status_code == 409, r.text
+    assert "code layer" in r.json()["error"]["message"]
+
+
+def test_code_manifest_generate_requires_admin():
+    state = AppState(
+        store=InMemoryStore(), llm=None, default_model="test/echo",
+        agent_config=_cfg([AgentProfile(id="main", name="Main")]),
+    )
+    c = _manifest_client(state, role="user")
+    r = c.post("/v1/agents/main/code-manifest/generate")
+    assert r.status_code == 403
+
+
+def test_code_manifest_generate_happy_path(monkeypatch):
+    from agent.core.events import TextDelta
+    import app.routes.agents as agents_mod
+
+    # Fake registry whose sandbox_provider advertises a mounted code layer.
+    registry = types.SimpleNamespace(
+        sandbox_provider=types.SimpleNamespace(nas_code_server_addr="10.0.0.1")
+    )
+    # Fake model router: one model, trivial config + llm.
+    model_cfg = types.SimpleNamespace(context_window=1000, max_output_tokens=100)
+    router = types.SimpleNamespace(
+        default_model_id="prov/m",
+        get_config=lambda mid: model_cfg,
+        get_llm=lambda mid: object(),
+    )
+    state = AppState(
+        store=InMemoryStore(), llm=None, default_model="prov/m",
+        agent_config=_cfg([AgentProfile(id="main", name="Main")]),
+        registry=registry, router=router,
+    )
+
+    async def fake_build_context(request, store, **kwargs):
+        return object(), None
+
+    monkeypatch.setattr(agents_mod, "build_context", fake_build_context)
+
+    class _FakeAgent:
+        max_steps = 0
+
+        async def run(self, ctx):
+            async def gen():
+                yield TextDelta(text="- repo-a — the API server\n")
+            return gen()
+
+    fake_agent = _FakeAgent()
+    state.make_agent = lambda **kw: fake_agent  # type: ignore[method-assign]
+
+    c = _manifest_client(state)
+    r = c.post("/v1/agents/main/code-manifest/generate")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"manifest": "- repo-a — the API server"}
+    # Exploration loop was capped, and nothing was persisted (InMemoryStore untouched).
+    assert fake_agent.max_steps == agents_mod._MANIFEST_MAX_STEPS

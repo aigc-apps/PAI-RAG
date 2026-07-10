@@ -150,9 +150,18 @@ async def build_context(
 
     tool_names = [t.name for t in toolbox.tools]
 
+    # The code layer is on only when the built sandbox provider resolved a code
+    # NAS server (provider is None when sandbox is disabled -> flag stays False).
+    code_layer_enabled = bool(
+        getattr(getattr(registry, "sandbox_provider", None), "nas_code_server_addr", "")
+    )
+    # Per-agent, admin-curated description of the /mnt/code repos (empty => the
+    # block falls back to discover-by-`ls`). Only meaningful when the layer is on.
+    code_manifest = getattr(agent_profile, "code_manifest", "") or ""
     system_prompt = render_stable_system_prompt(
         effective_soul, tool_names=tool_names, project_context=project_context,
         aliyun_pai_enabled=_aliyun_pai_enabled(),
+        code_layer_enabled=code_layer_enabled, code_manifest=code_manifest,
     )
 
     summary = ""

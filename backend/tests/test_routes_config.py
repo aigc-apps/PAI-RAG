@@ -96,6 +96,21 @@ def test_config_yaml_roundtrip_and_registry_reload(tmp_path, monkeypatch):
     assert search["status"] == "ready"
 
 
+def test_agent_code_manifest_survives_save_load(tmp_path):
+    from app.agent_config import (
+        load_agent_config,
+        save_agent_config,
+    )
+
+    path = str(tmp_path / "config.yaml")
+    doc = load_agent_config(path)  # missing file -> default doc
+    doc.agents[0].code_manifest = "- repo-a — the API server"
+    save_agent_config(path, doc)
+
+    reloaded = load_agent_config(path)
+    assert reloaded.agents[0].code_manifest == "- repo-a — the API server"
+
+
 def test_vectordb_secret_roundtrip_masked_and_preserved(tmp_path, monkeypatch):
     c = _client(tmp_path, monkeypatch)
     doc = c.get("/v1/config").json()

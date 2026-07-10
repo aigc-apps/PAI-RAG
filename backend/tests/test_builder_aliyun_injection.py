@@ -6,7 +6,9 @@ from app.builder import _resolve_aliyun_sandbox_env
 from app.store.memory import InMemoryStore
 from agent.integrations import aliyun_sts
 from agent.tools.scope import ToolScope
-from agent.tools.sandbox_providers import _build_env_contract, _mask_body
+from agent.tools.sandbox_providers import (
+    _build_env_contract, _build_nas_config, _mask_body,
+)
 
 
 def _agent_config(enabled=True):
@@ -128,8 +130,15 @@ def test_resolver_skips_without_base_creds(monkeypatch):
 # --------------------------------------------------------------------------- #
 # _build_env_contract merge
 # --------------------------------------------------------------------------- #
-def _fake_provider():
-    return types.SimpleNamespace(inject_env_contract=True, extra_envs={})
+def _fake_provider(code_server_addr=""):
+    return types.SimpleNamespace(
+        inject_env_contract=True, extra_envs={},
+        nas_user_id=1000, nas_group_id=1000,
+        nas_user_server_addr="", nas_user_remote_path_template="/users/{user_id}",
+        nas_user_read_only=False,
+        nas_code_server_addr=code_server_addr, nas_code_remote_path="/code",
+        nas_code_read_only=True,
+    )
 
 
 def test_env_contract_merges_aliyun_env():
@@ -145,6 +154,31 @@ def test_env_contract_unchanged_without_aliyun_env():
     scope = ToolScope(user_id="u1", metadata={})
     envs = _build_env_contract(_fake_provider(), scope, "sess:u1")
     assert not any(k.startswith("ALIBABACLOUD_") for k in envs)
+
+
+# --------------------------------------------------------------------------- #
+# code layer: /mnt/code mount + AGENT_CODE_PATH, gated on code_server_addr
+# --------------------------------------------------------------------------- #
+def test_env_contract_advertises_code_path_only_when_configured():
+    scope = ToolScope(user_id="u1", metadata={})
+    assert "AGENT_CODE_PATH" not in _build_env_contract(_fake_provider(), scope, "s:u1")
+    envs = _build_env_contract(_fake_provider("nas.example.com:/vol"), scope, "s:u1")
+    assert envs["AGENT_CODE_PATH"] == "/mnt/code"
+
+
+def test_nas_config_mounts_code_layer_read_only_when_configured():
+    scope = ToolScope(user_id="u1", skill_mounts=[])
+    cfg = _build_nas_config(_fake_provider("nas.example.com:/vol"), scope, "s:u1")
+    code = [m for m in cfg["mountPoints"] if m["mountDir"] == "/mnt/code"]
+    assert len(code) == 1
+    assert code[0]["readOnly"] is True
+    assert code[0]["serverAddr"] == "nas.example.com:/vol/code"
+
+
+def test_nas_config_omits_code_layer_when_unconfigured():
+    scope = ToolScope(user_id="u1", skill_mounts=[])
+    # No user/skill/code mounts configured -> no nasConfig at all.
+    assert _build_nas_config(_fake_provider(), scope, "s:u1") is None
 
 
 def test_mask_body_redacts_injected_sts_secrets():

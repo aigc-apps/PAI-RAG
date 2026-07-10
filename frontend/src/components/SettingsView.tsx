@@ -6,8 +6,10 @@ import {
   Database,
   GitBranch,
   Globe2,
+  Loader2,
   ShieldCheck,
   Settings2,
+  Sparkles,
   Terminal,
   Upload,
   UserRound,
@@ -20,6 +22,7 @@ import type {
   CapabilityConfig,
   AgentConfigDocument,
 } from "../api/agentConfig";
+import { generateCodeManifest } from "../api/agentConfig";
 import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
@@ -410,6 +413,85 @@ function Header({ title, body }: { title: string; body: string }) {
   );
 }
 
+/** Per-agent code-repository manifest editor. Local state (keyed on agent id by
+ * the parent, so it resets on switch) avoids a whole-document PUT per keystroke —
+ * it commits on blur and after an AI generation. The "generate" button drives the
+ * backend to explore /mnt/code with the LLM and returns Markdown for review. */
+function CodeManifestSection({
+  doc,
+  agent,
+  loading,
+  onSave,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  loading: boolean;
+  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(agent.code_manifest ?? "");
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
+
+  const commit = (next: string) => {
+    if (next !== (agent.code_manifest ?? "")) {
+      void onSave(applyAgentPatch(doc, agent.id, { code_manifest: next }));
+    }
+  };
+
+  const onGenerate = async () => {
+    setGenerating(true);
+    setError("");
+    try {
+      const { manifest } = await generateCodeManifest(agent.id);
+      setValue(manifest);
+      commit(manifest);
+      toast.success("已生成代码库配置单");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成失败");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <GitBranch className="h-4 w-4 text-[var(--text-muted)]" />
+        <h3 className="text-sm font-semibold">代码库配置单</h3>
+        <button
+          type="button"
+          onClick={() => void onGenerate()}
+          disabled={generating || loading}
+          title="让大模型进沙箱查看 /mnt/code 并生成清单"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 py-1 text-xs hover:bg-[var(--surface-2)] disabled:opacity-50"
+        >
+          {generating ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
+          {generating ? "生成中…" : "AI 生成"}
+        </button>
+      </div>
+      <p className="mb-2 text-xs text-[var(--text-muted)]">
+        描述该 agent 可访问的代码库（挂载在只读 <code>/mnt/code</code>）。这段会加入 system
+        prompt：知识库查不到时，模型据此到对应仓库探索源码。
+      </p>
+      <textarea
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => commit(value)}
+        rows={8}
+        placeholder="- repo-a — 简介…&#10;- repo-b — 简介…"
+        className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs"
+      />
+      {error && (
+        <p className="mt-2 text-xs text-[var(--warning,#d97706)]">{error}</p>
+      )}
+    </div>
+  );
+}
+
 function AgentsPanel({
   doc,
   agent,
@@ -506,6 +588,16 @@ function AgentsPanel({
               />
             </label>
           </div>
+
+          {(doc.capabilities ?? []).some((c) => c.id === "sandbox" && c.enabled) && (
+            <CodeManifestSection
+              key={agent.id}
+              doc={doc}
+              agent={agent}
+              loading={loading}
+              onSave={onSave}
+            />
+          )}
 
           <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
             <h3 className="mb-3 text-sm font-semibold">Tools For This Agent</h3>

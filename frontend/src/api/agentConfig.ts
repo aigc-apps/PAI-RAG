@@ -114,6 +114,9 @@ export interface AgentProfile {
   description: string;
   model: string;
   instructions: string;
+  // Markdown describing the repos under the read-only /mnt/code layer; injected
+  // into the system prompt when that layer is mounted. Can be AI-generated.
+  code_manifest: string;
   tools: AgentToolsConfig;
   skills: AgentSkillsConfig;
   settings: Record<string, unknown>;
@@ -210,6 +213,19 @@ export async function saveAgentConfig(
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(doc),
+    })
+  );
+}
+
+/** Ask the backend to explore the sandbox /mnt/code layer with the LLM and
+ * return a generated Markdown manifest. Not persisted — the caller reviews it
+ * and saves it onto the agent profile via saveAgentConfig. */
+export async function generateCodeManifest(
+  agentId: string
+): Promise<{ manifest: string }> {
+  return jsonOrThrow(
+    await apiFetch(`/v1/agents/${encodeURIComponent(agentId)}/code-manifest/generate`, {
+      method: "POST",
     })
   );
 }
