@@ -68,8 +68,15 @@ Resources:
                 'sts:ExternalId':
                   Ref: ExternalId
       # Permission policy = WHAT the assumed role can do in this account.
+      # PolicyName MUST be per-user unique: Aliyun materializes a role `Policies`
+      # entry as an ACCOUNT-GLOBAL custom RAM policy, not an AWS-style inline one.
+      # A fixed name ("pai-eas-fullaccess") means the first user to authorize
+      # creates it account-wide and every later user's stack fails with
+      # "The policy ... is already existed". `${ROLE_NAME}` is already per-user
+      # unique (baked in at serve time), so deriving the policy name from it makes
+      # each user's stack self-contained. Do not hardcode a shared name here.
       Policies:
-        - PolicyName: pai-eas-fullaccess
+        - PolicyName: '${ROLE_NAME}-pai-eas'
           PolicyDocument:
             Version: '1'
             Statement:
