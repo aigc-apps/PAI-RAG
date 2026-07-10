@@ -278,23 +278,35 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
     fresh creds before ALIBABACLOUD_SESSION_EXPIRATION so long sessions never see
     an expired token.
     """
+    # Capability off (or anonymous) is the normal "aliyun not wanted" state — stay
+    # silent so non-aliyun deployments don't log every turn.
     if not uid or not _aliyun_pai_enabled(agent_config):
         return {}
     try:
         from agent.integrations import aliyun_sts
         from app.config import get_settings
 
+        # Past this point the capability IS enabled, so an empty result means the
+        # sandbox silently gets no aliyun creds and its CLI reports "profile default
+        # is not configure yet". That failure is invisible in the sandbox request
+        # logs (the env contract simply lacks ALIBABACLOUD_*), so name the reason
+        # here — this is the one line that tells an operator which knob is missing.
+        def _skip(reason: str) -> dict:
+            logger.info("aliyun sandbox env: no creds for user={} ({})", uid, reason)
+            return {}
+
         settings = get_settings()
         if not settings.aliyun_authz_secret:
-            return {}
+            return _skip("aliyun_authz_secret not configured")
         user = await store.get_user(uid)
         binding = (user.meta or {}).get("aliyun_pai") if user else None
         if not binding or not binding.get("role_arn"):
-            return {}
+            return _skip("user has no PAI authorization binding (not authorized, "
+                         "or authorization did not persist a role_arn)")
         pai_settings = aliyun_sts.provider_settings(agent_config)
         base_ak, base_sk = aliyun_sts.read_base_creds(pai_settings)
         if not (base_ak and base_sk):
-            return {}
+            return _skip("developer base AK/SK not configured")
         # STS AssumeRole is region-agnostic (endpoint selection only); the minted
         # token works in every region. Prefer the binding's default/service region,
         # falling back to legacy single-region bindings, then the configured region.
@@ -328,6 +340,10 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
         # into a long-lived cached sandbox before this token expires.
         if creds.expiration:
             env["ALIBABACLOUD_SESSION_EXPIRATION"] = creds.expiration
+        logger.info(
+            "aliyun sandbox env: minted STS creds for user={} region={} expires={}",
+            uid, default_region, creds.expiration or "?",
+        )
         return env
     except Exception as exc:  # noqa: BLE001 — injection is strictly best-effort
         logger.warning("aliyun sandbox env skipped for user={}: {}", uid, exc)
