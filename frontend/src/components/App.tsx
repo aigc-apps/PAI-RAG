@@ -5,6 +5,7 @@ import { ChatView } from "./ChatView";
 import { SetupWizard } from "./SetupWizard";
 import { SettingsView } from "./SettingsView";
 import { KnowledgeView } from "./KnowledgeView";
+import { UsersView } from "./UsersView";
 import { PreviewPanel } from "./PreviewPanel";
 import { AliyunAuthDialog } from "./AliyunAuthDialog";
 import { LoginView, CreateAdminView, AcceptInviteView } from "./AuthViews";
@@ -31,7 +32,7 @@ function readInviteToken(): string {
 
 export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [view, setView] = useState<"chat" | "settings" | "knowledge">("chat");
+  const [view, setView] = useState<"chat" | "settings" | "knowledge" | "users">("chat");
   const [inviteToken, setInviteToken] = useState(readInviteToken);
 
   const phase = useAuthStore((s) => s.phase);
@@ -92,12 +93,19 @@ export function App() {
     return <KnowledgeView onBack={() => setView("chat")} />;
   }
 
+  // User management is likewise an admin-only surface, reached from the account
+  // menu rather than Settings (Settings is agent configuration).
+  if (view === "users" && isAdmin) {
+    return <UsersView onBack={() => setView("chat")} />;
+  }
+
   return (
     <div className="flex h-full bg-[var(--bg)]">
       {sidebarOpen && (
         <Sidebar
           onOpenSettings={isAdmin ? () => setView("settings") : undefined}
           onOpenKnowledge={isAdmin ? () => setView("knowledge") : undefined}
+          onOpenUsers={isAdmin ? () => setView("users") : undefined}
         />
       )}
       <main className={cn("flex flex-1 flex-col min-w-0", previewExpanded && "hidden")}>

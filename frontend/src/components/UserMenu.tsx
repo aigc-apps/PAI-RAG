@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ChevronsUpDown, KeyRound, LogOut, Settings2, ShieldCheck } from "lucide-react";
+import { ChevronsUpDown, KeyRound, LogOut, Settings2, ShieldCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "../store/auth";
 import { changePassword } from "../api/auth";
@@ -75,7 +75,13 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function UserMenu({ onOpenSettings }: { onOpenSettings?: () => void }) {
+export function UserMenu({
+  onOpenSettings,
+  onOpenUsers,
+}: {
+  onOpenSettings?: () => void;
+  onOpenUsers?: () => void;
+}) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [open, setOpen] = useState(false);
@@ -144,6 +150,19 @@ export function UserMenu({ onOpenSettings }: { onOpenSettings?: () => void }) {
                 >
                   <Settings2 className="h-4 w-4 text-[var(--text-muted)]" />
                   Settings
+                </button>
+              )}
+              {onOpenUsers && (
+                <button
+                  type="button"
+                  className={itemCls}
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenUsers();
+                  }}
+                >
+                  <Users className="h-4 w-4 text-[var(--text-muted)]" />
+                  Users
                 </button>
               )}
               <button

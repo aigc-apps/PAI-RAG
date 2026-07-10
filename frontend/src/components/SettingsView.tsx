@@ -23,11 +23,11 @@ import type {
 import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
-import { UsersPanel } from "./UsersPanel";
 import { ModelsPanel } from "./ModelsPanel";
+import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
 import { ThemeToggle } from "./ThemeToggle";
 
-type Tab = "agents" | "tools" | "models" | "skills" | "providers" | "users" | "yaml";
+type Tab = "agents" | "tools" | "models" | "knowledge" | "skills" | "providers" | "yaml";
 
 function statusClass(status: string) {
   if (status === "ready" || status === "healthy") return "text-[var(--success)]";
@@ -210,9 +210,9 @@ export function SettingsView({
     { id: "agents", label: "Agents" },
     { id: "tools", label: "Tools" },
     { id: "models", label: "Models" },
+    { id: "knowledge", label: "Knowledge Base" },
     { id: "skills", label: "Skills" },
     { id: "providers", label: "Providers" },
-    { id: "users", label: "Users" },
     { id: "yaml", label: "YAML" },
   ];
 
@@ -283,8 +283,10 @@ export function SettingsView({
             />
           )}
 
-          {tab === "models" && (
-            <ModelsPanel
+          {tab === "models" && <ModelsPanel doc={doc} />}
+
+          {tab === "knowledge" && (
+            <KnowledgeBasePanel
               doc={doc}
               onConfigureVectorDB={() => setVectordbOpen(true)}
             />
@@ -302,8 +304,6 @@ export function SettingsView({
           {tab === "providers" && (
             <ProvidersPanel doc={doc} onEditYaml={openYaml} />
           )}
-
-          {tab === "users" && <UsersPanel />}
 
           {tab === "yaml" && (
             <YamlPanel

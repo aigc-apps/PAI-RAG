@@ -49,7 +49,7 @@ beforeEach(() => {
 describe("ModelsPanel", () => {
   it("adds a model provider", async () => {
     const user = userEvent.setup();
-    render(<ModelsPanel doc={docWith({})} onConfigureVectorDB={vi.fn()} />);
+    render(<ModelsPanel doc={docWith({})} />);
 
     await user.type(screen.getByLabelText("Provider name"), "dashscope");
     await user.type(
@@ -73,7 +73,7 @@ describe("ModelsPanel", () => {
 
   it("registers an embedding model as the default for its type", async () => {
     const user = userEvent.setup();
-    render(<ModelsPanel doc={withProvider} onConfigureVectorDB={vi.fn()} />);
+    render(<ModelsPanel doc={withProvider} />);
 
     await user.selectOptions(screen.getByLabelText("Model provider"), "dashscope");
     await user.selectOptions(screen.getByLabelText("Model type"), "embedding");
@@ -96,7 +96,7 @@ describe("ModelsPanel", () => {
 
   it("registers a rerank model and hides the dimension field", async () => {
     const user = userEvent.setup();
-    render(<ModelsPanel doc={withProvider} onConfigureVectorDB={vi.fn()} />);
+    render(<ModelsPanel doc={withProvider} />);
 
     await user.selectOptions(screen.getByLabelText("Model provider"), "dashscope");
     await user.selectOptions(screen.getByLabelText("Model type"), "rerank");
@@ -126,7 +126,7 @@ describe("ModelsPanel", () => {
         },
       ],
     });
-    render(<ModelsPanel doc={doc} onConfigureVectorDB={vi.fn()} />);
+    render(<ModelsPanel doc={doc} />);
 
     await user.click(screen.getByRole("button", { name: "Delete provider dashscope" }));
 
@@ -134,41 +134,5 @@ describe("ModelsPanel", () => {
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     expect(saved.models.providers).toHaveLength(0);
     expect(saved.models.default_embedding_model).toBeUndefined();
-  });
-
-  it("shows a read-only knowledge base summary of embedding/rerank models", () => {
-    const doc = docWith({
-      default_embedding_model: "dashscope/text-embedding-v4",
-      default_rerank_model: "dashscope/gte-rerank",
-      providers: [
-        {
-          name: "dashscope",
-          models: [
-            { id: "text-embedding-v4", type: "embedding", dimension: 1024 },
-            { id: "text-embedding-v3", type: "embedding", dimension: 1024 },
-            { id: "gte-rerank", type: "rerank" },
-          ],
-        },
-      ],
-    });
-    render(<ModelsPanel doc={doc} onConfigureVectorDB={vi.fn()} />);
-
-    // Both defaults are surfaced, and every registered model of each role is
-    // listed (embedding chips appear in both the Models table and the summary).
-    expect(screen.getByText("Knowledge Base")).toBeInTheDocument();
-    expect(screen.getAllByText("dashscope/text-embedding-v4").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("dashscope/gte-rerank").length).toBeGreaterThan(0);
-    // Vector DB is unconfigured (engine local by default) → shown as 未配置
-    // (both the URL line and the status chip).
-    expect(screen.getAllByText("未配置").length).toBeGreaterThan(0);
-  });
-
-  it("opens the vector database dialog via Configure", async () => {
-    const user = userEvent.setup();
-    const onConfigureVectorDB = vi.fn();
-    render(<ModelsPanel doc={docWith({})} onConfigureVectorDB={onConfigureVectorDB} />);
-
-    await user.click(screen.getByRole("button", { name: "Configure" }));
-    expect(onConfigureVectorDB).toHaveBeenCalledOnce();
   });
 });

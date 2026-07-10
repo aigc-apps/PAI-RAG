@@ -45,6 +45,20 @@ describe("UserMenu", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
+  it("shows Users only when onOpenUsers is provided, and invokes it", async () => {
+    const { unmount } = render(<UserMenu />);
+    fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+    await screen.findByText(/sign out/i);
+    expect(screen.queryByText(/^users$/i)).not.toBeInTheDocument();
+    unmount();
+
+    const onOpenUsers = vi.fn();
+    render(<UserMenu onOpenUsers={onOpenUsers} />);
+    fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+    fireEvent.click(await screen.findByText(/^users$/i));
+    expect(onOpenUsers).toHaveBeenCalledTimes(1);
+  });
+
   it("calls logout from the menu", async () => {
     const logout = vi.fn().mockResolvedValue(undefined);
     useAuthStore.setState({ logout });
