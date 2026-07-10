@@ -189,8 +189,10 @@ cp .env.example .env
 | `USE_CUDA` | 是否启用 GPU 加速 | `false` |
 | `MAX_RECURSION_STEPS` | Agent 最大推理步数 | `20` |
 | `ENABLE_MINERU` | 启用 MinerU 高级 PDF 解析 | `false` |
+| `FILES_URL_SECRET` | 文件产物分发（预览/下载）签名密钥，留空则关闭 | 空 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry 追踪导出地址（或用 `LANGFUSE_*`），留空则不追踪 | 空 |
 
-完整配置请参考 [环境变量文档](docs/env.md)。
+完整配置请参考 [环境变量文档](docs/env.md)（含文件产物分发 `FILES_*`、可观测性 `OTEL_*` / `LANGFUSE_*` 等）。
 
 ---
 

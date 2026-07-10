@@ -88,3 +88,39 @@ CREATE DATABASE your_database_name CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode
 | POSTGRES_PASSWORD | STRING | 密码 | 
 | POSTGRES_DATABASE | STRING | 数据库名称 |
 
+
+### 5. 文件产物分发（Artifact）
+
+Agent 在沙箱 `/mnt/user` 下生成的文件（报告、图表、HTML 等），可通过 `publish_artifact` 工具在前端预览或下载。该能力默认关闭，**必须设置 `FILES_URL_SECRET` 才启用**（为空时 `publish_artifact` 直接拒绝，属于 fail-closed）。
+
+| 名称 | 取值 | 说明 |
+| - | - | - |
+| FILES_URL_SECRET | STRING | 签发 `/v1/files` 访问令牌的 HMAC 密钥。为空则文件分发功能关闭。请设置为足够长的随机串 |
+| FILES_NAS_LOCAL_ROOT | STRING | 后端主机上挂载的、与沙箱 `/mnt/user` 同一份 NAS 导出的本地路径。设置后直接读该挂载分发文件；留空则回退为从活动沙箱读回字节 |
+| FILES_MAX_BYTES | INT | 可内联预览的单文件大小上限，默认 `26214400`（25 MiB）。超限文件仍可下载，但不内联预览 |
+
+### 6. 可观测性（OpenTelemetry / Langfuse 追踪）
+
+记录 AgentLoop 的每一步——大模型推理（输入/输出/token）与工具输入/输出——为一棵嵌套 trace，走 OpenInference 语义约定，可被 Langfuse、Arize Phoenix、Jaeger 等原生消费。**不设置任何变量即为关闭**（零开销）。二选一：
+
+**方式 A — 标准 OTLP**（任意 OpenTelemetry Collector / Jaeger / Tempo）：
+
+| 名称 | 取值 | 说明 |
+| - | - | - |
+| OTEL_EXPORTER_OTLP_ENDPOINT | STRING | OTLP 服务地址（含端口），如 `http://otel-collector:4318` |
+| OTEL_EXPORTER_OTLP_HEADERS | STRING | 鉴权头，`key=value` 逗号分隔，如 `Authorization=Basic <base64>` |
+| OTEL_EXPORTER_OTLP_PROTOCOL | enum, `http/protobuf`/`grpc` | 传输协议，默认 `http/protobuf`（http 会自动补 `/v1/traces`） |
+| OTEL_SERVICE_NAME | STRING | 服务名，默认 `pai-agent` |
+| OTEL_TRACES_SAMPLER_ARG | FLOAT | 采样率 0..1，默认 `1.0`（全采） |
+| OTEL_TRACES_ENABLED | enum, `auto`/`true`/`false` | 总开关，默认 `auto`（解析到端点即启用） |
+
+**方式 B — Langfuse**（自动推导上面的 endpoint 与 Basic 鉴权头）：
+
+| 名称 | 取值 | 说明 |
+| - | - | - |
+| LANGFUSE_HOST | STRING | Langfuse 地址，默认 `https://cloud.langfuse.com` |
+| LANGFUSE_PUBLIC_KEY | STRING | Public Key（`pk-lf-...`） |
+| LANGFUSE_SECRET_KEY | STRING | Secret Key（`sk-lf-...`），endpoint = `{HOST}/api/public/otel` |
+
+> 注意：真正导出需运行环境已安装 `opentelemetry` / `openinference` 相关依赖（`poetry install`）；未安装时代码走 fallback，不报错但也不产出 span。
+
