@@ -295,15 +295,9 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             provider_refs=["sandbox.default"],
             settings={"runtime": "local", "network": False},
         ),
-        CapabilityConfig(
-            id="aliyun_pai",
-            kind="core_tool",
-            name="PAI Authorization",
-            description="Query a customer's Aliyun PAI/EAS status via a cross-account role.",
-            enabled=False,
-            permission="auto",
-            provider_refs=["aliyun_pai.default"],
-        ),
+        # NOTE: PAI authorization is no longer a togglable capability — it is gated by
+        # the ALIYUN_PAI_ENABLED env switch (Settings.aliyun_pai_enabled, default on).
+        # The aliyun_pai.default provider below still holds the base AK/SK env names.
         CapabilityConfig(
             id="install_skill",
             kind="core_tool",
@@ -382,6 +376,12 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
                 by_id[item["id"]].update(item)
             else:
                 merged[collection].append(item)
+    # aliyun_pai is no longer a capability — it's the ALIYUN_PAI_ENABLED env switch.
+    # An older config.yaml still carries the entry (and the merge above would re-append
+    # it), so drop it here; a subsequent save persists the removal. Forward-only.
+    merged["capabilities"] = [
+        c for c in merged["capabilities"] if c.get("id") != "aliyun_pai"
+    ]
     return AgentConfigDocument(**merged)
 
 
@@ -586,10 +586,12 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
             sandbox_provider.error if sandbox_provider else "Sandbox provider is not configured"
         )
 
+    # PAI authorization is gated by ALIYUN_PAI_ENABLED (no capability toggle). Grade
+    # the provider so the Settings panel still shows whether the feature is wired.
     pai_provider = providers.get("aliyun_pai.default")
-    pai = caps.get("aliyun_pai")
     if pai_provider is not None:
         pai_settings = pai_provider.settings or {}
+        pai_on = bool(getattr(settings, "aliyun_pai_enabled", True))
         # Mirror the authorize route's runtime prerequisites exactly (same env-var
         # names via read_base_creds), so status can't disagree with behavior.
         base_ak, base_sk = aliyun_sts.read_base_creds(pai_settings)
@@ -600,22 +602,12 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
             and base_ak and base_sk
         )
         pai_provider.status = (
-            "healthy" if pai and pai.enabled and configured
-            else "missing_config" if pai and pai.enabled
+            "healthy" if pai_on and configured
+            else "missing_config" if pai_on
             else "untested"
         )
         pai_provider.error = None if pai_provider.status != "missing_config" else (
             "Set ALIYUN_AUTHZ_SECRET, upload the ROS template (ros_template_url), and configure base AK/SK"
-        )
-    if pai is not None:
-        pai.status = (
-            "ready"
-            if pai.enabled and pai_provider and pai_provider.status == "healthy"
-            else "missing_config" if pai.enabled
-            else "disabled"
-        )
-        pai.error = None if pai.status == "ready" else (
-            pai_provider.error if pai_provider else "Aliyun PAI provider is not configured"
         )
 
     for cap in out.capabilities:

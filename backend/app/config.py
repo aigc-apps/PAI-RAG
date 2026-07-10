@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     # long-term AK/SK reuse the sandbox provider's AGENTRUN_ACCESS_KEY_ID/_SECRET
     # env. `aliyun_ros_template_url`, when set, overrides the self-hosted template
     # with a public-read OSS URL of authorize-role.yaml for the one-click link.
+    # Master switch for the whole PAI authorization feature (env ALIYUN_PAI_ENABLED,
+    # default on). Replaces the old per-config `aliyun_pai` capability toggle, which
+    # persisted in config.yaml and could get stuck at false, silently shadowing a
+    # fully-wired deployment. Off => no authorize card, no sandbox creds, no prompt
+    # guidance. The feature still stays inert until authz secret + ROS template +
+    # base AK/SK are configured and each user authorizes individually.
+    aliyun_pai_enabled: bool = True
     aliyun_authz_secret: str = ""
     aliyun_developer_account_id: str = ""
     aliyun_default_region: str = "cn-hangzhou"

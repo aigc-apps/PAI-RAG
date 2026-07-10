@@ -76,13 +76,14 @@ def test_resolver_emits_available_regions_from_binding(monkeypatch):
     assert env["PAI_AVAILABLE_REGIONS"] == "cn-shanghai"
 
 
-def test_resolver_skips_when_capability_disabled(monkeypatch):
+def test_resolver_skips_when_feature_env_off(monkeypatch):
     _env(monkeypatch)
+    monkeypatch.setenv("ALIYUN_PAI_ENABLED", "false")  # master kill-switch off
     monkeypatch.setattr(aliyun_sts, "assume_role", lambda *a, **k: 1 / 0)  # must not be called
 
     async def run():
         store = await _store_with_binding()
-        return await _resolve_aliyun_sandbox_env(store, _agent_config(enabled=False), "u1")
+        return await _resolve_aliyun_sandbox_env(store, _agent_config(), "u1")
 
     assert asyncio.run(run()) == {}
 

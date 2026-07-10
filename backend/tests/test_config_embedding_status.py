@@ -118,3 +118,24 @@ def test_mask_secrets_masks_vectordb_credentials():
     assert masked.knowledgebase.vectordb.password == "********"
     # original untouched
     assert doc.knowledgebase.vectordb.api_key == "real-key"
+
+
+def test_aliyun_pai_capability_removed_but_provider_kept():
+    from app.agent_config import _merge_default
+    ids = {c.id for c in DEFAULT_DOCUMENT.capabilities}
+    assert "aliyun_pai" not in ids  # gated by ALIYUN_PAI_ENABLED now, not a toggle
+    assert any(p.id == "aliyun_pai.default" for p in DEFAULT_DOCUMENT.providers)
+    # A legacy config.yaml still carrying the stale capability is pruned on load.
+    merged = _merge_default({"capabilities": [
+        {"id": "aliyun_pai", "kind": "core_tool", "name": "PAI", "enabled": False},
+    ]})
+    assert "aliyun_pai" not in {c.id for c in merged.capabilities}
+
+
+def test_apply_runtime_status_grades_pai_provider_without_capability():
+    # Feature on by default (getattr fallback) but nothing configured -> the provider
+    # grades missing_config and reconciliation never touches the absent capability.
+    doc = DEFAULT_DOCUMENT.model_copy(deep=True)
+    out = apply_runtime_status(doc, _settings(), None)
+    pai = next(p for p in out.providers if p.id == "aliyun_pai.default")
+    assert pai.status == "missing_config"

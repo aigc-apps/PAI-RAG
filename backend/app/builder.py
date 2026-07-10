@@ -152,7 +152,7 @@ async def build_context(
 
     system_prompt = render_stable_system_prompt(
         effective_soul, tool_names=tool_names, project_context=project_context,
-        aliyun_pai_enabled=_aliyun_pai_enabled(agent_config),
+        aliyun_pai_enabled=_aliyun_pai_enabled(),
     )
 
     summary = ""
@@ -230,14 +230,18 @@ def _capability_enabled(agent_config, cap_id: str) -> bool:
     return False
 
 
-def _aliyun_pai_enabled(agent_config) -> bool:
-    return _capability_enabled(agent_config, "aliyun_pai")
+def _aliyun_pai_enabled() -> bool:
+    """Master switch for the PAI authorization feature (env ALIYUN_PAI_ENABLED,
+    default on). Replaces the old per-config `aliyun_pai` capability toggle, which
+    could persist as false and silently shadow a fully-wired deployment."""
+    from app.config import get_settings
+    return bool(get_settings().aliyun_pai_enabled)
 
 
 async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
     """Cheap booleans (no AssumeRole) for the reactive authorization card.
 
-    ``aliyun_authz_available`` = the aliyun_pai capability is enabled AND the
+    ``aliyun_authz_available`` = the PAI feature is on (ALIYUN_PAI_ENABLED) AND the
     deployment can actually run an authorization (HMAC secret, developer base
     AK/SK, and a resolvable ROS template — explicit URL or a self-hostable
     developer account id). ``aliyun_bound`` = this user has a stored binding,
@@ -245,7 +249,7 @@ async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
     offer "re-verify" instead of a fresh "authorize". Returns ``{}`` when authz
     isn't available, so the shell tool never surfaces a card that can't work.
     """
-    if not uid or not _aliyun_pai_enabled(agent_config):
+    if not uid or not _aliyun_pai_enabled():
         return {}
     try:
         from agent.integrations import aliyun_sts
@@ -275,7 +279,7 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
     """Best-effort per-user Aliyun session env for the sandbox.
 
     If the user has authorized PAI access (a stored role binding) and the
-    capability is enabled, AssumeRole to mint temp creds (up to 12h) and return
+    feature is on (ALIYUN_PAI_ENABLED), AssumeRole to mint temp creds and return
     the three ALIBABACLOUD_* env vars plus region hints and the token expiry.
     NEVER raises — any failure (no binding, expired trust, missing CLI/creds)
     returns {} so sandbox creation is unaffected. The sandbox provider re-injects
@@ -297,8 +301,8 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
 
     if not uid:
         return _skip("no user id on this turn")
-    if not _aliyun_pai_enabled(agent_config):
-        return _skip("aliyun_pai capability disabled")
+    if not _aliyun_pai_enabled():
+        return _skip("ALIYUN_PAI_ENABLED is off")
     try:
         from agent.integrations import aliyun_sts
         from app.config import get_settings
