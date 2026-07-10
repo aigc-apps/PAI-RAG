@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { useChatStore } from "../store/chat";
+import { activeRuntime, EMPTY_MESSAGES, useChatStore } from "../store/chat";
 import { UserMessage } from "./UserMessage";
 import { AssistantMessage } from "./AssistantMessage";
 
@@ -8,7 +8,7 @@ import { AssistantMessage } from "./AssistantMessage";
 const NEAR_BOTTOM_PX = 80;
 
 export function MessageList({ onRegenerate }: { onRegenerate: () => void }) {
-  const messages = useChatStore((s) => s.messages);
+  const messages = useChatStore((s) => activeRuntime(s)?.messages ?? EMPTY_MESSAGES);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Follow new content only while the user is pinned to the bottom. Set false

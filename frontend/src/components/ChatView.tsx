@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { PanelLeft } from "lucide-react";
-import { useChatStore } from "../store/chat";
+import { activeRuntime, EMPTY_MESSAGES, useChatStore } from "../store/chat";
 import { useConversationsStore } from "../store/conversations";
 import { useComposer } from "../store/composer";
 import { useResponsesChat } from "../hooks/useResponsesChat";
@@ -14,7 +14,7 @@ import { BrandMark } from "./Sidebar";
 export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const model = useChatStore((s) => s.model);
   const setModel = useChatStore((s) => s.setModel);
-  const messages = useChatStore((s) => s.messages);
+  const messages = useChatStore((s) => activeRuntime(s)?.messages ?? EMPTY_MESSAGES);
   const conversations = useConversationsStore((s) => s.items);
   const selectedId = useConversationsStore((s) => s.selectedId);
   const { send, stop, regenerate, isStreaming, resumeIfInterrupted } =

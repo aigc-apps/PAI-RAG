@@ -41,17 +41,26 @@ export function Sidebar({
   const select = useConversationsStore((s) => s.select);
   const clearSelection = useConversationsStore((s) => s.clearSelection);
   const remove = useConversationsStore((s) => s.remove);
-  const loadHistory = useChatStore((s) => s.loadHistory);
-  const reset = useChatStore((s) => s.reset);
+  const activateByConversationId = useChatStore((s) => s.activateByConversationId);
+  const hydrate = useChatStore((s) => s.hydrate);
+  const newDraft = useChatStore((s) => s.newDraft);
+  const dropByConversationId = useChatStore((s) => s.dropByConversationId);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const openConversation = async (id: string) => {
+    // Prefer an already-loaded runtime (it may be mid-stream) so its partial
+    // tokens aren't clobbered by staler server history; only fetch the first
+    // time we open a conversation this session.
+    if (activateByConversationId(id)) {
+      select(id);
+      return;
+    }
     try {
       const detail = await getConversation(id);
-      loadHistory(detail);
+      hydrate(detail);
       select(id);
     } catch {
       toast.error("Could not load conversation");
@@ -60,7 +69,7 @@ export function Sidebar({
   };
 
   const newChat = () => {
-    reset();
+    newDraft();
     clearSelection();
   };
 
@@ -68,7 +77,10 @@ export function Sidebar({
     e.stopPropagation();
     try {
       await remove(id);
-      if (selectedId === id) newChat();
+      // Drops the conversation's runtime; if it was on screen, this installs a
+      // fresh draft (an empty "new chat" view). `remove` already clears the
+      // sidebar selection when the deleted item was selected.
+      dropByConversationId(id);
     } catch {
       toast.error("Could not delete conversation");
     }

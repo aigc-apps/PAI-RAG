@@ -68,18 +68,15 @@ describe("App", () => {
   });
 
   it("renders existing messages from the chat store", async () => {
-    useChatStore.setState({
-      messages: [
-        {
-          id: "u",
-          role: "user",
-          text: "hello there",
-          reasoning: "",
-          reasoningStatus: "idle",
-          status: "completed",
-          toolCalls: [],
-        },
-      ],
+    const key = useChatStore.getState().activeKey;
+    useChatStore.getState().appendMessage(key, {
+      id: "u",
+      role: "user",
+      text: "hello there",
+      reasoning: "",
+      reasoningStatus: "idle",
+      status: "completed",
+      toolCalls: [],
     });
     render(<App />);
     expect(await screen.findByText("hello there")).toBeInTheDocument();

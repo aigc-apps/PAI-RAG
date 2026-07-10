@@ -4,11 +4,12 @@ import { renderHook, act } from "@testing-library/react";
 vi.mock("../../api/client", () => ({ streamResponse: vi.fn() }));
 vi.mock("../../api/responses", () => ({ cancelResponse: vi.fn(), streamResume: vi.fn() }));
 vi.mock("../../store/conversations", () => ({
-  useConversationsStore: { getState: () => ({ refresh: vi.fn() }) },
+  useConversationsStore: { getState: () => ({ refresh: vi.fn(), select: vi.fn() }) },
 }));
 
 import { useResponsesChat } from "../useResponsesChat";
-import { useChatStore } from "../../store/chat";
+import { activeRuntime, useChatStore } from "../../store/chat";
+import type { ChatMessage } from "../../types";
 import * as client from "../../api/client";
 import * as responsesApi from "../../api/responses";
 
@@ -18,6 +19,12 @@ function streamOf(events: any[]): AsyncIterable<any> {
       for (const e of events) yield e;
     },
   };
+}
+
+const active = () => activeRuntime(useChatStore.getState())!;
+function seedActive(msgs: ChatMessage[]) {
+  const key = useChatStore.getState().activeKey;
+  for (const m of msgs) useChatStore.getState().appendMessage(key, m);
 }
 
 beforeEach(() => {
@@ -36,11 +43,10 @@ describe("useResponsesChat (resilient)", () => {
     );
     const { result } = renderHook(() => useResponsesChat());
     await act(async () => { await result.current.send("hello"); });
-    const st = useChatStore.getState();
-    expect(st.messages[1].text).toBe("hi");
-    expect(st.messages[1].status).toBe("completed");
-    expect(st.conversationId).toBe("conv_1");
-    expect(st.lastResponseId).toBe("resp_1");
+    expect(active().messages[1].text).toBe("hi");
+    expect(active().messages[1].status).toBe("completed");
+    expect(active().conversationId).toBe("conv_1");
+    expect(active().lastResponseId).toBe("resp_1");
     const params = (client.streamResponse as any).mock.calls[0][0];
     expect(params.background).toBe(true);
     // Identity is server-derived from the session; no user_id is sent.
@@ -65,12 +71,11 @@ describe("useResponsesChat (resilient)", () => {
     expect(responsesApi.cancelResponse).toHaveBeenCalledWith("resp_9");
     release();
     await act(async () => { await p; });
-    const st = useChatStore.getState();
-    expect(st.messages[1].status).toBe("cancelled");
-    expect(st.messages[1].text).toBe("partial");
+    expect(active().messages[1].status).toBe("cancelled");
+    expect(active().messages[1].text).toBe("partial");
     // cancelled turn is continuable: anchors advanced
-    expect(st.conversationId).toBe("c");
-    expect(st.lastResponseId).toBe("resp_9");
+    expect(active().conversationId).toBe("c");
+    expect(active().lastResponseId).toBe("resp_9");
   });
 
   it("stop before the response id is known defers the cancel until response.created", async () => {
@@ -102,13 +107,11 @@ describe("useResponsesChat (resilient)", () => {
   });
 
   it("resumeIfInterrupted resumes a streaming message from its cursor", async () => {
-    // seed a half-streamed assistant message in the store
-    useChatStore.setState({
-      messages: [
-        { id: "u", role: "user", text: "q", reasoning: "", reasoningStatus: "idle", status: "completed", toolCalls: [] },
-        { id: "resp_5", role: "assistant", text: "par", reasoning: "", reasoningStatus: "idle", status: "streaming", responseId: "resp_5", lastSequenceNumber: 4, toolCalls: [] },
-      ],
-    });
+    // seed a half-streamed assistant message in the active runtime
+    seedActive([
+      { id: "u", role: "user", text: "q", reasoning: "", reasoningStatus: "idle", status: "completed", toolCalls: [] },
+      { id: "resp_5", role: "assistant", text: "par", reasoning: "", reasoningStatus: "idle", status: "streaming", responseId: "resp_5", lastSequenceNumber: 4, toolCalls: [] },
+    ]);
     (responsesApi.streamResume as any).mockReturnValue(
       streamOf([
         { type: "response.output_text.delta", delta: "tial", sequence_number: 5 },
@@ -118,16 +121,13 @@ describe("useResponsesChat (resilient)", () => {
     const { result } = renderHook(() => useResponsesChat());
     await act(async () => { await result.current.resumeIfInterrupted(); });
     expect(responsesApi.streamResume).toHaveBeenCalledWith("resp_5", 4, expect.anything());
-    const st = useChatStore.getState();
-    expect(st.messages[1].text).toBe("partial");
-    expect(st.messages[1].status).toBe("completed");
-    expect(st.lastResponseId).toBe("resp_5");
+    expect(active().messages[1].text).toBe("partial");
+    expect(active().messages[1].status).toBe("completed");
+    expect(active().lastResponseId).toBe("resp_5");
   });
 
   it("resumeIfInterrupted is a no-op when the last message is not streaming", async () => {
-    useChatStore.setState({
-      messages: [{ id: "a", role: "assistant", text: "done", reasoning: "", reasoningStatus: "idle", status: "completed", responseId: "r", toolCalls: [] }],
-    });
+    seedActive([{ id: "a", role: "assistant", text: "done", reasoning: "", reasoningStatus: "idle", status: "completed", responseId: "r", toolCalls: [] }]);
     const { result } = renderHook(() => useResponsesChat());
     await act(async () => { await result.current.resumeIfInterrupted(); });
     expect(responsesApi.streamResume).not.toHaveBeenCalled();
@@ -163,17 +163,48 @@ describe("useResponsesChat (resilient)", () => {
     });
     const { result } = renderHook(() => useResponsesChat());
     await act(async () => { await result.current.send("hello"); });
-    let st = useChatStore.getState();
-    expect(st.messages[1].status).toBe("streaming"); // not "failed" — run started, resumable
-    expect(st.messages[1].text).toBe("par");
+    expect(active().messages[1].status).toBe("streaming"); // not "failed" — run started, resumable
+    expect(active().messages[1].text).toBe("par");
     (responsesApi.streamResume as any).mockReturnValue(streamOf([
       { type: "response.output_text.delta", delta: "tial", sequence_number: 3 },
       { type: "response.completed", response: { id: "resp_r", conversation: { id: "c" }, status: "completed" }, sequence_number: 4 },
     ]));
     await act(async () => { await result.current.resumeIfInterrupted(); });
-    st = useChatStore.getState();
-    expect(st.messages[1].text).toBe("partial");
-    expect(st.messages[1].status).toBe("completed");
+    expect(active().messages[1].text).toBe("partial");
+    expect(active().messages[1].status).toBe("completed");
     expect(responsesApi.streamResume).toHaveBeenCalledWith("resp_r", 2, expect.anything());
+  });
+
+  it("switching to another conversation aborts the local loop without cross-writing", async () => {
+    // A: a long-running stream we'll leave mid-flight.
+    let releaseA: () => void = () => {};
+    const gateA = new Promise<void>((r) => (releaseA = r));
+    (client.streamResponse as any).mockReturnValue({
+      async *[Symbol.asyncIterator]() {
+        yield { type: "response.created", response: { id: "resp_A", conversation: { id: "cA" } }, sequence_number: 1 };
+        yield { type: "response.output_text.delta", delta: "A-partial", sequence_number: 2 };
+        await gateA; // never released before we switch away
+        yield { type: "response.completed", response: { id: "resp_A", conversation: { id: "cA" }, status: "completed" }, sequence_number: 3 };
+      },
+    });
+    const { result } = renderHook(() => useResponsesChat());
+    const keyA = useChatStore.getState().activeKey;
+    let pA: Promise<void>;
+    await act(async () => { pA = result.current.send("hi from A"); await Promise.resolve(); await Promise.resolve(); });
+
+    // Switch to a brand-new conversation B. The effect aborts A's local loop.
+    await act(async () => { useChatStore.getState().newDraft(); });
+    const keyB = useChatStore.getState().activeKey;
+    expect(keyB).not.toBe(keyA);
+
+    // A's partial text is preserved in its own slice; B is untouched/empty.
+    expect(useChatStore.getState().runtimes[keyA].messages[1].text).toBe("A-partial");
+    expect(useChatStore.getState().runtimes[keyA].messages[1].status).toBe("streaming"); // resumable
+    expect(active().messages).toHaveLength(0);
+
+    releaseA();
+    await act(async () => { await pA; });
+    // Even after A's generator resumes post-abort, B (the visible one) is clean.
+    expect(active().messages).toHaveLength(0);
   });
 });

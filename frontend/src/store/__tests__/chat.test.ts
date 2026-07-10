@@ -1,47 +1,65 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useChatStore, normalizeHistoryMessages } from "../chat";
-import type { ConversationDetail } from "../../types";
+import { activeRuntime, useChatStore, normalizeHistoryMessages } from "../chat";
+import type { ChatMessage, ConversationDetail } from "../../types";
 
 beforeEach(() => useChatStore.getState().reset());
 
+const active = () => activeRuntime(useChatStore.getState())!;
+const userMsg = (id: string, text: string): ChatMessage => ({
+  id, role: "user", text, reasoning: "", reasoningStatus: "idle",
+  status: "completed", toolCalls: [],
+});
+const assistantMsg = (id: string): ChatMessage => ({
+  id, role: "assistant", text: "", reasoning: "", reasoningStatus: "idle",
+  status: "streaming", toolCalls: [],
+});
+
 describe("chat store", () => {
-  it("appends and patches the last message", () => {
-    const s = useChatStore.getState();
-    s.appendMessage({
-      id: "u1",
-      role: "user",
-      text: "hi",
-      reasoning: "",
-      reasoningStatus: "idle",
-      status: "completed",
-      toolCalls: [],
-    });
-    s.appendMessage({
-      id: "a1",
-      role: "assistant",
-      text: "",
-      reasoning: "",
-      reasoningStatus: "idle",
-      status: "streaming",
-      toolCalls: [],
-    });
-    useChatStore.getState().updateLast({ text: "hello", status: "completed" });
-    const msgs = useChatStore.getState().messages;
+  it("appends and patches the last message of the active runtime", () => {
+    const key = useChatStore.getState().activeKey;
+    useChatStore.getState().appendMessage(key, userMsg("u1", "hi"));
+    useChatStore.getState().appendMessage(key, assistantMsg("a1"));
+    useChatStore.getState().updateLastOf(key, { text: "hello", status: "completed" });
+    const msgs = active().messages;
     expect(msgs).toHaveLength(2);
     expect(msgs[1].text).toBe("hello");
     expect(msgs[1].status).toBe("completed");
   });
 
-  it("sets anchors and model", () => {
-    useChatStore.getState().setAnchors({ conversationId: "c1", lastResponseId: "r1" });
+  it("sets anchors on the runtime and model globally", () => {
+    const key = useChatStore.getState().activeKey;
+    useChatStore.getState().setAnchorsOf(key, { conversationId: "c1", lastResponseId: "r1" });
     useChatStore.getState().setModel("gpt-4o");
-    const st = useChatStore.getState();
-    expect(st.conversationId).toBe("c1");
-    expect(st.lastResponseId).toBe("r1");
-    expect(st.model).toBe("gpt-4o");
+    expect(active().conversationId).toBe("c1");
+    expect(active().lastResponseId).toBe("r1");
+    expect(useChatStore.getState().model).toBe("gpt-4o");
   });
 
-  it("loadHistory replaces messages and sets anchors", () => {
+  it("isolates writes per runtime — a background loop never touches the active one", () => {
+    const a = useChatStore.getState().activeKey;
+    useChatStore.getState().appendMessage(a, assistantMsg("a1"));
+    // Open a fresh conversation; `a` is now a background runtime.
+    const b = useChatStore.getState().newDraft();
+    expect(useChatStore.getState().activeKey).toBe(b);
+    useChatStore.getState().appendMessage(b, assistantMsg("b1"));
+    // A late write addressed to `a` lands in a's slice, not the visible one.
+    useChatStore.getState().updateLastOf(a, { text: "from A" });
+    expect(useChatStore.getState().runtimes[a].messages[0].text).toBe("from A");
+    expect(active().messages[0].text).toBe(""); // b untouched
+  });
+
+  it("newDraft prunes the previous empty draft but keeps ones with messages", () => {
+    const empty = useChatStore.getState().activeKey; // empty + idle
+    useChatStore.getState().newDraft();
+    expect(useChatStore.getState().runtimes[empty]).toBeUndefined();
+
+    const withMsg = useChatStore.getState().activeKey;
+    useChatStore.getState().appendMessage(withMsg, userMsg("u", "keep me"));
+    useChatStore.getState().newDraft();
+    expect(useChatStore.getState().runtimes[withMsg]).toBeDefined();
+  });
+
+  it("hydrate loads history into a runtime and activates it", () => {
     const detail: ConversationDetail = {
       id: "c9",
       title: "t",
@@ -60,13 +78,31 @@ describe("chat store", () => {
         } as never,
       ],
     };
-    useChatStore.getState().loadHistory(detail);
-    const st = useChatStore.getState();
-    expect(st.conversationId).toBe("c9");
-    expect(st.lastResponseId).toBe("r9");
-    expect(st.messages).toHaveLength(2);
-    expect(st.messages[1].reasoning).toBe("why");
-    expect(st.messages[1].reasoningStatus).toBe("done");
+    useChatStore.getState().hydrate(detail);
+    const rt = active();
+    expect(rt.conversationId).toBe("c9");
+    expect(rt.lastResponseId).toBe("r9");
+    expect(rt.messages).toHaveLength(2);
+    expect(rt.messages[1].reasoning).toBe("why");
+    expect(rt.messages[1].reasoningStatus).toBe("done");
+  });
+
+  it("activateByConversationId switches to an existing runtime; dropByConversationId removes it", () => {
+    useChatStore.getState().hydrate({
+      id: "c1", title: null, created_at: null, updated_at: null,
+      latest_response_id: "r1", messages: [],
+    });
+    const first = useChatStore.getState().activeKey;
+    useChatStore.getState().newDraft(); // move active away
+    expect(useChatStore.getState().activateByConversationId("c1")).toBe(true);
+    expect(useChatStore.getState().activeKey).toBe(first);
+    expect(useChatStore.getState().activateByConversationId("nope")).toBe(false);
+
+    // Deleting the active conversation installs a fresh empty draft.
+    useChatStore.getState().dropByConversationId("c1");
+    expect(useChatStore.getState().runtimes[first]).toBeUndefined();
+    expect(active().messages).toHaveLength(0);
+    expect(active().conversationId).toBeUndefined();
   });
 });
 
