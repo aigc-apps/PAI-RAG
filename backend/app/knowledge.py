@@ -305,6 +305,21 @@ class KnowledgeService:
                     logger.warning(f"[knowledge] default embedding resolution failed: {ex!r}")
         return dict(DEFAULT_EMBEDDING_CONFIG)
 
+    def _resolve_default_vector_store(self) -> dict:
+        """The vector_store_config a new KB gets when the caller doesn't pin a
+        provider. Derives ``provider_id`` from the active global search engine
+        (``knowledgebase.vectordb``) so a KB created while Elasticsearch is
+        configured records ``elasticsearch`` instead of the local SQL default —
+        the value the UI surfaces as the KB's vector engine. Recorded at creation
+        and never rewritten afterwards."""
+        base = dict(DEFAULT_VECTOR_STORE_CONFIG)
+        engine = self._search
+        if engine is not None and engine is not self._local:
+            name = getattr(engine, "name", None)
+            if name:
+                base["provider_id"] = str(name)
+        return base
+
     def embedding_config_for(self, model_id: str) -> dict:
         """Resolve a caller-chosen embedding model id into the frozen
         embedding_config a KB stores. Validates the id is catalogued and is an
@@ -371,7 +386,7 @@ class KnowledgeService:
             kb_id = _uuid("kb")
             # Fresh copy per attempt so setdefault of the kb_id-derived namespace
             # tracks a regenerated id on retry.
-            vector = _merge(DEFAULT_VECTOR_STORE_CONFIG, vector_store_config)
+            vector = _merge(self._resolve_default_vector_store(), vector_store_config)
             # Keep the vector store's declared dimension in step with the embedder
             # (the ES mapping reads embedding_config, but keep both coherent).
             if not (vector_store_config and "dimension" in vector_store_config):

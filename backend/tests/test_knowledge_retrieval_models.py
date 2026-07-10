@@ -158,6 +158,39 @@ def test_create_kb_falls_back_to_local_without_embedding_model():
     assert kb.embedding_config["dimension"] == 64
 
 
+class FakeSearchEngine:
+    """Minimal stand-in for a non-local primary engine — create_kb only reads
+    ``.name`` and identity (``is self._local``) off it."""
+
+    name = "elasticsearch"
+
+
+def test_create_kb_records_active_engine_as_vector_store_provider():
+    """A KB created while a non-local engine is active records that engine's
+    name as its vector store provider, not the local SQL default."""
+
+    async def scenario():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        svc = KnowledgeService(engine, search_engine=FakeSearchEngine())
+        return await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+
+    kb = asyncio.run(scenario())
+    assert kb.vector_store_config["provider_id"] == "elasticsearch"
+
+
+def test_create_kb_defaults_vector_store_to_local_sql_without_engine():
+    """With only the local SQL scan active (fresh install / tests), the KB keeps
+    the local_sql default."""
+
+    async def scenario():
+        svc = await _svc()  # no search_engine → LocalSearchEngine
+        return await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+
+    kb = asyncio.run(scenario())
+    assert kb.vector_store_config["provider_id"] == "local_sql"
+
+
 def test_update_kb_rejects_embedding_config_change():
     async def scenario():
         svc = await _svc()
