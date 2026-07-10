@@ -39,6 +39,15 @@ const baseDoc: AgentConfigDocument = {
       description: "",
       model: "",
       instructions: "",
+      persona: {
+        role: "",
+        identity: "",
+        personality: [],
+        principles: [],
+        expertise: [],
+        style: "",
+        constraints: [],
+      },
       code_manifest: "",
       tools: { include: ["current_datetime"], exclude: ["code_sandbox"] },
       skills: { enabled: [] },
@@ -99,11 +108,22 @@ const baseDoc: AgentConfigDocument = {
   ],
 };
 
-// A doc with the sandbox capability turned on, so the code-manifest section renders.
-const sandboxOnDoc: AgentConfigDocument = {
+// The sandbox capability turned on globally.
+const sandboxCapDoc: AgentConfigDocument = {
   ...baseDoc,
   capabilities: baseDoc.capabilities.map((c) =>
     c.id === "sandbox" ? { ...c, enabled: true, permission: "auto", status: "ready" } : c
+  ),
+};
+
+// ...and the selected agent has actually activated code browsing (code_sandbox in
+// its own toolbox). Only then does the manifest section belong to the agent.
+const codeBrowsingDoc: AgentConfigDocument = {
+  ...sandboxCapDoc,
+  agents: sandboxCapDoc.agents.map((a) =>
+    a.id === "main"
+      ? { ...a, tools: { include: [...a.tools.include, "code_sandbox"], exclude: [] } }
+      : a
   ),
 };
 
@@ -233,9 +253,10 @@ describe("SettingsView", () => {
     expect(saved.knowledgebase.vectordb.api_key).toBe("es-secret");
   });
 
-  it("hides the code manifest section when the sandbox capability is off", () => {
-    // baseDoc has sandbox capability disabled; the Agents tab is the default.
-    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+  it("hides the code manifest section unless the agent activated code browsing", () => {
+    // Sandbox is enabled globally, but the selected agent has code_sandbox excluded
+    // -> the manifest is not one of its attributes, so the section stays hidden.
+    render(<SettingsView doc={sandboxCapDoc} onBack={vi.fn()} />);
     expect(screen.queryByText("代码库配置单")).not.toBeInTheDocument();
   });
 
@@ -245,9 +266,9 @@ describe("SettingsView", () => {
     useAgentConfigStore.setState({ save });
     generateCodeManifest.mockResolvedValue({ manifest: "- repo-a — the API server" });
 
-    render(<SettingsView doc={sandboxOnDoc} onBack={vi.fn()} />);
+    render(<SettingsView doc={codeBrowsingDoc} onBack={vi.fn()} />);
 
-    // Section is visible once sandbox is enabled.
+    // Section is visible once this agent has activated code browsing.
     expect(screen.getByText("代码库配置单")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /AI 生成/ }));
@@ -259,5 +280,43 @@ describe("SettingsView", () => {
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     expect(saved.agents[0].code_manifest).toBe("- repo-a — the API server");
+  });
+
+  it("edits a persona field and commits on blur", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    // Persona card is always present in the Agents tab.
+    const role = screen.getByLabelText("Role");
+    await user.type(role, "a code archaeologist");
+    // No save while typing (local state); commit fires on blur.
+    expect(save).not.toHaveBeenCalled();
+    await user.tab();
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].persona.role).toBe("a code archaeologist");
+  });
+
+  it("normalizes a persona list field to trimmed non-empty lines", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    const expertise = screen.getByLabelText("Expertise（每行一条）");
+    await user.type(expertise, "static analysis{Enter}{Enter}  legacy migration  ");
+    await user.tab();
+
+    expect(save).toHaveBeenCalled();
+    const saved = save.mock.calls.at(-1)![0] as AgentConfigDocument;
+    expect(saved.agents[0].persona.expertise).toEqual([
+      "static analysis",
+      "legacy migration",
+    ]);
   });
 });

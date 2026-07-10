@@ -123,7 +123,14 @@ async def build_context(
     # (unit tests) or no matching profile, in which case behavior is unchanged.
     agent_profile = _resolve_agent_profile(agent_config, request)
 
-    override = dict(request.soul or {})
+    # Effective persona = global Soul <- per-agent persona override <- per-request
+    # soul override (request wins, so a one-off request can still steer any field).
+    override: dict = {}
+    if agent_profile is not None:
+        persona = getattr(agent_profile, "persona", None)
+        if persona is not None and hasattr(persona, "override_dict"):
+            override.update(persona.override_dict())
+    override.update(request.soul or {})
     if agent_profile is not None and getattr(agent_profile, "name", ""):
         override.setdefault("name", agent_profile.name)
     effective_soul = soul.merge(override)

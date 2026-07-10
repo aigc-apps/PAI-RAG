@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
+  AgentPersona,
   AgentProfile,
   CapabilityConfig,
   AgentConfigDocument,
@@ -413,6 +414,105 @@ function Header({ title, body }: { title: string; body: string }) {
   );
 }
 
+const EMPTY_PERSONA: AgentPersona = {
+  role: "",
+  identity: "",
+  personality: [],
+  principles: [],
+  expertise: [],
+  style: "",
+  constraints: [],
+};
+
+/** Per-agent persona override editor. Every field is optional — a blank field
+ * inherits the global Soul default. Local state (keyed on agent id by the parent)
+ * commits the whole persona on blur, avoiding a whole-document PUT per keystroke.
+ * List fields are edited one item per line. */
+function PersonaSection({
+  doc,
+  agent,
+  onSave,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+}) {
+  const [persona, setPersona] = useState<AgentPersona>(agent.persona ?? EMPTY_PERSONA);
+
+  // Commit the given value (not the state closure, which lags behind blur-time
+  // normalization) via the whole-doc save, and only when it actually changed.
+  const commit = (next: AgentPersona) => {
+    if (JSON.stringify(next) !== JSON.stringify(agent.persona ?? EMPTY_PERSONA)) {
+      void onSave(applyAgentPatch(doc, agent.id, { persona: next }));
+    }
+  };
+
+  const text = (key: "role" | "identity" | "style") => ({
+    value: persona[key],
+    onChange: (e: { target: { value: string } }) =>
+      setPersona((p) => ({ ...p, [key]: e.target.value })),
+    onBlur: () => commit(persona),
+  });
+  const list = (key: "personality" | "principles" | "expertise" | "constraints") => ({
+    value: persona[key].join("\n"),
+    onChange: (e: { target: { value: string } }) =>
+      setPersona((p) => ({ ...p, [key]: e.target.value.split("\n") })),
+    // Normalize on blur: trim, drop blank lines, sync state and commit the cleaned value.
+    onBlur: () => {
+      const next = { ...persona, [key]: persona[key].map((s) => s.trim()).filter(Boolean) };
+      setPersona(next);
+      commit(next);
+    },
+  });
+
+  const field = "w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm";
+  const labelCls = "mb-1 block text-xs font-medium text-[var(--text-muted)]";
+
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <UserRound className="h-4 w-4 text-[var(--text-muted)]" />
+        <h3 className="text-sm font-semibold">Persona</h3>
+      </div>
+      <p className="mb-3 text-xs text-[var(--text-muted)]">
+        覆盖该 agent 的人格设定，注入 system prompt。留空的字段继承全局默认；列表字段每行一条。
+      </p>
+      <div className="grid gap-3">
+        <label className="block">
+          <span className={labelCls}>Role</span>
+          <input {...text("role")} placeholder="留空继承全局默认" className={field} />
+        </label>
+        <label className="block">
+          <span className={labelCls}>Identity</span>
+          <textarea {...text("identity")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y")} />
+        </label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="block">
+            <span className={labelCls}>Expertise（每行一条）</span>
+            <textarea {...list("expertise")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Personality（每行一条）</span>
+            <textarea {...list("personality")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Principles（每行一条）</span>
+            <textarea {...list("principles")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
+          </label>
+          <label className="block">
+            <span className={labelCls}>Constraints（每行一条）</span>
+            <textarea {...list("constraints")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
+          </label>
+        </div>
+        <label className="block">
+          <span className={labelCls}>Style</span>
+          <textarea {...text("style")} rows={2} placeholder="留空继承全局默认" className={cn(field, "resize-y")} />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 /** Per-agent code-repository manifest editor. Local state (keyed on agent id by
  * the parent, so it resets on switch) avoids a whole-document PUT per keystroke —
  * it commits on blur and after an AI generation. The "generate" button drives the
@@ -589,9 +689,14 @@ function AgentsPanel({
             </label>
           </div>
 
-          {(doc.capabilities ?? []).some((c) => c.id === "sandbox" && c.enabled) && (
+          <PersonaSection key={`persona-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
+
+          {/* The manifest is a property of an agent that has activated code
+              browsing — gate on this agent's own code_sandbox tool, not the
+              global sandbox capability. */}
+          {enabledTools.has("code_sandbox") && (
             <CodeManifestSection
-              key={agent.id}
+              key={`manifest-${agent.id}`}
               doc={doc}
               agent={agent}
               loading={loading}

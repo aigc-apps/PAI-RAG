@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agent.tools.defaults import build_default_registry
-from app.agent_config import AgentProfile, AgentToolsConfig
+from app.agent_config import AgentPersona, AgentProfile, AgentToolsConfig
 from app.builder import build_context, resolve_agent_model
 from app.deps import AppState
 from app.routes.agents import router as agents_router
@@ -72,6 +72,70 @@ def test_profile_instructions_and_name_applied():
         )
         assert "Helper" in ctx.system_prompt          # persona name overrides the soul default
         assert "ALWAYS_SAY_MOO" in ctx.context_block  # profile instructions injected
+
+    asyncio.run(run())
+
+
+def test_profile_persona_overrides_soul_in_stable_prompt():
+    async def run():
+        reg = build_default_registry(_Settings())
+        cfg = _cfg([
+            AgentProfile(
+                id="main", name="Helper",
+                persona=AgentPersona(
+                    role="a meticulous code archaeologist",
+                    identity="You dig through source to explain how things work.",
+                    expertise=["static analysis", "legacy migration"],
+                ),
+            ),
+        ])
+        ctx, _ = await build_context(
+            ResponsesRequest(input="hi"), InMemoryStore(), registry=reg, agent_config=cfg,
+        )
+        # Overridden persona fields land in the stable (cacheable) system prompt.
+        assert "code archaeologist" in ctx.system_prompt
+        assert "dig through source" in ctx.system_prompt
+        assert "static analysis" in ctx.system_prompt
+
+    asyncio.run(run())
+
+
+def test_empty_persona_leaves_global_soul_untouched():
+    async def run():
+        reg = build_default_registry(_Settings())
+        base = await build_context(
+            ResponsesRequest(input="hi"),
+            InMemoryStore(), registry=reg,
+            agent_config=_cfg([AgentProfile(id="main", name="MiniAgent")]),
+        )
+        with_empty = await build_context(
+            ResponsesRequest(input="hi"),
+            InMemoryStore(), registry=reg,
+            agent_config=_cfg([
+                AgentProfile(id="main", name="MiniAgent", persona=AgentPersona()),
+            ]),
+        )
+        # A blank persona inherits the global Soul verbatim — no divergence.
+        assert base[0].system_prompt == with_empty[0].system_prompt
+
+    asyncio.run(run())
+
+
+def test_request_soul_wins_over_agent_persona():
+    async def run():
+        reg = build_default_registry(_Settings())
+        cfg = _cfg([
+            AgentProfile(
+                id="main", name="Helper",
+                persona=AgentPersona(role="a code archaeologist"),
+            ),
+        ])
+        ctx, _ = await build_context(
+            ResponsesRequest(input="hi", soul={"role": "a haiku poet"}),
+            InMemoryStore(), registry=reg, agent_config=cfg,
+        )
+        assert "haiku poet" in ctx.system_prompt
+        assert "code archaeologist" not in ctx.system_prompt
 
     asyncio.run(run())
 

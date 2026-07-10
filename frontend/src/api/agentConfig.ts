@@ -108,12 +108,26 @@ export interface SkillLibraryConfig {
   installed?: Array<Record<string, unknown>>;
 }
 
+// Per-agent overrides of the global Soul persona. Blank string / empty list means
+// "inherit the global default"; lists replace the corresponding Soul list wholesale.
+export interface AgentPersona {
+  role: string;
+  identity: string;
+  personality: string[];
+  principles: string[];
+  expertise: string[];
+  style: string;
+  constraints: string[];
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
   description: string;
   model: string;
   instructions: string;
+  // Per-agent persona override; blank fields inherit the global Soul.
+  persona: AgentPersona;
   // Markdown describing the repos under the read-only /mnt/code layer; injected
   // into the system prompt when that layer is mounted. Can be AI-generated.
   code_manifest: string;
