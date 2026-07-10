@@ -60,6 +60,27 @@ class ToolResult:
         return self.error is None
 
 
+def _set_tool_attrs(span, tool: "Tool", args: dict) -> None:
+    """Tag the tool span with OpenInference conventions (span kind, name, input).
+    Best-effort and fully guarded so a missing semconv module or a non-serialisable
+    arg never disturbs the tool call."""
+    if span is None:
+        return
+    try:
+        import json
+        from extensions.trace import semconv as sc
+        span.set_attribute(sc.OPENINFERENCE_SPAN_KIND, sc.SpanKind.TOOL)
+        span.set_attribute(sc.TOOL_NAME, tool.name)
+        if getattr(tool, "description", None):
+            span.set_attribute(sc.TOOL_DESCRIPTION, str(tool.description))
+        payload = json.dumps(args, ensure_ascii=False, default=str)
+        span.set_attribute(sc.TOOL_PARAMETERS, payload)
+        span.set_attribute(sc.INPUT_VALUE, payload)
+        span.set_attribute(sc.INPUT_MIME_TYPE, sc.MIME_JSON)
+    except Exception:
+        pass
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 async def _call_with_retry(tool: "Tool", args: dict) -> str:
     """Invoke the tool fn inside a tracing span, with retry.
@@ -73,13 +94,27 @@ async def _call_with_retry(tool: "Tool", args: dict) -> str:
         span_cm = nullcontext()
 
     with span_cm as span:
+        _set_tool_attrs(span, tool, args)
+        try:
+            result = await tool.fn(**args)
+        except Exception as e:
+            if span is not None:
+                try:
+                    from opentelemetry.trace import Status, StatusCode
+                    span.set_attribute("tool.error", str(e))
+                    span.set_status(Status(StatusCode.ERROR, str(e)))
+                except Exception:
+                    pass
+            raise
+        out = result if isinstance(result, str) else str(result)
         if span is not None:
             try:
-                span.set_attribute("tool.name", tool.name)
+                from extensions.trace import semconv as sc
+                span.set_attribute(sc.OUTPUT_VALUE, out)
+                span.set_attribute(sc.OUTPUT_MIME_TYPE, sc.MIME_TEXT)
             except Exception:
                 pass
-        result = await tool.fn(**args)
-        return result if isinstance(result, str) else str(result)
+        return out
 
 
 class ToolBox:

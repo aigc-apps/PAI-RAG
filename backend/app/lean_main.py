@@ -2,6 +2,8 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
+from loguru import logger
+
 # Load .env into os.environ before anything reads settings or secrets. This
 # must run at import time, ahead of get_settings()/provider/sandbox code that
 # resolves AGENTRUN_*/OPENAI_API_KEY via os.environ.get. pydantic-settings'
@@ -55,9 +57,22 @@ def _build_llm(settings) -> LeanLLM | None:
     )
 
 
+def _init_tracing(app: FastAPI, settings) -> None:
+    """Best-effort OpenTelemetry init. Imported at runtime (not module top) so the
+    lean service still imports when the trace extension / opentelemetry is absent
+    (see tests/test_lean_import_isolation). Any failure degrades to no tracing."""
+    try:
+        from extensions.trace import init_tracing, instrument_fastapi
+        if init_tracing(settings):
+            instrument_fastapi(app)
+    except Exception as e:  # extension or opentelemetry absent — run without tracing
+        logger.info("[trace] tracing extension unavailable, continuing without it: {}", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    _init_tracing(app, settings)
     engine = None
     if settings.store_backend == "memory":
         store = InMemoryStore()
@@ -135,6 +150,12 @@ async def lifespan(app: FastAPI):
     finally:
         # Stop the worker pool cleanly on shutdown (no shutdown hook existed before).
         await jobs.stop()
+        # Flush any buffered trace spans before the process exits.
+        try:
+            from extensions.trace import shutdown_tracing
+            shutdown_tracing()
+        except Exception:
+            pass
 
 
 app = FastAPI(title="Lean Agent Service", lifespan=lifespan)
