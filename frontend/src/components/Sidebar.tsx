@@ -45,9 +45,11 @@ export function BrandMark({ size = "sm" }: { size?: "sm" | "lg" }) {
 export function Sidebar({
   onOpenSettings,
   onOpenKnowledge,
+  onOpenUsers,
 }: {
   onOpenSettings?: () => void;
   onOpenKnowledge?: () => void;
+  onOpenUsers?: () => void;
 }) {
   const items = useConversationsStore((s) => s.items);
   const refresh = useConversationsStore((s) => s.refresh);
@@ -61,6 +63,7 @@ export function Sidebar({
   const hydrate = useChatStore((s) => s.hydrate);
   const newDraft = useChatStore((s) => s.newDraft);
   const dropByConversationId = useChatStore((s) => s.dropByConversationId);
+  const dropByKey = useChatStore((s) => s.dropByKey);
 
   useEffect(() => {
     void refresh();
@@ -88,6 +91,27 @@ export function Sidebar({
     activate(rt.key);
     if (rt.conversationId) select(rt.conversationId);
     else clearSelection();
+  };
+
+  // Delete an overlay row. An unsent draft (no conversationId) is discarded
+  // locally; a persisted/persisting one deletes server-side too.
+  const onDeleteRuntime = async (e: React.MouseEvent, rt: ConvRuntime) => {
+    e.stopPropagation();
+    if (!rt.conversationId) {
+      dropByKey(rt.key);
+      // Sync the sidebar highlight to whatever runtime became active.
+      const next = useChatStore.getState();
+      const cid = next.runtimes[next.activeKey]?.conversationId;
+      if (cid) select(cid);
+      else clearSelection();
+      return;
+    }
+    try {
+      await remove(rt.conversationId);
+      dropByConversationId(rt.conversationId);
+    } catch {
+      toast.error("Could not delete conversation");
+    }
   };
 
   const openConversation = async (id: string) => {
@@ -133,26 +157,29 @@ export function Sidebar({
       </div>
 
       <div className="px-3 pt-3">
-        <button
-          type="button"
-          aria-label="New chat"
-          onClick={newChat}
-          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm font-medium text-[var(--text)] shadow-[var(--shadow-sm)] hover:bg-[var(--surface-2)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
-        >
-          <Plus className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
-          新建对话
-        </button>
         {onOpenKnowledge && (
           <button
             type="button"
             aria-label="Open knowledge"
             onClick={onOpenKnowledge}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
+            className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
           >
             <Database className="h-4 w-4 flex-shrink-0" />
             知识库
           </button>
         )}
+        <button
+          type="button"
+          aria-label="New chat"
+          onClick={newChat}
+          className={cn(
+            "flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm font-medium text-[var(--text)] shadow-[var(--shadow-sm)] hover:bg-[var(--surface-2)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]",
+            onOpenKnowledge && "mt-2"
+          )}
+        >
+          <Plus className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
+          新建对话
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 pb-2">
@@ -168,9 +195,11 @@ export function Sidebar({
               <ConversationRow
                 key={rt.key}
                 title={runtimeTitle(rt)}
+                placeholder={rt.messages.length === 0}
                 selected={rt.key === activeKey}
                 busy={isBusy(rt)}
                 onOpen={() => openRuntime(rt)}
+                onDelete={(e) => onDeleteRuntime(e, rt)}
               />
             ))}
             {items.map((c) => (
@@ -189,7 +218,7 @@ export function Sidebar({
 
       {/* Account + settings, pinned to the bottom-left */}
       <div className="border-t border-[var(--border)] p-2 flex-shrink-0">
-        <UserMenu onOpenSettings={onOpenSettings} />
+        <UserMenu onOpenSettings={onOpenSettings} onOpenUsers={onOpenUsers} />
       </div>
     </aside>
   );
@@ -199,12 +228,14 @@ function ConversationRow({
   title,
   selected,
   busy,
+  placeholder,
   onOpen,
   onDelete,
 }: {
   title: string;
   selected: boolean;
   busy: boolean;
+  placeholder?: boolean;
   onOpen: () => void;
   onDelete?: (e: React.MouseEvent) => void;
 }) {
@@ -232,7 +263,9 @@ function ConversationRow({
           title="生成中"
         />
       )}
-      <span className="truncate">{title}</span>
+      <span className={cn("truncate", placeholder && "text-[var(--text-faint)]")}>
+        {title}
+      </span>
       {onDelete && (
         <button
           type="button"

@@ -141,6 +141,7 @@ interface ChatState {
   activateByConversationId: (id: string) => boolean;
   hydrate: (detail: ConversationDetail) => string;
   dropByConversationId: (id: string) => void;
+  dropByKey: (key: string) => void;
 
   // Keyed message mutators — the caller captures a key so writes always land in
   // the intended conversation's slice, never in whatever is currently displayed.
@@ -226,6 +227,30 @@ export const useChatStore = create<ChatState>((set, get) => {
           const rt = freshRuntime();
           runtimes[rt.key] = rt;
           activeKey = rt.key;
+        }
+        return { runtimes, activeKey };
+      }),
+
+    // Drop a runtime by its local key — used to discard an unsent draft (which
+    // has no conversationId and so nothing to delete server-side). If it was the
+    // active one, fall back to the most recently used remaining runtime (so
+    // deleting a just-created draft returns you to the previous conversation),
+    // or a fresh draft when none remain.
+    dropByKey: (key) =>
+      set((s) => {
+        if (!s.runtimes[key]) return s;
+        const runtimes = { ...s.runtimes };
+        delete runtimes[key];
+        let activeKey = s.activeKey;
+        if (activeKey === key) {
+          const remaining = Object.keys(runtimes);
+          if (remaining.length) {
+            activeKey = remaining[remaining.length - 1];
+          } else {
+            const rt = freshRuntime();
+            runtimes[rt.key] = rt;
+            activeKey = rt.key;
+          }
         }
         return { runtimes, activeKey };
       }),
