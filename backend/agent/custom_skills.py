@@ -155,10 +155,11 @@ def render_skill_catalog(
         "# Available Skills",
         "You have the following task-specific skills. Each entry below is only a "
         "one-line summary. When a request calls for one, first call the `load_skill` "
-        "tool with its id to load the full step-by-step instructions, then follow "
-        "them — do not attempt the task from the summary alone. Skills may bundle "
-        "extra files (templates, references, scripts); `load_skill` lists them and "
-        "you read them with `read_skill_resource`.",
+        "tool — a tool/function call, never a shell command — with its id to load the "
+        "full step-by-step instructions, then follow them; do not attempt the task "
+        "from the summary alone. Skills may bundle extra files (templates, references, "
+        "scripts); `load_skill` lists them and you read them with the "
+        "`read_skill_resource` tool.",
         "",
     ]
     for package in selected:

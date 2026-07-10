@@ -1,10 +1,35 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, Optional, Protocol
 
 from agent.tools.base import Tool
 from agent.tools.builtin._aliyun_notice import maybe_emit_aliyun_notice
+
+
+# The agent's own tools are function calls, not shell programs. Once the sandbox
+# `shell` is in the toolbox the model sometimes conflates the two and types a tool
+# name as a command (e.g. `load_skill skill.foo`) — the skill system's dual nature
+# (load_skill is a tool, but skills also bundle scripts you run in the sandbox) makes
+# this an easy slip. These names are unmistakably ours, not real binaries, so we
+# intercept them before spending a sandbox round-trip and redirect the model to call
+# the tool directly. Deliberately EXCLUDES generic names (view_file/grep_file) a
+# user's own script could legitimately carry — a real binary is still runnable by an
+# explicit path (./x, /usr/bin/x), which doesn't start with a bare identifier.
+_TOOL_NOT_SHELL = frozenset({
+    "load_skill", "read_skill_resource",
+    "knowledge_search", "list_knowledge_bases",
+    "publish_artifact", "code_interpreter",
+    "web_search", "web_fetch", "current_datetime",
+})
+_LEADING_IDENT_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _leading_tool_name(command: str) -> Optional[str]:
+    """The command's leading bare identifier if it names one of the agent's tools."""
+    m = _LEADING_IDENT_RE.match((command or "").strip())
+    return m.group(1) if m and m.group(1) in _TOOL_NOT_SHELL else None
 
 
 class ShellSandboxProvider(Protocol):
@@ -46,6 +71,14 @@ def make_shell_tool(provider: ShellSandboxProvider, *, default_timeout: int = 30
         cwd: Optional[str] = None,
         timeout: int = default_timeout,
     ) -> str:
+        tool = _leading_tool_name(command)
+        if tool is not None:
+            return (
+                f"'{tool}' is one of your own tools, not a shell program — call it "
+                "directly as a tool/function call. The shell is only for "
+                "operating-system and CLI commands (ls, cat, git, python, …). "
+                "Nothing was executed."
+            )
         try:
             result = await provider.run_command(
                 command=command,

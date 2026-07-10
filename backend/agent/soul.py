@@ -143,8 +143,12 @@ _SANDBOX_GUIDANCE = (
     "actual command's output — do not compute large or precise results in your head. "
     "Use code_interpreter to run code (e.g. Python) and shell to run shell commands; "
     "they share the same environment and mounts, including the durable per-user "
-    "directory at /mnt/user ($AGENT_USER_PATH). Keep stderr visible when a command "
-    "fails so you can see why, and fix and retry rather than guessing at the result."
+    "directory at /mnt/user ($AGENT_USER_PATH). The shell runs operating-system and "
+    "CLI commands only — it is not a way to invoke your own tools: load_skill, "
+    "knowledge_search, publish_artifact and the rest are tool/function calls, so call "
+    "them directly and never type a tool name as a shell command. Keep stderr visible "
+    "when a command fails so you can see why, and fix and retry rather than guessing "
+    "at the result."
 )
 
 

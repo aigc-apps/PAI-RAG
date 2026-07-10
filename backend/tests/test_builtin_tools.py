@@ -121,6 +121,32 @@ def test_shell_tool_formats_provider_result():
     assert '"cwd": "/home/user"' in out
 
 
+def test_shell_redirects_a_tool_name_typed_as_a_command():
+    # Regression: with the sandbox shell available, the model sometimes types a tool
+    # name as a command (e.g. `load_skill skill.foo`). The shell must intercept it —
+    # without a sandbox round-trip — and redirect to a direct tool call.
+    class _Recording:
+        default_timeout_seconds = 12
+        def __init__(self): self.called = False
+        async def run_command(self, *, command, cwd=None, timeout=None):
+            self.called = True
+            return {"stdout": "", "stderr": "", "exit_code": 0}
+
+    prov = _Recording()
+    t = make_shell_tool(prov, default_timeout=12)
+    for cmd in ("load_skill skill.foo", "load_skill", "knowledge_search x", "publish_artifact /mnt/user/r.md"):
+        out = asyncio.run(t.fn(command=cmd))
+        assert "one of your own tools" in out and "Nothing was executed" in out
+    assert prov.called is False  # never dispatched to the sandbox
+
+    # A real shell command whose name merely contains a tool name, or an explicit
+    # path, still runs normally.
+    for cmd in ("ls -la", "git status", "./load_skill", "python load_skill.py"):
+        out = asyncio.run(t.fn(command=cmd))
+        assert "one of your own tools" not in out
+    assert prov.called is True
+
+
 def test_shell_tool_reports_nonzero_exit():
     class _Boom:
         default_timeout_seconds = 12
