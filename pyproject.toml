@@ -74,6 +74,11 @@ pgvector = "^0.3.2"
 pre-commit = "^3.8.0"
 bs4 = "^0.0.2"
 httpx = "^0.28.1"
+# Async transport for the Elasticsearch client (AsyncElasticsearch uses
+# elastic-transport's AiohttpHttpNode, which hard-requires aiohttp). Without it
+# every ES ping fails with "You must have 'aiohttp' installed to use
+# AiohttpHttpNode" and knowledge-base retrieval can never reach Elasticsearch.
+aiohttp = "^3.10"
 peft = "^0.12.0"
 anyio = "^4.6.2.post1"
 sqlparse = "^0.5.3"

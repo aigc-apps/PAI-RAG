@@ -145,6 +145,9 @@ export interface SearchEngineStatus {
   engine: "elasticsearch" | "local" | string;
   configured: boolean;
   healthy: boolean;
+  // Human reason for the reachability state (connection refused / auth / missing
+  // dependency / connected). Surfaced on the Knowledge Base settings page.
+  detail?: string;
 }
 
 export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {

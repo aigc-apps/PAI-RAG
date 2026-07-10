@@ -1008,17 +1008,26 @@ class KnowledgeService:
         return {"engine": self._search.name, "indexed": indexed, "documents": len(by_doc), "reindexed": True}
 
     async def engine_status(self) -> dict:
-        """Which retrieval engine is active + whether it's reachable (frontend badge)."""
+        """Which retrieval engine is active + whether it's reachable (frontend badge).
+
+        ``detail`` carries a human reason for the reachability state (e.g. a
+        connection-refused / auth / missing-dependency message) so the settings
+        page can explain *why* an engine is unreachable, not just that it is."""
         engine = self._search
         name = getattr(engine, "name", "local")
         configured = engine is not self._local
         healthy = True
+        detail = ""
         if configured:
             try:
-                healthy = await engine.healthy()
-            except Exception:
+                if hasattr(engine, "health_detail"):
+                    healthy, detail = await engine.health_detail()
+                else:
+                    healthy = await engine.healthy()
+            except Exception as ex:
                 healthy = False
-        return {"engine": name, "configured": configured, "healthy": healthy}
+                detail = str(ex)
+        return {"engine": name, "configured": configured, "healthy": healthy, "detail": detail}
 
     async def catalog_search(
         self,

@@ -59,12 +59,30 @@ def matches_filters(doc: KnowledgeDocumentRow, filters: dict) -> bool:
     return True
 
 
+def _es_error_reason(msg: str, url: str) -> str:
+    """Map a raw Elasticsearch/transport exception string to an actionable, human
+    (zh) reason for the settings-page reachability badge."""
+    low = msg.lower()
+    if "aiohttp" in low:
+        return "缺少 aiohttp 依赖：Elasticsearch 异步客户端需要它，请安装 aiohttp 后重试"
+    if any(k in low for k in ("unauthorized", "authentication", "401", "403", "security_exception")):
+        return "认证失败：请检查 API Key 或用户名/密码"
+    if "timeout" in low or "timed out" in low:
+        return f"连接 {url} 超时：请检查地址、端口与网络可达性"
+    if any(k in low for k in ("refused", "cannot connect", "connection error", "name or service", "nodename", "getaddrinfo", "no route")):
+        return f"无法连接到 {url}：连接被拒绝或地址不可达"
+    if "certificate" in low or "ssl" in low:
+        return f"TLS/证书校验失败：请检查证书或关闭 verify_certs（{url}）"
+    return f"连接失败：{msg}"
+
+
 class SearchEngine(Protocol):
     async def ensure_index(self, kb) -> None: ...
     async def index_chunks(self, kb, doc, chunks: list[dict]) -> None: ...
     async def delete_document(self, kb_id: str, document_id: str) -> None: ...
     async def delete_kb(self, kb_id: str) -> None: ...
     async def healthy(self) -> bool: ...
+    async def health_detail(self) -> tuple[bool, str]: ...
     async def search(
         self, *, kb_ids: list[str], query: str, mode: str = "hybrid",
         offset: int = 0, limit: int = 6, score_threshold: float = 0.0,
@@ -92,6 +110,9 @@ class LocalSearchEngine:
 
     async def healthy(self) -> bool:
         return True
+
+    async def health_detail(self) -> tuple[bool, str]:
+        return True, "本地引擎（内置，无需外部连接）"
 
     async def search(
         self, *, kb_ids, query, mode="hybrid", offset=0, limit=6,
@@ -275,12 +296,28 @@ class ElasticsearchEngine:
         except Exception:
             return 64
 
-    async def healthy(self) -> bool:
+    async def health_detail(self) -> tuple[bool, str]:
+        """Live reachability probe returning ``(ok, human_reason)``.
+
+        The reason is surfaced verbatim on the Knowledge Base settings page so a
+        failed connection is actionable instead of a silent "unhealthy". We
+        classify the common failure modes — the missing-``aiohttp`` transport
+        dependency, connection refused / bad host, auth rejection, and timeout —
+        because they need very different fixes."""
         try:
-            return bool(await self.client().ping())
+            ok = bool(await self.client().ping())
         except Exception as ex:
             logger.warning(f"[es] ping failed: {ex!r}")
-            return False
+            return False, _es_error_reason(str(ex), self._url)
+        if ok:
+            return True, f"已连接 {self._url}"
+        # ping() returns False (no exception) when ES answers non-200 or the host
+        # is simply unreachable at the transport layer.
+        return False, f"无法连接到 {self._url}：Elasticsearch 未响应 ping"
+
+    async def healthy(self) -> bool:
+        ok, _ = await self.health_detail()
+        return ok
 
     # -- offline (indexing) ------------------------------------------------- #
     async def ensure_index(self, kb) -> None:

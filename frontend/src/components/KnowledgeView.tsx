@@ -6,14 +6,14 @@ import {
 import { toast } from "sonner";
 import {
   createDataSource, createKnowledgeBase, deleteDataSource, deleteKnowledgeBase,
-  getSearchEngine, getUploadSupport, importKnowledgeDocument, listDataSources,
+  getUploadSupport, importKnowledgeDocument, listDataSources,
   listKnowledgeBases, listKnowledgeChunks, listKnowledgeDocuments, searchKnowledge,
   syncDataSource, updateDataSource, updateKnowledgeBase, uploadKnowledgeDocument,
   type KnowledgeBase, type KnowledgeBasePatch, type KnowledgeChunk,
   type KnowledgeDataSource, type KnowledgeDocument, type KnowledgeHit,
-  type SearchEngineStatus,
 } from "../api/knowledge";
 import { listModels, modelsByType, type ModelInfo } from "../api/models";
+import { EngineStatusBadge, useEngineStatus } from "./EngineStatus";
 import { cn } from "../lib/cn";
 import { copyText } from "../lib/clipboard";
 
@@ -1198,26 +1198,6 @@ function AgentAvailability({ kb, queryable }: { kb: KnowledgeBase; queryable: bo
   );
 }
 
-function EngineBadge({ engine }: { engine: SearchEngineStatus | null }) {
-  if (!engine) return null;
-  const isEs = engine.engine === "elasticsearch";
-  const ok = !engine.configured || engine.healthy;
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11.5px] text-[var(--text-muted)]"
-      title={
-        isEs
-          ? engine.healthy ? "Elasticsearch 混合检索（BM25 + 向量 kNN）已连接" : "已配置 Elasticsearch 但当前不可达，自动降级本地检索"
-          : "内置本地检索引擎（配置 ELASTICSEARCH_URL 可启用 Elasticsearch 混合检索）"
-      }
-    >
-      <Database className={cn("h-3.5 w-3.5", ok ? "text-[var(--accent)]" : "text-[var(--warning,#d97706)]")} />
-      {isEs ? "Elasticsearch" : "本地检索"}
-      {engine.configured && !engine.healthy && <span className="text-[var(--warning,#d97706)]">· 不可达</span>}
-    </span>
-  );
-}
-
 function RecallPanel({ kb }: { kb: KnowledgeBase }) {
   const init = retrievalOf(kb);
   const [query, setQuery] = useState("");
@@ -1229,10 +1209,8 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
   const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [engine, setEngine] = useState<SearchEngineStatus | null>(null);
   const [lastQuery, setLastQuery] = useState("");
-
-  useEffect(() => { getSearchEngine().then(setEngine).catch(() => setEngine(null)); }, []);
+  const { engine } = useEngineStatus();
 
   const fetchPage = async (offset: number) => {
     const filters = tag.trim() ? { tags: [tag.trim()] } : {};
@@ -1270,7 +1248,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
       <AgentAvailability kb={kb} queryable={queryable} />
       <div className="flex items-center gap-2">
         <span className="text-[12px] text-[var(--text-faint)]">检索引擎</span>
-        <EngineBadge engine={engine} />
+        <EngineStatusBadge engine={engine} />
       </div>
       <div className={CARD}>
         <div className="flex gap-2">

@@ -1,9 +1,10 @@
-import { Database } from "lucide-react";
+import { Database, RefreshCw } from "lucide-react";
 import type {
   AgentConfigDocument,
   ModelCatalogDoc,
   ModelProviderDoc,
 } from "../api/agentConfig";
+import { EngineStatusBadge, useEngineStatus } from "./EngineStatus";
 import { cn } from "../lib/cn";
 
 // A model's type as the backend `ModelSpec` stores it.
@@ -31,6 +32,14 @@ export function KnowledgeBasePanel({
   const cat = doc.models ?? {};
   const vdb = doc.knowledgebase.vectordb;
   const configured = vdb.engine === "elasticsearch" && !!vdb.url;
+
+  // Live reachability: the config-graded `vdb.status` only tells us the URL +
+  // secret are filled in, not that ES actually answers. Probe the live engine
+  // (GET /v1/knowledge/engine → ES ping) and reflect the real state here. Gated
+  // on `configured` (skip the request for the always-reachable local engine) and
+  // re-probed when the saved URL changes (a save rebuilds the backend engine).
+  const { engine, checking, refresh } = useEngineStatus(configured, vdb.url);
+
   const providers = providersOf(cat);
   const modelsByType = (type: ModelType) =>
     providers.flatMap((p) =>
@@ -59,33 +68,54 @@ export function KnowledgeBasePanel({
             知识库检索使用 Elasticsearch，全局生效。保存后新建的知识库即记录该引擎。
           </p>
         </div>
-        <div className="flex items-center gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">
-            <Database className="h-4 w-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">向量库 · Elasticsearch</div>
-            <div className="truncate font-mono text-xs text-[var(--text-muted)]">
-              {configured ? vdb.url : "未配置"}
+        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">
+              <Database className="h-4 w-4" />
             </div>
-          </div>
-          <span
-            className={cn(
-              "text-xs",
-              configured && vdb.status === "healthy"
-                ? "text-[var(--success)]"
-                : "text-[var(--text-faint)]"
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">向量库 · Elasticsearch</div>
+              <div className="truncate font-mono text-xs text-[var(--text-muted)]">
+                {configured ? vdb.url : "未配置"}
+              </div>
+            </div>
+            <EngineStatusBadge
+              variant="dot"
+              configured={configured}
+              checking={checking}
+              engine={engine}
+            />
+            {configured && (
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={checking}
+                title="重新检测可达性"
+                className="rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] disabled:opacity-50"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", checking && "animate-spin")} />
+              </button>
             )}
-          >
-            {configured ? vdb.status : "未配置"}
-          </span>
-          <button
-            type="button"
-            onClick={onConfigureVectorDB}
-            className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
-          >
-            Configure
-          </button>
+            <button
+              type="button"
+              onClick={onConfigureVectorDB}
+              className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+            >
+              Configure
+            </button>
+          </div>
+          {/* Show the reason inline (not just a tooltip) when unreachable or
+              when config is incomplete, so the fix is obvious on the page. */}
+          {configured && engine && engine.configured && !engine.healthy && (
+            <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--warning,#d97706)]">
+              {engine.detail || "已配置 Elasticsearch 但当前不可达，检索将自动降级为本地引擎。"}
+            </p>
+          )}
+          {!configured && vdb.error && (
+            <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--text-faint)]">
+              {vdb.error}
+            </p>
+          )}
         </div>
       </section>
 
