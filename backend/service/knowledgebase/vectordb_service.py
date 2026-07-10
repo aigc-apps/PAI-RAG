@@ -12,6 +12,27 @@ from common.knowledgebase.types import SUPPORTED_VECTOR_DB_TYPES
 from common.knowledgebase.constants import DEFAULT_VECTOR_ID
 
 
+def _try_create_env_connection():
+    """Best-effort creation of the environment-configured vector db connection.
+
+    ``create_vector_db_connection_from_env`` asserts that every field for the
+    environment's configured db type is present. When the environment is only
+    partially configured (e.g. ``VECTOR_DB_TYPE=hologres`` set for deployment
+    but the credentials are meant to be supplied through the UI), those asserts
+    raise and would otherwise block saving/testing a config the user provided
+    explicitly. Returning ``None`` here lets callers simply skip the env-based
+    fallback instead of failing the whole operation.
+    """
+    try:
+        return create_vector_db_connection_from_env()
+    except Exception as e:
+        logger.warning(
+            f"Could not build vector db connection from environment; "
+            f"skipping environment fallback: {e}"
+        )
+        return None
+
+
 class VectordbService:
     """Service layer for VectorDB entity CRUD operations using dependency injection."""
 
@@ -37,13 +58,22 @@ class VectordbService:
         result = await self.session.exec(select(VectorDbConfig).where(VectorDbConfig.id == DEFAULT_VECTOR_ID, VectorDbConfig.tenant_id == tenant_id))
         vector_config = result.first()
         if vector_config is None:
-            # Create from environment if not exists
-            connection = create_vector_db_connection_from_env()
-            vector_config = VectorDbConfig(
-                id=DEFAULT_VECTOR_ID,
-                type=connection.type.value,
-                config=connection.model_dump(),
-            )
+            # Create from environment if not exists. If the environment is not
+            # (fully) configured, fall back to a local default so the page can
+            # still load and the user can configure a db through the UI.
+            connection = _try_create_env_connection()
+            if connection is not None:
+                vector_config = VectorDbConfig(
+                    id=DEFAULT_VECTOR_ID,
+                    type=connection.type.value,
+                    config=connection.model_dump(),
+                )
+            else:
+                vector_config = VectorDbConfig(
+                    id=DEFAULT_VECTOR_ID,
+                    type="local",
+                    config={"type": "local"},
+                )
         return vector_config
 
     async def create_or_update_vectordb_config(
@@ -74,17 +104,21 @@ class VectordbService:
         if existing_vector_config is None:
             logger.info(f"Creating new vectordb config for type {config_data.type}")
 
-            # Handle password and sk from environment if not provided
+            # Handle password and sk from environment if not provided.
+            # The env fallback is best-effort: a partial/mismatched environment
+            # must not block saving a config the user supplied through the UI.
             if not config_data.config.get("password"):
-                env_connection = create_vector_db_connection_from_env()
-                config_data.config["encrypted_password"] = (
-                    env_connection.model_dump().get("encrypted_password")
-                )
+                env_connection = _try_create_env_connection()
+                if env_connection is not None:
+                    config_data.config["encrypted_password"] = (
+                        env_connection.model_dump().get("encrypted_password")
+                    )
             if not config_data.config.get("sk"):
-                env_connection = create_vector_db_connection_from_env()
-                config_data.config["encrypted_sk"] = (
-                    env_connection.model_dump().get("encrypted_sk")
-                )
+                env_connection = _try_create_env_connection()
+                if env_connection is not None:
+                    config_data.config["encrypted_sk"] = (
+                        env_connection.model_dump().get("encrypted_sk")
+                    )
 
             existing_vector_config = VectorDbConfig(
                 id=DEFAULT_VECTOR_ID,
@@ -152,10 +186,11 @@ class VectordbService:
                     existing_vector_config.config.get("encrypted_password")
                 )
             else:
-                env_connection = create_vector_db_connection_from_env()
-                test_config.config["encrypted_password"] = (
-                    env_connection.model_dump().get("encrypted_password")
-                )
+                env_connection = _try_create_env_connection()
+                if env_connection is not None:
+                    test_config.config["encrypted_password"] = (
+                        env_connection.model_dump().get("encrypted_password")
+                    )
 
         if not test_config.config.get("sk"):
             result = await self.session.exec(select(VectorDbConfig).where(VectorDbConfig.id == DEFAULT_VECTOR_ID, VectorDbConfig.tenant_id == tenant_id))
@@ -166,9 +201,10 @@ class VectordbService:
                     existing_vector_config.config.get("encrypted_sk")
                 )
             else:
-                env_connection = create_vector_db_connection_from_env()
-                test_config.config["encrypted_sk"] = (
-                    env_connection.model_dump().get("encrypted_sk")
-                )
+                env_connection = _try_create_env_connection()
+                if env_connection is not None:
+                    test_config.config["encrypted_sk"] = (
+                        env_connection.model_dump().get("encrypted_sk")
+                    )
 
         return test_config
