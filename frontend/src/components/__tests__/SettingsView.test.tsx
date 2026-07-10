@@ -203,9 +203,8 @@ describe("SettingsView", () => {
     await user.click(screen.getByRole("button", { name: "Tools" }));
     await user.click(screen.getByRole("button", { name: "Vector DB" }));
 
-    // ES fields are hidden until the engine is elasticsearch.
-    expect(screen.queryByLabelText("URL")).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Engine"), "elasticsearch");
+    // Elasticsearch is the only engine — its fields show immediately, no chooser.
+    expect(screen.queryByLabelText("Engine")).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("URL"), "https://es:9200");
     await user.type(screen.getByLabelText("API Key"), "es-secret");
 

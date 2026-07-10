@@ -98,7 +98,7 @@ export function ModelsPanel({
         cat={cat}
       />
 
-      <VectorDBSection doc={doc} onConfigure={onConfigureVectorDB} />
+      <KnowledgeBaseSection doc={doc} cat={cat} onConfigureVectorDB={onConfigureVectorDB} />
     </div>
   );
 }
@@ -623,48 +623,140 @@ function ModelsSection({
 }
 
 // --------------------------------------------------------------------------- //
-// Part 3 — Vector DB (not a model; reuses the existing dialog)
+// Part 3 — Knowledge Base: the RAG components used for retrieval. The vector DB
+// is configurable here (reusing the existing dialog); the embedding and rerank
+// models are read-only summaries — they are registered in the Models section
+// above and surfaced here so you can see what retrieval will use.
 // --------------------------------------------------------------------------- //
-function VectorDBSection({
+function KnowledgeBaseSection({
   doc,
-  onConfigure,
+  cat,
+  onConfigureVectorDB,
 }: {
   doc: AgentConfigDocument;
-  onConfigure: () => void;
+  cat: ModelCatalogDoc;
+  onConfigureVectorDB: () => void;
 }) {
   const vdb = doc.knowledgebase.vectordb;
+  const configured = vdb.engine === "elasticsearch" && !!vdb.url;
+  const providers = providersOf(cat);
+  const modelsByType = (type: ModelType) =>
+    providers.flatMap((p) =>
+      (p.models ?? [])
+        .filter((m) => (m.type ?? "chat") === type)
+        .map((m) => ref(p.name, m.id))
+    );
+
   return (
     <section className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold">Vector Database</h3>
+        <h3 className="text-sm font-semibold">Knowledge Base</h3>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Global vector store for knowledge base retrieval. Switching engines
-          requires re-indexing existing knowledge bases.
+          The components used for RAG retrieval. Configure the vector database
+          here; the embedding and rerank models are registered in the Models
+          section above and shown read-only.
         </p>
       </div>
+
+      {/* Vector database — configurable */}
       <div className="flex items-center gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">
           <Database className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">
-            {vdb.engine === "elasticsearch" ? "Elasticsearch" : "本地 (local)"}
+            向量库 · Elasticsearch
           </div>
           <div className="truncate font-mono text-xs text-[var(--text-muted)]">
-            {vdb.engine === "elasticsearch" ? vdb.url || "no URL set" : "built-in scan"}
+            {configured ? vdb.url : "未配置"}
           </div>
         </div>
-        <span className={cn("text-xs", vdb.status === "healthy" ? "text-[var(--success)]" : "text-[var(--text-faint)]")}>
-          {vdb.status}
+        <span
+          className={cn(
+            "text-xs",
+            configured && vdb.status === "healthy"
+              ? "text-[var(--success)]"
+              : "text-[var(--text-faint)]"
+          )}
+        >
+          {configured ? vdb.status : "未配置"}
         </span>
         <button
           type="button"
-          onClick={onConfigure}
+          onClick={onConfigureVectorDB}
           className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
         >
           Configure
         </button>
       </div>
+
+      {/* Embedding + rerank — read-only, registered above */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <RagModelReadout
+          label="Embedding 模型"
+          defaultRef={cat.default_embedding_model}
+          models={modelsByType("embedding")}
+          emptyHint="上方 Models 中注册一个 embedding 模型"
+        />
+        <RagModelReadout
+          label="Rerank 模型"
+          defaultRef={cat.default_rerank_model}
+          models={modelsByType("rerank")}
+          emptyHint="上方 Models 中注册一个 rerank 模型（可选）"
+        />
+      </div>
     </section>
+  );
+}
+
+/** Read-only summary of the models of one RAG role: which are the default and
+ * what else is available. Registration happens in the Models section above. */
+function RagModelReadout({
+  label,
+  defaultRef,
+  models,
+  emptyHint,
+}: {
+  label: string;
+  defaultRef?: string;
+  models: string[];
+  emptyHint: string;
+}) {
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-[var(--text-muted)]">
+          默认：
+          {defaultRef ? (
+            <code className="font-mono">{defaultRef}</code>
+          ) : (
+            <span className="text-[var(--text-faint)]">未设置</span>
+          )}
+        </div>
+      </div>
+      {models.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {models.map((r) => {
+            const isDefault = r === defaultRef;
+            return (
+              <span
+                key={r}
+                className={cn(
+                  "rounded-full px-2 py-0.5 font-mono text-[11px]",
+                  isDefault
+                    ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                    : "bg-[var(--surface-2)] text-[var(--text-muted)]"
+                )}
+              >
+                {r}
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 text-xs text-[var(--text-faint)]">{emptyHint}</div>
+      )}
+    </div>
   );
 }

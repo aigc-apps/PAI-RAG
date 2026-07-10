@@ -136,6 +136,33 @@ describe("ModelsPanel", () => {
     expect(saved.models.default_embedding_model).toBeUndefined();
   });
 
+  it("shows a read-only knowledge base summary of embedding/rerank models", () => {
+    const doc = docWith({
+      default_embedding_model: "dashscope/text-embedding-v4",
+      default_rerank_model: "dashscope/gte-rerank",
+      providers: [
+        {
+          name: "dashscope",
+          models: [
+            { id: "text-embedding-v4", type: "embedding", dimension: 1024 },
+            { id: "text-embedding-v3", type: "embedding", dimension: 1024 },
+            { id: "gte-rerank", type: "rerank" },
+          ],
+        },
+      ],
+    });
+    render(<ModelsPanel doc={doc} onConfigureVectorDB={vi.fn()} />);
+
+    // Both defaults are surfaced, and every registered model of each role is
+    // listed (embedding chips appear in both the Models table and the summary).
+    expect(screen.getByText("Knowledge Base")).toBeInTheDocument();
+    expect(screen.getAllByText("dashscope/text-embedding-v4").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("dashscope/gte-rerank").length).toBeGreaterThan(0);
+    // Vector DB is unconfigured (engine local by default) → shown as 未配置
+    // (both the URL line and the status chip).
+    expect(screen.getAllByText("未配置").length).toBeGreaterThan(0);
+  });
+
   it("opens the vector database dialog via Configure", async () => {
     const user = userEvent.setup();
     const onConfigureVectorDB = vi.fn();

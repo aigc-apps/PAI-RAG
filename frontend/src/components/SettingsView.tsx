@@ -1237,7 +1237,6 @@ function VectorDBConfigDialog({
   onSave: (doc: AgentConfigDocument) => Promise<void>;
 }) {
   const vdb = doc.knowledgebase.vectordb;
-  const [engine, setEngine] = useState<"local" | "elasticsearch">(vdb.engine);
   const [url, setUrl] = useState(vdb.url);
   const [indexPrefix, setIndexPrefix] = useState(vdb.index_prefix || "kb");
   const [apiKey, setApiKey] = useState("");
@@ -1257,7 +1256,9 @@ function VectorDBConfigDialog({
           // Spread first so untouched masked secrets ("********") flow through and
           // the backend restores them; only override api_key/password when typed.
           ...vdb,
-          engine,
+          // Elasticsearch is the only user-facing engine; the local SQL scan
+          // stays a backend-internal default/fallback and is never chosen here.
+          engine: "elasticsearch",
           url,
           index_prefix: indexPrefix,
           api_key_env: apiKeyEnv,
@@ -1288,20 +1289,9 @@ function VectorDBConfigDialog({
           </button>
         </div>
         <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Engine</span>
-            <select
-              value={engine}
-              onChange={(event) => setEngine(event.target.value as "local" | "elasticsearch")}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
-            >
-              <option value="local">本地 (local)</option>
-              <option value="elasticsearch">Elasticsearch</option>
-            </select>
-          </label>
-
-          {engine === "elasticsearch" && (
-            <>
+          <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
+            知识库检索使用 Elasticsearch。填写连接信息并保存后立即全局生效。
+          </div>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">URL</span>
                 <input
@@ -1389,11 +1379,9 @@ function VectorDBConfigDialog({
                   className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                 />
               </label>
-            </>
-          )}
 
           <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
-            向量引擎为全局设置。切换引擎或连接后，已建知识库需重新索引才能在新的存储中检索。
+            向量库为全局设置。修改连接后，已建知识库需重新索引才能在新存储中检索。
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-[var(--border)] px-4 py-3">
