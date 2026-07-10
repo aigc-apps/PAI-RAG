@@ -24,9 +24,10 @@ import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
 import { UsersPanel } from "./UsersPanel";
+import { ModelsPanel } from "./ModelsPanel";
 import { ThemeToggle } from "./ThemeToggle";
 
-type Tab = "agents" | "tools" | "skills" | "providers" | "users" | "yaml";
+type Tab = "agents" | "tools" | "models" | "skills" | "providers" | "users" | "yaml";
 
 function statusClass(status: string) {
   if (status === "ready" || status === "healthy") return "text-[var(--success)]";
@@ -208,6 +209,7 @@ export function SettingsView({
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: "agents", label: "Agents" },
     { id: "tools", label: "Tools" },
+    { id: "models", label: "Models" },
     { id: "skills", label: "Skills" },
     { id: "providers", label: "Providers" },
     { id: "users", label: "Users" },
@@ -278,6 +280,13 @@ export function SettingsView({
               onConfigureAliyun={() => showAliyunDialog()}
               onConfigureVectorDB={() => setVectordbOpen(true)}
               onPatchCapability={patchCapability}
+            />
+          )}
+
+          {tab === "models" && (
+            <ModelsPanel
+              doc={doc}
+              onConfigureVectorDB={() => setVectordbOpen(true)}
             />
           )}
 

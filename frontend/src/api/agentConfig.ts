@@ -59,6 +59,37 @@ export interface KnowledgeBaseConfig {
   vectordb: VectorDBConfig;
 }
 
+// The LLM/embedding/rerank model catalog (persisted as config.yaml `models:` and
+// parsed by the backend `ModelCatalog`). A provider holds the shared connection
+// (base_url + the NAME of the env var that carries its API key — never an inline
+// secret, which the models section does not mask); a model is a registration under
+// a provider carrying a `type`. Index signatures preserve fields we don't model so
+// they round-trip through PUT /v1/config untouched.
+export interface ModelSpecDoc {
+  id: string;
+  type?: "chat" | "embedding" | "rerank";
+  protocol?: "openai" | "dashscope";
+  dimension?: number;
+  base_url?: string;
+  [k: string]: unknown;
+}
+
+export interface ModelProviderDoc {
+  name: string;
+  base_url?: string;
+  api_key_env?: string;
+  models?: ModelSpecDoc[];
+  [k: string]: unknown;
+}
+
+export interface ModelCatalogDoc {
+  default_model?: string;
+  default_embedding_model?: string;
+  default_rerank_model?: string;
+  providers?: ModelProviderDoc[];
+  [k: string]: unknown;
+}
+
 export interface AgentToolsConfig {
   include: string[];
   exclude: string[];
@@ -90,7 +121,7 @@ export interface AgentProfile {
 
 export interface AgentConfigDocument {
   setup: SetupConfig;
-  models: Record<string, unknown>;
+  models: ModelCatalogDoc;
   knowledgebase: KnowledgeBaseConfig;
   skills: SkillLibraryConfig;
   default_agent: string;
