@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     # session cookie). `admin_bootstrap_token`, when set, is additionally required
     # by the first-run admin bootstrap as a second factor.
     jwt_secret: str = ""
-    jwt_ttl_minutes: int = 720
+    jwt_ttl_minutes: int = 10080  # 7 days
     invite_ttl_hours: int = 72
     cookie_secure: bool = False
     admin_bootstrap_token: str = ""
