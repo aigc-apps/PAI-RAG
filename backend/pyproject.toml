@@ -28,6 +28,7 @@ dependencies = [
   "elasticsearch>=8,<9",
   "alembic>=1.13",
   "asyncpg>=0.29",
+  "aiohttp>=3.14.1"
 ]
 
 [project.optional-dependencies]
