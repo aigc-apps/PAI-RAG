@@ -79,6 +79,8 @@ describe("App", () => {
       toolCalls: [],
     });
     render(<App />);
-    expect(await screen.findByText("hello there")).toBeInTheDocument();
+    // Appears both in the message list and as the sidebar row title for the
+    // active runtime — assert it rendered at least once.
+    expect((await screen.findAllByText("hello there")).length).toBeGreaterThan(0);
   });
 });

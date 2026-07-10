@@ -2,11 +2,25 @@ import { useEffect } from "react";
 import { Database, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useConversationsStore } from "../store/conversations";
-import { useChatStore } from "../store/chat";
+import { useChatStore, type ConvRuntime } from "../store/chat";
 import { useAgentsStore } from "../store/agents";
 import { getConversation } from "../api/conversations";
 import { cn } from "../lib/cn";
 import { UserMenu } from "./UserMenu";
+
+/** A conversation's title while it lives only in a local runtime (before the
+ * server list has it): the first user turn, or a placeholder for an empty draft. */
+function runtimeTitle(rt: ConvRuntime): string {
+  const firstUser = rt.messages.find((m) => m.role === "user" && m.text.trim());
+  return firstUser ? firstUser.text.trim() : "新对话";
+}
+
+/** True while the conversation's tail assistant message is still streaming —
+ * including a backgrounded run (local loop idle, message still open). */
+function isBusy(rt: ConvRuntime): boolean {
+  const last = rt.messages[rt.messages.length - 1];
+  return last?.role === "assistant" && last.status === "streaming";
+}
 
 export function BrandMark({ size = "sm" }: { size?: "sm" | "lg" }) {
   const dotCls = size === "lg" ? "h-7 w-7" : "h-5 w-5";
@@ -36,11 +50,13 @@ export function Sidebar({
   onOpenKnowledge?: () => void;
 }) {
   const items = useConversationsStore((s) => s.items);
-  const selectedId = useConversationsStore((s) => s.selectedId);
   const refresh = useConversationsStore((s) => s.refresh);
   const select = useConversationsStore((s) => s.select);
   const clearSelection = useConversationsStore((s) => s.clearSelection);
   const remove = useConversationsStore((s) => s.remove);
+  const runtimes = useChatStore((s) => s.runtimes);
+  const activeKey = useChatStore((s) => s.activeKey);
+  const activate = useChatStore((s) => s.activate);
   const activateByConversationId = useChatStore((s) => s.activateByConversationId);
   const hydrate = useChatStore((s) => s.hydrate);
   const newDraft = useChatStore((s) => s.newDraft);
@@ -49,6 +65,30 @@ export function Sidebar({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Highlight and streaming state key off the on-screen runtime, not the
+  // server-side `selectedId` — a brand-new/streaming conversation isn't in the
+  // server list yet, so `selectedId` alone can't represent or highlight it.
+  const activeConversationId = runtimes[activeKey]?.conversationId;
+  const serverIds = new Set(items.map((i) => i.id));
+  const busyIds = new Set(
+    Object.values(runtimes)
+      .filter((rt) => rt.conversationId && isBusy(rt))
+      .map((rt) => rt.conversationId as string)
+  );
+  // Local runtimes not yet reflected in the server list: the active draft (shown
+  // the moment "新建对话" is clicked, even empty) and any conversation still
+  // streaming before its completion refresh lands. Newest first.
+  const overlay = Object.values(runtimes)
+    .filter((rt) => !rt.conversationId || !serverIds.has(rt.conversationId))
+    .filter((rt) => rt.key === activeKey || rt.messages.length > 0)
+    .reverse();
+
+  const openRuntime = (rt: ConvRuntime) => {
+    activate(rt.key);
+    if (rt.conversationId) select(rt.conversationId);
+    else clearSelection();
+  };
 
   const openConversation = async (id: string) => {
     // Prefer an already-loaded runtime (it may be mid-stream) so its partial
@@ -116,44 +156,34 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 pb-2">
-        {items.length === 0 ? (
+        {overlay.length === 0 && items.length === 0 ? (
           <div className="px-2 py-4 text-xs text-[var(--text-faint)]">
             暂无对话
           </div>
         ) : (
-          items.map((c) => {
-            const selected = selectedId === c.id;
-            return (
-              <div
+          <>
+            {/* Local, not-yet-persisted conversations (new draft + in-flight
+                streams) render first so a new chat is switchable immediately. */}
+            {overlay.map((rt) => (
+              <ConversationRow
+                key={rt.key}
+                title={runtimeTitle(rt)}
+                selected={rt.key === activeKey}
+                busy={isBusy(rt)}
+                onOpen={() => openRuntime(rt)}
+              />
+            ))}
+            {items.map((c) => (
+              <ConversationRow
                 key={c.id}
-                onClick={() => openConversation(c.id)}
                 title={c.title || "Untitled"}
-                className={cn(
-                  "group relative flex cursor-pointer items-center justify-between rounded-[var(--radius-sm)] px-3 py-2 text-sm transition-colors",
-                  selected
-                    ? "bg-[var(--surface-2)] text-[var(--text)] font-medium"
-                    : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-                )}
-              >
-                {selected && (
-                  <span
-                    className="absolute left-0 top-1/2 h-5 -translate-y-1/2 w-[3px] rounded-r bg-[var(--accent)]"
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="truncate">{c.title || "Untitled"}</span>
-                <button
-                  type="button"
-                  aria-label="删除对话"
-                  title="删除对话"
-                  onClick={(e) => onDelete(e, c.id)}
-                  className="invisible flex-shrink-0 rounded p-1 text-[var(--text-faint)] group-hover:visible hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            );
-          })
+                selected={c.id === activeConversationId}
+                busy={busyIds.has(c.id)}
+                onOpen={() => openConversation(c.id)}
+                onDelete={(e) => onDelete(e, c.id)}
+              />
+            ))}
+          </>
         )}
       </div>
 
@@ -162,5 +192,58 @@ export function Sidebar({
         <UserMenu onOpenSettings={onOpenSettings} />
       </div>
     </aside>
+  );
+}
+
+function ConversationRow({
+  title,
+  selected,
+  busy,
+  onOpen,
+  onDelete,
+}: {
+  title: string;
+  selected: boolean;
+  busy: boolean;
+  onOpen: () => void;
+  onDelete?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      onClick={onOpen}
+      title={title}
+      className={cn(
+        "group relative flex cursor-pointer items-center justify-between gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition-colors",
+        selected
+          ? "bg-[var(--surface-2)] text-[var(--text)] font-medium"
+          : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+      )}
+    >
+      {selected && (
+        <span
+          className="absolute left-0 top-1/2 h-5 -translate-y-1/2 w-[3px] rounded-r bg-[var(--accent)]"
+          aria-hidden="true"
+        />
+      )}
+      {busy && (
+        <span
+          className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-[var(--accent)]"
+          aria-label="生成中"
+          title="生成中"
+        />
+      )}
+      <span className="truncate">{title}</span>
+      {onDelete && (
+        <button
+          type="button"
+          aria-label="删除对话"
+          title="删除对话"
+          onClick={onDelete}
+          className="invisible ml-auto flex-shrink-0 rounded p-1 text-[var(--text-faint)] group-hover:visible hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
   );
 }
