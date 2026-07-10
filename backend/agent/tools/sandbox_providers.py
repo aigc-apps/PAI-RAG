@@ -451,7 +451,26 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         work, so we log and continue rather than failing sandbox creation."""
         command = _env_bootstrap_command(env_contract)
         if not command:
+            logger.info("sandbox env bootstrap: no contract to inject sandboxId={}", sandbox_id)
             return
+        # Whether the aliyun StsToken profile will actually be written mirrors the
+        # `if ak and sk and tok` guard in _ENV_BOOTSTRAP_PY: aliyun_sts_profile=False
+        # here is the reason a sandbox reports "profile default is not configure yet".
+        # Log key NAMES only (values are secret) so this is safe and greppable.
+        contract = env_contract or {}
+        has_sts = all(
+            contract.get(k)
+            for k in (
+                "ALIBABACLOUD_ACCESS_KEY_ID",
+                "ALIBABACLOUD_ACCESS_KEY_SECRET",
+                "ALIBABACLOUD_SECURITY_TOKEN",
+            )
+        )
+        logger.info(
+            "sandbox env bootstrap: injecting {} vars, aliyun_sts_profile={} "
+            "sandboxId={} keys={}",
+            len(contract), has_sts, sandbox_id, sorted(contract),
+        )
         try:
             await self._request_async(
                 "POST",

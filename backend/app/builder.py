@@ -223,11 +223,15 @@ async def build_context(
     return ctx, conversation_id
 
 
-def _aliyun_pai_enabled(agent_config) -> bool:
+def _capability_enabled(agent_config, cap_id: str) -> bool:
     for cap in (getattr(agent_config, "capabilities", []) or []):
-        if getattr(cap, "id", "") == "aliyun_pai":
+        if getattr(cap, "id", "") == cap_id:
             return bool(getattr(cap, "enabled", False))
     return False
+
+
+def _aliyun_pai_enabled(agent_config) -> bool:
+    return _capability_enabled(agent_config, "aliyun_pai")
 
 
 async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
@@ -278,22 +282,26 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
     fresh creds before ALIBABACLOUD_SESSION_EXPIRATION so long sessions never see
     an expired token.
     """
-    # Capability off (or anonymous) is the normal "aliyun not wanted" state — stay
-    # silent so non-aliyun deployments don't log every turn.
-    if not uid or not _aliyun_pai_enabled(agent_config):
+    # An empty result means the sandbox gets no aliyun creds and its CLI reports
+    # "profile default is not configure yet" — invisible in the sandbox request logs
+    # (the env contract simply lacks ALIBABACLOUD_*), so name the reason here. Only
+    # log when a sandbox actually exists to inject into: a no-sandbox deployment has
+    # nothing to configure, so staying silent there avoids per-turn noise while never
+    # hiding a reason from a deployment that could run aliyun.
+    sandbox_on = _capability_enabled(agent_config, "sandbox")
+
+    def _skip(reason: str) -> dict:
+        if sandbox_on:
+            logger.info("aliyun sandbox env: no creds for user={} ({})", uid or "-", reason)
         return {}
+
+    if not uid:
+        return _skip("no user id on this turn")
+    if not _aliyun_pai_enabled(agent_config):
+        return _skip("aliyun_pai capability disabled")
     try:
         from agent.integrations import aliyun_sts
         from app.config import get_settings
-
-        # Past this point the capability IS enabled, so an empty result means the
-        # sandbox silently gets no aliyun creds and its CLI reports "profile default
-        # is not configure yet". That failure is invisible in the sandbox request
-        # logs (the env contract simply lacks ALIBABACLOUD_*), so name the reason
-        # here — this is the one line that tells an operator which knob is missing.
-        def _skip(reason: str) -> dict:
-            logger.info("aliyun sandbox env: no creds for user={} ({})", uid, reason)
-            return {}
 
         settings = get_settings()
         if not settings.aliyun_authz_secret:
