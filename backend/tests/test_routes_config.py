@@ -239,3 +239,41 @@ def test_enable_skill_for_agent_endpoint(tmp_path, monkeypatch):
     )
     agent = next(a for a in off.json()["config"]["agents"] if a["id"] == "main")
     assert "skill.demo" not in agent["skills"]["enabled"]
+
+
+def test_config_save_preserves_knowledge_tools(tmp_path, monkeypatch):
+    # Regression: _save_and_reload rebuilt the registry WITHOUT knowledge_service, so
+    # every PUT /v1/config silently dropped knowledge_search / view_file / grep_file /
+    # list_knowledge_bases until a process restart (the reason a running agent lost its
+    # KB tools right after a sandbox config change). It must funnel through
+    # reload_app_state, which rebinds the already-live KnowledgeService.
+    import asyncio
+    from app.routes.config import _save_and_reload
+    from app.agent_config import load_agent_config
+    from app.knowledge import KnowledgeService
+    from app.db import make_engine, create_all
+
+    config_path = str(tmp_path / "config.yaml")
+    monkeypatch.setenv("CONFIG_PATH", config_path)
+    monkeypatch.setenv("MODELS_PATH", str(tmp_path / "models.yaml"))
+
+    async def _knowledge():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        return KnowledgeService(engine, router=None)
+
+    knowledge = asyncio.run(_knowledge())
+    cat = ModelCatalog(
+        default_model="local/fast",
+        providers=[ProviderConfig(name="local", base_url="http://x/v1",
+                                  models=[ModelSpec(id="fast")])],
+    )
+    state = AppState(store=InMemoryStore(), llm=None, default_model="local/fast",
+                     router=ProviderRouter(cat), knowledge=knowledge)
+
+    doc = load_agent_config(config_path)  # file missing -> default doc (knowledge enabled)
+    _save_and_reload(config_path, doc, state)
+
+    names = set(state.registry.names())
+    assert "knowledge_search" in names
+    assert {"view_file", "grep_file", "list_knowledge_bases"} <= names

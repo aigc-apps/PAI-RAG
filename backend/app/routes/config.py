@@ -25,7 +25,6 @@ from app.auth import require_admin
 from app.config import get_settings
 from app.deps import AppState, get_state, reload_app_state
 from app.store.base import User
-from agent.tools.defaults import build_default_registry
 from agent.tools.builtin.install_skill import _install_skill_sync
 
 router = APIRouter()
@@ -79,14 +78,14 @@ def _save_and_reload(path: str, doc: AgentConfigDocument, state: AppState) -> No
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"invalid models config: {exc}") from exc
     save_agent_config(path, doc)
-    state.registry = build_default_registry(
-        settings,
-        agent_config=doc,
-        on_config_change=lambda: reload_app_state(state, settings),
-    )
     if catalog is not None and state.router is not None:
         state.router.reload(catalog)
-    state.agent_config = apply_runtime_status(doc, settings, state.router)
+    # Rebuild the registry + knowledge search engine + runtime agent_config through
+    # the single canonical reloader. A partial build_default_registry() call here used
+    # to omit knowledge_service (and skip the search-engine rebuild), so every config
+    # save silently dropped the KB tools until a process restart. Router is reloaded
+    # first so apply_runtime_status inside reload_app_state sees the fresh catalog.
+    reload_app_state(state, settings)
 
 
 def _preserve_masked_secrets(doc: AgentConfigDocument, current: AgentConfigDocument) -> None:
@@ -207,12 +206,10 @@ async def reload_env(state: AppState = Depends(get_state),
             state.router = ProviderRouter(catalog, path=settings.models_path)
     except Exception as exc:
         logger.warning("reload-env: provider router rebuild skipped: {}", exc)
-    state.registry = build_default_registry(
-        settings,
-        agent_config=doc,
-        on_config_change=lambda: reload_app_state(state, settings),
-    )
-    state.agent_config = apply_runtime_status(doc, settings, state.router)
+    # Rebuild registry + agent_config through the canonical reloader so the sandbox
+    # provider picks up refreshed env creds AND knowledge_service stays wired — the
+    # partial rebuild here previously dropped the KB tools on every reload-env.
+    reload_app_state(state, settings)
     logger.info("reload-env: .env reloaded, registry + router + agent_config rebuilt")
     return JSONResponse({"ok": True})
 
