@@ -27,6 +27,17 @@ def test_stable_prompt_has_persona_tools_safety_not_memory_or_instructions():
     assert "# Memory" not in out and "# Additional instructions" not in out
 
 
+def test_tool_protocol_carries_execution_bias():
+    # Persistence + recover-from-weak-results + verify-before-finalize live in the
+    # always-on engine layer, NOT soul.principles, so a custom persona that replaces
+    # principles can't drop them. Present even in a no-tools session.
+    for tools in (["web_fetch"], []):
+        out = render_stable_system_prompt(DEFAULT_SOUL, tool_names=tools)
+        assert "keep going until the request is fully handled" in out
+        assert "try another angle" in out  # recover from weak/empty tool results
+        assert "check that what you produced actually answers" in out  # verify
+
+
 def test_publish_artifact_guidance_only_when_tool_enabled():
     without = render_stable_system_prompt(DEFAULT_SOUL, tool_names=["web_fetch"])
     assert "publish_artifact" not in without
@@ -49,6 +60,26 @@ def test_aliyun_cli_guidance_only_when_capability_and_shell_present():
     assert "aliyun configure" in on
     # Tells the model not to discard stderr, so auth errors stay diagnosable.
     assert "2>/dev/null" in on
+
+
+def test_knowledge_guidance_only_when_knowledge_search_present():
+    without = render_stable_system_prompt(DEFAULT_SOUL, tool_names=["web_fetch"])
+    assert "knowledge base" not in without.lower()
+    on = render_stable_system_prompt(
+        DEFAULT_SOUL, tool_names=["knowledge_search", "view_file", "grep_file"]
+    )
+    # Reflex ("ground your answer") + names the sibling tools so the model
+    # disambiguates instead of defaulting to knowledge_search for everything.
+    assert "ground your answer" in on
+    assert "grep_file" in on and "view_file" in on and "list_knowledge_bases" in on
+
+
+def test_sandbox_guidance_when_code_interpreter_or_shell_present():
+    assert "runs real code" not in render_stable_system_prompt(
+        DEFAULT_SOUL, tool_names=["web_fetch"])
+    for tools in (["code_interpreter"], ["shell"]):
+        out = render_stable_system_prompt(DEFAULT_SOUL, tool_names=tools)
+        assert "runs real code" in out and "/mnt/user" in out
 
 
 def test_stable_prompt_lists_no_tools_when_empty_and_project_when_set():

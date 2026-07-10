@@ -62,10 +62,9 @@ def _format(hits, *, query: str) -> str:
         lines.append(f"    {text}")
         lines.append("")
     lines.append(
-        "Cite sources by their [n] / title when answering, and say so plainly "
-        "if the passages do not contain the answer. To read a full document use "
-        "view_file with its doc id; to open a passage in context use "
-        "view_file(chunk_id=…, mode=\"locate\"); for an exact term use grep_file."
+        "Cite sources by their [n] / title, and say plainly if the passages do "
+        "not contain the answer. To read a hit in its surrounding document, use "
+        "view_file(chunk_id=…, mode=\"locate\")."
     )
     return "\n".join(lines).rstrip()
 

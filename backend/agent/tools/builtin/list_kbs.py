@@ -47,9 +47,8 @@ def make_list_kbs_tool(knowledge_service) -> Tool:
                 lines.append(f"    {kb.description.strip()}")
         lines.append("")
         lines.append(
-            "knowledge_search and grep_file search ALL of these at once when you omit "
-            "'kb_ids'. Pass 'kb_ids' with one or more ids above to narrow to specific "
-            "bases."
+            "Pass one or more ids above as 'kb_ids' to narrow knowledge_search or "
+            "grep_file to specific bases."
         )
         return "\n".join(lines)
 

@@ -63,12 +63,19 @@ def _bullets(items: List[str]) -> str:
     return "\n".join(f"- {it}" for it in items)
 
 
-# The stable "engine" layer: capabilities/tool protocol + safety. Persona-agnostic.
+# The stable "engine" layer: tool protocol + execution bias. Persona-agnostic and
+# always on, so persistence and verification survive any Soul persona override
+# (they deliberately do NOT live in soul.principles, which a custom agent replaces).
 _TOOL_PROTOCOL = (
     "When a tool would materially help, call it with well-formed arguments. "
     "Never invent tool output or claim you used a tool you did not. Ground "
-    "factual and time-sensitive answers in tool results. Take one logical "
-    "action at a time, and stop once the request is satisfied."
+    "factual and time-sensitive answers in tool results. Work in deliberate "
+    "steps and keep going until the request is fully handled — don't stop at a "
+    "partial result or hand back a plan you could have carried out yourself. If a "
+    "tool returns nothing useful or fails, adjust and try another angle before "
+    "giving up or falling back on guesswork. Before finalizing, check that what "
+    "you produced actually answers what was asked; then stop rather than "
+    "over-working."
 )
 
 # Only added when publish_artifact is registered. Without it, models tend to
@@ -105,6 +112,42 @@ _ALIYUN_CLI_GUIDANCE = (
 )
 
 
+# Added when the knowledge subsystem is wired in (anchored on knowledge_search).
+# Reflex-level: ground answers in ingested docs, and disambiguate the four KB tools
+# so the model picks the right one instead of defaulting to knowledge_search for
+# everything. Heavier procedures (citation discipline, cross-KB compare) live in the
+# knowledge_qa skill, not here.
+_KNOWLEDGE_GUIDANCE = (
+    "A knowledge base of ingested documents is available. Before answering a "
+    "question its contents could cover, search it and ground your answer in what "
+    "you find, citing the source; if it does not contain the answer, say so plainly "
+    "rather than guessing. Pick the right tool: knowledge_search for a "
+    "meaning/keyword query (the default; it searches every accessible base at once "
+    "unless you pass kb_ids); grep_file for an exact literal string that tokenized "
+    "search misses — error codes, identifiers, API names, exact jargon; view_file to "
+    "read a whole document once a hit looks relevant, or view_file(chunk_id=…, "
+    "mode=\"locate\") to open a passage in its surrounding context; "
+    "list_knowledge_bases to see which bases exist and get their ids when you need to "
+    "narrow a search. Prefer these over your own recall for anything the docs cover."
+)
+
+
+# Added when the execution sandbox is wired in (code_interpreter and/or shell).
+# Reflex-level: reach for execution instead of computing in your head, and split the
+# two entrypoints. publish_artifact's own block covers surfacing files, so this does
+# not repeat it.
+_SANDBOX_GUIDANCE = (
+    "You have a sandbox that runs real code and shell commands. Reach for it "
+    "whenever execution beats reasoning: non-trivial arithmetic, parsing or "
+    "transforming files, data analysis, running or testing a script, checking an "
+    "actual command's output — do not compute large or precise results in your head. "
+    "Use code_interpreter to run code (e.g. Python) and shell to run shell commands; "
+    "they share the same environment and mounts, including the durable per-user "
+    "directory at /mnt/user ($AGENT_USER_PATH). Keep stderr visible when a command "
+    "fails so you can see why, and fix and retry rather than guessing at the result."
+)
+
+
 def render_stable_system_prompt(
     soul: Soul, *, tool_names: List[str], project_context: str = "",
     aliyun_pai_enabled: bool = False,
@@ -126,6 +169,13 @@ def render_stable_system_prompt(
     tools_section = "# Tools\n" + _TOOL_PROTOCOL
     if tool_names:
         tools_section += "\n\nTools available this session: " + ", ".join(tool_names) + "."
+        # Subsystem guidance, each gated on its anchor tool being present. Short and
+        # always-on so a reflex capability never depends on the model loading a skill
+        # first; verbose workflows still live in skills.
+        if "knowledge_search" in tool_names:
+            tools_section += "\n\n" + _KNOWLEDGE_GUIDANCE
+        if "code_interpreter" in tool_names or "shell" in tool_names:
+            tools_section += "\n\n" + _SANDBOX_GUIDANCE
         if "publish_artifact" in tool_names:
             tools_section += "\n\n" + _FILE_OUTPUT_GUIDANCE
         if aliyun_pai_enabled and "shell" in tool_names:

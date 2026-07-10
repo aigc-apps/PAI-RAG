@@ -81,8 +81,8 @@ def make_grep_file_tool(knowledge_service) -> Tool:
             lines.append(f"    {_snippet(m.get('text') or '', q)}")
             lines.append("")
         lines.append(
-            "Use view_file(document_id=…) to read a full match, or "
-            "view_file(chunk_id=…, mode=\"locate\") to open a hit in situ."
+            "To read a match in its surrounding document, use "
+            "view_file(chunk_id=…, mode=\"locate\")."
         )
         return "\n".join(lines).rstrip()
 
