@@ -1,0 +1,32 @@
+# Build context hygiene for the combined image (see ./Dockerfile).
+# The image rebuilds the frontend and the Python venv from source, so anything
+# derived, local, or stateful is excluded to keep the context small and to
+# avoid baking dev state / secrets into layers.
+
+.git
+.github
+docs
+sandbox
+**/*.md
+
+# Python
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Node / frontend build output (rebuilt in-image)
+**/node_modules
+frontend/dist
+
+# Local runtime state — NEVER bake these. config.yaml + skills/ ARE kept
+# (they hold only env-var-name references, no secret values).
+backend/data/*.db
+backend/data/*.db-*
+backend/data/*.bak*
+backend/data/skill-uploads
+**/*.log
+.env
+**/.env
