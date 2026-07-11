@@ -35,8 +35,7 @@ from app.routes.agents import router as agents_router
 from app.knowledge import KnowledgeService
 from app.jobs import JobQueue, register_knowledge_handlers
 from app.search_engine import build_search_engine
-from app.agent_config import apply_runtime_status, load_agent_config
-from agent.soul import Soul
+from app.agent_config import apply_runtime_status, build_soul, load_agent_config
 from agent.tools.defaults import build_default_registry
 from agent.tools.skills import load_skills
 
@@ -91,8 +90,9 @@ async def lifespan(app: FastAPI):
             await migrate(settings.db_url)
         engine = make_engine(settings.db_url)
         store = SqlStore(engine)
-    soul = Soul(name=settings.agent_name, role=settings.agent_role)
     agent_config = load_agent_config(settings.config_path)
+    # Base persona: DEFAULT_SOUL ← stored org persona (doc.soul) ← env override.
+    soul = build_soul(agent_config, settings)
     # Router before KnowledgeService: the KB service resolves its embedder/reranker
     # through the router (ingest + query). One router instance, stored on AppState.
     catalog = load_catalog(settings.models_path, settings)

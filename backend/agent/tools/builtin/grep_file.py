@@ -19,6 +19,7 @@ from loguru import logger
 
 from agent.tools.base import Tool
 from agent.tools.builtin.knowledge import _scope_user
+from agent.tools.scope import scope_default_kb_ids
 
 
 _DEFAULT_LIMIT = 10
@@ -53,10 +54,13 @@ def make_grep_file_tool(knowledge_service) -> Tool:
         q = query.strip()
         user = _scope_user()
         try:
+            # Explicit kb_ids win; else the agent's soft default; else None =
+            # every accessible KB. grep_chunks permission-checks each id per user.
+            targets = list(kb_ids) if kb_ids else (scope_default_kb_ids() or None)
             matches = await knowledge_service.grep_chunks(
                 user=user,
                 query=q,
-                kb_ids=list(kb_ids) if kb_ids else None,
+                kb_ids=targets,
                 document_id=document_id,
                 limit=max(1, min(int(limit or _DEFAULT_LIMIT), 50)),
             )

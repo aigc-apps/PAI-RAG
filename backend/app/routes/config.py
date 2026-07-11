@@ -39,6 +39,11 @@ class SearchTestPayload(BaseModel):
     num_results: int = 3
 
 
+class ModelTestPayload(BaseModel):
+    # A `provider/model-id` catalog ref; omit to test the deployment default LLM.
+    model: Optional[str] = None
+
+
 class SkillInstallPayload(BaseModel):
     source: Dict[str, Any]
     enable_for_agent: Optional[str] = None
@@ -144,6 +149,7 @@ async def update_agent_config(
     existing.models = payload.models
     existing.knowledgebase = payload.knowledgebase
     existing.skills = payload.skills
+    existing.soul = payload.soul
     existing.default_agent = payload.default_agent
     existing.agents = payload.agents
     existing.providers = payload.providers
@@ -225,6 +231,41 @@ async def test_search_provider(
         raise HTTPException(status_code=400, detail="web_search is not configured")
     output = await tool.fn(query=payload.query, num_results=payload.num_results)
     return JSONResponse({"ok": not output.startswith("web_search failed:"), "output": output})
+
+
+@router.post("/v1/config/models/test")
+async def test_model_connection(
+    payload: ModelTestPayload,
+    state: AppState = Depends(get_state),
+    admin: User = Depends(require_admin),
+):
+    """Probe an LLM connection end-to-end: resolve its key env, open the client,
+    and stream a one-token completion. Tests the *saved* catalog (save the
+    connection first), mirroring how the search test hits the live registry.
+    Never raises on a bad connection — returns ``{ok: false, output}`` so the UI
+    can show the reason inline."""
+    router_ = getattr(state, "router", None)
+    if router_ is None:
+        return JSONResponse({"ok": False, "output": "No model catalog is configured."})
+    model_id = (payload.model or getattr(router_, "default_model_id", "") or "").strip()
+    if not model_id:
+        return JSONResponse(
+            {"ok": False, "output": "No model given and no default model is set."}
+        )
+    try:
+        llm = router_.get_llm(model_id)
+    except Exception as exc:  # unknown ref, wrong type, or unset key env
+        return JSONResponse({"ok": False, "output": str(exc)})
+    try:
+        async for chunk in llm.astream(
+            [{"role": "user", "content": "ping"}], max_tokens=1
+        ):
+            err = getattr(chunk, "error_message", None)
+            if err:
+                return JSONResponse({"ok": False, "output": f"{model_id}: {err}"})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "output": f"{model_id}: {exc}"})
+    return JSONResponse({"ok": True, "output": f"{model_id} responded."})
 
 
 @router.post("/v1/skills/uploads")

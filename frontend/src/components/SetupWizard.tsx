@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, ChevronRight, Database, Globe2, Lock, Terminal } from "lucide-react";
+import { Check, ChevronRight, CircleCheck, CircleAlert, Database, Globe2, Terminal } from "lucide-react";
 import { toast } from "sonner";
 import type {
   AgentConfigDocument,
@@ -10,6 +10,7 @@ import type {
 import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { BrandMark } from "./Sidebar";
+import { ConnectionsPanel } from "./ConnectionsPanel";
 import { ThemeToggle } from "./ThemeToggle";
 
 const modes: Array<{
@@ -108,17 +109,17 @@ export function SetupWizard({
     (cap) => cap.kind === "skill" && cap.enabled
   );
 
-  const finish = async (skip = false) => {
+  // Finish is gated on a healthy model (the one required step); the optional
+  // capabilities record themselves as skipped so Control Room can prompt later.
+  const finish = async () => {
     try {
       await completeSetup({
         completed: true,
         mode,
-        skipped_steps: skip
-          ? ["model", "search", "sandbox"]
-          : [
-              ...(caps.search?.status !== "ready" ? ["search"] : []),
-              ...(caps.sandbox?.status !== "ready" ? ["sandbox"] : []),
-            ],
+        skipped_steps: [
+          ...(caps.search?.status !== "ready" ? ["search"] : []),
+          ...(caps.sandbox?.status !== "ready" ? ["sandbox"] : []),
+        ],
       });
       onDone();
     } catch {
@@ -178,25 +179,31 @@ export function SetupWizard({
         </section>
 
         <section className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="flex items-start gap-3">
-            <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2">
-              <Lock className="h-4 w-4 text-[var(--text-muted)]" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold">Model Provider</h2>
-                <span className={cn("text-xs", llmReady ? "text-[var(--success)]" : "text-[var(--warning)]")}>
-                  {llmReady ? "Ready" : "Needs setup"}
-                </span>
-              </div>
-              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
-                Current default model:{" "}
-                <span className="font-mono text-xs text-[var(--text)]">
-                  {String(providers["llm.default"]?.settings.default_model ?? "not configured")}
-                </span>
-              </p>
-            </div>
+          <div className="mb-4 flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Connect a model</h2>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                llmReady
+                  ? "bg-[var(--success)]/12 text-[var(--success)]"
+                  : "bg-[var(--warning)]/12 text-[var(--warning)]"
+              )}
+            >
+              {llmReady ? (
+                <CircleCheck className="h-3.5 w-3.5" />
+              ) : (
+                <CircleAlert className="h-3.5 w-3.5" />
+              )}
+              {llmReady ? "Ready" : "Required"}
+            </span>
           </div>
+          <p className="mb-4 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
+            This is the one thing the agent can’t run without. Add a connection,
+            register a chat model, and mark it the default. A model connects when
+            its key env var is set on the server (a keyless local endpoint is
+            ready immediately).
+          </p>
+          <ConnectionsPanel doc={doc} />
         </section>
 
         <section>
@@ -227,20 +234,15 @@ export function SetupWizard({
 
         <section className="flex flex-col gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center">
           <div className="flex-1 text-xs leading-5 text-[var(--text-muted)]">
-            Search defaults to approval, local knowledge can run automatically, and
-            sandbox execution stays disabled until explicitly configured.
+            {llmReady
+              ? "Search, sandbox, knowledge, and skills are optional — configure them now or later from Control Room."
+              : "Connect a model above to finish. Everything else can wait until after setup."}
           </div>
           <button
             type="button"
-            onClick={() => finish(true)}
-            className="rounded-[var(--radius-sm)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
-          >
-            Skip for now
-          </button>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => finish(false)}
+            disabled={loading || !llmReady}
+            title={llmReady ? undefined : "Connect a model to finish setup"}
+            onClick={() => finish()}
             className="inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             Finish setup

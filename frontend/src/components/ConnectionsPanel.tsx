@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Zap, Loader2, CircleCheck, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
 import type {
   AgentConfigDocument,
@@ -7,6 +7,8 @@ import type {
   ModelProviderDoc,
   ModelSpecDoc,
 } from "../api/agentConfig";
+import { testModelConnection } from "../api/agentConfig";
+import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
 
 // A model's type as the backend `ModelSpec` stores it; the UI labels "chat" as
@@ -24,6 +26,12 @@ const ref = (provider: string, id: string) => `${provider}/${id}`;
 
 const providersOf = (cat: ModelCatalogDoc): ModelProviderDoc[] =>
   cat.providers ?? [];
+
+/** The first chat model under a provider — what its Test button probes. */
+function firstChatRef(p: ModelProviderDoc): string | null {
+  const chat = (p.models ?? []).find((m) => (m.type ?? "chat") === "chat");
+  return chat ? ref(p.name, chat.id) : null;
+}
 
 /** Which `default_*` field a model of the given type sets. */
 function defaultKeyFor(type: ModelType): keyof ModelCatalogDoc {
@@ -49,7 +57,7 @@ function clearDefaultsPointingAt(
   return out;
 }
 
-export function ModelsPanel({ doc }: { doc: AgentConfigDocument }) {
+export function ConnectionsPanel({ doc }: { doc: AgentConfigDocument }) {
   const save = useAgentConfigStore((s) => s.save);
   const loading = useAgentConfigStore((s) => s.loading);
   const cat = doc.models ?? {};
@@ -60,25 +68,27 @@ export function ModelsPanel({ doc }: { doc: AgentConfigDocument }) {
       await save({ ...doc, models: next });
       onOk?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save models");
+      toast.error(err instanceof Error ? err.message : "Could not save connections");
     }
   };
 
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Models</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Connections</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-          Register the LLM, embedding, and rerank models available to the
-          deployment without editing YAML. A <strong>provider</strong> holds the
-          shared connection (base URL + the name of the env var carrying its API
-          key); a <strong>model</strong> is a registration under a provider with
-          a type. The vector database and RAG components live on the{" "}
+          Control Room — wire the model endpoints the whole deployment draws on,
+          once. A <strong>connection</strong> is an endpoint (base URL + the name
+          of the env var carrying its API key); under it you register the{" "}
+          <strong>models</strong> — LLM, embedding, rerank — referenced elsewhere
+          as <code className="font-mono">provider/model-id</code>. Save a
+          connection, then <strong>Test</strong> it to confirm the key resolves
+          and the endpoint answers. The vector database lives on the{" "}
           <strong>Knowledge Base</strong> tab.
         </p>
       </div>
 
-      <ProvidersSection
+      <ConnectionsSection
         providers={providers}
         loading={loading}
         onSave={saveCatalog}
@@ -96,9 +106,9 @@ export function ModelsPanel({ doc }: { doc: AgentConfigDocument }) {
 }
 
 // --------------------------------------------------------------------------- //
-// Part 1 — Model Providers
+// Part 1 — Connections (model endpoints + credentials + Test)
 // --------------------------------------------------------------------------- //
-function ProvidersSection({
+function ConnectionsSection({
   providers,
   loading,
   cat,
@@ -113,6 +123,9 @@ function ProvidersSection({
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKeyEnv, setApiKeyEnv] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
+  // Per-connection Test result keyed by provider name.
+  const [testing, setTesting] = useState<string | null>(null);
+  const [result, setResult] = useState<Record<string, { ok: boolean; output: string }>>({});
 
   const reset = () => {
     setName("");
@@ -131,7 +144,7 @@ function ProvidersSection({
   const submit = () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error("Provider name is required");
+      toast.error("Connection name is required");
       return;
     }
     // Upsert by name. When editing, the name field is locked so `editing`
@@ -151,7 +164,7 @@ function ProvidersSection({
   };
 
   const remove = (p: ModelProviderDoc) => {
-    // Deleting a provider cascades its models — clear any default that pointed
+    // Deleting a connection cascades its models — clear any default that pointed
     // at one of them so the saved catalog stays valid.
     const providers = (cat.providers ?? []).filter((x) => x.name !== p.name);
     const next = clearDefaultsPointingAt(
@@ -162,14 +175,37 @@ function ProvidersSection({
     if (editing === p.name) reset();
   };
 
+  const test = async (p: ModelProviderDoc) => {
+    const modelRef = firstChatRef(p);
+    if (!modelRef) {
+      setResult((r) => ({
+        ...r,
+        [p.name]: { ok: false, output: "Register an LLM model under this connection first." },
+      }));
+      return;
+    }
+    setTesting(p.name);
+    try {
+      const res = await testModelConnection(modelRef);
+      setResult((r) => ({ ...r, [p.name]: res }));
+    } catch (err) {
+      setResult((r) => ({
+        ...r,
+        [p.name]: { ok: false, output: err instanceof Error ? err.message : "Test failed" },
+      }));
+    } finally {
+      setTesting(null);
+    }
+  };
+
   return (
     <section className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold">Model Providers</h3>
+        <h3 className="text-sm font-semibold">Model connections</h3>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Distinct from the <em>Providers</em> tab (search/sandbox credentials).
-          These are model endpoints referenced as{" "}
-          <code className="font-mono">provider/model-id</code>.
+          Endpoints referenced as{" "}
+          <code className="font-mono">provider/model-id</code>. Only the env-var{" "}
+          <em>name</em> is stored — the secret stays in the server environment.
         </p>
       </div>
 
@@ -185,43 +221,78 @@ function ProvidersSection({
             </tr>
           </thead>
           <tbody>
-            {providers.map((p) => (
-              <tr key={p.name} className="border-b border-[var(--border)] last:border-0">
-                <td className="px-3 py-2 font-medium">{p.name}</td>
-                <td className="px-3 py-2 font-mono text-xs text-[var(--text-muted)]">
-                  {p.base_url || "—"}
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-[var(--text-muted)]">
-                  {p.api_key_env || "—"}
-                </td>
-                <td className="px-3 py-2 text-xs text-[var(--text-muted)]">
-                  {(p.models ?? []).length}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => edit(p)}
-                      className="rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--surface-2)]"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete provider ${p.name}`}
-                      onClick={() => remove(p)}
-                      className="rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--danger)]"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {providers.map((p) => {
+              const res = result[p.name];
+              return (
+                <tr key={p.name} className="border-b border-[var(--border)] last:border-0">
+                  <td className="px-3 py-2 font-medium">{p.name}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-[var(--text-muted)]">
+                    {p.base_url || "—"}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs text-[var(--text-muted)]">
+                    {p.api_key_env || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-[var(--text-muted)]">
+                    {(p.models ?? []).length}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          aria-label={`Test connection ${p.name}`}
+                          disabled={testing === p.name}
+                          onClick={() => void test(p)}
+                          className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--surface-2)] disabled:opacity-60"
+                        >
+                          {testing === p.name ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Zap className="h-3.5 w-3.5" />
+                          )}
+                          Test
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => edit(p)}
+                          className="rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--surface-2)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete connection ${p.name}`}
+                          onClick={() => remove(p)}
+                          className="rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--danger)]"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {res && (
+                        <span
+                          className={cn(
+                            "inline-flex max-w-[22rem] items-center gap-1 text-xs",
+                            res.ok ? "text-[var(--success,#16a34a)]" : "text-[var(--danger,#dc2626)]"
+                          )}
+                          title={res.output}
+                        >
+                          {res.ok ? (
+                            <CircleCheck className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <CircleAlert className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                          <span className="truncate">{res.ok ? "OK" : res.output}</span>
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {providers.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-4 text-center text-xs text-[var(--text-faint)]">
-                  No model providers yet.
+                  No connections yet.
                 </td>
               </tr>
             )}
@@ -231,7 +302,7 @@ function ProvidersSection({
 
       <div className="rounded-[var(--radius)] border border-[var(--border)] p-3">
         <div className="mb-2 text-xs font-medium text-[var(--text-muted)]">
-          {editing ? `Edit provider "${editing}"` : "Add provider"}
+          {editing ? `Edit connection "${editing}"` : "Add connection"}
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-sm">
@@ -286,7 +357,8 @@ function ProvidersSection({
         </div>
         <p className="mt-2 text-xs text-[var(--text-faint)]">
           Only the env-var <em>name</em> is stored here — the secret lives in the
-          server environment, never in the config.
+          server environment, never in the config. Set the value in{" "}
+          <code className="font-mono">.env</code> and reload env.
         </p>
       </div>
     </section>
@@ -347,7 +419,7 @@ function ModelsSection({
     const provName = provider.trim();
     const modelId = id.trim();
     if (!provName) {
-      toast.error("Choose a provider");
+      toast.error("Choose a connection");
       return;
     }
     if (!modelId) {
@@ -361,8 +433,8 @@ function ModelsSection({
     }
     if (baseUrl.trim()) spec.base_url = baseUrl.trim();
 
-    // Upsert the model into its provider's list by id, preserving the
-    // provider's own base_url and any sibling models (e.g. a shared chat model).
+    // Upsert the model into its connection's list by id, preserving the
+    // connection's own base_url and any sibling models (e.g. a shared chat model).
     const origId = editing?.id;
     const list = (cat.providers ?? []).map((p) => {
       if (p.name !== provName) return p;
@@ -416,7 +488,7 @@ function ModelsSection({
       <div>
         <h3 className="text-sm font-semibold">Models</h3>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Register a model under a provider. Mark one embedding and one rerank
+          Register a model under a connection. Mark one embedding and one rerank
           model as the default — that is what knowledge bases use. (Per-KB rerank
           enable / top-N stays in knowledge base management.)
         </p>
@@ -426,7 +498,7 @@ function ModelsSection({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-muted)]">
-              <th className="px-3 py-2 font-medium">Provider</th>
+              <th className="px-3 py-2 font-medium">Connection</th>
               <th className="px-3 py-2 font-medium">Model</th>
               <th className="px-3 py-2 font-medium">Type</th>
               <th className="px-3 py-2 font-medium">Protocol</th>
@@ -498,7 +570,7 @@ function ModelsSection({
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Provider</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Connection</span>
             <select
               aria-label="Model provider"
               value={provider}
@@ -566,7 +638,7 @@ function ModelsSection({
             <input
               aria-label="Model base URL override"
               value={baseUrl}
-              placeholder="optional — defaults to provider"
+              placeholder="optional — defaults to connection"
               onChange={(e) => setBaseUrl(e.target.value)}
               className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
             />
@@ -606,7 +678,7 @@ function ModelsSection({
         </div>
         {providers.length === 0 && (
           <p className="mt-2 text-xs text-[var(--text-faint)]">
-            Add a provider above first.
+            Add a connection above first.
           </p>
         )}
       </div>

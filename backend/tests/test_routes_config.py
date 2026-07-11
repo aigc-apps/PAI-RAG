@@ -42,6 +42,73 @@ def _client(tmp_path, monkeypatch):
     return TestClient(apply_auth(app))
 
 
+class _FakeChunk:
+    """A stream chunk with no error_message → the endpoint reads it as success."""
+
+    def __init__(self, delta=""):
+        self.delta = delta
+
+
+class _FakeLLM:
+    def astream(self, messages, tools=None, **kwargs):
+        async def gen():
+            yield _FakeChunk("pong")
+        return gen()
+
+
+def _client_and_router(tmp_path, monkeypatch):
+    config_path = str(tmp_path / "config.yaml")
+    monkeypatch.setenv("CONFIG_PATH", config_path)
+    monkeypatch.setenv("MODELS_PATH", config_path)
+    cat = ModelCatalog(
+        default_model="local/fast",
+        providers=[
+            ProviderConfig(
+                name="local",
+                base_url="http://localhost:8000/v1",
+                models=[ModelSpec(id="fast")],
+            )
+        ],
+    )
+    router = ProviderRouter(cat)
+    app = FastAPI()
+    app.state.app_state = AppState(
+        store=InMemoryStore(), llm=None, default_model="local/fast", router=router
+    )
+    app.include_router(config_router)
+    return TestClient(apply_auth(app)), router
+
+
+def test_model_test_endpoint_reports_success_for_a_reachable_model(tmp_path, monkeypatch):
+    c, router = _client_and_router(tmp_path, monkeypatch)
+    # Inject a fake client so no real network hop is made.
+    router.register_llm("local/fast", _FakeLLM())
+    r = c.post("/v1/config/models/test", json={"model": "local/fast"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert "local/fast" in body["output"]
+
+
+def test_model_test_endpoint_defaults_to_the_deployment_default(tmp_path, monkeypatch):
+    c, router = _client_and_router(tmp_path, monkeypatch)
+    router.register_llm("local/fast", _FakeLLM())
+    # No model in the body → falls back to router.default_model_id ("local/fast").
+    r = c.post("/v1/config/models/test", json={})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+def test_model_test_endpoint_fails_gracefully_for_unknown_model(tmp_path, monkeypatch):
+    c, _router = _client_and_router(tmp_path, monkeypatch)
+    r = c.post("/v1/config/models/test", json={"model": "local/nope"})
+    # Never raises — a bad ref comes back as ok:false with a reason.
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False
+    assert body["output"]
+
+
 def test_get_setup_returns_default_config(tmp_path, monkeypatch):
     c = _client(tmp_path, monkeypatch)
     body = c.get("/v1/setup").json()
@@ -52,7 +119,12 @@ def test_get_setup_returns_default_config(tmp_path, monkeypatch):
     assert any(p["id"] == "llm.default" for p in body["providers"])
     assert body["default_agent"] == "main"
     assert body["agents"][0]["id"] == "main"
-    assert body["agents"][0]["model"] == "local/fast"
+    # A blank agent model means "inherit the deployment default" — the runtime no
+    # longer back-fills it (which would freeze it on the next save). The resolved
+    # default is surfaced on the llm.default provider for the UI to show as a hint.
+    assert body["agents"][0]["model"] == ""
+    llm = next(p for p in body["providers"] if p["id"] == "llm.default")
+    assert llm["settings"]["default_model"] == "local/fast"
     assert body["models"]["default_model"] == "openai/gpt-4o-mini"
     assert "skill.web_research" not in {item["id"] for item in body["capabilities"]}
 
@@ -148,6 +220,22 @@ def test_vectordb_secret_roundtrip_masked_and_preserved(tmp_path, monkeypatch):
     vdb2 = c.put("/v1/config", json=saved).json()["knowledgebase"]["vectordb"]
     assert vdb2["status"] == "healthy"
     assert vdb2["secret_configured"] is True
+
+
+def test_org_persona_soul_survives_put_config(tmp_path, monkeypatch):
+    # The org persona (doc.soul) is edited in Control Room and saved via the
+    # whole-doc PUT; a regression where update_agent_config forgot to copy it
+    # would silently drop the section.
+    c = _client(tmp_path, monkeypatch)
+    doc = c.get("/v1/config").json()
+    assert doc["soul"]["role"] == ""      # blank by default → inherits DEFAULT_SOUL
+    doc["soul"]["role"] = "an org-wide research copilot"
+    doc["soul"]["principles"] = ["cite sources", "show your work"]
+    saved = c.put("/v1/config", json=doc).json()
+    assert saved["soul"]["role"] == "an org-wide research copilot"
+    assert saved["soul"]["principles"] == ["cite sources", "show your work"]
+    # persists across a fresh read
+    assert c.get("/v1/config").json()["soul"]["role"] == "an org-wide research copilot"
 
 
 def test_runtime_status_discovers_local_skill_packages(tmp_path):

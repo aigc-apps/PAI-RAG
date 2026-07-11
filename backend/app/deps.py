@@ -61,10 +61,14 @@ def reload_app_state(state: AppState, settings) -> None:
     so control-plane tools (e.g. ``enable_skill_for_agent``) keep refreshing the
     live state after each mutation. Imported lazily to avoid an import cycle with
     ``app.agent_config`` / ``agent.tools.defaults``."""
-    from app.agent_config import apply_runtime_status, load_agent_config
+    from app.agent_config import apply_runtime_status, build_soul, load_agent_config
     from agent.tools.defaults import build_default_registry
 
     doc = load_agent_config(settings.config_path)
+    # Rebuild the base persona from the fresh doc so a Control Room "Org Persona"
+    # edit (PUT /v1/config funnels through here) takes effect without a restart —
+    # the same live-rebuild treatment registry + search engine already get below.
+    state.soul = build_soul(doc, settings)
     state.registry = build_default_registry(
         settings,
         agent_config=doc,

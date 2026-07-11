@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
@@ -22,22 +22,48 @@ import type {
   AgentProfile,
   CapabilityConfig,
   AgentConfigDocument,
+  SoulConfig,
 } from "../api/agentConfig";
 import { generateCodeManifest } from "../api/agentConfig";
+import { listKnowledgeBases } from "../api/knowledge";
+import type { KnowledgeBase } from "../api/knowledge";
 import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
-import { ModelsPanel } from "./ModelsPanel";
+import { ConnectionsPanel } from "./ConnectionsPanel";
 import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
 import { ThemeToggle } from "./ThemeToggle";
 
-type Tab = "agents" | "tools" | "models" | "knowledge" | "skills" | "providers" | "yaml";
+type Tab = "agents" | "org-persona" | "tools" | "connections" | "knowledge" | "skills" | "yaml";
 
 function statusClass(status: string) {
   if (status === "ready" || status === "healthy") return "text-[var(--success)]";
   if (status === "missing_config") return "text-[var(--warning)]";
   if (status === "error") return "text-[var(--danger)]";
   return "text-[var(--text-faint)]";
+}
+
+// Whether a Control Room tab is provisioned enough to use. Only tabs that carry
+// a real provisioning signal return a verdict; the rest return null (no badge),
+// so the nav shows a dot exactly where an operator has something to wire.
+function tabReadiness(tab: Tab, doc: AgentConfigDocument): "ready" | "attention" | null {
+  if (tab === "connections") {
+    const llm = doc.providers.find((p) => p.id === "llm.default");
+    return llm?.status === "healthy" ? "ready" : "attention";
+  }
+  if (tab === "knowledge") {
+    const vdb = doc.knowledgebase.vectordb;
+    // The local engine needs no external service; ES must report healthy.
+    return vdb.engine === "local" || vdb.status === "healthy" ? "ready" : "attention";
+  }
+  if (tab === "tools") {
+    // Flag when a switched-on core tool is missing its backing config.
+    const broken = doc.capabilities.some(
+      (c) => c.kind === "core_tool" && c.enabled && (c.status === "missing_config" || c.status === "error")
+    );
+    return broken ? "attention" : "ready";
+  }
+  return null;
 }
 
 function statusLabel(cap: CapabilityConfig) {
@@ -210,14 +236,25 @@ export function SettingsView({
     }
   };
 
-  const tabs: Array<{ id: Tab; label: string }> = [
-    { id: "agents", label: "Agents" },
-    { id: "tools", label: "Tools" },
-    { id: "models", label: "Models" },
-    { id: "knowledge", label: "Knowledge Base" },
-    { id: "skills", label: "Skills" },
-    { id: "providers", label: "Providers" },
-    { id: "yaml", label: "YAML" },
+  // Two surfaces, split by who owns the decision. Agent Studio is where an
+  // author shapes an individual agent (daily); Control Room is where an operator
+  // wires the deployment-wide backends (rarely). The whole view stays admin-only.
+  const tabGroups: Array<{ heading: string; items: Array<{ id: Tab; label: string }> }> = [
+    {
+      heading: "Agent Studio",
+      items: [{ id: "agents", label: "Agents" }],
+    },
+    {
+      heading: "Control Room",
+      items: [
+        { id: "org-persona", label: "Org Persona" },
+        { id: "connections", label: "Connections" },
+        { id: "tools", label: "Tools" },
+        { id: "knowledge", label: "Knowledge Base" },
+        { id: "skills", label: "Skills" },
+        { id: "yaml", label: "YAML" },
+      ],
+    },
   ];
 
   return (
@@ -237,24 +274,52 @@ export function SettingsView({
       </div>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-[180px_1fr] gap-6 overflow-y-auto px-5 py-6">
-        <aside className="space-y-1">
-          {tabs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={async () => {
-                if (item.id === "yaml" && !yamlText) await openYaml();
-                else setTab(item.id);
-              }}
-              className={cn(
-                "flex w-full items-center rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition-colors",
-                tab === item.id
-                  ? "bg-[var(--surface-2)] text-[var(--text)] font-medium"
-                  : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-              )}
-            >
-              {item.label}
-            </button>
+        <aside className="space-y-5">
+          {tabGroups.map((group) => (
+            <div key={group.heading} className="space-y-1">
+              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-faint)]">
+                {group.heading}
+              </div>
+              {group.items.map((item) => {
+                const readiness = tabReadiness(item.id, doc);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={async () => {
+                      if (item.id === "yaml" && !yamlText) await openYaml();
+                      else setTab(item.id);
+                    }}
+                    className={cn(
+                      "flex w-full items-center rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition-colors",
+                      tab === item.id
+                        ? "bg-[var(--surface-2)] text-[var(--text)] font-medium"
+                        : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                    )}
+                  >
+                    {item.label}
+                    {readiness && (
+                      <span
+                        // Decorative for the button's accessible name (which stays
+                        // just the label); the title carries the readiness verdict.
+                        aria-hidden="true"
+                        title={
+                          readiness === "ready"
+                            ? `${item.label} — Ready`
+                            : `${item.label} — Needs setup`
+                        }
+                        className={cn(
+                          "ml-auto h-2 w-2 shrink-0 rounded-full",
+                          readiness === "ready"
+                            ? "bg-[var(--success)]"
+                            : "bg-[var(--warning)]"
+                        )}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </aside>
 
@@ -275,6 +340,10 @@ export function SettingsView({
             />
           )}
 
+          {tab === "org-persona" && (
+            <OrgPersonaPanel doc={doc} onSave={saveDoc} />
+          )}
+
           {tab === "tools" && (
             <ToolsPanel
               tools={coreTools}
@@ -287,7 +356,7 @@ export function SettingsView({
             />
           )}
 
-          {tab === "models" && <ModelsPanel doc={doc} />}
+          {tab === "connections" && <ConnectionsPanel doc={doc} />}
 
           {tab === "knowledge" && (
             <KnowledgeBasePanel
@@ -303,10 +372,6 @@ export function SettingsView({
               onInstall={() => setSkillInstallOpen(true)}
               onPatchCapability={patchCapability}
             />
-          )}
-
-          {tab === "providers" && (
-            <ProvidersPanel doc={doc} onEditYaml={openYaml} />
           )}
 
           {tab === "yaml" && (
@@ -424,6 +489,8 @@ const EMPTY_PERSONA: AgentPersona = {
   constraints: [],
 };
 
+const EMPTY_SOUL: SoulConfig = { name: "", ...EMPTY_PERSONA };
+
 /** Per-agent persona override editor. Every field is optional — a blank field
  * inherits the global Soul default. Local state (keyed on agent id by the parent)
  * commits the whole persona on blur, avoiding a whole-document PUT per keystroke.
@@ -513,6 +580,97 @@ function PersonaSection({
   );
 }
 
+/** Control Room → Org Persona. Edits the deployment-wide base persona (doc.soul):
+ * the house voice every agent inherits. Blank fields fall back to the built-in
+ * default; each agent's own persona then layers on top of this at request time.
+ * Commits the whole soul on blur (one PUT), mirroring PersonaSection. */
+function OrgPersonaPanel({
+  doc,
+  onSave,
+}: {
+  doc: AgentConfigDocument;
+  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+}) {
+  const current = doc.soul ?? EMPTY_SOUL;
+  const [soul, setSoul] = useState<SoulConfig>(current);
+
+  const commit = (next: SoulConfig) => {
+    if (JSON.stringify(next) !== JSON.stringify(doc.soul ?? EMPTY_SOUL)) {
+      void onSave({ ...doc, soul: next });
+    }
+  };
+
+  const text = (key: "name" | "role" | "identity" | "style") => ({
+    value: soul[key],
+    onChange: (e: { target: { value: string } }) =>
+      setSoul((s) => ({ ...s, [key]: e.target.value })),
+    onBlur: () => commit(soul),
+  });
+  const list = (key: "personality" | "principles" | "expertise" | "constraints") => ({
+    value: soul[key].join("\n"),
+    onChange: (e: { target: { value: string } }) =>
+      setSoul((s) => ({ ...s, [key]: e.target.value.split("\n") })),
+    onBlur: () => {
+      const next = { ...soul, [key]: soul[key].map((s) => s.trim()).filter(Boolean) };
+      setSoul(next);
+      commit(next);
+    },
+  });
+
+  const field = "w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm";
+  const labelCls = "mb-1 block text-xs font-medium text-[var(--text-muted)]";
+  const inheritPh = "Leave blank to use the built-in default";
+
+  return (
+    <>
+      <Header
+        title="Org Persona"
+        body="Control Room — the deployment's base persona, inherited by every agent. Blank fields use the built-in default; each agent overrides what it needs in Agent Studio. List fields: one item per line."
+      />
+      <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="grid gap-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className={labelCls}>Name</span>
+              <input {...text("name")} placeholder={inheritPh} className={field} />
+            </label>
+            <label className="block">
+              <span className={labelCls}>Role</span>
+              <input {...text("role")} placeholder={inheritPh} className={field} />
+            </label>
+          </div>
+          <label className="block">
+            <span className={labelCls}>Identity</span>
+            <textarea {...text("identity")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y")} />
+          </label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className={labelCls}>Expertise（每行一条）</span>
+              <textarea {...list("expertise")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
+            </label>
+            <label className="block">
+              <span className={labelCls}>Personality（每行一条）</span>
+              <textarea {...list("personality")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
+            </label>
+            <label className="block">
+              <span className={labelCls}>Principles（每行一条）</span>
+              <textarea {...list("principles")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
+            </label>
+            <label className="block">
+              <span className={labelCls}>Constraints（每行一条）</span>
+              <textarea {...list("constraints")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
+            </label>
+          </div>
+          <label className="block">
+            <span className={labelCls}>Style</span>
+            <textarea {...text("style")} rows={2} placeholder={inheritPh} className={cn(field, "resize-y")} />
+          </label>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /** Per-agent code-repository manifest editor. Local state (keyed on agent id by
  * the parent, so it resets on switch) avoids a whole-document PUT per keystroke —
  * it commits on blur and after an AI generation. The "generate" button drives the
@@ -592,6 +750,80 @@ function CodeManifestSection({
   );
 }
 
+// Per-agent knowledge scoping. The checkboxes bind to agent.knowledge.kb_ids;
+// leaving all unchecked means "every knowledge base the user can access" (the
+// server intersects the chosen ids with the caller's permissions either way).
+function KnowledgeSection({
+  doc,
+  agent,
+  onSave,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+}) {
+  const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    listKnowledgeBases()
+      .then((list) => alive && setKbs(list))
+      .catch(() => alive && setLoadError(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const selected = new Set(agent.knowledge?.kb_ids ?? []);
+  const scoped = selected.size > 0;
+
+  const toggle = (kbId: string) => {
+    const next = new Set(selected);
+    if (next.has(kbId)) next.delete(kbId);
+    else next.add(kbId);
+    void onSave(
+      applyAgentPatch(doc, agent.id, { knowledge: { kb_ids: [...next] } })
+    );
+  };
+
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <Database className="h-4 w-4 text-[var(--text-muted)]" />
+        <h3 className="text-sm font-semibold">Knowledge</h3>
+      </div>
+      <p className="mb-3 text-xs text-[var(--text-muted)]">
+        {scoped
+          ? "This agent defaults its knowledge search to the bases checked below."
+          : "Nothing checked — this agent searches every knowledge base the user can access."}
+      </p>
+      {loadError ? (
+        <p className="text-xs text-[var(--text-faint)]">Couldn’t load knowledge bases.</p>
+      ) : kbs.length === 0 ? (
+        <p className="text-xs text-[var(--text-faint)]">No knowledge bases yet.</p>
+      ) : (
+        <div className="space-y-1">
+          {kbs.map((kb) => (
+            <label
+              key={kb.id}
+              className="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm hover:bg-[var(--surface-2)]"
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(kb.id)}
+                onChange={() => toggle(kb.id)}
+              />
+              <span>{kb.name}</span>
+              <span className="ml-auto text-xs text-[var(--text-faint)]">{kb.visibility}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AgentsPanel({
   doc,
   agent,
@@ -619,11 +851,32 @@ function AgentsPanel({
 }) {
   const enabledTools = new Set(agent.tools.include);
   const enabledSkills = new Set(agent.skills.enabled);
+  // The resolved deployment default, surfaced by the backend on the llm.default
+  // provider (falls back to the authored catalog default). A blank agent.model
+  // inherits this at request time.
+  const llmProvider = doc.providers.find((p) => p.id === "llm.default");
+  const defaultModel = String(
+    (llmProvider?.settings as { default_model?: unknown } | undefined)?.default_model ??
+      doc.models.default_model ??
+      ""
+  );
+  // Chat models registered across the connection catalog, as `provider/id`.
+  const chatModels: string[] = (doc.models.providers ?? []).flatMap((p) =>
+    (p.models ?? [])
+      .filter((m) => m.type === "chat" || m.type === undefined)
+      .map((m) => `${p.name}/${m.id}`)
+  );
+  // Keep an already-chosen override selectable even if it's no longer in the catalog.
+  const modelOptions =
+    agent.model && !chatModels.includes(agent.model)
+      ? [agent.model, ...chatModels]
+      : chatModels;
+  const inherits = !agent.model;
   return (
     <>
       <Header
         title="Agents"
-        body="Configure how each agent uses system capabilities. Tools and providers are configured globally; agents choose which of them to use."
+        body="Agent Studio — shape an individual agent. Its persona, tools, and skills are chosen here; the backends they draw on are wired once in Control Room."
       />
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-2">
@@ -666,14 +919,36 @@ function AgentsPanel({
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Model</span>
-                <input
+                <span className="mb-1 flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
+                  Model
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      inherits
+                        ? "bg-[var(--surface-2)] text-[var(--text-muted)]"
+                        : "bg-[var(--accent-soft,var(--surface-2))] text-[var(--accent,var(--text))]"
+                    )}
+                  >
+                    {inherits ? "Using system default" : "Override"}
+                  </span>
+                </span>
+                <select
+                  aria-label="Model"
                   value={agent.model}
                   onChange={(event) =>
                     void onSave(applyAgentPatch(doc, agent.id, { model: event.target.value }))
                   }
                   className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs"
-                />
+                >
+                  <option value="">
+                    {defaultModel ? `Inherit (uses ${defaultModel})` : "Inherit (deployment default)"}
+                  </option>
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <label className="mt-3 block text-sm">
@@ -690,6 +965,8 @@ function AgentsPanel({
           </div>
 
           <PersonaSection key={`persona-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
+
+          <KnowledgeSection key={`knowledge-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
 
           {/* The manifest is a property of an agent that has activated code
               browsing — gate on this agent's own code_sandbox tool, not the
@@ -795,7 +1072,7 @@ function ToolsPanel({
     <>
       <Header
         title="System Tools"
-        body="Configure which tools exist in the deployment. Agent profiles decide whether each agent can use them."
+        body="Control Room — configure which tools exist in the deployment. Each agent decides in Agent Studio whether to use them."
       />
       <div className="grid gap-3 lg:grid-cols-3">
         {tools.map((cap) => (
@@ -901,7 +1178,7 @@ function SkillsPanel({
       <div className="mb-5 flex items-start justify-between gap-3">
         <Header
           title="System Skills"
-          body="Skills are reusable higher-level behaviors. Agents opt into skills after their dependencies are available."
+          body="Control Room — install and manage the deployment's skill library. Agents opt into skills in Agent Studio once dependencies are available."
         />
         <button
           type="button"
@@ -1173,51 +1450,6 @@ function TextInput({
   );
 }
 
-function ProvidersPanel({
-  doc,
-  onEditYaml,
-}: {
-  doc: AgentConfigDocument;
-  onEditYaml: () => void;
-}) {
-  return (
-    <>
-      <Header
-        title="Providers"
-        body="Providers hold deployment-wide credentials and endpoints. Tools and agents reference these services indirectly."
-      />
-      <div className="mb-3 flex justify-end">
-        <button
-          type="button"
-          onClick={onEditYaml}
-          className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-        >
-          Edit YAML
-        </button>
-      </div>
-      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]">
-        {doc.providers.map((provider) => (
-          <div
-            key={provider.id}
-            className="grid gap-2 border-b border-[var(--border)] px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_140px_1fr]"
-          >
-            <div>
-              <div className="font-medium">{provider.name}</div>
-              <div className="text-xs text-[var(--text-faint)]">{provider.type}</div>
-            </div>
-            <div className={cn("text-xs md:text-sm", statusClass(provider.status))}>
-              {provider.status}
-            </div>
-            <div className="text-xs text-[var(--text-muted)]">
-              Used by: {provider.used_by.join(", ") || "none"}
-            </div>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
 function YamlPanel({
   yamlText,
   setYamlText,
@@ -1235,7 +1467,7 @@ function YamlPanel({
     <>
       <Header
         title="YAML"
-        body="Advanced configuration for system capabilities and agent profiles. Secrets are masked when read from the API."
+        body="Control Room — advanced raw configuration for system capabilities and agent profiles. Secrets are masked when read from the API."
       />
       <div className="mb-3 flex justify-end gap-2">
         <button
@@ -1362,6 +1594,9 @@ function SearchConfigDialog({
               onChange={(event) => setApiKeyEnv(event.target.value)}
               className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
             />
+            <span className="mt-1 block text-xs text-[var(--text-faint)]">
+              Stored as an environment-variable name — the secret value stays on the server.
+            </span>
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Endpoint</span>
@@ -1528,6 +1763,9 @@ function VectorDBConfigDialog({
                   onChange={(event) => setApiKeyEnv(event.target.value)}
                   className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                 />
+                <span className="mt-1 block text-xs text-[var(--text-faint)]">
+                  Stored as an environment-variable name — the secret value stays on the server.
+                </span>
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Username</span>
@@ -1746,6 +1984,9 @@ function SandboxConfigDialog({
                 onChange={(event) => setApiKeyEnv(event.target.value)}
                 className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
               />
+              <span className="mt-1 block text-xs text-[var(--text-faint)]">
+                Stored as an environment-variable name — the secret value stays on the server.
+              </span>
             </Field>
             <Field label="Alibaba Cloud account ID">
               <input

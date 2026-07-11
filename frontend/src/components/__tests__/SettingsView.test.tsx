@@ -11,9 +11,16 @@ vi.mock("../../api/agentConfig", async (importActual) => ({
   generateCodeManifest: (agentId: string) => generateCodeManifest(agentId),
 }));
 
+const listKnowledgeBases = vi.fn(async () => [] as unknown[]);
+vi.mock("../../api/knowledge", async (importActual) => ({
+  ...(await importActual<typeof import("../../api/knowledge")>()),
+  listKnowledgeBases: () => listKnowledgeBases(),
+}));
+
 const baseDoc: AgentConfigDocument = {
   setup: { completed: true, skipped_steps: [] },
   models: {},
+  soul: { name: "", role: "", identity: "", personality: [], principles: [], expertise: [], style: "", constraints: [] },
   knowledgebase: {
     vectordb: {
       engine: "local",
@@ -48,6 +55,7 @@ const baseDoc: AgentConfigDocument = {
         style: "",
         constraints: [],
       },
+      knowledge: { kb_ids: [] },
       code_manifest: "",
       tools: { include: ["current_datetime"], exclude: ["code_sandbox"] },
       skills: { enabled: [] },
@@ -130,6 +138,8 @@ const codeBrowsingDoc: AgentConfigDocument = {
 describe("SettingsView", () => {
   beforeEach(() => {
     generateCodeManifest.mockReset();
+    listKnowledgeBases.mockReset();
+    listKnowledgeBases.mockResolvedValue([]);
     useAgentConfigStore.setState({
       doc: baseDoc,
       loading: false,
@@ -318,5 +328,114 @@ describe("SettingsView", () => {
       "static analysis",
       "legacy migration",
     ]);
+  });
+
+  it("edits the org persona (doc.soul) from Control Room and commits on blur", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Org Persona" }));
+    const role = screen.getByLabelText("Role");
+    await user.type(role, "an org-wide research copilot");
+    expect(save).not.toHaveBeenCalled(); // local state until blur
+    await user.tab();
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.soul.role).toBe("an org-wide research copilot");
+  });
+
+  it("shows the inherited default and switches an agent to an override model", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    const docWithModels: AgentConfigDocument = {
+      ...baseDoc,
+      models: {
+        default_model: "openai/gpt-4o-mini",
+        providers: [
+          { name: "dashscope", models: [{ id: "qwen-max", type: "chat" }] },
+        ],
+      },
+      providers: [
+        ...baseDoc.providers,
+        {
+          id: "llm.default",
+          type: "llm",
+          name: "Default model provider",
+          status: "healthy",
+          settings: { default_model: "dashscope/qwen-plus" },
+          secret_configured: true,
+          used_by: ["model"],
+        },
+      ],
+    };
+
+    render(<SettingsView doc={docWithModels} onBack={vi.fn()} />);
+
+    // Blank agent model → chip reports it inherits, and the inherit option names
+    // the resolved runtime default (from the llm.default provider, not the catalog).
+    expect(screen.getByText("Using system default")).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Inherit (uses dashscope/qwen-plus)" })
+    ).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Model"), "dashscope/qwen-max");
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].model).toBe("dashscope/qwen-max");
+  });
+
+  it("flags Control Room tabs by provisioning readiness", () => {
+    // baseDoc has no healthy llm.default provider → Connections needs setup;
+    // the local vector engine and unbroken core tools read as ready.
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    expect(screen.getByTitle("Connections — Needs setup")).toBeInTheDocument();
+    expect(screen.getByTitle("Knowledge Base — Ready")).toBeInTheDocument();
+
+    // Once a healthy default model provider exists, Connections reads as ready.
+    const ready: AgentConfigDocument = {
+      ...baseDoc,
+      providers: [
+        ...baseDoc.providers,
+        {
+          id: "llm.default",
+          type: "llm",
+          name: "Default model provider",
+          status: "healthy",
+          settings: { default_model: "dashscope/qwen-max" },
+          secret_configured: true,
+          used_by: ["model"],
+        },
+      ],
+    };
+    render(<SettingsView doc={ready} onBack={vi.fn()} />);
+    expect(screen.getAllByTitle("Connections — Ready").length).toBeGreaterThan(0);
+  });
+
+  it("scopes an agent to a subset of knowledge bases", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    listKnowledgeBases.mockResolvedValue([
+      { id: "kb_a", name: "Handbook", visibility: "workspace" },
+      { id: "kb_b", name: "Secrets", visibility: "private" },
+    ]);
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    // Loaded async → the KB appears once the promise resolves.
+    const handbook = await screen.findByText("Handbook");
+    await user.click(handbook);
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].knowledge.kb_ids).toEqual(["kb_a"]);
   });
 });

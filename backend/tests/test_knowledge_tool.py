@@ -105,6 +105,74 @@ def test_knowledge_search_explicit_kb_ids_scope():
     assert "机密调优" not in out
 
 
+def test_knowledge_search_soft_default_narrows_to_agent_kbs():
+    """With an agent-scoped default_kb_ids and no explicit kb_ids, the search is
+    confined to that base — the other accessible KB must not appear."""
+    async def scenario():
+        svc, pub, priv = await _seed()
+        tool = make_knowledge_search_tool(svc)
+        # Agent is scoped to the public KB only; Alice can reach both.
+        tok = set_current_tool_scope(
+            ToolScope(
+                user_id=ALICE.id,
+                metadata={"role": "user", "default_kb_ids": [pub.id]},
+            )
+        )
+        try:
+            out = await tool.fn(query="调优")  # no explicit kb_ids
+        finally:
+            reset_current_tool_scope(tok)
+        return out
+
+    out = asyncio.run(scenario())
+    assert "机密调优" not in out  # private tuning doc excluded by the soft default
+
+
+def test_knowledge_search_soft_default_cannot_leak_forbidden_kb():
+    """A soft default pointing at a KB the user can't access must not leak it —
+    the per-KB permission check still applies, so Bob gets nothing from it."""
+    async def scenario():
+        svc, _pub, priv = await _seed()
+        tool = make_knowledge_search_tool(svc)
+        # The agent is (mis)configured to default at Alice's private KB, but the
+        # caller is Bob, who has no access to it.
+        tok = set_current_tool_scope(
+            ToolScope(
+                user_id=BOB.id,
+                metadata={"role": "user", "default_kb_ids": [priv.id]},
+            )
+        )
+        try:
+            out = await tool.fn(query="机密 调优")
+        finally:
+            reset_current_tool_scope(tok)
+        return out
+
+    out = asyncio.run(scenario())
+    assert "机密调优" not in out  # no leak: forbidden KB filtered per-request
+
+
+def test_knowledge_search_empty_default_searches_all_accessible():
+    """Empty default_kb_ids preserves today's behavior: all accessible KBs."""
+    async def scenario():
+        svc, _pub, _priv = await _seed()
+        tool = make_knowledge_search_tool(svc)
+        tok = set_current_tool_scope(
+            ToolScope(
+                user_id=ALICE.id,
+                metadata={"role": "user", "default_kb_ids": []},
+            )
+        )
+        try:
+            out = await tool.fn(query="机密 调优")
+        finally:
+            reset_current_tool_scope(tok)
+        return out
+
+    out = asyncio.run(scenario())
+    assert "机密调优" in out  # owner still reaches the private KB when unscoped
+
+
 def test_knowledge_search_empty_and_no_kb_messages():
     async def scenario():
         engine = make_engine("sqlite+aiosqlite:///:memory:")

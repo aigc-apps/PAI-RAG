@@ -240,6 +240,13 @@ async def build_context(
     # aliyun CLI call fails: whether authz is usable here at all, and whether this
     # user is already bound (drives "去授权" vs "重新校验/重新授权").
     metadata.update(aliyun_flags)
+    # Per-agent knowledge soft default: knowledge_search / grep_file fall back to
+    # these bases when the model passes no explicit kb_ids. Each is still
+    # permission-checked per request downstream — this narrows, never widens.
+    if agent_profile is not None:
+        agent_kbs = getattr(getattr(agent_profile, "knowledge", None), "kb_ids", None)
+        if agent_kbs:
+            metadata["default_kb_ids"] = list(agent_kbs)
 
     history = items_to_messages(history_items)
     ctx = AgentContext(

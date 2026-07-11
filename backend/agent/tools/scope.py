@@ -36,6 +36,17 @@ def get_current_tool_scope() -> ToolScope:
     return _current_tool_scope.get()
 
 
+def scope_default_kb_ids() -> List[str]:
+    """The active agent's soft-default knowledge bases, threaded through
+    ``metadata['default_kb_ids']`` by the builder. Knowledge tools fall back to
+    these when the model passes no explicit ``kb_ids``. Always still
+    permission-checked per KB downstream, so this can only narrow, never widen."""
+    raw = get_current_tool_scope().metadata.get("default_kb_ids")
+    if isinstance(raw, (list, tuple)):
+        return [str(k) for k in raw if str(k).strip()]
+    return []
+
+
 def set_current_tool_scope(scope: ToolScope):
     return _current_tool_scope.set(scope)
 

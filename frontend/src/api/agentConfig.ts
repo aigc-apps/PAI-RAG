@@ -120,6 +120,13 @@ export interface AgentPersona {
   constraints: string[];
 }
 
+// Per-agent knowledge scoping. `kb_ids` is a soft default: when non-empty the
+// agent's knowledge tools default to these bases (still permission-checked per
+// request server-side). Empty = search every base the user can access.
+export interface AgentKnowledgeConfig {
+  kb_ids: string[];
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -128,6 +135,8 @@ export interface AgentProfile {
   instructions: string;
   // Per-agent persona override; blank fields inherit the global Soul.
   persona: AgentPersona;
+  // Per-agent knowledge scoping (soft default; still permission-checked per KB).
+  knowledge: AgentKnowledgeConfig;
   // Markdown describing the repos under the read-only /mnt/code layer; injected
   // into the system prompt when that layer is mounted. Can be AI-generated.
   code_manifest: string;
@@ -136,11 +145,28 @@ export interface AgentProfile {
   settings: Record<string, unknown>;
 }
 
+// The deployment-wide base persona ("organization default"), edited in Control
+// Room. Blank string / empty list means "inherit the code-level default". Every
+// agent's own persona layers on top of this at request time. Carries `name`
+// (the base agent name) in addition to the AgentPersona fields.
+export interface SoulConfig {
+  name: string;
+  role: string;
+  identity: string;
+  personality: string[];
+  principles: string[];
+  expertise: string[];
+  style: string;
+  constraints: string[];
+}
+
 export interface AgentConfigDocument {
   setup: SetupConfig;
   models: ModelCatalogDoc;
   knowledgebase: KnowledgeBaseConfig;
   skills: SkillLibraryConfig;
+  // Deployment-wide base persona; blank = inherit. Agents override per-agent.
+  soul: SoulConfig;
   default_agent: string;
   agents: AgentProfile[];
   providers: ProviderConfig[];
@@ -269,6 +295,21 @@ export async function testSearchProvider(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, num_results: numResults }),
+    })
+  );
+}
+
+// Probe an LLM connection: resolves its key env, opens the client, streams a
+// one-token completion. Tests the *saved* catalog — save the connection first.
+// `model` is a `provider/model-id` ref; omit to test the deployment default.
+export async function testModelConnection(
+  model?: string
+): Promise<{ ok: boolean; output: string }> {
+  return jsonOrThrow(
+    await apiFetch("/v1/config/models/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model }),
     })
   );
 }

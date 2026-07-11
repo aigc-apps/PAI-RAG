@@ -18,7 +18,7 @@ from typing import List, Optional
 from loguru import logger
 
 from agent.tools.base import Tool
-from agent.tools.scope import get_current_tool_scope
+from agent.tools.scope import get_current_tool_scope, scope_default_kb_ids
 
 
 # A chunk can be long; the model only needs enough to ground an answer and cite.
@@ -82,9 +82,15 @@ def make_knowledge_search_tool(knowledge_service) -> Tool:
             return "knowledge_search requires a non-empty 'query'."
         user = _scope_user()
         try:
-            targets = list(kb_ids) if kb_ids else [
-                kb.id for kb in await knowledge_service.list_kbs(user=user)
-            ]
+            # Explicit kb_ids win; else the agent's soft default (if any); else
+            # every KB the user can reach. search() re-checks each id per user, so
+            # a soft default can only narrow, never leak.
+            if kb_ids:
+                targets = list(kb_ids)
+            else:
+                targets = scope_default_kb_ids() or [
+                    kb.id for kb in await knowledge_service.list_kbs(user=user)
+                ]
             if not targets:
                 return (
                     "No knowledge bases are available to search. Ask an admin to "

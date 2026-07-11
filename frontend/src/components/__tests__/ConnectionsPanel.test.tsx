@@ -1,14 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ModelsPanel } from "../ModelsPanel";
+import { ConnectionsPanel } from "../ConnectionsPanel";
 import { useAgentConfigStore } from "../../store/agentConfig";
 import type { AgentConfigDocument, ModelCatalogDoc } from "../../api/agentConfig";
+
+const testModelConnection = vi.fn(async (_model?: string) => ({ ok: true, output: "ok" }));
+vi.mock("../../api/agentConfig", async (importActual) => ({
+  ...(await importActual<typeof import("../../api/agentConfig")>()),
+  testModelConnection: (model?: string) => testModelConnection(model),
+}));
 
 function docWith(models: ModelCatalogDoc): AgentConfigDocument {
   return {
     setup: { completed: true, skipped_steps: [] },
     models,
+    soul: { name: "", role: "", identity: "", personality: [], principles: [], expertise: [], style: "", constraints: [] },
     knowledgebase: {
       vectordb: {
         engine: "local",
@@ -44,12 +51,14 @@ let save: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   save = vi.fn(async (doc: AgentConfigDocument) => doc);
   useAgentConfigStore.setState({ loading: false, error: undefined, save });
+  testModelConnection.mockReset();
+  testModelConnection.mockResolvedValue({ ok: true, output: "ok" });
 });
 
-describe("ModelsPanel", () => {
-  it("adds a model provider", async () => {
+describe("ConnectionsPanel", () => {
+  it("adds a model connection", async () => {
     const user = userEvent.setup();
-    render(<ModelsPanel doc={docWith({})} />);
+    render(<ConnectionsPanel doc={docWith({})} />);
 
     await user.type(screen.getByLabelText("Provider name"), "dashscope");
     await user.type(
@@ -73,7 +82,7 @@ describe("ModelsPanel", () => {
 
   it("registers an embedding model as the default for its type", async () => {
     const user = userEvent.setup();
-    render(<ModelsPanel doc={withProvider} />);
+    render(<ConnectionsPanel doc={withProvider} />);
 
     await user.selectOptions(screen.getByLabelText("Model provider"), "dashscope");
     await user.selectOptions(screen.getByLabelText("Model type"), "embedding");
@@ -90,13 +99,13 @@ describe("ModelsPanel", () => {
       { id: "text-embedding-v4", type: "embedding", protocol: "dashscope", dimension: 1024 },
     ]);
     expect(saved.models.default_embedding_model).toBe("dashscope/text-embedding-v4");
-    // The provider's shared connection is untouched.
+    // The connection's shared endpoint is untouched.
     expect(provider?.base_url).toBe("https://ds/v1");
   });
 
   it("registers a rerank model and hides the dimension field", async () => {
     const user = userEvent.setup();
-    render(<ModelsPanel doc={withProvider} />);
+    render(<ConnectionsPanel doc={withProvider} />);
 
     await user.selectOptions(screen.getByLabelText("Model provider"), "dashscope");
     await user.selectOptions(screen.getByLabelText("Model type"), "rerank");
@@ -113,7 +122,7 @@ describe("ModelsPanel", () => {
     expect(saved.models.default_rerank_model).toBe("dashscope/gte-rerank");
   });
 
-  it("deleting a provider clears a default that pointed at its model", async () => {
+  it("deleting a connection clears a default that pointed at its model", async () => {
     const user = userEvent.setup();
     const doc = docWith({
       default_embedding_model: "dashscope/text-embedding-v4",
@@ -126,13 +135,55 @@ describe("ModelsPanel", () => {
         },
       ],
     });
-    render(<ModelsPanel doc={doc} />);
+    render(<ConnectionsPanel doc={doc} />);
 
-    await user.click(screen.getByRole("button", { name: "Delete provider dashscope" }));
+    await user.click(screen.getByRole("button", { name: "Delete connection dashscope" }));
 
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     expect(saved.models.providers).toHaveLength(0);
     expect(saved.models.default_embedding_model).toBeUndefined();
+  });
+
+  it("tests a connection against its first chat model", async () => {
+    const user = userEvent.setup();
+    const doc = docWith({
+      providers: [
+        {
+          name: "dashscope",
+          base_url: "https://ds/v1",
+          api_key_env: "DASHSCOPE_API_KEY",
+          models: [{ id: "qwen-max", type: "chat" }],
+        },
+      ],
+    });
+    render(<ConnectionsPanel doc={doc} />);
+
+    await user.click(screen.getByRole("button", { name: "Test connection dashscope" }));
+
+    expect(testModelConnection).toHaveBeenCalledWith("dashscope/qwen-max");
+    // The success verdict is surfaced inline.
+    expect(await screen.findByText("OK")).toBeInTheDocument();
+  });
+
+  it("won't test a connection that has no LLM model registered", async () => {
+    const user = userEvent.setup();
+    // Only an embedding model — nothing to chat-probe.
+    const doc = docWith({
+      providers: [
+        {
+          name: "dashscope",
+          base_url: "https://ds/v1",
+          api_key_env: "DASHSCOPE_API_KEY",
+          models: [{ id: "text-embedding-v4", type: "embedding", dimension: 1024 }],
+        },
+      ],
+    });
+    render(<ConnectionsPanel doc={doc} />);
+
+    await user.click(screen.getByRole("button", { name: "Test connection dashscope" }));
+
+    expect(testModelConnection).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Register an LLM model/)).toBeInTheDocument();
   });
 });
