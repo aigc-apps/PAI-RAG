@@ -7,6 +7,7 @@ import {
   GitBranch,
   Globe2,
   Loader2,
+  Plus,
   ShieldCheck,
   Settings2,
   Sparkles,
@@ -18,13 +19,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
-  AgentPersona,
   AgentProfile,
   CapabilityConfig,
   AgentConfigDocument,
-  SoulConfig,
 } from "../api/agentConfig";
-import { generateCodeManifest } from "../api/agentConfig";
+import { generateCodeManifest, newAgentProfile } from "../api/agentConfig";
 import { listKnowledgeBases } from "../api/knowledge";
 import type { KnowledgeBase } from "../api/knowledge";
 import { cn } from "../lib/cn";
@@ -247,7 +246,7 @@ export function SettingsView({
     {
       heading: "Control Room",
       items: [
-        { id: "org-persona", label: "Org Persona" },
+        { id: "org-persona", label: "Default Persona" },
         { id: "connections", label: "Connections" },
         { id: "tools", label: "Tools" },
         { id: "knowledge", label: "Knowledge Base" },
@@ -479,23 +478,11 @@ function Header({ title, body }: { title: string; body: string }) {
   );
 }
 
-const EMPTY_PERSONA: AgentPersona = {
-  role: "",
-  identity: "",
-  personality: [],
-  principles: [],
-  expertise: [],
-  style: "",
-  constraints: [],
-};
-
-const EMPTY_SOUL: SoulConfig = { name: "", ...EMPTY_PERSONA };
-
-/** Per-agent persona override editor. Every field is optional — a blank field
- * inherits the global Soul default. Local state (keyed on agent id by the parent)
- * commits the whole persona on blur, avoiding a whole-document PUT per keystroke.
- * List fields are edited one item per line. */
-function PersonaSection({
+/** Per-agent Instructions editor — the agent's full system prompt (freeform
+ * Markdown). This IS the agent's persona/base prompt; tools and skills are
+ * appended automatically. Local state (keyed on agent id by the parent) commits
+ * on blur, avoiding a whole-document PUT per keystroke. */
+function InstructionsSection({
   doc,
   agent,
   onSave,
@@ -504,86 +491,40 @@ function PersonaSection({
   agent: AgentProfile;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
-  const [persona, setPersona] = useState<AgentPersona>(agent.persona ?? EMPTY_PERSONA);
+  const [text, setText] = useState<string>(agent.instructions ?? "");
 
-  // Commit the given value (not the state closure, which lags behind blur-time
-  // normalization) via the whole-doc save, and only when it actually changed.
-  const commit = (next: AgentPersona) => {
-    if (JSON.stringify(next) !== JSON.stringify(agent.persona ?? EMPTY_PERSONA)) {
-      void onSave(applyAgentPatch(doc, agent.id, { persona: next }));
+  const commit = () => {
+    if (text !== (agent.instructions ?? "")) {
+      void onSave(applyAgentPatch(doc, agent.id, { instructions: text }));
     }
   };
-
-  const text = (key: "role" | "identity" | "style") => ({
-    value: persona[key],
-    onChange: (e: { target: { value: string } }) =>
-      setPersona((p) => ({ ...p, [key]: e.target.value })),
-    onBlur: () => commit(persona),
-  });
-  const list = (key: "personality" | "principles" | "expertise" | "constraints") => ({
-    value: persona[key].join("\n"),
-    onChange: (e: { target: { value: string } }) =>
-      setPersona((p) => ({ ...p, [key]: e.target.value.split("\n") })),
-    // Normalize on blur: trim, drop blank lines, sync state and commit the cleaned value.
-    onBlur: () => {
-      const next = { ...persona, [key]: persona[key].map((s) => s.trim()).filter(Boolean) };
-      setPersona(next);
-      commit(next);
-    },
-  });
-
-  const field = "w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm";
-  const labelCls = "mb-1 block text-xs font-medium text-[var(--text-muted)]";
 
   return (
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-1 flex items-center gap-2">
         <UserRound className="h-4 w-4 text-[var(--text-muted)]" />
-        <h3 className="text-sm font-semibold">Persona</h3>
+        <h3 className="text-sm font-semibold">Instructions</h3>
       </div>
       <p className="mb-3 text-xs text-[var(--text-muted)]">
-        覆盖该 agent 的人格设定，注入 system prompt。留空的字段继承全局默认；列表字段每行一条。
+        The agent's full system prompt (Markdown). This is its persona — tools and
+        skills are appended automatically. Leave blank to use the built-in default.
       </p>
-      <div className="grid gap-3">
-        <label className="block">
-          <span className={labelCls}>Role</span>
-          <input {...text("role")} placeholder="留空继承全局默认" className={field} />
-        </label>
-        <label className="block">
-          <span className={labelCls}>Identity</span>
-          <textarea {...text("identity")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y")} />
-        </label>
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="block">
-            <span className={labelCls}>Expertise（每行一条）</span>
-            <textarea {...list("expertise")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
-          </label>
-          <label className="block">
-            <span className={labelCls}>Personality（每行一条）</span>
-            <textarea {...list("personality")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
-          </label>
-          <label className="block">
-            <span className={labelCls}>Principles（每行一条）</span>
-            <textarea {...list("principles")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
-          </label>
-          <label className="block">
-            <span className={labelCls}>Constraints（每行一条）</span>
-            <textarea {...list("constraints")} rows={3} placeholder="留空继承全局默认" className={cn(field, "resize-y font-mono text-xs")} />
-          </label>
-        </div>
-        <label className="block">
-          <span className={labelCls}>Style</span>
-          <textarea {...text("style")} rows={2} placeholder="留空继承全局默认" className={cn(field, "resize-y")} />
-        </label>
-      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        rows={14}
+        placeholder="Leave blank to use the built-in default persona"
+        className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-6"
+      />
     </div>
   );
 }
 
-/** Control Room → Org Persona. Edits the deployment-wide base persona (doc.soul):
- * the house voice every agent inherits. Blank fields fall back to the built-in
- * default; each agent's own persona then layers on top of this at request time.
- * Commits the whole soul on blur (one PUT), mirroring PersonaSection. */
+/** Control Room → Default Persona. Edits the deployment-wide template
+ * (doc.default_instructions) that SEEDS a new agent's Instructions at creation.
+ * It is a snapshot copy — editing it never changes existing agents, and it is
+ * never merged into them at runtime. Commits on blur (one PUT). */
 function OrgPersonaPanel({
   doc,
   onSave,
@@ -591,81 +532,29 @@ function OrgPersonaPanel({
   doc: AgentConfigDocument;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
-  const current = doc.soul ?? EMPTY_SOUL;
-  const [soul, setSoul] = useState<SoulConfig>(current);
+  const [text, setText] = useState<string>(doc.default_instructions ?? "");
 
-  const commit = (next: SoulConfig) => {
-    if (JSON.stringify(next) !== JSON.stringify(doc.soul ?? EMPTY_SOUL)) {
-      void onSave({ ...doc, soul: next });
+  const commit = () => {
+    if (text !== (doc.default_instructions ?? "")) {
+      void onSave({ ...doc, default_instructions: text });
     }
   };
-
-  const text = (key: "name" | "role" | "identity" | "style") => ({
-    value: soul[key],
-    onChange: (e: { target: { value: string } }) =>
-      setSoul((s) => ({ ...s, [key]: e.target.value })),
-    onBlur: () => commit(soul),
-  });
-  const list = (key: "personality" | "principles" | "expertise" | "constraints") => ({
-    value: soul[key].join("\n"),
-    onChange: (e: { target: { value: string } }) =>
-      setSoul((s) => ({ ...s, [key]: e.target.value.split("\n") })),
-    onBlur: () => {
-      const next = { ...soul, [key]: soul[key].map((s) => s.trim()).filter(Boolean) };
-      setSoul(next);
-      commit(next);
-    },
-  });
-
-  const field = "w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm";
-  const labelCls = "mb-1 block text-xs font-medium text-[var(--text-muted)]";
-  const inheritPh = "Leave blank to use the built-in default";
 
   return (
     <>
       <Header
-        title="Org Persona"
-        body="Control Room — the deployment's base persona, inherited by every agent. Blank fields use the built-in default; each agent overrides what it needs in Agent Studio. List fields: one item per line."
+        title="Default Persona"
+        body="Control Room — the Markdown a new agent starts from. New agents copy this into their own Instructions at creation; editing it here doesn't change existing agents. Leave blank to seed new agents from the built-in default."
       />
       <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-        <div className="grid gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className={labelCls}>Name</span>
-              <input {...text("name")} placeholder={inheritPh} className={field} />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Role</span>
-              <input {...text("role")} placeholder={inheritPh} className={field} />
-            </label>
-          </div>
-          <label className="block">
-            <span className={labelCls}>Identity</span>
-            <textarea {...text("identity")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y")} />
-          </label>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className={labelCls}>Expertise（每行一条）</span>
-              <textarea {...list("expertise")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Personality（每行一条）</span>
-              <textarea {...list("personality")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Principles（每行一条）</span>
-              <textarea {...list("principles")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
-            </label>
-            <label className="block">
-              <span className={labelCls}>Constraints（每行一条）</span>
-              <textarea {...list("constraints")} rows={3} placeholder={inheritPh} className={cn(field, "resize-y font-mono text-xs")} />
-            </label>
-          </div>
-          <label className="block">
-            <span className={labelCls}>Style</span>
-            <textarea {...text("style")} rows={2} placeholder={inheritPh} className={cn(field, "resize-y")} />
-          </label>
-        </div>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          rows={18}
+          placeholder="Leave blank to use the built-in default persona"
+          className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-6"
+        />
       </div>
     </>
   );
@@ -899,6 +788,25 @@ function AgentsPanel({
               )}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              const existing = new Set(agents.map((a) => a.id));
+              let n = agents.length + 1;
+              let id = `agent-${n}`;
+              while (existing.has(id)) id = `agent-${++n}`;
+              const created = newAgentProfile(doc, id, `New agent ${n}`);
+              void onSave(
+                { ...doc, agents: [...doc.agents, created] },
+                "Agent created"
+              );
+              setSelectedAgentId(id);
+            }}
+            className="mt-1 flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New agent</span>
+          </button>
         </div>
 
         <div className="space-y-4">
@@ -951,20 +859,9 @@ function AgentsPanel({
                 </select>
               </label>
             </div>
-            <label className="mt-3 block text-sm">
-              <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Instructions</span>
-              <textarea
-                value={agent.instructions}
-                onChange={(event) =>
-                  void onSave(applyAgentPatch(doc, agent.id, { instructions: event.target.value }))
-                }
-                rows={4}
-                className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm"
-              />
-            </label>
           </div>
 
-          <PersonaSection key={`persona-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
+          <InstructionsSection key={`instructions-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
 
           <KnowledgeSection key={`knowledge-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
 

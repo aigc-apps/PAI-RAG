@@ -120,7 +120,7 @@ async def generate_code_manifest(
     # chat history is created by generation.
     try:
         ctx, _conv = await build_context(
-            request, state.store, soul=state.soul, registry=state.registry,
+            request, state.store, registry=state.registry,
             agent_config=state.agent_config,
             project_context=getattr(state, "project_context", ""),
             authenticated_user_id=_admin.id,

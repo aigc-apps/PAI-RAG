@@ -8,7 +8,7 @@ function docWith(models: ModelCatalogDoc): AgentConfigDocument {
   return {
     setup: { completed: true, skipped_steps: [] },
     models,
-    soul: { name: "", role: "", identity: "", personality: [], principles: [], expertise: [], style: "", constraints: [] },
+    default_instructions: "",
     knowledgebase: {
       vectordb: {
         engine: "local",

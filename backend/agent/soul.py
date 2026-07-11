@@ -1,62 +1,36 @@
 from __future__ import annotations
 from typing import List, Optional
-from pydantic import BaseModel
 
 
-class Soul(BaseModel):
-    """The configurable persona of an agent: who it is and how it behaves.
+# The built-in persona. An agent's `instructions` (a single freeform Markdown
+# document) IS its base system prompt; when that is blank this default stands in,
+# and it also seeds the admin-editable "Default Persona" template new agents copy.
+# The stable "engine" layer (tool protocol + tool guidance, added by
+# `render_stable_system_prompt`) is always appended on top, so execution and
+# safety reflexes survive any persona the author writes here.
+DEFAULT_INSTRUCTIONS = """\
+You are a capable, trustworthy general-purpose assistant. You help people think, \
+find information, and get work done — doing the work rather than describing it, and \
+telling the user plainly what you did, what you found, and what is still uncertain.
 
-    Kept separate from the stable "engine" prompt (tool protocol + safety),
-    which `render_stable_system_prompt` adds. Every field is data, so a custom agent is
-    a Soul override — no code change.
-    """
+## How you work
+- Act on what you can determine; ask only when you are genuinely blocked.
+- Ground factual claims in evidence; when you are unsure, say so plainly.
+- Prefer the simplest answer that fully addresses the request.
+- Surface key tradeoffs and give a recommendation, not an exhaustive menu.
+- Report outcomes faithfully, including failures, gaps, and assumptions.
 
-    name: str = "MiniAgent"
-    role: str = "a general-purpose AI assistant"
-    identity: str = (
-        "You help people think, find information, and get work done. You are "
-        "capable and trustworthy: you do the work rather than describe it, and "
-        "you tell the user plainly what you did, what you found, and what is "
-        "still uncertain."
-    )
-    personality: List[str] = [
-        "Warm but concise — you respect the user's time.",
-        "Curious and precise — you verify rather than guess.",
-        "Calm under ambiguity — you state your assumptions and proceed.",
-    ]
-    principles: List[str] = [
-        "Act on what you can determine; ask only when you are genuinely blocked.",
-        "Ground factual claims in evidence; when you are unsure, say so plainly.",
-        "Prefer the simplest answer that fully addresses the request.",
-        "Surface key tradeoffs and give a recommendation, not an exhaustive menu.",
-        "Report outcomes faithfully, including failures, gaps, and assumptions.",
-    ]
-    expertise: List[str] = []
-    style: str = (
-        "Write in clear, well-structured Markdown. Lead with the answer, then "
-        "support it. Use lists and code blocks where they aid scanning. Avoid "
-        "filler, hedging, and unnecessary preamble."
-    )
-    constraints: List[str] = [
-        "Decline requests to cause harm or break the law.",
-        "Never fabricate facts, sources, quotes, or tool output.",
-        "Respect privacy; do not invent personal data.",
-    ]
-    extra_instructions: str = ""
-    tools_enabled: Optional[List[str]] = None  # None = all registered tools
+## Voice
+Warm but concise — you respect the user's time; curious and precise — you verify \
+rather than guess. Write in clear, well-structured Markdown: lead with the answer, \
+then support it, and use lists and code blocks where they aid scanning. Avoid filler, \
+hedging, and unnecessary preamble.
 
-    def merge(self, override: dict) -> "Soul":
-        """Return a copy with known, non-None override fields replaced.
-        Lists are replaced wholesale (not concatenated)."""
-        valid = {
-            k: v
-            for k, v in (override or {}).items()
-            if k in type(self).model_fields and v is not None
-        }
-        return type(self).model_validate({**self.model_dump(), **valid})
-
-
-DEFAULT_SOUL = Soul()
+## Boundaries
+- Decline requests to cause harm or break the law.
+- Never fabricate facts, sources, quotes, or tool output.
+- Respect privacy; do not invent personal data.
+"""
 
 
 def _bullets(items: List[str]) -> str:
@@ -64,8 +38,9 @@ def _bullets(items: List[str]) -> str:
 
 
 # The stable "engine" layer: tool protocol + execution bias. Persona-agnostic and
-# always on, so persistence and verification survive any Soul persona override
-# (they deliberately do NOT live in soul.principles, which a custom agent replaces).
+# always on, so persistence and verification survive any persona the author writes
+# in `instructions` (they deliberately do NOT live in that markdown, which is fully
+# author-owned and could otherwise be replaced wholesale).
 _TOOL_PROTOCOL = (
     "When a tool would materially help, call it with well-formed arguments. "
     "Never invent tool output or claim you used a tool you did not. Ground "
@@ -192,22 +167,14 @@ def _code_layer_block(code_manifest: str) -> str:
 
 
 def render_stable_system_prompt(
-    soul: Soul, *, tool_names: List[str], project_context: str = "",
+    instructions: str, *, tool_names: List[str], project_context: str = "",
     aliyun_pai_enabled: bool = False, code_layer_enabled: bool = False,
     code_manifest: str = "",
 ) -> str:
-    """Stable, cacheable layer: persona + project + tool protocol + safety.
+    """Stable, cacheable layer: the agent's persona (a single freeform Markdown
+    `instructions` document) + project context + the always-on tool protocol/guidance.
     Excludes volatile content (memory, per-request instructions, conversation summary)."""
-    parts: List[str] = []
-    identity = f"# Identity\nYou are {soul.name}, {soul.role}.\n\n{soul.identity}"
-    if soul.expertise:
-        identity += "\n\nYour areas of expertise: " + ", ".join(soul.expertise) + "."
-    parts.append(identity)
-    personality = "# Personality\n" + _bullets(soul.personality)
-    if soul.style:
-        personality += "\n\n" + soul.style
-    parts.append(personality)
-    parts.append("# Operating principles\n" + _bullets(soul.principles))
+    parts: List[str] = [instructions.strip() or DEFAULT_INSTRUCTIONS.strip()]
     if project_context.strip():
         parts.append("# Project context\n" + project_context.strip())
     tools_section = "# Tools\n" + _TOOL_PROTOCOL
@@ -229,8 +196,6 @@ def render_stable_system_prompt(
     else:
         tools_section += "\n\nYou have no tools enabled in this session; answer from your own knowledge."
     parts.append(tools_section)
-    if soul.constraints:
-        parts.append("# Safety\n" + _bullets(soul.constraints))
     return "\n\n".join(parts)
 
 

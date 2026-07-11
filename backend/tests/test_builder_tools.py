@@ -31,13 +31,19 @@ def test_build_context_wires_registry_tools_and_names_them_in_prompt():
     asyncio.run(run())
 
 
-def test_soul_tools_enabled_filters_the_toolbox():
+def test_profile_include_filters_the_toolbox():
     async def run():
+        from app.agent_config import AgentProfile, AgentToolsConfig
         reg = build_default_registry(_Settings())
-        req = ResponsesRequest(
-            model="m", input="hi", soul={"tools_enabled": ["current_datetime"]}
+        cfg = types.SimpleNamespace(
+            agents=[AgentProfile(id="main", name="Main",
+                                 tools=AgentToolsConfig(include=["current_datetime"]))],
+            default_agent="main",
+            skills=types.SimpleNamespace(root="/nonexistent"),
+            capabilities=[], providers=[],
         )
-        ctx, _ = await build_context(req, InMemoryStore(), registry=reg)
+        req = ResponsesRequest(model="m", input="hi")
+        ctx, _ = await build_context(req, InMemoryStore(), registry=reg, agent_config=cfg)
         assert [t.name for t in ctx.tools.tools] == ["current_datetime"]
         assert "web_fetch" not in ctx.system_prompt
 

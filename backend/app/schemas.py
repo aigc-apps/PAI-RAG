@@ -20,7 +20,6 @@ class ResponsesRequest(BaseModel):
     background: bool = False
     metadata: Optional[Dict[str, str]] = None
     tools: Optional[List[Dict[str, Any]]] = None
-    soul: Optional[Dict[str, Any]] = None
     user: Optional[str] = None
     safety_identifier: Optional[str] = None
     memory: bool = True

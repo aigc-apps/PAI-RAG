@@ -4,7 +4,6 @@ from typing import Optional
 from fastapi import Request
 from agent.agent import Agent
 from agent.budgeting import AgentMessageManager
-from agent.soul import Soul, DEFAULT_SOUL
 from agent.tools.registry import ToolRegistry
 from app.runs import RunManager
 from app.providers import ProviderRouter
@@ -17,7 +16,6 @@ class AppState:
     default_model: str
     context_window: int = 110000
     max_output_tokens: int = 8000
-    soul: Soul = field(default_factory=lambda: DEFAULT_SOUL)
     registry: ToolRegistry = field(default_factory=ToolRegistry)
     runs: RunManager = field(default_factory=RunManager)
     router: Optional[ProviderRouter] = None
@@ -61,14 +59,10 @@ def reload_app_state(state: AppState, settings) -> None:
     so control-plane tools (e.g. ``enable_skill_for_agent``) keep refreshing the
     live state after each mutation. Imported lazily to avoid an import cycle with
     ``app.agent_config`` / ``agent.tools.defaults``."""
-    from app.agent_config import apply_runtime_status, build_soul, load_agent_config
+    from app.agent_config import apply_runtime_status, load_agent_config
     from agent.tools.defaults import build_default_registry
 
     doc = load_agent_config(settings.config_path)
-    # Rebuild the base persona from the fresh doc so a Control Room "Org Persona"
-    # edit (PUT /v1/config funnels through here) takes effect without a restart —
-    # the same live-rebuild treatment registry + search engine already get below.
-    state.soul = build_soul(doc, settings)
     state.registry = build_default_registry(
         settings,
         agent_config=doc,

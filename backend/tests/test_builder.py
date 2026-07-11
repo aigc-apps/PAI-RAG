@@ -29,7 +29,8 @@ def test_build_context_from_string_input():
         assert "be terse" in ctx.context_block
         assert "# Additional instructions" in ctx.context_block
         assert "be terse" not in ctx.system_prompt
-        assert "# Identity" in ctx.system_prompt
+        # The default persona (the base prompt) + the always-on Tools section.
+        assert "# Tools" in ctx.system_prompt
         assert ctx.history == []
         assert conv_id is not None
 
@@ -239,48 +240,15 @@ def test_build_context_conflicting_ids_raises_value_error():
     asyncio.run(run())
 
 
-def test_build_context_renders_default_soul_into_system_prompt():
+def test_build_context_renders_default_persona_into_system_prompt():
     async def run():
-        from agent.soul import DEFAULT_SOUL
+        from agent.soul import DEFAULT_INSTRUCTIONS
         st = InMemoryStore()
         req = ResponsesRequest(model="m", input="hi")
         ctx, _ = await build_context(req, st)
-        assert DEFAULT_SOUL.name in ctx.system_prompt
-        assert "# Operating principles" in ctx.system_prompt
+        # With no agent config, the built-in default persona is the base prompt.
+        assert DEFAULT_INSTRUCTIONS.strip() in ctx.system_prompt
         # no tools wired in this plan
         assert "no tools" in ctx.system_prompt.lower()
 
-    asyncio.run(run())
-
-
-def test_build_context_applies_request_soul_override():
-    async def run():
-        st = InMemoryStore()
-        req = ResponsesRequest(
-            model="m", input="hi", soul={"name": "Lex", "role": "a legal analyst"}
-        )
-        ctx, _ = await build_context(req, st)
-        assert "You are Lex, a legal analyst." in ctx.system_prompt
-
-    asyncio.run(run())
-
-
-def test_build_context_accepts_explicit_soul_argument():
-    async def run():
-        from agent.soul import Soul
-        st = InMemoryStore()
-        req = ResponsesRequest(model="m", input="hi")
-        ctx, _ = await build_context(req, st, soul=Soul(name="Custom", role="a tutor"))
-        assert "You are Custom, a tutor." in ctx.system_prompt
-
-    asyncio.run(run())
-
-
-def test_build_context_invalid_soul_override_raises_value_error():
-    async def run():
-        import pytest
-        st = InMemoryStore()
-        req = ResponsesRequest(model="m", input="hi", soul={"principles": 123})
-        with pytest.raises(ValueError):
-            await build_context(req, st)
     asyncio.run(run())

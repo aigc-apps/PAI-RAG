@@ -20,7 +20,7 @@ from agent.tools.base import ToolBox
 from agent.tools.registry import ToolRegistry
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
-from agent.soul import Soul, DEFAULT_SOUL, render_stable_system_prompt, render_context_block
+from agent.soul import DEFAULT_INSTRUCTIONS, render_stable_system_prompt, render_context_block
 
 
 def _item_text(content: dict) -> str:
@@ -94,16 +94,16 @@ async def build_context(
     request: ResponsesRequest,
     store,
     *,
-    soul: Soul = DEFAULT_SOUL,
     registry: Optional[ToolRegistry] = None,
     agent_config=None,
     project_context: str = "",
     authenticated_user_id: Optional[str] = None,
 ) -> Tuple[AgentContext, Optional[str]]:
     """Resolve prior history via the store and assemble the AgentContext.
-    Composes the effective soul (default <- request.soul <- instructions) into a
-    layered system prompt. Selects tools from the registry governed by
-    soul.tools_enabled; registry=None keeps empty-ToolBox behavior.
+    The selected agent's ``instructions`` (a single freeform Markdown document,
+    falling back to ``DEFAULT_INSTRUCTIONS`` when blank) IS the stable base system
+    prompt — no org-persona merge. Selects tools from the registry, narrowed by the
+    agent profile's include/exclude; registry=None keeps empty-ToolBox behavior.
     Raises ValueError on previous_response_id/conversation conflict (-> HTTP 400).
 
     ``authenticated_user_id`` (the JWT ``sub``) is the source of truth for
@@ -131,18 +131,6 @@ async def build_context(
     # (unit tests) or no matching profile, in which case behavior is unchanged.
     agent_profile = _resolve_agent_profile(agent_config, request)
 
-    # Effective persona = global Soul <- per-agent persona override <- per-request
-    # soul override (request wins, so a one-off request can still steer any field).
-    override: dict = {}
-    if agent_profile is not None:
-        persona = getattr(agent_profile, "persona", None)
-        if persona is not None and hasattr(persona, "override_dict"):
-            override.update(persona.override_dict())
-    override.update(request.soul or {})
-    if agent_profile is not None and getattr(agent_profile, "name", ""):
-        override.setdefault("name", agent_profile.name)
-    effective_soul = soul.merge(override)
-
     # The skill catalog (L1, injected below) and the skill-loader tools are the two
     # halves of progressive disclosure and must be coupled: whenever the catalog is
     # present (the agent has enabled, discovered skills) the model is told to call
@@ -156,7 +144,7 @@ async def build_context(
     if registry is not None:
         toolbox = registry.build_toolbox(
             _select_tool_names(
-                registry, effective_soul, agent_profile,
+                registry, agent_profile,
                 force=_SKILL_LOADER_TOOLS if skills_active else (),
             )
         )
@@ -174,8 +162,11 @@ async def build_context(
     # Per-agent, admin-curated description of the /opt/code repos (empty => the
     # block falls back to discover-by-`ls`). Only meaningful when the layer is on.
     code_manifest = getattr(agent_profile, "code_manifest", "") or ""
+    # The agent's ``instructions`` markdown IS the persona (base system prompt);
+    # blank falls back to the built-in DEFAULT_INSTRUCTIONS.
+    instructions_md = (getattr(agent_profile, "instructions", "") or "").strip() or DEFAULT_INSTRUCTIONS
     system_prompt = render_stable_system_prompt(
-        effective_soul, tool_names=tool_names, project_context=project_context,
+        instructions_md, tool_names=tool_names, project_context=project_context,
         aliyun_pai_enabled=_aliyun_pai_enabled(),
         code_layer_enabled=code_layer_enabled, code_manifest=code_manifest,
     )
@@ -213,12 +204,12 @@ async def build_context(
         if agent_config is not None
         else []
     )
-    profile_instructions = (getattr(agent_profile, "instructions", "") or "").strip() if agent_profile else ""
+    # Volatile per-turn additions only. The agent's own instructions are now the
+    # stable base (above), so they are NOT repeated here; this carries the one-off
+    # per-request instructions and the active skills' loaded guidance.
     instructions = "\n\n".join(
         s
         for s in [
-            (effective_soul.extra_instructions or "").strip(),
-            profile_instructions,
             (request.instructions or "").strip(),
             skill_instructions.strip(),
         ]
@@ -452,17 +443,17 @@ def _resolve_agent_profile(agent_config, request: ResponsesRequest):
 _SKILL_LOADER_TOOLS = ("load_skill", "read_skill_resource")
 
 
-def _select_tool_names(registry, soul, agent_profile, *, force: Iterable[str] = ()) -> List[str]:
-    """Effective toolbox = the soul's base selection, then narrowed by the agent
+def _select_tool_names(registry, agent_profile, *, force: Iterable[str] = ()) -> List[str]:
+    """Effective toolbox = every registered tool, then narrowed by the agent
     profile's include/exclude. ``include`` (when non-empty) restricts to that set;
-    ``exclude`` always subtracts. No profile → unchanged soul/registry behavior.
+    ``exclude`` always subtracts. No profile → all registered tools.
 
     ``force`` names tools a capability requires that must survive the include/exclude
     filter (e.g. the skill loaders, which pair with an injected catalog) — added when
     actually registered, so a catalog never advertises a filtered-out tool. Appended
     last, preserving the configured selection's order."""
     available = registry.names()
-    base = soul.tools_enabled if soul.tools_enabled is not None else available
+    base = available
     tools_cfg = getattr(agent_profile, "tools", None) if agent_profile is not None else None
     include = list(getattr(tools_cfg, "include", []) or [])
     exclude = set(getattr(tools_cfg, "exclude", []) or [])

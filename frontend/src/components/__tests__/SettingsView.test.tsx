@@ -20,7 +20,7 @@ vi.mock("../../api/knowledge", async (importActual) => ({
 const baseDoc: AgentConfigDocument = {
   setup: { completed: true, skipped_steps: [] },
   models: {},
-  soul: { name: "", role: "", identity: "", personality: [], principles: [], expertise: [], style: "", constraints: [] },
+  default_instructions: "",
   knowledgebase: {
     vectordb: {
       engine: "local",
@@ -46,15 +46,6 @@ const baseDoc: AgentConfigDocument = {
       description: "",
       model: "",
       instructions: "",
-      persona: {
-        role: "",
-        identity: "",
-        personality: [],
-        principles: [],
-        expertise: [],
-        style: "",
-        constraints: [],
-      },
       knowledge: { kb_ids: [] },
       code_manifest: "",
       tools: { include: ["current_datetime"], exclude: ["code_sandbox"] },
@@ -292,60 +283,57 @@ describe("SettingsView", () => {
     expect(saved.agents[0].code_manifest).toBe("- repo-a — the API server");
   });
 
-  it("edits a persona field and commits on blur", async () => {
+  it("edits the agent Instructions (its system prompt) and commits on blur", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
     useAgentConfigStore.setState({ save });
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    // Persona card is always present in the Agents tab.
-    const role = screen.getByLabelText("Role");
-    await user.type(role, "a code archaeologist");
+    // The Instructions editor is always present in the Agents tab.
+    const box = screen.getByPlaceholderText("Leave blank to use the built-in default persona");
+    await user.type(box, "You are a code archaeologist.");
     // No save while typing (local state); commit fires on blur.
     expect(save).not.toHaveBeenCalled();
     await user.tab();
 
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
-    expect(saved.agents[0].persona.role).toBe("a code archaeologist");
+    expect(saved.agents[0].instructions).toBe("You are a code archaeologist.");
   });
 
-  it("normalizes a persona list field to trimmed non-empty lines", async () => {
+  it("edits the Default Persona template (doc.default_instructions) and commits on blur", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
     useAgentConfigStore.setState({ save });
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    const expertise = screen.getByLabelText("Expertise（每行一条）");
-    await user.type(expertise, "static analysis{Enter}{Enter}  legacy migration  ");
-    await user.tab();
-
-    expect(save).toHaveBeenCalled();
-    const saved = save.mock.calls.at(-1)![0] as AgentConfigDocument;
-    expect(saved.agents[0].persona.expertise).toEqual([
-      "static analysis",
-      "legacy migration",
-    ]);
-  });
-
-  it("edits the org persona (doc.soul) from Control Room and commits on blur", async () => {
-    const user = userEvent.setup();
-    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
-    useAgentConfigStore.setState({ save });
-
-    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
-
-    await user.click(screen.getByRole("button", { name: "Org Persona" }));
-    const role = screen.getByLabelText("Role");
-    await user.type(role, "an org-wide research copilot");
+    await user.click(screen.getByRole("button", { name: "Default Persona" }));
+    const box = screen.getByPlaceholderText("Leave blank to use the built-in default persona");
+    await user.type(box, "You are a research copilot.");
     expect(save).not.toHaveBeenCalled(); // local state until blur
     await user.tab();
 
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
-    expect(saved.soul.role).toBe("an org-wide research copilot");
+    expect(saved.default_instructions).toBe("You are a research copilot.");
+  });
+
+  it("seeds a new agent's Instructions from the Default Persona template", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    const seeded: AgentConfigDocument = { ...baseDoc, default_instructions: "House voice." };
+    render(<SettingsView doc={seeded} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "New agent" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents).toHaveLength(2);
+    expect(saved.agents[1].instructions).toBe("House voice.");
   });
 
   it("shows the inherited default and switches an agent to an override model", async () => {

@@ -1,5 +1,6 @@
-"""Agent profiles drive the run: per-agent tool filtering, instructions, persona
-name, and pinned model — plus the user-facing GET /v1/agents roster."""
+"""Agent profiles drive the run: per-agent tool filtering, instructions (the
+agent's base system prompt), and pinned model — plus the user-facing GET
+/v1/agents roster."""
 
 import asyncio
 import os
@@ -12,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agent.tools.defaults import build_default_registry
-from app.agent_config import AgentPersona, AgentProfile, AgentToolsConfig
+from app.agent_config import AgentProfile, AgentToolsConfig
 from app.builder import build_context, resolve_agent_model
 from app.deps import AppState
 from app.routes.agents import router as agents_router
@@ -63,79 +64,31 @@ def test_profile_exclude_subtracts_from_toolbox():
     asyncio.run(run())
 
 
-def test_profile_instructions_and_name_applied():
+def test_profile_instructions_are_the_stable_base_prompt():
     async def run():
         reg = build_default_registry(_Settings())
-        cfg = _cfg([AgentProfile(id="main", name="Helper", instructions="ALWAYS_SAY_MOO")])
+        instructions = "You are Helper, a meticulous code archaeologist. ALWAYS_SAY_MOO."
+        cfg = _cfg([AgentProfile(id="main", name="Helper", instructions=instructions)])
         ctx, _ = await build_context(
             ResponsesRequest(input="hi"), InMemoryStore(), registry=reg, agent_config=cfg,
         )
-        assert "Helper" in ctx.system_prompt          # persona name overrides the soul default
-        assert "ALWAYS_SAY_MOO" in ctx.context_block  # profile instructions injected
+        # The agent's instructions markdown IS the stable (cacheable) system prompt —
+        # not the volatile per-turn context block.
+        assert instructions in ctx.system_prompt
+        assert "ALWAYS_SAY_MOO" not in ctx.context_block
 
     asyncio.run(run())
 
 
-def test_profile_persona_overrides_soul_in_stable_prompt():
+def test_blank_instructions_fall_back_to_default_persona():
     async def run():
+        from agent.soul import DEFAULT_INSTRUCTIONS
         reg = build_default_registry(_Settings())
-        cfg = _cfg([
-            AgentProfile(
-                id="main", name="Helper",
-                persona=AgentPersona(
-                    role="a meticulous code archaeologist",
-                    identity="You dig through source to explain how things work.",
-                    expertise=["static analysis", "legacy migration"],
-                ),
-            ),
-        ])
+        cfg = _cfg([AgentProfile(id="main", name="Main", instructions="")])
         ctx, _ = await build_context(
             ResponsesRequest(input="hi"), InMemoryStore(), registry=reg, agent_config=cfg,
         )
-        # Overridden persona fields land in the stable (cacheable) system prompt.
-        assert "code archaeologist" in ctx.system_prompt
-        assert "dig through source" in ctx.system_prompt
-        assert "static analysis" in ctx.system_prompt
-
-    asyncio.run(run())
-
-
-def test_empty_persona_leaves_global_soul_untouched():
-    async def run():
-        reg = build_default_registry(_Settings())
-        base = await build_context(
-            ResponsesRequest(input="hi"),
-            InMemoryStore(), registry=reg,
-            agent_config=_cfg([AgentProfile(id="main", name="MiniAgent")]),
-        )
-        with_empty = await build_context(
-            ResponsesRequest(input="hi"),
-            InMemoryStore(), registry=reg,
-            agent_config=_cfg([
-                AgentProfile(id="main", name="MiniAgent", persona=AgentPersona()),
-            ]),
-        )
-        # A blank persona inherits the global Soul verbatim — no divergence.
-        assert base[0].system_prompt == with_empty[0].system_prompt
-
-    asyncio.run(run())
-
-
-def test_request_soul_wins_over_agent_persona():
-    async def run():
-        reg = build_default_registry(_Settings())
-        cfg = _cfg([
-            AgentProfile(
-                id="main", name="Helper",
-                persona=AgentPersona(role="a code archaeologist"),
-            ),
-        ])
-        ctx, _ = await build_context(
-            ResponsesRequest(input="hi", soul={"role": "a haiku poet"}),
-            InMemoryStore(), registry=reg, agent_config=cfg,
-        )
-        assert "haiku poet" in ctx.system_prompt
-        assert "code archaeologist" not in ctx.system_prompt
+        assert DEFAULT_INSTRUCTIONS.strip() in ctx.system_prompt
 
     asyncio.run(run())
 
@@ -184,7 +137,6 @@ def _client(*, role="user", agent_config=None):
     app.state.app_state = AppState(
         store=InMemoryStore(), llm=None, default_model="test/echo",
         agent_config=agent_config,
-        soul=types.SimpleNamespace(name="MiniAgent"),
     )
     app.include_router(agents_router)
     apply_auth(app, user_id="u1", role=role)

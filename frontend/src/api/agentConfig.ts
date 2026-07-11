@@ -108,18 +108,6 @@ export interface SkillLibraryConfig {
   installed?: Array<Record<string, unknown>>;
 }
 
-// Per-agent overrides of the global Soul persona. Blank string / empty list means
-// "inherit the global default"; lists replace the corresponding Soul list wholesale.
-export interface AgentPersona {
-  role: string;
-  identity: string;
-  personality: string[];
-  principles: string[];
-  expertise: string[];
-  style: string;
-  constraints: string[];
-}
-
 // Per-agent knowledge scoping. `kb_ids` is a soft default: when non-empty the
 // agent's knowledge tools default to these bases (still permission-checked per
 // request server-side). Empty = search every base the user can access.
@@ -132,9 +120,9 @@ export interface AgentProfile {
   name: string;
   description: string;
   model: string;
+  // The agent's full system prompt (freeform Markdown). This IS its persona/base
+  // prompt; tools and skills are appended automatically. Blank => built-in default.
   instructions: string;
-  // Per-agent persona override; blank fields inherit the global Soul.
-  persona: AgentPersona;
   // Per-agent knowledge scoping (soft default; still permission-checked per KB).
   knowledge: AgentKnowledgeConfig;
   // Markdown describing the repos under the read-only /mnt/code layer; injected
@@ -145,32 +133,42 @@ export interface AgentProfile {
   settings: Record<string, unknown>;
 }
 
-// The deployment-wide base persona ("organization default"), edited in Control
-// Room. Blank string / empty list means "inherit the code-level default". Every
-// agent's own persona layers on top of this at request time. Carries `name`
-// (the base agent name) in addition to the AgentPersona fields.
-export interface SoulConfig {
-  name: string;
-  role: string;
-  identity: string;
-  personality: string[];
-  principles: string[];
-  expertise: string[];
-  style: string;
-  constraints: string[];
-}
-
 export interface AgentConfigDocument {
   setup: SetupConfig;
   models: ModelCatalogDoc;
   knowledgebase: KnowledgeBaseConfig;
   skills: SkillLibraryConfig;
-  // Deployment-wide base persona; blank = inherit. Agents override per-agent.
-  soul: SoulConfig;
+  // The admin-editable "Default Persona" template. Its Markdown seeds a new
+  // agent's `instructions` at creation (a snapshot copy — editing it never
+  // touches existing agents, and it is never merged into them at runtime).
+  default_instructions: string;
   default_agent: string;
   agents: AgentProfile[];
   providers: ProviderConfig[];
   capabilities: CapabilityConfig[];
+}
+
+/** A fresh, blank agent profile seeded from the deployment's "Default Persona"
+ * template (`doc.default_instructions`). The snapshot is taken here at creation —
+ * a later edit to the template never reaches this agent. Blank template => the
+ * agent's own `instructions` stays blank and falls back to the built-in default. */
+export function newAgentProfile(
+  doc: AgentConfigDocument,
+  id: string,
+  name: string
+): AgentProfile {
+  return {
+    id,
+    name,
+    description: "",
+    model: "",
+    instructions: doc.default_instructions || "",
+    knowledge: { kb_ids: [] },
+    code_manifest: "",
+    tools: { include: [], exclude: [] },
+    skills: { enabled: [] },
+    settings: {},
+  };
 }
 
 export interface SkillUploadResult {

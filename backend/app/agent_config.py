@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from agent.custom_skills import _normalize_skill_id, discover_skill_packages, skill_sources
 from agent.integrations import aliyun_sts
-from agent.soul import Soul, DEFAULT_SOUL
 
 
 Permission = Literal["disabled", "ask", "auto", "admin"]
@@ -118,85 +117,6 @@ class SkillLibraryConfig(BaseModel):
     installed: List[Dict[str, Any]] = Field(default_factory=list)
 
 
-class AgentPersona(BaseModel):
-    """Per-agent overrides of the global Soul persona. Every field is optional; a
-    blank string or empty list inherits the global default rather than clearing it,
-    so an agent only diverges where the admin actually filled something in. Lists
-    replace the corresponding Soul list wholesale (matching Soul.merge semantics).
-
-    ``name`` stays on AgentProfile and ``extra_instructions`` is intentionally
-    absent — AgentProfile.instructions already carries per-agent free text."""
-
-    role: str = ""
-    identity: str = ""
-    personality: List[str] = Field(default_factory=list)
-    principles: List[str] = Field(default_factory=list)
-    expertise: List[str] = Field(default_factory=list)
-    style: str = ""
-    constraints: List[str] = Field(default_factory=list)
-
-    def override_dict(self) -> Dict[str, Any]:
-        """The subset of Soul fields the admin actually set. Fed into Soul.merge,
-        which ignores keys we omit — so blanks leave the global default in place."""
-        out: Dict[str, Any] = {}
-        if self.role.strip():
-            out["role"] = self.role.strip()
-        if self.identity.strip():
-            out["identity"] = self.identity.strip()
-        if self.personality:
-            out["personality"] = self.personality
-        if self.principles:
-            out["principles"] = self.principles
-        if self.expertise:
-            out["expertise"] = self.expertise
-        if self.style.strip():
-            out["style"] = self.style.strip()
-        if self.constraints:
-            out["constraints"] = self.constraints
-        return out
-
-
-class SoulConfig(BaseModel):
-    """The deployment's base persona — the 'organization default' voice, editable
-    in Control Room. Blank fields inherit the code-level DEFAULT_SOUL, so an
-    operator only diverges where they actually fill something in. This is the base
-    that every agent's per-agent ``persona`` then layers on top of at request time.
-
-    Unlike AgentPersona this also carries ``name`` (the base agent name); lists
-    replace the corresponding Soul list wholesale (matching Soul.merge)."""
-
-    name: str = ""
-    role: str = ""
-    identity: str = ""
-    personality: List[str] = Field(default_factory=list)
-    principles: List[str] = Field(default_factory=list)
-    expertise: List[str] = Field(default_factory=list)
-    style: str = ""
-    constraints: List[str] = Field(default_factory=list)
-
-    def override_dict(self) -> Dict[str, Any]:
-        """The subset of Soul fields the operator actually set. Fed into Soul.merge,
-        which ignores omitted keys — so blanks leave DEFAULT_SOUL in place."""
-        out: Dict[str, Any] = {}
-        if self.name.strip():
-            out["name"] = self.name.strip()
-        if self.role.strip():
-            out["role"] = self.role.strip()
-        if self.identity.strip():
-            out["identity"] = self.identity.strip()
-        if self.personality:
-            out["personality"] = self.personality
-        if self.principles:
-            out["principles"] = self.principles
-        if self.expertise:
-            out["expertise"] = self.expertise
-        if self.style.strip():
-            out["style"] = self.style.strip()
-        if self.constraints:
-            out["constraints"] = self.constraints
-        return out
-
-
 class AgentKnowledgeConfig(BaseModel):
     """Per-agent knowledge scoping. ``kb_ids`` is a *soft default*: when set, the
     agent's knowledge tools default to these bases instead of every base the user
@@ -211,10 +131,11 @@ class AgentProfile(BaseModel):
     name: str
     description: str = ""
     model: str = ""
+    # The agent's persona: a single freeform Markdown document that IS its base
+    # system prompt. Blank falls back to DEFAULT_INSTRUCTIONS at request time; new
+    # agents are seeded from the deployment's ``default_instructions`` template.
+    # Tool/skill guidance is appended automatically by the builder.
     instructions: str = ""
-    # Per-agent persona override; blank fields inherit the global Soul. Injected
-    # into the (cacheable) system prompt via builder's soul.merge.
-    persona: AgentPersona = Field(default_factory=AgentPersona)
     # Per-agent knowledge scoping (soft default; still permission-checked per KB).
     knowledge: AgentKnowledgeConfig = Field(default_factory=AgentKnowledgeConfig)
     # Static description of the source repos this agent can reach under the
@@ -232,9 +153,10 @@ class AgentConfigDocument(BaseModel):
     models: Dict[str, Any] = Field(default_factory=dict)
     knowledgebase: KnowledgeBaseConfig = Field(default_factory=KnowledgeBaseConfig)
     skills: SkillLibraryConfig = Field(default_factory=SkillLibraryConfig)
-    # Deployment-wide base persona (Control Room → Org Persona). Blank = inherit
-    # DEFAULT_SOUL. Agents layer their own persona on top of this at request time.
-    soul: SoulConfig = Field(default_factory=SoulConfig)
+    # Deployment-wide "Default Persona" template (Control Room). A single Markdown
+    # document that seeds a new agent's ``instructions`` at creation (snapshot copy,
+    # never merged at runtime). Blank = new agents start from DEFAULT_INSTRUCTIONS.
+    default_instructions: str = ""
     default_agent: str = "main"
     agents: List[AgentProfile] = Field(default_factory=list)
     providers: List[ProviderConfig] = Field(default_factory=list)
@@ -472,8 +394,8 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
     if isinstance(kb_raw, dict) and isinstance(kb_raw.get("vectordb"), dict):
         # Overlay onto the defaults so fields added later still get sane defaults.
         merged["knowledgebase"]["vectordb"].update(kb_raw["vectordb"])
-    if isinstance(raw.get("soul"), dict):
-        merged["soul"].update(raw["soul"])
+    if isinstance(raw.get("default_instructions"), str):
+        merged["default_instructions"] = raw["default_instructions"]
 
     for collection in ("agents", "providers", "capabilities"):
         by_id = {item["id"]: item for item in merged[collection]}
@@ -491,30 +413,6 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
         c for c in merged["capabilities"] if c.get("id") != "aliyun_pai"
     ]
     return AgentConfigDocument(**merged)
-
-
-def build_soul(doc: AgentConfigDocument, settings) -> Soul:
-    """Assemble the deployment's base Soul from three layers, most-specific last:
-
-        DEFAULT_SOUL  ←  doc.soul (Control Room org persona)  ←  env AGENT_NAME/ROLE
-
-    The stored org persona is the primary editable source of truth; the two env
-    vars stay as a deployment override, but only when explicitly set — otherwise
-    their Settings defaults ("MiniAgent" / "a general-purpose AI assistant") would
-    silently clobber a name/role an operator typed in the UI.
-    """
-    soul = DEFAULT_SOUL
-    soul_cfg = getattr(doc, "soul", None)
-    if soul_cfg is not None and hasattr(soul_cfg, "override_dict"):
-        soul = soul.merge(soul_cfg.override_dict())
-    env_override: Dict[str, Any] = {}
-    if os.getenv("AGENT_NAME"):
-        env_override["name"] = settings.agent_name
-    if os.getenv("AGENT_ROLE"):
-        env_override["role"] = settings.agent_role
-    if env_override:
-        soul = soul.merge(env_override)
-    return soul
 
 
 def load_agent_config(path: str) -> AgentConfigDocument:

@@ -9,7 +9,7 @@ function docWithLlm(status: ProviderStatus, defaultModel = "dashscope/qwen-max")
   return {
     setup: { completed: false, skipped_steps: [] },
     models: { default_model: defaultModel, providers: [] },
-    soul: { name: "", role: "", identity: "", personality: [], principles: [], expertise: [], style: "", constraints: [] },
+    default_instructions: "",
     knowledgebase: {
       vectordb: {
         engine: "local",

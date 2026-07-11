@@ -149,7 +149,7 @@ async def update_agent_config(
     existing.models = payload.models
     existing.knowledgebase = payload.knowledgebase
     existing.skills = payload.skills
-    existing.soul = payload.soul
+    existing.default_instructions = payload.default_instructions
     existing.default_agent = payload.default_agent
     existing.agents = payload.agents
     existing.providers = payload.providers

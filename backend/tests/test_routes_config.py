@@ -183,24 +183,16 @@ def test_agent_code_manifest_survives_save_load(tmp_path):
     assert reloaded.agents[0].code_manifest == "- repo-a — the API server"
 
 
-def test_agent_persona_survives_save_load(tmp_path):
-    from app.agent_config import (
-        AgentPersona,
-        load_agent_config,
-        save_agent_config,
-    )
+def test_agent_instructions_survive_save_load(tmp_path):
+    from app.agent_config import load_agent_config, save_agent_config
 
     path = str(tmp_path / "config.yaml")
     doc = load_agent_config(path)
-    doc.agents[0].persona = AgentPersona(
-        role="a code archaeologist",
-        personality=["terse", "precise"],
-    )
+    doc.agents[0].instructions = "# Ada\nYou are a code archaeologist. Terse and precise."
     save_agent_config(path, doc)
 
     reloaded = load_agent_config(path)
-    assert reloaded.agents[0].persona.role == "a code archaeologist"
-    assert reloaded.agents[0].persona.personality == ["terse", "precise"]
+    assert reloaded.agents[0].instructions == "# Ada\nYou are a code archaeologist. Terse and precise."
 
 
 def test_vectordb_secret_roundtrip_masked_and_preserved(tmp_path, monkeypatch):
@@ -222,20 +214,18 @@ def test_vectordb_secret_roundtrip_masked_and_preserved(tmp_path, monkeypatch):
     assert vdb2["secret_configured"] is True
 
 
-def test_org_persona_soul_survives_put_config(tmp_path, monkeypatch):
-    # The org persona (doc.soul) is edited in Control Room and saved via the
-    # whole-doc PUT; a regression where update_agent_config forgot to copy it
-    # would silently drop the section.
+def test_default_instructions_survives_put_config(tmp_path, monkeypatch):
+    # The "Default Persona" template (doc.default_instructions) is edited in Control
+    # Room and saved via the whole-doc PUT; a regression where update_agent_config
+    # forgot to copy it would silently drop the template.
     c = _client(tmp_path, monkeypatch)
     doc = c.get("/v1/config").json()
-    assert doc["soul"]["role"] == ""      # blank by default → inherits DEFAULT_SOUL
-    doc["soul"]["role"] = "an org-wide research copilot"
-    doc["soul"]["principles"] = ["cite sources", "show your work"]
+    assert doc["default_instructions"] == ""   # blank by default → built-in fallback
+    doc["default_instructions"] = "# House voice\nYou are a research copilot."
     saved = c.put("/v1/config", json=doc).json()
-    assert saved["soul"]["role"] == "an org-wide research copilot"
-    assert saved["soul"]["principles"] == ["cite sources", "show your work"]
+    assert saved["default_instructions"] == "# House voice\nYou are a research copilot."
     # persists across a fresh read
-    assert c.get("/v1/config").json()["soul"]["role"] == "an org-wide research copilot"
+    assert c.get("/v1/config").json()["default_instructions"] == "# House voice\nYou are a research copilot."
 
 
 def test_runtime_status_discovers_local_skill_packages(tmp_path):
