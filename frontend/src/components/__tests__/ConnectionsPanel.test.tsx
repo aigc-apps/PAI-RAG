@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConnectionsPanel } from "../ConnectionsPanel";
 import { useAgentConfigStore } from "../../store/agentConfig";
+import { useI18nStore } from "../../i18n";
 import type { AgentConfigDocument, ModelCatalogDoc } from "../../api/agentConfig";
 
 const testModelConnection = vi.fn(async (_model?: string) => ({ ok: true, output: "ok" }));
@@ -49,6 +50,7 @@ const withProvider = docWith({
 let save: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  useI18nStore.getState().setLang("en");
   save = vi.fn(async (doc: AgentConfigDocument) => doc);
   useAgentConfigStore.setState({ loading: false, error: undefined, save });
   testModelConnection.mockReset();

@@ -3,6 +3,7 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { ChevronRight } from "lucide-react";
 import type { ReasoningStatus } from "../types";
 import { cn } from "../lib/cn";
+import { useI18n } from "../i18n";
 
 export function CollapsibleReasoning({
   reasoning,
@@ -11,6 +12,7 @@ export function CollapsibleReasoning({
   reasoning: string;
   status: ReasoningStatus;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(status === "streaming");
 
   useEffect(() => {
@@ -31,9 +33,9 @@ export function CollapsibleReasoning({
           className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")}
         />
         {status === "streaming" ? (
-          <span className="shimmer-text font-medium">Thinking…</span>
+          <span className="shimmer-text font-medium">{t("reasoning.thinking")}</span>
         ) : (
-          <span className="text-[var(--text-faint)]">Thought process</span>
+          <span className="text-[var(--text-faint)]">{t("reasoning.thought")}</span>
         )}
       </Collapsible.Trigger>
       <Collapsible.Content className="mt-1 border-l-2 border-[var(--border-strong)] pl-3 text-xs text-[var(--text-muted)] whitespace-pre-wrap leading-6">

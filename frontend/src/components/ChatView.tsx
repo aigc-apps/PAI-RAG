@@ -9,8 +9,10 @@ import { Composer } from "./Composer";
 import { AgentSelector } from "./AgentSelector";
 import { ThemeToggle } from "./ThemeToggle";
 import { BrandMark } from "./Sidebar";
+import { useI18n } from "../i18n";
 
 export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
+  const { t } = useI18n();
   const messages = useChatStore((s) => activeRuntime(s)?.messages ?? EMPTY_MESSAGES);
   const conversations = useConversationsStore((s) => s.items);
   const selectedId = useConversationsStore((s) => s.selectedId);
@@ -50,8 +52,8 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
         {onToggleSidebar && (
           <button
             type="button"
-            aria-label="Toggle sidebar"
-            title="切换侧边栏"
+            aria-label={t("chat.toggleSidebar")}
+            title={t("chat.toggleSidebar")}
             onClick={onToggleSidebar}
             className="icon-btn p-1.5 text-[var(--text-muted)] hover:text-[var(--text)]"
           >
@@ -75,7 +77,7 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
           <div className="chat-container flex flex-col items-center gap-5">
             <BrandMark size="lg" />
             <h1 className="text-xl font-semibold text-[var(--text)] tracking-tight">
-              How can I help today?
+              {t("chat.greeting")}
             </h1>
             <div className="w-full">
               <Composer onSend={send} onStop={stop} isStreaming={isStreaming} />

@@ -5,13 +5,15 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, Check } from "lucide-react";
 import { copyText } from "../lib/clipboard";
+import { useI18n } from "../i18n";
 
 const plainOutputLanguages = new Set(["text", "txt", "plain", "plaintext", "output", "console"]);
 
 function CodeBlock({ language, code }: { language: string; code: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const isPlainOutput = plainOutputLanguages.has(language.toLowerCase());
-  const label = isPlainOutput ? "Output" : language;
+  const label = isPlainOutput ? t("markdown.output") : language;
 
   const copy = async () => {
     if (!(await copyText(code))) return;
@@ -27,7 +29,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
         </span>
         <button
           type="button"
-          aria-label="Copy code"
+          aria-label={t("markdown.copyCode")}
           onClick={copy}
           className="rounded-[var(--radius-sm)] p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
         >

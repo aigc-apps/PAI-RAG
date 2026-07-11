@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LoginView, CreateAdminView } from "../AuthViews";
 import { useAuthStore } from "../../store/auth";
+import { useI18nStore } from "../../i18n";
 
 beforeEach(() => {
+  useI18nStore.getState().setLang("en");
   useAuthStore.setState({
     login: vi.fn().mockResolvedValue(undefined),
     createAdmin: vi.fn().mockResolvedValue(undefined),

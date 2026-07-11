@@ -4,6 +4,7 @@ import { useAgentsStore } from "../store/agents";
 import { useChatStore } from "../store/chat";
 import { listModels } from "../api/models";
 import type { AgentSummary } from "../api/agents";
+import { useI18n } from "../i18n";
 
 /** Short, human model name: drop the "provider/" prefix ("openai/gpt-4o" → "gpt-4o"). */
 function shortModel(model: string): string {
@@ -16,6 +17,7 @@ function shortModel(model: string): string {
  * the deployment default when it inherits) is what runs, so we surface it here
  * rather than letting the user override the model per turn. */
 export function AgentSelector() {
+  const { t } = useI18n();
   const agents = useAgentsStore((s) => s.agents);
   const loaded = useAgentsStore((s) => s.loaded);
   const load = useAgentsStore((s) => s.load);
@@ -46,14 +48,14 @@ export function AgentSelector() {
 
   const current = agents.find((a) => a.id === agentId) ?? agents[0];
   const label = (a: AgentSummary) =>
-    `${a.name} (${shortModel(a.model || defaultModel) || "default"})`;
+    `${a.name} (${shortModel(a.model || defaultModel) || t("agent.defaultModel")})`;
 
   // A lone agent needs no picker — just show what's running.
   if (agents.length === 1) {
     return (
       <span
         className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-muted)]"
-        title="当前智能体"
+        title={t("agent.current")}
       >
         <Bot className="h-4 w-4" />
         {label(current)}
@@ -62,10 +64,10 @@ export function AgentSelector() {
   }
 
   return (
-    <label className="flex items-center gap-1.5" title="选择智能体">
+    <label className="flex items-center gap-1.5" title={t("agent.select")}>
       <Bot className="h-4 w-4 text-[var(--text-muted)]" />
       <select
-        aria-label="Agent"
+        aria-label={t("agent.aria")}
         value={current.id}
         onChange={(e) => select(e.target.value)}
         className="text-xs font-medium rounded-[var(--radius-sm)] px-2 py-1 text-[var(--text)] bg-transparent hover:bg-[var(--surface-2)] border border-transparent focus:border-[var(--border-strong)] outline-none cursor-pointer transition-colors"

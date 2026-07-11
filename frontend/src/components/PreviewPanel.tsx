@@ -6,6 +6,7 @@ import { fileUrl, humanSize } from "../lib/files";
 import { usePreviewStore } from "../store/preview";
 import { ArtifactIcon } from "./ArtifactIcon";
 import { Markdown } from "./Markdown";
+import { useI18n } from "../i18n";
 
 /** Fetches an artifact's text body (for markdown / text kinds). */
 function useTextBody(artifact: FileArtifact, enabled: boolean) {
@@ -14,6 +15,7 @@ function useTextBody(artifact: FileArtifact, enabled: boolean) {
     text: string;
     error: string | null;
   }>({ loading: enabled, text: "", error: null });
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!enabled) return;
@@ -21,7 +23,7 @@ function useTextBody(artifact: FileArtifact, enabled: boolean) {
     setState({ loading: true, text: "", error: null });
     fetch(fileUrl(artifact.id))
       .then(async (r) => {
-        if (!r.ok) throw new Error(`加载失败 (${r.status})`);
+        if (!r.ok) throw new Error(t("preview.loadFailedStatus", { status: r.status }));
         return r.text();
       })
       .then((text) => {
@@ -32,7 +34,7 @@ function useTextBody(artifact: FileArtifact, enabled: boolean) {
           setState({
             loading: false,
             text: "",
-            error: err instanceof Error ? err.message : "加载失败",
+            error: err instanceof Error ? err.message : t("preview.loadFailed"),
           });
       });
     return () => {
@@ -44,6 +46,7 @@ function useTextBody(artifact: FileArtifact, enabled: boolean) {
 }
 
 function PreviewBody({ artifact }: { artifact: FileArtifact }) {
+  const { t } = useI18n();
   const isText = artifact.kind === "markdown" || artifact.kind === "text";
   const { loading, text, error } = useTextBody(artifact, isText);
   const url = fileUrl(artifact.id);
@@ -78,13 +81,13 @@ function PreviewBody({ artifact }: { artifact: FileArtifact }) {
     return (
       <div className="grid h-full place-items-center p-6 text-center text-[var(--text-muted)]">
         <div>
-          <p className="mb-3 text-sm">此文件类型不支持预览。</p>
+          <p className="mb-3 text-sm">{t("preview.unsupported")}</p>
           <a
             href={url}
             download={artifact.name}
             className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--surface-2)]"
           >
-            <Download className="h-3.5 w-3.5" /> 下载 {artifact.name}
+            <Download className="h-3.5 w-3.5" /> {t("artifact.download")} {artifact.name}
           </a>
         </div>
       </div>
@@ -161,6 +164,7 @@ export function PreviewPanel() {
   const expanded = usePreviewStore((s) => s.expanded);
   const toggleExpanded = usePreviewStore((s) => s.toggleExpanded);
   const close = usePreviewStore((s) => s.close);
+  const { t } = useI18n();
   const artifact = items.find((i) => i.id === activeId) ?? items[0];
   if (!artifact) return null;
 
@@ -184,14 +188,14 @@ export function PreviewPanel() {
           <a
             href={fileUrl(artifact.id)}
             download={artifact.name}
-            aria-label="下载"
+            aria-label={t("artifact.download")}
             className="rounded-[var(--radius-sm)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           >
             <Download className="h-4 w-4" />
           </a>
           <button
             type="button"
-            aria-label={expanded ? "还原" : "最大化"}
+            aria-label={expanded ? t("preview.restore") : t("preview.maximize")}
             onClick={toggleExpanded}
             className="rounded-[var(--radius-sm)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           >
@@ -203,7 +207,7 @@ export function PreviewPanel() {
           </button>
           <button
             type="button"
-            aria-label="关闭预览"
+            aria-label={t("preview.close")}
             onClick={close}
             className="rounded-[var(--radius-sm)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           >

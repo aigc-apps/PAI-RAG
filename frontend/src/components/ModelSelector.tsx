@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { listModels } from "../api/models";
+import { useI18n } from "../i18n";
 
 export function ModelSelector({
   model,
@@ -8,6 +9,7 @@ export function ModelSelector({
   model: string;
   onChange: (m: string) => void;
 }) {
+  const { t } = useI18n();
   const [ids, setIds] = useState<string[]>([]);
   const [defaultId, setDefaultId] = useState("");
   const modelRef = useRef(model);
@@ -37,7 +39,7 @@ export function ModelSelector({
 
   return (
     <select
-      aria-label="Model"
+      aria-label={t("model.aria")}
       value={display}
       onChange={(e) => onChange(e.target.value)}
       className="text-xs font-medium rounded-[var(--radius-sm)] px-2 py-1 text-[var(--text-muted)] bg-transparent hover:bg-[var(--surface-2)] hover:text-[var(--text)] border border-transparent focus:border-[var(--border-strong)] outline-none cursor-pointer transition-colors"

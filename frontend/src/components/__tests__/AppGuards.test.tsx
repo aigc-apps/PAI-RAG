@@ -33,6 +33,7 @@ import { App } from "../App";
 import { useChatStore } from "../../store/chat";
 import { useAgentConfigStore } from "../../store/agentConfig";
 import { useAuthStore } from "../../store/auth";
+import { useI18nStore } from "../../i18n";
 
 function setAuth(over: Partial<ReturnType<typeof useAuthStore.getState>>) {
   useAuthStore.setState({
@@ -46,6 +47,7 @@ function setAuth(over: Partial<ReturnType<typeof useAuthStore.getState>>) {
 }
 
 beforeEach(() => {
+  useI18nStore.getState().setLang("en");
   useChatStore.getState().reset();
   useAgentConfigStore.setState({ doc: undefined, loading: false, error: undefined });
 });

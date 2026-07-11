@@ -6,6 +6,7 @@ import type {
 } from "../api/agentConfig";
 import { EngineStatusBadge, useEngineStatus } from "./EngineStatus";
 import { cn } from "../lib/cn";
+import { useI18n, type TFunction } from "../i18n";
 
 // A model's type as the backend `ModelSpec` stores it.
 type ModelType = "chat" | "embedding" | "rerank";
@@ -29,6 +30,7 @@ export function KnowledgeBasePanel({
   doc: AgentConfigDocument;
   onConfigureVectorDB: () => void;
 }) {
+  const { t } = useI18n();
   const cat = doc.models ?? {};
   const vdb = doc.knowledgebase.vectordb;
   const configured = vdb.engine === "elasticsearch" && !!vdb.url;
@@ -51,22 +53,19 @@ export function KnowledgeBasePanel({
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Knowledge Base</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{t("kb.title")}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-          The components used for RAG retrieval. Configure the vector database
-          here; the embedding and rerank models are registered on the{" "}
-          <strong>Models</strong> tab and shown read-only. A new knowledge base
-          inherits whichever vector engine is active here.
+          {t("kb.introA")}
+          <strong>Models</strong>
+          {t("kb.introB")}
         </p>
       </div>
 
       {/* Vector database — configurable */}
       <section className="space-y-3">
         <div>
-          <h3 className="text-sm font-semibold">向量数据库</h3>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            知识库检索使用 Elasticsearch，全局生效。保存后新建的知识库即记录该引擎。
-          </p>
+          <h3 className="text-sm font-semibold">{t("kb.vectorDb")}</h3>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t("kb.vectorDbHint")}</p>
         </div>
         <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="flex items-center gap-3">
@@ -74,9 +73,9 @@ export function KnowledgeBasePanel({
               <Database className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium">向量库 · Elasticsearch</div>
+              <div className="text-sm font-medium">{t("kb.vectorStore")}</div>
               <div className="truncate font-mono text-xs text-[var(--text-muted)]">
-                {configured ? vdb.url : "未配置"}
+                {configured ? vdb.url : t("engine.unconfigured")}
               </div>
             </div>
             <EngineStatusBadge
@@ -90,7 +89,7 @@ export function KnowledgeBasePanel({
                 type="button"
                 onClick={() => void refresh()}
                 disabled={checking}
-                title="重新检测可达性"
+                title={t("kb.recheck")}
                 className="rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] disabled:opacity-50"
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", checking && "animate-spin")} />
@@ -101,14 +100,14 @@ export function KnowledgeBasePanel({
               onClick={onConfigureVectorDB}
               className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
             >
-              Configure
+              {t("kb.configure")}
             </button>
           </div>
           {/* Show the reason inline (not just a tooltip) when unreachable or
               when config is incomplete, so the fix is obvious on the page. */}
           {configured && engine && engine.configured && !engine.healthy && (
             <p className="mt-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--warning,#d97706)]">
-              {engine.detail || "已配置 Elasticsearch 但当前不可达，检索将自动降级为本地引擎。"}
+              {engine.detail || t("kb.esUnreachableInline")}
             </p>
           )}
           {!configured && vdb.error && (
@@ -122,23 +121,27 @@ export function KnowledgeBasePanel({
       {/* Embedding + rerank — read-only, registered on the Models tab */}
       <section className="space-y-3">
         <div>
-          <h3 className="text-sm font-semibold">检索模型</h3>
+          <h3 className="text-sm font-semibold">{t("kb.retrievalModels")}</h3>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
-            只读。在 <strong>Models</strong> 标签页注册与设置默认模型。
+            {t("kb.retrievalModelsHintA")}
+            <strong>Models</strong>
+            {t("kb.retrievalModelsHintB")}
           </p>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <RagModelReadout
-            label="Embedding 模型"
+            t={t}
+            label={t("kb.embeddingModel")}
             defaultRef={cat.default_embedding_model}
             models={modelsByType("embedding")}
-            emptyHint="在 Models 中注册一个 embedding 模型"
+            emptyHint={t("kb.embeddingEmpty")}
           />
           <RagModelReadout
-            label="Rerank 模型"
+            t={t}
+            label={t("kb.rerankModel")}
             defaultRef={cat.default_rerank_model}
             models={modelsByType("rerank")}
-            emptyHint="在 Models 中注册一个 rerank 模型（可选）"
+            emptyHint={t("kb.rerankEmpty")}
           />
         </div>
       </section>
@@ -149,11 +152,13 @@ export function KnowledgeBasePanel({
 /** Read-only summary of the models of one RAG role: which is the default and
  * what else is available. Registration happens on the Models tab. */
 function RagModelReadout({
+  t,
   label,
   defaultRef,
   models,
   emptyHint,
 }: {
+  t: TFunction;
   label: string;
   defaultRef?: string;
   models: string[];
@@ -164,11 +169,11 @@ function RagModelReadout({
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm font-medium">{label}</div>
         <div className="text-xs text-[var(--text-muted)]">
-          默认：
+          {t("kb.default")}
           {defaultRef ? (
             <code className="font-mono">{defaultRef}</code>
           ) : (
-            <span className="text-[var(--text-faint)]">未设置</span>
+            <span className="text-[var(--text-faint)]">{t("kb.notSet")}</span>
           )}
         </div>
       </div>

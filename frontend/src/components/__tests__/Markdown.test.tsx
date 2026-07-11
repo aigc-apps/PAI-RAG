@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Markdown } from "../Markdown";
+import { useI18nStore } from "../../i18n";
+
+beforeEach(() => {
+  useI18nStore.getState().setLang("en");
+});
 
 describe("Markdown", () => {
   it("renders headings and bold", () => {

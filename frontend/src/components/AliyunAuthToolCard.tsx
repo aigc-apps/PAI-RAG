@@ -5,11 +5,12 @@ import { cn } from "../lib/cn";
 import { useAliyunDialog } from "../store/aliyunDialog";
 import { useComposer } from "../store/composer";
 import { verifyAliyun } from "../api/agentConfig";
+import { useI18n, translate, useI18nStore } from "../i18n";
 
-/** Resume the paused agent turn by sending a "继续" message on the user's behalf. */
-const RESUME_TEXT = "阿里云授权已完成,请继续之前的操作。";
+/** Resume the paused agent turn by sending a continue message on the user's behalf. */
 function resumeAgent() {
-  useComposer.getState().submit?.(RESUME_TEXT);
+  const text = translate(useI18nStore.getState().lang, "aliyun.resumeMessage");
+  useComposer.getState().submit?.(text);
 }
 
 /**
@@ -31,6 +32,7 @@ export function AliyunAuthToolCard({
   tool: ToolUse;
   historical?: boolean;
 }) {
+  const { t } = useI18n();
   const notice = tool.notice;
   const showDialog = useAliyunDialog((s) => s.show);
   const [verifying, setVerifying] = useState(false);
@@ -46,18 +48,16 @@ export function AliyunAuthToolCard({
       const r = await verifyAliyun();
       setResult(
         r.ok
-          ? { ok: true, message: "凭证有效,已刷新绑定。可以重试刚才的操作。" }
+          ? { ok: true, message: t("aliyun.card.verifyOk") }
           : {
               ok: false,
-              message:
-                r.verdict?.error_message ||
-                "校验未通过,凭证可能已失效,建议重新授权。",
+              message: r.verdict?.error_message || t("aliyun.card.verifyFail"),
             }
       );
     } catch (err) {
       setResult({
         ok: false,
-        message: err instanceof Error ? err.message : "校验请求失败",
+        message: err instanceof Error ? err.message : t("aliyun.card.verifyError"),
       });
     } finally {
       setVerifying(false);
@@ -91,19 +91,17 @@ export function AliyunAuthToolCard({
                 historical ? "text-[var(--text-muted)]" : "text-[var(--text)]"
               )}
             >
-              {bound ? "阿里云凭证可能已失效" : "需要阿里云授权才能继续"}
+              {bound ? t("aliyun.card.expiredTitle") : t("aliyun.card.needAuthTitle")}
             </div>
             {historical && (
               <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-3)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-faint)]">
                 <History className="h-3 w-3" />
-                已处理
+                {t("aliyun.card.handled")}
               </span>
             )}
           </div>
           <div className="mt-0.5 text-xs leading-5 text-[var(--text-muted)]">
-            {bound
-              ? "沙箱里的 aliyun 命令因凭证问题失败。可先重新校验现有授权;若仍不行,请重新授权。"
-              : "当前账号尚未完成阿里云跨账号授权,沙箱无法调用 aliyun。完成授权后即可继续。"}
+            {bound ? t("aliyun.card.expiredBody") : t("aliyun.card.needAuthBody")}
             {notice.error_code && (
               <span className="ml-1 font-mono text-[var(--text-faint)]">
                 ({notice.error_code})
@@ -127,7 +125,7 @@ export function AliyunAuthToolCard({
                 {verifying ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : null}
-                重新校验
+                {t("aliyun.card.reverify")}
               </button>
             )}
             <button
@@ -135,7 +133,7 @@ export function AliyunAuthToolCard({
               className={cn(btn, "bg-[var(--accent)] text-white hover:opacity-90")}
               onClick={() => showDialog({ resumeAfter: true })}
             >
-              {bound ? "重新授权" : "去授权"}
+              {bound ? t("aliyun.card.reauthorize") : t("aliyun.card.authorize")}
             </button>
           </div>
 
@@ -166,7 +164,7 @@ export function AliyunAuthToolCard({
               )}
               onClick={() => resumeAgent()}
             >
-              继续
+              {t("aliyun.card.continue")}
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
           )}

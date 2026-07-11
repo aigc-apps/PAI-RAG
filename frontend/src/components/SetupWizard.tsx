@@ -12,39 +12,40 @@ import { useAgentConfigStore } from "../store/agentConfig";
 import { BrandMark } from "./Sidebar";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { ThemeToggle } from "./ThemeToggle";
+import { useI18n, type MessageKey, type TFunction } from "../i18n";
 
 const modes: Array<{
   id: SetupMode;
-  title: string;
-  body: string;
-  points: string[];
+  titleKey: MessageKey;
+  bodyKey: MessageKey;
+  pointKeys: MessageKey[];
 }> = [
   {
     id: "local_first",
-    title: "Local-first",
-    body: "Start with local knowledge and minimal external dependencies.",
-    points: ["Local knowledge ready", "Search skipped", "Sandbox disabled"],
+    titleKey: "setup.mode.localFirst.title",
+    bodyKey: "setup.mode.localFirst.body",
+    pointKeys: ["setup.mode.localFirst.p1", "setup.mode.localFirst.p2", "setup.mode.localFirst.p3"],
   },
   {
     id: "cloud_enhanced",
-    title: "Cloud-enhanced",
-    body: "Use hosted search, embeddings, rerank, and vector databases.",
-    points: ["Better retrieval", "Requires provider keys", "External services enabled"],
+    titleKey: "setup.mode.cloudEnhanced.title",
+    bodyKey: "setup.mode.cloudEnhanced.body",
+    pointKeys: ["setup.mode.cloudEnhanced.p1", "setup.mode.cloudEnhanced.p2", "setup.mode.cloudEnhanced.p3"],
   },
   {
     id: "developer",
-    title: "Developer mode",
-    body: "Prepare the agent for script execution and automation workflows.",
-    points: ["Sandbox-focused", "Approval controls", "Local or cloud runtime"],
+    titleKey: "setup.mode.developer.title",
+    bodyKey: "setup.mode.developer.body",
+    pointKeys: ["setup.mode.developer.p1", "setup.mode.developer.p2", "setup.mode.developer.p3"],
   },
 ];
 
-function statusLabel(cap?: CapabilityConfig) {
-  if (!cap) return "Unknown";
-  if (cap.status === "ready") return "Ready";
-  if (cap.status === "missing_config") return "Needs setup";
-  if (cap.status === "disabled") return "Disabled";
-  return "Error";
+function statusLabel(t: TFunction, cap?: CapabilityConfig): string {
+  if (!cap) return t("setup.status.unknown");
+  if (cap.status === "ready") return t("setup.status.ready");
+  if (cap.status === "missing_config") return t("setup.status.needsSetup");
+  if (cap.status === "disabled") return t("setup.status.disabled");
+  return t("setup.status.error");
 }
 
 function statusClass(status?: string) {
@@ -61,6 +62,7 @@ function CoreCard({
   cap?: CapabilityConfig;
   icon: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex items-start gap-3">
@@ -71,7 +73,7 @@ function CoreCard({
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-[var(--text)]">{cap?.name}</h3>
             <span className={cn("text-xs", statusClass(cap?.status))}>
-              {statusLabel(cap)}
+              {statusLabel(t, cap)}
             </span>
           </div>
           <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
@@ -80,7 +82,7 @@ function CoreCard({
         </div>
       </div>
       <div className="text-xs text-[var(--text-faint)]">
-        Permission: <span className="text-[var(--text-muted)]">{cap?.permission}</span>
+        {t("setup.permission")} <span className="text-[var(--text-muted)]">{cap?.permission}</span>
       </div>
     </div>
   );
@@ -93,6 +95,7 @@ export function SetupWizard({
   doc: AgentConfigDocument;
   onDone: () => void;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<SetupMode>(doc.setup.mode ?? "local_first");
   const completeSetup = useAgentConfigStore((s) => s.completeSetup);
   const loading = useAgentConfigStore((s) => s.loading);
@@ -123,7 +126,7 @@ export function SetupWizard({
       });
       onDone();
     } catch {
-      toast.error("Could not save setup");
+      toast.error(t("setup.saveFailed"));
     }
   };
 
@@ -137,19 +140,18 @@ export function SetupWizard({
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-8">
         <section>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-faint)]">
-            First run setup
+            {t("setup.firstRun")}
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            Configure your agent capabilities
+            {t("setup.configureTitle")}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
-            Start local-first, then enable search, cloud retrieval, sandbox execution,
-            and skills as your deployment needs them.
+            {t("setup.introBody")}
           </p>
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold">Deployment Mode</h2>
+          <h2 className="mb-3 text-sm font-semibold">{t("setup.deploymentMode")}</h2>
           <div className="grid gap-3 md:grid-cols-3">
             {modes.map((item) => (
               <button
@@ -164,13 +166,13 @@ export function SetupWizard({
                 )}
               >
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="font-semibold">{item.title}</span>
+                  <span className="font-semibold">{t(item.titleKey)}</span>
                   {mode === item.id && <Check className="h-4 w-4 text-[var(--accent)]" />}
                 </div>
-                <p className="mb-3 text-sm leading-5 text-[var(--text-muted)]">{item.body}</p>
+                <p className="mb-3 text-sm leading-5 text-[var(--text-muted)]">{t(item.bodyKey)}</p>
                 <div className="space-y-1 text-xs text-[var(--text-faint)]">
-                  {item.points.map((point) => (
-                    <div key={point}>{point}</div>
+                  {item.pointKeys.map((pointKey) => (
+                    <div key={pointKey}>{t(pointKey)}</div>
                   ))}
                 </div>
               </button>
@@ -180,7 +182,7 @@ export function SetupWizard({
 
         <section className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="mb-4 flex items-center gap-2">
-            <h2 className="text-sm font-semibold">Connect a model</h2>
+            <h2 className="text-sm font-semibold">{t("setup.connectModel")}</h2>
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
@@ -194,20 +196,17 @@ export function SetupWizard({
               ) : (
                 <CircleAlert className="h-3.5 w-3.5" />
               )}
-              {llmReady ? "Ready" : "Required"}
+              {llmReady ? t("setup.status.ready") : t("setup.required")}
             </span>
           </div>
           <p className="mb-4 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
-            This is the one thing the agent can’t run without. Add a connection,
-            register a chat model, and mark it the default. A model connects when
-            its key env var is set on the server (a keyless local endpoint is
-            ready immediately).
+            {t("setup.connectModelBody")}
           </p>
           <ConnectionsPanel doc={doc} />
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold">Core Capabilities</h2>
+          <h2 className="mb-3 text-sm font-semibold">{t("setup.coreCapabilities")}</h2>
           <div className="grid gap-3 md:grid-cols-3">
             <CoreCard cap={caps.search} icon={<Globe2 className="h-4 w-4" />} />
             <CoreCard cap={caps.knowledge} icon={<Database className="h-4 w-4" />} />
@@ -216,7 +215,7 @@ export function SetupWizard({
         </section>
 
         <section className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-          <h2 className="text-sm font-semibold">Recommended Skills</h2>
+          <h2 className="text-sm font-semibold">{t("setup.recommendedSkills")}</h2>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {enabledSkills.map((skill) => (
               <div
@@ -225,7 +224,7 @@ export function SetupWizard({
               >
                 <span className="text-sm">{skill.name}</span>
                 <span className={cn("text-xs", statusClass(skill.status))}>
-                  {statusLabel(skill)}
+                  {statusLabel(t, skill)}
                 </span>
               </div>
             ))}
@@ -234,18 +233,16 @@ export function SetupWizard({
 
         <section className="flex flex-col gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center">
           <div className="flex-1 text-xs leading-5 text-[var(--text-muted)]">
-            {llmReady
-              ? "Search, sandbox, knowledge, and skills are optional — configure them now or later from Control Room."
-              : "Connect a model above to finish. Everything else can wait until after setup."}
+            {llmReady ? t("setup.finishHintReady") : t("setup.finishHintNeedModel")}
           </div>
           <button
             type="button"
             disabled={loading || !llmReady}
-            title={llmReady ? undefined : "Connect a model to finish setup"}
+            title={llmReady ? undefined : t("setup.finishTitleGate")}
             onClick={() => finish()}
             className="inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
-            Finish setup
+            {t("setup.finishSetup")}
             <ChevronRight className="h-4 w-4" />
           </button>
         </section>

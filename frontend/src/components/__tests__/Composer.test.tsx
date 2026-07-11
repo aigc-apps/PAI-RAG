@@ -1,7 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Composer } from "../Composer";
+import { useI18nStore } from "../../i18n";
+
+beforeEach(() => {
+  useI18nStore.getState().setLang("en");
+});
 
 describe("Composer", () => {
   it("sends on click and clears the input", async () => {

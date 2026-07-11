@@ -10,8 +10,10 @@ vi.mock("../../api/auth", () => ({
 
 import { UserMenu } from "../UserMenu";
 import { useAuthStore } from "../../store/auth";
+import { useI18nStore } from "../../i18n";
 
 beforeEach(() => {
+  useI18nStore.getState().setLang("en");
   useAuthStore.setState({
     user: { id: "u1", email: "amy@example.com", role: "user", status: "active", display_name: null },
     logout: vi.fn().mockResolvedValue(undefined),

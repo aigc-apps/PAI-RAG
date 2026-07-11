@@ -10,15 +10,16 @@ import type {
 import { testModelConnection } from "../api/agentConfig";
 import { cn } from "../lib/cn";
 import { useAgentConfigStore } from "../store/agentConfig";
+import { useI18n, type MessageKey } from "../i18n";
 
 // A model's type as the backend `ModelSpec` stores it; the UI labels "chat" as
 // "LLM" but the wire value stays `chat`.
 type ModelType = "chat" | "embedding" | "rerank";
 
-const TYPE_LABEL: Record<ModelType, string> = {
-  chat: "LLM",
-  embedding: "Embedding",
-  rerank: "Rerank",
+const TYPE_LABEL_KEY: Record<ModelType, MessageKey> = {
+  chat: "conn.typeLLM",
+  embedding: "conn.typeEmbedding",
+  rerank: "conn.typeRerank",
 };
 
 /** Reference format used everywhere the catalog points at a model. */
@@ -58,6 +59,7 @@ function clearDefaultsPointingAt(
 }
 
 export function ConnectionsPanel({ doc }: { doc: AgentConfigDocument }) {
+  const { t } = useI18n();
   const save = useAgentConfigStore((s) => s.save);
   const loading = useAgentConfigStore((s) => s.loading);
   const cat = doc.models ?? {};
@@ -68,23 +70,26 @@ export function ConnectionsPanel({ doc }: { doc: AgentConfigDocument }) {
       await save({ ...doc, models: next });
       onOk?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save connections");
+      toast.error(err instanceof Error ? err.message : t("conn.saveFailed"));
     }
   };
 
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Connections</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{t("conn.title")}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-          Control Room — wire the model endpoints the whole deployment draws on,
-          once. A <strong>connection</strong> is an endpoint (base URL + the name
-          of the env var carrying its API key); under it you register the{" "}
-          <strong>models</strong> — LLM, embedding, rerank — referenced elsewhere
-          as <code className="font-mono">provider/model-id</code>. Save a
-          connection, then <strong>Test</strong> it to confirm the key resolves
-          and the endpoint answers. The vector database lives on the{" "}
-          <strong>Knowledge Base</strong> tab.
+          {t("conn.intro.a")}
+          <strong>{t("conn.intro.connection")}</strong>
+          {t("conn.intro.b")}
+          <strong>{t("conn.intro.models")}</strong>
+          {t("conn.intro.c")}
+          <code className="font-mono">provider/model-id</code>
+          {t("conn.intro.d")}
+          <strong>{t("conn.intro.test")}</strong>
+          {t("conn.intro.e")}
+          <strong>{t("conn.intro.kb")}</strong>
+          {t("conn.intro.f")}
         </p>
       </div>
 
@@ -119,6 +124,7 @@ function ConnectionsSection({
   cat: ModelCatalogDoc;
   onSave: (next: ModelCatalogDoc, onOk?: () => void) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKeyEnv, setApiKeyEnv] = useState("");
@@ -144,7 +150,7 @@ function ConnectionsSection({
   const submit = () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error("Connection name is required");
+      toast.error(t("conn.nameRequired"));
       return;
     }
     // Upsert by name. When editing, the name field is locked so `editing`
@@ -180,7 +186,7 @@ function ConnectionsSection({
     if (!modelRef) {
       setResult((r) => ({
         ...r,
-        [p.name]: { ok: false, output: "Register an LLM model under this connection first." },
+        [p.name]: { ok: false, output: t("conn.registerLlmFirst") },
       }));
       return;
     }
@@ -191,7 +197,7 @@ function ConnectionsSection({
     } catch (err) {
       setResult((r) => ({
         ...r,
-        [p.name]: { ok: false, output: err instanceof Error ? err.message : "Test failed" },
+        [p.name]: { ok: false, output: err instanceof Error ? err.message : t("conn.testFailed") },
       }));
     } finally {
       setTesting(null);
@@ -201,11 +207,13 @@ function ConnectionsSection({
   return (
     <section className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold">Model connections</h3>
+        <h3 className="text-sm font-semibold">{t("conn.section1Title")}</h3>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Endpoints referenced as{" "}
-          <code className="font-mono">provider/model-id</code>. Only the env-var{" "}
-          <em>name</em> is stored — the secret stays in the server environment.
+          {t("conn.section1Hint.a")}
+          <code className="font-mono">provider/model-id</code>
+          {t("conn.section1Hint.b")}
+          <em>{t("conn.wordName")}</em>
+          {t("conn.section1Hint.c")}
         </p>
       </div>
 
@@ -213,10 +221,10 @@ function ConnectionsSection({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-muted)]">
-              <th className="px-3 py-2 font-medium">Name</th>
-              <th className="px-3 py-2 font-medium">Base URL</th>
-              <th className="px-3 py-2 font-medium">API key env</th>
-              <th className="px-3 py-2 font-medium">Models</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colName")}</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colBaseUrl")}</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colApiKeyEnv")}</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colModels")}</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -240,7 +248,7 @@ function ConnectionsSection({
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
-                          aria-label={`Test connection ${p.name}`}
+                          aria-label={t("conn.testConnAria", { name: p.name })}
                           disabled={testing === p.name}
                           onClick={() => void test(p)}
                           className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--surface-2)] disabled:opacity-60"
@@ -250,18 +258,18 @@ function ConnectionsSection({
                           ) : (
                             <Zap className="h-3.5 w-3.5" />
                           )}
-                          Test
+                          {t("conn.test")}
                         </button>
                         <button
                           type="button"
                           onClick={() => edit(p)}
                           className="rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--surface-2)]"
                         >
-                          Edit
+                          {t("common.edit")}
                         </button>
                         <button
                           type="button"
-                          aria-label={`Delete connection ${p.name}`}
+                          aria-label={t("conn.deleteConnAria", { name: p.name })}
                           onClick={() => remove(p)}
                           className="rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--danger)]"
                         >
@@ -281,7 +289,7 @@ function ConnectionsSection({
                           ) : (
                             <CircleAlert className="h-3.5 w-3.5 shrink-0" />
                           )}
-                          <span className="truncate">{res.ok ? "OK" : res.output}</span>
+                          <span className="truncate">{res.ok ? t("conn.ok") : res.output}</span>
                         </span>
                       )}
                     </div>
@@ -292,7 +300,7 @@ function ConnectionsSection({
             {providers.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-4 text-center text-xs text-[var(--text-faint)]">
-                  No connections yet.
+                  {t("conn.noConnections")}
                 </td>
               </tr>
             )}
@@ -302,13 +310,13 @@ function ConnectionsSection({
 
       <div className="rounded-[var(--radius)] border border-[var(--border)] p-3">
         <div className="mb-2 text-xs font-medium text-[var(--text-muted)]">
-          {editing ? `Edit connection "${editing}"` : "Add connection"}
+          {editing ? t("conn.editConnection", { name: editing }) : t("conn.addConnection")}
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Name</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colName")}</span>
             <input
-              aria-label="Provider name"
+              aria-label={t("conn.providerNameAria")}
               value={name}
               disabled={editing !== null}
               placeholder="dashscope"
@@ -317,9 +325,9 @@ function ConnectionsSection({
             />
           </label>
           <label className="flex-1 text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Base URL</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colBaseUrl")}</span>
             <input
-              aria-label="Provider base URL"
+              aria-label={t("conn.providerBaseUrlAria")}
               value={baseUrl}
               placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
               onChange={(e) => setBaseUrl(e.target.value)}
@@ -327,9 +335,9 @@ function ConnectionsSection({
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">API key env</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colApiKeyEnv")}</span>
             <input
-              aria-label="Provider API key env"
+              aria-label={t("conn.providerApiKeyEnvAria")}
               value={apiKeyEnv}
               placeholder="DASHSCOPE_API_KEY"
               onChange={(e) => setApiKeyEnv(e.target.value)}
@@ -343,7 +351,7 @@ function ConnectionsSection({
             className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             <Plus className="h-4 w-4" />
-            {editing ? "Save" : "Add"}
+            {editing ? t("common.save") : t("common.add")}
           </button>
           {editing && (
             <button
@@ -351,14 +359,16 @@ function ConnectionsSection({
               onClick={reset}
               className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           )}
         </div>
         <p className="mt-2 text-xs text-[var(--text-faint)]">
-          Only the env-var <em>name</em> is stored here — the secret lives in the
-          server environment, never in the config. Set the value in{" "}
-          <code className="font-mono">.env</code> and reload env.
+          {t("conn.foot.a")}
+          <em>{t("conn.wordName")}</em>
+          {t("conn.foot.b")}
+          <code className="font-mono">.env</code>
+          {t("conn.foot.c")}
         </p>
       </div>
     </section>
@@ -379,6 +389,7 @@ function ModelsSection({
   cat: ModelCatalogDoc;
   onSave: (next: ModelCatalogDoc, onOk?: () => void) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [provider, setProvider] = useState("");
   const [type, setType] = useState<ModelType>("embedding");
   const [id, setId] = useState("");
@@ -419,11 +430,11 @@ function ModelsSection({
     const provName = provider.trim();
     const modelId = id.trim();
     if (!provName) {
-      toast.error("Choose a connection");
+      toast.error(t("conn.chooseConnection"));
       return;
     }
     if (!modelId) {
-      toast.error("Model id is required");
+      toast.error(t("conn.modelIdRequired"));
       return;
     }
     const spec: ModelSpecDoc = { id: modelId, type };
@@ -486,29 +497,25 @@ function ModelsSection({
   return (
     <section className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold">Models</h3>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Register a model under a connection. Mark one embedding and one rerank
-          model as the default — that is what knowledge bases use. (Per-KB rerank
-          enable / top-N stays in knowledge base management.)
-        </p>
+        <h3 className="text-sm font-semibold">{t("conn.modelsTitle")}</h3>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">{t("conn.modelsHint")}</p>
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-muted)]">
-              <th className="px-3 py-2 font-medium">Connection</th>
-              <th className="px-3 py-2 font-medium">Model</th>
-              <th className="px-3 py-2 font-medium">Type</th>
-              <th className="px-3 py-2 font-medium">Protocol</th>
-              <th className="px-3 py-2 font-medium">Dim</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colConnection")}</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colModel")}</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colType")}</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colProtocol")}</th>
+              <th className="px-3 py-2 font-medium">{t("conn.colDim")}</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
             {rows.map(({ provider: pn, model: m }) => {
-              const t = (m.type ?? "chat") as ModelType;
+              const mt = (m.type ?? "chat") as ModelType;
               return (
                 <tr key={`${pn}/${m.id}`} className="border-b border-[var(--border)] last:border-0">
                   <td className="px-3 py-2 text-[var(--text-muted)]">{pn}</td>
@@ -516,13 +523,13 @@ function ModelsSection({
                     {m.id}
                     {isDefault(pn, m) && (
                       <span className="ml-2 rounded-full bg-[var(--accent)]/15 px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)]">
-                        Default
+                        {t("conn.defaultBadge")}
                       </span>
                     )}
                   </td>
                   <td className="px-3 py-2">
                     <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs">
-                      {TYPE_LABEL[t]}
+                      {t(TYPE_LABEL_KEY[mt])}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-xs text-[var(--text-muted)]">
@@ -538,11 +545,11 @@ function ModelsSection({
                         onClick={() => edit(pn, m)}
                         className="rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--surface-2)]"
                       >
-                        Edit
+                        {t("common.edit")}
                       </button>
                       <button
                         type="button"
-                        aria-label={`Delete model ${pn}/${m.id}`}
+                        aria-label={t("conn.deleteConnAria", { name: `${pn}/${m.id}` })}
                         onClick={() => remove(pn, m)}
                         className="rounded-[var(--radius-sm)] border border-[var(--border)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--danger)]"
                       >
@@ -556,7 +563,7 @@ function ModelsSection({
             {rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-4 text-center text-xs text-[var(--text-faint)]">
-                  No models registered yet.
+                  {t("conn.noModels")}
                 </td>
               </tr>
             )}
@@ -566,41 +573,41 @@ function ModelsSection({
 
       <div className="rounded-[var(--radius)] border border-[var(--border)] p-3">
         <div className="mb-2 text-xs font-medium text-[var(--text-muted)]">
-          {editing ? `Edit model "${editing.provider}/${editing.id}"` : "Register model"}
+          {editing ? t("conn.editModel", { ref: `${editing.provider}/${editing.id}` }) : t("conn.registerModel")}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Connection</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colConnection")}</span>
             <select
-              aria-label="Model provider"
+              aria-label={t("conn.modelProviderAria")}
               value={provider}
               disabled={editing !== null}
               onChange={(e) => setProvider(e.target.value)}
               className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:opacity-60"
             >
-              <option value="">Select…</option>
+              <option value="">{t("conn.selectPlaceholder")}</option>
               {providers.map((p) => (
                 <option key={p.name} value={p.name}>{p.name}</option>
               ))}
             </select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Type</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colType")}</span>
             <select
-              aria-label="Model type"
+              aria-label={t("conn.modelTypeAria")}
               value={type}
               onChange={(e) => setType(e.target.value as ModelType)}
               className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
             >
-              <option value="chat">LLM (chat)</option>
-              <option value="embedding">Embedding</option>
-              <option value="rerank">Rerank</option>
+              <option value="chat">{t("conn.typeOptChat")}</option>
+              <option value="embedding">{t("conn.typeEmbedding")}</option>
+              <option value="rerank">{t("conn.typeRerank")}</option>
             </select>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Model id</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.modelId")}</span>
             <input
-              aria-label="Model id"
+              aria-label={t("conn.modelId")}
               value={id}
               placeholder="text-embedding-v4"
               onChange={(e) => setId(e.target.value)}
@@ -608,9 +615,9 @@ function ModelsSection({
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Protocol</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colProtocol")}</span>
             <select
-              aria-label="Model protocol"
+              aria-label={t("conn.modelProtocolAria")}
               value={protocol}
               onChange={(e) => setProtocol(e.target.value as "openai" | "dashscope")}
               className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
@@ -621,9 +628,9 @@ function ModelsSection({
           </label>
           {type === "embedding" && (
             <label className="text-sm">
-              <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Dimension</span>
+              <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.dimension")}</span>
               <input
-                aria-label="Embedding dimension"
+                aria-label={t("conn.embeddingDimAria")}
                 value={dimension}
                 type="number"
                 min={1}
@@ -634,11 +641,11 @@ function ModelsSection({
             </label>
           )}
           <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Base URL override</span>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.baseUrlOverride")}</span>
             <input
-              aria-label="Model base URL override"
+              aria-label={t("conn.modelBaseUrlAria")}
               value={baseUrl}
-              placeholder="optional — defaults to connection"
+              placeholder={t("conn.baseUrlPlaceholder")}
               onChange={(e) => setBaseUrl(e.target.value)}
               className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
             />
@@ -647,13 +654,13 @@ function ModelsSection({
         <div className="mt-3 flex items-center justify-between gap-3">
           <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
             <input
-              aria-label="Set as default for this type"
+              aria-label={t("conn.setDefaultAria")}
               type="checkbox"
               checked={makeDefault}
               onChange={(e) => setMakeDefault(e.target.checked)}
               className="h-4 w-4"
             />
-            Set as default {TYPE_LABEL[type]} model
+            {t("conn.setDefault", { type: t(TYPE_LABEL_KEY[type]) })}
           </label>
           <div className="flex gap-2">
             {editing && (
@@ -662,7 +669,7 @@ function ModelsSection({
                 onClick={reset}
                 className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             )}
             <button
@@ -672,13 +679,13 @@ function ModelsSection({
               className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               <Plus className="h-4 w-4" />
-              {editing ? "Save" : "Register"}
+              {editing ? t("common.save") : t("conn.register")}
             </button>
           </div>
         </div>
         {providers.length === 0 && (
           <p className="mt-2 text-xs text-[var(--text-faint)]">
-            Add a connection above first.
+            {t("conn.addConnFirst")}
           </p>
         )}
       </div>

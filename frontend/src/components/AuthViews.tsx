@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { useAuthStore } from "../store/auth";
+import { useI18n } from "../i18n";
 
 // A centered card shell shared by the three unauthenticated screens.
 function AuthShell({
@@ -87,6 +88,7 @@ function ErrorLine({ message }: { message: string }) {
 
 // --------------------------------------------------------------------------- //
 export function LoginView() {
+  const { t } = useI18n();
   const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -100,21 +102,21 @@ export function LoginView() {
     try {
       await login(email.trim(), password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t("auth.loginFailed"));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <AuthShell title="Sign in" subtitle="Access your assistant workspace">
+    <AuthShell title={t("auth.signIn")} subtitle={t("auth.signInSubtitle")}>
       <form onSubmit={submit}>
         <ErrorLine message={error} />
-        <LabeledInput label="Email" type="email" value={email} onChange={setEmail}
+        <LabeledInput label={t("auth.email")} type="email" value={email} onChange={setEmail}
           placeholder="you@example.com" autoFocus autoComplete="username" />
-        <LabeledInput label="Password" type="password" value={password} onChange={setPassword}
+        <LabeledInput label={t("auth.password")} type="password" value={password} onChange={setPassword}
           placeholder="••••••••" autoComplete="current-password" />
-        <SubmitButton busy={busy}>Sign in</SubmitButton>
+        <SubmitButton busy={busy}>{t("auth.signIn")}</SubmitButton>
       </form>
     </AuthShell>
   );
@@ -122,6 +124,7 @@ export function LoginView() {
 
 // --------------------------------------------------------------------------- //
 export function CreateAdminView() {
+  const { t } = useI18n();
   const createAdmin = useAuthStore((s) => s.createAdmin);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -134,36 +137,36 @@ export function CreateAdminView() {
     e.preventDefault();
     setError("");
     if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError(t("auth.pwTooShort"));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match");
+      setError(t("auth.pwMismatch"));
       return;
     }
     setBusy(true);
     try {
       await createAdmin(email.trim(), password, token.trim() || undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the admin account");
+      setError(err instanceof Error ? err.message : t("auth.createAdminFailed"));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <AuthShell title="Create admin account" subtitle="First-run setup — this becomes the owner">
+    <AuthShell title={t("auth.createAdmin")} subtitle={t("auth.createAdminSubtitle")}>
       <form onSubmit={submit}>
         <ErrorLine message={error} />
-        <LabeledInput label="Admin email" type="email" value={email} onChange={setEmail}
+        <LabeledInput label={t("auth.adminEmail")} type="email" value={email} onChange={setEmail}
           placeholder="admin@example.com" autoFocus autoComplete="username" />
-        <LabeledInput label="Password" type="password" value={password} onChange={setPassword}
-          placeholder="At least 8 characters" autoComplete="new-password" />
-        <LabeledInput label="Confirm password" type="password" value={confirm} onChange={setConfirm}
-          placeholder="Repeat password" autoComplete="new-password" />
-        <LabeledInput label="Setup token (only if configured)" type="password" value={token}
-          onChange={setToken} placeholder="Optional" />
-        <SubmitButton busy={busy}>Create account</SubmitButton>
+        <LabeledInput label={t("auth.password")} type="password" value={password} onChange={setPassword}
+          placeholder={t("auth.atLeast8")} autoComplete="new-password" />
+        <LabeledInput label={t("auth.confirmPassword")} type="password" value={confirm} onChange={setConfirm}
+          placeholder={t("auth.repeatPassword")} autoComplete="new-password" />
+        <LabeledInput label={t("auth.setupToken")} type="password" value={token}
+          onChange={setToken} placeholder={t("auth.optional")} />
+        <SubmitButton busy={busy}>{t("auth.createAccount")}</SubmitButton>
       </form>
     </AuthShell>
   );
@@ -177,6 +180,7 @@ export function AcceptInviteView({
   token: string;
   onDone: () => void;
 }) {
+  const { t } = useI18n();
   const acceptInvite = useAuthStore((s) => s.acceptInvite);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -187,11 +191,11 @@ export function AcceptInviteView({
     e.preventDefault();
     setError("");
     if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError(t("auth.pwTooShort"));
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match");
+      setError(t("auth.pwMismatch"));
       return;
     }
     setBusy(true);
@@ -199,21 +203,21 @@ export function AcceptInviteView({
       await acceptInvite(token, password);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "This invite is invalid or has expired");
+      setError(err instanceof Error ? err.message : t("auth.inviteInvalid"));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <AuthShell title="Set your password" subtitle="Finish activating your invited account">
+    <AuthShell title={t("auth.setPassword")} subtitle={t("auth.setPasswordSubtitle")}>
       <form onSubmit={submit}>
         <ErrorLine message={error} />
-        <LabeledInput label="New password" type="password" value={password} onChange={setPassword}
-          placeholder="At least 8 characters" autoFocus autoComplete="new-password" />
-        <LabeledInput label="Confirm password" type="password" value={confirm} onChange={setConfirm}
-          placeholder="Repeat password" autoComplete="new-password" />
-        <SubmitButton busy={busy}>Activate account</SubmitButton>
+        <LabeledInput label={t("auth.newPassword")} type="password" value={password} onChange={setPassword}
+          placeholder={t("auth.atLeast8")} autoFocus autoComplete="new-password" />
+        <LabeledInput label={t("auth.confirmPassword")} type="password" value={confirm} onChange={setConfirm}
+          placeholder={t("auth.repeatPassword")} autoComplete="new-password" />
+        <SubmitButton busy={busy}>{t("auth.activateAccount")}</SubmitButton>
       </form>
     </AuthShell>
   );

@@ -2,12 +2,14 @@ import type { FileArtifact } from "../types";
 import { humanSize } from "../lib/files";
 import { usePreviewStore } from "../store/preview";
 import { ArtifactIcon } from "./ArtifactIcon";
+import { useI18n } from "../i18n";
 
 /** Files an assistant message produced, surfaced at the message level (not
  * buried inside a tool-call record). Clicking a card opens the preview panel
  * on the whole set, focused on that file — so the panel can switch between
  * siblings. Download-only kinds ("file") open the panel's download view. */
 export function MessageArtifacts({ files }: { files: FileArtifact[] }) {
+  const { t } = useI18n();
   const open = usePreviewStore((s) => s.open);
   const unique = files.filter((f, i) => files.findIndex((x) => x.id === f.id) === i);
   if (unique.length === 0) return null;
@@ -29,7 +31,7 @@ export function MessageArtifacts({ files }: { files: FileArtifact[] }) {
               {f.name}
             </span>
             <span className="block text-xs text-[var(--text-faint)]">
-              {f.kind === "file" ? "下载" : "预览"}
+              {f.kind === "file" ? t("artifact.download") : t("artifact.preview")}
               {f.size >= 0 ? ` · ${humanSize(f.size)}` : ""}
             </span>
           </span>

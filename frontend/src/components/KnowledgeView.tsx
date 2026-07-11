@@ -16,6 +16,7 @@ import { listModels, modelsByType, type ModelInfo } from "../api/models";
 import { EngineStatusBadge, useEngineStatus } from "./EngineStatus";
 import { cn } from "../lib/cn";
 import { copyText } from "../lib/clipboard";
+import { useI18n, type TFunction, type MessageKey } from "../i18n";
 
 // --- shared class strings (match SettingsView / app idioms) ---------------- //
 const CARD = "rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] p-4";
@@ -69,14 +70,19 @@ function useModelCatalog(enabled: boolean): ModelCatalog {
   return cat;
 }
 
-const STATUS_ZH: Record<string, string> = {
-  ready: "就绪", empty: "待索引", indexed: "已索引", active: "启用",
-  processing: "处理中", failed: "失败", has_errors: "有错误", disabled: "已停用", deleted: "已删除",
-  website: "website", upload: "upload", text: "text", file: "file",
-  // data source sync states
-  idle: "未同步", syncing: "同步中", succeeded: "已同步", partial: "部分成功",
-  llms_txt: "阿里云文档", yuque: "语雀",
+// Status/source-type values that carry a localized label. Unlisted values
+// (website / upload / text / file) render as their raw identifier in both langs.
+const STATUS_KEY: Record<string, MessageKey> = {
+  ready: "kbview.status.ready", empty: "kbview.status.empty", indexed: "kbview.status.indexed",
+  active: "kbview.status.active", processing: "kbview.status.processing", failed: "kbview.status.failed",
+  has_errors: "kbview.status.has_errors", disabled: "kbview.status.disabled", deleted: "kbview.status.deleted",
+  idle: "kbview.status.idle", syncing: "kbview.status.syncing", succeeded: "kbview.status.succeeded",
+  partial: "kbview.status.partial", llms_txt: "kbview.status.llms_txt", yuque: "kbview.status.yuque",
 };
+
+function statusLabelOf(t: TFunction, status: string): string {
+  return STATUS_KEY[status] ? t(STATUS_KEY[status]) : status;
+}
 
 function statusClass(status: string) {
   if (["ready", "indexed", "active", "succeeded"].includes(status))
@@ -91,9 +97,10 @@ function statusClass(status: string) {
 }
 
 function Pill({ status }: { status: string }) {
+  const { t } = useI18n();
   return (
     <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", statusClass(status))}>
-      {STATUS_ZH[status] ?? status}
+      {statusLabelOf(t, status)}
     </span>
   );
 }
@@ -155,6 +162,7 @@ function Seg<T extends string>({ value, options, onChange }: {
 function Drawer({ open, title, onClose, footer, children }: {
   open: boolean; title: string; onClose: () => void; footer: ReactNode; children: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <>
       <div
@@ -169,7 +177,7 @@ function Drawer({ open, title, onClose, footer, children }: {
         <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
           <h3 className="text-sm font-semibold">{title}</h3>
           <div className="flex-1" />
-          <button type="button" aria-label="关闭" onClick={onClose} className={ICON_BTN}>
+          <button type="button" aria-label={t("common.close")} onClick={onClose} className={ICON_BTN}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -184,6 +192,7 @@ function Drawer({ open, title, onClose, footer, children }: {
 // Root
 // ======================================================================== //
 export function KnowledgeView({ onBack }: { onBack: () => void }) {
+  const { t } = useI18n();
   const [bases, setBases] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -198,9 +207,10 @@ export function KnowledgeView({ onBack }: { onBack: () => void }) {
     (async () => {
       setLoading(true);
       try { await refresh(); }
-      catch (e) { toast.error(e instanceof Error ? e.message : "无法加载知识库"); }
+      catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.loadKbFailed")); }
       finally { setLoading(false); }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const open = openId ? bases.find((b) => b.id === openId) ?? null : null;
@@ -218,7 +228,7 @@ export function KnowledgeView({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg)] text-[var(--text)]">
-      <TopBar onBack={onBack} crumb={<b className="font-semibold text-[var(--text)]">知识库</b>} />
+      <TopBar onBack={onBack} crumb={<b className="font-semibold text-[var(--text)]">{t("kb.title")}</b>} />
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <KbList
           bases={bases} loading={loading}
@@ -231,9 +241,10 @@ export function KnowledgeView({ onBack }: { onBack: () => void }) {
 }
 
 function TopBar({ onBack, crumb }: { onBack: () => void; crumb: ReactNode }) {
+  const { t } = useI18n();
   return (
     <div className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-[var(--border)] px-3">
-      <button type="button" aria-label="返回" onClick={onBack} className={ICON_BTN}>
+      <button type="button" aria-label={t("common.back")} onClick={onBack} className={ICON_BTN}>
         <ArrowLeft className="h-4 w-4" />
       </button>
       <span className="grid h-6 w-6 place-items-center rounded-[6px] bg-[var(--accent-soft)] text-[var(--accent)]">
@@ -251,32 +262,33 @@ function KbList({ bases, loading, onOpen, onCreated }: {
   bases: KnowledgeBase[]; loading: boolean;
   onOpen: (id: string) => void; onCreated: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const [showCreate, setShowCreate] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-[1120px] px-5 pt-6 pb-16">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">知识库</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t("kb.title")}</h1>
           <p className="mt-1 max-w-2xl text-[13px] text-[var(--text-muted)]">
-            为智能体提供可检索、可追溯的私有知识。每个知识库有独立的向量引擎、Embedding 与切片配置。
+            {t("kbview.listIntro")}
           </p>
         </div>
         <button className={BTN_PRIMARY} onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" /> 新建知识库
+          <Plus className="h-4 w-4" /> {t("kbview.newKb")}
         </button>
       </div>
 
       {loading ? (
         <div className="flex items-center gap-2 py-10 text-sm text-[var(--text-muted)]">
-          <Loader2 className="h-4 w-4 animate-spin" /> 加载中
+          <Loader2 className="h-4 w-4 animate-spin" /> {t("common.loading")}
         </div>
       ) : bases.length === 0 ? (
         <div className="grid place-items-center rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] py-16 text-center">
           <Database className="h-6 w-6 text-[var(--text-faint)]" />
-          <div className="mt-3 text-sm text-[var(--text-muted)]">暂无知识库</div>
+          <div className="mt-3 text-sm text-[var(--text-muted)]">{t("kbview.emptyKb")}</div>
           <button className={cn(BTN_GHOST, "mt-3")} onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" /> 创建第一个
+            <Plus className="h-4 w-4" /> {t("kbview.createFirst")}
           </button>
         </div>
       ) : (
@@ -295,6 +307,7 @@ function KbList({ bases, loading, onOpen, onCreated }: {
 }
 
 function KbCard({ kb, onOpen }: { kb: KnowledgeBase; onOpen: () => void }) {
+  const { t } = useI18n();
   const emb = kb.embedding_config ?? {};
   const parser = parserOf(kb);
   const rerank = kb.rerank_config?.enabled;
@@ -308,18 +321,18 @@ function KbCard({ kb, onOpen }: { kb: KnowledgeBase; onOpen: () => void }) {
         <Pill status={kb.status} />
       </div>
       <div className="min-h-[18px] truncate text-[12.5px] text-[var(--text-muted)]">
-        {kb.description || "无描述"}
+        {kb.description || t("kbview.noDescription")}
       </div>
       <div className="flex items-center gap-3.5 text-xs text-[var(--text-muted)]">
-        <span><b className="font-semibold text-[var(--text)]">{kb.document_count}</b> 文档</span>
-        <span><b className="font-semibold text-[var(--text)]">{kb.chunk_count}</b> 切片</span>
+        <span><b className="font-semibold text-[var(--text)]">{kb.document_count}</b> {t("kbview.docs")}</span>
+        <span><b className="font-semibold text-[var(--text)]">{kb.chunk_count}</b> {t("kbview.chunks")}</span>
         <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">{kb.visibility}</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <Chip mono>{str(emb.model, "local-hash-v1")} · {num(emb.dimension, 64)}d</Chip>
-        <Chip>向量 <span className="text-[var(--text-faint)]">{str(kb.vector_store_config?.provider_id, "local_sql")}</span></Chip>
-        <Chip>重排 <span className="text-[var(--text-faint)]">{rerank ? str(kb.rerank_config?.model, "on") : "关闭"}</span></Chip>
-        <Chip>切片 <span className="text-[var(--text-faint)]">{parser.chunk_size}/{parser.chunk_overlap}</span></Chip>
+        <Chip>{t("kbview.chipVector")} <span className="text-[var(--text-faint)]">{str(kb.vector_store_config?.provider_id, "local_sql")}</span></Chip>
+        <Chip>{t("kbview.chipRerank")} <span className="text-[var(--text-faint)]">{rerank ? str(kb.rerank_config?.model, "on") : t("kbview.off")}</span></Chip>
+        <Chip>{t("kbview.chipChunk")} <span className="text-[var(--text-faint)]">{parser.chunk_size}/{parser.chunk_overlap}</span></Chip>
       </div>
     </button>
   );
@@ -343,20 +356,21 @@ function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
   kb: KnowledgeBase; onBackToList: () => void;
   onChanged: () => Promise<void>; onDeleted: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("overview");
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
-    { id: "overview", label: "概览" },
-    { id: "config", label: "配置" },
-    { id: "datasources", label: "数据源" },
-    { id: "files", label: "文档", badge: kb.document_count },
-    { id: "recall", label: "召回测试" },
+    { id: "overview", label: t("kbview.tab.overview") },
+    { id: "config", label: t("kbview.tab.config") },
+    { id: "datasources", label: t("kbview.tab.datasources") },
+    { id: "files", label: t("kbview.tab.files"), badge: kb.document_count },
+    { id: "recall", label: t("kbview.tab.recall") },
   ];
 
   const remove = async () => {
-    if (!confirm(`删除知识库「${kb.name}」？该操作不可撤销。`)) return;
-    try { await deleteKnowledgeBase(kb.id); toast.success("已删除"); await onDeleted(); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "删除失败"); }
+    if (!confirm(t("kbview.confirmDeleteKb", { name: kb.name }))) return;
+    try { await deleteKnowledgeBase(kb.id); toast.success(t("kbview.deleted")); await onDeleted(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.deleteFailed")); }
   };
 
   return (
@@ -364,27 +378,27 @@ function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
       <TopBar
         onBack={onBackToList}
         crumb={<>
-          <span className="cursor-pointer hover:text-[var(--text)]" onClick={onBackToList}>知识库</span>
+          <span className="cursor-pointer hover:text-[var(--text)]" onClick={onBackToList}>{t("kb.title")}</span>
           <span className="mx-1.5 text-[var(--text-faint)]">/</span>
           <b className="font-semibold text-[var(--text)]">{kb.name}</b>
         </>}
       />
       <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
-        {tabs.map((t) => (
+        {tabs.map((tb) => (
           <button
-            key={t.id} type="button" onClick={() => setTab(t.id)}
+            key={tb.id} type="button" onClick={() => setTab(tb.id)}
             className={cn(
               "-mb-px border-b-2 px-3.5 py-2.5 text-[13px] font-medium",
-              tab === t.id
+              tab === tb.id
                 ? "border-[var(--accent)] text-[var(--text)]"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
             )}
           >
-            {t.label}{typeof t.badge === "number" && <span className="ml-1 text-[var(--text-faint)]">{t.badge}</span>}
+            {tb.label}{typeof tb.badge === "number" && <span className="ml-1 text-[var(--text-faint)]">{tb.badge}</span>}
           </button>
         ))}
         <div className="flex-1" />
-        <button type="button" onClick={remove} className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title="删除知识库">
+        <button type="button" onClick={remove} className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title={t("kbview.deleteKb")}>
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
@@ -421,6 +435,7 @@ function KV({ k, v }: { k: string; v: ReactNode }) {
 }
 
 function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
+  const { t } = useI18n();
   const emb = kb.embedding_config ?? {};
   const parser = parserOf(kb);
   const ret = retrievalOf(kb);
@@ -428,28 +443,28 @@ function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
   return (
     <div className="space-y-3.5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat n={kb.document_count} l="文档" />
-        <Stat n={kb.chunk_count} l="切片 (active)" />
-        <Stat n={STATUS_ZH[kb.status] ?? kb.status} l="状态" />
-        <Stat n={kb.visibility} l="可见性" />
+        <Stat n={kb.document_count} l={t("kbview.docs")} />
+        <Stat n={kb.chunk_count} l={t("kbview.chunksActive")} />
+        <Stat n={statusLabelOf(t, kb.status)} l={t("kbview.statusLabel")} />
+        <Stat n={kb.visibility} l={t("kbview.visibility")} />
       </div>
       <div className={CARD}>
         <div className="mb-1 flex items-center gap-2">
-          <h3 className="text-sm font-semibold">配置摘要</h3>
+          <h3 className="text-sm font-semibold">{t("kbview.configSummary")}</h3>
           <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-            <Info className="h-3 w-3" /> 模型来自 Providers
+            <Info className="h-3 w-3" /> {t("kbview.modelsFromProviders")}
           </span>
         </div>
         <div className="mt-3 grid gap-x-5 md:grid-cols-2">
           <div>
             <KV k="Embedding" v={`${str(emb.provider_id, "local_hash")} / ${str(emb.model, "local-hash-v1")}`} />
-            <KV k="向量维度" v={num(emb.dimension, 64)} />
-            <KV k="向量引擎" v={`${str(kb.vector_store_config?.provider_id, "local_sql")} · ${str(kb.vector_store_config?.metric, "cosine")}`} />
+            <KV k={t("kbview.vectorDim")} v={num(emb.dimension, 64)} />
+            <KV k={t("kbview.vectorEngine")} v={`${str(kb.vector_store_config?.provider_id, "local_sql")} · ${str(kb.vector_store_config?.metric, "cosine")}`} />
           </div>
           <div>
-            <KV k="Reranker" v={rr.enabled ? `${str(rr.provider_id, "-")} / ${str(rr.model, "-")}` : "关闭"} />
-            <KV k="切片" v={`${parser.chunk_size} / overlap ${parser.chunk_overlap}`} />
-            <KV k="检索模式" v={`${ret.mode} · top_k ${ret.top_k}`} />
+            <KV k="Reranker" v={rr.enabled ? `${str(rr.provider_id, "-")} / ${str(rr.model, "-")}` : t("kbview.off")} />
+            <KV k={t("kbview.chunkingLabel")} v={`${parser.chunk_size} / overlap ${parser.chunk_overlap}`} />
+            <KV k={t("kbview.retrievalMode")} v={`${ret.mode} · top_k ${ret.top_k}`} />
           </div>
         </div>
       </div>
@@ -459,6 +474,7 @@ function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
 
 // ---------- Config ---------- //
 function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promise<void> }) {
+  const { t } = useI18n();
   const initParser = parserOf(kb), initRet = retrievalOf(kb);
   const [name, setName] = useState(kb.name);
   const [description, setDescription] = useState(kb.description ?? "");
@@ -471,7 +487,7 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
   const [forceCite, setForceCite] = useState(initRet.force_citation);
   const [saving, setSaving] = useState(false);
 
-  // rerank is mutable. Select value "" = 关闭; a model id = enabled with that model.
+  // rerank is mutable. Select value "" = off; a model id = enabled with that model.
   const initRerank = (kb.rerank_config?.enabled ? str(kb.rerank_config?.model, "") : "");
   const initRerankTopN = num(kb.rerank_config?.top_n, 5);
   const [rerankModel, setRerankModel] = useState(initRerank);
@@ -510,9 +526,9 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
         else patch.rerank_enabled = false;
       }
       await updateKnowledgeBase(kb.id, patch);
-      toast.success("配置已保存");
+      toast.success(t("kbview.configSaved"));
       await onSaved();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "保存失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.saveFailed")); }
     finally { setSaving(false); }
   };
 
@@ -520,18 +536,18 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
     <div className="space-y-3.5">
       {/* basic */}
       <div className={CARD}>
-        <h3 className="text-sm font-semibold">基本信息</h3>
+        <h3 className="text-sm font-semibold">{t("kbview.basicInfo")}</h3>
         <div className="mt-3 grid gap-3.5 md:grid-cols-2">
-          <Field label="名称"><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="可见性">
+          <Field label={t("kbview.name")}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label={t("kbview.visibility")}>
             <select className={INPUT} value={visibility} onChange={(e) => setVisibility(e.target.value)}>
-              <option value="private">private — 仅自己</option>
-              <option value="workspace">workspace — 团队可查询</option>
+              <option value="private">{t("kbview.visPrivate")}</option>
+              <option value="workspace">{t("kbview.visWorkspace")}</option>
               <option value="public">public</option>
             </select>
           </Field>
           <div className="md:col-span-2">
-            <Field label="描述"><input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="可选" /></Field>
+            <Field label={t("kbview.description")}><input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("common.optional")} /></Field>
           </div>
         </div>
       </div>
@@ -539,32 +555,32 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
       {/* Embedding (frozen at creation) + vector engine — read-only */}
       <div className={CARD}>
         <div className="mb-1 flex items-center gap-2">
-          <h3 className="text-sm font-semibold">Embedding · 向量引擎</h3>
-          <span className="ml-auto rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] text-[var(--text-muted)]">创建时固定</span>
+          <h3 className="text-sm font-semibold">{t("kbview.embeddingVectorEngine")}</h3>
+          <span className="ml-auto rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[11px] text-[var(--text-muted)]">{t("kbview.fixedAtCreation")}</span>
         </div>
         <div className="mt-3 grid gap-x-5 md:grid-cols-2">
           <div>
             <KV k="Embedding provider" v={str(emb.provider_id, "local_hash")} />
-            <KV k="Embedding 模型" v={str(emb.model, "local-hash-v1")} />
-            <KV k="向量维度" v={num(emb.dimension, 64)} />
+            <KV k={t("kbview.embeddingModelLabel")} v={str(emb.model, "local-hash-v1")} />
+            <KV k={t("kbview.vectorDim")} v={num(emb.dimension, 64)} />
           </div>
           <div>
-            <KV k="向量引擎" v={str(vec.provider_id, "local_sql")} />
-            <KV k="距离度量" v={str(vec.metric, "cosine")} />
+            <KV k={t("kbview.vectorEngine")} v={str(vec.provider_id, "local_sql")} />
+            <KV k={t("kbview.distanceMetric")} v={str(vec.metric, "cosine")} />
           </div>
         </div>
-        <p className="mt-3 text-[11px] text-[var(--text-faint)]">Embedding 模型在创建时固定，更换需重建索引（暂未开放）。</p>
+        <p className="mt-3 text-[11px] text-[var(--text-faint)]">{t("kbview.embeddingFixedNote")}</p>
       </div>
 
       {/* Reranker — editable */}
       <div className={CARD}>
         <h3 className="text-sm font-semibold">Reranker</h3>
-        <p className="mt-0.5 text-xs text-[var(--text-faint)]">对召回结果重排序；随时可调整，下一次查询即生效。</p>
+        <p className="mt-0.5 text-xs text-[var(--text-faint)]">{t("kbview.rerankerNote")}</p>
         <div className="mt-3 flex flex-wrap items-end gap-5">
           <div className="min-w-[220px] flex-1">
-            <Field label="重排模型">
+            <Field label={t("kbview.rerankModelLabel")}>
               <select className={INPUT} value={rerankModel} onChange={(e) => setRerankModel(e.target.value)}>
-                <option value="">关闭</option>
+                <option value="">{t("kbview.off")}</option>
                 {/* keep the current model selectable even if the catalog hasn't loaded it */}
                 {rerankModel && !cat.rerank.some((m) => m.id === rerankModel) && (
                   <option value={rerankModel}>{rerankModel}</option>
@@ -583,20 +599,20 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
           )}
         </div>
         {rerankModel && cat.rerank.length === 0 && (
-          <p className="mt-2 text-[11px] text-[var(--text-faint)]">当前已启用 {rerankModel}。</p>
+          <p className="mt-2 text-[11px] text-[var(--text-faint)]">{t("kbview.rerankEnabledNote", { model: rerankModel })}</p>
         )}
       </div>
 
       {/* chunking */}
       <div className={CARD}>
-        <h3 className="text-sm font-semibold">切片</h3>
-        <p className="mt-0.5 text-xs text-[var(--text-faint)]">影响之后导入的文档；已索引文档需重建索引后生效。</p>
+        <h3 className="text-sm font-semibold">{t("kbview.chunkingTitle")}</h3>
+        <p className="mt-0.5 text-xs text-[var(--text-faint)]">{t("kbview.chunkingNote")}</p>
         <div className="mt-3 grid gap-3.5 md:grid-cols-2">
-          <Field label="切片大小 chunk_size（字符）">
+          <Field label={t("kbview.chunkSizeLabel")}>
             <input type="number" className={cn(INPUT, "font-mono")} value={chunkSize}
               onChange={(e) => setChunkSize(Math.max(100, Number(e.target.value) || 0))} />
           </Field>
-          <Field label="重叠 chunk_overlap">
+          <Field label={t("kbview.chunkOverlapLabel")}>
             <input type="number" className={cn(INPUT, "font-mono")} value={chunkOverlap}
               onChange={(e) => setChunkOverlap(Math.max(0, Number(e.target.value) || 0))} />
           </Field>
@@ -607,16 +623,16 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
           <div className="flex-[8] bg-[var(--surface-2)]" />
         </div>
         <div className="mt-1 flex justify-between text-[11px] text-[var(--text-faint)]">
-          <span>切片 N</span><span className="text-[var(--accent)]">重叠 {chunkOverlap}</span><span>切片 N+1</span>
+          <span>{t("kbview.chunkN")}</span><span className="text-[var(--accent)]">{t("kbview.overlapN", { n: chunkOverlap })}</span><span>{t("kbview.chunkN1")}</span>
         </div>
       </div>
 
       {/* retrieval */}
       <div className={CARD}>
-        <h3 className="text-sm font-semibold">检索默认值</h3>
-        <p className="mt-0.5 text-xs text-[var(--text-faint)]">召回测试与智能体查询的初始参数。</p>
+        <h3 className="text-sm font-semibold">{t("kbview.retrievalDefaults")}</h3>
+        <p className="mt-0.5 text-xs text-[var(--text-faint)]">{t("kbview.retrievalDefaultsNote")}</p>
         <div className="mt-3 flex flex-wrap items-end gap-5">
-          <Field label="模式">
+          <Field label={t("kbview.mode")}>
             <Seg value={mode} onChange={setMode} options={[
               { value: "hybrid", label: "hybrid" }, { value: "vector", label: "vector" }, { value: "keyword", label: "keyword" },
             ]} />
@@ -625,29 +641,29 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
             <input type="number" className={cn(INPUT, "font-mono")} value={topK}
               onChange={(e) => setTopK(Math.max(1, Number(e.target.value) || 1))} />
           </Field></div>
-          <div className="w-28"><Field label="分数阈值">
+          <div className="w-28"><Field label={t("kbview.scoreThreshold")}>
             <input type="number" step="0.05" className={cn(INPUT, "font-mono")} value={threshold}
               onChange={(e) => setThreshold(Number(e.target.value) || 0)} />
           </Field></div>
-          <div className="pb-2"><Toggle on={forceCite} onChange={setForceCite} label="强制引用来源" /></div>
+          <div className="pb-2"><Toggle on={forceCite} onChange={setForceCite} label={t("kbview.forceCitation")} /></div>
         </div>
       </div>
 
       {indexAffecting && (
         <div className="flex items-start gap-2.5 rounded-[var(--radius)] border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3.5 py-3 text-[12.5px] text-[var(--warning)]">
           <TriangleAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div>切片参数已更改，将影响已索引的 {kb.chunk_count} 个切片；保存后需 <b>重建索引</b> 才会对旧文档生效（重建功能即将上线）。</div>
+          <div>{t("kbview.indexAffectingA", { count: kb.chunk_count })}<b>{t("kbview.indexAffectingRebuild")}</b>{t("kbview.indexAffectingB")}</div>
         </div>
       )}
 
       <div className="sticky bottom-0 flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 shadow-[var(--shadow)]">
         {dirty
-          ? <span className="flex items-center gap-2 text-[12.5px] text-[var(--warning)]"><span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" /> 有未保存的更改</span>
-          : <span className="text-[12.5px] text-[var(--text-faint)]">已是最新</span>}
+          ? <span className="flex items-center gap-2 text-[12.5px] text-[var(--warning)]"><span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" /> {t("kbview.unsavedChanges")}</span>
+          : <span className="text-[12.5px] text-[var(--text-faint)]">{t("kbview.upToDate")}</span>}
         <div className="flex-1" />
-        <button className={BTN_GHOST} disabled={!dirty || saving} onClick={reset}>放弃</button>
+        <button className={BTN_GHOST} disabled={!dirty || saving} onClick={reset}>{t("kbview.discard")}</button>
         <button className={BTN_PRIMARY} disabled={!dirty || saving} onClick={save}>
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />} 保存配置
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />} {t("kbview.saveConfig")}
         </button>
       </div>
     </div>
@@ -668,6 +684,7 @@ function sourceSummary(ds: KnowledgeDataSource): string {
 }
 
 function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Promise<void> }) {
+  const { t } = useI18n();
   const [sources, setSources] = useState<KnowledgeDataSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<KnowledgeDataSource | "new" | null>(null);
@@ -675,7 +692,7 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
 
   const refresh = async () => {
     try { setSources(await listDataSources(kb.id)); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "无法加载数据源"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.loadDsFailed")); }
     finally { setLoading(false); }
   };
   useEffect(() => { setLoading(true); void refresh(); }, [kb.id]);
@@ -683,8 +700,8 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
   // poll while any source is syncing; also refresh the KB counts when it settles
   useEffect(() => {
     if (!sources.some((s) => s.status === "syncing")) return;
-    const t = setTimeout(async () => { await refresh(); void onChanged(); }, 2500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(async () => { await refresh(); void onChanged(); }, 2500);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sources]);
 
@@ -692,45 +709,45 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
     setBusyId(ds.id);
     try {
       await syncDataSource(kb.id, ds.id);
-      toast.success("已开始同步，正在拉取文档…");
+      toast.success(t("kbview.syncStarted"));
       await refresh();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "同步失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.syncFailedToast")); }
     finally { setBusyId(null); }
   };
 
   const toggleEnabled = async (ds: KnowledgeDataSource) => {
     try { await updateDataSource(kb.id, ds.id, { enabled: !ds.enabled }); await refresh(); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "更新失败"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.updateFailed")); }
   };
 
   const remove = async (ds: KnowledgeDataSource) => {
-    if (!confirm(`删除数据源「${ds.name}」？已导入的文档将保留。`)) return;
-    try { await deleteDataSource(kb.id, ds.id); toast.success("已删除"); await refresh(); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "删除失败"); }
+    if (!confirm(t("kbview.confirmDeleteDs", { name: ds.name }))) return;
+    try { await deleteDataSource(kb.id, ds.id); toast.success(t("kbview.deleted")); await refresh(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.deleteFailed")); }
   };
 
   return (
     <div className="space-y-3.5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="max-w-2xl text-[13px] text-[var(--text-muted)]">
-          从外部来源自动拉取文档并入库。目前支持<b className="text-[var(--text)]">阿里云帮助文档</b>（
-          <code className="font-mono text-[11px]">llms.txt</code> 清单）：填入产品标识即可同步该产品的官方文档，重复同步只更新变化的内容。
+          {t("kbview.dsIntroA")}<b className="text-[var(--text)]">{t("kbview.dsIntroAliyun")}</b>{t("kbview.dsIntroB")}
+          <code className="font-mono text-[11px]">llms.txt</code>{t("kbview.dsIntroManifest")}
         </p>
         <button className={BTN_PRIMARY} onClick={() => setEditing("new")}>
-          <Plus className="h-4 w-4" /> 添加数据源
+          <Plus className="h-4 w-4" /> {t("kbview.addDataSource")}
         </button>
       </div>
 
       {loading ? (
         <div className="flex items-center gap-2 py-10 text-sm text-[var(--text-muted)]">
-          <Loader2 className="h-4 w-4 animate-spin" /> 加载中
+          <Loader2 className="h-4 w-4 animate-spin" /> {t("common.loading")}
         </div>
       ) : sources.length === 0 ? (
         <div className="grid place-items-center rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] py-16 text-center">
           <Globe className="h-6 w-6 text-[var(--text-faint)]" />
-          <div className="mt-3 text-sm text-[var(--text-muted)]">还没有数据源</div>
+          <div className="mt-3 text-sm text-[var(--text-muted)]">{t("kbview.noDataSources")}</div>
           <button className={cn(BTN_GHOST, "mt-3")} onClick={() => setEditing("new")}>
-            <Plus className="h-4 w-4" /> 添加阿里云文档数据源
+            <Plus className="h-4 w-4" /> {t("kbview.addAliyunDs")}
           </button>
         </div>
       ) : (
@@ -748,7 +765,7 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[14px] font-semibold">{ds.name}</span>
                       <Pill status={ds.source_type} />
-                      {!ds.enabled && <span className="text-[11px] text-[var(--text-faint)]">已停用</span>}
+                      {!ds.enabled && <span className="text-[11px] text-[var(--text-faint)]">{t("kbview.dsDisabled")}</span>}
                     </div>
                     <div className="mt-0.5 truncate font-mono text-[11px] text-[var(--text-faint)]">{sourceSummary(ds)}</div>
                   </div>
@@ -756,12 +773,12 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
                 </div>
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[38px] text-[12px] text-[var(--text-muted)]">
-                  <span><b className="font-semibold text-[var(--text)] tabular-nums">{ds.doc_count}</b> 文档</span>
-                  <span>最近同步 {fmtTime(ds.last_sync_finished_at || ds.last_sync_at || undefined)}</span>
+                  <span><b className="font-semibold text-[var(--text)] tabular-nums">{ds.doc_count}</b> {t("kbview.docs")}</span>
+                  <span>{t("kbview.lastSync", { time: fmtTime(t, ds.last_sync_finished_at || ds.last_sync_at || undefined) })}</span>
                   {(ds.status === "succeeded" || ds.status === "partial") && (
                     <span className="font-mono text-[11px] text-[var(--text-faint)]">
-                      +{rep.added ?? 0} 新增 · {rep.updated ?? 0} 更新 · {rep.deleted ?? 0} 删除
-                      {typeof rep.failed === "number" && rep.failed > 0 ? ` · ${rep.failed} 失败` : ""}
+                      {t("kbview.syncReport", { added: rep.added ?? 0, updated: rep.updated ?? 0, deleted: rep.deleted ?? 0 })}
+                      {typeof rep.failed === "number" && rep.failed > 0 ? t("kbview.syncFailedCount", { failed: rep.failed }) : ""}
                     </span>
                   )}
                 </div>
@@ -774,17 +791,17 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
                 )}
 
                 <div className="flex items-center gap-2 border-t border-[var(--border)] pt-2.5">
-                  <Toggle on={ds.enabled} onChange={() => void toggleEnabled(ds)} label={ds.enabled ? "已启用" : "已停用"} />
+                  <Toggle on={ds.enabled} onChange={() => void toggleEnabled(ds)} label={ds.enabled ? t("kbview.dsEnabled") : t("kbview.dsDisabled")} />
                   <div className="flex-1" />
                   <button
                     className={BTN_GHOST} disabled={syncing || busyId === ds.id || !ds.enabled}
-                    onClick={() => void runSync(ds)} title={ds.enabled ? "立即同步" : "启用后可同步"}
+                    onClick={() => void runSync(ds)} title={ds.enabled ? t("kbview.syncNow") : t("kbview.enableToSync")}
                   >
                     <RefreshCw className={cn("h-4 w-4", (syncing || busyId === ds.id) && "animate-spin")} />
-                    {syncing ? "同步中" : "同步"}
+                    {syncing ? t("kbview.status.syncing") : t("kbview.sync")}
                   </button>
-                  <button className={ICON_BTN} title="编辑" onClick={() => setEditing(ds)}><Pencil className="h-4 w-4" /></button>
-                  <button className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title="删除" onClick={() => void remove(ds)}><Trash2 className="h-4 w-4" /></button>
+                  <button className={ICON_BTN} title={t("common.edit")} onClick={() => setEditing(ds)}><Pencil className="h-4 w-4" /></button>
+                  <button className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title={t("common.delete")} onClick={() => void remove(ds)}><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             );
@@ -806,11 +823,12 @@ function DataSourceDrawer({ kb, editing, onClose, onDone }: {
   kb: KnowledgeBase; editing: KnowledgeDataSource | "new" | null;
   onClose: () => void; onDone: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const open = editing !== null;
   const isEdit = editing !== null && editing !== "new";
   const src = isEdit ? editing.source_config || {} : {};
   const initUrl = typeof src.llms_url === "string" ? src.llms_url : "";
-  const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
+  const strv = (v: unknown, d = "") => (typeof v === "string" ? v : d);
 
   // Source type is chosen on create and fixed on edit (changing it would
   // orphan the ingested docs). Existing rows infer it from source_type.
@@ -821,18 +839,18 @@ function DataSourceDrawer({ kb, editing, onClose, onDone }: {
 
   // llms_txt fields
   const [mode, setMode] = useState<"product" | "url">(initUrl ? "url" : "product");
-  const [product, setProduct] = useState(str(src.product));
+  const [product, setProduct] = useState(strv(src.product));
   const [llmsUrl, setLlmsUrl] = useState(initUrl);
   const [sections, setSections] = useState(Array.isArray(src.sections) ? (src.sections as string[]).join(", ") : "");
-  const [lang, setLang] = useState(str(src.lang, "zh"));
+  const [lang, setLang] = useState(strv(src.lang, "zh"));
 
   // yuque fields
-  const [group, setGroup] = useState(str(src.group_login));
-  const [book, setBook] = useState(str(src.book_slug));
-  const [tokenEnv, setTokenEnv] = useState(str(src.token_env, "YUQUE_TOKEN"));
-  const [yqPath, setYqPath] = useState(str(src.path));
-  const [apiBase, setApiBase] = useState(str(src.api_base));
-  const [webBase, setWebBase] = useState(str(src.web_base));
+  const [group, setGroup] = useState(strv(src.group_login));
+  const [book, setBook] = useState(strv(src.book_slug));
+  const [tokenEnv, setTokenEnv] = useState(strv(src.token_env, "YUQUE_TOKEN"));
+  const [yqPath, setYqPath] = useState(strv(src.path));
+  const [apiBase, setApiBase] = useState(strv(src.api_base));
+  const [webBase, setWebBase] = useState(strv(src.web_base));
 
   const valid = name.trim() !== "" && (
     type === "yuque"
@@ -866,87 +884,87 @@ function DataSourceDrawer({ kb, editing, onClose, onDone }: {
       const cfg = buildConfig();
       if (isEdit) {
         await updateDataSource(kb.id, editing.id, { name: name.trim(), source_config: cfg });
-        toast.success("数据源已更新");
+        toast.success(t("kbview.dsUpdated"));
       } else {
         await createDataSource(kb.id, { name: name.trim(), source_type: type, source_config: cfg });
-        toast.success("数据源已添加，点击「同步」拉取文档");
+        toast.success(t("kbview.dsAdded"));
       }
       await onDone();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "保存失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.saveFailed")); }
     finally { setBusy(false); }
   };
 
   return (
-    <Drawer open={open} title={isEdit ? "编辑数据源" : "添加数据源"} onClose={onClose}
+    <Drawer open={open} title={isEdit ? t("kbview.editDataSource") : t("kbview.addDataSource")} onClose={onClose}
       footer={<>
-        <button className={BTN_GHOST} onClick={onClose}>取消</button>
+        <button className={BTN_GHOST} onClick={onClose}>{t("common.cancel")}</button>
         <button className={BTN_PRIMARY} disabled={busy || !valid} onClick={submit}>
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />} {isEdit ? "保存" : "添加"}
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />} {isEdit ? t("common.save") : t("common.add")}
         </button>
       </>}>
-      <Field label="类型">
+      <Field label={t("kbview.type")}>
         {isEdit ? (
           <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px]">
             {type === "yuque" ? <BookOpen className="h-4 w-4 text-[var(--accent)]" /> : <Globe className="h-4 w-4 text-[var(--accent)]" />}
-            {type === "yuque" ? "语雀知识库" : "阿里云帮助文档 (llms.txt)"}
+            {type === "yuque" ? t("kbview.yuqueKb") : t("kbview.aliyunHelpDocs")}
           </div>
         ) : (
           <Seg value={type} onChange={setType} options={[
-            { value: "llms_txt", label: "阿里云文档" }, { value: "yuque", label: "语雀" },
+            { value: "llms_txt", label: t("kbview.status.llms_txt") }, { value: "yuque", label: t("kbview.status.yuque") },
           ]} />
         )}
       </Field>
-      <Field label="名称"><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "yuque" ? "如：团队手册" : "如：PAI 官方文档"} /></Field>
+      <Field label={t("kbview.name")}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "yuque" ? t("kbview.dsNamePlaceholderYuque") : t("kbview.dsNamePlaceholderLlms")} /></Field>
 
       {type === "yuque" ? (<>
-        <Field label="空间 group_login" hint="语雀知识库 URL 里 yuque.com/<group>/<book> 的 group 段">
+        <Field label={t("kbview.groupLogin")} hint={t("kbview.groupLoginHint")}>
           <input className={cn(INPUT, "font-mono text-xs")} value={group} onChange={(e) => setGroup(e.target.value)} placeholder="acme" />
         </Field>
-        <Field label="知识库 book_slug" hint="yuque.com/<group>/<book> 的 book 段">
+        <Field label={t("kbview.bookSlug")} hint={t("kbview.bookSlugHint")}>
           <input className={cn(INPUT, "font-mono text-xs")} value={book} onChange={(e) => setBook(e.target.value)} placeholder="handbook" />
         </Field>
-        <Field label="Token 环境变量 token_env" hint="服务端环境变量名（不是 token 本身）；真实 X-Auth-Token 由服务端从该变量读取，不入库">
+        <Field label={t("kbview.tokenEnv")} hint={t("kbview.tokenEnvHint")}>
           <input className={cn(INPUT, "font-mono text-xs")} value={tokenEnv} onChange={(e) => setTokenEnv(e.target.value)} placeholder="YUQUE_TOKEN" />
         </Field>
-        <Field label="路径 path（可选）" hint="TOC 里某个节点的 slug 或标题，只同步其子树；留空同步整库">
-          <input className={INPUT} value={yqPath} onChange={(e) => setYqPath(e.target.value)} placeholder="留空 = 整库" />
+        <Field label={t("kbview.yqPath")} hint={t("kbview.yqPathHint")}>
+          <input className={INPUT} value={yqPath} onChange={(e) => setYqPath(e.target.value)} placeholder={t("kbview.yqPathPlaceholder")} />
         </Field>
-        <Field label="API 地址 api_base（可选）" hint="默认 https://www.yuque.com/api/v2；企业版填自有地址">
+        <Field label={t("kbview.apiBase")} hint={t("kbview.apiBaseHint")}>
           <input className={cn(INPUT, "font-mono text-xs")} value={apiBase} onChange={(e) => setApiBase(e.target.value)} placeholder="https://www.yuque.com/api/v2" />
         </Field>
-        <Field label="站点地址 web_base（可选）" hint="用于生成引用链接；默认由 api_base 推导">
+        <Field label={t("kbview.webBase")} hint={t("kbview.webBaseHint")}>
           <input className={cn(INPUT, "font-mono text-xs")} value={webBase} onChange={(e) => setWebBase(e.target.value)} placeholder="https://www.yuque.com" />
         </Field>
         <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3 py-2.5 text-[12px] text-[var(--accent)]">
           <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-          <div>保存后点击「同步」拉取文档。需先在服务端把 <code className="font-mono">{tokenEnv.trim() || "YUQUE_TOKEN"}</code> 环境变量设为有效的语雀 X-Auth-Token。企业内网语雀还需开启 <code className="font-mono">PAIRAG_DATASOURCE_ALLOW_PRIVATE_NETWORK</code>。</div>
+          <div>{t("kbview.yuqueInfoA")}<code className="font-mono">{tokenEnv.trim() || "YUQUE_TOKEN"}</code>{t("kbview.yuqueInfoB")}<code className="font-mono">PAIRAG_DATASOURCE_ALLOW_PRIVATE_NETWORK</code>{t("kbview.yuqueInfoC")}</div>
         </div>
       </>) : (<>
-        <Field label="来源方式">
+        <Field label={t("kbview.sourceMethod")}>
           <Seg value={mode} onChange={setMode} options={[
-            { value: "product", label: "产品标识" }, { value: "url", label: "完整 URL" },
+            { value: "product", label: t("kbview.productId") }, { value: "url", label: t("kbview.fullUrl") },
           ]} />
         </Field>
         {mode === "product" ? (
-          <Field label="产品标识 product" hint="help.aliyun.com/zh/<product>/ 中的 product 段，如 pai、eas、oss">
+          <Field label={t("kbview.productField")} hint={t("kbview.productHint")}>
             <input className={cn(INPUT, "font-mono text-xs")} value={product}
               onChange={(e) => setProduct(e.target.value)} placeholder="pai" />
           </Field>
         ) : (
-          <Field label="llms.txt URL" hint="子产品或非标准路径时使用完整清单地址">
+          <Field label="llms.txt URL" hint={t("kbview.llmsUrlHint")}>
             <input className={cn(INPUT, "font-mono text-xs")} value={llmsUrl}
               onChange={(e) => setLlmsUrl(e.target.value)} placeholder="https://help.aliyun.com/zh/pai/llms.txt" />
           </Field>
         )}
-        <Field label="章节过滤 sections" hint="可选，逗号分隔；留空同步全部章节">
-          <input className={INPUT} value={sections} onChange={(e) => setSections(e.target.value)} placeholder="快速开始, 最佳实践" />
+        <Field label={t("kbview.sections")} hint={t("kbview.sectionsHint")}>
+          <input className={INPUT} value={sections} onChange={(e) => setSections(e.target.value)} placeholder={t("kbview.sectionsPlaceholder")} />
         </Field>
-        <Field label="语言 lang" hint="记录在文档元数据上，默认 zh">
+        <Field label={t("kbview.langField")} hint={t("kbview.langHint")}>
           <input className={cn(INPUT, "w-24")} value={lang} onChange={(e) => setLang(e.target.value)} placeholder="zh" />
         </Field>
         <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3 py-2.5 text-[12px] text-[var(--accent)]">
           <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-          <div>保存后在列表点击「同步」拉取文档。仅抓取公开的 llms.txt 清单与官方 <code className="font-mono">.md</code> 正文，按当前切片配置入库。</div>
+          <div>{t("kbview.llmsInfoA")}<code className="font-mono">.md</code>{t("kbview.llmsInfoB")}</div>
         </div>
       </>)}
     </Drawer>
@@ -955,6 +973,7 @@ function DataSourceDrawer({ kb, editing, onClose, onDone }: {
 
 // ---------- Files ---------- //
 function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Promise<void> }) {
+  const { t } = useI18n();
   const PAGE = 50;
   const [docs, setDocs] = useState<KnowledgeDocument[]>([]);
   const [total, setTotal] = useState(0);
@@ -985,8 +1004,8 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
 
   // Reset + reload on KB switch or (debounced) query change; server-side filter.
   useEffect(() => {
-    const t = setTimeout(() => { void load({ append: false, query: q }); }, q ? 250 : 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { void load({ append: false, query: q }); }, q ? 250 : 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kb.id, q]);
 
@@ -997,8 +1016,8 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
   // the KB counts once it settles to indexed. Mirrors the datasource poller.
   useEffect(() => {
     if (!docs.some((d) => d.status === "processing")) return;
-    const t = setTimeout(async () => { await refresh(); void onChanged(); }, 2500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(async () => { await refresh(); void onChanged(); }, 2500);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docs]);
 
@@ -1007,29 +1026,29 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
       <div className="flex flex-wrap items-center gap-2.5">
         <div className="relative max-w-[320px] flex-1">
           <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-faint)]" />
-          <input className={cn(INPUT, "pl-8")} placeholder="搜索标题 / URL" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className={cn(INPUT, "pl-8")} placeholder={t("kbview.searchDocs")} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="flex-1" />
-        {!loading && <span className="text-[12px] text-[var(--text-faint)] tabular-nums">共 {total} 篇</span>}
-        <button className={BTN_PRIMARY} onClick={() => setShowImport(true)}><Plus className="h-4 w-4" /> 导入文档</button>
+        {!loading && <span className="text-[12px] text-[var(--text-faint)] tabular-nums">{t("kbview.totalDocs", { total })}</span>}
+        <button className={BTN_PRIMARY} onClick={() => setShowImport(true)}><Plus className="h-4 w-4" /> {t("kbview.importDoc")}</button>
       </div>
 
       <div className={cn(CARD, "p-1")}>
         {loading ? (
-          <div className="flex items-center gap-2 p-6 text-sm text-[var(--text-muted)]"><Loader2 className="h-4 w-4 animate-spin" /> 加载中</div>
+          <div className="flex items-center gap-2 p-6 text-sm text-[var(--text-muted)]"><Loader2 className="h-4 w-4 animate-spin" /> {t("common.loading")}</div>
         ) : docs.length === 0 ? (
-          <div className="p-8 text-center text-sm text-[var(--text-muted)]">{q ? "无匹配文档" : "暂无文档，点击「导入文档」开始"}</div>
+          <div className="p-8 text-center text-sm text-[var(--text-muted)]">{q ? t("kbview.noMatchDocs") : t("kbview.noDocs")}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] font-semibold tracking-wide text-[var(--text-faint)] uppercase">
-                  <th className="border-b border-[var(--border)] px-3 py-2">标题</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2">来源</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2">状态</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2 text-right">切片</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2">标签</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2 text-right">索引时间</th>
+                  <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.colTitle")}</th>
+                  <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.colSource")}</th>
+                  <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.statusLabel")}</th>
+                  <th className="border-b border-[var(--border)] px-3 py-2 text-right">{t("kbview.colChunks")}</th>
+                  <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.colTags")}</th>
+                  <th className="border-b border-[var(--border)] px-3 py-2 text-right">{t("kbview.colIndexedAt")}</th>
                   <th className="border-b border-[var(--border)] px-3 py-2" />
                 </tr>
               </thead>
@@ -1045,16 +1064,16 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
                     <td className="border-b border-[var(--border)] px-3 py-2.5 text-right tabular-nums">{d.chunk_count}</td>
                     <td className="border-b border-[var(--border)] px-3 py-2.5">
                       <div className="flex flex-wrap gap-1">
-                        {(d.tags || []).slice(0, 3).map((t) => (
-                          <span key={t} className="rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[10.5px] text-[var(--text-muted)]">{t}</span>
+                        {(d.tags || []).slice(0, 3).map((tg) => (
+                          <span key={tg} className="rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[10.5px] text-[var(--text-muted)]">{tg}</span>
                         ))}
                       </div>
                     </td>
-                    <td className="border-b border-[var(--border)] px-3 py-2.5 text-right text-[var(--text-faint)]">{fmtTime(d.indexed_at)}</td>
+                    <td className="border-b border-[var(--border)] px-3 py-2.5 text-right text-[var(--text-faint)]">{fmtTime(t, d.indexed_at)}</td>
                     <td className="border-b border-[var(--border)] px-3 py-2.5">
                       <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100">
-                        <button className={ICON_BTN} title="查看切片" onClick={() => setViewDoc(d)}><Eye className="h-4 w-4" /></button>
-                        <button className={ICON_BTN} title="重新索引（即将上线）" disabled><RefreshCw className="h-4 w-4" /></button>
+                        <button className={ICON_BTN} title={t("kbview.viewChunks")} onClick={() => setViewDoc(d)}><Eye className="h-4 w-4" /></button>
+                        <button className={ICON_BTN} title={t("kbview.reindexSoon")} disabled><RefreshCw className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -1067,7 +1086,7 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
           <div className="flex justify-center p-2">
             <button className={BTN_GHOST} disabled={loadingMore} onClick={() => void load({ append: true })}>
               {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              加载更多（{docs.length}/{total}）
+              {t("kbview.loadMore", { loaded: docs.length, total })}
             </button>
           </div>
         )}
@@ -1083,6 +1102,7 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
 }
 
 function ChunkDrawer({ kb, doc, onClose }: { kb: KnowledgeBase; doc: KnowledgeDocument | null; onClose: () => void }) {
+  const { t } = useI18n();
   const PAGE = 50;
   const [chunks, setChunks] = useState<KnowledgeChunk[]>([]);
   const [total, setTotal] = useState(0);
@@ -1111,12 +1131,12 @@ function ChunkDrawer({ kb, doc, onClose }: { kb: KnowledgeBase; doc: KnowledgeDo
 
   const hasMore = chunks.length < total;
   return (
-    <Drawer open={!!doc} title={doc ? `切片 · ${doc.title}（${total}）` : "切片"} onClose={onClose}
-      footer={<button className={BTN_GHOST} onClick={onClose}>关闭</button>}>
+    <Drawer open={!!doc} title={doc ? t("kbview.chunksTitle", { title: doc.title, total }) : t("kbview.chunksTitleFallback")} onClose={onClose}
+      footer={<button className={BTN_GHOST} onClick={onClose}>{t("common.close")}</button>}>
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Loader2 className="h-4 w-4 animate-spin" /> 加载中</div>
+        <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Loader2 className="h-4 w-4 animate-spin" /> {t("common.loading")}</div>
       ) : chunks.length === 0 ? (
-        <div className="text-sm text-[var(--text-muted)]">暂无切片</div>
+        <div className="text-sm text-[var(--text-muted)]">{t("kbview.noChunks")}</div>
       ) : (
         <div className="space-y-2">
           {chunks.map((c) => (
@@ -1131,7 +1151,7 @@ function ChunkDrawer({ kb, doc, onClose }: { kb: KnowledgeBase; doc: KnowledgeDo
             <div className="flex justify-center pt-1">
               <button className={BTN_GHOST} disabled={loadingMore} onClick={() => void load(true)}>
                 {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                加载更多（{chunks.length}/{total}）
+                {t("kbview.loadMore", { loaded: chunks.length, total })}
               </button>
             </div>
           )}
@@ -1144,6 +1164,7 @@ function ChunkDrawer({ kb, doc, onClose }: { kb: KnowledgeBase; doc: KnowledgeDo
 function ImportDrawer({ kb, open, onClose, onDone }: {
   kb: KnowledgeBase; open: boolean; onClose: () => void; onDone: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({ title: "", uri: "", tags: "", content: "" });
   const [busy, setBusy] = useState(false);
   const [accept, setAccept] = useState<string>("");
@@ -1163,42 +1184,42 @@ function ImportDrawer({ kb, open, onClose, onDone }: {
         uri: form.uri.trim() || undefined,
         source_type: form.uri.trim().startsWith("http") ? "website" : "text",
         content: form.content,
-        tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        tags: form.tags.split(",").map((s) => s.trim()).filter(Boolean),
       });
       setForm({ title: "", uri: "", tags: "", content: "" });
-      toast.success("已导入并索引");
+      toast.success(t("kbview.imported"));
       await onDone();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "导入失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.importFailed")); }
     finally { setBusy(false); }
   };
   const upload = async (file: File) => {
     if (file.size > maxMb * 1024 * 1024) {
-      toast.error(`文件超过 ${maxMb}MB 上限`);
+      toast.error(t("kbview.fileTooLarge", { mb: maxMb }));
       return;
     }
     setBusy(true);
     try {
       await uploadKnowledgeDocument(kb.id, file, {
         title: form.title.trim() || undefined,
-        tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        tags: form.tags.split(",").map((s) => s.trim()).filter(Boolean),
       });
-      toast.success("已上传并索引");
+      toast.success(t("kbview.uploaded"));
       await onDone();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "上传失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.uploadFailed")); }
     finally { setBusy(false); }
   };
   return (
-    <Drawer open={open} title="导入文档" onClose={onClose}
+    <Drawer open={open} title={t("kbview.importDoc")} onClose={onClose}
       footer={<>
-        <button className={BTN_GHOST} onClick={onClose}>取消</button>
+        <button className={BTN_GHOST} onClick={onClose}>{t("common.cancel")}</button>
         <button className={BTN_PRIMARY} disabled={busy || !form.title.trim() || !form.content.trim()} onClick={submit}>
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />} 导入并索引
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />} {t("kbview.importAndIndex")}
         </button>
       </>}>
-      <Field label="上传文件" hint={accept ? `支持 ${accept}（≤${maxMb}MB）` : "PDF / Word / PPT / Excel / 文本等"}>
+      <Field label={t("kbview.uploadFile")} hint={accept ? t("kbview.uploadHintExt", { accept, mb: maxMb }) : t("kbview.uploadHintDefault")}>
         <label className={cn(BTN_GHOST, "w-full cursor-pointer")}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          选择文件上传
+          {t("kbview.chooseFile")}
           <input type="file" accept={accept || undefined} className="hidden" disabled={busy}
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -1208,21 +1229,21 @@ function ImportDrawer({ kb, open, onClose, onDone }: {
         </label>
       </Field>
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
-        <div className="h-px flex-1 bg-[var(--border)]" />或手动粘贴<div className="h-px flex-1 bg-[var(--border)]" />
+        <div className="h-px flex-1 bg-[var(--border)]" />{t("kbview.orPaste")}<div className="h-px flex-1 bg-[var(--border)]" />
       </div>
-      <Field label="标题"><input className={INPUT} value={form.title} onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))} placeholder="文档标题" /></Field>
-      <Field label="来源 URL / OSS URI" hint="可选，留空作为纯文本">
+      <Field label={t("kbview.colTitle")}><input className={INPUT} value={form.title} onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))} placeholder={t("kbview.docTitlePlaceholder")} /></Field>
+      <Field label={t("kbview.sourceUri")} hint={t("kbview.sourceUriHint")}>
         <input className={cn(INPUT, "font-mono text-xs")} value={form.uri} onChange={(e) => setForm((s) => ({ ...s, uri: e.target.value }))} placeholder="https://…" />
       </Field>
-      <Field label="标签（逗号分隔）"><input className={INPUT} value={form.tags} onChange={(e) => setForm((s) => ({ ...s, tags: e.target.value }))} placeholder="eas, product-docs" /></Field>
-      <Field label="内容">
+      <Field label={t("kbview.tagsComma")}><input className={INPUT} value={form.tags} onChange={(e) => setForm((s) => ({ ...s, tags: e.target.value }))} placeholder="eas, product-docs" /></Field>
+      <Field label={t("kbview.content")}>
         <textarea rows={9} className={cn(INPUT, "resize-none")} value={form.content}
           onChange={(e) => setForm((s) => ({ ...s, content: e.target.value }))}
-          placeholder="粘贴文本内容。MVP 先做同步文本导入；网站抓取 / OSS 下载 / 文件解析后续接 ingestion adapter。" />
+          placeholder={t("kbview.contentPlaceholder")} />
       </Field>
       <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3 py-2.5 text-[12px] text-[var(--accent)]">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-        <div>按当前切片配置索引；相同 URL 会覆盖旧文档。</div>
+        <div>{t("kbview.importInfo")}</div>
       </div>
     </Drawer>
   );
@@ -1233,13 +1254,14 @@ function ImportDrawer({ kb, open, onClose, onDone }: {
 // can retrieve from this KB via the knowledge_search tool, and hands over the id
 // for scoping a call. Visibility gates whether other users' agents can reach it.
 function AgentAvailability({ kb, queryable }: { kb: KnowledgeBase; queryable: boolean }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     if (await copyText(kb.id)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     } else {
-      toast.error("复制失败");
+      toast.error(t("common.copyFailed"));
     }
   };
   return (
@@ -1248,26 +1270,25 @@ function AgentAvailability({ kb, queryable }: { kb: KnowledgeBase; queryable: bo
         <Bot className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold">智能体问答已接通</div>
+        <div className="text-[13px] font-semibold">{t("kbview.agentConnected")}</div>
         <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">
-          对话中的智能体可通过 <code className="font-mono text-[11px]">knowledge_search</code> 工具检索本知识库
-          {queryable
-            ? "。当前可见性允许团队智能体查询。"
-            : "（当前为 private，仅所有者/管理员的智能体可查询）。"}
+          {t("kbview.agentAvailA")}<code className="font-mono text-[11px]">knowledge_search</code>{t("kbview.agentAvailB")}
+          {queryable ? t("kbview.agentAvailQueryable") : t("kbview.agentAvailPrivate")}
         </div>
       </div>
       <button
         className={cn(BTN_GHOST, "font-mono text-[11px]")} onClick={copy}
-        title="复制知识库 ID，用于 knowledge_search 的 kb_ids 参数"
+        title={t("kbview.copyKbIdTitle")}
       >
         {copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
-        {copied ? "已复制" : `id: ${kb.id.slice(0, 8)}…`}
+        {copied ? t("common.copied") : `id: ${kb.id.slice(0, 8)}…`}
       </button>
     </div>
   );
 }
 
 function RecallPanel({ kb }: { kb: KnowledgeBase }) {
+  const { t } = useI18n();
   const init = retrievalOf(kb);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState(init.mode);
@@ -1294,7 +1315,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
       setHits(page.data);
       setTotal(page.total);
       setLastQuery(query);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "检索失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.searchFailed")); }
     finally { setBusy(false); }
   };
 
@@ -1305,7 +1326,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
       const page = await fetchPage(hits.length);
       setHits((prev) => [...(prev || []), ...page.data]);
       setTotal(page.total);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "加载失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.loadMoreFailed")); }
     finally { setLoadingMore(false); }
   };
 
@@ -1316,22 +1337,22 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
     <div className="space-y-3.5">
       <AgentAvailability kb={kb} queryable={queryable} />
       <div className="flex items-center gap-2">
-        <span className="text-[12px] text-[var(--text-faint)]">检索引擎</span>
+        <span className="text-[12px] text-[var(--text-faint)]">{t("kbview.retrievalEngine")}</span>
         <EngineStatusBadge engine={engine} />
       </div>
       <div className={CARD}>
         <div className="flex gap-2">
           <input
-            className={cn(INPUT, "flex-1")} value={query} placeholder="输入查询，测试召回效果…"
+            className={cn(INPUT, "flex-1")} value={query} placeholder={t("kbview.recallPlaceholder")}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") void run(); }}
           />
           <button className={BTN_PRIMARY} disabled={busy || !query.trim()} onClick={run}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} 检索
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} {t("kbview.search")}
           </button>
         </div>
         <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-[var(--border)] pt-3.5 text-[12.5px] text-[var(--text-muted)]">
-          <span className="flex items-center gap-2">模式
+          <span className="flex items-center gap-2">{t("kbview.mode")}
             <Seg value={mode} onChange={setMode} options={[
               { value: "hybrid", label: "hybrid" }, { value: "vector", label: "vector" }, { value: "keyword", label: "keyword" },
             ]} />
@@ -1339,11 +1360,11 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
           <span className="flex items-center gap-2">top_k
             <input type="number" className={cn(INPUT, "w-16 px-2 py-1 font-mono")} value={topK} onChange={(e) => setTopK(Math.max(1, Number(e.target.value) || 1))} />
           </span>
-          <span className="flex items-center gap-2">阈值
+          <span className="flex items-center gap-2">{t("kbview.threshold")}
             <input type="number" step="0.05" className={cn(INPUT, "w-20 px-2 py-1 font-mono")} value={threshold} onChange={(e) => setThreshold(Number(e.target.value) || 0)} />
           </span>
-          <span className="flex items-center gap-2">标签
-            <input className={cn(INPUT, "w-28 px-2 py-1")} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="可选" />
+          <span className="flex items-center gap-2">{t("kbview.tagLabel")}
+            <input className={cn(INPUT, "w-28 px-2 py-1")} value={tag} onChange={(e) => setTag(e.target.value)} placeholder={t("common.optional")} />
           </span>
         </div>
       </div>
@@ -1351,26 +1372,26 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
       {hits === null ? (
         <div className="grid place-items-center rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] py-14 text-center">
           <Search className="h-6 w-6 text-[var(--text-faint)]" />
-          <div className="mt-3 text-sm text-[var(--text-muted)]">输入查询并检索，查看命中的切片与分数构成</div>
-          <div className="mt-1 text-[12px] text-[var(--text-faint)]">这里测试的检索与智能体 <code className="font-mono">knowledge_search</code> 工具走同一路径</div>
+          <div className="mt-3 text-sm text-[var(--text-muted)]">{t("kbview.recallEmptyTitle")}</div>
+          <div className="mt-1 text-[12px] text-[var(--text-faint)]">{t("kbview.recallEmptyHintA")}<code className="font-mono">knowledge_search</code>{t("kbview.recallEmptyHintB")}</div>
         </div>
       ) : hits.length === 0 ? (
         <div className="grid place-items-center rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] py-14 text-center">
           <Search className="h-6 w-6 text-[var(--text-faint)]" />
-          <div className="mt-3 text-sm text-[var(--text-muted)]">无命中结果</div>
-          <div className="mt-1 text-[12px] text-[var(--text-faint)]">尝试放宽阈值、切换检索模式，或确认文档已入库并索引</div>
+          <div className="mt-3 text-sm text-[var(--text-muted)]">{t("kbview.noHits")}</div>
+          <div className="mt-1 text-[12px] text-[var(--text-faint)]">{t("kbview.noHitsHint")}</div>
         </div>
       ) : (
         <>
           <div className="text-[12.5px] text-[var(--text-muted)]">
-            命中 <b className="text-[var(--text)]">{total}</b> 条 · 显示前 {hits.length} · 模式 {mode}
+            {t("kbview.hitCountA")}<b className="text-[var(--text)]">{total}</b>{t("kbview.hitCountB", { shown: hits.length, mode })}
           </div>
           {hits.map((h, i) => <Hit key={h.chunk_id} hit={h} rank={i + 1} mode={mode} query={lastQuery} />)}
           {hasMore && (
             <div className="flex justify-center pt-1">
               <button className={BTN_GHOST} disabled={loadingMore} onClick={() => void loadMore()}>
                 {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                加载更多（{hits.length}/{total}）
+                {t("kbview.loadMore", { loaded: hits.length, total })}
               </button>
             </div>
           )}
@@ -1381,6 +1402,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
 }
 
 function Hit({ hit, rank, mode, query }: { hit: KnowledgeHit; rank: number; mode: string; query: string }) {
+  const { t } = useI18n();
   const chunkIdx = hit.metadata?.chunk_index;
   return (
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3.5">
@@ -1394,8 +1416,8 @@ function Hit({ hit, rank, mode, query }: { hit: KnowledgeHit; rank: number; mode
       </div>
       <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)] line-clamp-4">{highlight(hit.text, query)}</p>
       <div className="mt-2.5 grid max-w-[360px] grid-cols-[auto_1fr_auto] items-center gap-x-2 gap-y-1">
-        <ScoreBar label="向量" value={hit.vector_score} color="var(--accent)" dim={mode === "keyword"} />
-        <ScoreBar label="关键词" value={hit.keyword_score} color="#8b5cf6" dim={mode === "vector"} />
+        <ScoreBar label={t("kbview.chipVector")} value={hit.vector_score} color="var(--accent)" dim={mode === "keyword"} />
+        <ScoreBar label={t("kbview.keyword")} value={hit.keyword_score} color="#8b5cf6" dim={mode === "vector"} />
       </div>
     </div>
   );
@@ -1418,6 +1440,7 @@ function ScoreBar({ label, value, color, dim }: { label: string; value: number; 
 function CreateDrawer({ open, onClose, onCreated }: {
   open: boolean; onClose: () => void; onCreated: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState("private");
@@ -1442,26 +1465,26 @@ function CreateDrawer({ open, onClose, onCreated }: {
       setName(""); setDescription(""); setVisibility("private");
       setChunkSize(1000); setChunkOverlap(150);
       setEmbeddingModel(""); setRerankModel("");
-      toast.success("知识库已创建");
+      toast.success(t("kbview.kbCreated"));
       onCreated(kb.id);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "创建失败"); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.createFailed")); }
     finally { setBusy(false); }
   };
 
   return (
-    <Drawer open={open} title="新建知识库" onClose={onClose}
+    <Drawer open={open} title={t("kbview.newKb")} onClose={onClose}
       footer={<>
-        <button className={BTN_GHOST} onClick={onClose}>取消</button>
+        <button className={BTN_GHOST} onClick={onClose}>{t("common.cancel")}</button>
         <button className={BTN_PRIMARY} disabled={busy || !name.trim()} onClick={submit}>
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />} 创建
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />} {t("common.create")}
         </button>
       </>}>
-      <Field label="名称"><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="如：PAI 产品文档" /></Field>
-      <Field label="描述"><input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="可选" /></Field>
-      <Field label="可见性">
+      <Field label={t("kbview.name")}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("kbview.kbNamePlaceholder")} /></Field>
+      <Field label={t("kbview.description")}><input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("common.optional")} /></Field>
+      <Field label={t("kbview.visibility")}>
         <select className={INPUT} value={visibility} onChange={(e) => setVisibility(e.target.value)}>
-          <option value="private">private — 仅自己</option>
-          <option value="workspace">workspace — 团队可查询</option>
+          <option value="private">{t("kbview.visPrivate")}</option>
+          <option value="workspace">{t("kbview.visWorkspace")}</option>
           <option value="public">public</option>
         </select>
       </Field>
@@ -1469,46 +1492,46 @@ function CreateDrawer({ open, onClose, onCreated }: {
         <Field label="chunk_size"><input type="number" className={cn(INPUT, "font-mono")} value={chunkSize} onChange={(e) => setChunkSize(Math.max(100, Number(e.target.value) || 0))} /></Field>
         <Field label="chunk_overlap"><input type="number" className={cn(INPUT, "font-mono")} value={chunkOverlap} onChange={(e) => setChunkOverlap(Math.max(0, Number(e.target.value) || 0))} /></Field>
       </div>
-      <Field label="Embedding 模型">
+      <Field label={t("kbview.embeddingModelLabel")}>
         <select className={INPUT} value={embeddingModel} onChange={(e) => setEmbeddingModel(e.target.value)} disabled={!hasEmbedding}>
           <option value="">
             {hasEmbedding
-              ? `默认${cat.defaultEmbedding ? ` — ${cat.defaultEmbedding}` : ""}`
-              : "内置 local 向量（未配置外部模型）"}
+              ? (cat.defaultEmbedding ? t("kbview.embDefaultWith", { model: cat.defaultEmbedding }) : t("kbview.embDefault"))
+              : t("kbview.embLocalBuiltin")}
           </option>
           {cat.embedding.map((m) => (
             <option key={m.id} value={m.id}>{m.id}{m.dimension ? ` · ${m.dimension}d` : ""}</option>
           ))}
         </select>
-        <p className="mt-1 text-[11px] text-[var(--text-faint)]">创建后不可更改（切换需重建索引）。</p>
+        <p className="mt-1 text-[11px] text-[var(--text-faint)]">{t("kbview.embFixedNote2")}</p>
       </Field>
-      <Field label="Reranker（可选）">
+      <Field label={t("kbview.rerankerOptional")}>
         <select className={INPUT} value={rerankModel} onChange={(e) => setRerankModel(e.target.value)}>
-          <option value="">不启用</option>
+          <option value="">{t("kbview.rerankerNone")}</option>
           {cat.rerank.map((m) => (
             <option key={m.id} value={m.id}>{m.id}</option>
           ))}
         </select>
-        <p className="mt-1 text-[11px] text-[var(--text-faint)]">创建后可在「配置」中调整或关闭。</p>
+        <p className="mt-1 text-[11px] text-[var(--text-faint)]">{t("kbview.rerankAdjustNote")}</p>
       </Field>
     </Drawer>
   );
 }
 
 // --- utils ----------------------------------------------------------------- //
-function fmtTime(iso?: string): string {
+function fmtTime(t: TFunction, iso?: string): string {
   if (!iso) return "—";
   const d = new Date(iso), diff = (Date.now() - d.getTime()) / 1000;
-  if (diff < 60) return "刚刚";
-  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+  if (diff < 60) return t("kbview.justNow");
+  if (diff < 3600) return t("kbview.minutesAgo", { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t("kbview.hoursAgo", { n: Math.floor(diff / 3600) });
   return d.toLocaleDateString();
 }
 
 function highlight(text: string, query: string): ReactNode {
-  const terms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
+  const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 1);
   if (!terms.length) return text;
-  const re = new RegExp(`(${terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
+  const re = new RegExp(`(${terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
   return text.split(re).map((p, i) =>
     terms.includes(p.toLowerCase())
       ? <mark key={i} className="rounded-[2px] bg-[var(--accent)]/25 px-0.5 text-[var(--text)]">{p}</mark>

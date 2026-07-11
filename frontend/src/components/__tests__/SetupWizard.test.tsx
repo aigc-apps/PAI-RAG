@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SetupWizard } from "../SetupWizard";
 import { useAgentConfigStore } from "../../store/agentConfig";
+import { useI18nStore } from "../../i18n";
 import type { AgentConfigDocument, ProviderStatus } from "../../api/agentConfig";
 
 function docWithLlm(status: ProviderStatus, defaultModel = "dashscope/qwen-max"): AgentConfigDocument {
@@ -47,6 +48,7 @@ function docWithLlm(status: ProviderStatus, defaultModel = "dashscope/qwen-max")
 let completeSetup: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  useI18nStore.getState().setLang("en");
   completeSetup = vi.fn(async (setup) => ({ ...docWithLlm("healthy"), setup: { ...setup } }));
   useAgentConfigStore.setState({ loading: false, error: undefined, completeSetup });
 });

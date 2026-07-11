@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { KnowledgeBasePanel } from "../KnowledgeBasePanel";
 import type { AgentConfigDocument, ModelCatalogDoc } from "../../api/agentConfig";
+import { useI18nStore } from "../../i18n";
+
+beforeEach(() => {
+  useI18nStore.getState().setLang("en");
+});
 
 function docWith(models: ModelCatalogDoc): AgentConfigDocument {
   return {
@@ -59,7 +64,7 @@ describe("KnowledgeBasePanel", () => {
     expect(screen.getAllByText("dashscope/gte-rerank").length).toBeGreaterThan(0);
     // Vector DB is unconfigured (engine local by default) → shown as 未配置
     // (both the URL line and the status chip).
-    expect(screen.getAllByText("未配置").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not configured").length).toBeGreaterThan(0);
   });
 
   it("opens the vector database dialog via Configure", async () => {

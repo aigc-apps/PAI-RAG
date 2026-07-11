@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Database } from "lucide-react";
 import { getSearchEngine, type SearchEngineStatus } from "../api/knowledge";
 import { cn } from "../lib/cn";
+import { translate, useI18nStore } from "../i18n";
 
 /**
  * Shared retrieval-engine reachability UI. One source of truth for:
@@ -78,6 +79,8 @@ export function EngineStatusBadge({
   configured?: boolean;
   checking?: boolean;
 }) {
+  const lang = useI18nStore((s) => s.lang);
+  const t = (k: Parameters<typeof translate>[1]) => translate(lang, k);
   const state = reachStateOf(engine, { configured, checking });
 
   if (variant === "pill") {
@@ -90,39 +93,41 @@ export function EngineStatusBadge({
         title={
           isEs
             ? engine.healthy
-              ? engine.detail || "Elasticsearch 混合检索（BM25 + 向量 kNN）已连接"
-              : engine.detail || "已配置 Elasticsearch 但当前不可达，自动降级本地检索"
-            : "内置本地检索引擎（配置 ELASTICSEARCH_URL 可启用 Elasticsearch 混合检索）"
+              ? engine.detail || t("engine.esConnected")
+              : engine.detail || t("engine.esUnreachable")
+            : t("engine.localDetail")
         }
       >
         <Database className={cn("h-3.5 w-3.5", ok ? "text-[var(--accent)]" : WARN)} />
-        {isEs ? "Elasticsearch" : "本地检索"}
-        {engine.configured && !engine.healthy && <span className={WARN}>· 不可达</span>}
+        {isEs ? t("engine.elasticsearch") : t("engine.local")}
+        {engine.configured && !engine.healthy && (
+          <span className={WARN}>{t("engine.unreachableSuffix")}</span>
+        )}
       </span>
     );
   }
 
   // variant === "dot"
   if (state === "unconfigured") {
-    return <span className="text-xs text-[var(--text-faint)]">未配置</span>;
+    return <span className="text-xs text-[var(--text-faint)]">{t("engine.unconfigured")}</span>;
   }
   if (state === "checking") {
-    return <span className="text-xs text-[var(--text-faint)]">检测中…</span>;
+    return <span className="text-xs text-[var(--text-faint)]">{t("engine.checking")}</span>;
   }
   const cls = "inline-flex items-center gap-1.5 text-xs";
   const dot = "h-1.5 w-1.5 rounded-full";
   if (state === "reachable") {
     return (
-      <span className={cn(cls, "text-[var(--success)]")} title={engine?.detail || "已连接"}>
+      <span className={cn(cls, "text-[var(--success)]")} title={engine?.detail || t("engine.connected")}>
         <span className={cn(dot, "bg-[var(--success)]")} />
-        可达
+        {t("engine.reachable")}
       </span>
     );
   }
   return (
-    <span className={cn(cls, WARN)} title={engine?.detail || "无法连接到 Elasticsearch"}>
+    <span className={cn(cls, WARN)} title={engine?.detail || t("engine.cannotConnect")}>
       <span className={cn(dot, "bg-[var(--warning,#d97706)]")} />
-      不可达
+      {t("engine.unreachable")}
     </span>
   );
 }

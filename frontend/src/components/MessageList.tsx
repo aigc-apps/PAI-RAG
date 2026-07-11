@@ -3,11 +3,13 @@ import { ChevronDown } from "lucide-react";
 import { activeRuntime, EMPTY_MESSAGES, useChatStore } from "../store/chat";
 import { UserMessage } from "./UserMessage";
 import { AssistantMessage } from "./AssistantMessage";
+import { useI18n } from "../i18n";
 
 // How close to the bottom (px) still counts as "pinned" and keeps auto-following.
 const NEAR_BOTTOM_PX = 80;
 
 export function MessageList({ onRegenerate }: { onRegenerate: () => void }) {
+  const { t } = useI18n();
   const messages = useChatStore((s) => activeRuntime(s)?.messages ?? EMPTY_MESSAGES);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -77,11 +79,11 @@ export function MessageList({ onRegenerate }: { onRegenerate: () => void }) {
         <button
           type="button"
           onClick={jumpToBottom}
-          aria-label="回到底部"
+          aria-label={t("msg.jumpToBottom")}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] shadow-md transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
         >
           <ChevronDown className="h-3.5 w-3.5" />
-          回到底部
+          {t("msg.jumpToBottom")}
         </button>
       )}
     </div>

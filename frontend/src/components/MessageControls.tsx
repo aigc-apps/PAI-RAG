@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { copyText } from "../lib/clipboard";
 import type { ChatMessage } from "../types";
+import { useI18n } from "../i18n";
 
 export function MessageControls({
   text,
@@ -13,6 +14,7 @@ export function MessageControls({
   usage?: ChatMessage["usage"];
   onRegenerate?: () => void;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -20,7 +22,7 @@ export function MessageControls({
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } else {
-      toast.error("复制失败");
+      toast.error(t("common.copyFailed"));
     }
   };
 
@@ -28,8 +30,8 @@ export function MessageControls({
     <div className="mt-2 flex gap-1">
       <button
         type="button"
-        aria-label="复制"
-        title="复制"
+        aria-label={t("common.copy")}
+        title={t("common.copy")}
         onClick={copy}
         className="icon-btn p-1"
       >
@@ -38,8 +40,8 @@ export function MessageControls({
       {onRegenerate && (
         <button
           type="button"
-          aria-label="重新生成"
-          title="重新生成"
+          aria-label={t("msg.regenerate")}
+          title={t("msg.regenerate")}
           onClick={onRegenerate}
           className="icon-btn p-1"
         >
@@ -49,9 +51,12 @@ export function MessageControls({
       {usage && usage.total > 0 && (
         <span
           className="ml-1 self-center text-xs text-[var(--text-faint)]"
-          title={`输入 ${usage.input.toLocaleString()} · 输出 ${usage.output.toLocaleString()} tokens`}
+          title={t("msg.usageTitle", {
+            input: usage.input.toLocaleString(),
+            output: usage.output.toLocaleString(),
+          })}
         >
-          {usage.total.toLocaleString()} tokens
+          {t("msg.tokens", { count: usage.total.toLocaleString() })}
         </span>
       )}
     </div>

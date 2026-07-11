@@ -43,8 +43,10 @@ import { App } from "../App";
 import { useChatStore } from "../../store/chat";
 import { useAgentConfigStore } from "../../store/agentConfig";
 import { useAuthStore } from "../../store/auth";
+import { useI18nStore } from "../../i18n";
 
 beforeEach(() => {
+  useI18nStore.getState().setLang("en");
   useChatStore.getState().reset();
   useAgentConfigStore.setState({ doc: undefined, loading: false, error: undefined });
   // Start authenticated as an admin with a no-op hydrate so the guards fall

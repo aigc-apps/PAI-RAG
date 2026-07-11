@@ -1,5 +1,6 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { ArrowUp, Square } from "lucide-react";
+import { useI18n } from "../i18n";
 
 export function Composer({
   onSend,
@@ -10,6 +11,7 @@ export function Composer({
   onStop: () => void;
   isStreaming: boolean;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -47,7 +49,7 @@ export function Composer({
         <textarea
           ref={textareaRef}
           className="flex-1 resize-none border-0 outline-none bg-transparent text-[var(--text)] placeholder:text-[var(--text-faint)] py-0.5 leading-6 text-sm"
-          placeholder="Send a message…"
+          placeholder={t("composer.placeholder")}
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
@@ -59,7 +61,7 @@ export function Composer({
         {isStreaming ? (
           <button
             type="button"
-            aria-label="Stop"
+            aria-label={t("composer.stop")}
             onClick={onStop}
             className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border-strong)] text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors"
           >
@@ -68,7 +70,7 @@ export function Composer({
         ) : (
           <button
             type="button"
-            aria-label="Send"
+            aria-label={t("composer.send")}
             onClick={submit}
             className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--surface-3)] text-[var(--text)] hover:bg-[var(--border-strong)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             disabled={!value.trim()}

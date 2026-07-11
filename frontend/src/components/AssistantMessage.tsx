@@ -6,6 +6,7 @@ import { MessageControls } from "./MessageControls";
 import { AgentActivity } from "./AgentActivity";
 import { MessageArtifacts } from "./MessageArtifacts";
 import { AliyunAuthToolCard } from "./AliyunAuthToolCard";
+import { useI18n } from "../i18n";
 
 export function AssistantMessage({
   message,
@@ -16,6 +17,7 @@ export function AssistantMessage({
   isLast?: boolean;
   onRegenerate?: () => void;
 }) {
+  const { t } = useI18n();
   const showControls =
     message.status === "completed" || message.status === "cancelled";
   const failed = message.status === "failed";
@@ -41,10 +43,10 @@ export function AssistantMessage({
           <div className="rounded-[var(--radius)] border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-3.5 py-3">
             <div className="flex items-center gap-2 text-[var(--danger)]">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span className="text-sm font-semibold">执行失败</span>
+              <span className="text-sm font-semibold">{t("assistant.failed")}</span>
             </div>
             <div className="mt-1.5 text-sm text-[var(--text-muted)] whitespace-pre-wrap">
-              {message.error || "Something went wrong."}
+              {message.error || t("assistant.genericError")}
             </div>
             {onRegenerate && (
               <button
@@ -53,7 +55,7 @@ export function AssistantMessage({
                 className="mt-2.5 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--danger)]/40 bg-[var(--bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors"
               >
                 <RefreshCw className="h-3 w-3" />
-                再试试
+                {t("assistant.retry")}
               </button>
             )}
           </div>
@@ -68,10 +70,10 @@ export function AssistantMessage({
           ))}
         {!failed && files.length > 0 && <MessageArtifacts files={files} />}
         {message.status === "stopped" && (
-          <div className="mt-1 text-xs text-[var(--text-faint)]">已停止</div>
+          <div className="mt-1 text-xs text-[var(--text-faint)]">{t("assistant.stopped")}</div>
         )}
         {message.status === "cancelled" && (
-          <div className="mt-1 text-xs text-[var(--text-faint)]">已取消</div>
+          <div className="mt-1 text-xs text-[var(--text-faint)]">{t("assistant.cancelled")}</div>
         )}
         {showControls && (
           <MessageControls

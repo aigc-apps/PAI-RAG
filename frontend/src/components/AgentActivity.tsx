@@ -5,6 +5,7 @@ import type { ReasoningStatus } from "../types";
 import type { ResolvedStep } from "../stream/assistantView";
 import { cn } from "../lib/cn";
 import { ToolCall } from "./ToolCall";
+import { useI18n } from "../i18n";
 
 export function AgentActivity({
   reasoning,
@@ -18,6 +19,7 @@ export function AgentActivity({
   steps: ResolvedStep[];
   messageStatus: "streaming" | "completed" | "failed" | "stopped" | "cancelled";
 }) {
+  const { t } = useI18n();
   const hasReasoning = Boolean(reasoning);
   const tools = steps.flatMap((s) => (s.kind === "tool" ? [s.tool] : []));
   const hasTools = tools.length > 0;
@@ -42,13 +44,13 @@ export function AgentActivity({
   // A concise status chip summarising the tool run state.
   let badge: { label: string; tone: string } | null = null;
   if (failedTools > 0)
-    badge = { label: `失败 ${failedTools}`, tone: "text-[var(--danger)]" };
+    badge = { label: t("activity.failedCount", { count: failedTools }), tone: "text-[var(--danger)]" };
   else if (runningTools > 0)
-    badge = { label: "运行中", tone: "text-[var(--accent)]" };
+    badge = { label: t("activity.running"), tone: "text-[var(--accent)]" };
   else if (hasTools)
-    badge = { label: `完成 ${doneTools}/${tools.length}`, tone: "text-[var(--success)]" };
+    badge = { label: t("activity.doneCount", { done: doneTools, total: tools.length }), tone: "text-[var(--success)]" };
 
-  const label = active ? "工作中" : "执行记录";
+  const label = active ? t("activity.working") : t("activity.record");
 
   return (
     <Collapsible.Root open={open} onOpenChange={setOpen} className="mb-2 w-full">
@@ -76,7 +78,7 @@ export function AgentActivity({
         <span className={cn("font-medium", active && "shimmer-text")}>{label}</span>
         <span className="text-[var(--text-faint)]">·</span>
         <span className="truncate text-[var(--text-muted)]">
-          {hasTools ? `${tools.length} 个工具` : "推理"}
+          {hasTools ? t("activity.toolCount", { count: tools.length }) : t("activity.reasoning")}
         </span>
         {badge && (
           <span className={cn("ml-auto shrink-0 text-xs font-semibold", badge.tone)}>

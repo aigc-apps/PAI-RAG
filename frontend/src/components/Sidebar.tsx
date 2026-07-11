@@ -7,12 +7,14 @@ import { useAgentsStore } from "../store/agents";
 import { getConversation } from "../api/conversations";
 import { cn } from "../lib/cn";
 import { UserMenu } from "./UserMenu";
+import { useI18n, translate, useI18nStore } from "../i18n";
 
 /** A conversation's title while it lives only in a local runtime (before the
  * server list has it): the first user turn, or a placeholder for an empty draft. */
 function runtimeTitle(rt: ConvRuntime): string {
   const firstUser = rt.messages.find((m) => m.role === "user" && m.text.trim());
-  return firstUser ? firstUser.text.trim() : "新对话";
+  if (firstUser) return firstUser.text.trim();
+  return translate(useI18nStore.getState().lang, "chat.newConversationTitle");
 }
 
 /** True while the conversation's tail assistant message is still streaming —
@@ -51,6 +53,7 @@ export function Sidebar({
   onOpenKnowledge?: () => void;
   onOpenUsers?: () => void;
 }) {
+  const { t } = useI18n();
   const items = useConversationsStore((s) => s.items);
   const refresh = useConversationsStore((s) => s.refresh);
   const select = useConversationsStore((s) => s.select);
@@ -110,7 +113,7 @@ export function Sidebar({
       await remove(rt.conversationId);
       dropByConversationId(rt.conversationId);
     } catch {
-      toast.error("Could not delete conversation");
+      toast.error(t("sidebar.deleteFailed"));
     }
   };
 
@@ -127,7 +130,7 @@ export function Sidebar({
       hydrate(detail);
       select(id);
     } catch {
-      toast.error("Could not load conversation");
+      toast.error(t("sidebar.loadFailed"));
       clearSelection();
     }
   };
@@ -146,7 +149,7 @@ export function Sidebar({
       // sidebar selection when the deleted item was selected.
       dropByConversationId(id);
     } catch {
-      toast.error("Could not delete conversation");
+      toast.error(t("sidebar.deleteFailed"));
     }
   };
 
@@ -160,17 +163,17 @@ export function Sidebar({
         {onOpenKnowledge && (
           <button
             type="button"
-            aria-label="Open knowledge"
+            aria-label={t("sidebar.openKnowledge")}
             onClick={onOpenKnowledge}
             className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
           >
             <Database className="h-4 w-4 flex-shrink-0" />
-            知识库
+            {t("sidebar.knowledge")}
           </button>
         )}
         <button
           type="button"
-          aria-label="New chat"
+          aria-label={t("sidebar.newChat")}
           onClick={newChat}
           className={cn(
             "flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm font-medium text-[var(--text)] shadow-[var(--shadow-sm)] hover:bg-[var(--surface-2)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]",
@@ -178,14 +181,14 @@ export function Sidebar({
           )}
         >
           <Plus className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
-          新建对话
+          {t("sidebar.newChat")}
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 pb-2">
         {overlay.length === 0 && items.length === 0 ? (
           <div className="px-2 py-4 text-xs text-[var(--text-faint)]">
-            暂无对话
+            {t("sidebar.empty")}
           </div>
         ) : (
           <>
@@ -205,7 +208,7 @@ export function Sidebar({
             {items.map((c) => (
               <ConversationRow
                 key={c.id}
-                title={c.title || "Untitled"}
+                title={c.title || t("sidebar.untitled")}
                 selected={c.id === activeConversationId}
                 busy={busyIds.has(c.id)}
                 onOpen={() => openConversation(c.id)}
@@ -239,6 +242,7 @@ function ConversationRow({
   onOpen: () => void;
   onDelete?: (e: React.MouseEvent) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div
       onClick={onOpen}
@@ -259,8 +263,8 @@ function ConversationRow({
       {busy && (
         <span
           className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-[var(--accent)]"
-          aria-label="生成中"
-          title="生成中"
+          aria-label={t("common.generating")}
+          title={t("common.generating")}
         />
       )}
       <span className={cn("truncate", placeholder && "text-[var(--text-faint)]")}>
@@ -269,8 +273,8 @@ function ConversationRow({
       {onDelete && (
         <button
           type="button"
-          aria-label="删除对话"
-          title="删除对话"
+          aria-label={t("sidebar.deleteConversation")}
+          title={t("sidebar.deleteConversation")}
           onClick={onDelete}
           className="invisible ml-auto flex-shrink-0 rounded p-1 text-[var(--text-faint)] group-hover:visible hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
         >

@@ -34,6 +34,7 @@ import { useAliyunDialog } from "../store/aliyunDialog";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
 import { ThemeToggle } from "./ThemeToggle";
+import { useI18n } from "../i18n";
 
 type Tab = "agents" | "org-persona" | "tools" | "connections" | "knowledge" | "skills" | "yaml";
 
@@ -545,6 +546,7 @@ function PersonaDialog({
   onClose: () => void;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [text, setText] = useState<string>(agent.instructions ?? "");
   const dirty = text !== (agent.instructions ?? "");
 
@@ -565,7 +567,7 @@ function PersonaDialog({
             onClick={onClose}
             className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
-            取消
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -573,7 +575,7 @@ function PersonaDialog({
             disabled={!dirty}
             className="rounded-[var(--radius-sm)] bg-[var(--accent,var(--text))] px-3 py-1.5 text-sm font-medium text-[var(--bg)] disabled:opacity-50"
           >
-            保存
+            {t("common.save")}
           </button>
         </>
       }
@@ -746,6 +748,7 @@ function CodeManifestSection({
   loading: boolean;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState(agent.code_manifest ?? "");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
@@ -763,9 +766,9 @@ function CodeManifestSection({
       const { manifest } = await generateCodeManifest(agent.id);
       setValue(manifest);
       commit(manifest);
-      toast.success("已生成代码库配置单");
+      toast.success(t("settings.manifestGenerated"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败");
+      setError(err instanceof Error ? err.message : t("settings.generateFailed"));
     } finally {
       setGenerating(false);
     }
@@ -775,12 +778,12 @@ function CodeManifestSection({
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-1 flex items-center gap-2">
         <GitBranch className="h-4 w-4 text-[var(--text-muted)]" />
-        <h3 className="text-sm font-semibold">代码库配置单</h3>
+        <h3 className="text-sm font-semibold">{t("settings.codeManifest")}</h3>
         <button
           type="button"
           onClick={() => void onGenerate()}
           disabled={generating || loading}
-          title="让大模型进沙箱查看 /mnt/code 并生成清单"
+          title={t("settings.manifestGenTitle")}
           className="ml-auto inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 py-1 text-xs hover:bg-[var(--surface-2)] disabled:opacity-50"
         >
           {generating ? (
@@ -788,19 +791,18 @@ function CodeManifestSection({
           ) : (
             <Sparkles className="h-3.5 w-3.5" />
           )}
-          {generating ? "生成中…" : "AI 生成"}
+          {generating ? t("settings.generating") : t("settings.aiGenerate")}
         </button>
       </div>
       <p className="mb-2 text-xs text-[var(--text-muted)]">
-        描述该 agent 可访问的代码库（挂载在只读 <code>/mnt/code</code>）。这段会加入 system
-        prompt：知识库查不到时，模型据此到对应仓库探索源码。
+        {t("settings.manifestDescA")}<code>/mnt/code</code>{t("settings.manifestDescB")}
       </p>
       <textarea
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onBlur={() => commit(value)}
         rows={8}
-        placeholder="- repo-a — 简介…&#10;- repo-b — 简介…"
+        placeholder={t("settings.manifestPlaceholder")}
         className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs"
       />
       {error && (
@@ -998,6 +1000,7 @@ function PreviewCard({
   onEdit: () => void;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-2 flex items-center gap-2 text-[var(--text-muted)]">
@@ -1011,7 +1014,7 @@ function PreviewCard({
           className="ml-auto inline-flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--accent,var(--text))] hover:bg-[var(--surface-2)]"
         >
           <Pencil className="h-3 w-3" />
-          编辑
+          {t("common.edit")}
         </button>
       </div>
       {children}
@@ -1047,6 +1050,7 @@ function BasicInfoSection({
   isDefault: boolean;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(agent.name);
   const commitName = () => {
     if (name !== agent.name) void onSave(applyAgentPatch(doc, agent.id, { name }));
@@ -1056,10 +1060,10 @@ function BasicInfoSection({
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="mb-3 flex items-center gap-2 text-[var(--text-muted)]">
         <Settings2 className="h-4 w-4" />
-        <h3 className="text-sm font-semibold text-[var(--text)]">基础信息</h3>
+        <h3 className="text-sm font-semibold text-[var(--text)]">{t("settings.basicInfo")}</h3>
         {isDefault && (
           <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
-            默认 agent
+            {t("settings.defaultAgent")}
           </span>
         )}
       </div>
@@ -1135,6 +1139,7 @@ function AgentsPanel({
   onToggleTool: (toolId: string) => void;
   onToggleSkill: (skillId: string) => void;
 }) {
+  const { t } = useI18n();
   const enabledTools = new Set(agent.tools.include);
   const enabledSkills = new Set(agent.skills.enabled);
   // The resolved deployment default, surfaced by the backend on the llm.default
@@ -1192,7 +1197,7 @@ function AgentsPanel({
   const scopedKb = kbCount > 0;
   const kbIdSet = new Set(agent.knowledge?.kb_ids ?? []);
   const kbNames = kbs.filter((k) => kbIdSet.has(k.id)).map((k) => k.name);
-  const toolNames = tools.filter((t) => enabledTools.has(t.id)).map((t) => t.name);
+  const toolNames = tools.filter((tl) => enabledTools.has(tl.id)).map((tl) => tl.name);
   const skillNames = skills.filter((s) => enabledSkills.has(s.id)).map((s) => s.name);
 
   // Deletion is a whole-doc PUT with one fewer agent. If the removed agent was the
@@ -1227,7 +1232,7 @@ function AgentsPanel({
           {agents.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
-              {doc.default_agent === item.id ? " · 默认" : ""}
+              {doc.default_agent === item.id ? t("settings.defaultSuffix") : ""}
             </option>
           ))}
         </select>
@@ -1257,7 +1262,7 @@ function AgentsPanel({
             onClick={makeDefault}
             className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
-            设为默认
+            {t("settings.setDefault")}
           </button>
         )}
         {confirmDelete ? (
@@ -1267,14 +1272,14 @@ function AgentsPanel({
               onClick={deleteAgent}
               className="rounded-[var(--radius-sm)] border border-[var(--danger,#dc2626)] px-3 py-2 text-sm font-medium text-[var(--danger,#dc2626)] hover:bg-[var(--surface-2)]"
             >
-              确认删除
+              {t("settings.confirmDelete")}
             </button>
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
               className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
             >
-              取消
+              {t("common.cancel")}
             </button>
           </>
         ) : (
@@ -1282,11 +1287,11 @@ function AgentsPanel({
             type="button"
             onClick={() => setConfirmDelete(true)}
             disabled={!canDelete}
-            title={canDelete ? "删除此 agent" : "至少保留一个 agent"}
+            title={canDelete ? t("settings.deleteThisAgent") : t("settings.keepOneAgent")}
             className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
-            删除
+            {t("common.delete")}
           </button>
         )}
       </div>
@@ -1308,13 +1313,13 @@ function AgentsPanel({
         <PreviewCard
           icon={<UserRound className="h-4 w-4" />}
           title="Persona"
-          editLabel="编辑 Persona"
+          editLabel={t("settings.editPersona")}
           onEdit={() => setDialog("persona")}
         >
           <p className="line-clamp-3 whitespace-pre-wrap font-mono text-xs leading-6 text-[var(--text-muted)]">
             {persona
               ? persona.slice(0, 200) + (persona.length > 200 ? "…" : "")
-              : "使用内置默认人格 — 点击编辑，为该 agent 撰写系统提示。"}
+              : t("settings.personaEmpty")}
           </p>
         </PreviewCard>
 
@@ -1322,51 +1327,51 @@ function AgentsPanel({
         <div className="grid gap-3 sm:grid-cols-3">
           <PreviewCard
             icon={<Wrench className="h-4 w-4" />}
-            title="工具"
+            title={t("settings.tools")}
             badge={
               <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
                 {enabledTools.size}/{tools.length}
               </span>
             }
-            editLabel="编辑工具"
+            editLabel={t("settings.editTools")}
             onEdit={() => setDialog("tools")}
           >
             <p className="line-clamp-2 text-xs text-[var(--text-muted)]">
-              {previewNames(toolNames, "未启用任何工具")}
+              {previewNames(toolNames, t("settings.noToolsEnabled"))}
             </p>
           </PreviewCard>
           <PreviewCard
             icon={<Sparkles className="h-4 w-4" />}
-            title="技能"
+            title={t("settings.skills")}
             badge={
               <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
                 {enabledSkills.size}/{skills.length}
               </span>
             }
-            editLabel="编辑技能"
+            editLabel={t("settings.editSkills")}
             onEdit={() => setDialog("skills")}
           >
             <p className="line-clamp-2 text-xs text-[var(--text-muted)]">
-              {previewNames(skillNames, skills.length ? "未启用任何技能" : "未安装技能")}
+              {previewNames(skillNames, skills.length ? t("settings.noSkillsEnabled") : t("settings.noSkillsInstalled"))}
             </p>
           </PreviewCard>
           <PreviewCard
             icon={<Database className="h-4 w-4" />}
-            title="知识库"
+            title={t("settings.knowledge")}
             badge={
               <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
-                {scopedKb ? kbCount : "全部"}
+                {scopedKb ? kbCount : t("settings.all")}
               </span>
             }
-            editLabel="编辑知识库"
+            editLabel={t("settings.editKnowledge")}
             onEdit={() => setDialog("knowledge")}
           >
             <p className="line-clamp-2 text-xs text-[var(--text-muted)]">
               {scopedKb
                 ? kbNames.length
                   ? previewNames(kbNames, "")
-                  : `已选 ${kbCount} 个知识库`
-                : "全部知识库（用户可访问的全部）"}
+                  : t("settings.kbSelected", { count: kbCount })
+                : t("settings.allKb")}
             </p>
           </PreviewCard>
         </div>
@@ -2032,6 +2037,7 @@ function VectorDBConfigDialog({
   onClose: () => void;
   onSave: (doc: AgentConfigDocument) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const vdb = doc.knowledgebase.vectordb;
   const [url, setUrl] = useState(vdb.url);
   const [indexPrefix, setIndexPrefix] = useState(vdb.index_prefix || "kb");
@@ -2086,7 +2092,7 @@ function VectorDBConfigDialog({
         </div>
         <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
           <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
-            知识库检索使用 Elasticsearch。填写连接信息并保存后立即全局生效。
+            {t("settings.vdbIntro")}
           </div>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">URL</span>
@@ -2107,7 +2113,7 @@ function VectorDBConfigDialog({
                 />
               </label>
               <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
-                认证：填写 API Key，或用户名 + 密码（二选一，优先使用 API Key）。密钥可直接填写或用环境变量名引用。
+                {t("settings.vdbAuthHint")}
               </div>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">API Key</span>
@@ -2180,7 +2186,7 @@ function VectorDBConfigDialog({
               </label>
 
           <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
-            向量库为全局设置。修改连接后，已建知识库需重新索引才能在新存储中检索。
+            {t("settings.vdbGlobalNote")}
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-[var(--border)] px-4 py-3">
