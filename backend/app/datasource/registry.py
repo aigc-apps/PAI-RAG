@@ -9,9 +9,11 @@ from typing import Dict, Optional, Type
 
 from app.datasource.base_adapter import BaseAdapter
 from app.datasource.adapters.llms_txt import LlmsTxtAdapter
+from app.datasource.adapters.yuque import YuqueAdapter
 
 _ADAPTERS: Dict[str, Type[BaseAdapter]] = {
     LlmsTxtAdapter.source_type: LlmsTxtAdapter,
+    YuqueAdapter.source_type: YuqueAdapter,
     # "sphinx": SphinxAdapter,      # later
     # "website": WebsiteAdapter,    # later
 }

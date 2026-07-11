@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowLeft, Bot, Check, Copy, Database, Eye, Globe, Info, Loader2, Pencil, Plus,
+  ArrowLeft, BookOpen, Bot, Check, Copy, Database, Eye, Globe, Info, Loader2, Pencil, Plus,
   RefreshCw, Search, Trash2, TriangleAlert, Upload, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -75,7 +75,7 @@ const STATUS_ZH: Record<string, string> = {
   website: "website", upload: "upload", text: "text", file: "file",
   // data source sync states
   idle: "未同步", syncing: "同步中", succeeded: "已同步", partial: "部分成功",
-  llms_txt: "阿里云文档",
+  llms_txt: "阿里云文档", yuque: "语雀",
 };
 
 function statusClass(status: string) {
@@ -657,6 +657,10 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
 // ---------- Data sources ---------- //
 function sourceSummary(ds: KnowledgeDataSource): string {
   const cfg = ds.source_config || {};
+  if (ds.source_type === "yuque") {
+    const base = `${cfg.group_login || "?"}/${cfg.book_slug || "?"}`;
+    return typeof cfg.path === "string" && cfg.path ? `${base} · ${cfg.path}` : base;
+  }
   if (typeof cfg.llms_url === "string" && cfg.llms_url) return cfg.llms_url;
   if (typeof cfg.product === "string" && cfg.product)
     return `help.aliyun.com/zh/${cfg.product}/llms.txt`;
@@ -806,32 +810,65 @@ function DataSourceDrawer({ kb, editing, onClose, onDone }: {
   const isEdit = editing !== null && editing !== "new";
   const src = isEdit ? editing.source_config || {} : {};
   const initUrl = typeof src.llms_url === "string" ? src.llms_url : "";
+  const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
 
+  // Source type is chosen on create and fixed on edit (changing it would
+  // orphan the ingested docs). Existing rows infer it from source_type.
+  const initType: "llms_txt" | "yuque" = isEdit && editing.source_type === "yuque" ? "yuque" : "llms_txt";
+  const [type, setType] = useState<"llms_txt" | "yuque">(initType);
   const [name, setName] = useState(isEdit ? editing.name : "");
-  const [mode, setMode] = useState<"product" | "url">(initUrl ? "url" : "product");
-  const [product, setProduct] = useState(typeof src.product === "string" ? src.product : "");
-  const [llmsUrl, setLlmsUrl] = useState(initUrl);
-  const [sections, setSections] = useState(Array.isArray(src.sections) ? (src.sections as string[]).join(", ") : "");
-  const [lang, setLang] = useState(typeof src.lang === "string" ? src.lang : "zh");
   const [busy, setBusy] = useState(false);
 
-  const valid = name.trim() !== "" && (mode === "product" ? product.trim() !== "" : llmsUrl.trim() !== "");
+  // llms_txt fields
+  const [mode, setMode] = useState<"product" | "url">(initUrl ? "url" : "product");
+  const [product, setProduct] = useState(str(src.product));
+  const [llmsUrl, setLlmsUrl] = useState(initUrl);
+  const [sections, setSections] = useState(Array.isArray(src.sections) ? (src.sections as string[]).join(", ") : "");
+  const [lang, setLang] = useState(str(src.lang, "zh"));
+
+  // yuque fields
+  const [group, setGroup] = useState(str(src.group_login));
+  const [book, setBook] = useState(str(src.book_slug));
+  const [tokenEnv, setTokenEnv] = useState(str(src.token_env, "YUQUE_TOKEN"));
+  const [yqPath, setYqPath] = useState(str(src.path));
+  const [apiBase, setApiBase] = useState(str(src.api_base));
+  const [webBase, setWebBase] = useState(str(src.web_base));
+
+  const valid = name.trim() !== "" && (
+    type === "yuque"
+      ? group.trim() !== "" && book.trim() !== "" && tokenEnv.trim() !== ""
+      : mode === "product" ? product.trim() !== "" : llmsUrl.trim() !== ""
+  );
+
+  const buildConfig = (): Record<string, unknown> => {
+    if (type === "yuque") {
+      const cfg: Record<string, unknown> = {
+        group_login: group.trim(), book_slug: book.trim(), token_env: tokenEnv.trim(),
+      };
+      if (yqPath.trim()) cfg.path = yqPath.trim();
+      if (apiBase.trim()) cfg.api_base = apiBase.trim();
+      if (webBase.trim()) cfg.web_base = webBase.trim();
+      return cfg;
+    }
+    const cfg: Record<string, unknown> = {};
+    if (mode === "product") cfg.product = product.trim();
+    else cfg.llms_url = llmsUrl.trim();
+    const secs = sections.split(",").map((s) => s.trim()).filter(Boolean);
+    if (secs.length) cfg.sections = secs;
+    cfg.lang = lang.trim() || "zh";
+    return cfg;
+  };
 
   const submit = async () => {
     if (!valid) return;
     setBusy(true);
     try {
-      const cfg: Record<string, unknown> = {};
-      if (mode === "product") cfg.product = product.trim();
-      else cfg.llms_url = llmsUrl.trim();
-      const secs = sections.split(",").map((s) => s.trim()).filter(Boolean);
-      if (secs.length) cfg.sections = secs;
-      cfg.lang = lang.trim() || "zh";
+      const cfg = buildConfig();
       if (isEdit) {
         await updateDataSource(kb.id, editing.id, { name: name.trim(), source_config: cfg });
         toast.success("数据源已更新");
       } else {
-        await createDataSource(kb.id, { name: name.trim(), source_type: "llms_txt", source_config: cfg });
+        await createDataSource(kb.id, { name: name.trim(), source_type: type, source_config: cfg });
         toast.success("数据源已添加，点击「同步」拉取文档");
       }
       await onDone();
@@ -848,38 +885,70 @@ function DataSourceDrawer({ kb, editing, onClose, onDone }: {
         </button>
       </>}>
       <Field label="类型">
-        <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px]">
-          <Globe className="h-4 w-4 text-[var(--accent)]" /> 阿里云帮助文档 (llms.txt)
-        </div>
+        {isEdit ? (
+          <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px]">
+            {type === "yuque" ? <BookOpen className="h-4 w-4 text-[var(--accent)]" /> : <Globe className="h-4 w-4 text-[var(--accent)]" />}
+            {type === "yuque" ? "语雀知识库" : "阿里云帮助文档 (llms.txt)"}
+          </div>
+        ) : (
+          <Seg value={type} onChange={setType} options={[
+            { value: "llms_txt", label: "阿里云文档" }, { value: "yuque", label: "语雀" },
+          ]} />
+        )}
       </Field>
-      <Field label="名称"><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="如：PAI 官方文档" /></Field>
+      <Field label="名称"><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "yuque" ? "如：团队手册" : "如：PAI 官方文档"} /></Field>
 
-      <Field label="来源方式">
-        <Seg value={mode} onChange={setMode} options={[
-          { value: "product", label: "产品标识" }, { value: "url", label: "完整 URL" },
-        ]} />
-      </Field>
-      {mode === "product" ? (
-        <Field label="产品标识 product" hint="help.aliyun.com/zh/<product>/ 中的 product 段，如 pai、eas、oss">
-          <input className={cn(INPUT, "font-mono text-xs")} value={product}
-            onChange={(e) => setProduct(e.target.value)} placeholder="pai" />
+      {type === "yuque" ? (<>
+        <Field label="空间 group_login" hint="语雀知识库 URL 里 yuque.com/<group>/<book> 的 group 段">
+          <input className={cn(INPUT, "font-mono text-xs")} value={group} onChange={(e) => setGroup(e.target.value)} placeholder="acme" />
         </Field>
-      ) : (
-        <Field label="llms.txt URL" hint="子产品或非标准路径时使用完整清单地址">
-          <input className={cn(INPUT, "font-mono text-xs")} value={llmsUrl}
-            onChange={(e) => setLlmsUrl(e.target.value)} placeholder="https://help.aliyun.com/zh/pai/llms.txt" />
+        <Field label="知识库 book_slug" hint="yuque.com/<group>/<book> 的 book 段">
+          <input className={cn(INPUT, "font-mono text-xs")} value={book} onChange={(e) => setBook(e.target.value)} placeholder="handbook" />
         </Field>
-      )}
-      <Field label="章节过滤 sections" hint="可选，逗号分隔；留空同步全部章节">
-        <input className={INPUT} value={sections} onChange={(e) => setSections(e.target.value)} placeholder="快速开始, 最佳实践" />
-      </Field>
-      <Field label="语言 lang" hint="记录在文档元数据上，默认 zh">
-        <input className={cn(INPUT, "w-24")} value={lang} onChange={(e) => setLang(e.target.value)} placeholder="zh" />
-      </Field>
-      <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3 py-2.5 text-[12px] text-[var(--accent)]">
-        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-        <div>保存后在列表点击「同步」拉取文档。仅抓取公开的 llms.txt 清单与官方 <code className="font-mono">.md</code> 正文，按当前切片配置入库。</div>
-      </div>
+        <Field label="Token 环境变量 token_env" hint="服务端环境变量名（不是 token 本身）；真实 X-Auth-Token 由服务端从该变量读取，不入库">
+          <input className={cn(INPUT, "font-mono text-xs")} value={tokenEnv} onChange={(e) => setTokenEnv(e.target.value)} placeholder="YUQUE_TOKEN" />
+        </Field>
+        <Field label="路径 path（可选）" hint="TOC 里某个节点的 slug 或标题，只同步其子树；留空同步整库">
+          <input className={INPUT} value={yqPath} onChange={(e) => setYqPath(e.target.value)} placeholder="留空 = 整库" />
+        </Field>
+        <Field label="API 地址 api_base（可选）" hint="默认 https://www.yuque.com/api/v2；企业版填自有地址">
+          <input className={cn(INPUT, "font-mono text-xs")} value={apiBase} onChange={(e) => setApiBase(e.target.value)} placeholder="https://www.yuque.com/api/v2" />
+        </Field>
+        <Field label="站点地址 web_base（可选）" hint="用于生成引用链接；默认由 api_base 推导">
+          <input className={cn(INPUT, "font-mono text-xs")} value={webBase} onChange={(e) => setWebBase(e.target.value)} placeholder="https://www.yuque.com" />
+        </Field>
+        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3 py-2.5 text-[12px] text-[var(--accent)]">
+          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <div>保存后点击「同步」拉取文档。需先在服务端把 <code className="font-mono">{tokenEnv.trim() || "YUQUE_TOKEN"}</code> 环境变量设为有效的语雀 X-Auth-Token。企业内网语雀还需开启 <code className="font-mono">PAIRAG_DATASOURCE_ALLOW_PRIVATE_NETWORK</code>。</div>
+        </div>
+      </>) : (<>
+        <Field label="来源方式">
+          <Seg value={mode} onChange={setMode} options={[
+            { value: "product", label: "产品标识" }, { value: "url", label: "完整 URL" },
+          ]} />
+        </Field>
+        {mode === "product" ? (
+          <Field label="产品标识 product" hint="help.aliyun.com/zh/<product>/ 中的 product 段，如 pai、eas、oss">
+            <input className={cn(INPUT, "font-mono text-xs")} value={product}
+              onChange={(e) => setProduct(e.target.value)} placeholder="pai" />
+          </Field>
+        ) : (
+          <Field label="llms.txt URL" hint="子产品或非标准路径时使用完整清单地址">
+            <input className={cn(INPUT, "font-mono text-xs")} value={llmsUrl}
+              onChange={(e) => setLlmsUrl(e.target.value)} placeholder="https://help.aliyun.com/zh/pai/llms.txt" />
+          </Field>
+        )}
+        <Field label="章节过滤 sections" hint="可选，逗号分隔；留空同步全部章节">
+          <input className={INPUT} value={sections} onChange={(e) => setSections(e.target.value)} placeholder="快速开始, 最佳实践" />
+        </Field>
+        <Field label="语言 lang" hint="记录在文档元数据上，默认 zh">
+          <input className={cn(INPUT, "w-24")} value={lang} onChange={(e) => setLang(e.target.value)} placeholder="zh" />
+        </Field>
+        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-3 py-2.5 text-[12px] text-[var(--accent)]">
+          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <div>保存后在列表点击「同步」拉取文档。仅抓取公开的 llms.txt 清单与官方 <code className="font-mono">.md</code> 正文，按当前切片配置入库。</div>
+        </div>
+      </>)}
     </Drawer>
   );
 }
