@@ -22,19 +22,19 @@ from app.store.base import User
 router = APIRouter()
 
 # What the model is asked to do when generating a code manifest: drive the
-# sandbox tools itself to look at /mnt/code, then emit only the finished list.
+# sandbox tools itself to look at /opt/code, then emit only the finished list.
 _MANIFEST_INSTRUCTION = (
     "You are documenting the source-code repositories mounted read-only at "
-    "/mnt/code, for another AI agent's system prompt. Explore them yourself "
+    "/opt/code, for another AI agent's system prompt. Explore them yourself "
     "with the shell / code_interpreter tools:\n"
-    "1. Run `ls /mnt/code` — each subdirectory is one repository.\n"
+    "1. Run `ls /opt/code` — each subdirectory is one repository.\n"
     "2. For each repository, read its README and skim its top-level layout "
     "(ls, cat the README and obvious entry files) to learn what it is for.\n\n"
     "Then output ONLY a concise Markdown manifest: one short section or bullet "
-    "per repository, giving its directory name under /mnt/code and a 1-2 "
+    "per repository, giving its directory name under /opt/code and a 1-2 "
     "sentence description of what it contains and when it would be relevant to "
     "consult. Do NOT include your shell transcript or exploration steps — just "
-    "the final manifest. If /mnt/code is empty or unreadable, say so in one line."
+    "the final manifest. If /opt/code is empty or unreadable, say so in one line."
 )
 
 # Cap the exploration loop so a manifest generation can't run the full 20-step
@@ -78,14 +78,14 @@ async def generate_code_manifest(
     state: AppState = Depends(get_state),
     _admin: User = Depends(require_admin),
 ):
-    """Have the LLM explore the read-only /mnt/code layer (via the sandbox tools)
+    """Have the LLM explore the read-only /opt/code layer (via the sandbox tools)
     and return a Markdown manifest of the repositories. Admin-only authoring
     action; the result is NOT persisted — the caller reviews it and saves it onto
     the agent profile through the normal config save."""
-    # The code layer must actually be mounted, or there's nothing to document.
+    # The code layer must actually be enabled, or there's nothing to document.
     provider = getattr(getattr(state, "registry", None), "sandbox_provider", None)
-    if provider is None or not getattr(provider, "nas_code_server_addr", ""):
-        return _err(409, "code layer not configured (sandbox /mnt/code is unavailable)")
+    if provider is None or not getattr(provider, "code_layer_enabled", False):
+        return _err(409, "code layer not enabled (sandbox /opt/code is unavailable)")
 
     doc = getattr(state, "agent_config", None)
     agents = list(getattr(doc, "agents", []) or []) if doc is not None else []

@@ -6,7 +6,8 @@
 #   docs/design/skill_install_mount_dependencies.md
 # so the AGENT_* env vars resolve and the per-user / per-skill NAS mounts land
 # on pre-created, correctly-owned directories. Also bakes the Aliyun CLI +
-# PAI plugins so skill scripts can drive Aliyun services from inside the box.
+# PAI plugins so skill scripts can drive Aliyun services from inside the box,
+# and a release-pinned read-only code layer at /opt/code for grep/read.
 #
 # Build on top of the official AgentRun code-interpreter image. Pass its
 # registry ref via --build-arg BASE_IMAGE=... (find it in the AgentRun console
@@ -28,6 +29,13 @@ FROM ${BASE_IMAGE}
 # --build-arg ALIYUN_CLI_URL=... if a different release is needed.
 ARG ALIYUN_CLI_URL=https://easyrec.oss-cn-beijing.aliyuncs.com/aliyun-cli-spec/aliyun-cli-linux-latest-amd64.tgz
 
+# Read-only code layer baked into the image at /opt/code: a release-pinned
+# snapshot of the source repositories (one per subdirectory) the agent greps and
+# reads when the knowledge base can't answer. Baked rather than NAS-mounted so
+# grep/read hit local disk instead of NFS. Bump the URL to ship newer source;
+# override with --build-arg PAIREC_CODE_ARCHIVE_URL="" to build without the layer.
+ARG PAIREC_CODE_ARCHIVE_URL=https://pai-rag.oss-cn-hangzhou.aliyuncs.com/production_artifacts/pairec_code/pairec_code_20260623.tar.gz
+
 # The platform runs the sandbox as uid/gid 1000 (matches nasConfig.userId /
 # groupId). Create the three contract mount points as root, ensure the
 # runtime user's home exists and is owned by 1000, and make /mnt/user owned
@@ -35,8 +43,21 @@ ARG ALIYUN_CLI_URL=https://easyrec.oss-cn-beijing.aliyuncs.com/aliyun-cli-spec/a
 # via read-only NAS mounts at sandbox start — they stay empty dirs in the
 # image.
 USER root
-RUN mkdir -p /mnt/system /mnt/skills /mnt/user /home/user \
+RUN mkdir -p /mnt/system /mnt/skills /mnt/user /opt/code /home/user \
  && chown -R 1000:1000 /mnt/user /home/user
+
+# Bake the read-only code layer into /opt/code. Kept in its own layer (and last
+# among the root steps that change rarely) so it re-downloads only when the
+# archive URL changes. Root-owned + world-readable: the runtime user (uid 1000)
+# only ever reads it. Guarded so an empty PAIREC_CODE_ARCHIVE_URL builds an
+# image with an empty /opt/code (the code layer stays off via config).
+RUN if [ -n "${PAIREC_CODE_ARCHIVE_URL}" ]; then \
+      curl -fsSL "${PAIREC_CODE_ARCHIVE_URL}" -o /tmp/pairec_code.tar.gz \
+      && tar -xzf /tmp/pairec_code.tar.gz -C /opt/code \
+      && rm -f /tmp/pairec_code.tar.gz \
+      && chmod -R a+rX /opt/code \
+      && echo "baked code layer:" && ls -1 /opt/code ; \
+    fi
 
 # Startup validation: fails fast if a contract mount is missing/unreadable,
 # so a mis-mounted sandbox surfaces a clear error instead of a confusing 404
@@ -62,6 +83,7 @@ RUN tmpdir="$(mktemp -d)" \
 ENV AGENT_SYSTEM_PATH=/mnt/system \
     AGENT_SKILL_PATH=/mnt/skills \
     AGENT_USER_PATH=/mnt/user \
+    AGENT_CODE_PATH=/opt/code \
     AGENT_ENV_PATH=/mnt/system/skill-envs/current \
     PATH=/mnt/system/skill-envs/current/bin:/usr/local/bin:/mnt/system/bin:${PATH} \
     VIRTUAL_ENV=/mnt/system/skill-envs/current \

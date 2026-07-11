@@ -76,13 +76,15 @@ Code 沙箱会在 AI 助手需要执行代码时自动启用。当用户请求�
 
 AI 助手会自动调用 Code 沙箱工具来执行相应的 Python 代码。
 
-## 代码层（/mnt/code，可选）
-沙箱内除 `/mnt/system`（共享只读）、`/mnt/skills`（技能包只读）、`/mnt/user`（用户可写）三层挂载外，还可挂载**只读代码层 `/mnt/code`**：一个共享 NAS 导出，其下每个子目录是一个源码仓库。配置后：
+## 代码层（/opt/code，可选）
+沙箱内除 `/mnt/system`（共享只读）、`/mnt/skills`（技能包只读）、`/mnt/user`（用户可写）三层 NAS 挂载外，还有一层**只读代码层 `/opt/code`**：一份随发布固化、**烘焙进沙箱镜像**的源码快照，其下每个子目录是一个源码仓库。之所以烘焙进镜像而非 NAS 挂载，是因为该层只做目录浏览 / grep / read，本地磁盘比 NFS 快得多。启用后：
 
-- 沙箱内暴露环境变量 `AGENT_CODE_PATH=/mnt/code`；
-- 当**知识库回答不了、而问题关乎本系统自身代码行为**时，助手会 `ls /mnt/code` 查看可用仓库，再用 shell / code_interpreter 以 grep、cat 探索源码作为兜底（只读，不会修改）。
+- 沙箱内暴露环境变量 `AGENT_CODE_PATH=/opt/code`；
+- 当**知识库回答不了、而问题关乎本系统自身代码行为**时，助手会 `ls /opt/code` 查看可用仓库，再用 shell / code_interpreter 以 grep、cat 探索源码作为兜底（只读，不会修改）。
 
-启用方式：给 `sandbox.default` 的 `nas_config` 填 `code_server_addr`（部署时经 config.yaml 覆盖），可选 `code_remote_path`（默认 `/code`）、`code_read_only`（默认 `true`）。不填即不挂载、助手也不会收到相关提示。部署侧需沙箱镜像预建 `/mnt/code` 目录并挂上只读代码 NAS。完整挂载契约见 [`docs/design/skill_install_mount_dependencies.md`](design/skill_install_mount_dependencies.md)。
+**镜像侧**：`sandbox/Dockerfile` 用 `--build-arg PAIREC_CODE_ARCHIVE_URL=<归档.tar.gz>` 下载并解压到 `/opt/code`（默认指向一份 release-pinned 的 OSS 归档；置空则构建出空代码层）。更新代码 = 换归档 URL 重新构建、重新注册模板。
+
+**服务侧**：给 `sandbox.default` 的设置打开 `code_layer_enabled: true`（部署时经 config.yaml），表示当前沙箱模板确实带了代码层——服务据此注入 `AGENT_CODE_PATH` 并加上代码探索的系统提示。为 `false`（默认）时助手收不到相关提示。每个 agent 还需自行启用 code_sandbox 工具，并可在设置页维护「代码库配置单」。完整挂载契约见 [`docs/design/skill_install_mount_dependencies.md`](design/skill_install_mount_dependencies.md)。
 
 ## 使用案例
 ![](images/code_sandbox/code_sandbox_example.jpg)

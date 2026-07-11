@@ -130,14 +130,13 @@ def test_resolver_skips_without_base_creds(monkeypatch):
 # --------------------------------------------------------------------------- #
 # _build_env_contract merge
 # --------------------------------------------------------------------------- #
-def _fake_provider(code_server_addr=""):
+def _fake_provider(code_layer_enabled=False):
     return types.SimpleNamespace(
         inject_env_contract=True, extra_envs={},
         nas_user_id=1000, nas_group_id=1000,
         nas_user_server_addr="", nas_user_remote_path_template="/users/{user_id}",
         nas_user_read_only=False,
-        nas_code_server_addr=code_server_addr, nas_code_remote_path="/code",
-        nas_code_read_only=True,
+        code_layer_enabled=code_layer_enabled,
     )
 
 
@@ -157,27 +156,21 @@ def test_env_contract_unchanged_without_aliyun_env():
 
 
 # --------------------------------------------------------------------------- #
-# code layer: /mnt/code mount + AGENT_CODE_PATH, gated on code_server_addr
+# code layer: baked into the image, so it adds AGENT_CODE_PATH (gated on the
+# code_layer_enabled flag) but NEVER a NAS mountPoint.
 # --------------------------------------------------------------------------- #
-def test_env_contract_advertises_code_path_only_when_configured():
+def test_env_contract_advertises_code_path_only_when_enabled():
     scope = ToolScope(user_id="u1", metadata={})
     assert "AGENT_CODE_PATH" not in _build_env_contract(_fake_provider(), scope, "s:u1")
-    envs = _build_env_contract(_fake_provider("nas.example.com:/vol"), scope, "s:u1")
-    assert envs["AGENT_CODE_PATH"] == "/mnt/code"
+    envs = _build_env_contract(_fake_provider(code_layer_enabled=True), scope, "s:u1")
+    assert envs["AGENT_CODE_PATH"] == "/opt/code"
 
 
-def test_nas_config_mounts_code_layer_read_only_when_configured():
+def test_nas_config_never_mounts_code_layer():
     scope = ToolScope(user_id="u1", skill_mounts=[])
-    cfg = _build_nas_config(_fake_provider("nas.example.com:/vol"), scope, "s:u1")
-    code = [m for m in cfg["mountPoints"] if m["mountDir"] == "/mnt/code"]
-    assert len(code) == 1
-    assert code[0]["readOnly"] is True
-    assert code[0]["serverAddr"] == "nas.example.com:/vol/code"
-
-
-def test_nas_config_omits_code_layer_when_unconfigured():
-    scope = ToolScope(user_id="u1", skill_mounts=[])
-    # No user/skill/code mounts configured -> no nasConfig at all.
+    # Baked code layer contributes no mountPoint even when enabled; with no
+    # user/skill mounts either, there is no nasConfig at all.
+    assert _build_nas_config(_fake_provider(code_layer_enabled=True), scope, "s:u1") is None
     assert _build_nas_config(_fake_provider(), scope, "s:u1") is None
 
 

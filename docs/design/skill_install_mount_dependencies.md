@@ -66,11 +66,9 @@ providers:
         user_server_addr: xxxx.nas.aliyuncs.com:/
         user_remote_path_template: /users/{user_id}
         user_read_only: false
-        # Optional read-only code layer at /mnt/code (repos are subdirs).
-        # Set code_server_addr to enable; empty => layer off.
-        code_server_addr: xxxx.nas.aliyuncs.com:/
-        code_remote_path: /code
-        code_read_only: true
+      # Read-only code layer at /opt/code is baked into the sandbox image, not
+      # NAS-mounted. Turn on when the template ships it (see below).
+      code_layer_enabled: true
       inject_env_contract: true
       extra_envs: {}
 ```
@@ -179,14 +177,15 @@ First implementation status:
 
 ## Sandbox Mounting
 
-Four runtime paths are contracted inside the sandbox (the code layer is optional
-— present only when `code_server_addr` is configured):
+Four runtime paths are contracted inside the sandbox. Three are NAS-mounted at
+create time; the code layer is baked into the image (optional — present only on a
+template that ships it, flagged by `code_layer_enabled`):
 
 ```text
 /mnt/system   # agent-level shared, read-only; heavy deps baked into the sandbox image
 /mnt/skills   # agent-level shared, read-only skill packages
 /mnt/user     # per-user isolated, writable (outputs, memory)
-/mnt/code     # agent-level shared, read-only source repos (optional; explore when the KB misses)
+/opt/code     # agent-level shared, read-only source repos, BAKED into the image (optional; explore when the KB misses)
 ```
 
 The active agent determines skill mounts:
@@ -207,23 +206,24 @@ Plus one per-user mount:
 /mnt/user  <- nas: <server>:/users/<user_id>  (read-write)
 ```
 
-And, when configured, one shared read-only code layer (a single export whose
-subdirectories are repositories; the agent discovers them by `ls /mnt/code`):
+The read-only code layer is **not** a NAS mount — it is a release-pinned source
+snapshot baked into the sandbox image at `/opt/code` (a single dir whose
+subdirectories are repositories; the agent discovers them by `ls /opt/code`).
+Baked rather than mounted because the workload is pure grep/read, where local
+disk beats NFS. It therefore contributes no `mountPoint`.
 
-```text
-/mnt/code  <- nas: <code_server>:/code  (read-only)
-```
+The remaining mount points share `userId/groupId = 1000` (the platform default
+for NAS mounts) at the `nasConfig` top level. `mountDir` values must not collide;
+skill mounts are leaf dirs under `/mnt/skills/<id>` and the user mount is
+`/mnt/user`, so they never overlap. Empty mount configs are omitted from the
+create payload to avoid provider validation errors.
 
-All mount points share `userId/groupId = 1000` (the platform default for NAS
-mounts) at the `nasConfig` top level. `mountDir` values must not collide; skill
-mounts are leaf dirs under `/mnt/skills/<id>`, the user mount is `/mnt/user`,
-and the code layer is `/mnt/code`, so they never overlap. Empty mount configs
-are omitted from the create payload to avoid provider validation errors.
-
-The env-var contract exposes each mounted path: `AGENT_SYSTEM_PATH`,
-`AGENT_SKILL_PATH`, `AGENT_USER_PATH`, and (only when the code layer is
-configured) `AGENT_CODE_PATH=/mnt/code`. Deployment side: the sandbox image must
-`mkdir /mnt/code`, and the read-only code NAS export must be mounted there.
+The env-var contract exposes each contracted path: `AGENT_SYSTEM_PATH`,
+`AGENT_SKILL_PATH`, `AGENT_USER_PATH`, and (only when `code_layer_enabled`)
+`AGENT_CODE_PATH=/opt/code`. Deployment side: build the sandbox image with
+`--build-arg PAIREC_CODE_ARCHIVE_URL=<archive.tar.gz>` (it downloads + extracts
+into `/opt/code` and bakes `AGENT_CODE_PATH`), then set `code_layer_enabled: true`
+on the matching template. To ship newer source, bump the archive URL and rebuild.
 
 Skill content lives on the NAS filesystem. `install_skill` writes packages to
 `skills.root`, which is deployed on the same NAS the sandbox mounts read-only —

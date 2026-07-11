@@ -84,16 +84,16 @@ def test_sandbox_guidance_when_code_interpreter_or_shell_present():
 
 def test_code_layer_guidance_gated_on_flag_and_sandbox_tool():
     # Off by default even with a sandbox tool present.
-    assert "/mnt/code" not in render_stable_system_prompt(
+    assert "/opt/code" not in render_stable_system_prompt(
         DEFAULT_SOUL, tool_names=["shell"])
     # Enabled flag but no sandbox tool to explore with -> still off.
-    assert "/mnt/code" not in render_stable_system_prompt(
+    assert "/opt/code" not in render_stable_system_prompt(
         DEFAULT_SOUL, tool_names=["web_fetch"], code_layer_enabled=True)
     # Flag + sandbox tool -> the fallback-to-code guidance appears.
     for tools in (["shell"], ["code_interpreter"]):
         out = render_stable_system_prompt(
             DEFAULT_SOUL, tool_names=tools, code_layer_enabled=True)
-        assert "/mnt/code" in out and "ls /mnt/code" in out
+        assert "/opt/code" in out and "ls /opt/code" in out
 
 
 def test_code_manifest_injected_when_present_and_layer_enabled():
@@ -103,17 +103,17 @@ def test_code_manifest_injected_when_present_and_layer_enabled():
         DEFAULT_SOUL, tool_names=["shell"], code_layer_enabled=True,
         code_manifest=manifest)
     assert manifest in out
-    assert "ls /mnt/code" in out
+    assert "ls /opt/code" in out
     # Empty manifest -> falls back to the pure discover-by-ls guidance (no leftover
-    # "available repositories" header, but /mnt/code still mentioned).
+    # "available repositories" header, but /opt/code still mentioned).
     empty = render_stable_system_prompt(
         DEFAULT_SOUL, tool_names=["shell"], code_layer_enabled=True,
         code_manifest="")
-    assert "repo-a" not in empty and "/mnt/code" in empty
+    assert "repo-a" not in empty and "/opt/code" in empty
     # Layer off -> a manifest is never advertised.
     off = render_stable_system_prompt(
         DEFAULT_SOUL, tool_names=["shell"], code_manifest=manifest)
-    assert manifest not in off and "/mnt/code" not in off
+    assert manifest not in off and "/opt/code" not in off
 
 
 def test_stable_prompt_lists_no_tools_when_empty_and_project_when_set():

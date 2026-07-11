@@ -157,12 +157,13 @@ async def build_context(
 
     tool_names = [t.name for t in toolbox.tools]
 
-    # The code layer is on only when the built sandbox provider resolved a code
-    # NAS server (provider is None when sandbox is disabled -> flag stays False).
+    # The code layer is baked into the sandbox image; the operator flips
+    # code_layer_enabled on the sandbox provider when the template ships it
+    # (provider is None when sandbox is disabled -> flag stays False).
     code_layer_enabled = bool(
-        getattr(getattr(registry, "sandbox_provider", None), "nas_code_server_addr", "")
+        getattr(getattr(registry, "sandbox_provider", None), "code_layer_enabled", False)
     )
-    # Per-agent, admin-curated description of the /mnt/code repos (empty => the
+    # Per-agent, admin-curated description of the /opt/code repos (empty => the
     # block falls back to discover-by-`ls`). Only meaningful when the layer is on.
     code_manifest = getattr(agent_profile, "code_manifest", "") or ""
     system_prompt = render_stable_system_prompt(

@@ -16,13 +16,18 @@ for the full contract.
 - `mkdir /mnt/system /mnt/skills /mnt/user` (empty dirs — content comes from
   NAS mounts at sandbox start, never baked in) + `chown -R 1000:1000 /mnt/user`
   (the platform runs the sandbox as uid 1000, matching `nasConfig.userId`).
+- Bakes the **read-only code layer** at `/opt/code` from
+  `--build-arg PAIREC_CODE_ARCHIVE_URL=<archive.tar.gz>` (a release-pinned source
+  snapshot, one repo per subdir, for grep/read). Unlike the three NAS paths above
+  this is baked in — local disk beats NFS for the browse/grep workload. Build with
+  an empty URL to omit it; the service exposes it only when `code_layer_enabled`.
 - Ensures `/home/user` exists and is owned by 1000, sets `HOME=/home/user`.
 - Bakes the **Aliyun CLI** (`/usr/local/bin/aliyun`) and the PAI plugins
   (`aliyun-cli-eas`, `aliyun-cli-pairecservice`, `aliyun-cli-pai-dsw`,
   `aliyun-cli-paifeaturestore`) installed as uid 1000 into `~/.aliyun`, so
   skill scripts can drive Aliyun services from inside the sandbox.
 - Bakes `AGENT_SYSTEM_PATH` / `AGENT_SKILL_PATH` / `AGENT_USER_PATH` /
-  `AGENT_ENV_PATH` / `PATH` / `VIRTUAL_ENV` env vars.
+  `AGENT_CODE_PATH` / `AGENT_ENV_PATH` / `PATH` / `VIRTUAL_ENV` env vars.
 - Runs `agent-sandbox-bootstrap` as ENTRYPOINT: validates the three mounts
   exist and are readable on start, fails fast with a contract-version marker
   if not, then execs the base image's startup chain. The CMD is set explicitly

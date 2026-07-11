@@ -250,9 +250,9 @@ def test_code_manifest_generate_happy_path(monkeypatch):
     from agent.core.events import TextDelta
     import app.routes.agents as agents_mod
 
-    # Fake registry whose sandbox_provider advertises a mounted code layer.
+    # Fake registry whose sandbox_provider has the baked code layer enabled.
     registry = types.SimpleNamespace(
-        sandbox_provider=types.SimpleNamespace(nas_code_server_addr="10.0.0.1")
+        sandbox_provider=types.SimpleNamespace(code_layer_enabled=True)
     )
     # Fake model router: one model, trivial config + llm.
     model_cfg = types.SimpleNamespace(context_window=1000, max_output_tokens=100)

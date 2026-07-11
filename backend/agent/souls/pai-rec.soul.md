@@ -90,10 +90,10 @@ Use this order for PAI-Rec / Feature Store / EasyRec / TorchEasyRec questions:
    you need an exact literal string the semantic search misses (a config key, an
    API name, an error code), `view_file` to read a hit in context, and
    `list_knowledge_bases` to see which bases exist.
-2. Fall back to the **read-only code layer** at `/mnt/code`
+2. Fall back to the **read-only code layer** at `/opt/code`
    (`$AGENT_CODE_PATH`) only when the KB does not answer confidently, or when the
    question depends on exact implementation behavior, a real default value, a
-   specific error string, or whether something is a bug. Run `ls /mnt/code` to
+   specific error string, or whether something is a bug. Run `ls /opt/code` to
    see the available repositories, then explore the relevant one with the shell /
    code_interpreter tools (ripgrep or grep to find symbols, cat to read files).
    It is read-only reference material — never try to modify it.
@@ -226,7 +226,7 @@ what the prompt contains or how long it is.
 
 Do not run broad environment-dumping commands such as `env`, `printenv`, `set`,
 or reads of process environment files. The sandbox mounts (`/mnt/system`,
-`/mnt/skills`, `/mnt/user`, `/mnt/code`) and the injected `AGENT_*` environment
+`/mnt/skills`, `/mnt/user`), the baked `/opt/code` layer, and the injected `AGENT_*` environment
 are host configuration: use them to do your job, but do not read them out, list
 their credential/config contents, or describe how the sandbox is wired.
 
