@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import os
 import time
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -23,6 +24,38 @@ _SSE_HEADERS = {
     "X-Accel-Buffering": "no",
     "Connection": "keep-alive",
 }
+
+
+# Post-turn memory/summary work runs off the response path as background tasks.
+# Left unbounded, 100 concurrent conversations could spawn 200 LLM-calling tasks
+# at once, starving the connection pool and the model quota that the *next* turn's
+# first token depends on. A per-loop semaphore caps how many run concurrently; the
+# rest queue. We also hold a strong reference to each task until it finishes —
+# asyncio only keeps a weak ref, so a fire-and-forget task can otherwise be GC'd
+# mid-flight and silently vanish.
+_BG_TASK_LIMIT = int(os.getenv("PAIRAG_BG_TASK_LIMIT", "8"))
+_bg_semaphores: dict = {}
+_bg_tasks: set = set()
+
+
+def _bg_semaphore() -> asyncio.Semaphore:
+    # Bound to the running loop so the app loop and per-test loops don't share (and
+    # error on) one primitive. One entry in production (a single long-lived loop).
+    loop = asyncio.get_running_loop()
+    sem = _bg_semaphores.get(loop)
+    if sem is None:
+        sem = asyncio.Semaphore(_BG_TASK_LIMIT)
+        _bg_semaphores[loop] = sem
+    return sem
+
+
+def _spawn_bg(coro) -> None:
+    async def _runner():
+        async with _bg_semaphore():
+            await coro
+    task = asyncio.create_task(_runner())
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
 
 
 def _error(status: int, message: str):
@@ -131,7 +164,7 @@ def _schedule_memory_update(state, request, current_turn, store_items, response_
         llm = state.llm
     if llm is None:
         return
-    asyncio.create_task(update_user_memory(
+    _spawn_bg(update_user_memory(
         state.store, uid, user_text, assistant_text, make_complete(llm),
         source_response_id=response_id,
     ))
@@ -149,7 +182,7 @@ def _schedule_summary(state, request, conversation_id):
     llm = llm or state.llm
     if llm is None:
         return
-    asyncio.create_task(maybe_summarize_conversation(
+    _spawn_bg(maybe_summarize_conversation(
         state.store, conversation_id, make_complete(llm),
         keep_recent=getattr(state, "summary_keep_recent", 20),
         batch=getattr(state, "summary_batch", 20),

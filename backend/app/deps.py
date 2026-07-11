@@ -45,7 +45,10 @@ class AppState:
         )
 
 
-def get_state(request: Request) -> AppState:
+async def get_state(request: Request) -> AppState:
+    # async so FastAPI resolves it on the event loop directly; a sync `def`
+    # dependency is dispatched through anyio's bounded threadpool on every
+    # request, needlessly consuming a token under load.
     return request.app.state.app_state
 
 

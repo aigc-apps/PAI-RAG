@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -53,7 +54,54 @@ class SkillMount:
         }
 
 
+# Cache the discovered catalog so build_context (called on every chat turn)
+# doesn't re-glob + read_text + yaml-parse every skill manifest per request —
+# a real event-loop cost when skills_dir is a NAS mount. Keyed by a cheap
+# fingerprint (source paths + each skill dir's mtime), so a skill install /
+# remove (which changes a dir mtime) invalidates it naturally on the next call.
+_discovery_cache: Dict[str, List[SkillPackage]] = {}
+
+
+def _discovery_fingerprint(sources: List[Dict[str, Any]]) -> str:
+    parts: List[Any] = []
+    for source in sources:
+        if str(source.get("type") or "local") != "local":
+            parts.append(("nonlocal", repr(source)))
+            continue
+        root = Path(str(source.get("path") or "")).expanduser()
+        try:
+            root_mtime = root.stat().st_mtime_ns
+        except OSError:
+            parts.append((str(root), None))
+            continue
+        children: List[Tuple[str, Optional[int]]] = []
+        try:
+            with os.scandir(root) as it:  # one round trip; no per-file read/parse
+                for entry in it:
+                    if entry.is_dir():
+                        try:
+                            children.append((entry.name, entry.stat().st_mtime_ns))
+                        except OSError:
+                            children.append((entry.name, None))
+        except OSError:
+            pass
+        parts.append((str(root), root_mtime, tuple(sorted(children))))
+    return repr(parts)
+
+
 def discover_skill_packages(sources: Iterable[Dict[str, Any]]) -> List[SkillPackage]:
+    sources = list(sources)
+    key = _discovery_fingerprint(sources)
+    cached = _discovery_cache.get(key)
+    if cached is not None:
+        return cached
+    packages = _discover_skill_packages_uncached(sources)
+    _discovery_cache.clear()  # keep only the current on-disk fingerprint
+    _discovery_cache[key] = packages
+    return packages
+
+
+def _discover_skill_packages_uncached(sources: Iterable[Dict[str, Any]]) -> List[SkillPackage]:
     packages: List[SkillPackage] = []
     seen: set[str] = set()
     for source in sources:

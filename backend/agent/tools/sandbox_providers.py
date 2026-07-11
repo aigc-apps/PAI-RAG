@@ -261,7 +261,13 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         self.inject_env_contract = bool(settings.get("inject_env_contract", True))
         extra_envs = settings.get("extra_envs") or {}
         self.extra_envs = {str(k): str(v) for k, v in extra_envs.items()} if isinstance(extra_envs, dict) else {}
-        self._async_lock = asyncio.Lock()
+        # Per-scope creation locks: only calls for the SAME scope_key (one
+        # conversation/session) serialize while its sandbox is created,
+        # health-checked, or re-credentialed. Different conversations never wait on
+        # each other, so the first-token path scales with concurrency instead of
+        # funnelling every sandbox operation through one global lock. Idle reaping
+        # runs OUTSIDE these locks (see _ensure_sandbox_async).
+        self._scope_locks: Dict[str, asyncio.Lock] = {}
 
     async def run_code(
         self,
@@ -325,10 +331,21 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
                 cwd=cwd or self.cwd,
             )
 
+    def _scope_lock(self, scope_key: str) -> asyncio.Lock:
+        # Lazily created; get/create has no await in between, so it's atomic on the
+        # single event-loop thread (no double-create race). Reaped with the session.
+        lock = self._scope_locks.get(scope_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._scope_locks[scope_key] = lock
+        return lock
+
     async def _ensure_sandbox_async(self, scope_key: str) -> str:
         now = time.monotonic()
-        async with self._async_lock:
-            await self._reap_idle_async(now)
+        # Reap idle sessions OUTSIDE any creation lock, so GC of one conversation's
+        # stale sandbox never delays another conversation's first token.
+        await self._reap_idle_async(now)
+        async with self._scope_lock(scope_key):
             session = self._sessions.get(scope_key)
             if session is None:
                 session = await self._new_session_async(scope_key, now)
@@ -384,12 +401,23 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         )
 
     async def _reap_idle_async(self, now: float) -> None:
-        expired = [
-            key for key, session in self._sessions.items()
-            if now - session.last_used > self.session_idle_seconds
-        ]
-        for key in expired:
-            session = self._sessions.pop(key)
+        # Runs without a global lock, so it must tolerate a concurrent ensure for the
+        # same scope. For each candidate: get -> recheck idle -> pop, with NO await in
+        # between (atomic on the event loop). An ensure that just (re)created a scope's
+        # session bumps last_used past `now`, so the recheck fails and we never reap a
+        # live sandbox out from under it.
+        for key in list(self._sessions.keys()):
+            session = self._sessions.get(key)
+            if session is None or now - session.last_used <= self.session_idle_seconds:
+                continue
+            session = self._sessions.pop(key, None)
+            if session is None:
+                continue
+            # Drop the per-scope lock too (bounded growth), but only if no coroutine
+            # is currently holding/awaiting it — an idle-reaped scope has none.
+            lock = self._scope_locks.get(key)
+            if lock is not None and not lock.locked():
+                self._scope_locks.pop(key, None)
             try:
                 await self._stop_sandbox_async(session.handle)
             except Exception as exc:
@@ -508,7 +536,7 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             return False
 
     async def _discard_sandbox_async(self, scope_key: str, handle: str) -> None:
-        async with self._async_lock:
+        async with self._scope_lock(scope_key):
             session = self._sessions.get(scope_key)
             if session is not None and str(session.handle) == str(handle):
                 self._sessions.pop(scope_key, None)

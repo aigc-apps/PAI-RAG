@@ -43,7 +43,8 @@ def test_resolver_injects_sts_keys_and_region_when_bound(monkeypatch):
 
     async def run():
         store = await _store_with_binding()
-        return await _resolve_aliyun_sandbox_env(store, _agent_config(), "u1")
+        user = await store.get_user("u1")
+        return await _resolve_aliyun_sandbox_env(_agent_config(), "u1", user)
 
     env = asyncio.run(run())
     # Three session-credential keys plus a default region hint. The legacy binding
@@ -71,7 +72,8 @@ def test_resolver_emits_available_regions_from_binding(monkeypatch):
             "service_regions": ["cn-shanghai"],
             "default_region": "cn-shanghai",
         }})
-        return await _resolve_aliyun_sandbox_env(store, _agent_config(), "u1")
+        user = await store.get_user("u1")
+        return await _resolve_aliyun_sandbox_env(_agent_config(), "u1", user)
 
     env = asyncio.run(run())
     assert env["ALIBABACLOUD_REGION_ID"] == "cn-shanghai"
@@ -85,7 +87,8 @@ def test_resolver_skips_when_feature_env_off(monkeypatch):
 
     async def run():
         store = await _store_with_binding()
-        return await _resolve_aliyun_sandbox_env(store, _agent_config(), "u1")
+        user = await store.get_user("u1")
+        return await _resolve_aliyun_sandbox_env(_agent_config(), "u1", user)
 
     assert asyncio.run(run()) == {}
 
@@ -96,7 +99,8 @@ def test_resolver_skips_when_no_binding(monkeypatch):
     async def run():
         store = InMemoryStore()
         await store.ensure_user("u1")
-        return await _resolve_aliyun_sandbox_env(store, _agent_config(), "u1")
+        user = await store.get_user("u1")
+        return await _resolve_aliyun_sandbox_env(_agent_config(), "u1", user)
 
     assert asyncio.run(run()) == {}
 
@@ -112,7 +116,8 @@ def test_resolver_is_failure_isolated(monkeypatch):
 
     async def run():
         store = await _store_with_binding()
-        return await _resolve_aliyun_sandbox_env(store, _agent_config(), "u1")
+        user = await store.get_user("u1")
+        return await _resolve_aliyun_sandbox_env(_agent_config(), "u1", user)
 
     assert asyncio.run(run()) == {}
 
@@ -122,7 +127,8 @@ def test_resolver_skips_without_base_creds(monkeypatch):
 
     async def run():
         store = await _store_with_binding()
-        return await _resolve_aliyun_sandbox_env(store, _agent_config(), "u1")
+        user = await store.get_user("u1")
+        return await _resolve_aliyun_sandbox_env(_agent_config(), "u1", user)
 
     assert asyncio.run(run()) == {}
 

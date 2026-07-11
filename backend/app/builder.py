@@ -1,5 +1,7 @@
 from __future__ import annotations
 import asyncio
+import time
+from datetime import datetime
 from typing import Iterable, List, Optional, Tuple
 
 from loguru import logger
@@ -80,6 +82,12 @@ def _input_to_turn(req_input) -> Message:
             if t:
                 text = t
     return Message(role="user", content=text)
+
+
+async def _async_none():
+    # A ready awaitable yielding None, so asyncio.gather() slots can be filled
+    # unconditionally (a skipped read contributes None instead of a branch).
+    return None
 
 
 async def build_context(
@@ -172,17 +180,24 @@ async def build_context(
         code_layer_enabled=code_layer_enabled, code_manifest=code_manifest,
     )
 
-    summary = ""
-    if conversation_id:
-        conv = await store.get_conversation(conversation_id)
-        if conv is not None and conv.summary:
-            summary = conv.summary
-            history_items = [it for it in history_items if it.seq > conv.summarized_seq]
-
-    memories: List[str] = []
     uid = authenticated_user_id or request.resolved_user_id
-    if uid:
-        memories = [m.text for m in await store.list_memories(uid, limit=MEMORY_INJECT_LIMIT)]
+
+    # Independent per-turn store reads run concurrently (each store op uses its
+    # own session/connection) instead of a serial await chain: the conversation
+    # (for summary), the user's injected memories, and the user row — loaded once
+    # here and threaded into the aliyun resolvers so they don't each re-fetch it.
+    conv, memory_rows, user = await asyncio.gather(
+        store.get_conversation(conversation_id) if conversation_id else _async_none(),
+        store.list_memories(uid, limit=MEMORY_INJECT_LIMIT) if uid else _async_none(),
+        store.get_user(uid) if uid else _async_none(),
+    )
+
+    summary = ""
+    if conv is not None and conv.summary:
+        summary = conv.summary
+        history_items = [it for it in history_items if it.seq > conv.summarized_seq]
+
+    memories: List[str] = [m.text for m in (memory_rows or [])]
     current_turn = _input_to_turn(request.input)
     skill_instructions = _active_skill_instructions(
         packages=skill_packages,
@@ -212,13 +227,19 @@ async def build_context(
     context_block = render_context_block(memories=memories, summary=summary, instructions=instructions)
 
     metadata = dict(request.metadata or {})
-    aliyun_env = await _resolve_aliyun_sandbox_env(store, agent_config, uid)
+    # Both aliyun resolvers take the already-loaded `user` (no re-fetch) and run
+    # concurrently: the sandbox-env one may AssumeRole (cached, but a cold key is a
+    # network hop), the flags one is cheap — no reason to serialize them.
+    aliyun_env, aliyun_flags = await asyncio.gather(
+        _resolve_aliyun_sandbox_env(agent_config, uid, user),
+        _resolve_aliyun_flags(agent_config, uid, user),
+    )
     if aliyun_env:
         metadata["aliyun_sandbox_env"] = aliyun_env
     # Flags for the reactive authorization card the shell tool surfaces when an
     # aliyun CLI call fails: whether authz is usable here at all, and whether this
     # user is already bound (drives "去授权" vs "重新校验/重新授权").
-    metadata.update(await _resolve_aliyun_flags(store, agent_config, uid))
+    metadata.update(aliyun_flags)
 
     history = items_to_messages(history_items)
     ctx = AgentContext(
@@ -255,7 +276,7 @@ def _aliyun_pai_enabled() -> bool:
     return bool(get_settings().aliyun_pai_enabled)
 
 
-async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
+async def _resolve_aliyun_flags(agent_config, uid, user) -> dict:
     """Cheap booleans (no AssumeRole) for the reactive authorization card.
 
     ``aliyun_authz_available`` = the PAI feature is on (ALIYUN_PAI_ENABLED) AND the
@@ -265,6 +286,8 @@ async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
     even if minting creds later fails (e.g. a deleted role) — so the card can
     offer "re-verify" instead of a fresh "authorize". Returns ``{}`` when authz
     isn't available, so the shell tool never surfaces a card that can't work.
+
+    ``user`` is the already-loaded row from build_context — no re-fetch here.
     """
     if not uid or not _aliyun_pai_enabled():
         return {}
@@ -281,7 +304,6 @@ async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
         )
         if not available:
             return {}
-        user = await store.get_user(uid)
         binding = (user.meta or {}).get("aliyun_pai") if user else None
         return {
             "aliyun_authz_available": True,
@@ -292,7 +314,26 @@ async def _resolve_aliyun_flags(store, agent_config, uid) -> dict:
         return {}
 
 
-async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
+# Per-user STS session env cache, keyed by (uid, role_arn, region). AssumeRole is
+# a network round-trip on the first-token path; the minted token lives ~1h, so we
+# reuse it until it's within _STS_REFRESH_MARGIN_S of expiry rather than calling
+# STS every turn. The sandbox provider independently re-injects fresh creds into a
+# long-lived cached sandbox before ALIBABACLOUD_SESSION_EXPIRATION, so a cache hand
+# out is always well inside the token's validity thanks to the margin.
+_STS_ENV_CACHE: dict = {}
+_STS_REFRESH_MARGIN_S = 300
+
+
+def _parse_iso_expiry(iso: str) -> Optional[float]:
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    except Exception:  # noqa: BLE001 — unparseable expiry just means "don't cache"
+        return None
+
+
+async def _resolve_aliyun_sandbox_env(agent_config, uid, user) -> dict:
     """Best-effort per-user Aliyun session env for the sandbox.
 
     If the user has authorized PAI access (a stored role binding) and the
@@ -327,7 +368,6 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
         settings = get_settings()
         if not settings.aliyun_authz_secret:
             return _skip("aliyun_authz_secret not configured")
-        user = await store.get_user(uid)
         binding = (user.meta or {}).get("aliyun_pai") if user else None
         if not binding or not binding.get("role_arn"):
             return _skip("user has no PAI authorization binding (not authorized, "
@@ -344,6 +384,13 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
             or binding.get("region")
             or aliyun_sts.configured_region(pai_settings, settings.aliyun_default_region)
         )
+        # Reuse a still-valid minted session instead of hitting STS on this turn's
+        # first-token path. Keyed by role_arn+region so a re-authorization (new role)
+        # or region change misses and re-mints.
+        cache_key = (uid, binding["role_arn"], default_region)
+        cached = _STS_ENV_CACHE.get(cache_key)
+        if cached is not None and time.time() < cached[0] - _STS_REFRESH_MARGIN_S:
+            return dict(cached[1])
         creds = await asyncio.to_thread(
             aliyun_sts.assume_role,
             binding["role_arn"],
@@ -369,6 +416,9 @@ async def _resolve_aliyun_sandbox_env(store, agent_config, uid) -> dict:
         # into a long-lived cached sandbox before this token expires.
         if creds.expiration:
             env["ALIBABACLOUD_SESSION_EXPIRATION"] = creds.expiration
+        exp_ts = _parse_iso_expiry(creds.expiration)
+        if exp_ts is not None:
+            _STS_ENV_CACHE[cache_key] = (exp_ts, dict(env))
         logger.info(
             "aliyun sandbox env: minted STS creds for user={} region={} expires={}",
             uid, default_region, creds.expiration or "?",

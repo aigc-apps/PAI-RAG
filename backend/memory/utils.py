@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import List, Tuple, Any
 
 try:
@@ -12,9 +13,13 @@ except ImportError:  # pragma: no cover - exercised only in lean envs
 TOKENIZATION_MODEL = "resources/tokenizer/Qwen3-32B-Tokenizer"
 
 
+@lru_cache(maxsize=1)
 def get_tokenizer():
     # Imported lazily so transformers (torch/accelerate/safetensors/tokenizers)
     # is pulled only when a real tokenizer is actually requested at runtime.
+    # Cached process-wide: from_pretrained parses the ~11MB tokenizer.json and
+    # is a per-call cost, so on the hot path (one AgentMessageManager per chat
+    # turn) it MUST be built once, not on every request's event loop.
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(TOKENIZATION_MODEL, local_files_only=True, use_fast=True)
     return tokenizer

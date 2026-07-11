@@ -17,6 +17,37 @@ MESSAGE_OVERHEAD_TOKENS = 4
 # ~4 chars/token heuristic used when no tokenizer is available (lean mode).
 CHARS_PER_TOKEN = 4
 
+# --- Cheap, script-aware token approximation for the budget fast-path ---------
+# BPE compresses Latin prose to ~5 chars/token but CJK to ~1.5, so a single
+# chars/N constant is unsafe on mixed CN/EN text — it under-counts Chinese ~2.5×,
+# the dangerous direction for a budget guard. We split the two scripts: the CJK
+# char count is derived from the UTF-8 byte/char delta (a 3-byte CJK char adds +2
+# bytes over its 1 char), so the whole estimate is C-level len()/encode() with no
+# Python char loop (~600× cheaper than tokenizing a full context). Divisors sit
+# BELOW the measured chars/token so the estimate biases high: an "under budget"
+# verdict is trustworthy, and the exact tokenizer only runs when this lands near
+# the limit. Calibrate against your own corpus with the real tokenizer offline.
+CJK_CHARS_PER_TOKEN = 1.5
+OTHER_CHARS_PER_TOKEN = 2.5
+# Skip exact tokenization while the cheap over-estimate is under this fraction of
+# the budget; the margin absorbs the estimator's slack on dense JSON/code.
+BUDGET_GATE_RATIO = 0.8
+
+
+def approx_tokens(text: str) -> int:
+    """Fast, conservative (over-counting) token estimate for the budget gate.
+
+    Not exact — never use it to *bill* or to make the final truncation cut; it is
+    only the "am I comfortably under budget?" pre-check that lets the common,
+    well-under-budget turn skip the exact tokenizer entirely (see notes above)."""
+    if not text:
+        return 0
+    n_chars = len(text)
+    n_bytes = len(text.encode("utf-8"))
+    cjk = min((n_bytes - n_chars) / 2, n_chars)  # 3-byte CJK char ⇒ +2 bytes/char
+    other = n_chars - cjk
+    return int(cjk / CJK_CHARS_PER_TOKEN + other / OTHER_CHARS_PER_TOKEN)
+
 
 def _estimate_tokens(text: str, tokenizer) -> int:
     if not text:
@@ -72,12 +103,50 @@ class AgentMessageManager:
         except Exception:
             logger.info("Tokenizer unavailable; using length-based token estimate.")
             self.tokenizer = None
+        # Per-manager (i.e. per-turn — one manager is built per request) cache of
+        # exact per-message counts. fit() re-runs on every agent step but history
+        # messages are immutable, so without this a turn tokenizes the whole history
+        # once per step instead of once. Keyed by (content, tool-calls signature).
+        self._token_cache: dict = {}
         logger.info(
             f"AgentMessageManager initialized: context_window={context_window}, "
             f"max_output={max_output_tokens}, token_budget={self.token_budget}"
         )
 
+    @staticmethod
+    def _msg_text(msg: dict) -> str:
+        content = msg.get("content") or ""
+        if isinstance(content, list):
+            return "".join(
+                item.get("text", "") for item in content
+                if isinstance(item, dict) and item.get("type") == "text"
+            )
+        return content if isinstance(content, str) else ""
+
+    def _msg_cache_key(self, msg: dict):
+        tcs = msg.get("tool_calls")
+        if tcs:
+            tc_sig = tuple(
+                (tc.get("id", ""), tc.get("function", {}).get("name", ""),
+                 tc.get("function", {}).get("arguments", ""))
+                for tc in tcs if isinstance(tc, dict)
+            )
+        else:
+            tc_sig = ()
+        # to_wire() passes the same content str object through each step, so hashing
+        # it as a key is itself cached on the str — the lookup is cheap.
+        return (self._msg_text(msg), tc_sig)
+
     def estimate_msg_tokens(self, msg: dict) -> int:
+        key = self._msg_cache_key(msg)
+        hit = self._token_cache.get(key)
+        if hit is not None:
+            return hit
+        tokens = self._estimate_msg_tokens_uncached(msg)
+        self._token_cache[key] = tokens
+        return tokens
+
+    def _estimate_msg_tokens_uncached(self, msg: dict) -> int:
         tokens = MESSAGE_OVERHEAD_TOKENS
         content = msg.get("content") or ""
         if isinstance(content, str):
@@ -95,8 +164,23 @@ class AgentMessageManager:
     def estimate_messages_tokens(self, messages: List[dict]) -> int:
         return sum(self.estimate_msg_tokens(m) for m in messages)
 
+    def _approx_msg_tokens(self, msg: dict) -> int:
+        text = self._msg_text(msg)
+        for tc in (msg.get("tool_calls") or []):
+            if isinstance(tc, dict):
+                text += tc.get("function", {}).get("arguments", "") or ""
+        return MESSAGE_OVERHEAD_TOKENS + approx_tokens(text)
+
+    def approx_messages_tokens(self, messages: List[dict]) -> int:
+        return sum(self._approx_msg_tokens(m) for m in messages)
+
     def cap_tool_result(self, content: str) -> str:
         if not content:
+            return content
+        # A token spans >= 1 character, so token_count <= len(content). When the raw
+        # length is already under the cap the result provably fits — skip the
+        # tokenizer. This is the common case for ordinary (small) tool outputs.
+        if len(content) <= self.max_tool_result_tokens:
             return content
         tokens = _estimate_tokens(content, self.tokenizer)
         if tokens <= self.max_tool_result_tokens:
@@ -293,6 +377,13 @@ class AgentMessageManager:
         return saved
 
     def fit_to_budget(self, messages: List[dict]) -> List[dict]:
+        # Fast path: a cheap, script-aware over-estimate. When it's comfortably under
+        # budget — the overwhelming common case — skip exact tokenization entirely.
+        # fit() runs on every agent step, and the exact pass is a synchronous,
+        # event-loop-blocking cost that scales with the whole context; the gate keeps
+        # it off the loop except for turns genuinely approaching the window.
+        if self.approx_messages_tokens(messages) < BUDGET_GATE_RATIO * self.token_budget:
+            return messages
         total_tokens = self.estimate_messages_tokens(messages)
         logger.info(
             f"Context check: {total_tokens}/{self.token_budget} tokens "
