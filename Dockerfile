@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# PAI-RAG — combined image (Frontend + Backend)
+# PAI-Loop — combined image (Frontend + Backend)
 #
 # One container serves the whole app:
 #   * nginx serves the built SPA and reverse-proxies /v1 -> uvicorn (loopback)
 #   * uvicorn runs the lean agent service (app.lean_main:app) on 127.0.0.1:8000
 #
-# Build:   docker build -t pai-rag .
+# Build:   docker build -t pai-loop .
 # Run:     docker run -p 8080:80 \
 #            -e DASHSCOPE_API_KEY=... \
 #            -v $(pwd)/backend/data:/app/backend/data \   # optional: persist db/config/skills
-#            pai-rag
+#            pai-loop
 # =============================================================================
 
 # --------------------------------------------------------------------------- #

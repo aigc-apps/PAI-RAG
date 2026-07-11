@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PAI-RAG sandbox startup validation.
+# PAI-Loop sandbox startup validation.
 #
 # Runs as the container ENTRYPOINT. Verifies the three contract mounts
 # (/mnt/system, /mnt/skills, /mnt/user) are present and readable by the

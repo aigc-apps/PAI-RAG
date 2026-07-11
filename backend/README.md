@@ -1,6 +1,6 @@
 # backend — Lean Agent Service (the base)
 
-This is the **clean base** for PAI-RAG's agent core: a lean, OpenAI-Responses-compatible
+This is the **clean base** for PAI-Loop's agent core: a lean, OpenAI-Responses-compatible
 agent service with **zero heavy ML/RAG dependencies** (no `llama_index`, `torch`,
 `transformers`, `chromadb`, …). It was extracted from the legacy pairag backend
 (see [docs/MIGRATION.md](docs/MIGRATION.md) for the history).

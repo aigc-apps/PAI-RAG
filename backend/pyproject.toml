@@ -6,7 +6,7 @@ dev = [
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Lean agent service — the clean base for PAI-RAG's agent core."
+description = "Lean agent service — the clean base for PAI-Loop's agent core."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",

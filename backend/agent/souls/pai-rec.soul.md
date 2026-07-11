@@ -1,7 +1,7 @@
 # PAI 智能助手 — Persona (sample SOUL)
 
 > **What this is.** A sample, domain-specialized persona for the PAI-Rec product
-> family. It is a *template*, not wired code: PAI-RAG composes an agent's persona
+> family. It is a *template*, not wired code: PAI-Loop composes an agent's persona
 > from the `Soul` model (`backend/agent/soul.py`) plus the per-agent override
 > (`AgentPersona` / `instructions` in `config.yaml`). Apply this file by copying
 > its sections into an agent's **Persona** card in Settings (or the `persona:` /

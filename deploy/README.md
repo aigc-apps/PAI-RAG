@@ -8,11 +8,11 @@ nginx serves the built SPA and reverse-proxies `/v1` to the uvicorn backend
 
 ```bash
 # from the repo root
-docker build -t pai-rag .
+docker build -t pai-loop .
 docker run --rm -p 8080:80 \
   -e DASHSCOPE_API_KEY=sk-...            # whichever provider keys config.yaml references \
   -v "$(pwd)/backend/data:/app/backend/data" \   # optional: persist sqlite db / config / skills
-  pai-rag
+  pai-loop
 # open http://localhost:8080
 ```
 
@@ -41,6 +41,6 @@ The Docker workflow needs these repository secrets:
 | Secret | Example | Purpose |
 | --- | --- | --- |
 | `ACR_REGISTRY` | `registry.cn-hangzhou.aliyuncs.com` | ACR host |
-| `ACR_NAMESPACE` | `pai-rag` | namespace before the repo name |
+| `ACR_NAMESPACE` | `pai-loop` | namespace before the repo name |
 | `ACR_USERNAME` | — | ACR access username |
 | `ACR_PASSWORD` | — | ACR access password / token |

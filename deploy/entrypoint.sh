@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PAI-RAG combined image entrypoint: run uvicorn (backend) + nginx (SPA/proxy)
+# PAI-Loop combined image entrypoint: run uvicorn (backend) + nginx (SPA/proxy)
 # in one container and tie their lifecycles together so the orchestrator can
 # restart the whole thing if either half dies.
 set -euo pipefail

@@ -1,12 +1,12 @@
 <div align="center">
 
-# PAI-RAG
+# PAI-Loop
 
 ### An agent core you can actually operate — a lean, OpenAI-Responses-compatible agent service with a web console.
 
 </div>
 
-PAI-RAG is a **self-hostable agent platform**: a server-side agent that runs a full
+PAI-Loop is a **self-hostable agent platform**: a server-side agent that runs a full
 tool loop and speaks the OpenAI **Responses** wire format, paired with a React
 console for authoring agents and operating the deployment. The backend carries
 **zero heavy ML/RAG dependencies** (no `llama_index` / `torch` / `transformers`)
@@ -68,11 +68,11 @@ A single combined image serves the whole app: nginx serves the built SPA and
 reverse-proxies `/v1` to uvicorn in the same container.
 
 ```bash
-docker build -t pai-rag .
+docker build -t pai-loop .
 docker run --rm -p 8080:80 \
   -e DASHSCOPE_API_KEY=sk-... \
   -v "$(pwd)/backend/data:/app/backend/data" \
-  pai-rag
+  pai-loop
 # open http://localhost:8080
 ```
 

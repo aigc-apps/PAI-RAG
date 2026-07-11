@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# PAI-RAG AgentRun sandbox image
+# PAI-Loop AgentRun sandbox image
 #
 # Implements the runtime contract documented in
 #   docs/design/skill_install_mount_dependencies.md

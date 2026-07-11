@@ -8,7 +8,7 @@ name: Docker
 #   ACR_USERNAME   ACR access username
 #   ACR_PASSWORD   ACR access password / token
 #
-# Image is pushed as: ${ACR_REGISTRY}/${ACR_NAMESPACE}/pai-rag:<tag>
+# Image is pushed as: ${ACR_REGISTRY}/${ACR_NAMESPACE}/pai-loop:<tag>
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/pai-rag
+          images: ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/pai-loop
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}

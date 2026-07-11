@@ -1,4 +1,4 @@
-# PAI-RAG AgentRun Sandbox Image
+# PAI-Loop AgentRun Sandbox Image
 
 This directory builds the **sandbox image** — the AgentRun template that runs
 inside the sandbox (Function Compute) and fulfills the runtime contract so the
