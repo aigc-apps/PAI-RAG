@@ -6,14 +6,11 @@ import { useComposer } from "../store/composer";
 import { useResponsesChat } from "../hooks/useResponsesChat";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
-import { ModelSelector } from "./ModelSelector";
 import { AgentSelector } from "./AgentSelector";
 import { ThemeToggle } from "./ThemeToggle";
 import { BrandMark } from "./Sidebar";
 
 export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
-  const model = useChatStore((s) => s.model);
-  const setModel = useChatStore((s) => s.setModel);
   const messages = useChatStore((s) => activeRuntime(s)?.messages ?? EMPTY_MESSAGES);
   const conversations = useConversationsStore((s) => s.items);
   const selectedId = useConversationsStore((s) => s.selectedId);
@@ -69,7 +66,6 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
           )}
         </div>
         <AgentSelector />
-        <ModelSelector model={model} onChange={setModel} />
         <ThemeToggle />
       </div>
 

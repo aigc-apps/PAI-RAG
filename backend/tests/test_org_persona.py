@@ -30,8 +30,12 @@ def test_default_instructions_survives_save_load(tmp_path):
 def test_merge_default_overlays_default_instructions():
     merged = _merge_default({"default_instructions": "You are a billing specialist."})
     assert merged.default_instructions == "You are a billing specialist."
-    # A config that doesn't set it keeps the blank default (=> built-in fallback).
-    assert _merge_default({}).default_instructions == ""
+    # A config that doesn't set it inherits the shipped, non-blank template.
+    assert _merge_default({}).default_instructions == DEFAULT_INSTRUCTIONS
+    # A stored BLANK value (older configs persisted "") also inherits the template
+    # rather than blanking the "Default Persona" box.
+    assert _merge_default({"default_instructions": ""}).default_instructions == DEFAULT_INSTRUCTIONS
+    assert _merge_default({"default_instructions": "   "}).default_instructions == DEFAULT_INSTRUCTIONS
 
 
 # --------------------------------------------------------------------------- #

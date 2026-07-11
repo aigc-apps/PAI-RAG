@@ -269,6 +269,8 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={codeBrowsingDoc} onBack={vi.fn()} />);
 
+    // The manifest lives in the Tools dialog (it belongs with the code-sandbox tool).
+    await user.click(screen.getByRole("button", { name: "编辑工具" }));
     // Section is visible once this agent has activated code browsing.
     expect(screen.getByText("代码库配置单")).toBeInTheDocument();
 
@@ -283,19 +285,20 @@ describe("SettingsView", () => {
     expect(saved.agents[0].code_manifest).toBe("- repo-a — the API server");
   });
 
-  it("edits the agent Instructions (its system prompt) and commits on blur", async () => {
+  it("edits the agent Persona in a dialog and commits on 保存", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
     useAgentConfigStore.setState({ save });
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    // The Instructions editor is always present in the Agents tab.
+    // The overview shows a read-only Persona preview; editing happens in a dialog.
+    await user.click(screen.getByRole("button", { name: "编辑 Persona" }));
     const box = screen.getByPlaceholderText("Leave blank to use the built-in default persona");
     await user.type(box, "You are a code archaeologist.");
-    // No save while typing (local state); commit fires on blur.
+    // Local state until the user commits — no save while typing.
     expect(save).not.toHaveBeenCalled();
-    await user.tab();
+    await user.click(screen.getByRole("button", { name: "保存" }));
 
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
@@ -336,6 +339,64 @@ describe("SettingsView", () => {
     expect(saved.agents[1].instructions).toBe("House voice.");
   });
 
+  it("deletes an agent (two-step confirm) and reassigns the default", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    // Two agents, with the *selected* (main) one being the deployment default.
+    const twoAgents: AgentConfigDocument = {
+      ...baseDoc,
+      default_agent: "main",
+      agents: [
+        baseDoc.agents[0],
+        { ...baseDoc.agents[0], id: "agent-2", name: "Support" },
+      ],
+    };
+    render(<SettingsView doc={twoAgents} onBack={vi.fn()} />);
+
+    // First click arms the confirm; nothing persisted yet.
+    await user.click(screen.getByRole("button", { name: /删除/ }));
+    expect(save).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "确认删除" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents).toHaveLength(1);
+    expect(saved.agents[0].id).toBe("agent-2");
+    // The default followed the survivor.
+    expect(saved.default_agent).toBe("agent-2");
+  });
+
+  it("disables delete for the only agent", async () => {
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /删除/ })).toBeDisabled();
+  });
+
+  it("sets a non-default agent as the deployment default", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    // main is default; select the non-default "Support" agent, then promote it.
+    const twoAgents: AgentConfigDocument = {
+      ...baseDoc,
+      default_agent: "main",
+      agents: [
+        baseDoc.agents[0],
+        { ...baseDoc.agents[0], id: "agent-2", name: "Support" },
+      ],
+    };
+    render(<SettingsView doc={twoAgents} onBack={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText("Select agent"), "agent-2");
+    await user.click(screen.getByRole("button", { name: "设为默认" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.default_agent).toBe("agent-2");
+  });
+
   it("shows the inherited default and switches an agent to an override model", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
@@ -365,6 +426,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={docWithModels} onBack={vi.fn()} />);
 
+    // Basic info (name + model) is edited inline — no dialog.
     // Blank agent model → chip reports it inherits, and the inherit option names
     // the resolved runtime default (from the llm.default provider, not the catalog).
     expect(screen.getByText("Using system default")).toBeInTheDocument();
@@ -418,6 +480,8 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
+    // Knowledge scoping lives in a dialog opened from the overview preview card.
+    await user.click(screen.getByRole("button", { name: "编辑知识库" }));
     // Loaded async → the KB appears once the promise resolves.
     const handbook = await screen.findByText("Handbook");
     await user.click(handbook);

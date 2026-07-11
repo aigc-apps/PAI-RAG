@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from agent.custom_skills import _normalize_skill_id, discover_skill_packages, skill_sources
 from agent.integrations import aliyun_sts
+from agent.soul import DEFAULT_INSTRUCTIONS
 
 
 Permission = Literal["disabled", "ask", "auto", "admin"]
@@ -186,6 +187,10 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
         root="./data/skills",
         mount={"mount_root": "/mnt/skills", "nas": {"server_addr": "", "remote_path_prefix": "skills", "read_only": True}},
     ),
+    # The admin-editable "Default Persona" template new agents copy at creation.
+    # Seeded with the built-in persona so Control Room shows real, editable content
+    # (not a blank box) out of the box.
+    default_instructions=DEFAULT_INSTRUCTIONS,
     default_agent="main",
     agents=[
         AgentProfile(
@@ -193,7 +198,10 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             name="MiniAgent",
             description="General-purpose assistant using the default model and safe core tools.",
             model="",
-            instructions="",
+            # Shipped with the built-in persona so the out-of-box agent has a real,
+            # visible persona rather than a blank editor (runtime would fall back to
+            # DEFAULT_INSTRUCTIONS anyway, but the UI should show its value).
+            instructions=DEFAULT_INSTRUCTIONS,
             tools=AgentToolsConfig(
                 include=[
                     "current_datetime",
@@ -394,7 +402,11 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
     if isinstance(kb_raw, dict) and isinstance(kb_raw.get("vectordb"), dict):
         # Overlay onto the defaults so fields added later still get sane defaults.
         merged["knowledgebase"]["vectordb"].update(kb_raw["vectordb"])
-    if isinstance(raw.get("default_instructions"), str):
+    # A stored default_instructions only overrides the built-in when it's non-blank.
+    # Older configs persisted "" (and the frontend used to save it), which would
+    # otherwise blank the "Default Persona" box; a blank value now inherits the
+    # shipped default so that template is never empty.
+    if isinstance(raw.get("default_instructions"), str) and raw["default_instructions"].strip():
         merged["default_instructions"] = raw["default_instructions"]
 
     for collection in ("agents", "providers", "capabilities"):

@@ -7,11 +7,13 @@ import {
   GitBranch,
   Globe2,
   Loader2,
+  Pencil,
   Plus,
-  ShieldCheck,
   Settings2,
+  ShieldCheck,
   Sparkles,
   Terminal,
+  Trash2,
   Upload,
   UserRound,
   Wrench,
@@ -478,46 +480,215 @@ function Header({ title, body }: { title: string; body: string }) {
   );
 }
 
-/** Per-agent Instructions editor — the agent's full system prompt (freeform
- * Markdown). This IS the agent's persona/base prompt; tools and skills are
- * appended automatically. Local state (keyed on agent id by the parent) commits
- * on blur, avoiding a whole-document PUT per keystroke. */
-function InstructionsSection({
+/** Shared modal shell for the per-agent editors, matching the app's existing
+ * dialogs (backdrop + header + X). `wide` widens it for the persona editor. */
+function EditorDialog({
+  title,
+  onClose,
+  wide,
+  footer,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  wide?: boolean;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4"
+      onMouseDown={(e) => {
+        // Backdrop click (not a drag ending outside) dismisses.
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className={cn(
+          "flex max-h-[85vh] w-full flex-col rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] shadow-xl",
+          wide ? "max-w-3xl" : "max-w-xl"
+        )}
+      >
+        <div className="flex h-11 shrink-0 items-center border-b border-[var(--border)] px-4">
+          <div className="text-sm font-semibold">{title}</div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="ml-auto rounded-[var(--radius-sm)] p-1 text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+        {footer && (
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--border)] px-4 py-3">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Persona editor — the agent's full system prompt (freeform Markdown). This IS
+ * the agent's persona/base prompt; tools and skills are appended automatically.
+ * Local state; "保存" commits via the whole-doc PUT and closes, X/backdrop discards. */
+function PersonaDialog({
   doc,
   agent,
+  onClose,
   onSave,
 }: {
   doc: AgentConfigDocument;
   agent: AgentProfile;
+  onClose: () => void;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
   const [text, setText] = useState<string>(agent.instructions ?? "");
+  const dirty = text !== (agent.instructions ?? "");
 
-  const commit = () => {
-    if (text !== (agent.instructions ?? "")) {
-      void onSave(applyAgentPatch(doc, agent.id, { instructions: text }));
-    }
+  const save = () => {
+    if (dirty) void onSave(applyAgentPatch(doc, agent.id, { instructions: text }));
+    onClose();
   };
 
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="mb-1 flex items-center gap-2">
-        <UserRound className="h-4 w-4 text-[var(--text-muted)]" />
-        <h3 className="text-sm font-semibold">Instructions</h3>
-      </div>
+    <EditorDialog
+      title={`Persona — ${agent.name}`}
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty}
+            className="rounded-[var(--radius-sm)] bg-[var(--accent,var(--text))] px-3 py-1.5 text-sm font-medium text-[var(--bg)] disabled:opacity-50"
+          >
+            保存
+          </button>
+        </>
+      }
+    >
       <p className="mb-3 text-xs text-[var(--text-muted)]">
         The agent's full system prompt (Markdown). This is its persona — tools and
         skills are appended automatically. Leave blank to use the built-in default.
       </p>
       <textarea
+        autoFocus
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onBlur={commit}
-        rows={14}
+        rows={20}
         placeholder="Leave blank to use the built-in default persona"
-        className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-6"
+        className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs leading-6"
       />
+    </EditorDialog>
+  );
+}
+
+/** The tool-toggle grid, reused inside ToolsDialog. Toggles persist immediately. */
+function ToolsGrid({
+  tools,
+  enabled,
+  loading,
+  onToggle,
+}: {
+  tools: ReturnType<typeof systemTools>;
+  enabled: Set<string>;
+  loading: boolean;
+  onToggle: (toolId: string) => void;
+}) {
+  return (
+    <div className="grid gap-2 md:grid-cols-2">
+      {tools.map((tool) => (
+        <button
+          key={tool.id}
+          type="button"
+          disabled={loading || !tool.available}
+          onClick={() => onToggle(tool.id)}
+          className={cn(
+            "rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm",
+            enabled.has(tool.id)
+              ? "border-[var(--accent)] bg-[var(--surface-2)] text-[var(--text)]"
+              : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]",
+            !tool.available && "opacity-55"
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-xs">{tool.name}</span>
+            <span className={cn("text-xs", statusClass(tool.status))}>{tool.status}</span>
+          </div>
+          <div className="mt-1 line-clamp-2 text-xs text-[var(--text-faint)]">
+            {tool.description}
+          </div>
+        </button>
+      ))}
     </div>
+  );
+}
+
+/** The skill-toggle grid, reused inside SkillsDialog. Toggles persist immediately. */
+function SkillsGrid({
+  doc,
+  agent,
+  skills,
+  enabled,
+  loading,
+  onToggle,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  skills: CapabilityConfig[];
+  enabled: Set<string>;
+  loading: boolean;
+  onToggle: (skillId: string) => void;
+}) {
+  return (
+    <>
+      <div className="grid gap-2 md:grid-cols-2">
+        {skills.map((skill) => (
+          <button
+            key={skill.id}
+            type="button"
+            disabled={loading || skill.status !== "ready"}
+            onClick={() => onToggle(skill.id)}
+            className={cn(
+              "rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm",
+              enabled.has(skill.id)
+                ? "border-[var(--accent)] bg-[var(--surface-2)] text-[var(--text)]"
+                : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]",
+              skill.status !== "ready" && "opacity-55"
+            )}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span>{skill.name}</span>
+              <span className={cn("text-xs", statusClass(skill.status))}>
+                {statusLabel(skill)}
+              </span>
+            </div>
+            <div className="mt-1 text-xs text-[var(--text-faint)]">
+              {skill.dependencies.length ? `Requires ${skill.dependencies.join(", ")}` : "No tool dependency"}
+            </div>
+          </button>
+        ))}
+      </div>
+      {skills.length === 0 && (
+        <p className="text-xs text-[var(--text-faint)]">No skills installed yet.</p>
+      )}
+      {skillSummary(doc, agent).length > 0 && (
+        <div className="mt-3 text-xs text-[var(--text-faint)]">
+          Enabled: {skillSummary(doc, agent).map((skill) => skill.name).join(", ")}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -646,10 +817,13 @@ function KnowledgeSection({
   doc,
   agent,
   onSave,
+  bare,
 }: {
   doc: AgentConfigDocument;
   agent: AgentProfile;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+  /** Render just the description + checklist (no card/header) for use in a dialog. */
+  bare?: boolean;
 }) {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loadError, setLoadError] = useState(false);
@@ -676,12 +850,8 @@ function KnowledgeSection({
     );
   };
 
-  return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="mb-1 flex items-center gap-2">
-        <Database className="h-4 w-4 text-[var(--text-muted)]" />
-        <h3 className="text-sm font-semibold">Knowledge</h3>
-      </div>
+  const inner = (
+    <>
       <p className="mb-3 text-xs text-[var(--text-muted)]">
         {scoped
           ? "This agent defaults its knowledge search to the bases checked below."
@@ -709,6 +879,233 @@ function KnowledgeSection({
           ))}
         </div>
       )}
+    </>
+  );
+
+  if (bare) return inner;
+
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <Database className="h-4 w-4 text-[var(--text-muted)]" />
+        <h3 className="text-sm font-semibold">Knowledge</h3>
+      </div>
+      {inner}
+    </div>
+  );
+}
+
+/** Tools editor dialog: the per-agent tool grid + (when code browsing is on) the
+ * code-repository manifest, which belongs with tools. Toggles persist immediately. */
+function ToolsDialog({
+  doc,
+  agent,
+  tools,
+  enabled,
+  loading,
+  onToggle,
+  onSave,
+  onClose,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  tools: ReturnType<typeof systemTools>;
+  enabled: Set<string>;
+  loading: boolean;
+  onToggle: (toolId: string) => void;
+  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <EditorDialog title={`Tools — ${agent.name}`} onClose={onClose} wide>
+      <ToolsGrid tools={tools} enabled={enabled} loading={loading} onToggle={onToggle} />
+      {enabled.has("code_sandbox") && (
+        <div className="mt-4">
+          <CodeManifestSection doc={doc} agent={agent} loading={loading} onSave={onSave} />
+        </div>
+      )}
+    </EditorDialog>
+  );
+}
+
+/** Skills editor dialog: the per-agent skill grid. Toggles persist immediately. */
+function SkillsDialog({
+  doc,
+  agent,
+  skills,
+  enabled,
+  loading,
+  onToggle,
+  onClose,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  skills: CapabilityConfig[];
+  enabled: Set<string>;
+  loading: boolean;
+  onToggle: (skillId: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <EditorDialog title={`Skills — ${agent.name}`} onClose={onClose} wide>
+      <SkillsGrid
+        doc={doc}
+        agent={agent}
+        skills={skills}
+        enabled={enabled}
+        loading={loading}
+        onToggle={onToggle}
+      />
+    </EditorDialog>
+  );
+}
+
+/** Knowledge scoping dialog: the per-agent KB checklist. Toggles persist immediately. */
+function KnowledgeDialog({
+  doc,
+  agent,
+  onSave,
+  onClose,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <EditorDialog title={`Knowledge — ${agent.name}`} onClose={onClose}>
+      <KnowledgeSection doc={doc} agent={agent} onSave={onSave} bare />
+    </EditorDialog>
+  );
+}
+
+/** A compact summary tile in the agent overview: icon + label, the current value,
+ * and a "✎ 编辑" affordance that opens the matching editor dialog. */
+/** A read-only overview tile: icon + title + optional badge, an explicit "编辑"
+ * button (nothing is editable until it's clicked), and a preview body. */
+function PreviewCard({
+  icon,
+  title,
+  badge,
+  editLabel,
+  onEdit,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  badge?: ReactNode;
+  editLabel: string;
+  onEdit: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="mb-2 flex items-center gap-2 text-[var(--text-muted)]">
+        {icon}
+        <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
+        {badge}
+        <button
+          type="button"
+          aria-label={editLabel}
+          onClick={onEdit}
+          className="ml-auto inline-flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--accent,var(--text))] hover:bg-[var(--surface-2)]"
+        >
+          <Pencil className="h-3 w-3" />
+          编辑
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Comma-joined preview of enabled names, truncated to a few with a "+N" tail. */
+function previewNames(names: string[], empty: string): string {
+  if (names.length === 0) return empty;
+  const shown = names.slice(0, 4);
+  const rest = names.length - shown.length;
+  return shown.join(", ") + (rest > 0 ? ` +${rest}` : "");
+}
+
+/** Basic info — the agent's Name and Model, edited inline (no dialog). It's light
+ * enough to sit on the page: Name is local and commits on blur; Model commits on
+ * change. Parent keys this on agent.id so local state resets on switch. */
+function BasicInfoSection({
+  doc,
+  agent,
+  defaultModel,
+  modelOptions,
+  inherits,
+  isDefault,
+  onSave,
+}: {
+  doc: AgentConfigDocument;
+  agent: AgentProfile;
+  defaultModel: string;
+  modelOptions: string[];
+  inherits: boolean;
+  isDefault: boolean;
+  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
+}) {
+  const [name, setName] = useState(agent.name);
+  const commitName = () => {
+    if (name !== agent.name) void onSave(applyAgentPatch(doc, agent.id, { name }));
+  };
+
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="mb-3 flex items-center gap-2 text-[var(--text-muted)]">
+        <Settings2 className="h-4 w-4" />
+        <h3 className="text-sm font-semibold text-[var(--text)]">基础信息</h3>
+        {isDefault && (
+          <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
+            默认 agent
+          </span>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Name</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={commitName}
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm font-semibold"
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
+            Model
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                inherits
+                  ? "bg-[var(--surface-2)] text-[var(--text-muted)]"
+                  : "bg-[var(--accent-soft,var(--surface-2))] text-[var(--accent,var(--text))]"
+              )}
+            >
+              {inherits ? "Using system default" : "Override"}
+            </span>
+          </span>
+          <select
+            aria-label="Model"
+            value={agent.model}
+            onChange={(event) =>
+              void onSave(applyAgentPatch(doc, agent.id, { model: event.target.value }))
+            }
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs"
+          >
+            <option value="">
+              {defaultModel ? `Inherit (uses ${defaultModel})` : "Inherit (deployment default)"}
+            </option>
+            {modelOptions.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   );
 }
@@ -761,189 +1158,259 @@ function AgentsPanel({
       ? [agent.model, ...chatModels]
       : chatModels;
   const inherits = !agent.model;
+
+  // Which focused editor dialog is open, and the two-step delete confirm. Both
+  // reset when the selected agent changes.
+  const [dialog, setDialog] = useState<
+    null | "persona" | "tools" | "skills" | "knowledge"
+  >(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    setDialog(null);
+    setConfirmDelete(false);
+  }, [agent.id]);
+
+  // Knowledge bases are fetched once so the overview can preview scoped KB *names*
+  // (not just a count). The dialog fetches its own copy for the live checklist.
+  const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listKnowledgeBases()
+      .then((list) => alive && setKbs(list))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const isDefault = doc.default_agent === agent.id;
+  const canDelete = agents.length > 1;
+  const persona = (agent.instructions ?? "").trim();
+
+  // Enabled names, for the read-only preview lines on each card.
+  const kbCount = agent.knowledge?.kb_ids?.length ?? 0;
+  const scopedKb = kbCount > 0;
+  const kbIdSet = new Set(agent.knowledge?.kb_ids ?? []);
+  const kbNames = kbs.filter((k) => kbIdSet.has(k.id)).map((k) => k.name);
+  const toolNames = tools.filter((t) => enabledTools.has(t.id)).map((t) => t.name);
+  const skillNames = skills.filter((s) => enabledSkills.has(s.id)).map((s) => s.name);
+
+  // Deletion is a whole-doc PUT with one fewer agent. If the removed agent was the
+  // deployment default, hand default to the first survivor; then reselect it.
+  const deleteAgent = () => {
+    const remaining = doc.agents.filter((a) => a.id !== agent.id);
+    if (remaining.length === 0) return;
+    const nextDefault =
+      doc.default_agent === agent.id ? remaining[0].id : doc.default_agent;
+    void onSave(
+      { ...doc, agents: remaining, default_agent: nextDefault },
+      "Agent deleted"
+    );
+    setConfirmDelete(false);
+    setSelectedAgentId(remaining[0].id);
+  };
+  const makeDefault = () =>
+    void onSave({ ...doc, default_agent: agent.id }, "Default agent set");
+
   return (
     <>
-      <Header
-        title="Agents"
-        body="Agent Studio — shape an individual agent. Its persona, tools, and skills are chosen here; the backends they draw on are wired once in Control Room."
-      />
-      <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-2">
+      {/* Top toolbar: the agent switcher lives here alone, so it's the only thing
+          occupying the top; the full-width, read-only config sits below it. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <UserRound className="h-4 w-4 text-[var(--text-muted)]" />
+        <select
+          aria-label="Select agent"
+          value={selectedAgentId}
+          onChange={(event) => setSelectedAgentId(event.target.value)}
+          className="min-w-[200px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium"
+        >
           {agents.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setSelectedAgentId(item.id)}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm",
-                selectedAgentId === item.id
-                  ? "bg-[var(--surface-2)] text-[var(--text)]"
-                  : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-              )}
-            >
-              <UserRound className="h-4 w-4" />
-              <span>{item.name}</span>
-              {doc.default_agent === item.id && (
-                <span className="ml-auto text-xs text-[var(--text-faint)]">default</span>
-              )}
-            </button>
+            <option key={item.id} value={item.id}>
+              {item.name}
+              {doc.default_agent === item.id ? " · 默认" : ""}
+            </option>
           ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => {
+            const existing = new Set(agents.map((a) => a.id));
+            let n = agents.length + 1;
+            let id = `agent-${n}`;
+            while (existing.has(id)) id = `agent-${++n}`;
+            const created = newAgentProfile(doc, id, `New agent ${n}`);
+            void onSave(
+              { ...doc, agents: [...doc.agents, created] },
+              "Agent created"
+            );
+            setSelectedAgentId(id);
+          }}
+          className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+        >
+          <Plus className="h-4 w-4" />
+          New agent
+        </button>
+        <div className="flex-1" />
+        {!isDefault && (
           <button
             type="button"
-            onClick={() => {
-              const existing = new Set(agents.map((a) => a.id));
-              let n = agents.length + 1;
-              let id = `agent-${n}`;
-              while (existing.has(id)) id = `agent-${++n}`;
-              const created = newAgentProfile(doc, id, `New agent ${n}`);
-              void onSave(
-                { ...doc, agents: [...doc.agents, created] },
-                "Agent created"
-              );
-              setSelectedAgentId(id);
-            }}
-            className="mt-1 flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+            onClick={makeDefault}
+            className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
           >
-            <Plus className="h-4 w-4" />
-            <span>New agent</span>
+            设为默认
           </button>
-        </div>
+        )}
+        {confirmDelete ? (
+          <>
+            <button
+              type="button"
+              onClick={deleteAgent}
+              className="rounded-[var(--radius-sm)] border border-[var(--danger,#dc2626)] px-3 py-2 text-sm font-medium text-[var(--danger,#dc2626)] hover:bg-[var(--surface-2)]"
+            >
+              确认删除
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            >
+              取消
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            disabled={!canDelete}
+            title={canDelete ? "删除此 agent" : "至少保留一个 agent"}
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            删除
+          </button>
+        )}
+      </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-            <div className="mb-4 flex items-center gap-2">
-              <Settings2 className="h-4 w-4 text-[var(--text-muted)]" />
-              <h3 className="text-sm font-semibold">Profile</h3>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Name</span>
-                <input
-                  value={agent.name}
-                  onChange={(event) =>
-                    void onSave(applyAgentPatch(doc, agent.id, { name: event.target.value }))
-                  }
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
-                  Model
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                      inherits
-                        ? "bg-[var(--surface-2)] text-[var(--text-muted)]"
-                        : "bg-[var(--accent-soft,var(--surface-2))] text-[var(--accent,var(--text))]"
-                    )}
-                  >
-                    {inherits ? "Using system default" : "Override"}
-                  </span>
-                </span>
-                <select
-                  aria-label="Model"
-                  value={agent.model}
-                  onChange={(event) =>
-                    void onSave(applyAgentPatch(doc, agent.id, { model: event.target.value }))
-                  }
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs"
-                >
-                  <option value="">
-                    {defaultModel ? `Inherit (uses ${defaultModel})` : "Inherit (deployment default)"}
-                  </option>
-                  {modelOptions.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
+      <div className="space-y-3">
+        {/* Basic info — name + model, edited inline (light enough for no dialog). */}
+        <BasicInfoSection
+          key={`basic-${agent.id}`}
+          doc={doc}
+          agent={agent}
+          defaultModel={defaultModel}
+          modelOptions={modelOptions}
+          inherits={inherits}
+          isDefault={isDefault}
+          onSave={onSave}
+        />
 
-          <InstructionsSection key={`instructions-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
+        {/* Persona — first ~200 chars of the system prompt. */}
+        <PreviewCard
+          icon={<UserRound className="h-4 w-4" />}
+          title="Persona"
+          editLabel="编辑 Persona"
+          onEdit={() => setDialog("persona")}
+        >
+          <p className="line-clamp-3 whitespace-pre-wrap font-mono text-xs leading-6 text-[var(--text-muted)]">
+            {persona
+              ? persona.slice(0, 200) + (persona.length > 200 ? "…" : "")
+              : "使用内置默认人格 — 点击编辑，为该 agent 撰写系统提示。"}
+          </p>
+        </PreviewCard>
 
-          <KnowledgeSection key={`knowledge-${agent.id}`} doc={doc} agent={agent} onSave={onSave} />
-
-          {/* The manifest is a property of an agent that has activated code
-              browsing — gate on this agent's own code_sandbox tool, not the
-              global sandbox capability. */}
-          {enabledTools.has("code_sandbox") && (
-            <CodeManifestSection
-              key={`manifest-${agent.id}`}
-              doc={doc}
-              agent={agent}
-              loading={loading}
-              onSave={onSave}
-            />
-          )}
-
-          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h3 className="mb-3 text-sm font-semibold">Tools For This Agent</h3>
-            <div className="grid gap-2 md:grid-cols-2">
-              {tools.map((tool) => (
-                <button
-                  key={tool.id}
-                  type="button"
-                  disabled={loading || !tool.available}
-                  onClick={() => onToggleTool(tool.id)}
-                  className={cn(
-                    "rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm",
-                    enabledTools.has(tool.id)
-                      ? "border-[var(--accent)] bg-[var(--surface-2)] text-[var(--text)]"
-                      : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]",
-                    !tool.available && "opacity-55"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs">{tool.name}</span>
-                    <span className={cn("text-xs", statusClass(tool.status))}>{tool.status}</span>
-                  </div>
-                  <div className="mt-1 line-clamp-2 text-xs text-[var(--text-faint)]">
-                    {tool.description}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h3 className="mb-3 text-sm font-semibold">Skills For This Agent</h3>
-            <div className="grid gap-2 md:grid-cols-2">
-              {skills.map((skill) => (
-                <button
-                  key={skill.id}
-                  type="button"
-                  disabled={loading || skill.status !== "ready"}
-                  onClick={() => onToggleSkill(skill.id)}
-                  className={cn(
-                    "rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm",
-                    enabledSkills.has(skill.id)
-                      ? "border-[var(--accent)] bg-[var(--surface-2)] text-[var(--text)]"
-                      : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]",
-                    skill.status !== "ready" && "opacity-55"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span>{skill.name}</span>
-                    <span className={cn("text-xs", statusClass(skill.status))}>
-                      {statusLabel(skill)}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--text-faint)]">
-                    {skill.dependencies.length ? `Requires ${skill.dependencies.join(", ")}` : "No tool dependency"}
-                  </div>
-                </button>
-              ))}
-            </div>
-            {skillSummary(doc, agent).length > 0 && (
-              <div className="mt-3 text-xs text-[var(--text-faint)]">
-                Enabled: {skillSummary(doc, agent).map((skill) => skill.name).join(", ")}
-              </div>
-            )}
-          </div>
+        {/* Capabilities — tools / skills / knowledge, previewing example names. */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <PreviewCard
+            icon={<Wrench className="h-4 w-4" />}
+            title="工具"
+            badge={
+              <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
+                {enabledTools.size}/{tools.length}
+              </span>
+            }
+            editLabel="编辑工具"
+            onEdit={() => setDialog("tools")}
+          >
+            <p className="line-clamp-2 text-xs text-[var(--text-muted)]">
+              {previewNames(toolNames, "未启用任何工具")}
+            </p>
+          </PreviewCard>
+          <PreviewCard
+            icon={<Sparkles className="h-4 w-4" />}
+            title="技能"
+            badge={
+              <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
+                {enabledSkills.size}/{skills.length}
+              </span>
+            }
+            editLabel="编辑技能"
+            onEdit={() => setDialog("skills")}
+          >
+            <p className="line-clamp-2 text-xs text-[var(--text-muted)]">
+              {previewNames(skillNames, skills.length ? "未启用任何技能" : "未安装技能")}
+            </p>
+          </PreviewCard>
+          <PreviewCard
+            icon={<Database className="h-4 w-4" />}
+            title="知识库"
+            badge={
+              <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
+                {scopedKb ? kbCount : "全部"}
+              </span>
+            }
+            editLabel="编辑知识库"
+            onEdit={() => setDialog("knowledge")}
+          >
+            <p className="line-clamp-2 text-xs text-[var(--text-muted)]">
+              {scopedKb
+                ? kbNames.length
+                  ? previewNames(kbNames, "")
+                  : `已选 ${kbCount} 个知识库`
+                : "全部知识库（用户可访问的全部）"}
+            </p>
+          </PreviewCard>
         </div>
       </div>
+
+      {dialog === "persona" && (
+        <PersonaDialog
+          doc={doc}
+          agent={agent}
+          onClose={() => setDialog(null)}
+          onSave={onSave}
+        />
+      )}
+      {dialog === "tools" && (
+        <ToolsDialog
+          doc={doc}
+          agent={agent}
+          tools={tools}
+          enabled={enabledTools}
+          loading={loading}
+          onToggle={onToggleTool}
+          onSave={onSave}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "skills" && (
+        <SkillsDialog
+          doc={doc}
+          agent={agent}
+          skills={skills}
+          enabled={enabledSkills}
+          loading={loading}
+          onToggle={onToggleSkill}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "knowledge" && (
+        <KnowledgeDialog
+          doc={doc}
+          agent={agent}
+          onSave={onSave}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </>
   );
 }

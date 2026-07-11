@@ -220,7 +220,7 @@ def test_default_instructions_survives_put_config(tmp_path, monkeypatch):
     # forgot to copy it would silently drop the template.
     c = _client(tmp_path, monkeypatch)
     doc = c.get("/v1/config").json()
-    assert doc["default_instructions"] == ""   # blank by default → built-in fallback
+    assert doc["default_instructions"]   # ships non-blank (the built-in persona)
     doc["default_instructions"] = "# House voice\nYou are a research copilot."
     saved = c.put("/v1/config", json=doc).json()
     assert saved["default_instructions"] == "# House voice\nYou are a research copilot."
