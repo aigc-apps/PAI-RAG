@@ -54,7 +54,14 @@ async def reload_models(state: AppState = Depends(get_state),
     if state.router is None:
         raise HTTPException(status_code=400, detail="no model router configured")
     try:
-        state.router.reload_from_disk()
+        if getattr(state, "config_store", None) is not None:
+            from app.providers import ModelCatalog
+
+            stored = await state.config_store.load()
+            state.config_revision = stored.revision
+            state.router.reload(ModelCatalog(**stored.doc.models))
+        else:
+            state.router.reload_from_disk()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return JSONResponse(_envelope(state, reloaded=True))

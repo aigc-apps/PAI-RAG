@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
@@ -15,12 +16,12 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from app.config import get_settings
-from app.deps import AppState, reload_app_state
+from app.deps import AppState, rebuild_app_state_from_config, reload_app_state
 from app.db import make_engine, create_all, migrate
 from app.store.memory import InMemoryStore
 from app.store.sql import SqlStore
 from app.llm import LeanLLM
-from app.providers import ProviderRouter, load_catalog
+from app.providers import ModelCatalog, ProviderRouter
 from app.routes.auth import router as auth_router
 from app.routes.responses import router as responses_router
 from app.routes.chat import router as chat_router
@@ -36,6 +37,7 @@ from app.knowledge import KnowledgeService
 from app.jobs import JobQueue, register_knowledge_handlers
 from app.search_engine import build_search_engine
 from app.agent_config import apply_runtime_status, load_agent_config
+from app.agent_config_store import SqlAgentConfigStore
 from agent.tools.defaults import build_default_registry
 from agent.tools.skills import load_skills
 
@@ -68,6 +70,18 @@ def _init_tracing(app: FastAPI, settings) -> None:
         logger.info("[trace] tracing extension unavailable, continuing without it: {}", e)
 
 
+async def _reload_config_from_state(app: FastAPI, settings) -> None:
+    state = app.state.app_state
+    if getattr(state, "config_store", None) is None:
+        reload_app_state(state, settings)
+        return
+    stored = await state.config_store.load()
+    state.config_revision = stored.revision
+    if state.router is not None:
+        state.router.reload(ModelCatalog(**stored.doc.models))
+    rebuild_app_state_from_config(state, settings, stored.doc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -90,10 +104,15 @@ async def lifespan(app: FastAPI):
             await migrate(settings.db_url)
         engine = make_engine(settings.db_url)
         store = SqlStore(engine)
-    agent_config = load_agent_config(settings.config_path)
+    config_store = SqlAgentConfigStore(
+        engine,
+        seed=load_agent_config(settings.config_path),
+    )
+    stored_config = await config_store.load()
+    agent_config = stored_config.doc
     # Router before KnowledgeService: the KB service resolves its embedder/reranker
     # through the router (ingest + query). One router instance, stored on AppState.
-    catalog = load_catalog(settings.models_path, settings)
+    catalog = ModelCatalog(**agent_config.models)
     provider_router = ProviderRouter(catalog, path=settings.models_path)
     # Built before the registry so knowledge_search can bind to it; the same
     # instance is stored on AppState below and reused for the REST query routes.
@@ -113,7 +132,7 @@ async def lifespan(app: FastAPI):
     registry = build_default_registry(
         settings,
         agent_config=agent_config,
-        on_config_change=lambda: reload_app_state(app.state.app_state, settings),
+        on_config_change=lambda: _reload_config_from_state(app, settings),
         knowledge_service=knowledge,
     )
     if settings.skills_dir:
@@ -142,6 +161,8 @@ async def lifespan(app: FastAPI):
         summary_keep_recent=settings.summary_keep_recent,
         summary_batch=settings.summary_batch,
         project_context=settings.project_context,
+        config_store=config_store,
+        config_revision=stored_config.revision,
     )
     try:
         yield

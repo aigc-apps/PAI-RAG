@@ -1,4 +1,8 @@
-import sys, os, asyncio
+# ruff: noqa: E402
+import asyncio
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect
@@ -32,7 +36,8 @@ def test_migrate_builds_full_schema_on_fresh_db(tmp_path):
         engine = make_engine(url)
         tables = await _tables(engine)
         for t in ("users", "conversations", "conversation_items", "responses",
-                  "knowledge_bases", "knowledge_documents", "knowledge_chunks"):
+                  "knowledge_bases", "knowledge_documents", "knowledge_chunks",
+                  "app_config_documents", "app_config_revisions"):
             assert t in tables, f"{t} missing"
 
         user_cols = await _columns(engine, "users")

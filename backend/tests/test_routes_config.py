@@ -3,6 +3,7 @@ import os
 import sys
 import io
 import zipfile
+import asyncio
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -15,6 +16,8 @@ from app.agent_config import AgentConfigDocument, apply_runtime_status
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
 from app.routes.config import router as config_router
 from app.store.memory import InMemoryStore
+from app.db import create_all, make_engine
+from app.agent_config_store import SqlAgentConfigStore
 from tests.authutil import apply_auth
 
 
@@ -41,6 +44,38 @@ def _client(tmp_path, monkeypatch):
     )
     app.include_router(config_router)
     return TestClient(apply_auth(app))
+
+
+def _client_with_sql_config(tmp_path, monkeypatch):
+    config_path = str(tmp_path / "seed.yaml")
+    monkeypatch.setenv("CONFIG_PATH", config_path)
+    monkeypatch.setenv("MODELS_PATH", config_path)
+    engine = make_engine("sqlite+aiosqlite:///:memory:")
+
+    async def init():
+        await create_all(engine)
+
+    asyncio.run(init())
+    cat = ModelCatalog(
+        default_model="local/fast",
+        providers=[
+            ProviderConfig(
+                name="local",
+                base_url="http://localhost:8000/v1",
+                models=[ModelSpec(id="fast")],
+            )
+        ],
+    )
+    app = FastAPI()
+    app.state.app_state = AppState(
+        store=InMemoryStore(),
+        llm=None,
+        default_model="local/fast",
+        router=ProviderRouter(cat),
+        config_store=SqlAgentConfigStore(engine),
+    )
+    app.include_router(config_router)
+    return TestClient(apply_auth(app)), engine, config_path
 
 
 class _FakeChunk:
@@ -185,6 +220,63 @@ def test_config_yaml_roundtrip_and_registry_reload(tmp_path, monkeypatch):
     search = next(cap for cap in doc["capabilities"] if cap["id"] == "search")
     assert search["permission"] == "auto"
     assert search["status"] == "ready"
+
+
+def test_config_yaml_exposes_authored_fields_only(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    config = yaml.safe_load(c.get("/v1/config.yaml").text)
+
+    assert "status" not in config["knowledgebase"]["vectordb"]
+    assert "secret_configured" not in config["knowledgebase"]["vectordb"]
+    assert "error" not in config["knowledgebase"]["vectordb"]
+    assert all("status" not in provider for provider in config["providers"])
+    assert all("secret_configured" not in provider for provider in config["providers"])
+    assert all("error" not in provider for provider in config["providers"])
+    assert all("status" not in cap for cap in config["capabilities"])
+    assert all("error" not in cap for cap in config["capabilities"])
+
+    # Legacy KB provider shells are merged away before YAML is shown or saved.
+    config["providers"].extend([
+        {"id": "embedding.default", "type": "embedding", "name": "Old embedding"},
+        {"id": "rerank.default", "type": "rerank", "name": "Old rerank"},
+        {"id": "vectordb.default", "type": "vectordb", "name": "Old vector"},
+    ])
+    knowledge = next(cap for cap in config["capabilities"] if cap["id"] == "knowledge")
+    knowledge["provider_refs"] = ["embedding.default", "rerank.default", "vectordb.default"]
+
+    assert c.put("/v1/config.yaml", json={"yaml": yaml.safe_dump(config, sort_keys=False)}).status_code == 200
+    saved = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))
+    assert {p["id"] for p in saved["providers"]}.isdisjoint({
+        "embedding.default", "rerank.default", "vectordb.default",
+    })
+    saved_knowledge = next(cap for cap in saved["capabilities"] if cap["id"] == "knowledge")
+    assert saved_knowledge["provider_refs"] == []
+    assert all("status" not in provider for provider in saved["providers"])
+    assert all("status" not in cap for cap in saved["capabilities"])
+
+
+def test_config_routes_persist_to_sql_config_store(tmp_path, monkeypatch):
+    client, engine, config_path = _client_with_sql_config(tmp_path, monkeypatch)
+    doc = client.get("/v1/config").json()
+    assert doc["default_agent"] == "main"
+
+    doc["agents"][0]["name"] = "SQL Agent"
+    response = client.put("/v1/config", json=doc)
+    assert response.status_code == 200
+    assert response.json()["agents"][0]["name"] == "SQL Agent"
+    assert not os.path.exists(config_path)
+
+    async def check():
+        store = SqlAgentConfigStore(engine)
+        stored = await store.load()
+        revisions = await store.list_revisions()
+        await engine.dispose()
+        return stored, revisions
+
+    stored, revisions = asyncio.run(check())
+    assert stored.doc.agents[0].name == "SQL Agent"
+    assert stored.revision == 2
+    assert [item.revision for item in revisions] == [1, 2]
 
 
 def test_agent_code_manifest_survives_save_load(tmp_path):
@@ -404,7 +496,7 @@ def test_config_save_preserves_knowledge_tools(tmp_path, monkeypatch):
                      router=ProviderRouter(cat), knowledge=knowledge)
 
     doc = load_agent_config(config_path)  # file missing -> default doc (knowledge enabled)
-    _save_and_reload(config_path, doc, state)
+    asyncio.run(_save_and_reload(doc, state))
 
     names = set(state.registry.names())
     assert "knowledge_search" in names

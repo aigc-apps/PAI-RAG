@@ -233,6 +233,37 @@ class BackgroundJobRow(SQLModel, table=True):
     finished_at: Optional[datetime] = Field(default=None)
 
 
+class AppConfigDocumentRow(SQLModel, table=True):
+    """Singleton authored product configuration.
+
+    Runtime status is intentionally not stored here; it is recomputed from this
+    authored document and deployment environment on read.
+    """
+
+    __tablename__ = "app_config_documents"
+    id: str = Field(primary_key=True, max_length=64)
+    schema_version: int = Field(default=1)
+    document_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    revision: int = Field(default=1, index=True)
+    checksum: str = Field(default="", max_length=128)
+    updated_by: Optional[str] = Field(default=None, max_length=64)
+    updated_at: datetime = Field(default_factory=_now)
+
+
+class AppConfigRevisionRow(SQLModel, table=True):
+    """Append-only revision history for admin config changes."""
+
+    __tablename__ = "app_config_revisions"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    config_id: str = Field(index=True, max_length=64)
+    revision: int = Field(index=True)
+    schema_version: int = Field(default=1)
+    document_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    checksum: str = Field(default="", max_length=128)
+    updated_by: Optional[str] = Field(default=None, max_length=64)
+    updated_at: datetime = Field(default_factory=_now)
+
+
 class KnowledgeDataSourceRow(SQLModel, table=True):
     """A configured data source feeding a knowledge base (e.g. an Aliyun docs
     ``llms.txt`` manifest). Aggregate sync state is stored inline — the backend

@@ -32,7 +32,6 @@ import { CARD, INPUT, BTN_PRIMARY, BTN_GHOST, BTN_DANGER } from "../lib/ui";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
 import { ConnectionsPanel } from "./ConnectionsPanel";
-import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
 import { PageHeader } from "./PageHeader";
 import { useI18n } from "../i18n";
 
@@ -339,9 +338,7 @@ export function SettingsView({
 
           {tab === "knowledge" && (
             <KnowledgeSettingsHub
-              doc={doc}
               onOpenKnowledge={onOpenKnowledge}
-              onConfigureVectorDB={() => setVectordbOpen(true)}
             />
           )}
 
@@ -449,13 +446,9 @@ export function SettingsView({
 }
 
 function KnowledgeSettingsHub({
-  doc,
   onOpenKnowledge,
-  onConfigureVectorDB,
 }: {
-  doc: AgentConfigDocument;
   onOpenKnowledge?: () => void;
-  onConfigureVectorDB: () => void;
 }) {
   const { t } = useI18n();
   return (
@@ -507,7 +500,6 @@ function KnowledgeSettingsHub({
         </div>
       )}
 
-      <KnowledgeBasePanel doc={doc} onConfigureVectorDB={onConfigureVectorDB} compact />
     </div>
   );
 }

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     skills_dir: str = ""
     config_path: str = "./data/config.yaml"
     models_path: str = "./data/config.yaml"
+    config_reload_interval_seconds: float = 2.0
     app_env: str = "development"
     # Externally-reachable base URL of this deployment (e.g.
     # "https://pai.example.com"), env PUBLIC_BASE_URL. Used to build links we hand

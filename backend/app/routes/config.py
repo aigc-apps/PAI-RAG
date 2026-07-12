@@ -17,6 +17,7 @@ from app.agent_config import (
     AgentConfigDocument,
     SetupConfig,
     apply_runtime_status,
+    authored_config_dict,
     load_agent_config,
     mask_secrets,
     save_agent_config,
@@ -24,7 +25,7 @@ from app.agent_config import (
 )
 from app.auth import require_admin
 from app.config import get_settings
-from app.deps import AppState, get_state, reload_app_state
+from app.deps import AppState, get_state, rebuild_app_state_from_config
 from app.store.base import User
 from agent.tools.builtin.install_skill import _install_skill_sync
 
@@ -58,40 +59,57 @@ class SkillEnablePayload(BaseModel):
     enabled: bool = True
 
 
-def _path() -> str:
-    return get_settings().config_path
+async def _authored_doc(state: AppState) -> AgentConfigDocument:
+    if getattr(state, "config_store", None) is not None:
+        stored = await state.config_store.load()
+        state.config_revision = stored.revision
+        return stored.doc
+    return load_agent_config(get_settings().config_path)
 
 
-def _runtime_doc(state: AppState, *, mask: bool = True) -> AgentConfigDocument:
+def _runtime_from_doc(
+    state: AppState,
+    doc: AgentConfigDocument,
+    *,
+    mask: bool = True,
+) -> AgentConfigDocument:
     settings = get_settings()
-    doc = apply_runtime_status(
-        load_agent_config(settings.config_path),
-        settings,
-        state.router,
-    )
-    return mask_secrets(doc) if mask else doc
+    runtime = apply_runtime_status(doc, settings, state.router)
+    return mask_secrets(runtime) if mask else runtime
 
 
-def _save_and_reload(path: str, doc: AgentConfigDocument, state: AppState) -> None:
+async def _runtime_doc(state: AppState, *, mask: bool = True) -> AgentConfigDocument:
+    return _runtime_from_doc(state, await _authored_doc(state), mask=mask)
+
+
+async def _save_and_reload(
+    doc: AgentConfigDocument,
+    state: AppState,
+    *,
+    updated_by: Optional[str] = None,
+) -> None:
     settings = get_settings()
-    catalog = None
-    if path == settings.models_path:
-        try:
-            from app.providers import ModelCatalog, ProviderRouter
+    try:
+        from app.providers import ModelCatalog, ProviderRouter
 
-            catalog = ModelCatalog(**doc.models)
-            ProviderRouter(catalog)
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"invalid models config: {exc}") from exc
-    save_agent_config(path, doc)
-    if catalog is not None and state.router is not None:
+        catalog = ModelCatalog(**doc.models)
+        ProviderRouter(catalog)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"invalid models config: {exc}") from exc
+    if getattr(state, "config_store", None) is not None:
+        stored = await state.config_store.save(doc, updated_by=updated_by)
+        doc = stored.doc
+        state.config_revision = stored.revision
+    else:
+        save_agent_config(settings.config_path, doc)
+    if state.router is not None:
         state.router.reload(catalog)
     # Rebuild the registry + knowledge search engine + runtime agent_config through
     # the single canonical reloader. A partial build_default_registry() call here used
     # to omit knowledge_service (and skip the search-engine rebuild), so every config
     # save silently dropped the KB tools until a process restart. Router is reloaded
-    # first so apply_runtime_status inside reload_app_state sees the fresh catalog.
-    reload_app_state(state, settings)
+    # first so runtime status sees the fresh catalog.
+    rebuild_app_state_from_config(state, settings, doc)
 
 
 def _preserve_masked_secrets(doc: AgentConfigDocument, current: AgentConfigDocument) -> None:
@@ -116,26 +134,25 @@ def _preserve_masked_secrets(doc: AgentConfigDocument, current: AgentConfigDocum
 @router.get("/v1/setup")
 async def get_setup(state: AppState = Depends(get_state),
                     admin: User = Depends(require_admin)):
-    doc = _runtime_doc(state)
+    doc = await _runtime_doc(state)
     return JSONResponse(doc.model_dump(mode="json"))
 
 
 @router.put("/v1/setup")
 async def update_setup(payload: SetupConfig, state: AppState = Depends(get_state),
                        admin: User = Depends(require_admin)):
-    path = _path()
-    doc = load_agent_config(path)
+    doc = await _authored_doc(state)
     doc.setup = payload
     if doc.setup.completed and not doc.setup.completed_at:
         doc.setup.completed_at = datetime.now(timezone.utc).isoformat()
-    _save_and_reload(path, doc, state)
-    return JSONResponse(_runtime_doc(state).model_dump(mode="json"))
+    await _save_and_reload(doc, state, updated_by=admin.id)
+    return JSONResponse((await _runtime_doc(state)).model_dump(mode="json"))
 
 
 @router.get("/v1/config")
 async def get_agent_config(state: AppState = Depends(get_state),
                            admin: User = Depends(require_admin)):
-    return JSONResponse(_runtime_doc(state).model_dump(mode="json"))
+    return JSONResponse((await _runtime_doc(state)).model_dump(mode="json"))
 
 
 @router.put("/v1/config")
@@ -144,8 +161,7 @@ async def update_agent_config(
     state: AppState = Depends(get_state),
     admin: User = Depends(require_admin),
 ):
-    path = _path()
-    existing = load_agent_config(path)
+    existing = await _authored_doc(state)
     existing.setup = payload.setup
     existing.models = payload.models
     existing.knowledgebase = payload.knowledgebase
@@ -155,17 +171,17 @@ async def update_agent_config(
     existing.agents = payload.agents
     existing.providers = payload.providers
     existing.capabilities = payload.capabilities
-    _preserve_masked_secrets(existing, load_agent_config(path))
-    _save_and_reload(path, existing, state)
-    return JSONResponse(_runtime_doc(state).model_dump(mode="json"))
+    _preserve_masked_secrets(existing, await _authored_doc(state))
+    await _save_and_reload(existing, state, updated_by=admin.id)
+    return JSONResponse((await _runtime_doc(state)).model_dump(mode="json"))
 
 
 @router.get("/v1/config.yaml")
 async def get_agent_config_yaml(state: AppState = Depends(get_state),
                                 admin: User = Depends(require_admin)):
-    doc = _runtime_doc(state, mask=True)
+    doc = await _runtime_doc(state, mask=True)
     body = yaml.safe_dump(
-        doc.model_dump(mode="json"),
+        authored_config_dict(doc),
         sort_keys=False,
         allow_unicode=True,
     )
@@ -183,9 +199,9 @@ async def update_agent_config_yaml(
     except Exception as exc:
         logger.warning("PUT /v1/config.yaml rejected YAML: {}\n--- payload ---\n{}", exc, payload.yaml)
         raise HTTPException(status_code=400, detail=f"invalid config YAML: {exc}") from exc
-    _preserve_masked_secrets(doc, load_agent_config(_path()))
-    _save_and_reload(_path(), doc, state)
-    return JSONResponse(_runtime_doc(state).model_dump(mode="json"))
+    _preserve_masked_secrets(doc, await _authored_doc(state))
+    await _save_and_reload(doc, state, updated_by=admin.id)
+    return JSONResponse((await _runtime_doc(state)).model_dump(mode="json"))
 
 
 @router.post("/v1/config/reload-env")
@@ -204,7 +220,7 @@ async def reload_env(state: AppState = Depends(get_state),
     from dotenv import load_dotenv
     load_dotenv(override=True)
     settings = get_settings()
-    doc = load_agent_config(settings.config_path)
+    doc = await _authored_doc(state)
     # Refresh the LLM provider router too — its API keys are env-derived.
     try:
         from app.providers import ModelCatalog, ProviderRouter
@@ -216,7 +232,7 @@ async def reload_env(state: AppState = Depends(get_state),
     # Rebuild registry + agent_config through the canonical reloader so the sandbox
     # provider picks up refreshed env creds AND knowledge_service stays wired — the
     # partial rebuild here previously dropped the KB tools on every reload-env.
-    reload_app_state(state, settings)
+    rebuild_app_state_from_config(state, settings, doc)
     logger.info("reload-env: .env reloaded, registry + router + agent_config rebuilt")
     return JSONResponse({"ok": True})
 
@@ -273,9 +289,10 @@ async def test_model_connection(
 @router.post("/v1/skills/uploads")
 async def upload_skill_zip(
     file: UploadFile = File(...),
+    state: AppState = Depends(get_state),
     admin: User = Depends(require_admin),
 ):
-    doc = load_agent_config(_path())
+    doc = await _authored_doc(state)
     upload_root = Path(str(doc.skills.install.get("upload_root") or "./data/skill-uploads"))
     upload_root.mkdir(parents=True, exist_ok=True)
     upload_id = f"up_{uuid.uuid4().hex}"
@@ -309,8 +326,7 @@ async def install_skill(
     admin: User = Depends(require_admin),
 ):
     settings = get_settings()
-    path = _path()
-    doc = load_agent_config(path)
+    doc = await _authored_doc(state)
     try:
         result = await asyncio.to_thread(
             _install_skill_sync,
@@ -359,8 +375,8 @@ async def install_skill(
             )
         except ValueError as exc:
             logger.warning("install: enable_for_agent skipped: {}", exc)
-    _save_and_reload(path, doc, state)
-    runtime = _runtime_doc(state)
+    await _save_and_reload(doc, state, updated_by=admin.id)
+    runtime = await _runtime_doc(state)
     return JSONResponse({
         "ok": True,
         "result": result,
@@ -375,8 +391,7 @@ async def enable_skill_for_agent(
     admin: User = Depends(require_admin),
 ):
     settings = get_settings()
-    path = _path()
-    doc = load_agent_config(path)
+    doc = await _authored_doc(state)
     target_agent = payload.agent_id or doc.default_agent
     runtime = apply_runtime_status(doc, settings, state.router)
     try:
@@ -389,9 +404,9 @@ async def enable_skill_for_agent(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    _save_and_reload(path, doc, state)
+    await _save_and_reload(doc, state, updated_by=admin.id)
     return JSONResponse({
         "ok": True,
         "result": result,
-        "config": _runtime_doc(state).model_dump(mode="json"),
+        "config": (await _runtime_doc(state)).model_dump(mode="json"),
     })

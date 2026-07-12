@@ -17,6 +17,7 @@ from agent.soul import DEFAULT_INSTRUCTIONS
 Permission = Literal["disabled", "ask", "auto", "admin"]
 CapabilityStatus = Literal["ready", "missing_config", "error", "disabled"]
 ProviderStatus = Literal["untested", "healthy", "missing_config", "error"]
+LEGACY_PROVIDER_IDS = {"embedding.default", "rerank.default", "vectordb.default"}
 
 
 class ProviderConfig(BaseModel):
@@ -399,6 +400,18 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
     merged["capabilities"] = [
         c for c in merged["capabilities"] if c.get("id") != "aliyun_pai"
     ]
+    # Embedding/rerank defaults moved into the model catalog and vector DB moved
+    # into knowledgebase.vectordb. Older YAMLs can still carry these provider
+    # shells and knowledge.provider_refs; drop them so a later save persists the
+    # current shape.
+    merged["providers"] = [
+        p for p in merged["providers"] if p.get("id") not in LEGACY_PROVIDER_IDS
+    ]
+    for cap in merged["capabilities"]:
+        if cap.get("id") == "knowledge":
+            cap["provider_refs"] = [
+                ref for ref in cap.get("provider_refs", []) if ref not in LEGACY_PROVIDER_IDS
+            ]
     return AgentConfigDocument(**merged)
 
 
@@ -417,13 +430,55 @@ def save_agent_config(path: str, doc: AgentConfigDocument) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(p.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8") as f:
-        data = doc.model_dump(mode="json")
+        data = authored_config_dict(doc)
         if p.suffix.lower() in {".yaml", ".yml"}:
             yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
         else:
             json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
     os.replace(tmp, p)
+
+
+def authored_config_dict(doc: AgentConfigDocument) -> Dict[str, Any]:
+    """Return the YAML/JSON shape we persist and expose in the raw editor.
+
+    Runtime health fields are derived on every read by ``apply_runtime_status`` and
+    should not be user-authored. Keeping them out of config.yaml makes the YAML
+    page a source-of-truth editor instead of a snapshot of the last status poll.
+    """
+
+    data = doc.model_dump(mode="json")
+
+    vdb = data.get("knowledgebase", {}).get("vectordb")
+    if isinstance(vdb, dict):
+        for key in ("status", "secret_configured", "error"):
+            vdb.pop(key, None)
+
+    providers = []
+    for provider in data.get("providers", []) or []:
+        if provider.get("id") in LEGACY_PROVIDER_IDS:
+            continue
+        item = dict(provider)
+        for key in ("status", "secret_configured", "error"):
+            item.pop(key, None)
+        providers.append(item)
+    data["providers"] = providers
+
+    capabilities = []
+    for cap in data.get("capabilities", []) or []:
+        if cap.get("id") == "aliyun_pai":
+            continue
+        item = dict(cap)
+        for key in ("status", "error"):
+            item.pop(key, None)
+        if item.get("id") == "knowledge":
+            item["provider_refs"] = [
+                ref for ref in item.get("provider_refs", []) if ref not in LEGACY_PROVIDER_IDS
+            ]
+        capabilities.append(item)
+    data["capabilities"] = capabilities
+
+    return data
 
 
 def _configured_secret(settings_dict: Dict[str, Any]) -> bool:
