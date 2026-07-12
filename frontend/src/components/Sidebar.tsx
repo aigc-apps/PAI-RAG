@@ -24,15 +24,37 @@ function isBusy(rt: ConvRuntime): boolean {
 }
 
 export function BrandMark({ size = "sm" }: { size?: "sm" | "lg" }) {
-  const dotCls = size === "lg" ? "h-9 w-9" : "h-7 w-7";
+  const dotCls = size === "lg" ? "h-10 w-10" : "h-7 w-7";
   const textCls = size === "lg" ? "text-xl" : "text-[15px]";
-  const loopCls = size === "lg" ? "text-[10px]" : "text-[8px]";
+  const markCls = size === "lg" ? "h-7 w-7" : "h-5 w-5";
   return (
     <div className="flex items-center gap-2">
       <span
-        className={`${dotCls} grid flex-shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--surface-2)] font-semibold tracking-tight text-[var(--text)] shadow-[var(--shadow-sm)]`}
+        className={`${dotCls} grid flex-shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--surface-2)] text-[var(--text)] shadow-[var(--shadow-sm)]`}
+        aria-hidden="true"
       >
-        <span className={loopCls}>PAI</span>
+        <svg
+          className={markCls}
+          viewBox="0 0 64 64"
+          fill="none"
+          focusable="false"
+        >
+          <path
+            d="M20.5 37.5c-6.5 0-10.5-4.5-10.5-10.2 0-5.6 4.2-10 10.4-10 4 0 7.3 1.9 10.6 5.5l2.1 2.3"
+            stroke="currentColor"
+            strokeWidth="5.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M43.5 26.5c6.5 0 10.5 4.5 10.5 10.2 0 5.6-4.2 10-10.4 10-4 0-7.3-1.9-10.6-5.5l-2.1-2.3"
+            stroke="currentColor"
+            strokeWidth="5.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <circle cx="32" cy="32" r="3.5" fill="currentColor" opacity="0.62" />
+        </svg>
       </span>
       <span className={`${textCls} font-semibold tracking-tight text-[var(--text)]`}>
         PAI-Loop
@@ -229,15 +251,15 @@ function ConversationRow({
       onClick={onOpen}
       title={title}
       className={cn(
-        "group relative flex min-h-9 cursor-pointer items-center justify-between gap-2 rounded-[var(--radius)] px-3 py-1.5 text-sm transition-colors",
+        "group relative my-0.5 flex min-h-8 cursor-pointer items-center justify-between gap-2 rounded-[var(--radius)] px-3 py-1 text-sm transition-colors",
         selected
-          ? "bg-[var(--bg-elevated)] text-[var(--text)] font-semibold shadow-[var(--shadow-sm)]"
+          ? "bg-[var(--bg-elevated)]/88 text-[var(--text)] font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.035)]"
           : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
       )}
     >
       {selected && (
         <span
-          className="absolute left-0 top-1/2 h-5 -translate-y-1/2 w-[3px] rounded-r bg-[var(--accent)]"
+          className="absolute left-0 top-1/2 h-4 -translate-y-1/2 w-[3px] rounded-r bg-[var(--accent)]"
           aria-hidden="true"
         />
       )}

@@ -72,10 +72,10 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
 
       {/* Main area: empty state or messages + composer */}
       {messages.length === 0 ? (
-        <div className="flex-1 grid place-items-center px-4 pb-12">
-          <div className="chat-container flex flex-col items-center gap-5">
+        <div className="flex-1 grid place-items-center px-4 pb-[15vh]">
+          <div className="chat-container flex flex-col items-center gap-4">
             <BrandMark size="lg" />
-            <h1 className="text-xl font-semibold text-[var(--text)] tracking-tight">
+            <h1 className="text-[19px] font-semibold text-[var(--text)] tracking-tight">
               {t("chat.greeting")}
             </h1>
             <div className="w-full max-w-[720px]">
