@@ -1,6 +1,13 @@
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from agent.soul import DEFAULT_INSTRUCTIONS, render_stable_system_prompt, render_context_block
+
+from agent.soul import (  # noqa: E402
+    DEFAULT_INSTRUCTIONS,
+    render_context_block,
+    render_stable_system_prompt,
+)
 
 
 # A sample author-written persona, used across the tool-gating cases below. The
@@ -48,6 +55,14 @@ def test_publish_artifact_guidance_only_when_tool_enabled():
     assert "publish_artifact" in with_tool and "/mnt/user" in with_tool
 
 
+def test_web_search_guidance_only_when_tool_enabled():
+    without = render_stable_system_prompt(PERSONA, tool_names=["web_fetch"])
+    assert "Web search is available" not in without
+    with_tool = render_stable_system_prompt(PERSONA, tool_names=["web_search", "web_fetch"])
+    assert "Web search is available" in with_tool
+    assert "web_fetch on a specific result URL" in with_tool
+
+
 def test_aliyun_cli_guidance_only_when_capability_and_shell_present():
     # Gated on both the capability flag and a sandbox shell tool.
     assert "aliyun" not in render_stable_system_prompt(
@@ -66,13 +81,15 @@ def test_aliyun_cli_guidance_only_when_capability_and_shell_present():
 def test_knowledge_guidance_only_when_knowledge_search_present():
     without = render_stable_system_prompt(PERSONA, tool_names=["web_fetch"])
     assert "knowledge base" not in without.lower()
-    on = render_stable_system_prompt(
+    on = render_stable_system_prompt(PERSONA, tool_names=["knowledge_search"])
+    # Reflex ("ground your answer") without naming unavailable sibling tools.
+    assert "ground your answer" in on
+    assert "grep_file" not in on and "view_file" not in on and "list_knowledge_bases" not in on
+
+    with_aux = render_stable_system_prompt(
         PERSONA, tool_names=["knowledge_search", "view_file", "grep_file"]
     )
-    # Reflex ("ground your answer") + names the sibling tools so the model
-    # disambiguates instead of defaulting to knowledge_search for everything.
-    assert "ground your answer" in on
-    assert "grep_file" in on and "view_file" in on and "list_knowledge_bases" in on
+    assert "grep_file" in with_aux and "view_file" in with_aux
 
 
 def test_sandbox_guidance_when_code_interpreter_or_shell_present():

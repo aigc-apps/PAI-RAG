@@ -1,9 +1,8 @@
 import { useEffect } from "react";
-import { Database, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useConversationsStore } from "../store/conversations";
 import { useChatStore, type ConvRuntime } from "../store/chat";
-import { useAgentsStore } from "../store/agents";
 import { getConversation } from "../api/conversations";
 import { cn } from "../lib/cn";
 import { UserMenu } from "./UserMenu";
@@ -25,20 +24,18 @@ function isBusy(rt: ConvRuntime): boolean {
 }
 
 export function BrandMark({ size = "sm" }: { size?: "sm" | "lg" }) {
-  const dotCls = size === "lg" ? "h-7 w-7" : "h-5 w-5";
-  const textCls = size === "lg" ? "text-xl" : "text-sm";
-  const agents = useAgentsStore((s) => s.agents);
-  const defaultAgent = useAgentsStore((s) => s.defaultAgent);
-  const agentId = useChatStore((s) => s.agentId);
-  const name =
-    agents.find((a) => a.id === (agentId || defaultAgent))?.name || "MiniAgent";
+  const dotCls = size === "lg" ? "h-9 w-9" : "h-7 w-7";
+  const textCls = size === "lg" ? "text-xl" : "text-[15px]";
+  const loopCls = size === "lg" ? "text-[10px]" : "text-[8px]";
   return (
     <div className="flex items-center gap-2">
       <span
-        className={`${dotCls} rounded-[var(--radius-sm)] flex-shrink-0 bg-[var(--surface-3)]`}
-      />
+        className={`${dotCls} grid flex-shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--surface-2)] font-semibold tracking-tight text-[var(--text)] shadow-[var(--shadow-sm)]`}
+      >
+        <span className={loopCls}>PAI</span>
+      </span>
       <span className={`${textCls} font-semibold tracking-tight text-[var(--text)]`}>
-        {name}
+        PAI-Loop
       </span>
     </div>
   );
@@ -46,11 +43,9 @@ export function BrandMark({ size = "sm" }: { size?: "sm" | "lg" }) {
 
 export function Sidebar({
   onOpenSettings,
-  onOpenKnowledge,
   onOpenUsers,
 }: {
   onOpenSettings?: () => void;
-  onOpenKnowledge?: () => void;
   onOpenUsers?: () => void;
 }) {
   const { t } = useI18n();
@@ -154,38 +149,24 @@ export function Sidebar({
   };
 
   return (
-    <aside className="flex w-[240px] flex-col border-r border-[var(--border)] bg-[var(--surface)] h-full flex-shrink-0">
-      <div className="flex items-center gap-2 px-4 h-12 border-b border-[var(--border)] flex-shrink-0">
+    <aside className="flex w-[var(--sidebar-w)] flex-col border-r border-[var(--border)] bg-[var(--surface)]/95 h-full flex-shrink-0 shadow-[1px_0_0_rgba(15,23,42,0.02)]">
+      <div className="flex h-[var(--header-h)] flex-shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-elevated)]/70 px-4">
         <BrandMark />
       </div>
 
-      <div className="px-3 pt-3">
-        {onOpenKnowledge && (
-          <button
-            type="button"
-            aria-label={t("sidebar.openKnowledge")}
-            onClick={onOpenKnowledge}
-            className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"
-          >
-            <Database className="h-4 w-4 flex-shrink-0" />
-            {t("sidebar.knowledge")}
-          </button>
-        )}
+      <div className="px-3 pt-4">
         <button
           type="button"
           aria-label={t("sidebar.newChat")}
           onClick={newChat}
-          className={cn(
-            "flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-sm font-medium text-[var(--text)] shadow-[var(--shadow-sm)] hover:bg-[var(--surface-2)] hover:border-[var(--accent)]/40 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]",
-            onOpenKnowledge && "mt-2"
-          )}
+          className="focus-ring flex h-9 w-full items-center justify-center gap-2 rounded-[var(--radius)] border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-3 text-sm font-semibold text-[var(--text)] shadow-[var(--shadow-sm)] transition-colors hover:border-[var(--text-muted)] hover:bg-[var(--surface)]"
         >
           <Plus className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
           {t("sidebar.newChat")}
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin px-2 pt-2 pb-2">
+      <div className="flex-1 overflow-y-auto scrollbar-thin px-2.5 pt-3 pb-3">
         {overlay.length === 0 && items.length === 0 ? (
           <div className="px-2 py-4 text-xs text-[var(--text-faint)]">
             {t("sidebar.empty")}
@@ -220,7 +201,7 @@ export function Sidebar({
       </div>
 
       {/* Account + settings, pinned to the bottom-left */}
-      <div className="border-t border-[var(--border)] p-2 flex-shrink-0">
+      <div className="border-t border-[var(--border)] bg-[var(--bg-elevated)]/65 p-2.5 flex-shrink-0">
         <UserMenu onOpenSettings={onOpenSettings} onOpenUsers={onOpenUsers} />
       </div>
     </aside>
@@ -248,10 +229,10 @@ function ConversationRow({
       onClick={onOpen}
       title={title}
       className={cn(
-        "group relative flex cursor-pointer items-center justify-between gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition-colors",
+        "group relative flex min-h-9 cursor-pointer items-center justify-between gap-2 rounded-[var(--radius)] px-3 py-1.5 text-sm transition-colors",
         selected
-          ? "bg-[var(--surface-2)] text-[var(--text)] font-medium"
-          : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+          ? "bg-[var(--bg-elevated)] text-[var(--text)] font-semibold shadow-[var(--shadow-sm)]"
+          : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
       )}
     >
       {selected && (

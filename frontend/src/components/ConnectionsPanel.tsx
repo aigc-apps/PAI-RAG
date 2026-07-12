@@ -9,6 +9,7 @@ import type {
 } from "../api/agentConfig";
 import { testModelConnection } from "../api/agentConfig";
 import { cn } from "../lib/cn";
+import { BTN_PRIMARY, CARD } from "../lib/ui";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useI18n, type MessageKey } from "../i18n";
 
@@ -64,6 +65,12 @@ export function ConnectionsPanel({ doc }: { doc: AgentConfigDocument }) {
   const loading = useAgentConfigStore((s) => s.loading);
   const cat = doc.models ?? {};
   const providers = providersOf(cat);
+  const modelCount = providers.reduce((sum, provider) => sum + (provider.models ?? []).length, 0);
+  const defaultCount = [
+    cat.default_model,
+    cat.default_embedding_model,
+    cat.default_rerank_model,
+  ].filter(Boolean).length;
 
   const saveCatalog = async (next: ModelCatalogDoc, onOk?: () => void) => {
     try {
@@ -75,22 +82,19 @@ export function ConnectionsPanel({ doc }: { doc: AgentConfigDocument }) {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">{t("conn.title")}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-          {t("conn.intro.a")}
-          <strong>{t("conn.intro.connection")}</strong>
-          {t("conn.intro.b")}
-          <strong>{t("conn.intro.models")}</strong>
-          {t("conn.intro.c")}
-          <code className="font-mono">provider/model-id</code>
-          {t("conn.intro.d")}
-          <strong>{t("conn.intro.test")}</strong>
-          {t("conn.intro.e")}
-          <strong>{t("conn.intro.kb")}</strong>
-          {t("conn.intro.f")}
-        </p>
+    <div className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">{t("conn.title")}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
+            {t("conn.subtitle")}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <SummaryStat label={t("conn.summaryConnections")} value={providers.length} />
+          <SummaryStat label={t("conn.summaryModels")} value={modelCount} />
+          <SummaryStat label={t("conn.summaryDefaults")} value={`${defaultCount}/3`} />
+        </div>
       </div>
 
       <ConnectionsSection
@@ -106,6 +110,15 @@ export function ConnectionsPanel({ doc }: { doc: AgentConfigDocument }) {
         onSave={saveCatalog}
         cat={cat}
       />
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 shadow-[var(--shadow-sm)]">
+      <div className="text-base font-semibold tabular-nums text-[var(--text)]">{value}</div>
+      <div className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-faint)]">{label}</div>
     </div>
   );
 }
@@ -205,19 +218,17 @@ function ConnectionsSection({
   };
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold">{t("conn.section1Title")}</h3>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
-          {t("conn.section1Hint.a")}
-          <code className="font-mono">provider/model-id</code>
-          {t("conn.section1Hint.b")}
-          <em>{t("conn.wordName")}</em>
-          {t("conn.section1Hint.c")}
-        </p>
+    <section className={cn(CARD, "space-y-4 p-[18px]")}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[15px] font-semibold">{t("conn.section1Title")}</h3>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--text-muted)]">
+            {t("conn.section1ShortHint")}
+          </p>
+        </div>
       </div>
 
-      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-muted)]">
@@ -308,8 +319,8 @@ function ConnectionsSection({
         </table>
       </div>
 
-      <div className="rounded-[var(--radius)] border border-[var(--border)] p-3">
-        <div className="mb-2 text-xs font-medium text-[var(--text-muted)]">
+      <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="mb-2 text-xs font-semibold text-[var(--text-muted)]">
           {editing ? t("conn.editConnection", { name: editing }) : t("conn.addConnection")}
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -348,7 +359,7 @@ function ConnectionsSection({
             type="button"
             disabled={loading}
             onClick={submit}
-            className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-fg)] disabled:opacity-60"
+            className={BTN_PRIMARY}
           >
             <Plus className="h-4 w-4" />
             {editing ? t("common.save") : t("common.add")}
@@ -363,13 +374,6 @@ function ConnectionsSection({
             </button>
           )}
         </div>
-        <p className="mt-2 text-xs text-[var(--text-faint)]">
-          {t("conn.foot.a")}
-          <em>{t("conn.wordName")}</em>
-          {t("conn.foot.b")}
-          <code className="font-mono">.env</code>
-          {t("conn.foot.c")}
-        </p>
       </div>
     </section>
   );
@@ -495,13 +499,13 @@ function ModelsSection({
   };
 
   return (
-    <section className="space-y-3">
+    <section className={cn(CARD, "space-y-4 p-[18px]")}>
       <div>
-        <h3 className="text-sm font-semibold">{t("conn.modelsTitle")}</h3>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">{t("conn.modelsHint")}</p>
+        <h3 className="text-[15px] font-semibold">{t("conn.modelsTitle")}</h3>
+        <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--text-muted)]">{t("conn.modelsShortHint")}</p>
       </div>
 
-      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--text-muted)]">
@@ -571,8 +575,8 @@ function ModelsSection({
         </table>
       </div>
 
-      <div className="rounded-[var(--radius)] border border-[var(--border)] p-3">
-        <div className="mb-2 text-xs font-medium text-[var(--text-muted)]">
+      <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="mb-2 text-xs font-semibold text-[var(--text-muted)]">
           {editing ? t("conn.editModel", { ref: `${editing.provider}/${editing.id}` }) : t("conn.registerModel")}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
@@ -676,7 +680,7 @@ function ModelsSection({
               type="button"
               disabled={loading}
               onClick={submit}
-              className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-fg)] disabled:opacity-60"
+              className={BTN_PRIMARY}
             >
               <Plus className="h-4 w-4" />
               {editing ? t("common.save") : t("conn.register")}

@@ -45,7 +45,7 @@ export function Composer({
 
   return (
     <div className="chat-container px-4">
-      <div className="flex items-end gap-2 border border-[var(--border)] rounded-[var(--radius-lg)] bg-[var(--bg-elevated)] px-3 py-2 focus-within:border-[var(--border-strong)] transition-colors">
+      <div className="professional-card flex items-end gap-2 px-3 py-2 transition-colors focus-within:border-[var(--accent)] focus-within:shadow-[var(--shadow-focus)]">
         <textarea
           ref={textareaRef}
           className="flex-1 resize-none border-0 outline-none bg-transparent text-[var(--text)] placeholder:text-[var(--text-faint)] py-0.5 leading-6 text-sm"
@@ -63,7 +63,7 @@ export function Composer({
             type="button"
             aria-label={t("composer.stop")}
             onClick={onStop}
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border-strong)] text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors"
+            className="focus-ring flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[var(--radius)] border border-[var(--border-strong)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
           >
             <Square className="h-3 w-3" />
           </button>
@@ -72,7 +72,7 @@ export function Composer({
             type="button"
             aria-label={t("composer.send")}
             onClick={submit}
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--surface-3)] text-[var(--text)] hover:bg-[var(--border-strong)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="focus-ring flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[var(--radius)] border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-[var(--shadow-sm)] transition-colors hover:border-[var(--text-muted)] hover:bg-[var(--surface)] disabled:border-[var(--border)] disabled:bg-[var(--surface)] disabled:text-[var(--text-faint)] disabled:opacity-70"
             disabled={!value.trim()}
           >
             <ArrowUp className="h-4 w-4" />

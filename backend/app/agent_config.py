@@ -208,20 +208,13 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "web_fetch",
                     "web_search",
                     "knowledge_search",
-                    "view_file",
-                    "grep_file",
-                    "list_knowledge_bases",
-                    # Sandbox execution + its file-surfacing companion. All three are
-                    # intersected with what's actually registered, so they stay off
-                    # until the sandbox.default provider (and files_url_secret, for
-                    # publish_artifact) are configured.
                     "code_interpreter",
                     "shell",
                     "publish_artifact",
                 ],
             ),
             skills=AgentSkillsConfig(
-                enabled=["skill.writing", "skill.knowledge_qa"]
+                enabled=["skill.knowledge_qa"]
             ),
             settings={"max_steps": 20},
         )
@@ -325,9 +318,9 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             id="sandbox",
             kind="core_tool",
             name="Sandbox",
-            description="Run scripts in a constrained local or cloud runtime.",
-            enabled=False,
-            permission="disabled",
+            description="Run commands, inspect files, process data, and publish artifacts in the remote Agent Loop sandbox.",
+            enabled=True,
+            permission="auto",
             provider_refs=["sandbox.default"],
             settings={"runtime": "local", "network": False},
         ),
@@ -363,24 +356,6 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             permission="auto",
             status="ready",
             dependencies=["knowledge"],
-        ),
-        CapabilityConfig(
-            id="skill.data_analysis",
-            kind="skill",
-            name="Data Analysis",
-            description="Analyze files or data by executing scripts in a sandbox.",
-            enabled=False,
-            permission="ask",
-            dependencies=["sandbox"],
-        ),
-        CapabilityConfig(
-            id="skill.writing",
-            kind="skill",
-            name="Writing Assistant",
-            description="Draft and revise structured content without extra tools.",
-            enabled=True,
-            permission="auto",
-            status="ready",
         ),
     ],
 )

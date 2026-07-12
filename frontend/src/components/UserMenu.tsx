@@ -182,19 +182,20 @@ export function UserMenu({
               </button>
               <div className="flex items-center gap-2 border-t border-[var(--border)] px-3 py-2 text-sm text-[var(--text)]">
                 <Languages className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />
-                <span className="flex-1">{t("lang.label")}</span>
-                <div className="flex overflow-hidden rounded-[var(--radius-sm)] border border-[var(--border)]">
+                <span className="min-w-0 flex-1 truncate">{t("lang.label")}</span>
+                <div className="flex shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--border)]">
                   {(["zh", "en"] as const).map((code) => (
                     <button
                       key={code}
                       type="button"
                       onClick={() => setLang(code)}
-                      className={
-                        "px-2 py-0.5 text-xs transition-colors " +
-                        (lang === code
-                          ? "bg-[var(--accent)] text-[var(--accent-fg)]"
-                          : "text-[var(--text-muted)] hover:bg-[var(--surface-2)]")
-                      }
+                      className={cn(
+                        "h-6 min-w-9 whitespace-nowrap px-1.5 text-[11px] leading-none transition-colors",
+                        code === "zh" && "text-[10px]",
+                        lang === code
+                          ? "bg-[var(--surface-2)] text-[var(--text)]"
+                          : "text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+                      )}
                     >
                       {t(code === "zh" ? "lang.zh" : "lang.en")}
                     </button>

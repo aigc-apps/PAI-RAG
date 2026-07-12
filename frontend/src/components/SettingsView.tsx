@@ -34,7 +34,6 @@ import { useAliyunDialog } from "../store/aliyunDialog";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
 import { PageHeader } from "./PageHeader";
-import { ThemeToggle } from "./ThemeToggle";
 import { useI18n } from "../i18n";
 
 type Tab = "agents" | "org-persona" | "tools" | "connections" | "knowledge" | "skills" | "yaml";
@@ -99,11 +98,38 @@ function displayToolName(id: string) {
   return id;
 }
 
+const TOOL_BUNDLES: Record<string, string[]> = {
+  knowledge_search: ["knowledge_search"],
+  code_sandbox: ["code_interpreter", "shell", "publish_artifact"],
+};
+
+function toolBundle(toolId: string) {
+  return TOOL_BUNDLES[toolId] ?? [toolId];
+}
+
+function toolAliases(toolId: string) {
+  return Array.from(new Set([toolId, ...toolBundle(toolId)]));
+}
+
+function isToolEnabled(agent: AgentProfile, toolId: string) {
+  const included = new Set(agent.tools.include);
+  return toolAliases(toolId).some((name) => included.has(name));
+}
+
+function enabledToolIds(agent: AgentProfile, tools: ReturnType<typeof systemTools>) {
+  return new Set(tools.filter((tool) => isToolEnabled(agent, tool.id)).map((tool) => tool.id));
+}
+
 function systemTools(doc: AgentConfigDocument) {
   const core = doc.capabilities
     // aliyun_pai is a deployment capability (governs sandbox credential
     // injection), not a callable tool an agent selects — skip it here.
-    .filter((cap) => cap.kind === "core_tool" && cap.id !== "aliyun_pai")
+    .filter(
+      (cap) =>
+        cap.kind === "core_tool" &&
+        cap.id !== "aliyun_pai" &&
+        cap.settings.control_plane !== true
+    )
     .map((cap) => ({
       id: displayToolName(cap.id),
       sourceId: cap.id,
@@ -140,9 +166,11 @@ function applyAgentPatch(
 export function SettingsView({
   doc,
   onBack,
+  onOpenKnowledge,
 }: {
   doc: AgentConfigDocument;
   onBack: () => void;
+  onOpenKnowledge?: () => void;
 }) {
   const save = useAgentConfigStore((s) => s.save);
   const loadYaml = useAgentConfigStore((s) => s.loadYaml);
@@ -180,12 +208,15 @@ export function SettingsView({
     if (!agent) return;
     const included = new Set(agent.tools.include);
     const excluded = new Set(agent.tools.exclude);
-    if (included.has(toolId)) {
-      included.delete(toolId);
-      excluded.add(toolId);
+    const aliases = toolAliases(toolId);
+    if (isToolEnabled(agent, toolId)) {
+      aliases.forEach((name) => {
+        included.delete(name);
+        excluded.add(name);
+      });
     } else {
-      included.add(toolId);
-      excluded.delete(toolId);
+      toolBundle(toolId).forEach((name) => included.add(name));
+      aliases.forEach((name) => excluded.delete(name));
     }
     void saveDoc(
       applyAgentPatch(doc, agent.id, {
@@ -245,14 +276,16 @@ export function SettingsView({
   const tabGroups: Array<{ heading: string; items: Array<{ id: Tab; label: string }> }> = [
     {
       heading: "Agent Studio",
-      items: [{ id: "agents", label: "Agents" }],
+      items: [
+        { id: "agents", label: "Agents" },
+        { id: "connections", label: "Connections" },
+      ],
     },
     {
       heading: "Control Room",
       items: [
         { id: "org-persona", label: "Default Persona" },
-        { id: "connections", label: "Connections" },
-        { id: "tools", label: "Tools" },
+        { id: "tools", label: "Capabilities" },
         { id: "knowledge", label: "Knowledge Base" },
         { id: "skills", label: "Skills" },
         { id: "yaml", label: "YAML" },
@@ -261,17 +294,16 @@ export function SettingsView({
   ];
 
   return (
-    <div className="flex h-full flex-col bg-[var(--bg)] text-[var(--text)]">
+    <div className="workspace-page flex h-full flex-col text-[var(--text)]">
       <PageHeader
         icon={Settings2}
         title="Settings"
         onBack={onBack}
         backLabel="Back to chat"
-        actions={<ThemeToggle />}
       />
 
-      <main className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-[180px_1fr] gap-6 overflow-y-auto px-5 py-6">
-        <aside className="space-y-5">
+      <main className="mx-auto grid w-full max-w-[1180px] flex-1 grid-cols-[220px_1fr] gap-6 overflow-y-auto px-7 py-6 max-lg:grid-cols-1 max-md:px-4 max-md:py-5">
+        <aside className="space-y-5 max-lg:grid max-lg:grid-cols-2 max-lg:gap-4 max-md:grid-cols-1">
           {tabGroups.map((group) => (
             <div key={group.heading} className="space-y-1">
               <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-faint)]">
@@ -288,10 +320,10 @@ export function SettingsView({
                       else setTab(item.id);
                     }}
                     className={cn(
-                      "flex w-full items-center rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition-colors",
+                      "flex min-h-9 w-full items-center rounded-[var(--radius)] px-3 py-1.5 text-left text-sm transition-colors",
                       tab === item.id
-                        ? "bg-[var(--surface-2)] text-[var(--text)] font-medium"
-                        : "text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                        ? "bg-[var(--bg-elevated)] text-[var(--text)] font-semibold shadow-[var(--shadow-sm)]"
+                        : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
                     )}
                   >
                     {item.label}
@@ -326,7 +358,6 @@ export function SettingsView({
               doc={doc}
               agent={agent}
               agents={agents}
-              selectedAgentId={agentId}
               setSelectedAgentId={setAgentId}
               tools={tools}
               skills={skills}
@@ -356,8 +387,9 @@ export function SettingsView({
           {tab === "connections" && <ConnectionsPanel doc={doc} />}
 
           {tab === "knowledge" && (
-            <KnowledgeBasePanel
+            <KnowledgeSettingsHub
               doc={doc}
+              onOpenKnowledge={onOpenKnowledge}
               onConfigureVectorDB={() => setVectordbOpen(true)}
             />
           )}
@@ -461,6 +493,70 @@ export function SettingsView({
           }}
         />
       )}
+    </div>
+  );
+}
+
+function KnowledgeSettingsHub({
+  doc,
+  onOpenKnowledge,
+  onConfigureVectorDB,
+}: {
+  doc: AgentConfigDocument;
+  onOpenKnowledge?: () => void;
+  onConfigureVectorDB: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">{t("settings.kbHubTitle")}</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
+          {t("settings.kbHubBody")}
+        </p>
+      </div>
+
+      {onOpenKnowledge ? (
+        <button
+          type="button"
+          onClick={onOpenKnowledge}
+          className={cn(
+            CARD,
+            "focus-ring group w-full p-[18px] text-left transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface)]"
+          )}
+        >
+          <div className="flex flex-wrap items-start gap-3">
+            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] group-hover:border-[var(--border-strong)] group-hover:bg-[var(--bg-elevated)]">
+              <Database className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[15px] font-semibold">{t("settings.kbDataTitle")}</h3>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--text-muted)]">
+                {t("settings.kbDataBody")}
+              </p>
+            </div>
+            <span className={cn(BTN_PRIMARY, "pointer-events-none")}>
+              {t("settings.openKbManager")}
+            </span>
+          </div>
+        </button>
+      ) : (
+        <div className={cn(CARD, "p-[18px]")}>
+          <div className="flex flex-wrap items-start gap-3">
+            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)]">
+              <Database className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[15px] font-semibold">{t("settings.kbDataTitle")}</h3>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--text-muted)]">
+                {t("settings.kbDataBody")}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <KnowledgeBasePanel doc={doc} onConfigureVectorDB={onConfigureVectorDB} compact />
     </div>
   );
 }
@@ -905,7 +1001,7 @@ function ToolsDialog({
   onClose: () => void;
 }) {
   return (
-    <EditorDialog title={`Tools — ${agent.name}`} onClose={onClose} wide>
+    <EditorDialog title={`Capabilities — ${agent.name}`} onClose={onClose} wide>
       <ToolsGrid tools={tools} enabled={enabled} loading={loading} onToggle={onToggle} />
       {enabled.has("code_sandbox") && (
         <div className="mt-4">
@@ -961,7 +1057,7 @@ function KnowledgeDialog({
   onClose: () => void;
 }) {
   return (
-    <EditorDialog title={`Knowledge — ${agent.name}`} onClose={onClose}>
+    <EditorDialog title={`Knowledge Scope — ${agent.name}`} onClose={onClose}>
       <KnowledgeSection doc={doc} agent={agent} onSave={onSave} bare />
     </EditorDialog>
   );
@@ -988,16 +1084,16 @@ function PreviewCard({
 }) {
   const { t } = useI18n();
   return (
-    <div className={CARD}>
-      <div className="mb-2 flex items-center gap-2 text-[var(--text-muted)]">
+    <div className={cn(CARD, "professional-card-hover p-[18px]")}>
+      <div className="mb-3 flex items-center gap-2 text-[var(--text-muted)]">
         {icon}
-        <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
+        <h3 className="text-[15px] font-semibold text-[var(--text)]">{title}</h3>
         {badge}
         <button
           type="button"
           aria-label={editLabel}
           onClick={onEdit}
-          className="ml-auto inline-flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--accent)] hover:bg-[var(--surface-2)]"
+          className="focus-ring ml-auto inline-flex items-center gap-1 rounded-[var(--radius)] border border-transparent px-2 py-1 text-xs font-medium text-[var(--accent)] hover:border-[var(--border)] hover:bg-[var(--surface)]"
         >
           <Pencil className="h-3 w-3" />
           {t("common.edit")}
@@ -1016,95 +1112,10 @@ function previewNames(names: string[], empty: string): string {
   return shown.join(", ") + (rest > 0 ? ` +${rest}` : "");
 }
 
-/** Basic info — the agent's Name and Model, edited inline (no dialog). It's light
- * enough to sit on the page: Name is local and commits on blur; Model commits on
- * change. Parent keys this on agent.id so local state resets on switch. */
-function BasicInfoSection({
-  doc,
-  agent,
-  defaultModel,
-  modelOptions,
-  inherits,
-  isDefault,
-  onSave,
-}: {
-  doc: AgentConfigDocument;
-  agent: AgentProfile;
-  defaultModel: string;
-  modelOptions: string[];
-  inherits: boolean;
-  isDefault: boolean;
-  onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const [name, setName] = useState(agent.name);
-  const commitName = () => {
-    if (name !== agent.name) void onSave(applyAgentPatch(doc, agent.id, { name }));
-  };
-
-  return (
-    <div className={CARD}>
-      <div className="mb-3 flex items-center gap-2 text-[var(--text-muted)]">
-        <Settings2 className="h-4 w-4" />
-        <h3 className="text-sm font-semibold text-[var(--text)]">{t("settings.basicInfo")}</h3>
-        {isDefault && (
-          <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
-            {t("settings.defaultAgent")}
-          </span>
-        )}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">
-          <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Name</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onBlur={commitName}
-            className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm font-semibold"
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
-            Model
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                inherits
-                  ? "bg-[var(--surface-2)] text-[var(--text-muted)]"
-                  : "bg-[var(--accent-soft)] text-[var(--accent)]"
-              )}
-            >
-              {inherits ? "Using system default" : "Override"}
-            </span>
-          </span>
-          <select
-            aria-label="Model"
-            value={agent.model}
-            onChange={(event) =>
-              void onSave(applyAgentPatch(doc, agent.id, { model: event.target.value }))
-            }
-            className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs"
-          >
-            <option value="">
-              {defaultModel ? `Inherit (uses ${defaultModel})` : "Inherit (deployment default)"}
-            </option>
-            {modelOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-    </div>
-  );
-}
-
 function AgentsPanel({
   doc,
   agent,
   agents,
-  selectedAgentId,
   setSelectedAgentId,
   tools,
   skills,
@@ -1116,7 +1127,6 @@ function AgentsPanel({
   doc: AgentConfigDocument;
   agent: AgentProfile;
   agents: AgentProfile[];
-  selectedAgentId: string;
   setSelectedAgentId: (id: string) => void;
   tools: ReturnType<typeof systemTools>;
   skills: CapabilityConfig[];
@@ -1126,7 +1136,7 @@ function AgentsPanel({
   onToggleSkill: (skillId: string) => void;
 }) {
   const { t } = useI18n();
-  const enabledTools = new Set(agent.tools.include);
+  const enabledTools = enabledToolIds(agent, tools);
   const enabledSkills = new Set(agent.skills.enabled);
   // The resolved deployment default, surfaced by the backend on the llm.default
   // provider (falls back to the authored catalog default). A blank agent.model
@@ -1148,7 +1158,6 @@ function AgentsPanel({
     agent.model && !chatModels.includes(agent.model)
       ? [agent.model, ...chatModels]
       : chatModels;
-  const inherits = !agent.model;
 
   // Which focused editor dialog is open, and the two-step delete confirm. Both
   // reset when the selected agent changes.
@@ -1156,9 +1165,11 @@ function AgentsPanel({
     null | "persona" | "tools" | "skills" | "knowledge"
   >(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [modelEditing, setModelEditing] = useState(false);
   useEffect(() => {
     setDialog(null);
     setConfirmDelete(false);
+    setModelEditing(false);
   }, [agent.id]);
 
   // Knowledge bases are fetched once so the overview can preview scoped KB *names*
@@ -1202,99 +1213,151 @@ function AgentsPanel({
   };
   const makeDefault = () =>
     void onSave({ ...doc, default_agent: agent.id }, "Default agent set");
+  const createAgent = () => {
+    const existing = new Set(agents.map((a) => a.id));
+    let n = agents.length + 1;
+    let id = `agent-${n}`;
+    while (existing.has(id)) id = `agent-${++n}`;
+    const created = newAgentProfile(doc, id, `New agent ${n}`);
+    void onSave(
+      { ...doc, agents: [...doc.agents, created] },
+      "Agent created"
+    );
+    setSelectedAgentId(id);
+  };
+  const resolvedModel = agent.model || defaultModel || "deployment default";
 
   return (
     <>
-      {/* Top toolbar: the agent switcher lives here alone, so it's the only thing
-          occupying the top; the full-width, read-only config sits below it. */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <UserRound className="h-4 w-4 text-[var(--text-muted)]" />
-        <select
-          aria-label="Select agent"
-          value={selectedAgentId}
-          onChange={(event) => setSelectedAgentId(event.target.value)}
-          className="min-w-[200px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium"
-        >
-          {agents.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-              {doc.default_agent === item.id ? t("settings.defaultSuffix") : ""}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() => {
-            const existing = new Set(agents.map((a) => a.id));
-            let n = agents.length + 1;
-            let id = `agent-${n}`;
-            while (existing.has(id)) id = `agent-${++n}`;
-            const created = newAgentProfile(doc, id, `New agent ${n}`);
-            void onSave(
-              { ...doc, agents: [...doc.agents, created] },
-              "Agent created"
-            );
-            setSelectedAgentId(id);
-          }}
-          className={BTN_GHOST}
-        >
-          <Plus className="h-4 w-4" />
-          New agent
-        </button>
-        <div className="flex-1" />
-        {!isDefault && (
-          <button
-            type="button"
-            onClick={makeDefault}
-            className={BTN_GHOST}
-          >
-            {t("settings.setDefault")}
-          </button>
-        )}
-        {confirmDelete ? (
-          <>
-            <button
-              type="button"
-              onClick={deleteAgent}
-              className={BTN_DANGER}
-            >
-              {t("settings.confirmDelete")}
+      <div className={cn(CARD, "mb-5 p-[18px]")}>
+        <div className="flex flex-wrap items-start gap-3">
+          <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)]">
+            <UserRound className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-semibold tracking-tight text-[var(--text)]">
+                {agent.name}
+              </h2>
+              {isDefault && (
+                <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
+                  {t("settings.defaultAgent")}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+              <span className="font-medium text-[var(--text-faint)]">Model</span>
+              {modelEditing ? (
+                <select
+                  aria-label="Model"
+                  autoFocus
+                  value={agent.model}
+                  onBlur={() => setModelEditing(false)}
+                  onChange={(event) => {
+                    void onSave(applyAgentPatch(doc, agent.id, { model: event.target.value }));
+                    setModelEditing(false);
+                  }}
+                  className="h-8 min-w-[260px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 font-mono text-xs text-[var(--text)] outline-none focus:border-[var(--accent)] focus:shadow-[var(--shadow-focus)]"
+                >
+                  <option value="">
+                    {defaultModel ? `Inherit (${defaultModel})` : "Inherit deployment default"}
+                  </option>
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <span className="font-mono text-[var(--text-muted)]">{resolvedModel}</span>
+                  {!agent.model && defaultModel && (
+                    <span className="rounded-full bg-[var(--surface)] px-1.5 py-0.5 text-[10px]">
+                      {t("settings.inheritsDefault")}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setModelEditing(true)}
+                    className="focus-ring inline-flex h-6 items-center gap-1 rounded-[var(--radius-sm)] px-1.5 text-[11px] font-medium text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text)]"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    {t("common.edit")}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="ml-auto flex flex-wrap justify-end gap-2">
+            {!isDefault && (
+              <button type="button" onClick={makeDefault} className={BTN_GHOST}>
+                {t("settings.setDefault")}
+              </button>
+            )}
+            <button type="button" onClick={createAgent} className={BTN_GHOST}>
+              <Plus className="h-4 w-4" />
+              {t("settings.newAgent")}
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              className={BTN_GHOST}
-            >
-              {t("common.cancel")}
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            disabled={!canDelete}
-            title={canDelete ? t("settings.deleteThisAgent") : t("settings.keepOneAgent")}
-            className={BTN_GHOST}
-          >
-            <Trash2 className="h-4 w-4" />
-            {t("common.delete")}
-          </button>
+            {confirmDelete ? (
+              <>
+                <button type="button" onClick={deleteAgent} className={BTN_DANGER}>
+                  {t("settings.confirmDelete")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className={BTN_GHOST}
+                >
+                  {t("common.cancel")}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={!canDelete}
+                title={canDelete ? t("settings.deleteThisAgent") : t("settings.keepOneAgent")}
+                className={BTN_GHOST}
+              >
+                <Trash2 className="h-4 w-4" />
+                {t("common.delete")}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {agents.length > 1 && (
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
+            {agents.map((item) => {
+              const selected = item.id === agent.id;
+              const itemIsDefault = doc.default_agent === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setSelectedAgentId(item.id)}
+                  className={cn(
+                    "focus-ring inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-[var(--radius)] border px-2.5 text-xs transition-colors",
+                    selected
+                      ? "border-[var(--border-strong)] bg-[var(--bg-elevated)] font-semibold text-[var(--text)] shadow-[var(--shadow-sm)]"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                  )}
+                >
+                  <span className="truncate">{item.name}</span>
+                  {itemIsDefault && (
+                    <span className="shrink-0 rounded-full bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-faint)]">
+                      {t("settings.defaultBadge")}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      <div className="space-y-3">
-        {/* Basic info — name + model, edited inline (light enough for no dialog). */}
-        <BasicInfoSection
-          key={`basic-${agent.id}`}
-          doc={doc}
-          agent={agent}
-          defaultModel={defaultModel}
-          modelOptions={modelOptions}
-          inherits={inherits}
-          isDefault={isDefault}
-          onSave={onSave}
-        />
-
+      <div className="space-y-4">
         {/* Persona — first ~200 chars of the system prompt. */}
         <PreviewCard
           icon={<UserRound className="h-4 w-4" />}
@@ -1310,20 +1373,20 @@ function AgentsPanel({
         </PreviewCard>
 
         {/* Capabilities — tools / skills / knowledge, previewing example names. */}
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-3">
           <PreviewCard
             icon={<Wrench className="h-4 w-4" />}
-            title={t("settings.tools")}
+            title={t("settings.capabilities")}
             badge={
               <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
                 {enabledTools.size}/{tools.length}
               </span>
             }
-            editLabel={t("settings.editTools")}
+            editLabel={t("settings.editCapabilities")}
             onEdit={() => setDialog("tools")}
           >
             <p className="line-clamp-2 text-xs text-[var(--text-muted)]">
-              {previewNames(toolNames, t("settings.noToolsEnabled"))}
+              {previewNames(toolNames, t("settings.noCapabilitiesEnabled"))}
             </p>
           </PreviewCard>
           <PreviewCard
@@ -1343,7 +1406,7 @@ function AgentsPanel({
           </PreviewCard>
           <PreviewCard
             icon={<Database className="h-4 w-4" />}
-            title={t("settings.knowledge")}
+            title={t("settings.knowledgeScope")}
             badge={
               <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
                 {scopedKb ? kbCount : t("settings.all")}
@@ -1426,8 +1489,8 @@ function ToolsPanel({
   return (
     <>
       <Header
-        title="System Tools"
-        body="Control Room — configure which tools exist in the deployment. Each agent decides in Agent Studio whether to use them."
+        title="Capabilities"
+        body="Capabilities are the channels an agent can use: search the web, retrieve from knowledge bases, run code in the sandbox, or access connected cloud services. Configure them once here, then choose which capabilities each agent may use."
       />
       <div className="grid gap-3 lg:grid-cols-3">
         {tools.map((cap) => (
@@ -1532,8 +1595,8 @@ function SkillsPanel({
     <>
       <div className="mb-5 flex items-start justify-between gap-3">
         <Header
-          title="System Skills"
-          body="Control Room — install and manage the deployment's skill library. Agents opt into skills in Agent Studio once dependencies are available."
+          title="Skills"
+          body="Skills are task playbooks. They teach an agent how to use its capabilities for a specific workflow, such as knowledge-grounded QA, PAI-Rec diagnosis, or report generation."
         />
         <button
           type="button"
@@ -2275,8 +2338,8 @@ function SandboxConfigDialog({
       agents: doc.agents.map((agent) => ({
         ...agent,
         tools: {
-          include: Array.from(new Set([...agent.tools.include, "code_sandbox"])),
-          exclude: agent.tools.exclude.filter((name) => name !== "code_sandbox"),
+          include: Array.from(new Set([...agent.tools.include, ...toolBundle("code_sandbox")])),
+          exclude: agent.tools.exclude.filter((name) => !toolAliases("code_sandbox").includes(name)),
         },
       })),
     };

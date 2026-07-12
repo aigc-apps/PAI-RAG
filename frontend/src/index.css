@@ -2,11 +2,11 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #ffffff;
+  --bg: #fbfcfe;
   --bg-elevated: #ffffff;
-  --surface: #f9fafb;
-  --surface-2: #f3f4f6;
-  --surface-3: #e5e7eb;
+  --surface: #f6f8fb;
+  --surface-2: #eef2f7;
+  --surface-3: #dce3ee;
   --code-bg: #f1f5f9;
   --code-header: #e8edf4;
   --code-border: #cfd8e3;
@@ -14,22 +14,25 @@
   --text: #111827;
   --text-muted: #6b7280;
   --text-faint: #9ca3af;
-  --border: #eaecef;
-  --border-strong: #d6d9df;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-soft: #eff6ff;
+  --border: #e5e9f0;
+  --border-strong: #cbd5e1;
+  --accent: #586170;
+  --accent-hover: #495260;
+  --accent-soft: #f3f5f8;
   --accent-fg: #ffffff;
   --user-bubble: #f3f4f6;
   --tool-bg: #f9fafb;
   --danger: #dc2626;
   --success: #16a34a;
   --warning: #b45309;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow: 0 10px 30px -20px rgba(15, 23, 42, 0.34), 0 2px 8px rgba(15, 23, 42, 0.04);
+  --shadow-focus: 0 0 0 3px rgba(88, 97, 112, 0.14);
   --radius: 6px;
   --radius-sm: 4px;
   --radius-lg: 8px;
+  --sidebar-w: 260px;
+  --header-h: 52px;
 }
 
 :root[data-theme="dark"] {
@@ -47,10 +50,10 @@
   --text-faint: #6b7280;
   --border: #262a36;
   --border-strong: #313644;
-  --accent: #60a5fa;
-  --accent-hover: #93c5fd;
-  --accent-soft: #1e293b;
-  --accent-fg: #ffffff;
+  --accent: #c5cbd3;
+  --accent-hover: #d7dce3;
+  --accent-soft: #232834;
+  --accent-fg: #111827;
   --user-bubble: #1f2330;
   --tool-bg: #14171f;
   --danger: #f87171;
@@ -66,11 +69,23 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 .font-mono {
@@ -81,8 +96,52 @@ body {
    stable max width so the reading focus doesn't drift on wide screens. */
 .chat-container {
   width: 100%;
-  max-width: 820px;
+  max-width: 860px;
   margin-inline: auto;
+}
+
+.app-shell {
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.94) 0%, rgba(251, 252, 254, 0.98) 48%, var(--bg) 100%);
+}
+
+.workspace-page {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(241, 245, 249, 0.7) 0, transparent 340px),
+    var(--bg);
+}
+
+.workspace-container {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding: 24px 28px 64px;
+}
+
+.professional-card {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.professional-card-hover {
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease, background-color 0.16s ease;
+}
+.professional-card-hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--shadow-focus);
+}
+
+.subtle-divider {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
 }
 
 /* Reusable icon-button affordance: clear hover + a focus-visible ring so
@@ -102,6 +161,16 @@ body {
 .icon-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sidebar-w: 232px;
+    --header-h: 50px;
+  }
+  .workspace-container {
+    padding: 20px 16px 56px;
+  }
 }
 
 .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }

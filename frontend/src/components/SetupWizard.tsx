@@ -12,7 +12,6 @@ import { CARD, BTN_PRIMARY } from "../lib/ui";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { BrandMark } from "./Sidebar";
 import { ConnectionsPanel } from "./ConnectionsPanel";
-import { ThemeToggle } from "./ThemeToggle";
 import { useI18n, type MessageKey, type TFunction } from "../i18n";
 
 const modes: Array<{
@@ -135,8 +134,6 @@ export function SetupWizard({
     <div className="min-h-full bg-[var(--bg)] text-[var(--text)]">
       <div className="flex h-12 items-center border-b border-[var(--border)] px-4">
         <BrandMark />
-        <div className="flex-1" />
-        <ThemeToggle />
       </div>
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-8">
         <section>

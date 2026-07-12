@@ -27,9 +27,11 @@ const providersOf = (cat: ModelCatalogDoc): ModelProviderDoc[] =>
 export function KnowledgeBasePanel({
   doc,
   onConfigureVectorDB,
+  compact = false,
 }: {
   doc: AgentConfigDocument;
   onConfigureVectorDB: () => void;
+  compact?: boolean;
 }) {
   const { t } = useI18n();
   const cat = doc.models ?? {};
@@ -53,14 +55,16 @@ export function KnowledgeBasePanel({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">{t("kb.title")}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-          {t("kb.introA")}
-          <strong>Models</strong>
-          {t("kb.introB")}
-        </p>
-      </div>
+      {!compact && (
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">{t("kb.title")}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
+            {t("kb.introA")}
+            <strong>Models</strong>
+            {t("kb.introB")}
+          </p>
+        </div>
+      )}
 
       {/* Vector database — configurable */}
       <section className="space-y-3">

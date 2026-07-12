@@ -66,6 +66,8 @@ export function AliyunAuthToolCard({
 
   const btn =
     "inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3 py-1.5 text-xs font-semibold transition-colors";
+  const primaryBtn =
+    "border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-[var(--shadow-sm)] hover:border-[var(--text-muted)] hover:bg-[var(--surface)]";
 
   return (
     <div
@@ -130,7 +132,7 @@ export function AliyunAuthToolCard({
             )}
             <button
               type="button"
-              className={cn(btn, "bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]")}
+              className={cn(btn, primaryBtn)}
               onClick={() => showDialog({ resumeAfter: true })}
             >
               {bound ? t("aliyun.card.reauthorize") : t("aliyun.card.authorize")}
@@ -160,7 +162,8 @@ export function AliyunAuthToolCard({
               type="button"
               className={cn(
                 btn,
-                "mt-2 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
+                primaryBtn,
+                "mt-2"
               )}
               onClick={() => resumeAgent()}
             >

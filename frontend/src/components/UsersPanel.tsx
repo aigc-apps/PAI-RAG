@@ -12,6 +12,7 @@ import {
 import { useAuthStore } from "../store/auth";
 import { cn } from "../lib/cn";
 import { copyText } from "../lib/clipboard";
+import { BTN_PRIMARY } from "../lib/ui";
 import { useI18n } from "../i18n";
 
 export function UsersPanel() {
@@ -108,7 +109,7 @@ export function UsersPanel() {
             type="button"
             disabled={busy}
             onClick={submitInvite}
-            className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-fg)] disabled:opacity-60"
+            className={BTN_PRIMARY}
           >
             <UserPlus className="h-4 w-4" />
             {t("users.invite")}

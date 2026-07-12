@@ -90,7 +90,7 @@ export function App() {
   // non-admin never gets the entry point, and a stray view state falls through
   // to chat.
   if (view === "knowledge" && isAdmin) {
-    return <KnowledgeView onBack={() => setView("chat")} />;
+    return <KnowledgeView onBack={() => setView("settings")} />;
   }
 
   // User management is likewise an admin-only surface, reached from the account
@@ -100,11 +100,10 @@ export function App() {
   }
 
   return (
-    <div className="flex h-full bg-[var(--bg)]">
+    <div className="app-shell flex h-full bg-[var(--bg)]">
       {sidebarOpen && (
         <Sidebar
           onOpenSettings={isAdmin ? () => setView("settings") : undefined}
-          onOpenKnowledge={isAdmin ? () => setView("knowledge") : undefined}
           onOpenUsers={isAdmin ? () => setView("users") : undefined}
         />
       )}

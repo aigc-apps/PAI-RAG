@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from typing import List, Optional
 
 
@@ -41,6 +42,18 @@ _TOOL_PROTOCOL = (
     "over-working."
 )
 
+
+@dataclass(frozen=True)
+class CapabilityPrompt:
+    """Stable prompt fragment gated by the actual tools in an agent's toolbox."""
+
+    id: str
+    anchor_tools: tuple[str, ...]
+    guidance: str
+
+    def enabled(self, tool_names: set[str]) -> bool:
+        return any(name in tool_names for name in self.anchor_tools)
+
 # Only added when publish_artifact is registered. Without it, models tend to
 # write a file in the sandbox and then merely describe it or print its path,
 # which the user cannot open. This tells the model to hand the file to the UI.
@@ -75,23 +88,36 @@ _ALIYUN_CLI_GUIDANCE = (
 )
 
 
+_WEB_SEARCH_GUIDANCE = (
+    "Web search is available for current or external information that is not "
+    "reliably covered by the conversation, knowledge base, or sandbox files. Use "
+    "web_search to discover candidate sources; if a snippet is not enough, use "
+    "web_fetch on a specific result URL before making detailed claims. Prefer "
+    "primary or official sources, cite URLs when they inform the answer, and say "
+    "when search results are weak or inconclusive."
+)
+
+
 # Added when the knowledge subsystem is wired in (anchored on knowledge_search).
-# Reflex-level: ground answers in ingested docs, and disambiguate the four KB tools
-# so the model picks the right one instead of defaulting to knowledge_search for
-# everything. Heavier procedures (citation discipline, cross-KB compare) live in the
-# knowledge_qa skill, not here.
+# Reflex-level: ground answers in ingested docs. Heavier procedures (citation
+# discipline, cross-KB compare) live in the knowledge_qa skill, not here.
 _KNOWLEDGE_GUIDANCE = (
     "A knowledge base of ingested documents is available. Before answering a "
     "question its contents could cover, search it and ground your answer in what "
     "you find, citing the source; if it does not contain the answer, say so plainly "
-    "rather than guessing. Pick the right tool: knowledge_search for a "
-    "meaning/keyword query (the default; it searches every accessible base at once "
-    "unless you pass kb_ids); grep_file for an exact literal string that tokenized "
-    "search misses — error codes, identifiers, API names, exact jargon; view_file to "
-    "read a whole document once a hit looks relevant, or view_file(chunk_id=…, "
-    "mode=\"locate\") to open a passage in its surrounding context; "
-    "list_knowledge_bases to see which bases exist and get their ids when you need to "
-    "narrow a search. Prefer these over your own recall for anything the docs cover."
+    "rather than guessing. Use knowledge_search for meaning/keyword queries; it "
+    "searches every accessible base at once unless you pass kb_ids. Prefer it over "
+    "your own recall for anything the docs could cover."
+)
+
+
+_KNOWLEDGE_AUX_GUIDANCE = (
+    "Additional knowledge-base inspection tools are available. Use "
+    "list_knowledge_bases to discover base ids when you need to narrow a search; "
+    "use grep_file for an exact literal string that tokenized search may miss — "
+    "error codes, identifiers, API names, exact jargon; use view_file to read a "
+    "document or locate a chunk in surrounding context after knowledge_search or "
+    "grep_file surfaces a relevant hit."
 )
 
 
@@ -100,18 +126,23 @@ _KNOWLEDGE_GUIDANCE = (
 # two entrypoints. publish_artifact's own block covers surfacing files, so this does
 # not repeat it.
 _SANDBOX_GUIDANCE = (
-    "You have a sandbox that runs real code and shell commands. Reach for it "
+    "You have a remote Agent Loop sandbox that runs real code and shell commands. "
+    "This service cannot inspect the user's local filesystem directly; read, grep, "
+    "parse, or transform files only inside sandbox mounts such as /mnt/user, "
+    "/mnt/skills, and /mnt/system. Reach for the sandbox "
     "whenever execution beats reasoning: non-trivial arithmetic, parsing or "
     "transforming files, data analysis, running or testing a script, checking an "
     "actual command's output — do not compute large or precise results in your head. "
     "Use code_interpreter to run code (e.g. Python) and shell to run shell commands; "
     "they share the same environment and mounts, including the durable per-user "
-    "directory at /mnt/user ($AGENT_USER_PATH). The shell runs operating-system and "
-    "CLI commands only — it is not a way to invoke your own tools: load_skill, "
-    "knowledge_search, publish_artifact and the rest are tool/function calls, so call "
-    "them directly and never type a tool name as a shell command. Keep stderr visible "
-    "when a command fails so you can see why, and fix and retry rather than guessing "
-    "at the result."
+    "directory at /mnt/user ($AGENT_USER_PATH). For file inspection, prefer shell "
+    "commands such as ls, find, rg/grep, sed, head, tail, and cat; for multi-step "
+    "parsing or larger transformations, prefer code_interpreter. The shell runs "
+    "operating-system and CLI commands only — it is not a way to invoke your own "
+    "tools: load_skill, knowledge_search, publish_artifact and the rest are "
+    "tool/function calls, so call them directly and never type a tool name as a "
+    "shell command. Keep stderr visible when a command fails so you can see why, "
+    "and fix and retry rather than guessing at the result."
 )
 
 
@@ -129,6 +160,14 @@ _CODE_LAYER_GUIDANCE = (
     "symbols, cat to read files). It is read-only reference material — do not "
     "try to modify it — and it is a fallback for source-level questions, not a "
     "replacement for knowledge_search on document questions."
+)
+
+
+_CAPABILITY_PROMPTS: tuple[CapabilityPrompt, ...] = (
+    CapabilityPrompt("web_search", ("web_search",), _WEB_SEARCH_GUIDANCE),
+    CapabilityPrompt("knowledge", ("knowledge_search",), _KNOWLEDGE_GUIDANCE),
+    CapabilityPrompt("sandbox", ("code_interpreter", "shell"), _SANDBOX_GUIDANCE),
+    CapabilityPrompt("file_output", ("publish_artifact",), _FILE_OUTPUT_GUIDANCE),
 )
 
 
@@ -154,6 +193,30 @@ def _code_layer_block(code_manifest: str) -> str:
     )
 
 
+def _render_capability_guidance(
+    *,
+    tool_names: List[str],
+    aliyun_pai_enabled: bool,
+    code_layer_enabled: bool,
+    code_manifest: str,
+) -> List[str]:
+    tool_set = set(tool_names)
+    blocks: List[str] = []
+    for capability in _CAPABILITY_PROMPTS:
+        if not capability.enabled(tool_set):
+            continue
+        blocks.append(capability.guidance)
+        if capability.id == "knowledge" and any(
+            name in tool_set for name in ("view_file", "grep_file", "list_knowledge_bases")
+        ):
+            blocks.append(_KNOWLEDGE_AUX_GUIDANCE)
+        if capability.id == "sandbox" and code_layer_enabled:
+            blocks.append(_code_layer_block(code_manifest))
+    if aliyun_pai_enabled and "shell" in tool_set:
+        blocks.append(_ALIYUN_CLI_GUIDANCE)
+    return blocks
+
+
 def render_stable_system_prompt(
     instructions: str, *, tool_names: List[str], project_context: str = "",
     aliyun_pai_enabled: bool = False, code_layer_enabled: bool = False,
@@ -168,19 +231,13 @@ def render_stable_system_prompt(
     tools_section = "# Tools\n" + _TOOL_PROTOCOL
     if tool_names:
         tools_section += "\n\nTools available this session: " + ", ".join(tool_names) + "."
-        # Subsystem guidance, each gated on its anchor tool being present. Short and
-        # always-on so a reflex capability never depends on the model loading a skill
-        # first; verbose workflows still live in skills.
-        if "knowledge_search" in tool_names:
-            tools_section += "\n\n" + _KNOWLEDGE_GUIDANCE
-        if "code_interpreter" in tool_names or "shell" in tool_names:
-            tools_section += "\n\n" + _SANDBOX_GUIDANCE
-            if code_layer_enabled:
-                tools_section += "\n\n" + _code_layer_block(code_manifest)
-        if "publish_artifact" in tool_names:
-            tools_section += "\n\n" + _FILE_OUTPUT_GUIDANCE
-        if aliyun_pai_enabled and "shell" in tool_names:
-            tools_section += "\n\n" + _ALIYUN_CLI_GUIDANCE
+        for block in _render_capability_guidance(
+            tool_names=tool_names,
+            aliyun_pai_enabled=aliyun_pai_enabled,
+            code_layer_enabled=code_layer_enabled,
+            code_manifest=code_manifest,
+        ):
+            tools_section += "\n\n" + block
     else:
         tools_section += "\n\nYou have no tools enabled in this session; answer from your own knowledge."
     parts.append(tools_section)

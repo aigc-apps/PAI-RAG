@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "../lib/cn";
+import { BTN_PRIMARY } from "../lib/ui";
 import { useAliyunDialog } from "../store/aliyunDialog";
 import { useComposer } from "../store/composer";
 import {
@@ -185,7 +186,7 @@ export function AliyunAuthDialog({ onClose }: { onClose: () => void }) {
                   rel="noopener noreferrer"
                   aria-disabled={!status?.ros_url}
                   className={cn(
-                    "inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-fg)]",
+                    BTN_PRIMARY,
                     !status?.ros_url && "pointer-events-none opacity-50"
                   )}
                 >
@@ -217,7 +218,7 @@ export function AliyunAuthDialog({ onClose }: { onClose: () => void }) {
                   type="button"
                   disabled={busy || !configured}
                   onClick={submit}
-                  className="mt-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-fg)] disabled:opacity-60"
+                  className={cn(BTN_PRIMARY, "mt-2")}
                 >
                   {busy ? t("aliyun.verifying") : t("aliyun.verifyAuthorize")}
                 </button>
@@ -238,7 +239,7 @@ export function AliyunAuthDialog({ onClose }: { onClose: () => void }) {
                 useComposer.getState().submit?.(t("aliyun.resumeMessage"));
                 onClose();
               }}
-              className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-fg)] hover:opacity-90"
+              className={BTN_PRIMARY}
             >
               {t("aliyun.resumeButton")}
               <ArrowRight className="h-4 w-4" />

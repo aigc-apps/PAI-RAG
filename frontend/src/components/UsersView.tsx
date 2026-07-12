@@ -1,6 +1,5 @@
 import { Users } from "lucide-react";
 import { UsersPanel } from "./UsersPanel";
-import { ThemeToggle } from "./ThemeToggle";
 import { PageHeader } from "./PageHeader";
 import { useI18n } from "../i18n";
 
@@ -18,7 +17,6 @@ export function UsersView({ onBack }: { onBack: () => void }) {
         title={t("users.title")}
         onBack={onBack}
         backLabel={t("users.backToChat")}
-        actions={<ThemeToggle />}
       />
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="mx-auto w-full max-w-4xl px-5 py-6">

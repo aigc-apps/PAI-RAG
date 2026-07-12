@@ -7,7 +7,6 @@ import { useResponsesChat } from "../hooks/useResponsesChat";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 import { AgentSelector } from "./AgentSelector";
-import { ThemeToggle } from "./ThemeToggle";
 import { BrandMark } from "./Sidebar";
 import { ICON_BTN } from "../lib/ui";
 import { useI18n } from "../i18n";
@@ -49,7 +48,7 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
   return (
     <div className="flex h-full flex-col">
       {/* Top bar */}
-      <div className="h-12 flex items-center gap-1 px-3 border-b border-[var(--border)] flex-shrink-0 bg-[var(--bg)]">
+      <div className="h-[var(--header-h)] flex items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-elevated)]/92 px-4 flex-shrink-0 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
         {onToggleSidebar && (
           <button
             type="button"
@@ -63,24 +62,23 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
         )}
         <div className="flex-1 min-w-0 text-center px-2">
           {currentTitle && (
-            <span className="truncate inline-block max-w-full text-sm font-medium text-[var(--text-muted)]">
+            <span className="truncate inline-block max-w-full rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-muted)]">
               {currentTitle}
             </span>
           )}
         </div>
         <AgentSelector />
-        <ThemeToggle />
       </div>
 
       {/* Main area: empty state or messages + composer */}
       {messages.length === 0 ? (
-        <div className="flex-1 grid place-items-center px-4 pb-8">
+        <div className="flex-1 grid place-items-center px-4 pb-12">
           <div className="chat-container flex flex-col items-center gap-5">
             <BrandMark size="lg" />
             <h1 className="text-xl font-semibold text-[var(--text)] tracking-tight">
               {t("chat.greeting")}
             </h1>
-            <div className="w-full">
+            <div className="w-full max-w-[720px]">
               <Composer onSend={send} onStop={stop} isStreaming={isStreaming} />
             </div>
           </div>
@@ -89,8 +87,8 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
         <>
           <MessageList onRegenerate={regenerate} />
           <div
-            className="flex-shrink-0 border-t border-[var(--border)] bg-[var(--bg)] py-3"
-            style={{ boxShadow: "0 -1px 8px rgba(0,0,0,0.04)" }}
+            className="flex-shrink-0 border-t border-[var(--border)] bg-[var(--bg-elevated)]/92 py-3 backdrop-blur"
+            style={{ boxShadow: "0 -10px 28px -26px rgba(15,23,42,0.45)" }}
           >
             <Composer onSend={send} onStop={stop} isStreaming={isStreaming} />
           </div>

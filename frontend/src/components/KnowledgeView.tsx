@@ -222,7 +222,7 @@ export function KnowledgeView({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[var(--bg)] text-[var(--text)]">
+    <div className="workspace-page flex h-full flex-col text-[var(--text)]">
       <TopBar onBack={onBack} crumb={<b className="font-semibold text-[var(--text)]">{t("kb.title")}</b>} />
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <KbList
@@ -251,16 +251,22 @@ function KbList({ bases, loading, onOpen, onCreated }: {
   const [showCreate, setShowCreate] = useState(false);
 
   return (
-    <div className="mx-auto w-full max-w-[1120px] px-5 pt-6 pb-16">
-      <div className="mb-5 flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{t("kb.title")}</h1>
-          <p className="mt-1 max-w-2xl text-[13px] text-[var(--text-muted)]">
+    <div className="workspace-container">
+      <div className="mb-7 grid max-w-5xl grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 gap-y-4 max-sm:grid-cols-1">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-semibold tracking-tight">{t("kb.title")}</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
             {t("kbview.listIntro")}
           </p>
         </div>
-        <button className={BTN_PRIMARY} onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" /> {t("kbview.newKb")}
+        <button
+          type="button"
+          className={cn(BTN_PRIMARY, "mt-2 whitespace-nowrap max-sm:mt-0 max-sm:w-fit")}
+          aria-label={t("kbview.newKb")}
+          title={t("kbview.newKb")}
+          onClick={() => setShowCreate(true)}
+        >
+          <Plus className="h-4 w-4" /> {t("kbview.newShort")}
         </button>
       </div>
 
@@ -277,7 +283,7 @@ function KbList({ bases, loading, onOpen, onCreated }: {
           </button>
         </div>
       ) : (
-        <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))" }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))" }}>
           {bases.map((kb) => <KbCard key={kb.id} kb={kb} onOpen={() => onOpen(kb.id)} />)}
         </div>
       )}
@@ -299,21 +305,21 @@ function KbCard({ kb, onOpen }: { kb: KnowledgeBase; onOpen: () => void }) {
   return (
     <button
       type="button" onClick={onOpen}
-      className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] p-4 text-left transition-colors hover:border-[var(--border-strong)] hover:shadow-[var(--shadow)]"
+      className="professional-card professional-card-hover flex min-h-[170px] flex-col gap-3 p-[18px] text-left"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-[15px] font-semibold">{kb.name}</h3>
         <Pill status={kb.status} />
       </div>
-      <div className="min-h-[18px] truncate text-[12.5px] text-[var(--text-muted)]">
+      <div className="min-h-[20px] truncate text-[13px] text-[var(--text-muted)]">
         {kb.description || t("kbview.noDescription")}
       </div>
-      <div className="flex items-center gap-3.5 text-xs text-[var(--text-muted)]">
+      <div className="flex items-center gap-4 border-y border-[var(--border)] py-2.5 text-xs text-[var(--text-muted)]">
         <span><b className="font-semibold text-[var(--text)]">{kb.document_count}</b> {t("kbview.docs")}</span>
         <span><b className="font-semibold text-[var(--text)]">{kb.chunk_count}</b> {t("kbview.chunks")}</span>
         <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">{kb.visibility}</span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5 pt-0.5">
         <Chip mono>{str(emb.model, "local-hash-v1")} · {num(emb.dimension, 64)}d</Chip>
         <Chip>{t("kbview.chipVector")} <span className="text-[var(--text-faint)]">{str(kb.vector_store_config?.provider_id, "local_sql")}</span></Chip>
         <Chip>{t("kbview.chipRerank")} <span className="text-[var(--text-faint)]">{rerank ? str(kb.rerank_config?.model, "on") : t("kbview.off")}</span></Chip>
@@ -359,7 +365,7 @@ function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[var(--bg)] text-[var(--text)]">
+    <div className="workspace-page flex h-full flex-col text-[var(--text)]">
       <TopBar
         onBack={onBackToList}
         crumb={<>
@@ -368,12 +374,12 @@ function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
           <b className="font-semibold text-[var(--text)]">{kb.name}</b>
         </>}
       />
-      <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
+      <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-elevated)]/84 px-4 backdrop-blur">
         {tabs.map((tb) => (
           <button
             key={tb.id} type="button" onClick={() => setTab(tb.id)}
             className={cn(
-              "-mb-px border-b-2 px-3.5 py-2.5 text-[13px] font-medium",
+              "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
               tab === tb.id
                 ? "border-[var(--accent)] text-[var(--text)]"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
@@ -389,7 +395,7 @@ function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto w-full max-w-[1120px] px-5 py-6">
+        <div className="workspace-container">
           {tab === "overview" && <OverviewPanel kb={kb} />}
           {tab === "config" && <ConfigPanel kb={kb} onSaved={onChanged} />}
           {tab === "datasources" && <DataSourcePanel kb={kb} onChanged={onChanged} />}
@@ -403,16 +409,16 @@ function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
 
 function Stat({ n, l }: { n: ReactNode; l: string }) {
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+    <div className="professional-card px-5 py-4">
       <div className="text-[22px] font-semibold tracking-tight">{n}</div>
-      <div className="mt-0.5 text-[11.5px] text-[var(--text-faint)]">{l}</div>
+      <div className="mt-1 text-xs font-medium text-[var(--text-faint)]">{l}</div>
     </div>
   );
 }
 
 function KV({ k, v }: { k: string; v: ReactNode }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-[var(--border)] py-1.5 text-[13px] last:border-b-0">
+    <div className="flex justify-between gap-3 border-b border-[var(--border)] py-2 text-sm last:border-b-0">
       <span className="text-[var(--text-muted)]">{k}</span>
       <span className="font-mono text-xs">{v}</span>
     </div>
@@ -426,8 +432,8 @@ function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
   const ret = retrievalOf(kb);
   const rr = kb.rerank_config ?? {};
   return (
-    <div className="space-y-3.5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat n={kb.document_count} l={t("kbview.docs")} />
         <Stat n={kb.chunk_count} l={t("kbview.chunksActive")} />
         <Stat n={statusLabelOf(t, kb.status)} l={t("kbview.statusLabel")} />
@@ -435,12 +441,12 @@ function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
       </div>
       <div className={CARD}>
         <div className="mb-1 flex items-center gap-2">
-          <h3 className="text-sm font-semibold">{t("kbview.configSummary")}</h3>
+          <h3 className="text-[15px] font-semibold">{t("kbview.configSummary")}</h3>
           <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
             <Info className="h-3 w-3" /> {t("kbview.modelsFromProviders")}
           </span>
         </div>
-        <div className="mt-3 grid gap-x-5 md:grid-cols-2">
+        <div className="mt-4 grid gap-x-8 md:grid-cols-2">
           <div>
             <KV k="Embedding" v={`${str(emb.provider_id, "local_hash")} / ${str(emb.model, "local-hash-v1")}`} />
             <KV k={t("kbview.vectorDim")} v={num(emb.dimension, 64)} />
@@ -644,7 +650,7 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
       <div className="sticky bottom-0 flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 shadow-[var(--shadow)]">
         {dirty
           ? <span className="flex items-center gap-2 text-[12.5px] text-[var(--warning)]"><span className="h-1.5 w-1.5 rounded-full bg-[var(--warning)]" /> {t("kbview.unsavedChanges")}</span>
-          : <span className="text-[12.5px] text-[var(--text-faint)]">{t("kbview.upToDate")}</span>}
+          : <span className="text-[12.5px] text-[var(--text-faint)]">{t("kbview.up_to_date")}</span>}
         <div className="flex-1" />
         <button className={BTN_GHOST} disabled={!dirty || saving} onClick={reset}>{t("kbview.discard")}</button>
         <button className={BTN_PRIMARY} disabled={!dirty || saving} onClick={save}>

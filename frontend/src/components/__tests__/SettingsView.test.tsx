@@ -121,7 +121,13 @@ const codeBrowsingDoc: AgentConfigDocument = {
   ...sandboxCapDoc,
   agents: sandboxCapDoc.agents.map((a) =>
     a.id === "main"
-      ? { ...a, tools: { include: [...a.tools.include, "code_sandbox"], exclude: [] } }
+      ? {
+          ...a,
+          tools: {
+            include: [...a.tools.include, "code_interpreter", "shell", "publish_artifact"],
+            exclude: [],
+          },
+        }
       : a
   ),
 };
@@ -146,7 +152,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("button", { name: "Capabilities" }));
     await user.click(screen.getByRole("button", { name: "Configure" }));
 
     await user.type(
@@ -183,8 +189,12 @@ describe("SettingsView", () => {
     expect(provider?.settings.oss_mount_config).toEqual({ mount_points: [] });
     expect(sandbox?.enabled).toBe(true);
     expect(sandbox?.permission).toBe("auto");
-    expect(agent.tools.include).toContain("code_sandbox");
-    expect(agent.tools.exclude).not.toContain("code_sandbox");
+    expect(agent.tools.include).toEqual(
+      expect.arrayContaining(["code_interpreter", "shell", "publish_artifact"])
+    );
+    expect(agent.tools.exclude).not.toEqual(
+      expect.arrayContaining(["code_sandbox", "code_interpreter", "shell", "publish_artifact"])
+    );
   });
 
   it("saves with endpoint empty (auto-derived by backend)", async () => {
@@ -194,7 +204,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("button", { name: "Capabilities" }));
     await user.click(screen.getByRole("button", { name: "Configure" }));
 
     // Leave gateway endpoint empty — backend auto-derives from account id.
@@ -218,7 +228,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("button", { name: "Capabilities" }));
     await user.click(screen.getByRole("button", { name: "Configure" }));
 
     await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
@@ -237,7 +247,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Tools" }));
+    await user.click(screen.getByRole("button", { name: "Capabilities" }));
     await user.click(screen.getByRole("button", { name: "Vector DB" }));
 
     // Elasticsearch is the only engine — its fields show immediately, no chooser.
@@ -269,8 +279,8 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={codeBrowsingDoc} onBack={vi.fn()} />);
 
-    // The manifest lives in the Tools dialog (it belongs with the code-sandbox tool).
-    await user.click(screen.getByRole("button", { name: "编辑工具" }));
+    // The manifest lives in the Capabilities dialog (it belongs with the code-sandbox capability).
+    await user.click(screen.getByRole("button", { name: "编辑能力" }));
     // Section is visible once this agent has activated code browsing.
     expect(screen.getByText("代码库配置单")).toBeInTheDocument();
 
@@ -331,7 +341,7 @@ describe("SettingsView", () => {
     const seeded: AgentConfigDocument = { ...baseDoc, default_instructions: "House voice." };
     render(<SettingsView doc={seeded} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "New agent" }));
+    await user.click(screen.getByRole("button", { name: "新建" }));
 
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
@@ -389,7 +399,7 @@ describe("SettingsView", () => {
     };
     render(<SettingsView doc={twoAgents} onBack={vi.fn()} />);
 
-    await user.selectOptions(screen.getByLabelText("Select agent"), "agent-2");
+    await user.click(screen.getByRole("button", { name: /Support/ }));
     await user.click(screen.getByRole("button", { name: "设为默认" }));
 
     expect(save).toHaveBeenCalledOnce();
@@ -426,12 +436,13 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={docWithModels} onBack={vi.fn()} />);
 
-    // Basic info (name + model) is edited inline — no dialog.
+    // Model is edited inline from the agent header.
     // Blank agent model → chip reports it inherits, and the inherit option names
     // the resolved runtime default (from the llm.default provider, not the catalog).
-    expect(screen.getByText("Using system default")).toBeInTheDocument();
+    expect(screen.getByText("继承默认")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "编辑" }));
     expect(
-      screen.getByRole("option", { name: "Inherit (uses dashscope/qwen-plus)" })
+      screen.getByRole("option", { name: "Inherit (dashscope/qwen-plus)" })
     ).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Model"), "dashscope/qwen-max");
