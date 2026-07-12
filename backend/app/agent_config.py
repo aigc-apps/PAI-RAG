@@ -212,6 +212,7 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "code_interpreter",
                     "shell",
                     "publish_artifact",
+                    "spawn_subagent",
                 ],
             ),
             skills=AgentSkillsConfig(
@@ -328,6 +329,19 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
         # NOTE: PAI authorization is no longer a togglable capability — it is gated by
         # the ALIYUN_PAI_ENABLED env switch (Settings.aliyun_pai_enabled, default on).
         # The aliyun_pai.default provider below still holds the base AK/SK env names.
+        CapabilityConfig(
+            id="subagent",
+            kind="core_tool",
+            name="Subagents",
+            description=(
+                "Let the agent delegate self-contained sub-tasks (deep knowledge-base "
+                "search, code exploration) to subagents that run in an isolated context "
+                "and return only a summary — includes the built-in read-only 'explore' worker."
+            ),
+            enabled=True,
+            permission="auto",
+            status="ready",
+        ),
         CapabilityConfig(
             id="install_skill",
             kind="core_tool",
@@ -688,7 +702,7 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         if cap.kind != "skill":
             if not cap.enabled:
                 cap.status = "disabled"
-            elif cap.id in ("install_skill", "enable_skill_for_agent"):
+            elif cap.id in ("install_skill", "enable_skill_for_agent", "subagent"):
                 cap.status = "ready"
                 cap.error = None
             continue

@@ -82,6 +82,12 @@ function displayToolName(id: string) {
 const TOOL_BUNDLES: Record<string, string[]> = {
   knowledge_search: ["knowledge_search"],
   code_sandbox: ["code_interpreter", "shell", "publish_artifact"],
+  // The `subagent` capability id maps to the real registered tool name, so toggling
+  // the "Subagents" card writes spawn_subagent into the agent's tools.include
+  // (mirrors the sandbox → code_sandbox bundle). Parallel fan-out is not a separate
+  // tool — the model emits several spawn_subagent calls and the loop runs them
+  // concurrently — so there is just one name to bundle here.
+  subagent: ["spawn_subagent"],
 };
 
 function toolBundle(toolId: string) {

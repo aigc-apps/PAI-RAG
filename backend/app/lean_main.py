@@ -164,6 +164,10 @@ async def lifespan(app: FastAPI):
         config_store=config_store,
         config_revision=stored_config.revision,
     )
+    # Register spawn_subagent tools into the boot registry (boot builds the registry
+    # directly, not via rebuild_app_state_from_config, so wire them here too).
+    from app.subagent import wire_subagents
+    wire_subagents(app.state.app_state)
     try:
         yield
     finally:

@@ -244,6 +244,41 @@ def render_stable_system_prompt(
     return "\n\n".join(parts)
 
 
+# Appended (as a stable "# Subagent protocol" block) to a subagent's system prompt.
+# A subagent is a delegated worker running in an isolated context (no parent
+# conversation), so this reframes its job: do the work with tools, then return ONE
+# compact, evidence-bearing summary the coordinator can act on — the whole point of
+# the context firewall.
+_SUBAGENT_PROTOCOL = (
+    "You are a delegated subagent working on ONE self-contained task handed to you "
+    "by a coordinating agent. You do NOT see the parent conversation — the task "
+    "message is complete on its own, so never ask clarifying questions (there is no "
+    "user to answer). Use your tools to actually do the work (search, read, "
+    "explore), not to describe or plan it. When finished, reply with a SINGLE final "
+    "message that is a compact, self-contained summary: the answer plus the concrete "
+    "evidence behind it — knowledge-base source ids, file paths with line ranges, "
+    "URLs — enough for the coordinator to act without redoing your work. Be thorough "
+    "in the work but terse in the summary; do not dump raw tool output."
+)
+
+
+def render_subagent_system_prompt(
+    instructions: str, *, tool_names: List[str], project_context: str = "",
+    aliyun_pai_enabled: bool = False, code_layer_enabled: bool = False,
+    code_manifest: str = "",
+) -> str:
+    """A subagent's system prompt: the same stable persona + tool guidance as a
+    top-level agent, with the subagent protocol appended so it does the work and
+    returns a single compact summary. Reuses ``render_stable_system_prompt`` so
+    every capability block (knowledge, code-layer, sandbox, web) stays identical."""
+    base = render_stable_system_prompt(
+        instructions, tool_names=tool_names, project_context=project_context,
+        aliyun_pai_enabled=aliyun_pai_enabled,
+        code_layer_enabled=code_layer_enabled, code_manifest=code_manifest,
+    )
+    return base + "\n\n# Subagent protocol\n" + _SUBAGENT_PROTOCOL
+
+
 def render_context_block(
     *, memories: Optional[List[str]] = None, summary: str = "", instructions: str = ""
 ) -> str:

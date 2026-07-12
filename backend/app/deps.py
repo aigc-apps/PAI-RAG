@@ -116,6 +116,10 @@ def rebuild_app_state_from_config(state: AppState, settings, doc) -> None:
     if state.knowledge is not None and hasattr(state.knowledge, "rebuild_search_engine"):
         state.knowledge.rebuild_search_engine(doc.knowledgebase.vectordb)
     state.agent_config = apply_runtime_status(doc, settings, state.router)
+    # Register the spawn_subagent tools into the freshly rebuilt registry, bound to
+    # a runner over this AppState (needs registry + agent_config, both set above).
+    from app.subagent import wire_subagents
+    wire_subagents(state)
 
 
 def reload_app_state(state: AppState, settings) -> None:

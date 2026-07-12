@@ -42,6 +42,15 @@ MAX_RECURSION_STEPS = try_get_int_env("MAX_RECURSION_STEPS", 20)
 # 流式调用的"空闲超时":超过该秒数没有收到任何分片(package)即超时(非总时长)
 LLM_STREAM_IDLE_TIMEOUT = try_get_int_env("LLM_STREAM_IDLE_TIMEOUT_SECONDS", 30)
 
+# When a single assistant turn emits several independent tool calls, dispatch them
+# concurrently (bounded) instead of one-at-a-time. This is how parallel fan-out —
+# e.g. several spawn_subagent calls, or KB + code searches — actually runs in
+# parallel, without a dedicated "batch" tool. Results are still stitched back into
+# the message history and event stream in the model's original call order, so
+# history stays replay-safe. Tuned modestly because each concurrent call may itself
+# be an expensive subagent LLM run.
+TOOL_DISPATCH_CONCURRENCY = try_get_int_env("TOOL_DISPATCH_CONCURRENCY", 8)
+
 # Human-in-the-loop pause. When a tool result carries a notice with
 # ``interrupt: true`` (e.g. the aliyun authorization card), the run stops after
 # the current tool batch and hands control to the user instead of re-entering
@@ -62,6 +71,25 @@ async def _iter_with_idle_timeout(stream, timeout: int):
         except StopAsyncIteration:
             return
         yield chunk
+
+
+async def _dispatch_parallel(tools, pairs, scope):
+    """Dispatch every tool call in ``pairs`` concurrently (bounded by
+    TOOL_DISPATCH_CONCURRENCY) and return their results in the SAME order as
+    ``pairs`` — so the caller can stitch them into history/events deterministically.
+
+    Concurrency is safe because ToolBox.dispatch sets the ambient ToolScope on a
+    contextvar, and asyncio.gather runs each coroutine in its own copied context,
+    so per-call scope set/reset never races. dispatch also never raises (failures
+    come back as ToolResult(ok=False)), so gather can't be torn down by one bad
+    tool — no return_exceptions needed."""
+    sem = asyncio.Semaphore(TOOL_DISPATCH_CONCURRENCY)
+
+    async def _one(tc):
+        async with sem:
+            return await tools.dispatch(tc, scope=scope)
+
+    return await asyncio.gather(*[_one(tc) for _, tc in pairs])
 
 
 def _format_return_direct(content):
@@ -249,18 +277,34 @@ class Agent:
                     if tc.id not in sink["started_tool_calls"]:
                         yield ToolStarted(call_id=tc.id, name=tc.name)
                     yield ToolCompleted(call_id=tc.id, name=tc.name, arguments=tc.arguments)
+
+                scope = ToolScope(
+                    user_id=ctx.user_id,
+                    conversation_id=ctx.conversation_id,
+                    metadata=ctx.metadata,
+                    agent_id=ctx.agent_id,
+                    skill_mounts=ctx.skill_mounts,
+                    skill_fingerprint=ctx.skill_fingerprint,
+                )
+                # Parallel fan-out: when the turn has several independent tool calls
+                # and none returns directly (return_direct short-circuits the batch,
+                # so it must stay sequential), dispatch them concurrently up front.
+                # The loop below then consumes precomputed results in call order, so
+                # message history and events keep the model's original ordering.
+                # Single-call / return_direct turns fall through to the unchanged
+                # await-per-call path (parallel_results stays None) — byte-identical.
+                parallel_results = None
+                if len(pairs) > 1 and not any(
+                    ctx.tools.is_return_direct(tc.name) for _, tc in pairs
+                ):
+                    parallel_results = await _dispatch_parallel(ctx.tools, pairs, scope)
+
                 interrupt_seen = False
                 for idx, (raw, tc) in enumerate(pairs):
-                    result = await ctx.tools.dispatch(
-                        tc,
-                        scope=ToolScope(
-                            user_id=ctx.user_id,
-                            conversation_id=ctx.conversation_id,
-                            metadata=ctx.metadata,
-                            agent_id=ctx.agent_id,
-                            skill_mounts=ctx.skill_mounts,
-                            skill_fingerprint=ctx.skill_fingerprint,
-                        ),
+                    result = (
+                        parallel_results[idx]
+                        if parallel_results is not None
+                        else await ctx.tools.dispatch(tc, scope=scope)
                     )
                     messages.append(Message("assistant", text if idx == 0 else None, tool_calls=[tc]))
                     capped = (self.budget.cap_tool_result(result.message.content)

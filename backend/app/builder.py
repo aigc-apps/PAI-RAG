@@ -18,9 +18,16 @@ from agent.custom_skills import (
 from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
 from agent.tools.registry import ToolRegistry
+from agent.tools.builtin.spawn_subagent import SPAWN_TOOL_NAMES
+from agent.tools.scope import ToolScope
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
-from agent.soul import DEFAULT_INSTRUCTIONS, render_stable_system_prompt, render_context_block
+from agent.soul import (
+    DEFAULT_INSTRUCTIONS,
+    render_context_block,
+    render_stable_system_prompt,
+    render_subagent_system_prompt,
+)
 
 
 def _item_text(content: dict) -> str:
@@ -257,6 +264,94 @@ async def build_context(
         skill_fingerprint=skill_mount_fingerprint(skill_mounts),
     )
     return ctx, conversation_id
+
+
+def build_subagent_context(
+    *,
+    profile,
+    task: str,
+    parent_scope: ToolScope,
+    registry: ToolRegistry,
+    agent_config=None,
+    project_context: str = "",
+    depth: int = 1,
+) -> AgentContext:
+    """Assemble a CLEAN AgentContext for a delegated subagent — the context firewall.
+
+    Unlike ``build_context`` this does NOT touch the store: history is empty, and no
+    user memory or rolling summary is injected. The subagent gets its own persona
+    (``profile.instructions``) and toolbox, minus the spawn tools so it can't nest.
+    It inherits the parent's user/conversation/metadata scope so sandbox mounts and
+    KB permissions stay correct, but runs in a fresh window — its noisy exploration
+    stays here; only its final summary returns to the caller."""
+    skill_packages = _skill_packages(agent_config)
+    enabled_skill_ids = _enabled_skill_ids(agent_config, profile)
+    skills_active = bool(skill_packages and enabled_skill_ids)
+
+    tool_names = _select_tool_names(
+        registry, profile, force=_SKILL_LOADER_TOOLS if skills_active else (),
+    )
+    # Depth cap = 1: a subagent never gets the spawn tools, so it cannot nest.
+    tool_names = [n for n in tool_names if n not in SPAWN_TOOL_NAMES]
+    toolbox = registry.build_toolbox(tool_names)
+    effective_names = [t.name for t in toolbox.tools]
+
+    code_layer_enabled = bool(
+        getattr(getattr(registry, "sandbox_provider", None), "code_layer_enabled", False)
+    )
+    instructions_md = (getattr(profile, "instructions", "") or "").strip() or DEFAULT_INSTRUCTIONS
+    system_prompt = render_subagent_system_prompt(
+        instructions_md, tool_names=effective_names, project_context=project_context,
+        aliyun_pai_enabled=_aliyun_pai_enabled(),
+        code_layer_enabled=code_layer_enabled,
+        code_manifest=getattr(profile, "code_manifest", "") or "",
+    )
+
+    task_turn = Message(role="user", content=task)
+    skill_instructions = (
+        _active_skill_instructions(
+            packages=skill_packages, enabled_ids=enabled_skill_ids, current_turn=task_turn,
+        )
+        if skills_active
+        else ""
+    )
+    context_block = render_context_block(instructions=skill_instructions) if skill_instructions else ""
+    skill_mounts = (
+        resolve_skill_mounts(
+            packages=skill_packages,
+            enabled_ids=enabled_skill_ids,
+            skill_config=getattr(agent_config, "skills", None),
+        )
+        if agent_config is not None and skills_active
+        else []
+    )
+
+    # Inherit the parent's runtime scope (sandbox creds, aliyun env, admin flags),
+    # but stamp the subagent depth and swap the KB soft-default to the child's own.
+    metadata = dict(parent_scope.metadata or {})
+    metadata["subagent_depth"] = depth
+    kb_ids = getattr(getattr(profile, "knowledge", None), "kb_ids", None)
+    if kb_ids:
+        metadata["default_kb_ids"] = list(kb_ids)
+    else:
+        metadata.pop("default_kb_ids", None)  # e.g. explore searches every accessible KB
+
+    return AgentContext(
+        system_prompt=system_prompt,
+        history=[],
+        current_turn=task_turn,
+        attachments=[],
+        hints=[],
+        tools=toolbox,
+        run_vars=RunVars(),
+        context_block=context_block,
+        user_id=parent_scope.user_id,
+        conversation_id=parent_scope.conversation_id,
+        metadata=metadata,
+        agent_id=getattr(profile, "id", "subagent") or "subagent",
+        skill_mounts=[mount.to_dict() for mount in skill_mounts],
+        skill_fingerprint=skill_mount_fingerprint(skill_mounts),
+    )
 
 
 def _capability_enabled(agent_config, cap_id: str) -> bool:
