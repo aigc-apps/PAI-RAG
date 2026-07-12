@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import os
 import sys
 import io
@@ -56,6 +57,13 @@ class _FakeLLM:
         return gen()
 
 
+class _AsyncFakeLLM:
+    async def astream(self, messages, tools=None, **kwargs):
+        async def gen():
+            yield _FakeChunk("pong")
+        return gen()
+
+
 def _client_and_router(tmp_path, monkeypatch):
     config_path = str(tmp_path / "config.yaml")
     monkeypatch.setenv("CONFIG_PATH", config_path)
@@ -83,6 +91,17 @@ def test_model_test_endpoint_reports_success_for_a_reachable_model(tmp_path, mon
     c, router = _client_and_router(tmp_path, monkeypatch)
     # Inject a fake client so no real network hop is made.
     router.register_llm("local/fast", _FakeLLM())
+    r = c.post("/v1/config/models/test", json={"model": "local/fast"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert "local/fast" in body["output"]
+
+
+def test_model_test_endpoint_supports_async_astream_contract(tmp_path, monkeypatch):
+    c, router = _client_and_router(tmp_path, monkeypatch)
+    # Real LeanLLM.astream is async and returns an async iterator after awaiting.
+    router.register_llm("local/fast", _AsyncFakeLLM())
     r = c.post("/v1/config/models/test", json={"model": "local/fast"})
     assert r.status_code == 200
     body = r.json()

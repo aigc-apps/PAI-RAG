@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -257,9 +258,10 @@ async def test_model_connection(
     except Exception as exc:  # unknown ref, wrong type, or unset key env
         return JSONResponse({"ok": False, "output": str(exc)})
     try:
-        async for chunk in llm.astream(
-            [{"role": "user", "content": "ping"}], max_tokens=1
-        ):
+        stream = llm.astream([{"role": "user", "content": "ping"}], max_tokens=1)
+        if inspect.isawaitable(stream):
+            stream = await stream
+        async for chunk in stream:
             err = getattr(chunk, "error_message", None)
             if err:
                 return JSONResponse({"ok": False, "output": f"{model_id}: {err}"})

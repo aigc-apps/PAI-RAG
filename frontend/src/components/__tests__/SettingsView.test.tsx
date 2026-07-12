@@ -152,7 +152,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Capabilities" }));
+    await user.click(screen.getByRole("button", { name: "能力" }));
     await user.click(screen.getByRole("button", { name: "Configure" }));
 
     await user.type(
@@ -204,7 +204,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Capabilities" }));
+    await user.click(screen.getByRole("button", { name: "能力" }));
     await user.click(screen.getByRole("button", { name: "Configure" }));
 
     // Leave gateway endpoint empty — backend auto-derives from account id.
@@ -228,7 +228,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Capabilities" }));
+    await user.click(screen.getByRole("button", { name: "能力" }));
     await user.click(screen.getByRole("button", { name: "Configure" }));
 
     await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
@@ -247,7 +247,7 @@ describe("SettingsView", () => {
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Capabilities" }));
+    await user.click(screen.getByRole("button", { name: "能力" }));
     await user.click(screen.getByRole("button", { name: "Vector DB" }));
 
     // Elasticsearch is the only engine — its fields show immediately, no chooser.
@@ -262,6 +262,47 @@ describe("SettingsView", () => {
     expect(saved.knowledgebase.vectordb.engine).toBe("elasticsearch");
     expect(saved.knowledgebase.vectordb.url).toBe("https://es:9200");
     expect(saved.knowledgebase.vectordb.api_key).toBe("es-secret");
+  });
+
+  it("hides control-plane skill management tools from Capabilities", async () => {
+    const user = userEvent.setup();
+    const docWithControlPlaneTools: AgentConfigDocument = {
+      ...baseDoc,
+      capabilities: [
+        ...baseDoc.capabilities,
+        {
+          id: "install_skill",
+          kind: "core_tool",
+          name: "Install Skill",
+          description: "Admin-only installer.",
+          enabled: false,
+          permission: "admin",
+          status: "disabled",
+          dependencies: [],
+          provider_refs: [],
+          settings: { control_plane: true },
+        },
+        {
+          id: "enable_skill_for_agent",
+          kind: "core_tool",
+          name: "Enable Skill For Agent",
+          description: "Admin-only skill toggle.",
+          enabled: false,
+          permission: "admin",
+          status: "disabled",
+          dependencies: [],
+          provider_refs: [],
+          settings: { control_plane: true },
+        },
+      ],
+    };
+
+    render(<SettingsView doc={docWithControlPlaneTools} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+
+    expect(screen.queryByText("Install Skill")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enable Skill For Agent")).not.toBeInTheDocument();
   });
 
   it("hides the code manifest section unless the agent activated code browsing", () => {
@@ -304,7 +345,7 @@ describe("SettingsView", () => {
 
     // The overview shows a read-only Persona preview; editing happens in a dialog.
     await user.click(screen.getByRole("button", { name: "编辑 Persona" }));
-    const box = screen.getByPlaceholderText("Leave blank to use the built-in default persona");
+    const box = screen.getByPlaceholderText("留空则使用内置默认人格");
     await user.type(box, "You are a code archaeologist.");
     // Local state until the user commits — no save while typing.
     expect(save).not.toHaveBeenCalled();
@@ -315,18 +356,20 @@ describe("SettingsView", () => {
     expect(saved.agents[0].instructions).toBe("You are a code archaeologist.");
   });
 
-  it("edits the Default Persona template (doc.default_instructions) and commits on blur", async () => {
+  it("edits the Default Persona template (doc.default_instructions) and commits on 保存", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
     useAgentConfigStore.setState({ save });
 
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "Default Persona" }));
-    const box = screen.getByPlaceholderText("Leave blank to use the built-in default persona");
+    await user.click(screen.getByRole("button", { name: "默认人格" }));
+    expect(screen.getByText("已保存")).toBeInTheDocument();
+    const box = screen.getByPlaceholderText("留空则使用内置默认人格");
     await user.type(box, "You are a research copilot.");
-    expect(save).not.toHaveBeenCalled(); // local state until blur
-    await user.tab();
+    expect(screen.getByText("有未保存修改")).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled(); // local state until explicit save
+    await user.click(screen.getByRole("button", { name: "保存" }));
 
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
@@ -452,15 +495,14 @@ describe("SettingsView", () => {
     expect(saved.agents[0].model).toBe("dashscope/qwen-max");
   });
 
-  it("flags Control Room tabs by provisioning readiness", () => {
-    // baseDoc has no healthy llm.default provider → Connections needs setup;
-    // the local vector engine and unbroken core tools read as ready.
+  it("keeps the settings navigation focused on section labels", () => {
     render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
 
-    expect(screen.getByTitle("Connections — Needs setup")).toBeInTheDocument();
-    expect(screen.getByTitle("Knowledge Base — Ready")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "模型" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "知识库" })).toBeInTheDocument();
+    expect(screen.queryByText("就绪")).not.toBeInTheDocument();
+    expect(screen.queryByText("待配置")).not.toBeInTheDocument();
 
-    // Once a healthy default model provider exists, Connections reads as ready.
     const ready: AgentConfigDocument = {
       ...baseDoc,
       providers: [
@@ -477,7 +519,8 @@ describe("SettingsView", () => {
       ],
     };
     render(<SettingsView doc={ready} onBack={vi.fn()} />);
-    expect(screen.getAllByTitle("Connections — Ready").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "模型" }).length).toBeGreaterThan(0);
+    expect(screen.queryByTitle("模型 — 就绪")).not.toBeInTheDocument();
   });
 
   it("scopes an agent to a subset of knowledge bases", async () => {

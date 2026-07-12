@@ -92,22 +92,23 @@ class LeanLLM:
             in_think_block = False
             has_reasoning_content = False
             try:
-                stream = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    stream=True,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    tools=tools_to_use,
-                    stream_options={"include_usage": True},
-                    extra_body={
+                request = {
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": True,
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens,
+                    "tools": tools_to_use,
+                    "stream_options": {"include_usage": True},
+                    "extra_body": {
                         "chat_template_kwargs": {
                             "enable_thinking": self.enable_thinking
                         },
                         "enable_thinking": self.enable_thinking,
                     },
-                    **kwargs,
-                )
+                }
+                request.update(kwargs)
+                stream = await self.client.chat.completions.create(**request)
                 async for chunk in stream:
                     usage = getattr(chunk, "usage", None)
                     choices = getattr(chunk, "choices", None) or []

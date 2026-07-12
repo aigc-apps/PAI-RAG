@@ -217,10 +217,10 @@ export const en = {
   "kb.notSet": "Not set",
 
   // --- connections panel ---
-  "conn.saveFailed": "Could not save connections",
-  "conn.title": "Connections",
-  "conn.subtitle": "Configure the model endpoints, model catalog, and defaults your agents use.",
-  "conn.summaryConnections": "Connections",
+  "conn.saveFailed": "Could not save models",
+  "conn.title": "Models",
+  "conn.subtitle": "Manage model providers, registered models, and the defaults your agents use.",
+  "conn.summaryConnections": "Providers",
   "conn.summaryModels": "Models",
   "conn.summaryDefaults": "Defaults",
   "conn.missingDefault": "Not set",
@@ -237,8 +237,8 @@ export const en = {
     " it to confirm the key resolves and the endpoint answers. The vector database lives on the ",
   "conn.intro.kb": "Knowledge Base",
   "conn.intro.f": " tab.",
-  "conn.section1Title": "Model connections",
-  "conn.section1ShortHint": "Add model service endpoints. Only API-key environment variable names are stored here, not secret values.",
+  "conn.section1Title": "Model providers",
+  "conn.section1ShortHint": "Add model service providers and endpoints. Only API-key environment variable names are stored here, not secret values.",
   "conn.section1Hint.a": "Endpoints referenced as ",
   "conn.section1Hint.b": ". Only the env-var ",
   "conn.wordName": "name",
@@ -252,8 +252,9 @@ export const en = {
   "conn.deleteConnAria": "Delete connection {name}",
   "conn.ok": "OK",
   "conn.noConnections": "No connections yet.",
-  "conn.editConnection": "Edit connection \"{name}\"",
-  "conn.addConnection": "Add connection",
+  "conn.editConnection": "Edit provider \"{name}\"",
+  "conn.addConnection": "Add provider",
+  "conn.addProvider": "Add provider",
   "conn.providerNameAria": "Provider name",
   "conn.providerBaseUrlAria": "Provider base URL",
   "conn.providerApiKeyEnvAria": "Provider API key env",
@@ -269,6 +270,7 @@ export const en = {
   "conn.modelIdRequired": "Model id is required",
   "conn.modelsTitle": "Models",
   "conn.modelsShortHint": "Register LLM, embedding, and rerank models under a connection, then choose defaults.",
+  "conn.addModel": "Add model",
   "conn.modelsHint":
     "Register a model under a connection. Mark one embedding and one rerank model as the default — that is what knowledge bases use. (Per-KB rerank enable / top-N stays in knowledge base management.)",
   "conn.colConnection": "Connection",
@@ -617,7 +619,15 @@ export const en = {
   "kbview.minutesAgo": "{n} min ago",
   "kbview.hoursAgo": "{n} h ago",
 
-  // --- settings view (agent studio / control room) ---
+  // --- settings view ---
+  "settings.title": "Settings",
+  "settings.navAgents": "Agents",
+  "settings.navConnections": "Models",
+  "settings.navCapabilities": "Capabilities",
+  "settings.navKnowledge": "Knowledge",
+  "settings.navSkills": "Skills",
+  "settings.navDefaultPersona": "Default Persona",
+  "settings.navYaml": "YAML",
   "settings.manifestGenerated": "Code repository manifest generated",
   "settings.generateFailed": "Generation failed",
   "settings.codeManifest": "Code repository manifest",
@@ -652,7 +662,7 @@ export const en = {
   "settings.all": "All",
   "settings.editKnowledge": "Edit knowledge bases",
   "settings.kbHubTitle": "Knowledge Base",
-  "settings.kbHubBody": "Manage knowledge-base data alongside the vector database and default models used for retrieval.",
+  "settings.kbHubBody": "Manage knowledge data and the retrieval infrastructure it depends on.",
   "settings.kbDataTitle": "Knowledge data management",
   "settings.kbDataBody": "Create knowledge bases, import documents, configure data sources, inspect indexing, and run recall tests.",
   "settings.openKbManager": "Open manager",
@@ -664,4 +674,23 @@ export const en = {
     "Auth: provide an API Key, or a username + password (choose one; API Key takes priority). The key can be entered directly or referenced by env var name.",
   "settings.vdbGlobalNote":
     "The vector store is a global setting. After changing the connection, existing knowledge bases must be re-indexed to be searchable in the new store.",
+  "settings.defaultPersonaBody":
+    "Template for newly created agents. Existing agents keep their own persona, so edits here only affect future agents.",
+  "settings.defaultPersonaPlaceholder": "Leave blank to use the built-in default persona",
+  "settings.saved": "Saved",
+  "settings.unsavedChanges": "Unsaved changes",
+  "settings.agentPersonaBody":
+    "The agent's full system prompt. Tools, capabilities, and skills are appended automatically.",
+  "settings.capabilitiesBody":
+    "Configure the shared channels agents may use, then choose which ones each agent can access.",
+  "settings.skillsBody":
+    "Skills are workflow playbooks. They guide an agent in using its enabled capabilities for a task.",
+  "settings.installSkill": "Install",
+  "settings.skillRequires": "Requires: {list}",
+  "settings.skillNoDependency": "No dependency",
+  "settings.skillInstalled": "Installed",
+  "settings.yamlBody":
+    "Advanced raw configuration for agents and shared capabilities. Secrets are masked when loaded from the API.",
+  "settings.reloadYaml": "Reload",
+  "settings.saveYaml": "Save YAML",
 } satisfies Record<string, string>;

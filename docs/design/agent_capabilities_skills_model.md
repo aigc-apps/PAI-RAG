@@ -82,7 +82,6 @@ Examples:
 - Knowledge QA: how to answer from retrieved documentation and cite sources
 - PAI-Rec Diagnosis: how to gather cloud state, inspect logs, validate configs,
   and report findings
-- Report Generation: how to structure and export a report
 
 Skills may depend on capabilities. For example, Knowledge QA depends on
 Knowledge Base. PAI-Rec Diagnosis depends on Code Sandbox and Cloud Access.

@@ -1,4 +1,8 @@
-import sys, os, asyncio
+# ruff: noqa: E402
+import asyncio
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import httpx
 from agent.tools.builtin.datetime_tool import make_current_datetime_tool
@@ -523,7 +527,6 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
 
 def test_parse_iso_expiry_and_contract_expiry():
     from agent.tools.sandbox_providers import _parse_iso_expiry, _env_contract_expiry
-    import datetime as _dt
 
     # Z-suffixed UTC (AssumeRole's format) and explicit offset both parse.
     z = _parse_iso_expiry("2026-07-08T09:20:00Z")
@@ -1047,7 +1050,7 @@ def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path):
     config_path = str(tmp_path / "config.yaml")
     settings = type("Settings", (), {"config_path": config_path})()
     reloaded = []
-    doc = load_agent_config(config_path)  # -> DEFAULT_DOCUMENT (agent "main", skill.writing ready+enabled)
+    doc = load_agent_config(config_path)  # -> DEFAULT_DOCUMENT (agent "main", skill.knowledge_qa ready+enabled)
     tool = make_enable_skill_for_agent_tool(
         settings, doc, on_config_change=lambda: reloaded.append(True)
     )
@@ -1058,42 +1061,54 @@ def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path):
         return asyncio.run(box.dispatch(tc, scope=ToolScope(metadata={"role": role})))
 
     # Non-admin is blocked before any mutation.
-    denied = _call('{"skill_id":"skill.writing","enabled":false}', "user")
+    denied = _call('{"skill_id":"skill.knowledge_qa","enabled":false}', "user")
     assert not denied.ok
     assert "requires admin permission" in denied.error
     assert reloaded == []
 
     # Admin disables the (default-enabled) skill: a real change, persisted + reloaded.
-    off = _call('{"skill_id":"skill.writing","enabled":false}', "admin")
+    off = _call('{"skill_id":"skill.knowledge_qa","enabled":false}', "admin")
     assert off.ok
     assert '"changed": true' in off.content
     assert '"runtime_reloaded": true' in off.content
     persisted = load_agent_config(config_path)
-    assert "skill.writing" not in next(a for a in persisted.agents if a.id == "main").skills.enabled
+    assert "skill.knowledge_qa" not in next(a for a in persisted.agents if a.id == "main").skills.enabled
 
     # Admin re-enables it.
-    on = _call('{"skill_id":"skill.writing"}', "admin")
+    on = _call('{"skill_id":"skill.knowledge_qa"}', "admin")
     assert on.ok
     assert '"changed": true' in on.content
     persisted = load_agent_config(config_path)
-    assert "skill.writing" in next(a for a in persisted.agents if a.id == "main").skills.enabled
+    assert "skill.knowledge_qa" in next(a for a in persisted.agents if a.id == "main").skills.enabled
     assert reloaded == [True, True]
 
 
 def test_enable_skill_for_agent_tool_rejects_not_ready_skill(tmp_path):
     from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
-    from app.agent_config import load_agent_config
+    from app.agent_config import CapabilityConfig, load_agent_config, save_agent_config
 
     config_path = str(tmp_path / "config.yaml")
     settings = type("Settings", (), {"config_path": config_path})()
     doc = load_agent_config(config_path)
-    # skill.data_analysis depends on the (disabled) sandbox capability -> not ready.
+    doc.capabilities.append(
+        CapabilityConfig(
+            id="skill.custom_analysis",
+            kind="skill",
+            name="Custom Analysis",
+            description="A custom analysis workflow whose dependency is not ready.",
+            enabled=True,
+            permission="auto",
+            status="missing_config",
+            dependencies=["sandbox"],
+        )
+    )
+    save_agent_config(config_path, doc)
     tool = make_enable_skill_for_agent_tool(settings, doc)
     box = ToolBox([tool])
     tc = ToolCall(
         id="call_2",
         name="enable_skill_for_agent",
-        arguments='{"skill_id":"skill.data_analysis"}',
+        arguments='{"skill_id":"skill.custom_analysis"}',
     )
     result = asyncio.run(box.dispatch(tc, scope=ToolScope(metadata={"role": "admin"})))
     assert not result.ok

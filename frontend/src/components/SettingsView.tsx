@@ -37,35 +37,17 @@ import { PageHeader } from "./PageHeader";
 import { useI18n } from "../i18n";
 
 type Tab = "agents" | "org-persona" | "tools" | "connections" | "knowledge" | "skills" | "yaml";
+type TabItem = { id: Tab; label: string; subtle?: boolean };
+
+function isControlPlaneCapability(cap: CapabilityConfig) {
+  return cap.settings.control_plane === true;
+}
 
 function statusClass(status: string) {
   if (status === "ready" || status === "healthy") return "text-[var(--success)]";
   if (status === "missing_config") return "text-[var(--warning)]";
   if (status === "error") return "text-[var(--danger)]";
   return "text-[var(--text-faint)]";
-}
-
-// Whether a Control Room tab is provisioned enough to use. Only tabs that carry
-// a real provisioning signal return a verdict; the rest return null (no badge),
-// so the nav shows a dot exactly where an operator has something to wire.
-function tabReadiness(tab: Tab, doc: AgentConfigDocument): "ready" | "attention" | null {
-  if (tab === "connections") {
-    const llm = doc.providers.find((p) => p.id === "llm.default");
-    return llm?.status === "healthy" ? "ready" : "attention";
-  }
-  if (tab === "knowledge") {
-    const vdb = doc.knowledgebase.vectordb;
-    // The local engine needs no external service; ES must report healthy.
-    return vdb.engine === "local" || vdb.status === "healthy" ? "ready" : "attention";
-  }
-  if (tab === "tools") {
-    // Flag when a switched-on core tool is missing its backing config.
-    const broken = doc.capabilities.some(
-      (c) => c.kind === "core_tool" && c.enabled && (c.status === "missing_config" || c.status === "error")
-    );
-    return broken ? "attention" : "ready";
-  }
-  return null;
 }
 
 function statusLabel(cap: CapabilityConfig) {
@@ -128,7 +110,7 @@ function systemTools(doc: AgentConfigDocument) {
       (cap) =>
         cap.kind === "core_tool" &&
         cap.id !== "aliyun_pai" &&
-        cap.settings.control_plane !== true
+        !isControlPlaneCapability(cap)
     )
     .map((cap) => ({
       id: displayToolName(cap.id),
@@ -193,7 +175,9 @@ export function SettingsView({
   const agents = doc.agents.length ? doc.agents : [];
   const agent = agents.find((item) => item.id === agentId) ?? agents[0];
   const tools = useMemo(() => systemTools(doc), [doc]);
-  const coreTools = doc.capabilities.filter((cap) => cap.kind === "core_tool");
+  const coreTools = doc.capabilities.filter(
+    (cap) => cap.kind === "core_tool" && !isControlPlaneCapability(cap)
+  );
   const skills = doc.capabilities.filter((cap) => cap.kind === "skill");
 
   const saveDoc = async (next: AgentConfigDocument, message = "Could not save") => {
@@ -270,86 +254,53 @@ export function SettingsView({
     }
   };
 
-  // Two surfaces, split by who owns the decision. Agent Studio is where an
-  // author shapes an individual agent (daily); Control Room is where an operator
-  // wires the deployment-wide backends (rarely). The whole view stays admin-only.
-  const tabGroups: Array<{ heading: string; items: Array<{ id: Tab; label: string }> }> = [
-    {
-      heading: "Agent Studio",
-      items: [
-        { id: "agents", label: "Agents" },
-        { id: "connections", label: "Connections" },
-      ],
-    },
-    {
-      heading: "Control Room",
-      items: [
-        { id: "org-persona", label: "Default Persona" },
-        { id: "tools", label: "Capabilities" },
-        { id: "knowledge", label: "Knowledge Base" },
-        { id: "skills", label: "Skills" },
-        { id: "yaml", label: "YAML" },
-      ],
-    },
+  const { t } = useI18n();
+  const tabs: TabItem[] = [
+    { id: "agents", label: t("settings.navAgents") },
+    { id: "connections", label: t("settings.navConnections") },
+    { id: "tools", label: t("settings.navCapabilities") },
+    { id: "knowledge", label: t("settings.navKnowledge") },
+    { id: "skills", label: t("settings.navSkills") },
+    { id: "org-persona", label: t("settings.navDefaultPersona"), subtle: true },
+    { id: "yaml", label: t("settings.navYaml"), subtle: true },
   ];
 
   return (
     <div className="workspace-page flex h-full flex-col text-[var(--text)]">
       <PageHeader
         icon={Settings2}
-        title="Settings"
+        title={t("settings.title")}
         onBack={onBack}
-        backLabel="Back to chat"
+        backLabel={t("users.backToChat")}
       />
 
-      <main className="mx-auto grid w-full max-w-[1180px] flex-1 grid-cols-[220px_1fr] gap-6 overflow-y-auto px-7 py-6 max-lg:grid-cols-1 max-md:px-4 max-md:py-5">
-        <aside className="space-y-5 max-lg:grid max-lg:grid-cols-2 max-lg:gap-4 max-md:grid-cols-1">
-          {tabGroups.map((group) => (
-            <div key={group.heading} className="space-y-1">
-              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-faint)]">
-                {group.heading}
-              </div>
-              {group.items.map((item) => {
-                const readiness = tabReadiness(item.id, doc);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={async () => {
-                      if (item.id === "yaml" && !yamlText) await openYaml();
-                      else setTab(item.id);
-                    }}
-                    className={cn(
-                      "flex min-h-9 w-full items-center rounded-[var(--radius)] px-3 py-1.5 text-left text-sm transition-colors",
-                      tab === item.id
-                        ? "bg-[var(--bg-elevated)] text-[var(--text)] font-semibold shadow-[var(--shadow-sm)]"
-                        : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
-                    )}
-                  >
-                    {item.label}
-                    {readiness && (
-                      <span
-                        // Decorative for the button's accessible name (which stays
-                        // just the label); the title carries the readiness verdict.
-                        aria-hidden="true"
-                        title={
-                          readiness === "ready"
-                            ? `${item.label} — Ready`
-                            : `${item.label} — Needs setup`
-                        }
-                        className={cn(
-                          "ml-auto h-2 w-2 shrink-0 rounded-full",
-                          readiness === "ready"
-                            ? "bg-[var(--success)]"
-                            : "bg-[var(--warning)]"
-                        )}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+      <main
+        className="mx-auto grid w-full max-w-[1160px] flex-1 grid-cols-[196px_1fr] gap-6 overflow-y-auto px-7 py-6 max-lg:grid-cols-1 max-md:px-4 max-md:py-5"
+      >
+        <aside className="space-y-1 max-lg:flex max-lg:gap-1 max-lg:overflow-x-auto max-lg:pb-1">
+          {tabs.map((item, index) => {
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={async () => {
+                  if (item.id === "yaml" && !yamlText) await openYaml();
+                  else setTab(item.id);
+                }}
+                className={cn(
+                  "flex min-h-9 w-full items-center rounded-[var(--radius)] px-3 py-1.5 text-left text-sm transition-colors max-lg:w-auto max-lg:shrink-0",
+                  item.subtle && index > 0 && "mt-2 max-lg:mt-0",
+                  tab === item.id
+                    ? "bg-[var(--bg-elevated)] text-[var(--text)] font-semibold shadow-[var(--shadow-sm)]"
+                    : item.subtle
+                      ? "text-[var(--text-faint)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                      : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                )}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </aside>
 
         <section className="min-w-0">
@@ -663,15 +614,14 @@ function PersonaDialog({
       }
     >
       <p className="mb-3 text-xs text-[var(--text-muted)]">
-        The agent's full system prompt (Markdown). This is its persona — tools and
-        skills are appended automatically. Leave blank to use the built-in default.
+        {t("settings.agentPersonaBody")}
       </p>
       <textarea
         autoFocus
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={20}
-        placeholder="Leave blank to use the built-in default persona"
+        placeholder={t("settings.defaultPersonaPlaceholder")}
         className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs leading-6"
       />
     </EditorDialog>
@@ -787,10 +737,12 @@ function OrgPersonaPanel({
   doc: AgentConfigDocument;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [text, setText] = useState<string>(doc.default_instructions ?? "");
+  const dirty = text !== (doc.default_instructions ?? "");
 
   const commit = () => {
-    if (text !== (doc.default_instructions ?? "")) {
+    if (dirty) {
       void onSave({ ...doc, default_instructions: text });
     }
   };
@@ -798,18 +750,30 @@ function OrgPersonaPanel({
   return (
     <>
       <Header
-        title="Default Persona"
-        body="Control Room — the Markdown a new agent starts from. New agents copy this into their own Instructions at creation; editing it here doesn't change existing agents. Leave blank to seed new agents from the built-in default."
+        title={t("settings.navDefaultPersona")}
+        body={t("settings.defaultPersonaBody")}
       />
-      <div className={CARD}>
+      <div className={cn(CARD, "p-0")}>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onBlur={commit}
           rows={18}
-          placeholder="Leave blank to use the built-in default persona"
-          className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-6"
+          placeholder={t("settings.defaultPersonaPlaceholder")}
+          className="block w-full resize-y rounded-t-[var(--radius)] border-0 border-b border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-6 outline-none focus:shadow-[var(--shadow-focus)]"
         />
+        <div className="flex min-h-12 items-center justify-between gap-3 px-3 py-2">
+          <span className="text-xs text-[var(--text-faint)]">
+            {dirty ? t("settings.unsavedChanges") : t("settings.saved")}
+          </span>
+          <button
+            type="button"
+            disabled={!dirty}
+            onClick={commit}
+            className={BTN_PRIMARY}
+          >
+            {t("common.save")}
+          </button>
+        </div>
       </div>
     </>
   );
@@ -1486,11 +1450,12 @@ function ToolsPanel({
   onConfigureVectorDB: () => void;
   onPatchCapability: (id: string, patch: Partial<CapabilityConfig>) => Promise<void>;
 }) {
+  const { t } = useI18n();
   return (
     <>
       <Header
-        title="Capabilities"
-        body="Capabilities are the channels an agent can use: search the web, retrieve from knowledge bases, run code in the sandbox, or access connected cloud services. Configure them once here, then choose which capabilities each agent may use."
+        title={t("settings.capabilities")}
+        body={t("settings.capabilitiesBody")}
       />
       <div className="grid gap-3 lg:grid-cols-3">
         {tools.map((cap) => (
@@ -1591,12 +1556,13 @@ function SkillsPanel({
   onInstall: () => void;
   onPatchCapability: (id: string, patch: Partial<CapabilityConfig>) => Promise<void>;
 }) {
+  const { t } = useI18n();
   return (
     <>
       <div className="mb-5 flex items-start justify-between gap-3">
         <Header
-          title="Skills"
-          body="Skills are task playbooks. They teach an agent how to use its capabilities for a specific workflow, such as knowledge-grounded QA, PAI-Rec diagnosis, or report generation."
+          title={t("settings.skills")}
+          body={t("settings.skillsBody")}
         />
         <button
           type="button"
@@ -1604,7 +1570,7 @@ function SkillsPanel({
           className={cn(BTN_PRIMARY, "mt-1 shrink-0")}
         >
           <Upload className="h-3.5 w-3.5" />
-          Install
+          {t("settings.installSkill")}
         </button>
       </div>
       <div className="grid gap-2 md:grid-cols-2">
@@ -1619,7 +1585,9 @@ function SkillsPanel({
                 {skill.description}
               </div>
               <div className="mt-2 text-xs text-[var(--text-faint)]">
-                {skill.dependencies.length ? `Requires: ${skill.dependencies.join(", ")}` : "No dependency"}
+                {skill.dependencies.length
+                  ? t("settings.skillRequires", { list: skill.dependencies.join(", ") })
+                  : t("settings.skillNoDependency")}
               </div>
               {skillMeta(skill) && (
                 <div className="mt-1 text-xs text-[var(--text-faint)]">
@@ -1638,7 +1606,7 @@ function SkillsPanel({
                   : "border border-[var(--border)] text-[var(--text-muted)]"
               )}
             >
-              {skill.enabled ? "Installed" : "Disabled"}
+              {skill.enabled ? t("settings.skillInstalled") : t("common.disabled")}
             </button>
           </div>
         ))}
@@ -1881,36 +1849,41 @@ function YamlPanel({
   onLoad: () => Promise<void>;
   onSave: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   return (
-    <>
-      <Header
-        title="YAML"
-        body="Control Room — advanced raw configuration for system capabilities and agent profiles. Secrets are masked when read from the API."
-      />
-      <div className="mb-3 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => void onLoad()}
-          className={BTN_GHOST}
-        >
-          Reload
-        </button>
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => void onSave()}
-          className={BTN_PRIMARY}
-        >
-          Save YAML
-        </button>
+    <div className="flex min-h-[calc(100vh_-_var(--header-h)_-_48px)] flex-col">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-semibold tracking-tight">{t("settings.navYaml")}</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+            {t("settings.yamlBody")}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={() => void onLoad()}
+            className={BTN_GHOST}
+          >
+            {t("settings.reloadYaml")}
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void onSave()}
+            className={BTN_PRIMARY}
+          >
+            {t("settings.saveYaml")}
+          </button>
+        </div>
       </div>
       <textarea
         value={yamlText}
         onChange={(event) => setYamlText(event.target.value)}
         spellCheck={false}
-        className="min-h-[560px] w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 font-mono text-xs leading-5 text-[var(--text)] outline-none"
+        className="min-h-[680px] flex-1 resize-none rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 font-mono text-[13px] leading-6 text-[var(--text)] outline-none focus:border-[var(--border-strong)] focus:shadow-[var(--shadow-focus)]"
       />
-    </>
+    </div>
   );
 }
 

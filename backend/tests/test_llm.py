@@ -1,5 +1,8 @@
 # tests/app/test_llm.py
-import sys, os, asyncio
+# ruff: noqa: E402
+import asyncio
+import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.llm import LeanLLM
@@ -310,5 +313,19 @@ def test_enable_thinking_passed_to_api():
             extra_body.get("chat_template_kwargs", {}).get("enable_thinking")
             is True
         )
+
+    asyncio.run(run())
+
+
+def test_astream_allows_request_kwargs_to_override_defaults():
+    async def run():
+        chunks = [_FakeChunk([_FakeChoice(_FakeDelta(content="ok"))])]
+        llm = LeanLLM(base_url="x", api_key="x", model="m", max_tokens=4096)
+        fake = _FakeClient(chunks)
+        llm.client = fake
+        _ = [c async for c in await llm.astream(messages=[], tools=[], max_tokens=1)]
+        kwargs = fake.completions.last_kwargs
+        assert kwargs is not None
+        assert kwargs["max_tokens"] == 1
 
     asyncio.run(run())

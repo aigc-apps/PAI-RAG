@@ -62,6 +62,7 @@ describe("ConnectionsPanel", () => {
     const user = userEvent.setup();
     render(<ConnectionsPanel doc={docWith({})} />);
 
+    await user.click(screen.getByRole("button", { name: "Add provider" }));
     await user.type(screen.getByLabelText("Provider name"), "dashscope");
     await user.type(
       screen.getByLabelText("Provider base URL"),
@@ -86,6 +87,7 @@ describe("ConnectionsPanel", () => {
     const user = userEvent.setup();
     render(<ConnectionsPanel doc={withProvider} />);
 
+    await user.click(screen.getByRole("button", { name: "Add model" }));
     await user.selectOptions(screen.getByLabelText("Model provider"), "dashscope");
     await user.selectOptions(screen.getByLabelText("Model type"), "embedding");
     await user.type(screen.getByLabelText("Model id"), "text-embedding-v4");
@@ -109,6 +111,7 @@ describe("ConnectionsPanel", () => {
     const user = userEvent.setup();
     render(<ConnectionsPanel doc={withProvider} />);
 
+    await user.click(screen.getByRole("button", { name: "Add model" }));
     await user.selectOptions(screen.getByLabelText("Model provider"), "dashscope");
     await user.selectOptions(screen.getByLabelText("Model type"), "rerank");
     // Dimension only applies to embeddings.
