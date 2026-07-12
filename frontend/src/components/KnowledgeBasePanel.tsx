@@ -6,6 +6,7 @@ import type {
 } from "../api/agentConfig";
 import { EngineStatusBadge, useEngineStatus } from "./EngineStatus";
 import { cn } from "../lib/cn";
+import { CARD } from "../lib/ui";
 import { useI18n, type TFunction } from "../i18n";
 
 // A model's type as the backend `ModelSpec` stores it.
@@ -67,7 +68,7 @@ export function KnowledgeBasePanel({
           <h3 className="text-sm font-semibold">{t("kb.vectorDb")}</h3>
           <p className="mt-1 text-xs text-[var(--text-muted)]">{t("kb.vectorDbHint")}</p>
         </div>
-        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className={CARD}>
           <div className="flex items-center gap-3">
             <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">
               <Database className="h-4 w-4" />
@@ -165,7 +166,7 @@ function RagModelReadout({
   emptyHint: string;
 }) {
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className={CARD}>
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm font-medium">{label}</div>
         <div className="text-xs text-[var(--text-muted)]">

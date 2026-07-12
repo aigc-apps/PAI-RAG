@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  ArrowLeft,
   CircleAlert,
   Database,
   GitBranch,
@@ -29,10 +28,12 @@ import { generateCodeManifest, newAgentProfile } from "../api/agentConfig";
 import { listKnowledgeBases } from "../api/knowledge";
 import type { KnowledgeBase } from "../api/knowledge";
 import { cn } from "../lib/cn";
+import { CARD, INPUT, BTN_PRIMARY, BTN_GHOST, BTN_DANGER } from "../lib/ui";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { KnowledgeBasePanel } from "./KnowledgeBasePanel";
+import { PageHeader } from "./PageHeader";
 import { ThemeToggle } from "./ThemeToggle";
 import { useI18n } from "../i18n";
 
@@ -261,19 +262,13 @@ export function SettingsView({
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg)] text-[var(--text)]">
-      <div className="flex h-12 items-center gap-2 border-b border-[var(--border)] px-3">
-        <button
-          type="button"
-          aria-label="Back to chat"
-          onClick={onBack}
-          className="rounded-[var(--radius-sm)] p-1.5 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <h1 className="text-sm font-semibold">Settings</h1>
-        <div className="flex-1" />
-        <ThemeToggle />
-      </div>
+      <PageHeader
+        icon={Settings2}
+        title="Settings"
+        onBack={onBack}
+        backLabel="Back to chat"
+        actions={<ThemeToggle />}
+      />
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 grid-cols-[180px_1fr] gap-6 overflow-y-auto px-5 py-6">
         <aside className="space-y-5">
@@ -506,7 +501,7 @@ function EditorDialog({
     >
       <div
         className={cn(
-          "flex max-h-[85vh] w-full flex-col rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] shadow-xl",
+          "flex max-h-[85vh] w-full flex-col rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl",
           wide ? "max-w-3xl" : "max-w-xl"
         )}
       >
@@ -562,19 +557,10 @@ function PersonaDialog({
       wide
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
-          >
+          <button type="button" onClick={onClose} className={BTN_GHOST}>
             {t("common.cancel")}
           </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty}
-            className="rounded-[var(--radius-sm)] bg-[var(--accent,var(--text))] px-3 py-1.5 text-sm font-medium text-[var(--bg)] disabled:opacity-50"
-          >
+          <button type="button" onClick={save} disabled={!dirty} className={BTN_PRIMARY}>
             {t("common.save")}
           </button>
         </>
@@ -719,7 +705,7 @@ function OrgPersonaPanel({
         title="Default Persona"
         body="Control Room — the Markdown a new agent starts from. New agents copy this into their own Instructions at creation; editing it here doesn't change existing agents. Leave blank to seed new agents from the built-in default."
       />
-      <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className={CARD}>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -775,7 +761,7 @@ function CodeManifestSection({
   };
 
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className={CARD}>
       <div className="mb-1 flex items-center gap-2">
         <GitBranch className="h-4 w-4 text-[var(--text-muted)]" />
         <h3 className="text-sm font-semibold">{t("settings.codeManifest")}</h3>
@@ -887,7 +873,7 @@ function KnowledgeSection({
   if (bare) return inner;
 
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className={CARD}>
       <div className="mb-1 flex items-center gap-2">
         <Database className="h-4 w-4 text-[var(--text-muted)]" />
         <h3 className="text-sm font-semibold">Knowledge</h3>
@@ -1002,7 +988,7 @@ function PreviewCard({
 }) {
   const { t } = useI18n();
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className={CARD}>
       <div className="mb-2 flex items-center gap-2 text-[var(--text-muted)]">
         {icon}
         <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
@@ -1011,7 +997,7 @@ function PreviewCard({
           type="button"
           aria-label={editLabel}
           onClick={onEdit}
-          className="ml-auto inline-flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--accent,var(--text))] hover:bg-[var(--surface-2)]"
+          className="ml-auto inline-flex items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--accent)] hover:bg-[var(--surface-2)]"
         >
           <Pencil className="h-3 w-3" />
           {t("common.edit")}
@@ -1057,7 +1043,7 @@ function BasicInfoSection({
   };
 
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className={CARD}>
       <div className="mb-3 flex items-center gap-2 text-[var(--text-muted)]">
         <Settings2 className="h-4 w-4" />
         <h3 className="text-sm font-semibold text-[var(--text)]">{t("settings.basicInfo")}</h3>
@@ -1085,7 +1071,7 @@ function BasicInfoSection({
                 "rounded-full px-2 py-0.5 text-[10px] font-medium",
                 inherits
                   ? "bg-[var(--surface-2)] text-[var(--text-muted)]"
-                  : "bg-[var(--accent-soft,var(--surface-2))] text-[var(--accent,var(--text))]"
+                  : "bg-[var(--accent-soft)] text-[var(--accent)]"
               )}
             >
               {inherits ? "Using system default" : "Override"}
@@ -1250,7 +1236,7 @@ function AgentsPanel({
             );
             setSelectedAgentId(id);
           }}
-          className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+          className={BTN_GHOST}
         >
           <Plus className="h-4 w-4" />
           New agent
@@ -1260,7 +1246,7 @@ function AgentsPanel({
           <button
             type="button"
             onClick={makeDefault}
-            className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            className={BTN_GHOST}
           >
             {t("settings.setDefault")}
           </button>
@@ -1270,14 +1256,14 @@ function AgentsPanel({
             <button
               type="button"
               onClick={deleteAgent}
-              className="rounded-[var(--radius-sm)] border border-[var(--danger,#dc2626)] px-3 py-2 text-sm font-medium text-[var(--danger,#dc2626)] hover:bg-[var(--surface-2)]"
+              className={BTN_DANGER}
             >
               {t("settings.confirmDelete")}
             </button>
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+              className={BTN_GHOST}
             >
               {t("common.cancel")}
             </button>
@@ -1288,7 +1274,7 @@ function AgentsPanel({
             onClick={() => setConfirmDelete(true)}
             disabled={!canDelete}
             title={canDelete ? t("settings.deleteThisAgent") : t("settings.keepOneAgent")}
-            className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] disabled:opacity-50"
+            className={BTN_GHOST}
           >
             <Trash2 className="h-4 w-4" />
             {t("common.delete")}
@@ -1447,7 +1433,7 @@ function ToolsPanel({
         {tools.map((cap) => (
           <div
             key={cap.id}
-            className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4"
+            className={CARD}
           >
             <div className="mb-3 flex items-start gap-3">
               <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">
@@ -1483,7 +1469,7 @@ function ToolsPanel({
                       : cap.enabled ? "disabled" : "auto",
                   })
                 }
-                className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)] disabled:opacity-60"
+                className={BTN_GHOST}
               >
                 {cap.enabled ? "Disable" : "Enable"}
               </button>
@@ -1491,7 +1477,7 @@ function ToolsPanel({
                 <button
                   type="button"
                   onClick={onConfigureSearch}
-                  className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+                  className={BTN_GHOST}
                 >
                   Configure
                 </button>
@@ -1500,7 +1486,7 @@ function ToolsPanel({
                 <button
                   type="button"
                   onClick={onConfigureSandbox}
-                  className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+                  className={BTN_GHOST}
                 >
                   Configure
                 </button>
@@ -1509,7 +1495,7 @@ function ToolsPanel({
                 <button
                   type="button"
                   onClick={onConfigureVectorDB}
-                  className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+                  className={BTN_GHOST}
                 >
                   Vector DB
                 </button>
@@ -1518,7 +1504,7 @@ function ToolsPanel({
                 <button
                   type="button"
                   onClick={onConfigureAliyun}
-                  className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+                  className={BTN_GHOST}
                 >
                   Authorize
                 </button>
@@ -1552,7 +1538,7 @@ function SkillsPanel({
         <button
           type="button"
           onClick={onInstall}
-          className="mt-1 flex shrink-0 items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+          className={cn(BTN_PRIMARY, "mt-1 shrink-0")}
         >
           <Upload className="h-3.5 w-3.5" />
           Install
@@ -1677,7 +1663,7 @@ function SkillInstallDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-4">
-      <div className="w-full max-w-lg rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-xl">
+      <div className="w-full max-w-lg rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
           <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">
             {mode === "git" ? <GitBranch className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
@@ -1726,7 +1712,7 @@ function SkillInstallDialog({
                 type="file"
                 accept=".zip,application/zip"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm"
+                className={INPUT}
               />
             </label>
           )}
@@ -1754,7 +1740,7 @@ function SkillInstallDialog({
               <select
                 value={agentId}
                 onChange={(event) => setAgentId(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm"
+                className={INPUT}
               >
                 <option value="">Do not enable</option>
                 {agents.map((agent) => (
@@ -1777,7 +1763,7 @@ function SkillInstallDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            className={BTN_GHOST}
           >
             Cancel
           </button>
@@ -1785,7 +1771,7 @@ function SkillInstallDialog({
             type="button"
             disabled={loading || submitting}
             onClick={() => void submit()}
-            className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+            className={BTN_PRIMARY}
           >
             {submitting ? "Installing" : "Install"}
           </button>
@@ -1813,7 +1799,7 @@ function TextInput({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm"
+        className={INPUT}
       />
     </label>
   );
@@ -1842,7 +1828,7 @@ function YamlPanel({
         <button
           type="button"
           onClick={() => void onLoad()}
-          className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+          className={BTN_GHOST}
         >
           Reload
         </button>
@@ -1850,7 +1836,7 @@ function YamlPanel({
           type="button"
           disabled={loading}
           onClick={() => void onSave()}
-          className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+          className={BTN_PRIMARY}
         >
           Save YAML
         </button>
@@ -1921,7 +1907,7 @@ function SearchConfigDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
-      <div className="w-full max-w-xl rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] shadow-xl">
+      <div className="w-full max-w-xl rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex h-11 items-center border-b border-[var(--border)] px-4">
           <div className="text-sm font-semibold">Configure Search</div>
           <button
@@ -1939,7 +1925,7 @@ function SearchConfigDialog({
             <select
               value={providerName}
               onChange={(event) => setProviderName(event.target.value)}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              className={INPUT}
             >
               <option value="tavily">Tavily</option>
               <option value="brave">Brave Search</option>
@@ -1952,7 +1938,7 @@ function SearchConfigDialog({
               type="password"
               placeholder={provider?.secret_configured ? "Already configured" : "Paste key or use env below"}
               onChange={(event) => setApiKey(event.target.value)}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              className={INPUT}
             />
           </label>
           <label className="block text-sm">
@@ -1961,7 +1947,7 @@ function SearchConfigDialog({
               value={apiKeyEnv}
               placeholder={providerName === "tavily" ? "TAVILY_API_KEY" : "BRAVE_SEARCH_API_KEY"}
               onChange={(event) => setApiKeyEnv(event.target.value)}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              className={INPUT}
             />
             <span className="mt-1 block text-xs text-[var(--text-faint)]">
               Stored as an environment-variable name — the secret value stays on the server.
@@ -1973,7 +1959,7 @@ function SearchConfigDialog({
               value={endpoint}
               placeholder={providerName === "tavily" ? "https://api.tavily.com/search" : "https://api.search.brave.com/res/v1/web/search"}
               onChange={(event) => setEndpoint(event.target.value)}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              className={INPUT}
             />
           </label>
           <label className="block text-sm">
@@ -1984,7 +1970,7 @@ function SearchConfigDialog({
               min={1}
               max={20}
               onChange={(event) => setMaxResults(event.target.value)}
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              className={INPUT}
             />
           </label>
           <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
@@ -2001,14 +1987,14 @@ function SearchConfigDialog({
             type="button"
             onClick={onTest}
             disabled={testing || !search?.enabled}
-            className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] disabled:opacity-50"
+            className={BTN_GHOST}
           >
             {testing ? "Testing..." : "Test search"}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[var(--radius-sm)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            className={BTN_GHOST}
           >
             Cancel
           </button>
@@ -2016,7 +2002,7 @@ function SearchConfigDialog({
             type="button"
             disabled={loading}
             onClick={saveSearch}
-            className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+            className={BTN_PRIMARY}
           >
             Save
           </button>
@@ -2078,7 +2064,7 @@ function VectorDBConfigDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
-      <div className="w-full max-w-xl rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] shadow-xl">
+      <div className="w-full max-w-xl rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex h-11 items-center border-b border-[var(--border)] px-4">
           <div className="text-sm font-semibold">Configure Vector Database</div>
           <button
@@ -2100,7 +2086,7 @@ function VectorDBConfigDialog({
                   value={url}
                   placeholder="https://es-host:9200"
                   onChange={(event) => setUrl(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </label>
               <label className="block text-sm">
@@ -2109,7 +2095,7 @@ function VectorDBConfigDialog({
                   value={indexPrefix}
                   placeholder="kb"
                   onChange={(event) => setIndexPrefix(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </label>
               <div className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
@@ -2122,7 +2108,7 @@ function VectorDBConfigDialog({
                   type="password"
                   placeholder={vdb.api_key ? "Already configured" : "Paste key or use env below"}
                   onChange={(event) => setApiKey(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </label>
               <label className="block text-sm">
@@ -2131,7 +2117,7 @@ function VectorDBConfigDialog({
                   value={apiKeyEnv}
                   placeholder="ELASTICSEARCH_API_KEY"
                   onChange={(event) => setApiKeyEnv(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
                 <span className="mt-1 block text-xs text-[var(--text-faint)]">
                   Stored as an environment-variable name — the secret value stays on the server.
@@ -2143,7 +2129,7 @@ function VectorDBConfigDialog({
                   value={username}
                   placeholder="elastic"
                   onChange={(event) => setUsername(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </label>
               <label className="block text-sm">
@@ -2153,7 +2139,7 @@ function VectorDBConfigDialog({
                   type="password"
                   placeholder={vdb.password ? "Already configured" : "Paste password or use env below"}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </label>
               <label className="block text-sm">
@@ -2162,7 +2148,7 @@ function VectorDBConfigDialog({
                   value={passwordEnv}
                   placeholder="ELASTICSEARCH_PASSWORD"
                   onChange={(event) => setPasswordEnv(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </label>
               <label className="flex items-center gap-2 text-sm">
@@ -2181,7 +2167,7 @@ function VectorDBConfigDialog({
                   type="number"
                   min={1}
                   onChange={(event) => setTimeoutValue(event.target.value)}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </label>
 
@@ -2193,7 +2179,7 @@ function VectorDBConfigDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[var(--radius-sm)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            className={BTN_GHOST}
           >
             Cancel
           </button>
@@ -2201,7 +2187,7 @@ function VectorDBConfigDialog({
             type="button"
             disabled={loading}
             onClick={saveVectorDB}
-            className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+            className={BTN_PRIMARY}
           >
             Save
           </button>
@@ -2299,7 +2285,7 @@ function SandboxConfigDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
-      <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] shadow-xl">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex h-11 items-center border-b border-[var(--border)] px-4">
           <div className="text-sm font-semibold">Configure Sandbox</div>
           <button
@@ -2319,7 +2305,7 @@ function SandboxConfigDialog({
                 value={endpoint}
                 placeholder="Auto-derived from account id if empty"
                 onChange={(event) => setEndpoint(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
               {!endpoint.trim() && accountId.trim() && (
                 <span className="mt-1 block text-xs text-[var(--text-muted)]">
@@ -2333,7 +2319,7 @@ function SandboxConfigDialog({
                 value={templateName}
                 placeholder="code-interpreter-template"
                 onChange={(event) => setTemplateName(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
             </Field>
             <Field label="Gateway API key">
@@ -2343,7 +2329,7 @@ function SandboxConfigDialog({
                 type="password"
                 placeholder={provider?.secret_configured ? "Already configured" : "Optional if env is set"}
                 onChange={(event) => setApiKey(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
             </Field>
             <Field label="Gateway API key env">
@@ -2352,7 +2338,7 @@ function SandboxConfigDialog({
                 value={apiKeyEnv}
                 placeholder="AGENTRUN_SANDBOX_API_KEY"
                 onChange={(event) => setApiKeyEnv(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
               <span className="mt-1 block text-xs text-[var(--text-faint)]">
                 Stored as an environment-variable name — the secret value stays on the server.
@@ -2364,7 +2350,7 @@ function SandboxConfigDialog({
                 value={accountId}
                 placeholder="Optional if env is set"
                 onChange={(event) => setAccountId(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
             </Field>
             <Field label="Account ID env">
@@ -2373,7 +2359,7 @@ function SandboxConfigDialog({
                 value={accountIdEnv}
                 placeholder="AGENTRUN_ACCOUNT_ID"
                 onChange={(event) => setAccountIdEnv(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
             </Field>
             <Field label="Session idle seconds">
@@ -2383,7 +2369,7 @@ function SandboxConfigDialog({
                 type="number"
                 min={30}
                 onChange={(event) => setSessionIdle(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
             </Field>
             <Field label="Execution timeout seconds">
@@ -2393,7 +2379,7 @@ function SandboxConfigDialog({
                 type="number"
                 min={1}
                 onChange={(event) => setTimeoutValue(event.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                className={INPUT}
               />
             </Field>
           </div>
@@ -2416,7 +2402,7 @@ function SandboxConfigDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-[var(--radius-sm)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]"
+            className={BTN_GHOST}
           >
             Cancel
           </button>
@@ -2424,7 +2410,7 @@ function SandboxConfigDialog({
             type="button"
             disabled={loading}
             onClick={saveSandbox}
-            className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+            className={BTN_PRIMARY}
           >
             Save
           </button>

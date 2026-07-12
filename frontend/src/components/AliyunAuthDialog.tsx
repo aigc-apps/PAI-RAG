@@ -102,7 +102,7 @@ export function AliyunAuthDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] shadow-xl">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
         <div className="flex h-11 items-center border-b border-[var(--border)] px-4">
           <ShieldCheck className="mr-2 h-4 w-4 text-[var(--text-muted)]" />
           <div className="text-sm font-semibold">{t("aliyun.title")}</div>
@@ -185,7 +185,7 @@ export function AliyunAuthDialog({ onClose }: { onClose: () => void }) {
                   rel="noopener noreferrer"
                   aria-disabled={!status?.ros_url}
                   className={cn(
-                    "inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white",
+                    "inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-fg)]",
                     !status?.ros_url && "pointer-events-none opacity-50"
                   )}
                 >
@@ -217,7 +217,7 @@ export function AliyunAuthDialog({ onClose }: { onClose: () => void }) {
                   type="button"
                   disabled={busy || !configured}
                   onClick={submit}
-                  className="mt-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+                  className="mt-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-fg)] disabled:opacity-60"
                 >
                   {busy ? t("aliyun.verifying") : t("aliyun.verifyAuthorize")}
                 </button>
@@ -238,7 +238,7 @@ export function AliyunAuthDialog({ onClose }: { onClose: () => void }) {
                 useComposer.getState().submit?.(t("aliyun.resumeMessage"));
                 onClose();
               }}
-              className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--accent-fg)] hover:opacity-90"
             >
               {t("aliyun.resumeButton")}
               <ArrowRight className="h-4 w-4" />

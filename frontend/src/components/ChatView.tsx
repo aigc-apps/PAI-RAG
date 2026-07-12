@@ -9,6 +9,7 @@ import { Composer } from "./Composer";
 import { AgentSelector } from "./AgentSelector";
 import { ThemeToggle } from "./ThemeToggle";
 import { BrandMark } from "./Sidebar";
+import { ICON_BTN } from "../lib/ui";
 import { useI18n } from "../i18n";
 
 export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
@@ -55,7 +56,7 @@ export function ChatView({ onToggleSidebar }: { onToggleSidebar?: () => void }) 
             aria-label={t("chat.toggleSidebar")}
             title={t("chat.toggleSidebar")}
             onClick={onToggleSidebar}
-            className="icon-btn p-1.5 text-[var(--text-muted)] hover:text-[var(--text)]"
+            className={ICON_BTN}
           >
             <PanelLeft className="h-4 w-4" />
           </button>

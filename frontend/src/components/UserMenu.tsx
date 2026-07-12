@@ -5,6 +5,8 @@ import { useAuthStore } from "../store/auth";
 import { changePassword } from "../api/auth";
 import { getAliyunStatus } from "../api/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
+import { cn } from "../lib/cn";
+import { INPUT, BTN_PRIMARY, BTN_GHOST } from "../lib/ui";
 import { useI18n } from "../i18n";
 
 function initialOf(email: string | null | undefined): string {
@@ -42,12 +44,11 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const inputCls =
-    "mb-3 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]";
+  const inputCls = cn(INPUT, "mb-3");
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
-      <div className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xl">
+      <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] p-5 shadow-xl">
         <div className="mb-4 text-sm font-semibold">{t("userMenu.changePassword")}</div>
         <form onSubmit={submit}>
           {error && (
@@ -62,12 +63,10 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
           <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
             placeholder={t("userMenu.pwConfirm")} autoComplete="new-password" className={inputCls} />
           <div className="mt-1 flex justify-end gap-2">
-            <button type="button" onClick={onClose}
-              className="rounded-[var(--radius-sm)] px-3 py-1.5 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)]">
+            <button type="button" onClick={onClose} className={BTN_GHOST}>
               {t("common.cancel")}
             </button>
-            <button type="submit" disabled={busy}
-              className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60">
+            <button type="submit" disabled={busy} className={BTN_PRIMARY}>
               {t("common.save")}
             </button>
           </div>
@@ -137,7 +136,7 @@ export function UserMenu({
             {/* click-away backdrop */}
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             {/* Opens upward + left-aligned — the menu lives at the bottom-left of the sidebar. */}
-            <div className="absolute left-0 bottom-full z-50 mb-2 w-56 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-xl">
+            <div className="absolute left-0 bottom-full z-50 mb-2 w-56 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-xl">
               <div className="border-b border-[var(--border)] px-3 py-2">
                 <div className="truncate text-sm font-medium">{user?.email ?? t("userMenu.account")}</div>
                 <div className="text-xs capitalize text-[var(--text-muted)]">{user?.role}</div>
@@ -193,7 +192,7 @@ export function UserMenu({
                       className={
                         "px-2 py-0.5 text-xs transition-colors " +
                         (lang === code
-                          ? "bg-[var(--accent)] text-white"
+                          ? "bg-[var(--accent)] text-[var(--accent-fg)]"
                           : "text-[var(--text-muted)] hover:bg-[var(--surface-2)]")
                       }
                     >

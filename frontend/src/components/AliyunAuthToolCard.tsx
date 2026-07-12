@@ -130,7 +130,7 @@ export function AliyunAuthToolCard({
             )}
             <button
               type="button"
-              className={cn(btn, "bg-[var(--accent)] text-white hover:opacity-90")}
+              className={cn(btn, "bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]")}
               onClick={() => showDialog({ resumeAfter: true })}
             >
               {bound ? t("aliyun.card.reauthorize") : t("aliyun.card.authorize")}
@@ -160,7 +160,7 @@ export function AliyunAuthToolCard({
               type="button"
               className={cn(
                 btn,
-                "mt-2 bg-[var(--accent)] text-white hover:opacity-90"
+                "mt-2 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
               )}
               onClick={() => resumeAgent()}
             >

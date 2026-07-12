@@ -108,7 +108,7 @@ export function UsersPanel() {
             type="button"
             disabled={busy}
             onClick={submitInvite}
-            className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-fg)] disabled:opacity-60"
           >
             <UserPlus className="h-4 w-4" />
             {t("users.invite")}

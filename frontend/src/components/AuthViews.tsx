@@ -1,6 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { useAuthStore } from "../store/auth";
+import { cn } from "../lib/cn";
+import { INPUT, LABEL, BTN_PRIMARY } from "../lib/ui";
 import { useI18n } from "../i18n";
 
 // A centered card shell shared by the three unauthenticated screens.
@@ -15,7 +17,7 @@ function AuthShell({
 }) {
   return (
     <div className="grid h-full place-items-center bg-[var(--bg)] p-4">
-      <div className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-xl">
+      <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] p-6 shadow-xl">
         <div className="mb-5 flex items-center gap-2">
           <div className="grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] bg-[var(--accent)]/10 text-[var(--accent)]">
             <ShieldCheck className="h-4 w-4" />
@@ -50,7 +52,7 @@ function LabeledInput({
 }) {
   return (
     <label className="mb-3 block text-sm">
-      <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{label}</span>
+      <span className={LABEL}>{label}</span>
       <input
         type={type}
         value={value}
@@ -58,7 +60,7 @@ function LabeledInput({
         autoFocus={autoFocus}
         autoComplete={autoComplete}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        className={INPUT}
       />
     </label>
   );
@@ -66,11 +68,7 @@ function LabeledInput({
 
 function SubmitButton({ busy, children }: { busy: boolean; children: ReactNode }) {
   return (
-    <button
-      type="submit"
-      disabled={busy}
-      className="mt-1 flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-    >
+    <button type="submit" disabled={busy} className={cn(BTN_PRIMARY, "mt-1 w-full")}>
       {busy && <Loader2 className="h-4 w-4 animate-spin" />}
       {children}
     </button>

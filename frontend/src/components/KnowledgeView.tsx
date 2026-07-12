@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowLeft, BookOpen, Bot, Check, Copy, Database, Eye, Globe, Info, Loader2, Pencil, Plus,
+  BookOpen, Bot, Check, Copy, Database, Eye, Globe, Info, Loader2, Pencil, Plus,
   RefreshCw, Search, Trash2, TriangleAlert, Upload, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -15,15 +15,10 @@ import {
 import { listModels, modelsByType, type ModelInfo } from "../api/models";
 import { EngineStatusBadge, useEngineStatus } from "./EngineStatus";
 import { cn } from "../lib/cn";
+import { CARD, INPUT, BTN_PRIMARY, BTN_GHOST, ICON_BTN, PILL_BASE } from "../lib/ui";
+import { PageHeader } from "./PageHeader";
 import { copyText } from "../lib/clipboard";
 import { useI18n, type TFunction, type MessageKey } from "../i18n";
-
-// --- shared class strings (match SettingsView / app idioms) ---------------- //
-const CARD = "rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] p-4";
-const INPUT = "w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]";
-const BTN_PRIMARY = "inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-2 text-sm font-medium text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] disabled:opacity-50";
-const BTN_GHOST = "inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] disabled:opacity-50";
-const ICON_BTN = "grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] disabled:opacity-40 disabled:hover:bg-transparent";
 
 // --- config accessors with defaults ---------------------------------------- //
 const num = (v: unknown, d: number) => (typeof v === "number" && !Number.isNaN(v) ? v : d);
@@ -99,7 +94,7 @@ function statusClass(status: string) {
 function Pill({ status }: { status: string }) {
   const { t } = useI18n();
   return (
-    <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", statusClass(status))}>
+    <span className={cn(PILL_BASE, statusClass(status))}>
       {statusLabelOf(t, status)}
     </span>
   );
@@ -242,17 +237,7 @@ export function KnowledgeView({ onBack }: { onBack: () => void }) {
 
 function TopBar({ onBack, crumb }: { onBack: () => void; crumb: ReactNode }) {
   const { t } = useI18n();
-  return (
-    <div className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-[var(--border)] px-3">
-      <button type="button" aria-label={t("common.back")} onClick={onBack} className={ICON_BTN}>
-        <ArrowLeft className="h-4 w-4" />
-      </button>
-      <span className="grid h-6 w-6 place-items-center rounded-[6px] bg-[var(--accent-soft)] text-[var(--accent)]">
-        <Database className="h-3.5 w-3.5" />
-      </span>
-      <div className="text-[13px] text-[var(--text-muted)]">{crumb}</div>
-    </div>
-  );
+  return <PageHeader icon={Database} title={crumb} onBack={onBack} backLabel={t("common.back")} />;
 }
 
 // ======================================================================== //

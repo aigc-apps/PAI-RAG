@@ -8,6 +8,7 @@ import type {
   SetupMode,
 } from "../api/agentConfig";
 import { cn } from "../lib/cn";
+import { CARD, BTN_PRIMARY } from "../lib/ui";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { BrandMark } from "./Sidebar";
 import { ConnectionsPanel } from "./ConnectionsPanel";
@@ -64,7 +65,7 @@ function CoreCard({
 }) {
   const { t } = useI18n();
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className={CARD}>
       <div className="mb-3 flex items-start gap-3">
         <div className="mt-0.5 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-[var(--text-muted)]">
           {icon}
@@ -159,7 +160,7 @@ export function SetupWizard({
                 type="button"
                 onClick={() => setMode(item.id)}
                 className={cn(
-                  "min-h-[176px] rounded-[var(--radius)] border bg-[var(--surface)] p-4 text-left transition-colors",
+                  "min-h-[176px] rounded-[var(--radius-lg)] border bg-[var(--bg-elevated)] p-4 text-left transition-colors",
                   mode === item.id
                     ? "border-[var(--accent)] bg-[var(--surface-2)]"
                     : "border-[var(--border)] hover:bg-[var(--surface-2)]"
@@ -180,7 +181,7 @@ export function SetupWizard({
           </div>
         </section>
 
-        <section className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+        <section className={CARD}>
           <div className="mb-4 flex items-center gap-2">
             <h2 className="text-sm font-semibold">{t("setup.connectModel")}</h2>
             <span
@@ -214,7 +215,7 @@ export function SetupWizard({
           </div>
         </section>
 
-        <section className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+        <section className={CARD}>
           <h2 className="text-sm font-semibold">{t("setup.recommendedSkills")}</h2>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {enabledSkills.map((skill) => (
@@ -240,7 +241,7 @@ export function SetupWizard({
             disabled={loading || !llmReady}
             title={llmReady ? undefined : t("setup.finishTitleGate")}
             onClick={() => finish()}
-            className="inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className={cn(BTN_PRIMARY, "px-4")}
           >
             {t("setup.finishSetup")}
             <ChevronRight className="h-4 w-4" />
