@@ -831,9 +831,9 @@ def _skill_tool_dependencies(permissions: Dict[str, Any]) -> List[str]:
     mapped = {
         "web_search": "search",
         "knowledge_search": "knowledge",
-        "view_file": "knowledge",
-        "grep_file": "knowledge",
-        "list_knowledge_bases": "knowledge",
+        "knowledge_read": "knowledge",
+        "knowledge_find": "knowledge",
+        "knowledge_list": "knowledge",
         "code_interpreter": "sandbox",
         "shell": "sandbox",
     }

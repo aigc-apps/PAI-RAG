@@ -13,9 +13,9 @@ from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
 from agent.tools.builtin.load_skill import make_load_skill_tool
 from agent.tools.builtin.read_skill_resource import make_read_skill_resource_tool
 from agent.tools.builtin.knowledge import make_knowledge_search_tool
-from agent.tools.builtin.view_file import make_view_file_tool
-from agent.tools.builtin.grep_file import make_grep_file_tool
-from agent.tools.builtin.list_kbs import make_list_kbs_tool
+from agent.tools.builtin.knowledge_read import make_knowledge_read_tool
+from agent.tools.builtin.knowledge_find import make_knowledge_find_tool
+from agent.tools.builtin.knowledge_list import make_knowledge_list_tool
 from agent.tools.search_providers import make_search_provider
 from agent.tools.sandbox_providers import make_sandbox_provider
 from agent.custom_skills import discover_skill_packages, skill_sources
@@ -31,23 +31,20 @@ def build_default_registry(
 ) -> ToolRegistry:
     """Assemble the default registry. current_datetime + web_fetch always; web_search
     only when a provider is injected or `settings.search_provider != "none"`;
-    knowledge_search only when a live KnowledgeService is passed in."""
+    knowledge tools only when a live KnowledgeService is passed in and the
+    knowledge capability is not explicitly disabled."""
     reg = ToolRegistry()
     reg.register(make_current_datetime_tool())
     reg.register(make_web_fetch_tool())
 
-    # knowledge_search: the agent's online query path into the KB. Registered only
-    # when the host wires in a live KnowledgeService (lean_main / reload_app_state);
-    # agents opt in via tools.include ("knowledge_search").
-    if knowledge_service is not None:
+    # Register knowledge as one complete capability. A missing control-plane config
+    # means "not explicitly disabled", preserving isolated-test and alternate-host
+    # behavior; an explicit disabled capability removes the entire bundle.
+    if knowledge_service is not None and _knowledge_capability_available(agent_config):
         reg.register(make_knowledge_search_tool(knowledge_service))
-        # view_file (read a whole doc/chunk) + grep_file (exact literal match) round
-        # out the KB read surface alongside the semantic knowledge_search. Same gate.
-        reg.register(make_view_file_tool(knowledge_service))
-        reg.register(make_grep_file_tool(knowledge_service))
-        # list_knowledge_bases lets the model discover which bases exist (and their
-        # ids) so it can scope knowledge_search/grep_file to specific ones.
-        reg.register(make_list_kbs_tool(knowledge_service))
+        reg.register(make_knowledge_read_tool(knowledge_service))
+        reg.register(make_knowledge_find_tool(knowledge_service))
+        reg.register(make_knowledge_list_tool(knowledge_service))
 
     provider = search_provider
     if provider is None:
@@ -132,3 +129,13 @@ def _capability_enabled(agent_config, capability_id: str) -> bool:
         if cap.id == capability_id:
             return bool(cap.enabled and cap.permission != "disabled")
     return False
+
+
+def _knowledge_capability_available(agent_config) -> bool:
+    """Return false only when the control plane explicitly disables knowledge."""
+    if agent_config is None:
+        return True
+    for cap in getattr(agent_config, "capabilities", []) or []:
+        if cap.id == "knowledge":
+            return bool(cap.enabled and cap.permission != "disabled")
+    return True

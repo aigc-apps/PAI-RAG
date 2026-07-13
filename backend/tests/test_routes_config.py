@@ -578,4 +578,10 @@ def test_config_save_preserves_knowledge_tools(tmp_path, monkeypatch):
 
     names = set(state.registry.names())
     assert "knowledge_search" in names
-    assert {"view_file", "grep_file", "list_knowledge_bases"} <= names
+    assert {
+        "knowledge_search",
+        "knowledge_read",
+        "knowledge_find",
+        "knowledge_list",
+    } <= names
+    assert {"view_file", "grep_file", "list_knowledge_bases"}.isdisjoint(names)

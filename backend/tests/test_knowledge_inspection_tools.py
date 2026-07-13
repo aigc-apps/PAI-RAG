@@ -1,7 +1,7 @@
-"""view_file + grep_file agent tools (and their KnowledgeService seams).
+"""Knowledge inspection agent tools (and their KnowledgeService seams).
 
-- view_file reads a whole document by its short id, paginates, and fails softly;
-- grep_file finds an EXACT literal substring — including one buried inside a larger
+- knowledge_read reads a whole document by its short id, paginates, and fails softly;
+- knowledge_find finds an EXACT literal substring — including one buried inside a larger
   token, which a BM25 tokenizer cannot match — proving the literal-match value;
 - both enforce the same private/workspace/public permission scoping as the REST
   path (kb resolved internally still runs through get_kb);
@@ -17,11 +17,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
-
-from agent.tools.builtin.view_file import make_view_file_tool
-from agent.tools.builtin.grep_file import make_grep_file_tool
-from agent.tools.builtin.list_kbs import make_list_kbs_tool
+from agent.tools.builtin.knowledge_read import make_knowledge_read_tool
+from agent.tools.builtin.knowledge_find import make_knowledge_find_tool
+from agent.tools.builtin.knowledge_list import make_knowledge_list_tool
 from agent.tools.scope import ToolScope, set_current_tool_scope, reset_current_tool_scope
 from app.db import create_all, make_engine
 from app.knowledge import KnowledgeService
@@ -77,20 +75,21 @@ def _seed():
 
 
 # --------------------------------------------------------------------------- #
-# view_file
+# knowledge_read
 # --------------------------------------------------------------------------- #
-def test_view_file_returns_full_document():
+def test_knowledge_read_returns_full_document():
     svc, kb, doc = _seed()
-    view = make_view_file_tool(svc)
+    view = make_knowledge_read_tool(svc)
+    assert view.name == "knowledge_read"
     out = _run(ADMIN, lambda: view.fn(document_id=doc.id))
     assert "Runbook" in out
     assert f"document_id: {doc.id}" in out
     assert "ERR_x7abc" in out  # body is present in full
 
 
-def test_view_file_paginates_with_offset_and_max_chars():
+def test_knowledge_read_paginates_with_offset_and_max_chars():
     svc, kb, doc = _seed()
-    view = make_view_file_tool(svc)
+    view = make_knowledge_read_tool(svc)
     page1 = _run(ADMIN, lambda: view.fn(document_id=doc.id, max_chars=200, offset=0))
     assert "truncated" in page1  # more to read → paging hint present
     page2 = _run(ADMIN, lambda: view.fn(document_id=doc.id, max_chars=200, offset=200))
@@ -98,65 +97,66 @@ def test_view_file_paginates_with_offset_and_max_chars():
     assert page1 != page2
 
 
-def test_view_file_bad_id_is_friendly():
+def test_knowledge_read_bad_id_is_friendly():
     svc, kb, doc = _seed()
-    view = make_view_file_tool(svc)
+    view = make_knowledge_read_tool(svc)
     out = _run(ADMIN, lambda: view.fn(document_id="doc_doesNotExist"))
-    assert "view_file" in out and "Traceback" not in out
+    assert "knowledge_read" in out and "Traceback" not in out
 
 
-def test_view_file_requires_an_id():
+def test_knowledge_read_requires_an_id():
     svc, kb, doc = _seed()
-    view = make_view_file_tool(svc)
+    view = make_knowledge_read_tool(svc)
     out = _run(ADMIN, lambda: view.fn())
     assert "requires" in out
 
 
-def test_view_file_denies_other_users_private_doc():
+def test_knowledge_read_denies_other_users_private_doc():
     svc, kb, doc = _seed()
-    view = make_view_file_tool(svc)
+    view = make_knowledge_read_tool(svc)
     out = _run(OTHER, lambda: view.fn(document_id=doc.id))
     assert "do not have access" in out
     assert "ERR_x7abc" not in out  # nothing leaked
 
 
 # --------------------------------------------------------------------------- #
-# grep_file
+# knowledge_find
 # --------------------------------------------------------------------------- #
-def test_grep_file_finds_exact_term():
+def test_knowledge_find_finds_exact_term():
     svc, kb, doc = _seed()
-    grep = make_grep_file_tool(svc)
+    grep = make_knowledge_find_tool(svc)
+    assert grep.name == "knowledge_find"
     out = _run(ADMIN, lambda: grep.fn(query="ERR_x7abc"))
     assert doc.id in out
     assert "ERR_x7abc" in out
 
 
-def test_grep_file_finds_substring_inside_a_token():
+def test_knowledge_find_finds_substring_inside_a_token():
     # "x7ab" is a substring of the token "ERR_x7abc" — impossible for a tokenizer
     # to match, trivial for a literal substring grep.
     svc, kb, doc = _seed()
-    grep = make_grep_file_tool(svc)
+    grep = make_knowledge_find_tool(svc)
     out = _run(ADMIN, lambda: grep.fn(query="x7ab"))
     assert doc.id in out
 
 
-def test_grep_file_no_match_is_friendly():
+def test_knowledge_find_no_match_is_friendly():
     svc, kb, doc = _seed()
-    grep = make_grep_file_tool(svc)
+    grep = make_knowledge_find_tool(svc)
     out = _run(ADMIN, lambda: grep.fn(query="ZZ_not_present_anywhere"))
     assert "No chunk contains" in out
 
 
-def test_grep_file_scoped_to_document_id():
+def test_knowledge_find_scoped_to_document_id():
     svc, kb, doc = _seed()
-    grep = make_grep_file_tool(svc)
+    grep = make_knowledge_find_tool(svc)
     out = _run(ADMIN, lambda: grep.fn(query="tokenizer", document_id=doc.id))
     assert doc.id in out
 
 
-def test_grep_file_hides_other_users_private_kb():
+def test_knowledge_find_hides_other_users_private_kb():
     svc, kb, doc = _seed()
-    grep = make_grep_file_tool(svc)
+    grep = make_knowledge_find_tool(svc)
     # OTHER has no accessible KBs → nothing to grep, even for the seeded term.
     out = _run(OTHER, lambda: grep.fn(query="ERR_x7abc"))
     assert "No chunk contains" in out
@@ -166,20 +166,21 @@ def test_grep_file_hides_other_users_private_kb():
 
 
 # --------------------------------------------------------------------------- #
-# list_knowledge_bases
+# knowledge_list
 # --------------------------------------------------------------------------- #
-def test_list_kbs_shows_accessible_bases_with_ids():
+def test_knowledge_list_shows_accessible_bases_with_ids():
     svc, kb, doc = _seed()
-    tool = make_list_kbs_tool(svc)
+    tool = make_knowledge_list_tool(svc)
+    assert tool.name == "knowledge_list"
     out = _run(ADMIN, lambda: tool.fn())
     assert kb.id in out  # the id the model needs for kb_ids scoping
     assert "Ops KB" in out
     assert "1 docs" in out  # size surfaced so the model can skip empty bases
 
 
-def test_list_kbs_hides_other_users_private_base():
+def test_knowledge_list_hides_other_users_private_base():
     svc, kb, doc = _seed()
-    tool = make_list_kbs_tool(svc)
+    tool = make_knowledge_list_tool(svc)
     out = _run(OTHER, lambda: tool.fn())
     # OTHER can't see ADMIN's private base → the friendly "none" message, no leak.
     assert kb.id not in out

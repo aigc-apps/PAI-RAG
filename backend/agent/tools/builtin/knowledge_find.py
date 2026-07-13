@@ -1,9 +1,9 @@
-"""grep_file — exact literal substring search across knowledge-base chunks.
+"""knowledge_find — exact literal substring search across knowledge-base chunks.
 
 ``knowledge_search`` retrieves by *meaning* (vector) and *tokens* (BM25). Neither
 reliably matches an exact literal string — a jargon term, an error code, an API
 symbol, a part number, or a substring inside a larger token — because the BM25
-analyzer segments text. ``grep_file`` closes that gap: a case-insensitive
+analyzer segments text. ``knowledge_find`` closes that gap: a case-insensitive
 ``LIKE '%query%'`` match with no tokenization, so exactly-spelled terms are found.
 
 Backed in-process by :meth:`KnowledgeService.grep_chunks`, permission-scoped like
@@ -40,8 +40,8 @@ def _snippet(text: str, query: str) -> str:
     return f"{'… ' if start > 0 else ''}{body}{' …' if end < len(text) else ''}"
 
 
-def make_grep_file_tool(knowledge_service) -> Tool:
-    """Build the ``grep_file`` tool bound to a live ``KnowledgeService``."""
+def make_knowledge_find_tool(knowledge_service) -> Tool:
+    """Build the ``knowledge_find`` tool bound to a live ``KnowledgeService``."""
 
     async def fn(
         query: str,
@@ -50,7 +50,7 @@ def make_grep_file_tool(knowledge_service) -> Tool:
         limit: int = _DEFAULT_LIMIT,
     ) -> str:
         if not query or not query.strip():
-            return "grep_file requires a non-empty 'query'."
+            return "knowledge_find requires a non-empty 'query'."
         q = query.strip()
         user = _scope_user()
         try:
@@ -65,12 +65,12 @@ def make_grep_file_tool(knowledge_service) -> Tool:
                 limit=max(1, min(int(limit or _DEFAULT_LIMIT), 50)),
             )
         except Exception as ex:  # never surface a raw traceback to the model
-            logger.warning(f"grep_file failed: {ex!r}")
-            return f"grep_file failed: {ex}"
+            logger.warning(f"knowledge_find failed: {ex!r}")
+            return f"knowledge_find failed: {ex}"
 
         if not matches:
             return (
-                f'No chunk contains the literal string "{q}". grep_file matches exact '
+                f'No chunk contains the literal string "{q}". knowledge_find matches exact '
                 "text (no tokenization); try knowledge_search for a semantic/keyword "
                 "query, or check spelling and casing."
             )
@@ -86,12 +86,12 @@ def make_grep_file_tool(knowledge_service) -> Tool:
             lines.append("")
         lines.append(
             "To read a match in its surrounding document, use "
-            "view_file(chunk_id=…, mode=\"locate\")."
+            "knowledge_read(chunk_id=…, mode=\"locate\")."
         )
         return "\n".join(lines).rstrip()
 
     return Tool(
-        name="grep_file",
+        name="knowledge_find",
         description=(
             "Find the exact literal string in knowledge-base documents — a "
             "case-insensitive substring match with no tokenization. Use this for "

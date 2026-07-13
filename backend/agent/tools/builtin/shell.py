@@ -14,12 +14,11 @@ from agent.tools.builtin._aliyun_notice import maybe_emit_aliyun_notice
 # (load_skill is a tool, but skills also bundle scripts you run in the sandbox) makes
 # this an easy slip. These names are unmistakably ours, not real binaries, so we
 # intercept them before spending a sandbox round-trip and redirect the model to call
-# the tool directly. Deliberately EXCLUDES generic names (view_file/grep_file) a
-# user's own script could legitimately carry — a real binary is still runnable by an
+# the tool directly. A real binary with the same name is still runnable by an
 # explicit path (./x, /usr/bin/x), which doesn't start with a bare identifier.
 _TOOL_NOT_SHELL = frozenset({
     "load_skill", "read_skill_resource",
-    "knowledge_search", "list_knowledge_bases",
+    "knowledge_search", "knowledge_read", "knowledge_find", "knowledge_list",
     "publish_artifact", "code_interpreter",
     "web_search", "web_fetch", "current_datetime",
 })

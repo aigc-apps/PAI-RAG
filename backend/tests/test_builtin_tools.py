@@ -138,14 +138,30 @@ def test_shell_redirects_a_tool_name_typed_as_a_command():
 
     prov = _Recording()
     t = make_shell_tool(prov, default_timeout=12)
-    for cmd in ("load_skill skill.foo", "load_skill", "knowledge_search x", "publish_artifact /mnt/user/r.md"):
+    for cmd in (
+        "load_skill skill.foo",
+        "load_skill",
+        "knowledge_search x",
+        "knowledge_read document_id=doc_1",
+        "knowledge_find ERR_1",
+        "knowledge_list",
+        "publish_artifact /mnt/user/r.md",
+    ):
         out = asyncio.run(t.fn(command=cmd))
         assert "one of your own tools" in out and "Nothing was executed" in out
     assert prov.called is False  # never dispatched to the sandbox
 
     # A real shell command whose name merely contains a tool name, or an explicit
     # path, still runs normally.
-    for cmd in ("ls -la", "git status", "./load_skill", "python load_skill.py"):
+    for cmd in (
+        "ls -la",
+        "git status",
+        "./load_skill",
+        "python load_skill.py",
+        "view_file notes.txt",
+        "grep_file ERR_1 notes.txt",
+        "list_knowledge_bases",
+    ):
         out = asyncio.run(t.fn(command=cmd))
         assert "one of your own tools" not in out
     assert prov.called is True

@@ -1,4 +1,4 @@
-"""view_file — read a knowledge-base document (or a single chunk) in full.
+"""knowledge_read — read a knowledge-base document (or a single chunk) in full.
 
 ``knowledge_search`` returns ranked *snippets*; once a passage looks relevant the
 model often needs the surrounding document to ground a complete answer. This tool
@@ -24,8 +24,8 @@ from agent.tools.builtin.knowledge import _scope_user
 _DEFAULT_MAX_CHARS = 6000
 
 
-def make_view_file_tool(knowledge_service) -> Tool:
-    """Build the ``view_file`` tool bound to a live ``KnowledgeService``."""
+def make_knowledge_read_tool(knowledge_service) -> Tool:
+    """Build the ``knowledge_read`` tool bound to a live ``KnowledgeService``."""
 
     async def fn(
         document_id: Optional[str] = None,
@@ -35,7 +35,7 @@ def make_view_file_tool(knowledge_service) -> Tool:
         offset: int = 0,
     ) -> str:
         if not (document_id or chunk_id):
-            return "view_file requires a 'document_id' or 'chunk_id'."
+            return "knowledge_read requires a 'document_id' or 'chunk_id'."
         user = _scope_user()
         max_chars = max(1, min(int(max_chars or _DEFAULT_MAX_CHARS), 50000))
         offset = max(0, int(offset or 0))
@@ -50,12 +50,12 @@ def make_view_file_tool(knowledge_service) -> Tool:
                 offset=offset,
             )
         except LookupError as ex:
-            return f"view_file: {ex}"
+            return f"knowledge_read: {ex}"
         except PermissionError:
-            return "view_file: you do not have access to that document."
+            return "knowledge_read: you do not have access to that document."
         except Exception as ex:  # never surface a raw traceback to the model
-            logger.warning(f"view_file failed: {ex!r}")
-            return f"view_file failed: {ex}"
+            logger.warning(f"knowledge_read failed: {ex!r}")
+            return f"knowledge_read failed: {ex}"
 
         text = result.get("text") or ""
         header = [
@@ -71,16 +71,16 @@ def make_view_file_tool(knowledge_service) -> Tool:
         # the model how to page forward rather than silently truncating.
         if len(text) >= max_chars:
             body.append(
-                f"\n… truncated at {max_chars} chars. Call view_file again with "
+                f"\n… truncated at {max_chars} chars. Call knowledge_read again with "
                 f"offset={offset + max_chars} to continue."
             )
         return "\n".join(body).rstrip()
 
     return Tool(
-        name="view_file",
+        name="knowledge_read",
         description=(
             "Read a knowledge-base document in full (or a single chunk) by its id. "
-            "Use after knowledge_search or grep_file surfaces a relevant passage and "
+            "Use after knowledge_search or knowledge_find surfaces a relevant passage and "
             "you need the surrounding document to answer completely. Pass the "
             "'document_id' (printed by knowledge_search) for the whole file, or a "
             "'chunk_id' for one passage. Long documents are paginated via 'offset'."
@@ -104,7 +104,7 @@ def make_view_file_tool(knowledge_service) -> Tool:
                         "chunk_id. chunk_neighbors: the chunk plus its immediate "
                         "neighbors for context. locate: open the whole document at "
                         "the chunk_id's position (with preceding context) — best "
-                        "after grep_file/knowledge_search to read a hit in situ."
+                        "after knowledge_find/knowledge_search to read a hit in situ."
                     ),
                 },
                 "max_chars": {

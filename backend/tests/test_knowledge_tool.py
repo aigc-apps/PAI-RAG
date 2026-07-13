@@ -65,6 +65,7 @@ def test_knowledge_search_returns_ranked_snippets_with_sources():
     assert "score" in out
     assert "Document: 安装指南" in out
     assert "document_id:" in out and "chunk_id:" in out
+    assert 'knowledge_read(chunk_id=…, mode="locate")' in out
     assert "[1]" not in out
     assert "Cite sources by their [n]" not in out
 

@@ -62,8 +62,8 @@ def _format(hits, *, query: str) -> str:
         if h.source_uri:
             lines.append(f"    source: {h.source_uri}")
         # Surface the (short) document id so the model can hand it straight to
-        # view_file (read the whole file) or grep_file (find an exact term in it);
-        # the chunk id opens this exact passage in situ via view_file locate.
+        # knowledge_read (read the whole file) or knowledge_find (find an exact
+        # term in it); the chunk id opens this passage via knowledge_read locate.
         lines.append(f"    document_id: {h.document_id}")
         if getattr(h, "chunk_id", None):
             lines.append(f"    chunk_id: {h.chunk_id}")
@@ -76,7 +76,7 @@ def _format(hits, *, query: str) -> str:
         "indexes. Include a link only when source is an HTTP or HTTPS URL; when "
         "there is no accessible URL, show the title only. document_id and chunk_id "
         "are internal tool inputs: never expose them to the user. To inspect a hit "
-        "in context, use view_file(chunk_id=…, mode=\"locate\")."
+        "in context, use knowledge_read(chunk_id=…, mode=\"locate\")."
     )
     return "\n".join(lines).rstrip()
 

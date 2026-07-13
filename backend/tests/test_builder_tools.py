@@ -1,4 +1,7 @@
-import sys, os, asyncio, types
+import asyncio
+import os
+import sys
+import types
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.schemas import ResponsesRequest
 from app.builder import build_context
@@ -32,6 +35,32 @@ def test_build_context_wires_registry_tools_and_names_them_in_prompt():
         assert "web_fetch" in ctx.system_prompt
 
     asyncio.run(run())
+
+
+def test_knowledge_service_registers_only_complete_canonical_bundle():
+    reg = build_default_registry(_Settings(), knowledge_service=object())
+
+    names = set(reg.names())
+    assert set(KNOWLEDGE_TOOL_NAMES) <= names
+    assert {"view_file", "grep_file", "list_knowledge_bases"}.isdisjoint(names)
+
+
+def test_disabled_knowledge_capability_registers_no_knowledge_tools():
+    config = types.SimpleNamespace(
+        skills=types.SimpleNamespace(root="/nonexistent"),
+        capabilities=[
+            types.SimpleNamespace(
+                id="knowledge", enabled=False, permission="disabled"
+            )
+        ],
+        providers=[],
+    )
+
+    reg = build_default_registry(
+        _Settings(), agent_config=config, knowledge_service=object()
+    )
+
+    assert set(KNOWLEDGE_TOOL_NAMES).isdisjoint(reg.names())
 
 
 def test_profile_include_filters_the_toolbox():

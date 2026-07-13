@@ -1,6 +1,6 @@
-"""list_knowledge_bases — enumerate the knowledge bases the caller can search.
+"""knowledge_list — enumerate the knowledge bases the caller can search.
 
-``knowledge_search`` and ``grep_file`` already query *every* accessible KB when no
+``knowledge_search`` and ``knowledge_find`` already query *every* accessible KB when no
 ``kb_ids`` is given, and accept a list to search several specific ones at once. But
 the model can't *see* what bases exist to decide whether to scope a query (e.g. "only
 the HR-policies base"). This tool lists them — id, name, description, and size — so
@@ -19,21 +19,21 @@ from agent.tools.base import Tool
 from agent.tools.builtin.knowledge import _scope_user
 
 
-def make_list_kbs_tool(knowledge_service) -> Tool:
-    """Build the ``list_knowledge_bases`` tool bound to a live ``KnowledgeService``."""
+def make_knowledge_list_tool(knowledge_service) -> Tool:
+    """Build the ``knowledge_list`` tool bound to a live ``KnowledgeService``."""
 
     async def fn() -> str:
         user = _scope_user()
         try:
             kbs = await knowledge_service.list_kbs(user=user)
         except Exception as ex:  # never surface a raw traceback to the model
-            logger.warning(f"list_knowledge_bases failed: {ex!r}")
-            return f"list_knowledge_bases failed: {ex}"
+            logger.warning(f"knowledge_list failed: {ex!r}")
+            return f"knowledge_list failed: {ex}"
 
         if not kbs:
             return (
                 "No knowledge bases are available to you. Ask an admin to create one "
-                "and ingest documents before using knowledge_search or grep_file."
+                "and ingest documents before using knowledge_search or knowledge_find."
             )
         lines = [f"{len(kbs)} knowledge base(s) you can search:", ""]
         for kb in kbs:
@@ -48,17 +48,17 @@ def make_list_kbs_tool(knowledge_service) -> Tool:
         lines.append("")
         lines.append(
             "Pass one or more ids above as 'kb_ids' to narrow knowledge_search or "
-            "grep_file to specific bases."
+            "knowledge_find to specific bases."
         )
         return "\n".join(lines)
 
     return Tool(
-        name="list_knowledge_bases",
+        name="knowledge_list",
         description=(
             "List the knowledge bases you can search, with their ids, names, "
             "descriptions, and sizes. Call this to discover what documentation is "
             "available and to get the 'kb_ids' for scoping knowledge_search or "
-            "grep_file to specific bases. (Both tools already search every accessible "
+            "knowledge_find to specific bases. (Both tools already search every accessible "
             "base at once when kb_ids is omitted, so this is only needed to narrow.)"
         ),
         parameters={"type": "object", "properties": {}, "required": []},
