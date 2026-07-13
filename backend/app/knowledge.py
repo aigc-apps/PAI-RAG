@@ -687,7 +687,7 @@ class KnowledgeService:
         # Embed a context-enriched representation (document title + heading path
         # prepended to the body) while STORING the raw body in the chunk row. The
         # richer input lifts recall on both the local cosine and ES kNN paths (both
-        # score the stored vector); view_file/grep stay clean on the raw text.
+        # score the stored vector); knowledge_read/knowledge_find stay clean on raw text.
         doc_title = title or stable_uri
         embedder = build_embedder(kb.embedding_config, self._router)
         chunk_vectors = await embedder.embed(
@@ -1366,7 +1366,7 @@ class KnowledgeService:
 
         Returns dicts ``{kb_id, document_id, chunk_id, title, chunk_index, text}`` —
         the chunk's own ``chunk_metadata.title`` when present, else the document
-        title. ``chunk_id`` lets the caller open the hit with ``view_file`` locate.
+        title. ``chunk_id`` lets the caller open the hit with ``knowledge_read`` locate.
         """
         q = (query or "").strip()
         if not q:

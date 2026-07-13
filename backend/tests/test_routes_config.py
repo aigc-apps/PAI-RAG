@@ -23,6 +23,7 @@ from app.agent_config import (
 )
 from agent.tools.knowledge_bundle import (
     KNOWLEDGE_TOOL_NAMES,
+    LEGACY_KNOWLEDGE_TOOL_MAP,
     normalize_knowledge_tool_lists,
 )
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
@@ -545,9 +546,9 @@ def test_enable_skill_for_agent_endpoint(tmp_path, monkeypatch):
 
 def test_config_save_preserves_knowledge_tools(tmp_path, monkeypatch):
     # Regression: _save_and_reload rebuilt the registry WITHOUT knowledge_service, so
-    # every PUT /v1/config silently dropped knowledge_search / view_file / grep_file /
-    # list_knowledge_bases until a process restart (the reason a running agent lost its
-    # KB tools right after a sandbox config change). It must funnel through
+    # every PUT /v1/config silently dropped the knowledge tool bundle until a process
+    # restart (the reason a running agent lost its KB tools right after a sandbox
+    # config change). It must funnel through
     # reload_app_state, which rebinds the already-live KnowledgeService.
     import asyncio
     from app.routes.config import _save_and_reload
@@ -584,4 +585,4 @@ def test_config_save_preserves_knowledge_tools(tmp_path, monkeypatch):
         "knowledge_find",
         "knowledge_list",
     } <= names
-    assert {"view_file", "grep_file", "list_knowledge_bases"}.isdisjoint(names)
+    assert set(LEGACY_KNOWLEDGE_TOOL_MAP).isdisjoint(names)

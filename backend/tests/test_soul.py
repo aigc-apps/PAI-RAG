@@ -8,7 +8,10 @@ from agent.soul import (  # noqa: E402
     render_context_block,
     render_stable_system_prompt,
 )
-from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES  # noqa: E402
+from agent.tools.knowledge_bundle import (  # noqa: E402
+    KNOWLEDGE_TOOL_NAMES,
+    LEGACY_KNOWLEDGE_TOOL_MAP,
+)
 
 
 # A sample author-written persona, used across the tool-gating cases below. The
@@ -93,7 +96,7 @@ def test_knowledge_guidance_only_when_knowledge_search_present():
     assert all(name in with_aux for name in KNOWLEDGE_TOOL_NAMES)
     assert all(
         legacy not in with_aux
-        for legacy in ("view_file", "grep_file", "list_knowledge_bases")
+        for legacy in LEGACY_KNOWLEDGE_TOOL_MAP
     )
     assert "incomplete" in with_aux
     assert "document_id" in with_aux and "chunk_id" in with_aux

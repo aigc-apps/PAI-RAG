@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import asyncio
 import os
 import sys
@@ -8,7 +9,10 @@ from app.builder import build_context
 from app.store.memory import InMemoryStore
 from agent.tools.defaults import build_default_registry
 from agent.tools.base import Tool
-from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES
+from agent.tools.knowledge_bundle import (
+    KNOWLEDGE_TOOL_NAMES,
+    LEGACY_KNOWLEDGE_TOOL_MAP,
+)
 from agent.tools.registry import ToolRegistry
 from agent.message import ToolCall
 
@@ -42,7 +46,7 @@ def test_knowledge_service_registers_only_complete_canonical_bundle():
 
     names = set(reg.names())
     assert set(KNOWLEDGE_TOOL_NAMES) <= names
-    assert {"view_file", "grep_file", "list_knowledge_bases"}.isdisjoint(names)
+    assert set(LEGACY_KNOWLEDGE_TOOL_MAP).isdisjoint(names)
 
 
 def test_disabled_knowledge_capability_registers_no_knowledge_tools():

@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Subagent orchestration: the clean child context (firewall), the runner, and the
 spawn_subagent tool. Uses a scripted LLM so the loop is deterministic and offline
 (same pattern as test_agent_hitl / test_llm_agent_integration). Parallel fan-out
@@ -10,7 +11,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from openai.types.completion_usage import CompletionUsage
 
 from agent.tools.base import Tool
-from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES
+from agent.tools.knowledge_bundle import (
+    KNOWLEDGE_TOOL_NAMES,
+    LEGACY_KNOWLEDGE_TOOL_MAP,
+)
 from agent.tools.registry import ToolRegistry
 from agent.tools.scope import ToolScope, set_current_tool_scope, reset_current_tool_scope
 from agent.tools.builtin.spawn_subagent import (
@@ -109,7 +113,7 @@ def test_explore_worker_uses_canonical_knowledge_bundle():
     assert all(name in profile.tools.include for name in KNOWLEDGE_TOOL_NAMES)
     assert all(
         legacy not in profile.tools.include and legacy not in profile.instructions
-        for legacy in ("view_file", "grep_file", "list_knowledge_bases")
+        for legacy in LEGACY_KNOWLEDGE_TOOL_MAP
     )
     assert "knowledge_read" in profile.instructions
     assert "knowledge_find" in profile.instructions
@@ -118,7 +122,7 @@ def test_explore_worker_uses_canonical_knowledge_bundle():
 
 def test_runner_explore_worker_returns_summary():
     async def go():
-        reg = _registry("knowledge_search", "grep_file", "shell", "current_datetime")
+        reg = _registry(*KNOWLEDGE_TOOL_NAMES, "shell", "current_datetime")
         cfg = AgentConfigDocument(agents=[])
         llm = _EchoLLM("FOUND: the auth flow lives in app/auth.py")
         runner = SubagentRunner(_state(registry=reg, agent_config=cfg, llm=llm))

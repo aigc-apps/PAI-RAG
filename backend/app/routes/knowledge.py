@@ -167,7 +167,7 @@ class DataSourcePatch(BaseModel):
 
 
 @router.get("/v1/knowledge-bases")
-async def list_knowledge_bases(
+async def list_knowledge_base_rows(
     user: User = Depends(require_user),
     svc: KnowledgeService = Depends(get_knowledge_service),
 ):

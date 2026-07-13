@@ -24,7 +24,7 @@ def _mgr():
 def _tool_round(call_id: str, output: str) -> MessageGroup:
     assistant = {"role": "assistant", "content": None,
                  "tool_calls": [{"id": call_id, "type": "function",
-                                 "function": {"name": "grep_file", "arguments": "{}"}}]}
+                                 "function": {"name": "knowledge_find", "arguments": "{}"}}]}
     tool = {"role": "tool", "tool_call_id": call_id, "content": output}
     return MessageGroup(messages=[assistant, tool], tokens=0, group_type="tool_round")
 
@@ -90,7 +90,7 @@ def test_fit_to_budget_offloads_older_rounds_losslessly():
     for cid, out in bodies.items():
         messages.append({"role": "assistant", "content": None,
                          "tool_calls": [{"id": cid, "type": "function",
-                                         "function": {"name": "grep_file", "arguments": "{}"}}]})
+                                         "function": {"name": "knowledge_find", "arguments": "{}"}}]})
         messages.append({"role": "tool", "tool_call_id": cid, "content": out})
     messages.append({"role": "user", "content": "what did we find?"})
 

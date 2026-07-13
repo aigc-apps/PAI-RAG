@@ -171,7 +171,7 @@ class KnowledgeDocumentContentRow(SQLModel, table=True):
 
     Kept in its own table — not a column on ``knowledge_documents`` — so the hot
     ``list_documents`` scan (which selects every document column) never drags the
-    full body along; ``view_file`` loads it only when it actually reads a file.
+    full body along; ``knowledge_read`` loads it only when it reads a file.
     Lets full-document reads return the original verbatim instead of re-stitching
     overlapping chunks."""
     __tablename__ = "knowledge_document_contents"

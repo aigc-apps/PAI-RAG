@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Heading-aware chunking, contextual embedding, content cap/window, and locate.
 
 - ``split_document`` splits markdown at heading boundaries (each chunk carries its
@@ -7,7 +8,7 @@
   body in ``chunk.text``;
 - over-long documents store only a capped prefix flagged ``truncated``, and reads
   window the stored copy via SQL substr;
-- ``view_file`` locate opens the full document at a chunk's position with context.
+- ``knowledge_read`` locate opens the full document at a chunk's position with context.
 
 All offline — local hash embedder (router=None), in-memory SQLite.
 """
@@ -18,7 +19,6 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 
 from app.db import create_all, make_engine
 from app import knowledge as kmod
@@ -183,7 +183,7 @@ def test_windowed_read_returns_the_requested_slice():
 
 
 # --------------------------------------------------------------------------- #
-# view_file locate
+# knowledge_read locate
 # --------------------------------------------------------------------------- #
 def test_locate_opens_document_at_chunk_position():
     async def scenario():

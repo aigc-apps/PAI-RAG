@@ -158,9 +158,9 @@ def test_shell_redirects_a_tool_name_typed_as_a_command():
         "git status",
         "./load_skill",
         "python load_skill.py",
-        "view_file notes.txt",
-        "grep_file ERR_1 notes.txt",
-        "list_knowledge_bases",
+        "render_notes notes.txt",
+        "search_notes ERR_1 notes.txt",
+        "list_catalogs",
     ):
         out = asyncio.run(t.fn(command=cmd))
         assert "one of your own tools" not in out

@@ -57,7 +57,7 @@ def _create_kb(c: TestClient):
     return r.json()
 
 
-def test_list_knowledge_bases_serializes_knowledge_base_rows():
+def test_list_knowledge_base_rows_serializes_response():
     c = _client()
     kb = _create_kb(c)
 

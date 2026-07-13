@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Knowledge inspection agent tools (and their KnowledgeService seams).
 
 - knowledge_read reads a whole document by its short id, paginates, and fails softly;
