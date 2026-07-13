@@ -4,6 +4,9 @@ from app.schemas import ResponsesRequest
 from app.builder import build_context
 from app.store.memory import InMemoryStore
 from agent.tools.defaults import build_default_registry
+from agent.tools.base import Tool
+from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES
+from agent.tools.registry import ToolRegistry
 from agent.message import ToolCall
 
 
@@ -48,6 +51,34 @@ def test_profile_include_filters_the_toolbox():
         assert "web_fetch" not in ctx.system_prompt
 
     asyncio.run(run())
+
+
+def test_partial_knowledge_include_selects_complete_bundle():
+    async def noop():
+        return "ok"
+
+    registry = ToolRegistry()
+    for name in KNOWLEDGE_TOOL_NAMES:
+        registry.register(
+            Tool(
+                name=name,
+                description=name,
+                parameters={"type": "object", "properties": {}},
+                fn=noop,
+            )
+        )
+
+    from app.agent_config import AgentProfile, AgentToolsConfig
+    from app.builder import _select_tool_names
+
+    profile = AgentProfile(
+        id="main",
+        name="Main",
+        tools=AgentToolsConfig(include=["knowledge_search"]),
+    )
+    toolbox = registry.build_toolbox(_select_tool_names(registry, profile))
+
+    assert [tool.name for tool in toolbox.tools] == list(KNOWLEDGE_TOOL_NAMES)
 
 
 def test_no_registry_means_no_tools():

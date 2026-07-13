@@ -15,9 +15,15 @@ from app.deps import AppState
 from app.agent_config import (
     AgentConfigDocument,
     AgentKnowledgeRerankConfig,
+    _merge_default,
     apply_runtime_status,
+    authored_config_dict,
     load_agent_config,
     save_agent_config,
+)
+from agent.tools.knowledge_bundle import (
+    KNOWLEDGE_TOOL_NAMES,
+    normalize_knowledge_tool_lists,
 )
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
 from app.routes.config import router as config_router
@@ -25,6 +31,54 @@ from app.store.memory import InMemoryStore
 from app.db import create_all, make_engine
 from app.agent_config_store import SqlAgentConfigStore
 from tests.authutil import apply_auth
+
+
+def test_merge_normalizes_legacy_knowledge_tools_to_complete_bundle():
+    doc = _merge_default(
+        {
+            "agents": [
+                {
+                    "id": "main",
+                    "tools": {
+                        "include": ["current_datetime", "view_file"],
+                        "exclude": [],
+                    },
+                }
+            ],
+        }
+    )
+    tools = doc.agents[0].tools
+    assert set(KNOWLEDGE_TOOL_NAMES) <= set(tools.include)
+    assert "view_file" not in tools.include
+
+
+def test_knowledge_exclusion_disables_entire_bundle_idempotently():
+    include, exclude = normalize_knowledge_tool_lists(
+        ["knowledge_search", "shell"], ["grep_file"]
+    )
+    assert include == ["shell"]
+    assert set(KNOWLEDGE_TOOL_NAMES) <= set(exclude)
+    assert normalize_knowledge_tool_lists(include, exclude) == (
+        include,
+        exclude,
+    )
+
+
+def test_authored_config_normalizes_partial_knowledge_bundle():
+    doc = AgentConfigDocument(
+        agents=[
+            {
+                "id": "main",
+                "name": "Main",
+                "tools": {"include": ["knowledge_find"], "exclude": []},
+            }
+        ]
+    )
+
+    tools = authored_config_dict(doc)["agents"][0]["tools"]
+
+    assert tools["include"] == list(KNOWLEDGE_TOOL_NAMES)
+    assert tools["exclude"] == []
 
 
 def test_agent_knowledge_rerank_defaults_and_round_trips(tmp_path):

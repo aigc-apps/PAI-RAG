@@ -12,6 +12,10 @@ from pydantic import BaseModel, Field
 from agent.custom_skills import _normalize_skill_id, discover_skill_packages, skill_sources
 from agent.integrations import aliyun_sts
 from agent.soul import DEFAULT_INSTRUCTIONS
+from agent.tools.knowledge_bundle import (
+    KNOWLEDGE_TOOL_NAMES,
+    normalize_knowledge_tool_lists,
+)
 
 
 Permission = Literal["disabled", "ask", "auto", "admin"]
@@ -217,7 +221,7 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "current_datetime",
                     "web_fetch",
                     "web_search",
-                    "knowledge_search",
+                    *KNOWLEDGE_TOOL_NAMES,
                     "code_interpreter",
                     "shell",
                     "publish_artifact",
@@ -372,6 +376,21 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
 )
 
 
+def _normalize_agent_tools(data: Dict[str, Any]) -> None:
+    for agent in data.get("agents", []) or []:
+        if not isinstance(agent, dict):
+            continue
+        tools = agent.get("tools")
+        if not isinstance(tools, dict):
+            continue
+        include, exclude = normalize_knowledge_tool_lists(
+            list(tools.get("include") or []),
+            list(tools.get("exclude") or []),
+        )
+        tools["include"] = include
+        tools["exclude"] = exclude
+
+
 def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
     base = DEFAULT_DOCUMENT.model_dump(mode="json")
     merged = deepcopy(base)
@@ -422,6 +441,7 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
             cap["provider_refs"] = [
                 ref for ref in cap.get("provider_refs", []) if ref not in LEGACY_PROVIDER_IDS
             ]
+    _normalize_agent_tools(merged)
     return AgentConfigDocument(**merged)
 
 
@@ -458,6 +478,7 @@ def authored_config_dict(doc: AgentConfigDocument) -> Dict[str, Any]:
     """
 
     data = doc.model_dump(mode="json")
+    _normalize_agent_tools(data)
 
     vdb = data.get("knowledgebase", {}).get("vectordb")
     if isinstance(vdb, dict):

@@ -70,11 +70,11 @@ def _state(*, registry, agent_config, llm):
 # ---- build_subagent_context ---------------------------------------------------
 
 def test_child_context_is_clean_and_scoped():
-    reg = _registry("knowledge_search", "grep_file", "spawn_subagent")
+    reg = _registry("knowledge_search", "knowledge_find", "spawn_subagent")
     profile = AgentProfile(
         id="researcher", name="R", instructions="be sharp",
         knowledge=AgentKnowledgeConfig(kb_ids=["kb1"]),
-        tools=AgentToolsConfig(include=["knowledge_search", "grep_file", "spawn_subagent"]),
+        tools=AgentToolsConfig(include=["knowledge_search", "knowledge_find", "spawn_subagent"]),
     )
     scope = ToolScope(user_id="u1", conversation_id="c1", metadata={"aliyun_sandbox_env": {"X": "1"}})
     ctx = build_subagent_context(profile=profile, task="find X", parent_scope=scope,
@@ -93,7 +93,7 @@ def test_child_context_is_clean_and_scoped():
     assert ctx.metadata["default_kb_ids"] == ["kb1"]          # child's own KB soft-default
     # Depth cap: the spawn tools are stripped so a subagent can never nest.
     names = [t.name for t in ctx.tools.tools]
-    assert "knowledge_search" in names and "grep_file" in names
+    assert "knowledge_search" in names and "knowledge_find" in names
     assert all(n not in names for n in SPAWN_TOOL_NAMES)
     # The subagent protocol is in the system prompt.
     assert "Subagent protocol" in ctx.system_prompt

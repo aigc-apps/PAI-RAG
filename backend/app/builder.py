@@ -18,6 +18,7 @@ from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
 from agent.tools.registry import ToolRegistry
 from agent.tools.builtin.spawn_subagent import SPAWN_TOOL_NAMES
+from agent.tools.knowledge_bundle import normalize_knowledge_tool_lists
 from agent.tools.scope import ToolScope
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
@@ -567,7 +568,9 @@ def _select_tool_names(registry, agent_profile, *, force: Iterable[str] = ()) ->
     base = available
     tools_cfg = getattr(agent_profile, "tools", None) if agent_profile is not None else None
     include = list(getattr(tools_cfg, "include", []) or [])
-    exclude = set(getattr(tools_cfg, "exclude", []) or [])
+    exclude_list = list(getattr(tools_cfg, "exclude", []) or [])
+    include, exclude_list = normalize_knowledge_tool_lists(include, exclude_list)
+    exclude = set(exclude_list)
     if include:
         base = [n for n in include if n in available]
     selected = [n for n in base if n not in exclude]
