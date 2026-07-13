@@ -34,17 +34,15 @@ const retrievalOf = (kb: KnowledgeBase) => ({
   force_citation: kb.default_retrieval_config?.force_citation ?? true,
 });
 
-// Load the embedding/rerank model catalog once for the create/config pickers.
+// Load the embedding model catalog once for the create picker.
 // Empty lists (no models configured) → callers fall back to the local defaults.
 interface ModelCatalog {
   embedding: ModelInfo[];
-  rerank: ModelInfo[];
   defaultEmbedding: string | null;
-  defaultRerank: string | null;
 }
 function useModelCatalog(enabled: boolean): ModelCatalog {
   const [cat, setCat] = useState<ModelCatalog>({
-    embedding: [], rerank: [], defaultEmbedding: null, defaultRerank: null,
+    embedding: [], defaultEmbedding: null,
   });
   useEffect(() => {
     if (!enabled) return;
@@ -54,9 +52,7 @@ function useModelCatalog(enabled: boolean): ModelCatalog {
         if (!alive) return;
         setCat({
           embedding: modelsByType(c, "embedding"),
-          rerank: modelsByType(c, "rerank"),
           defaultEmbedding: c.defaultEmbedding,
-          defaultRerank: c.defaultRerank,
         });
       })
       .catch(() => { /* keep empty → local defaults */ });
@@ -324,7 +320,6 @@ function KbCard({ kb, onOpen }: { kb: KnowledgeBase; onOpen: () => void }) {
   const { t } = useI18n();
   const emb = kb.embedding_config ?? {};
   const parser = parserOf(kb);
-  const rerank = kb.rerank_config?.enabled;
   return (
     <button
       type="button" onClick={onOpen}
@@ -345,7 +340,6 @@ function KbCard({ kb, onOpen }: { kb: KnowledgeBase; onOpen: () => void }) {
       <div className="flex flex-wrap gap-1.5 pt-0.5">
         <Chip mono>{str(emb.model, "local-hash-v1")} · {num(emb.dimension, 64)}d</Chip>
         <Chip>{t("kbview.chipVector")} <span className="text-[var(--text-faint)]">{str(kb.vector_store_config?.provider_id, "local_sql")}</span></Chip>
-        <Chip>{t("kbview.chipRerank")} <span className="text-[var(--text-faint)]">{rerank ? str(kb.rerank_config?.model, "on") : t("kbview.off")}</span></Chip>
         <Chip>{t("kbview.chipChunk")} <span className="text-[var(--text-faint)]">{parser.chunk_size}/{parser.chunk_overlap}</span></Chip>
       </div>
     </button>
@@ -451,7 +445,6 @@ function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
   const emb = kb.embedding_config ?? {};
   const parser = parserOf(kb);
   const ret = retrievalOf(kb);
-  const rr = kb.rerank_config ?? {};
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -474,7 +467,6 @@ function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
             <KV k={t("kbview.vectorEngine")} v={`${str(kb.vector_store_config?.provider_id, "local_sql")} · ${str(kb.vector_store_config?.metric, "cosine")}`} />
           </div>
           <div>
-            <KV k="Reranker" v={rr.enabled ? `${str(rr.provider_id, "-")} / ${str(rr.model, "-")}` : t("kbview.off")} />
             <KV k={t("kbview.chunkingLabel")} v={`${parser.chunk_size} / overlap ${parser.chunk_overlap}`} />
             <KV k={t("kbview.retrievalMode")} v={`${ret.mode} · top_k ${ret.top_k}`} />
           </div>
@@ -499,22 +491,14 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
   const [forceCite, setForceCite] = useState(initRet.force_citation);
   const [saving, setSaving] = useState(false);
 
-  // rerank is mutable. Select value "" = off; a model id = enabled with that model.
-  const initRerank = (kb.rerank_config?.enabled ? str(kb.rerank_config?.model, "") : "");
-  const initRerankTopN = num(kb.rerank_config?.top_n, 5);
-  const [rerankModel, setRerankModel] = useState(initRerank);
-  const [rerankTopN, setRerankTopN] = useState(initRerankTopN);
-  const cat = useModelCatalog(true);
-
   const emb = kb.embedding_config ?? {};
   const vec = kb.vector_store_config ?? {};
 
-  const rerankDirty = rerankModel !== initRerank || (!!rerankModel && rerankTopN !== initRerankTopN);
   const dirty =
     name !== kb.name || description !== (kb.description ?? "") || visibility !== kb.visibility ||
     chunkSize !== initParser.chunk_size || chunkOverlap !== initParser.chunk_overlap ||
     mode !== initRet.mode || topK !== initRet.top_k ||
-    threshold !== initRet.score_threshold || forceCite !== initRet.force_citation || rerankDirty;
+    threshold !== initRet.score_threshold || forceCite !== initRet.force_citation;
   const indexAffecting = chunkSize !== initParser.chunk_size || chunkOverlap !== initParser.chunk_overlap;
 
   const reset = () => {
@@ -522,7 +506,6 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
     setChunkSize(initParser.chunk_size); setChunkOverlap(initParser.chunk_overlap);
     setMode(initRet.mode); setTopK(initRet.top_k);
     setThreshold(initRet.score_threshold); setForceCite(initRet.force_citation);
-    setRerankModel(initRerank); setRerankTopN(initRerankTopN);
   };
 
   const save = async () => {
@@ -533,10 +516,6 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
         default_parser_config: { chunk_size: chunkSize, chunk_overlap: chunkOverlap },
         default_retrieval_config: { mode, top_k: topK, score_threshold: threshold, force_citation: forceCite },
       };
-      if (rerankDirty) {
-        if (rerankModel) { patch.rerank_model = rerankModel; patch.rerank_top_n = rerankTopN; }
-        else patch.rerank_enabled = false;
-      }
       await updateKnowledgeBase(kb.id, patch);
       toast.success(t("kbview.configSaved"));
       await onSaved();
@@ -582,37 +561,6 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
           </div>
         </div>
         <p className="mt-3 text-[11px] text-[var(--text-faint)]">{t("kbview.embeddingFixedNote")}</p>
-      </div>
-
-      {/* Reranker — editable */}
-      <div className={CARD}>
-        <h3 className="text-sm font-semibold">Reranker</h3>
-        <p className="mt-0.5 text-xs text-[var(--text-faint)]">{t("kbview.rerankerNote")}</p>
-        <div className="mt-3 flex flex-wrap items-end gap-5">
-          <div className="min-w-[220px] flex-1">
-            <Field label={t("kbview.rerankModelLabel")}>
-              <select className={INPUT} value={rerankModel} onChange={(e) => setRerankModel(e.target.value)}>
-                <option value="">{t("kbview.off")}</option>
-                {/* keep the current model selectable even if the catalog hasn't loaded it */}
-                {rerankModel && !cat.rerank.some((m) => m.id === rerankModel) && (
-                  <option value={rerankModel}>{rerankModel}</option>
-                )}
-                {cat.rerank.map((m) => (
-                  <option key={m.id} value={m.id}>{m.id}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          {rerankModel && (
-            <div className="w-24"><Field label="top_n">
-              <input type="number" className={cn(INPUT, "font-mono")} value={rerankTopN}
-                onChange={(e) => setRerankTopN(Math.max(1, Number(e.target.value) || 1))} />
-            </Field></div>
-          )}
-        </div>
-        {rerankModel && cat.rerank.length === 0 && (
-          <p className="mt-2 text-[11px] text-[var(--text-faint)]">{t("kbview.rerankEnabledNote", { model: rerankModel })}</p>
-        )}
       </div>
 
       {/* chunking */}
@@ -1398,7 +1346,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
           <div className="text-[12.5px] text-[var(--text-muted)]">
             {t("kbview.hitCountA")}<b className="text-[var(--text)]">{total}</b>{t("kbview.hitCountB", { shown: hits.length, mode })}
           </div>
-          {hits.map((h, i) => <Hit key={h.chunk_id} hit={h} rank={i + 1} mode={mode} query={lastQuery} />)}
+          {hits.map((h, i) => <Hit key={h.chunk_id} hit={h} rank={i + 1} query={lastQuery} />)}
           {hasMore && (
             <div className="flex justify-center pt-1">
               <button className={BTN_GHOST} disabled={loadingMore} onClick={() => void loadMore()}>
@@ -1413,7 +1361,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
   );
 }
 
-function Hit({ hit, rank, mode, query }: { hit: KnowledgeHit; rank: number; mode: string; query: string }) {
+function Hit({ hit, rank, query }: { hit: KnowledgeHit; rank: number; query: string }) {
   const { t } = useI18n();
   const chunkIdx = hit.metadata?.chunk_index;
   return (
@@ -1424,27 +1372,13 @@ function Hit({ hit, rank, mode, query }: { hit: KnowledgeHit; rank: number; mode
         <span className="truncate font-mono text-[11px] text-[var(--text-faint)]">
           {hit.source_uri}{typeof chunkIdx === "number" ? ` · chunk ${chunkIdx}` : ""}
         </span>
-        <span className="ml-auto font-mono text-xs font-semibold text-[var(--accent)]">{hit.score.toFixed(3)}</span>
+        <span className="ml-auto flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+          {t("kbview.finalScore")}
+          <b className="font-mono font-semibold text-[var(--accent)]">{hit.score.toFixed(3)}</b>
+        </span>
       </div>
       <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)] line-clamp-4">{highlight(hit.text, query)}</p>
-      <div className="mt-2.5 grid max-w-[360px] grid-cols-[auto_1fr_auto] items-center gap-x-2 gap-y-1">
-        <ScoreBar label={t("kbview.chipVector")} value={hit.vector_score} color="var(--accent)" dim={mode === "keyword"} />
-        <ScoreBar label={t("kbview.keyword")} value={hit.keyword_score} color="#8b5cf6" dim={mode === "vector"} />
-      </div>
     </div>
-  );
-}
-
-function ScoreBar({ label, value, color, dim }: { label: string; value: number; color: string; dim?: boolean }) {
-  const pct = Math.max(0, Math.min(1, value)) * 100;
-  return (
-    <>
-      <span className={cn("text-[10.5px] uppercase text-[var(--text-faint)]", dim && "opacity-40")}>{label}</span>
-      <span className={cn("h-[5px] overflow-hidden rounded-full bg-[var(--surface-3)]", dim && "opacity-40")}>
-        <i className="block h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-      </span>
-      <span className={cn("font-mono text-[10.5px] text-[var(--text-muted)] tabular-nums", dim && "opacity-40")}>{value.toFixed(2)}</span>
-    </>
   );
 }
 
@@ -1459,7 +1393,6 @@ function CreateDrawer({ open, onClose, onCreated }: {
   const [chunkSize, setChunkSize] = useState(1000);
   const [chunkOverlap, setChunkOverlap] = useState(150);
   const [embeddingModel, setEmbeddingModel] = useState("");  // "" → catalog default
-  const [rerankModel, setRerankModel] = useState("");        // "" → disabled
   const [busy, setBusy] = useState(false);
   const cat = useModelCatalog(open);
   const hasEmbedding = cat.embedding.length > 0;
@@ -1472,11 +1405,10 @@ function CreateDrawer({ open, onClose, onCreated }: {
         name: name.trim(), description: description.trim(), visibility,
         default_parser_config: { chunk_size: chunkSize, chunk_overlap: chunkOverlap },
         ...(embeddingModel ? { embedding_model: embeddingModel } : {}),
-        ...(rerankModel ? { rerank_model: rerankModel } : {}),
       });
       setName(""); setDescription(""); setVisibility("private");
       setChunkSize(1000); setChunkOverlap(150);
-      setEmbeddingModel(""); setRerankModel("");
+      setEmbeddingModel("");
       toast.success(t("kbview.kbCreated"));
       onCreated(kb.id);
     } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.createFailed")); }
@@ -1516,15 +1448,6 @@ function CreateDrawer({ open, onClose, onCreated }: {
           ))}
         </select>
         <p className="mt-1 text-[11px] text-[var(--text-faint)]">{t("kbview.embFixedNote2")}</p>
-      </Field>
-      <Field label={t("kbview.rerankerOptional")}>
-        <select className={INPUT} value={rerankModel} onChange={(e) => setRerankModel(e.target.value)}>
-          <option value="">{t("kbview.rerankerNone")}</option>
-          {cat.rerank.map((m) => (
-            <option key={m.id} value={m.id}>{m.id}</option>
-          ))}
-        </select>
-        <p className="mt-1 text-[11px] text-[var(--text-faint)]">{t("kbview.rerankAdjustNote")}</p>
       </Field>
     </Drawer>
   );

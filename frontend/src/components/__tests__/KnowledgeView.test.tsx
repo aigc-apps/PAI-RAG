@@ -7,10 +7,12 @@ import type { KnowledgeBase } from "../../api/knowledge";
 
 const listKnowledgeBases = vi.fn();
 const listDataSources = vi.fn();
+const searchKnowledge = vi.fn();
 vi.mock("../../api/knowledge", async (importActual) => ({
   ...(await importActual<typeof import("../../api/knowledge")>()),
   listKnowledgeBases: () => listKnowledgeBases(),
   listDataSources: () => listDataSources(),
+  searchKnowledge: (...args: unknown[]) => searchKnowledge(...args),
 }));
 
 vi.mock("../../api/models", () => ({
@@ -45,6 +47,7 @@ beforeEach(() => {
   listKnowledgeBases.mockResolvedValue([kb]);
   listDataSources.mockReset();
   listDataSources.mockResolvedValue([]);
+  searchKnowledge.mockReset();
 });
 
 describe("KnowledgeView routes", () => {
@@ -83,5 +86,35 @@ describe("KnowledgeView routes", () => {
     );
 
     await waitFor(() => expect(onInvalidKb).toHaveBeenCalledOnce());
+  });
+
+  it("shows only the final recall score and no KB rerank controls", async () => {
+    useI18nStore.getState().setLang("en");
+    searchKnowledge.mockResolvedValue({
+      data: [{
+        kb_id: "kb_1", document_id: "doc_1", chunk_id: "chunk_1",
+        title: "Production guide", source_uri: "https://docs.example/guide",
+        source_type: "website", text: "TurboX production setup",
+        score: 0.876, vector_score: 0.8, keyword_score: 0.4, metadata: {},
+      }],
+      total: 1, offset: 0, limit: 6, has_more: false,
+    });
+
+    const props = {
+      onBack: vi.fn(), kbId: "kb_1", onOpenKb: vi.fn(),
+      onBackToList: vi.fn(), onTabChange: vi.fn(), onInvalidKb: vi.fn(),
+    };
+    const { rerender } = render(<KnowledgeView {...props} tab="recall" />);
+    await screen.findByText("Production KB");
+    await userEvent.type(screen.getByPlaceholderText(/enter a query/i), "turbox");
+    await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+    expect(await screen.findByText("Final score")).toBeInTheDocument();
+    expect(screen.getByText("0.876")).toBeInTheDocument();
+    expect(screen.queryByText("0.80")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.40")).not.toBeInTheDocument();
+
+    rerender(<KnowledgeView {...props} tab="config" />);
+    await waitFor(() => expect(screen.queryByText("Reranker")).not.toBeInTheDocument());
   });
 });

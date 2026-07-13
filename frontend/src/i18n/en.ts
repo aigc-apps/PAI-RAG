@@ -595,7 +595,7 @@ export const en = {
   "kbview.search": "Search",
   "kbview.threshold": "Threshold",
   "kbview.tagLabel": "Tag",
-  "kbview.recallEmptyTitle": "Enter a query and search to see the matched chunks and score breakdown",
+  "kbview.recallEmptyTitle": "Enter a query and search to see the matched chunks and final scores",
   "kbview.recallEmptyHintA": "The retrieval tested here uses the same path as the agent ",
   "kbview.recallEmptyHintB": " tool",
   "kbview.noHits": "No hits",
@@ -603,6 +603,7 @@ export const en = {
   "kbview.hitCountA": "Hit ",
   "kbview.hitCountB": " · showing first {shown} · mode {mode}",
   "kbview.keyword": "Keyword",
+  "kbview.finalScore": "Final score",
   // create drawer
   "kbview.kbCreated": "Knowledge base created",
   "kbview.createFailed": "Create failed",

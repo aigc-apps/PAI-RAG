@@ -590,7 +590,7 @@ export const zh: Record<keyof typeof en, string> = {
   "kbview.search": "检索",
   "kbview.threshold": "阈值",
   "kbview.tagLabel": "标签",
-  "kbview.recallEmptyTitle": "输入查询并检索，查看命中的切片与分数构成",
+  "kbview.recallEmptyTitle": "输入查询并检索，查看命中的切片与最终得分",
   "kbview.recallEmptyHintA": "这里测试的检索与智能体 ",
   "kbview.recallEmptyHintB": " 工具走同一路径",
   "kbview.noHits": "无命中结果",
@@ -598,6 +598,7 @@ export const zh: Record<keyof typeof en, string> = {
   "kbview.hitCountA": "命中 ",
   "kbview.hitCountB": " 条 · 显示前 {shown} · 模式 {mode}",
   "kbview.keyword": "关键词",
+  "kbview.finalScore": "最终得分",
   // create drawer
   "kbview.kbCreated": "知识库已创建",
   "kbview.createFailed": "创建失败",
