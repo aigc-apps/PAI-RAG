@@ -15,9 +15,9 @@ Two ways to configure the exporter, both via environment variables:
                                        ``auto`` = enabled iff an endpoint resolves)
 
 2. Langfuse convenience (used only when no explicit OTLP endpoint is set):
-   - ``LANGFUSE_HOST``                 default ``https://cloud.langfuse.com``
+   - ``LANGFUSE_BASE_URL``             default ``https://cloud.langfuse.com``
    - ``LANGFUSE_PUBLIC_KEY`` / ``LANGFUSE_SECRET_KEY``
-     → endpoint ``{HOST}/api/public/otel`` + ``Authorization: Basic base64(pk:sk)``
+     → endpoint ``{BASE_URL}/api/public/otel`` + ``Authorization: Basic base64(pk:sk)``
 """
 from __future__ import annotations
 
@@ -75,8 +75,12 @@ class TraceConfig:
             pk = (env.get("LANGFUSE_PUBLIC_KEY") or "").strip()
             sk = (env.get("LANGFUSE_SECRET_KEY") or "").strip()
             if pk and sk:
-                host = (env.get("LANGFUSE_HOST") or "https://cloud.langfuse.com").strip().rstrip("/")
-                endpoint = f"{host}/api/public/otel"
+                base_url = (
+                    (env.get("LANGFUSE_BASE_URL") or "https://cloud.langfuse.com")
+                    .strip()
+                    .rstrip("/")
+                )
+                endpoint = f"{base_url}/api/public/otel"
                 token = base64.b64encode(f"{pk}:{sk}".encode()).decode()
                 headers.setdefault("Authorization", f"Basic {token}")
                 # Langfuse's OTLP ingest speaks http/protobuf.
