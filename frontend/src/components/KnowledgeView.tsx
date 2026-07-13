@@ -186,11 +186,28 @@ function Drawer({ open, title, onClose, footer, children }: {
 // ======================================================================== //
 // Root
 // ======================================================================== //
-export function KnowledgeView({ onBack }: { onBack: () => void }) {
+export type KnowledgeTab = "overview" | "config" | "datasources" | "files" | "recall";
+
+export function KnowledgeView({
+  onBack,
+  kbId,
+  tab,
+  onOpenKb,
+  onBackToList,
+  onTabChange,
+  onInvalidKb,
+}: {
+  onBack: () => void;
+  kbId?: string;
+  tab: KnowledgeTab;
+  onOpenKb: (id: string) => void;
+  onBackToList: () => void;
+  onTabChange: (tab: KnowledgeTab) => void;
+  onInvalidKb: () => void;
+}) {
   const { t } = useI18n();
   const [bases, setBases] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState<string | null>(null);
 
   const refresh = async () => {
     const rows = await listKnowledgeBases();
@@ -208,15 +225,21 @@ export function KnowledgeView({ onBack }: { onBack: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const open = openId ? bases.find((b) => b.id === openId) ?? null : null;
+  const open = kbId ? bases.find((b) => b.id === kbId) ?? null : null;
+
+  useEffect(() => {
+    if (!loading && kbId && !open) onInvalidKb();
+  }, [kbId, loading, onInvalidKb, open]);
 
   if (open) {
     return (
       <KbDetail
         kb={open}
-        onBackToList={() => setOpenId(null)}
+        tab={tab}
+        onTabChange={onTabChange}
+        onBackToList={onBackToList}
         onChanged={async () => { await refresh(); }}
-        onDeleted={async () => { setOpenId(null); await refresh(); }}
+        onDeleted={async () => { onBackToList(); await refresh(); }}
       />
     );
   }
@@ -227,8 +250,8 @@ export function KnowledgeView({ onBack }: { onBack: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <KbList
           bases={bases} loading={loading}
-          onOpen={setOpenId}
-          onCreated={async (id) => { await refresh(); setOpenId(id); }}
+          onOpen={onOpenKb}
+          onCreated={async (id) => { await refresh(); onOpenKb(id); }}
         />
       </div>
     </div>
@@ -341,16 +364,14 @@ function Chip({ children, mono }: { children: ReactNode; mono?: boolean }) {
 // ======================================================================== //
 // Detail
 // ======================================================================== //
-type Tab = "overview" | "config" | "datasources" | "files" | "recall";
-
-function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
+function KbDetail({ kb, tab, onTabChange, onBackToList, onChanged, onDeleted }: {
   kb: KnowledgeBase; onBackToList: () => void;
+  tab: KnowledgeTab; onTabChange: (tab: KnowledgeTab) => void;
   onChanged: () => Promise<void>; onDeleted: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<Tab>("overview");
 
-  const tabs: { id: Tab; label: string; badge?: number }[] = [
+  const tabs: { id: KnowledgeTab; label: string; badge?: number }[] = [
     { id: "overview", label: t("kbview.tab.overview") },
     { id: "config", label: t("kbview.tab.config") },
     { id: "datasources", label: t("kbview.tab.datasources") },
@@ -377,7 +398,7 @@ function KbDetail({ kb, onBackToList, onChanged, onDeleted }: {
       <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-elevated)]/84 px-4 backdrop-blur">
         {tabs.map((tb) => (
           <button
-            key={tb.id} type="button" onClick={() => setTab(tb.id)}
+            key={tb.id} type="button" onClick={() => onTabChange(tb.id)}
             className={cn(
               "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
               tab === tb.id

@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useConversationsStore } from "../store/conversations";
 import { useChatStore, type ConvRuntime } from "../store/chat";
-import { getConversation } from "../api/conversations";
 import { cn } from "../lib/cn";
 import { UserMenu } from "./UserMenu";
 import { useI18n, translate, useI18nStore } from "../i18n";
@@ -71,6 +71,8 @@ export function Sidebar({
   onOpenUsers?: () => void;
 }) {
   const { t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
   const items = useConversationsStore((s) => s.items);
   const refresh = useConversationsStore((s) => s.refresh);
   const select = useConversationsStore((s) => s.select);
@@ -80,7 +82,6 @@ export function Sidebar({
   const activeKey = useChatStore((s) => s.activeKey);
   const activate = useChatStore((s) => s.activate);
   const activateByConversationId = useChatStore((s) => s.activateByConversationId);
-  const hydrate = useChatStore((s) => s.hydrate);
   const newDraft = useChatStore((s) => s.newDraft);
   const dropByConversationId = useChatStore((s) => s.dropByConversationId);
   const dropByKey = useChatStore((s) => s.dropByKey);
@@ -109,8 +110,13 @@ export function Sidebar({
 
   const openRuntime = (rt: ConvRuntime) => {
     activate(rt.key);
-    if (rt.conversationId) select(rt.conversationId);
-    else clearSelection();
+    if (rt.conversationId) {
+      select(rt.conversationId);
+      navigate(`/chat/${encodeURIComponent(rt.conversationId)}`);
+    } else {
+      clearSelection();
+      navigate("/");
+    }
   };
 
   // Delete an overlay row. An unsent draft (no conversationId) is discarded
@@ -129,32 +135,24 @@ export function Sidebar({
     try {
       await remove(rt.conversationId);
       dropByConversationId(rt.conversationId);
+      if (location.pathname === `/chat/${encodeURIComponent(rt.conversationId)}`) {
+        navigate("/", { replace: true });
+      }
     } catch {
       toast.error(t("sidebar.deleteFailed"));
     }
   };
 
-  const openConversation = async (id: string) => {
-    // Prefer an already-loaded runtime (it may be mid-stream) so its partial
-    // tokens aren't clobbered by staler server history; only fetch the first
-    // time we open a conversation this session.
-    if (activateByConversationId(id)) {
-      select(id);
-      return;
-    }
-    try {
-      const detail = await getConversation(id);
-      hydrate(detail);
-      select(id);
-    } catch {
-      toast.error(t("sidebar.loadFailed"));
-      clearSelection();
-    }
+  const openConversation = (id: string) => {
+    activateByConversationId(id);
+    select(id);
+    navigate(`/chat/${encodeURIComponent(id)}`);
   };
 
   const newChat = () => {
     newDraft();
     clearSelection();
+    navigate("/");
   };
 
   const onDelete = async (e: React.MouseEvent, id: string) => {
@@ -165,6 +163,9 @@ export function Sidebar({
       // fresh draft (an empty "new chat" view). `remove` already clears the
       // sidebar selection when the deleted item was selected.
       dropByConversationId(id);
+      if (location.pathname === `/chat/${encodeURIComponent(id)}`) {
+        navigate("/", { replace: true });
+      }
     } catch {
       toast.error(t("sidebar.deleteFailed"));
     }

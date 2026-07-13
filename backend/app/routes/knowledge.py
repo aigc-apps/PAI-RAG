@@ -172,7 +172,7 @@ async def list_knowledge_bases(
     svc: KnowledgeService = Depends(get_knowledge_service),
 ):
     rows = await svc.list_kbs(user=user)
-    return {"data": [_dump(r) for r in rows]}
+    return {"data": [_dump(row) for row in rows]}
 
 
 @router.post("/v1/knowledge-bases")

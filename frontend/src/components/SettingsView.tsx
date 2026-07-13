@@ -35,8 +35,8 @@ import { ConnectionsPanel } from "./ConnectionsPanel";
 import { PageHeader } from "./PageHeader";
 import { useI18n } from "../i18n";
 
-type Tab = "agents" | "org-persona" | "tools" | "connections" | "knowledge" | "skills" | "yaml";
-type TabItem = { id: Tab; label: string; subtle?: boolean };
+export type SettingsSection = "agents" | "org-persona" | "tools" | "connections" | "skills" | "yaml";
+type TabItem = { id: SettingsSection | "knowledge"; label: string; subtle?: boolean };
 
 function isControlPlaneCapability(cap: CapabilityConfig) {
   return cap.settings.control_plane === true;
@@ -154,10 +154,14 @@ export function SettingsView({
   doc,
   onBack,
   onOpenKnowledge,
+  initialSection = "agents",
+  onSectionChange,
 }: {
   doc: AgentConfigDocument;
   onBack: () => void;
   onOpenKnowledge?: () => void;
+  initialSection?: SettingsSection;
+  onSectionChange?: (section: SettingsSection) => void;
 }) {
   const save = useAgentConfigStore((s) => s.save);
   const loadYaml = useAgentConfigStore((s) => s.loadYaml);
@@ -166,7 +170,7 @@ export function SettingsView({
   const uploadSkillZip = useAgentConfigStore((s) => s.uploadSkillZip);
   const installSkill = useAgentConfigStore((s) => s.installSkill);
   const loading = useAgentConfigStore((s) => s.loading);
-  const [tab, setTab] = useState<Tab>("agents");
+  const [tab, setTab] = useState<SettingsSection>(initialSection);
   const [agentId, setAgentId] = useState(doc.default_agent || doc.agents[0]?.id || "main");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sandboxOpen, setSandboxOpen] = useState(false);
@@ -176,6 +180,15 @@ export function SettingsView({
   const [yamlText, setYamlText] = useState("");
   const [testingSearch, setTestingSearch] = useState(false);
   const [searchOutput, setSearchOutput] = useState("");
+
+  useEffect(() => {
+    setTab(initialSection);
+  }, [initialSection]);
+
+  const selectSection = (section: SettingsSection) => {
+    setTab(section);
+    onSectionChange?.(section);
+  };
 
   const agents = doc.agents.length ? doc.agents : [];
   const agent = agents.find((item) => item.id === agentId) ?? agents[0];
@@ -238,7 +251,7 @@ export function SettingsView({
   const openYaml = async () => {
     try {
       setYamlText(await loadYaml());
-      setTab("yaml");
+      selectSection("yaml");
     } catch {
       toast.error("Could not load YAML");
     }
@@ -289,8 +302,9 @@ export function SettingsView({
                 key={item.id}
                 type="button"
                 onClick={async () => {
-                  if (item.id === "yaml" && !yamlText) await openYaml();
-                  else setTab(item.id);
+                  if (item.id === "knowledge") onOpenKnowledge?.();
+                  else if (item.id === "yaml" && !yamlText) await openYaml();
+                  else selectSection(item.id);
                 }}
                 className={cn(
                   "flex min-h-9 w-full items-center rounded-[var(--radius)] px-3 py-1.5 text-left text-sm transition-colors max-lg:w-auto max-lg:shrink-0",
@@ -341,12 +355,6 @@ export function SettingsView({
           )}
 
           {tab === "connections" && <ConnectionsPanel doc={doc} />}
-
-          {tab === "knowledge" && (
-            <KnowledgeSettingsHub
-              onOpenKnowledge={onOpenKnowledge}
-            />
-          )}
 
           {tab === "skills" && (
             <SkillsPanel
@@ -447,65 +455,6 @@ export function SettingsView({
           }}
         />
       )}
-    </div>
-  );
-}
-
-function KnowledgeSettingsHub({
-  onOpenKnowledge,
-}: {
-  onOpenKnowledge?: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">{t("settings.kbHubTitle")}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-          {t("settings.kbHubBody")}
-        </p>
-      </div>
-
-      {onOpenKnowledge ? (
-        <button
-          type="button"
-          onClick={onOpenKnowledge}
-          className={cn(
-            CARD,
-            "focus-ring group w-full p-[18px] text-left transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface)]"
-          )}
-        >
-          <div className="flex flex-wrap items-start gap-3">
-            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] group-hover:border-[var(--border-strong)] group-hover:bg-[var(--bg-elevated)]">
-              <Database className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-[15px] font-semibold">{t("settings.kbDataTitle")}</h3>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--text-muted)]">
-                {t("settings.kbDataBody")}
-              </p>
-            </div>
-            <span className={cn(BTN_PRIMARY, "pointer-events-none")}>
-              {t("settings.openKbManager")}
-            </span>
-          </div>
-        </button>
-      ) : (
-        <div className={cn(CARD, "p-[18px]")}>
-          <div className="flex flex-wrap items-start gap-3">
-            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)]">
-              <Database className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-[15px] font-semibold">{t("settings.kbDataTitle")}</h3>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--text-muted)]">
-                {t("settings.kbDataBody")}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

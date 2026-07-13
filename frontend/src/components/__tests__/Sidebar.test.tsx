@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 vi.mock("../../api/conversations", () => ({
   getConversation: vi.fn(),
@@ -24,6 +25,19 @@ const streamingAssistant = (): ChatMessage => ({
   status: "streaming", responseId: "resp_1", toolCalls: [],
 });
 
+function renderSidebar(path = "/") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Sidebar />
+      <div data-testid="location">{<Location />}</div>
+    </MemoryRouter>,
+  );
+}
+
+function Location() {
+  return <>{useLocation().pathname}</>;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useChatStore.getState().reset();
@@ -38,7 +52,7 @@ beforeEach(() => {
 describe("Sidebar", () => {
   it("shows a row for a brand-new draft immediately", () => {
     // reset() installs one fresh empty draft as the active runtime.
-    render(<Sidebar />);
+    renderSidebar();
     expect(screen.getByText("新对话")).toBeInTheDocument();
     expect(screen.queryByText("暂无对话")).not.toBeInTheDocument();
   });
@@ -50,7 +64,7 @@ describe("Sidebar", () => {
     useChatStore.getState().setStatusOf(key, "streaming");
     useChatStore.getState().setAnchorsOf(key, { conversationId: "conv_live" });
     // Server list is still empty (refresh happens on completion).
-    render(<Sidebar />);
+    renderSidebar();
     expect(screen.getByText("streaming question")).toBeInTheDocument();
     expect(screen.getByLabelText("生成中")).toBeInTheDocument();
   });
@@ -66,7 +80,7 @@ describe("Sidebar", () => {
     const keyB = useChatStore.getState().newDraft();
     expect(useChatStore.getState().activeKey).toBe(keyB);
 
-    render(<Sidebar />);
+    renderSidebar();
     // A is still listed and switchable back to.
     await user.click(screen.getByText("conversation A"));
     expect(useChatStore.getState().activeKey).toBe(keyA);
@@ -82,7 +96,28 @@ describe("Sidebar", () => {
     useConversationsStore.setState({
       items: [{ id: "conv_saved", title: "Saved chat", created_at: null, updated_at: null, last_response_id: null }],
     });
-    render(<Sidebar />);
+    renderSidebar();
     expect(screen.getAllByText(/saved chat/i)).toHaveLength(1);
+  });
+
+  it("navigates persisted rows to their conversation route", async () => {
+    const user = userEvent.setup();
+    useConversationsStore.setState({
+      items: [{ id: "c1", title: "Saved route", created_at: null, updated_at: null, last_response_id: null }],
+    });
+    renderSidebar();
+
+    await user.click(screen.getByText("Saved route"));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/chat/c1");
+  });
+
+  it("navigates New chat to the root route", async () => {
+    const user = userEvent.setup();
+    renderSidebar("/chat/c1");
+
+    await user.click(screen.getByRole("button", { name: /new chat|新建对话/i }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
   });
 });

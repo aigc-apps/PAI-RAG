@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../../api/conversations", () => ({
   listConversations: vi.fn().mockResolvedValue([]),
@@ -35,6 +36,14 @@ import { useAgentConfigStore } from "../../store/agentConfig";
 import { useAuthStore } from "../../store/auth";
 import { useI18nStore } from "../../i18n";
 
+function renderApp(path = "/") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
 function setAuth(over: Partial<ReturnType<typeof useAuthStore.getState>>) {
   useAuthStore.setState({
     user: null,
@@ -55,13 +64,13 @@ beforeEach(() => {
 describe("App auth guards", () => {
   it("shows Create-Admin when bootstrap is needed", async () => {
     setAuth({ bootstrapNeeded: true });
-    render(<App />);
+    renderApp();
     expect(await screen.findByText(/create admin account/i)).toBeInTheDocument();
   });
 
   it("shows Login when anonymous", async () => {
     setAuth({ phase: "anonymous" });
-    render(<App />);
+    renderApp();
     expect(await screen.findByRole("button", { name: /sign in/i })).toBeInTheDocument();
   });
 
@@ -71,7 +80,7 @@ describe("App auth guards", () => {
       isAdmin: false,
       user: { id: "u1", email: "u@b.com", role: "user", status: "active", display_name: null },
     });
-    render(<App />);
+    renderApp();
     // Chat surface is up…
     expect(await screen.findByRole("textbox")).toBeInTheDocument();
     // …open the bottom-left account menu — a non-admin sees no Settings item.
@@ -86,8 +95,18 @@ describe("App auth guards", () => {
       isAdmin: true,
       user: { id: "a1", email: "a@b.com", role: "admin", status: "active", display_name: null },
     });
-    render(<App />);
+    renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /account menu/i }));
     expect(await screen.findByText(/^settings$/i)).toBeInTheDocument();
+  });
+
+  it("redirects a regular user away from admin routes", async () => {
+    setAuth({
+      phase: "authenticated",
+      isAdmin: false,
+      user: { id: "u1", email: "u@b.com", role: "user", status: "active", display_name: null },
+    });
+    renderApp("/users");
+    expect(await screen.findByRole("textbox")).toBeInTheDocument();
   });
 });

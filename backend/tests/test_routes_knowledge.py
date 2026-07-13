@@ -4,16 +4,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from fastapi import FastAPI  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-from app.db import create_all, make_engine
-from app.deps import AppState
-from app.jobs import JobQueue, register_knowledge_handlers
-from app.knowledge import KnowledgeService
-from app.routes.knowledge import router as knowledge_router
-from app.store.memory import InMemoryStore
-from tests.authutil import apply_auth
+from app.db import create_all, make_engine  # noqa: E402
+from app.deps import AppState  # noqa: E402
+from app.jobs import JobQueue, register_knowledge_handlers  # noqa: E402
+from app.knowledge import KnowledgeService  # noqa: E402
+from app.routes.knowledge import router as knowledge_router  # noqa: E402
+from app.store.memory import InMemoryStore  # noqa: E402
+from tests.authutil import apply_auth  # noqa: E402
 
 
 def _client(*, user_id="u_owner", role="admin"):
@@ -55,6 +55,17 @@ def _create_kb(c: TestClient):
     )
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def test_list_knowledge_bases_serializes_knowledge_base_rows():
+    c = _client()
+    kb = _create_kb(c)
+
+    response = c.get("/v1/knowledge-bases")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"][0]["id"] == kb["id"]
+    assert "active_job_id" not in response.json()["data"][0]
 
 
 def test_knowledge_base_import_search_and_fetch():
@@ -168,7 +179,7 @@ def test_disable_chunk_removes_it_from_search():
 
 # ---- Embedding/rerank model selection at KB create + update ----
 
-from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
+from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter  # noqa: E402
 
 
 def _router():
