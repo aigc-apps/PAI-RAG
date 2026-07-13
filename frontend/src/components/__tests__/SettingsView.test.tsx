@@ -312,6 +312,109 @@ describe("SettingsView", () => {
     expect(screen.queryByText("代码库配置单")).not.toBeInTheDocument();
   });
 
+  it("enables the complete knowledge tool bundle while preserving unrelated tools", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "编辑能力" }));
+    await user.click(screen.getByRole("button", { name: /knowledge_search/ }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const agent = saved.agents[0];
+    expect(agent.tools.include).toEqual([
+      "current_datetime",
+      "knowledge_search",
+      "knowledge_read",
+      "knowledge_find",
+      "knowledge_list",
+    ]);
+    expect(agent.tools.include).not.toEqual(
+      expect.arrayContaining(["view_file", "grep_file", "list_knowledge_bases"])
+    );
+  });
+
+  it("disables and strips every canonical and legacy knowledge tool name", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const migratedDoc: AgentConfigDocument = {
+      ...baseDoc,
+      agents: baseDoc.agents.map((agent) => ({
+        ...agent,
+        tools: {
+          include: [
+            "current_datetime",
+            "knowledge_search",
+            "knowledge_read",
+            "knowledge_find",
+            "knowledge_list",
+            "view_file",
+            "grep_file",
+            "list_knowledge_bases",
+          ],
+          exclude: ["code_sandbox", "view_file"],
+        },
+      })),
+    };
+
+    render(<SettingsView doc={migratedDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "编辑能力" }));
+    await user.click(screen.getByRole("button", { name: /knowledge_search/ }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const agent = saved.agents[0];
+    expect(agent.tools.include).toEqual(["current_datetime"]);
+    expect(agent.tools.exclude).toEqual(
+      expect.arrayContaining([
+        "code_sandbox",
+        "knowledge_search",
+        "knowledge_read",
+        "knowledge_find",
+        "knowledge_list",
+      ])
+    );
+    expect(agent.tools.exclude).not.toEqual(
+      expect.arrayContaining(["view_file", "grep_file", "list_knowledge_bases"])
+    );
+  });
+
+  it("recognizes a legacy knowledge selection and removes it without persisting aliases", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const legacyDoc: AgentConfigDocument = {
+      ...baseDoc,
+      agents: baseDoc.agents.map((agent) => ({
+        ...agent,
+        tools: {
+          include: ["current_datetime", "view_file", "grep_file", "list_knowledge_bases"],
+          exclude: ["code_sandbox"],
+        },
+      })),
+    };
+
+    render(<SettingsView doc={legacyDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "编辑能力" }));
+    await user.click(screen.getByRole("button", { name: /knowledge_search/ }));
+
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].tools.include).toEqual(["current_datetime"]);
+    expect(saved.agents[0].tools.exclude).toEqual([
+      "code_sandbox",
+      "knowledge_search",
+      "knowledge_read",
+      "knowledge_find",
+      "knowledge_list",
+    ]);
+  });
+
   it("generates a code manifest and saves it onto the agent", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);

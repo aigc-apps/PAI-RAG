@@ -79,8 +79,21 @@ function displayToolName(id: string) {
   return id;
 }
 
+const KNOWLEDGE_TOOL_BUNDLE = [
+  "knowledge_search",
+  "knowledge_read",
+  "knowledge_find",
+  "knowledge_list",
+];
+
+const LEGACY_KNOWLEDGE_TOOL_NAMES = [
+  "view_file",
+  "grep_file",
+  "list_knowledge_bases",
+];
+
 const TOOL_BUNDLES: Record<string, string[]> = {
-  knowledge_search: ["knowledge_search"],
+  knowledge_search: KNOWLEDGE_TOOL_BUNDLE,
   code_sandbox: ["code_interpreter", "shell", "publish_artifact"],
   // The `subagent` capability id maps to the real registered tool name, so toggling
   // the "Subagents" card writes spawn_subagent into the agent's tools.include
@@ -95,6 +108,11 @@ function toolBundle(toolId: string) {
 }
 
 function toolAliases(toolId: string) {
+  const legacyAliases = toolId === "knowledge_search" ? LEGACY_KNOWLEDGE_TOOL_NAMES : [];
+  return Array.from(new Set([toolId, ...toolBundle(toolId), ...legacyAliases]));
+}
+
+function persistedToolNames(toolId: string) {
   return Array.from(new Set([toolId, ...toolBundle(toolId)]));
 }
 
@@ -211,11 +229,11 @@ export function SettingsView({
     const included = new Set(agent.tools.include);
     const excluded = new Set(agent.tools.exclude);
     const aliases = toolAliases(toolId);
+    const persistedNames = persistedToolNames(toolId);
     if (isToolEnabled(agent, toolId)) {
-      aliases.forEach((name) => {
-        included.delete(name);
-        excluded.add(name);
-      });
+      aliases.forEach((name) => included.delete(name));
+      aliases.forEach((name) => excluded.delete(name));
+      persistedNames.forEach((name) => excluded.add(name));
     } else {
       toolBundle(toolId).forEach((name) => included.add(name));
       aliases.forEach((name) => excluded.delete(name));
