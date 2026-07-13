@@ -112,9 +112,13 @@ _KNOWLEDGE_GUIDANCE = (
     "your own recall for anything the docs could cover. When your answer draws on "
     "knowledge-base documents, end it with a references section — headed in the "
     "user's language (e.g. \"参考文献\" or \"References\") — listing each cited "
-    "document's title and, when its source is a URL, a link to it, so the reader "
+    "document's title and, only when its source is an HTTP or HTTPS URL, a link "
+    "to it, so the reader "
     "can trace each claim back to its document. List each document once, and use "
-    "only titles and links that appeared in the search results — never invent them."
+    "only titles and links that appeared in the search results — never invent them. "
+    "Do not use passage indexes such as [1] or [n] as citations. document_id and "
+    "chunk_id are internal tool inputs; never expose them in the answer. If a "
+    "document has no accessible URL, list its title only."
 )
 
 
@@ -122,9 +126,13 @@ _KNOWLEDGE_AUX_GUIDANCE = (
     "Additional knowledge-base inspection tools are available. Use "
     "list_knowledge_bases to discover base ids when you need to narrow a search; "
     "use grep_file for an exact literal string that tokenized search may miss — "
-    "error codes, identifiers, API names, exact jargon; use view_file to read a "
-    "document or locate a chunk in surrounding context after knowledge_search or "
-    "grep_file surfaces a relevant hit."
+    "error codes, identifiers, API names, exact jargon. When a retrieved passage "
+    "is incomplete, lacks context, is ambiguous, or does not support a confident "
+    "conclusion, use view_file with the internal document_id or chunk_id to inspect "
+    "the surrounding document; use grep_file to locate exact related terms. Answer "
+    "only after the evidence is sufficient, and do not infer from an isolated "
+    "passage. These IDs are only for tool calls: never expose them to the user, and "
+    "never cite passages as [1] or [n]."
 )
 
 

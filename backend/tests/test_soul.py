@@ -90,6 +90,10 @@ def test_knowledge_guidance_only_when_knowledge_search_present():
         PERSONA, tool_names=["knowledge_search", "view_file", "grep_file"]
     )
     assert "grep_file" in with_aux and "view_file" in with_aux
+    assert "incomplete" in with_aux
+    assert "document_id" in with_aux and "chunk_id" in with_aux
+    assert "[n]" in with_aux
+    assert "never expose" in with_aux
 
 
 def test_sandbox_guidance_when_code_interpreter_or_shell_present():

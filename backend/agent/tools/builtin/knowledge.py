@@ -53,28 +53,30 @@ def _format(hits, *, query: str) -> str:
             "not cover this topic, or nothing has been ingested yet."
         )
     lines: List[str] = [f'Top {len(hits)} passages for "{query}":', ""]
-    for i, h in enumerate(hits, 1):
+    for h in hits:
         text = (h.text or "").strip()
         if len(text) > _MAX_SNIPPET_CHARS:
             text = text[:_MAX_SNIPPET_CHARS].rstrip() + " …"
         title = h.title or "(untitled)"
-        src = h.source_uri or h.document_id
-        lines.append(f"[{i}] {title}  (score {h.score:.3f})")
-        lines.append(f"    source: {src}")
+        lines.append(f"Document: {title}")
+        if h.source_uri:
+            lines.append(f"    source: {h.source_uri}")
         # Surface the (short) document id so the model can hand it straight to
         # view_file (read the whole file) or grep_file (find an exact term in it);
         # the chunk id opens this exact passage in situ via view_file locate.
-        lines.append(f"    doc: {h.document_id}")
+        lines.append(f"    document_id: {h.document_id}")
         if getattr(h, "chunk_id", None):
-            lines.append(f"    chunk: {h.chunk_id}")
-        lines.append(f"    {text}")
+            lines.append(f"    chunk_id: {h.chunk_id}")
+        lines.append(f"    final_score: {h.score:.6f}")
+        lines.append(f"    passage: {text}")
         lines.append("")
     lines.append(
-        "Cite sources by their [n] / title, and say plainly if the passages do "
-        "not contain the answer. Keep each cited document's title and source so you "
-        "can list them (title + link, when the source is a URL) in a references "
-        "section (\"参考文献\" / \"References\") at the end of your answer. To read a "
-        "hit in its surrounding document, use view_file(chunk_id=…, mode=\"locate\")."
+        "Say plainly if the passages do not contain the answer. In the final "
+        "answer, reference documents by title rather than bracketed passage "
+        "indexes. Include a link only when source is an HTTP or HTTPS URL; when "
+        "there is no accessible URL, show the title only. document_id and chunk_id "
+        "are internal tool inputs: never expose them to the user. To inspect a hit "
+        "in context, use view_file(chunk_id=…, mode=\"locate\")."
     )
     return "\n".join(lines).rstrip()
 

@@ -63,6 +63,10 @@ def test_knowledge_search_returns_ranked_snippets_with_sources():
     assert "安装指南" in out
     assert "docs/install" in out  # source cited
     assert "score" in out
+    assert "Document: 安装指南" in out
+    assert "document_id:" in out and "chunk_id:" in out
+    assert "[1]" not in out
+    assert "Cite sources by their [n]" not in out
 
 
 def test_knowledge_search_respects_kb_visibility():
