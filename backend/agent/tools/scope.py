@@ -51,6 +51,12 @@ def scope_default_kb_ids() -> List[str]:
     return []
 
 
+def scope_knowledge_rerank() -> Dict[str, Any]:
+    """Return the active Agent's validated knowledge rerank policy."""
+    raw = get_current_tool_scope().metadata.get("knowledge_rerank")
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
 def set_current_tool_scope(scope: ToolScope):
     return _current_tool_scope.set(scope)
 

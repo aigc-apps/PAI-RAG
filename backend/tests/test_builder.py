@@ -1,5 +1,8 @@
+# ruff: noqa: E402
 # tests/app/test_builder.py
-import sys, os, asyncio
+import asyncio
+import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.schemas import ResponsesRequest
@@ -33,6 +36,39 @@ def test_build_context_from_string_input():
         assert "# Tools" in ctx.system_prompt
         assert ctx.history == []
         assert conv_id is not None
+
+    asyncio.run(run())
+
+
+def test_build_context_injects_agent_knowledge_rerank_policy():
+    async def run():
+        doc = AgentConfigDocument(
+            agents=[
+                {
+                    "id": "main",
+                    "name": "Main",
+                    "knowledge": {
+                        "kb_ids": ["kb_a", "kb_b"],
+                        "rerank": {
+                            "enabled": True,
+                            "model": "dashscope/rr",
+                            "candidate_pool_size": 80,
+                        },
+                    },
+                }
+            ]
+        )
+        ctx, _ = await build_context(
+            ResponsesRequest(model="m", input="turbox"),
+            InMemoryStore(),
+            agent_config=doc,
+        )
+        assert ctx.metadata["default_kb_ids"] == ["kb_a", "kb_b"]
+        assert ctx.metadata["knowledge_rerank"] == {
+            "enabled": True,
+            "model": "dashscope/rr",
+            "candidate_pool_size": 80,
+        }
 
     asyncio.run(run())
 

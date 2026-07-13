@@ -6,7 +6,6 @@ from typing import Iterable, List, Optional, Tuple
 
 from loguru import logger
 
-MEMORY_INJECT_LIMIT = 30
 from agent.context import AgentContext, RunVars
 from agent.custom_skills import (
     discover_skill_packages,
@@ -28,6 +27,8 @@ from agent.soul import (
     render_stable_system_prompt,
     render_subagent_system_prompt,
 )
+
+MEMORY_INJECT_LIMIT = 30
 
 
 def _item_text(content: dict) -> str:
@@ -242,9 +243,13 @@ async def build_context(
     # these bases when the model passes no explicit kb_ids. Each is still
     # permission-checked per request downstream — this narrows, never widens.
     if agent_profile is not None:
-        agent_kbs = getattr(getattr(agent_profile, "knowledge", None), "kb_ids", None)
+        agent_knowledge = getattr(agent_profile, "knowledge", None)
+        agent_kbs = getattr(agent_knowledge, "kb_ids", None)
         if agent_kbs:
             metadata["default_kb_ids"] = list(agent_kbs)
+        agent_rerank = getattr(agent_knowledge, "rerank", None)
+        if agent_rerank is not None:
+            metadata["knowledge_rerank"] = agent_rerank.model_dump()
 
     history = items_to_messages(history_items)
     ctx = AgentContext(
@@ -336,6 +341,11 @@ def build_subagent_context(
         metadata["default_kb_ids"] = list(kb_ids)
     else:
         metadata.pop("default_kb_ids", None)  # e.g. explore searches every accessible KB
+    rerank = getattr(getattr(profile, "knowledge", None), "rerank", None)
+    if rerank is not None:
+        metadata["knowledge_rerank"] = rerank.model_dump()
+    else:
+        metadata.pop("knowledge_rerank", None)
 
     return AgentContext(
         system_prompt=system_prompt,
@@ -423,7 +433,7 @@ def _parse_iso_expiry(iso: str) -> Optional[float]:
         return None
     try:
         return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
-    except Exception:  # noqa: BLE001 — unparseable expiry just means "don't cache"
+    except Exception:  # noqa: BLE001 — unparsable expiry just means "don't cache"
         return None
 
 

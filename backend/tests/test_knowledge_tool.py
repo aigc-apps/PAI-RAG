@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """End-to-end test for the agent-facing knowledge_search tool.
 
 Exercises the online query path the way the agent hits it: build a live
@@ -10,6 +11,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from loguru import logger
 
 from agent.tools.builtin.knowledge import make_knowledge_search_tool
 from agent.tools.scope import ToolScope, reset_current_tool_scope, set_current_tool_scope
@@ -128,13 +131,56 @@ def test_knowledge_search_soft_default_narrows_to_agent_kbs():
     assert "机密调优" not in out  # private tuning doc excluded by the soft default
 
 
+def test_knowledge_search_forwards_agent_rerank_and_logs_resolved_kbs():
+    async def scenario():
+        svc, pub, priv = await _seed()
+        calls = []
+        original_search = svc.search
+
+        async def recording_search(**kwargs):
+            calls.append(kwargs)
+            return await original_search(**kwargs)
+
+        svc.search = recording_search
+        tool = make_knowledge_search_tool(svc)
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}")
+        token = set_current_tool_scope(
+            ToolScope(
+                user_id=ALICE.id,
+                metadata={
+                    "role": "user",
+                    "default_kb_ids": [pub.id, priv.id],
+                    "knowledge_rerank": {
+                        "enabled": True,
+                        "model": "dashscope/rr",
+                        "candidate_pool_size": 80,
+                    },
+                },
+            )
+        )
+        try:
+            await tool.fn(query="turbox", top_k=10)
+        finally:
+            reset_current_tool_scope(token)
+            logger.remove(sink)
+        return pub, priv, calls, messages
+
+    pub, priv, calls, messages = asyncio.run(scenario())
+    assert calls[-1]["kb_ids"] == [pub.id, priv.id]
+    assert calls[-1]["rerank_config"]["model"] == "dashscope/rr"
+    line = next(message for message in messages if "resolved_kb_ids" in message)
+    assert "Calling tool knowledge_search with args:" in line
+    assert pub.id in line and priv.id in line
+
+
 def test_knowledge_search_soft_default_cannot_leak_forbidden_kb():
     """A soft default pointing at a KB the user can't access must not leak it —
     the per-KB permission check still applies, so Bob gets nothing from it."""
     async def scenario():
         svc, _pub, priv = await _seed()
         tool = make_knowledge_search_tool(svc)
-        # The agent is (mis)configured to default at Alice's private KB, but the
+        # The Agent configuration defaults to Alice's private KB, but the
         # caller is Bob, who has no access to it.
         tok = set_current_tool_scope(
             ToolScope(

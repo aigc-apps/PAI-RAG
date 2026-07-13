@@ -22,7 +22,11 @@ from typing import List, Optional
 from loguru import logger
 
 from agent.tools.base import Tool
-from agent.tools.scope import get_current_tool_scope, scope_default_kb_ids
+from agent.tools.scope import (
+    get_current_tool_scope,
+    scope_default_kb_ids,
+    scope_knowledge_rerank,
+)
 
 
 # A chunk can be long; the model only needs enough to ground an answer and cite.
@@ -102,12 +106,38 @@ def make_knowledge_search_tool(knowledge_service) -> Tool:
                     "No knowledge bases are available to search. Ask an admin to "
                     "create one and ingest documents first."
                 )
+            allowed = await knowledge_service.resolve_search_kbs(
+                user=user, kb_ids=targets
+            )
+            resolved_kb_ids = [kb.id for kb in allowed]
+            if not resolved_kb_ids:
+                return (
+                    "No knowledge bases are available to search. Ask an admin to "
+                    "grant access or configure an accessible knowledge base."
+                )
+            rerank_config = scope_knowledge_rerank()
+            resolved_args = {
+                "query": query.strip(),
+                "top_k": top_k,
+                "resolved_kb_ids": resolved_kb_ids,
+                "rerank": (
+                    rerank_config.get("model")
+                    if rerank_config.get("enabled")
+                    else None
+                ),
+            }
+            logger.info(f"Calling tool knowledge_search with args: {resolved_args}")
             hits, _total = await knowledge_service.search(
                 user=user,
-                kb_ids=targets,
+                kb_ids=resolved_kb_ids,
                 query=query.strip(),
                 top_k=max(1, min(int(top_k or _DEFAULT_TOP_K), 20)),
                 mode=mode if mode in {"hybrid", "vector", "keyword"} else "hybrid",
+                rerank_config=rerank_config,
+            )
+            logger.info(
+                f"[knowledge_search] final_results={len(hits)} "
+                f"resolved_kb_ids={resolved_kb_ids}"
             )
             return _format(hits, query=query.strip())
         except Exception as ex:  # never surface a raw traceback to the model
