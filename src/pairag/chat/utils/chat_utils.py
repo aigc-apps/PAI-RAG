@@ -306,25 +306,42 @@ async def make_completion_chunk_response(
     except asyncio.CancelledError:
         logger.warning(f"Streaming cancelled: {full_content}")
         raise
+    except (BrokenPipeError, ConnectionError) as e:
+        # Client already went away; do not attempt another yield.
+        logger.warning(f"Streaming aborted, client disconnected: {e}")
+        raise
     except Exception:
         logger.error(f"Streaming failed: {traceback.format_exc()}")
-        chunk = ChatCompletionChunk(
-            id=chat_id,
-            created=created_ts,
-            model=model,
-            choices=[
-                chat_completion_chunk.Choice(
-                    index=chunk_id,
-                    delta=chat_completion_chunk.ChoiceDelta(
-                        role=MessageRole.ASSISTANT.value,
-                        content=DEFAULT_ERROR_RESPONSE,
-                    ),
-                    finish_reason="stop",
-                )
-            ],
-            object="chat.completion.chunk",
-        )
-        yield _make_json_chunk(data=chunk.model_dump(mode="json"))
+        try:
+            chunk = ChatCompletionChunk(
+                id=chat_id,
+                created=created_ts,
+                model=model,
+                choices=[
+                    chat_completion_chunk.Choice(
+                        index=chunk_id,
+                        delta=chat_completion_chunk.ChoiceDelta(
+                            role=MessageRole.ASSISTANT.value,
+                            content=DEFAULT_ERROR_RESPONSE,
+                        ),
+                        finish_reason="stop",
+                    )
+                ],
+                object="chat.completion.chunk",
+            )
+            yield _make_json_chunk(data=chunk.model_dump(mode="json"))
+        except (BrokenPipeError, ConnectionError, asyncio.CancelledError) as e:
+            # Writing the fallback chunk failed because the peer is gone.
+            # Swallow the secondary error so the original traceback above is
+            # what surfaces in logs; the outer generator machinery will
+            # propagate as needed.
+            logger.warning(
+                f"Failed to deliver error chunk, client disconnected: {e}"
+            )
+        except Exception:
+            logger.error(
+                f"Failed to deliver error chunk: {traceback.format_exc()}"
+            )
 
         raise
 

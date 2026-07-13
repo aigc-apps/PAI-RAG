@@ -106,12 +106,27 @@ def pai_query_wrapper() -> Callable:
                                                     x
                                                 )
                                             )
-                                        full_content += chunk.choices[0].delta.content
+                                        # 尾包（usage-only）可能没有 choices，或
+                                        # delta.content 为 None，避免 IndexError /
+                                        # AttributeError 让整条 SSE 流中断。
+                                        if (
+                                            chunk.choices
+                                            and chunk.choices[0].delta
+                                            and chunk.choices[0].delta.content
+                                        ):
+                                            full_content += (
+                                                chunk.choices[0].delta.content
+                                            )
                                         if not end_time:
                                             end_time = time.time_ns()
-                                    except ValueError as e:
+                                    except (
+                                        ValueError,
+                                        IndexError,
+                                        AttributeError,
+                                        TypeError,
+                                    ) as e:
                                         logger.error(
-                                            "Invalid JSON or data structure:", e
+                                            f"Invalid JSON or data structure: {e}"
                                         )
                                     yield x
 
@@ -225,7 +240,20 @@ def pai_query_wrapper() -> Callable:
                 return f_return_val
 
         async def async_dummy_wrapper(_self: Any, *args: Any, **kwargs: Any) -> Any:
-            return await f(_self, *args, **kwargs)
+            f_return_val = await f(_self, *args, **kwargs)
+            if isinstance(f_return_val, AsyncGenerator):
+                # Wrap the generator with ``aclosing`` so the upstream
+                # httpx / LLM stream is torn down promptly if the client
+                # disconnects mid-stream. Without this, cancelled SSE
+                # requests can leave sockets hanging and slow subsequent
+                # requests — a known amplifier for intermittent 499s.
+                async def _wrapped() -> AsyncGenerator[Any, None]:
+                    async with contextlib.aclosing(f_return_val) as agen:
+                        async for x in agen:
+                            yield x
+
+                return _wrapped()
+            return f_return_val
 
         def dummy_wrapper(_self: Any, *args: Any, **kwargs: Any) -> Any:
             return f(_self, *args, **kwargs)
