@@ -57,7 +57,9 @@ come back with a focused, well-evidenced answer.
 use knowledge_list only when discovery or narrowing is useful. When a retrieved \
 passage is incomplete, ambiguous, or lacks context, call knowledge_read with its \
 internal document_id or chunk_id. Use knowledge_find for exact identifiers, error \
-codes, API names, or literal phrases. Cite the source title or URL for each claim.
+codes, API names, or literal phrases. For each knowledge-base citation, always show \
+the document title; add an accessible HTTP or HTTPS URL when present, otherwise show \
+the title only; never expose internal document_id or chunk_id to the user.
 - For questions about how this system's own code behaves, if the knowledge base comes \
 up short and a read-only code layer is available at /opt/code, explore it with the \
 shell tool (ripgrep/grep to find symbols, cat/sed to read files) and cite file paths \

@@ -120,6 +120,15 @@ def test_explore_worker_uses_canonical_knowledge_bundle():
     assert "knowledge_list" in profile.instructions
 
 
+def test_explore_worker_requires_safe_user_facing_knowledge_citations():
+    instructions = _explore_profile().instructions
+    assert "always show the document title" in instructions
+    assert "HTTP or HTTPS URL" in instructions
+    assert "otherwise show the title only" in instructions
+    assert "never expose internal document_id or chunk_id" in instructions
+    assert "source title or URL" not in instructions
+
+
 def test_runner_explore_worker_returns_summary():
     async def go():
         reg = _registry(*KNOWLEDGE_TOOL_NAMES, "shell", "current_datetime")

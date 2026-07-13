@@ -118,11 +118,16 @@ def make_knowledge_search_tool(knowledge_service) -> Tool:
                     "grant access or configure an accessible knowledge base."
                 )
             rerank_config = scope_knowledge_rerank()
+            resolved_top_k = max(1, min(int(top_k or _DEFAULT_TOP_K), 20))
+            resolved_mode = (
+                mode if mode in {"hybrid", "vector", "keyword"} else "hybrid"
+            )
             resolved_args = {
-                "query": query.strip(),
-                "top_k": top_k,
+                "top_k": resolved_top_k,
+                "mode": resolved_mode,
                 "resolved_kb_ids": resolved_kb_ids,
-                "rerank": (
+                "rerank_enabled": bool(rerank_config.get("enabled")),
+                "rerank_model": (
                     rerank_config.get("model")
                     if rerank_config.get("enabled")
                     else None
@@ -133,8 +138,8 @@ def make_knowledge_search_tool(knowledge_service) -> Tool:
                 user=user,
                 kb_ids=resolved_kb_ids,
                 query=query.strip(),
-                top_k=max(1, min(int(top_k or _DEFAULT_TOP_K), 20)),
-                mode=mode if mode in {"hybrid", "vector", "keyword"} else "hybrid",
+                top_k=resolved_top_k,
+                mode=resolved_mode,
                 rerank_config=rerank_config,
             )
             logger.info(

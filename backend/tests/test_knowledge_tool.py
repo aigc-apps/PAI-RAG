@@ -137,6 +137,8 @@ def test_knowledge_search_soft_default_narrows_to_agent_kbs():
 
 
 def test_knowledge_search_forwards_agent_rerank_and_logs_resolved_kbs():
+    sentinel_query = "SENSITIVE_QUERY_MUST_NOT_APPEAR_IN_LOGS_7f3d"
+
     async def scenario():
         svc, pub, priv = await _seed()
         calls = []
@@ -165,7 +167,7 @@ def test_knowledge_search_forwards_agent_rerank_and_logs_resolved_kbs():
             )
         )
         try:
-            await tool.fn(query="turbox", top_k=10)
+            await tool.fn(query=sentinel_query, top_k=10, mode="keyword")
         finally:
             reset_current_tool_scope(token)
             logger.remove(sink)
@@ -177,6 +179,9 @@ def test_knowledge_search_forwards_agent_rerank_and_logs_resolved_kbs():
     line = next(message for message in messages if "resolved_kb_ids" in message)
     assert "Calling tool knowledge_search with args:" in line
     assert pub.id in line and priv.id in line
+    assert "'top_k': 10" in line
+    assert "'mode': 'keyword'" in line
+    assert all(sentinel_query not in message for message in messages)
 
 
 def test_knowledge_search_soft_default_cannot_leak_forbidden_kb():
