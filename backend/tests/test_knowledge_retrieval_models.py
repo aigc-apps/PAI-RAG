@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """KnowledgeService with real embedder/reranker seams:
 - ingest + query embed through the KB's frozen embedder (same source);
 - rerank reorders the candidate window when rerank_config.enabled;
@@ -96,7 +97,18 @@ def test_rerank_reorders_when_enabled():
         )
         for i in range(3):
             await svc.import_text_document(kb.id, user=ADMIN, title=f"d{i}", content=f"shared word doc {i}", uri=f"d/{i}")
-        hits, _ = await svc.search(user=ADMIN, kb_ids=[kb.id], query="shared", mode="keyword", top_k=3)
+        hits, _ = await svc.search(
+            user=ADMIN,
+            kb_ids=[kb.id],
+            query="shared",
+            mode="keyword",
+            top_k=3,
+            rerank_config={
+                "enabled": True,
+                "model": "dashscope/rr",
+                "candidate_pool_size": 20,
+            },
+        )
         return reranker, hits
 
     reranker, hits = asyncio.run(scenario())
@@ -106,6 +118,97 @@ def test_rerank_reorders_when_enabled():
     # the fake reranker reverses its input; final hit order must follow that
     assert [h.text for h in hits] == list(reversed(candidate_docs))
     # rerank relevance score is written onto the hits (descending)
+    assert base_scores_descending(hits)
+
+
+def test_kb_rerank_config_is_ignored_without_agent_policy():
+    async def scenario():
+        router = _chat_router()
+        reranker = FakeReranker()
+        router.register_llm("dashscope/rr", reranker)
+        svc = await _svc(router)
+        kb = await svc.create_kb(
+            user=ADMIN,
+            name="KB",
+            visibility="public",
+            rerank_config={"enabled": True, "model": "dashscope/rr"},
+        )
+        await svc.import_text_document(
+            kb.id,
+            user=ADMIN,
+            title="d",
+            content="shared content",
+            uri="d/1",
+        )
+        hits, _ = await svc.search(
+            user=ADMIN,
+            kb_ids=[kb.id],
+            query="shared",
+            mode="keyword",
+        )
+        return reranker, hits
+
+    reranker, hits = asyncio.run(scenario())
+    assert hits
+    assert reranker.calls == []
+
+
+def test_multi_kb_search_queries_each_embedding_group_then_reranks_once():
+    async def scenario():
+        router = _chat_router()
+        emb_a = FakeEmbedder(dimension=8)
+        emb_b = FakeEmbedder(dimension=12)
+        reranker = FakeReranker()
+        router.register_llm("dashscope/emb-a", emb_a)
+        router.register_llm("dashscope/emb-b", emb_b)
+        router.register_llm("dashscope/rr", reranker)
+        svc = await _svc(router)
+        kb_a = await svc.create_kb(
+            user=ADMIN,
+            name="A",
+            visibility="public",
+            embedding_config={
+                "provider_id": "dashscope",
+                "model": "dashscope/emb-a",
+                "dimension": 8,
+            },
+        )
+        kb_b = await svc.create_kb(
+            user=ADMIN,
+            name="B",
+            visibility="public",
+            embedding_config={
+                "provider_id": "dashscope",
+                "model": "dashscope/emb-b",
+                "dimension": 12,
+            },
+        )
+        await svc.import_text_document(
+            kb_a.id, user=ADMIN, title="A doc", content="turbox alpha", uri="a"
+        )
+        await svc.import_text_document(
+            kb_b.id, user=ADMIN, title="B doc", content="turbox beta", uri="b"
+        )
+        emb_a.calls.clear()
+        emb_b.calls.clear()
+        hits, _ = await svc.search(
+            user=ADMIN,
+            kb_ids=[kb_a.id, kb_b.id],
+            query="turbox",
+            top_k=2,
+            rerank_config={
+                "enabled": True,
+                "model": "dashscope/rr",
+                "candidate_pool_size": 20,
+            },
+        )
+        return emb_a, emb_b, reranker, hits, kb_a, kb_b
+
+    emb_a, emb_b, reranker, hits, kb_a, kb_b = asyncio.run(scenario())
+    assert [call[0] for call in emb_a.calls] == ["query"]
+    assert [call[0] for call in emb_b.calls] == ["query"]
+    assert len(reranker.calls) == 1
+    assert {hit.kb_id for hit in hits} == {kb_a.id, kb_b.id}
     assert base_scores_descending(hits)
 
 

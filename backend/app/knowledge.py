@@ -874,6 +874,31 @@ class KnowledgeService:
             rows = (await s.exec(stmt)).all()
             return list(rows), total
 
+    async def resolve_search_kbs(
+        self, *, user: User, kb_ids: list[str]
+    ) -> list[KnowledgeBaseRow]:
+        """Return the requested KBs the caller may query, preserving order."""
+        rows: list[KnowledgeBaseRow] = []
+        seen: set[str] = set()
+        for kb_id in kb_ids:
+            if kb_id in seen:
+                continue
+            seen.add(kb_id)
+            try:
+                rows.append(await self.get_kb(kb_id, user=user))
+            except PermissionError:
+                continue
+        return rows
+
+    @staticmethod
+    def _embedding_group_key(kb: KnowledgeBaseRow) -> tuple[str, str, int]:
+        cfg = kb.embedding_config or {}
+        return (
+            str(cfg.get("provider_id") or "local_hash"),
+            str(cfg.get("model") or "local-hash-v1"),
+            int(cfg.get("dimension") or 64),
+        )
+
     async def search(
         self,
         *,
@@ -885,65 +910,89 @@ class KnowledgeService:
         score_threshold: float = 0.0,
         mode: str = "hybrid",
         filters: Optional[dict] = None,
+        rerank_config: Optional[dict] = None,
     ) -> tuple[list[SearchHit], int]:
-        """Permission-scope the requested KBs, then delegate retrieval to the
-        active engine. Returns ``(hits, total)`` where ``total`` is the full match
-        count (for pagination), independent of ``offset``/``top_k``."""
+        """Search permission-filtered KBs and globally rank their candidates."""
         if not query.strip():
             return [], 0
         filters = filters or {}
-        allowed_kbs: list[str] = []
-        dimension = 64
-        first_kb: Optional[KnowledgeBaseRow] = None
-        for kb_id in kb_ids:
-            try:
-                kb = await self.get_kb(kb_id, user=user)
-                if not allowed_kbs:
-                    first_kb = kb
-                    dimension = int((kb.embedding_config or {}).get("dimension") or 64)
-                allowed_kbs.append(kb_id)
-            except PermissionError:
-                continue
-        if not allowed_kbs:
+        allowed = await self.resolve_search_kbs(user=user, kb_ids=kb_ids)
+        if not allowed:
             return [], 0
+
         limit = max(1, min(int(top_k or 6), 50))
         offset = max(0, int(offset or 0))
-        # Cross-KB search over heterogeneous embedders isn't supported: the query
-        # is embedded once, with the FIRST allowed KB's embedder, and that vector
-        # is compared against every KB's chunks. Same-embedder KBs are the norm.
-        query_vector = None
-        if mode in ("vector", "hybrid") and first_kb is not None:
-            try:
-                embedder = build_embedder(first_kb.embedding_config, self._router)
-                vecs = await embedder.embed([query], text_type="query")
-                query_vector = vecs[0] if vecs else None
-            except Exception as ex:
-                logger.warning(f"[search] query embedding failed ({ex!r}); engine will fall back")
-                query_vector = None
-        # Rerank is a query-time step (toggle via rerank_config.enabled). When on,
-        # over-fetch a candidate pool, rerank it, and trim to the requested page.
-        rerank_cfg = (first_kb.rerank_config if first_kb else None) or {}
+        rerank_cfg = dict(rerank_config or {})
         rerank_on = bool(rerank_cfg.get("enabled")) and self._router is not None
-        fetch_limit = max(limit * 4, 50) if rerank_on else limit
-        kwargs = dict(
-            kb_ids=allowed_kbs, query=query, mode=mode, offset=offset, limit=fetch_limit,
-            score_threshold=score_threshold, dimension=dimension, filters=filters,
-            query_vector=query_vector,
+        candidate_pool_size = max(
+            limit + offset,
+            min(200, max(1, int(rerank_cfg.get("candidate_pool_size") or 50))),
         )
-        engine = self._search
-        if engine is self._local:
-            hits, total = await self._local.search(**kwargs)
-        else:
-            try:
-                hits, total = await engine.search(**kwargs)
-            except Exception as ex:
-                if not self._fallback_to_local:
-                    raise
-                logger.warning(f"[search] primary engine '{getattr(engine, 'name', '?')}' failed ({ex!r}); falling back to local")
-                hits, total = await self._local.search(**kwargs)
-        if rerank_on and hits:
-            hits = await self._rerank_hits(query, hits, limit, rerank_cfg)
-        return hits[:limit], total
+        fetch_limit = candidate_pool_size if rerank_on else limit + offset
+
+        groups: dict[tuple[str, str, int], list[KnowledgeBaseRow]] = {}
+        for kb in allowed:
+            groups.setdefault(self._embedding_group_key(kb), []).append(kb)
+
+        candidates: list[SearchHit] = []
+        total = 0
+        for (_provider, _model, dimension), group in groups.items():
+            query_vector = None
+            if mode in ("vector", "hybrid"):
+                try:
+                    embedder = build_embedder(group[0].embedding_config, self._router)
+                    vecs = await embedder.embed([query], text_type="query")
+                    query_vector = vecs[0] if vecs else None
+                except Exception as ex:
+                    logger.warning(
+                        f"[search] query embedding failed ({ex!r}); "
+                        "engine will fall back"
+                    )
+            kwargs = dict(
+                kb_ids=[kb.id for kb in group],
+                query=query,
+                mode=mode,
+                offset=0,
+                limit=fetch_limit,
+                score_threshold=score_threshold,
+                dimension=dimension,
+                filters=filters,
+                query_vector=query_vector,
+            )
+            engine = self._search
+            if engine is self._local:
+                group_hits, group_total = await self._local.search(**kwargs)
+            else:
+                try:
+                    group_hits, group_total = await engine.search(**kwargs)
+                except Exception as ex:
+                    if not self._fallback_to_local:
+                        raise
+                    logger.warning(
+                        f"[search] primary engine "
+                        f"'{getattr(engine, 'name', '?')}' failed ({ex!r}); "
+                        "falling back to local"
+                    )
+                    group_hits, group_total = await self._local.search(**kwargs)
+            candidates.extend(group_hits)
+            total += group_total
+
+        candidates.sort(key=lambda hit: hit.score, reverse=True)
+        logger.info(
+            f"[search] kb_ids={[kb.id for kb in allowed]} "
+            f"candidates={len(candidates)} rerank="
+            f"{rerank_cfg.get('model') if rerank_on else None}"
+        )
+        if rerank_on and candidates:
+            candidates = await self._rerank_hits(
+                query,
+                candidates[:candidate_pool_size],
+                limit + offset,
+                rerank_cfg,
+            )
+        result = candidates[offset : offset + limit]
+        logger.info(f"[search] final_results={len(result)} total={total}")
+        return result, total
 
     async def _rerank_hits(self, query, hits, limit, rerank_cfg) -> list[SearchHit]:
         """Reorder a candidate window with a DashScope reranker, best-effort:
