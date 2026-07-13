@@ -244,3 +244,4 @@ debug/
 .claude/
 .agent/
 graphify-out/
+.worktrees/
