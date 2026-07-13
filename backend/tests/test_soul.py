@@ -8,6 +8,7 @@ from agent.soul import (  # noqa: E402
     render_context_block,
     render_stable_system_prompt,
 )
+from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES  # noqa: E402
 
 
 # A sample author-written persona, used across the tool-gating cases below. The
@@ -84,12 +85,16 @@ def test_knowledge_guidance_only_when_knowledge_search_present():
     on = render_stable_system_prompt(PERSONA, tool_names=["knowledge_search"])
     # Reflex ("ground your answer") without naming unavailable sibling tools.
     assert "ground your answer" in on
-    assert "grep_file" not in on and "view_file" not in on and "list_knowledge_bases" not in on
+    assert all(name not in on for name in KNOWLEDGE_TOOL_NAMES[1:])
 
     with_aux = render_stable_system_prompt(
-        PERSONA, tool_names=["knowledge_search", "view_file", "grep_file"]
+        PERSONA, tool_names=list(KNOWLEDGE_TOOL_NAMES)
     )
-    assert "grep_file" in with_aux and "view_file" in with_aux
+    assert all(name in with_aux for name in KNOWLEDGE_TOOL_NAMES)
+    assert all(
+        legacy not in with_aux
+        for legacy in ("view_file", "grep_file", "list_knowledge_bases")
+    )
     assert "incomplete" in with_aux
     assert "document_id" in with_aux and "chunk_id" in with_aux
     assert "[n]" in with_aux

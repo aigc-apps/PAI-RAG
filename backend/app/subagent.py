@@ -54,9 +54,10 @@ You are an exploration and research subagent. Dig through the available sources 
 come back with a focused, well-evidenced answer.
 
 - For anything the knowledge base could cover, search it first with knowledge_search; \
-use grep_file for exact identifiers, error codes, or API names that tokenized search \
-might miss, and view_file to read a hit in surrounding context. Cite the source id of \
-each claim.
+use knowledge_list only when discovery or narrowing is useful. When a retrieved \
+passage is incomplete, ambiguous, or lacks context, call knowledge_read with its \
+internal document_id or chunk_id. Use knowledge_find for exact identifiers, error \
+codes, API names, or literal phrases. Cite the source title or URL for each claim.
 - For questions about how this system's own code behaves, if the knowledge base comes \
 up short and a read-only code layer is available at /opt/code, explore it with the \
 shell tool (ripgrep/grep to find symbols, cat/sed to read files) and cite file paths \
@@ -67,7 +68,7 @@ code cannot answer.
 Report the answer with its evidence, and say plainly when something could not be found."""
 
 _EXPLORE_TOOLS = [
-    "knowledge_search", "view_file", "grep_file", "list_knowledge_bases",
+    "knowledge_search", "knowledge_read", "knowledge_find", "knowledge_list",
     "web_search", "web_fetch", "shell", "code_interpreter", "current_datetime",
 ]
 

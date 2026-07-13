@@ -4,12 +4,32 @@ import asyncio
 import os
 import sys
 
+from loguru import logger
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.schemas import ResponsesRequest
 from app.builder import build_context, items_to_messages
 from app.agent_config import AgentConfigDocument
 from app.store.memory import InMemoryStore
 from app.store.base import Item, StoredResponse
+from agent.tools.base import Tool
+from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES
+from agent.tools.registry import ToolRegistry
+
+
+def _knowledge_registry():
+    registry = ToolRegistry()
+    for name in KNOWLEDGE_TOOL_NAMES:
+        async def fn(**kwargs):
+            return "ok"
+
+        registry.register(Tool(
+            name=name,
+            description="d",
+            parameters={"type": "object", "properties": {}},
+            fn=fn,
+        ))
+    return registry
 
 
 def test_request_ignores_unknown_fields_and_parses_input():
@@ -69,6 +89,46 @@ def test_build_context_injects_agent_knowledge_rerank_policy():
             "model": "dashscope/rr",
             "candidate_pool_size": 80,
         }
+
+    asyncio.run(run())
+
+
+def test_build_context_logs_safe_effective_knowledge_summary():
+    async def run():
+        doc = AgentConfigDocument(
+            agents=[
+                {
+                    "id": "research",
+                    "name": "Research",
+                    "tools": {"include": ["knowledge_search"]},
+                    "knowledge": {
+                        "kb_ids": ["kb_a", "kb_b"],
+                        "rerank": {"enabled": True},
+                    },
+                }
+            ]
+        )
+        messages = []
+        sink = logger.add(messages.append, level="DEBUG", format="{message}")
+        try:
+            await build_context(
+                ResponsesRequest(model="m", input="private customer query"),
+                InMemoryStore(),
+                registry=_knowledge_registry(),
+                agent_config=doc,
+            )
+        finally:
+            logger.remove(sink)
+
+        diagnostic = next(
+            str(message) for message in messages
+            if "agent knowledge tools resolved:" in str(message)
+        )
+        assert "agent_id=research" in diagnostic
+        assert all(name in diagnostic for name in KNOWLEDGE_TOOL_NAMES)
+        assert "kb_ids=['kb_a', 'kb_b']" in diagnostic
+        assert "rerank_enabled=True" in diagnostic
+        assert "private customer query" not in diagnostic
 
     asyncio.run(run())
 

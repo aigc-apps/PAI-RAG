@@ -18,7 +18,7 @@ from agent.message import Message, ToolCall
 from agent.tools.base import ToolBox
 from agent.tools.registry import ToolRegistry
 from agent.tools.builtin.spawn_subagent import SPAWN_TOOL_NAMES
-from agent.tools.knowledge_bundle import normalize_knowledge_tool_lists
+from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES, normalize_knowledge_tool_lists
 from agent.tools.scope import ToolScope
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
@@ -240,9 +240,11 @@ async def build_context(
     # aliyun CLI call fails: whether authz is usable here at all, and whether this
     # user is already bound (drives "去授权" vs "重新校验/重新授权").
     metadata.update(aliyun_flags)
-    # Per-agent knowledge soft default: knowledge_search / grep_file fall back to
+    # Per-agent knowledge soft default: knowledge_search / knowledge_find fall back to
     # these bases when the model passes no explicit kb_ids. Each is still
     # permission-checked per request downstream — this narrows, never widens.
+    agent_kbs = None
+    agent_rerank = None
     if agent_profile is not None:
         agent_knowledge = getattr(agent_profile, "knowledge", None)
         agent_kbs = getattr(agent_knowledge, "kb_ids", None)
@@ -251,6 +253,13 @@ async def build_context(
         agent_rerank = getattr(agent_knowledge, "rerank", None)
         if agent_rerank is not None:
             metadata["knowledge_rerank"] = agent_rerank.model_dump()
+    logger.debug(
+        "agent knowledge tools resolved: agent_id={} tools={} kb_ids={} rerank_enabled={}",
+        _agent_id(agent_config, agent_profile),
+        [name for name in tool_names if name in KNOWLEDGE_TOOL_NAMES],
+        list(agent_kbs or []),
+        bool(agent_rerank and agent_rerank.enabled),
+    )
 
     history = items_to_messages(history_items)
     ctx = AgentContext(

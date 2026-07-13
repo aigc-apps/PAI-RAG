@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional
 
+from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES
+
 
 # The built-in persona. An agent's `instructions` (a single freeform Markdown
 # document) IS its base system prompt; when that is blank this default stands in,
@@ -123,16 +125,11 @@ _KNOWLEDGE_GUIDANCE = (
 
 
 _KNOWLEDGE_AUX_GUIDANCE = (
-    "Additional knowledge-base inspection tools are available. Use "
-    "list_knowledge_bases to discover base ids when you need to narrow a search; "
-    "use grep_file for an exact literal string that tokenized search may miss — "
-    "error codes, identifiers, API names, exact jargon. When a retrieved passage "
-    "is incomplete, lacks context, is ambiguous, or does not support a confident "
-    "conclusion, use view_file with the internal document_id or chunk_id to inspect "
-    "the surrounding document; use grep_file to locate exact related terms. Answer "
-    "only after the evidence is sufficient, and do not infer from an isolated "
-    "passage. These IDs are only for tool calls: never expose them to the user, and "
-    "never cite passages as [1] or [n]."
+    "Use knowledge_list only when discovery or narrowing is useful. When a retrieved "
+    "passage is incomplete, ambiguous, or lacks context, call knowledge_read with the "
+    "internal document_id or chunk_id. Use knowledge_find for exact identifiers, "
+    "error codes, API names, or literal phrases. These IDs are only for tool calls: "
+    "never expose them to the user, and never cite passages as [1] or [n]."
 )
 
 
@@ -222,7 +219,7 @@ def _render_capability_guidance(
             continue
         blocks.append(capability.guidance)
         if capability.id == "knowledge" and any(
-            name in tool_set for name in ("view_file", "grep_file", "list_knowledge_bases")
+            name in tool_set for name in KNOWLEDGE_TOOL_NAMES[1:]
         ):
             blocks.append(_KNOWLEDGE_AUX_GUIDANCE)
         if capability.id == "sandbox" and code_layer_enabled:

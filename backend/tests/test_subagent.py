@@ -2,12 +2,15 @@
 spawn_subagent tool. Uses a scripted LLM so the loop is deterministic and offline
 (same pattern as test_agent_hitl / test_llm_agent_integration). Parallel fan-out
 lives in the agent loop, not a batch tool — see test_agent_parallel_dispatch."""
-import sys, os, asyncio
+import asyncio
+import os
+import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from openai.types.completion_usage import CompletionUsage
 
 from agent.tools.base import Tool
+from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES
 from agent.tools.registry import ToolRegistry
 from agent.tools.scope import ToolScope, set_current_tool_scope, reset_current_tool_scope
 from agent.tools.builtin.spawn_subagent import (
@@ -16,7 +19,7 @@ from agent.tools.builtin.spawn_subagent import (
 from app.agent_config import AgentConfigDocument, AgentProfile, AgentToolsConfig, AgentKnowledgeConfig
 from app.builder import build_subagent_context
 from app.deps import AppState
-from app.subagent import SubagentRunner
+from app.subagent import SubagentRunner, _explore_profile
 from common.llm.models import TextChunk
 
 
@@ -100,6 +103,18 @@ def test_child_context_is_clean_and_scoped():
 
 
 # ---- SubagentRunner -----------------------------------------------------------
+
+def test_explore_worker_uses_canonical_knowledge_bundle():
+    profile = _explore_profile()
+    assert all(name in profile.tools.include for name in KNOWLEDGE_TOOL_NAMES)
+    assert all(
+        legacy not in profile.tools.include and legacy not in profile.instructions
+        for legacy in ("view_file", "grep_file", "list_knowledge_bases")
+    )
+    assert "knowledge_read" in profile.instructions
+    assert "knowledge_find" in profile.instructions
+    assert "knowledge_list" in profile.instructions
+
 
 def test_runner_explore_worker_returns_summary():
     async def go():
