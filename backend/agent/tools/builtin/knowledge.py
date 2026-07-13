@@ -4,6 +4,10 @@ The knowledge base's HTTP query routes (``/v1/knowledge/query/*``) serve the
 frontend; this tool gives the *agent* the same retrieval so a chat turn can
 answer questions grounded in ingested docs (the ``skill.knowledge_qa`` flow).
 
+Knowledge-base QA is a basic capability, not a skill: registering this tool (the
+``knowledge`` capability) is what grounds a chat turn in ingested docs and mounts
+the KB guidance into the system prompt — there is no separate skill to enable.
+
 It calls ``KnowledgeService.search`` in-process — no HTTP hop — and derives the
 caller from the active :class:`ToolScope` (set per turn by the run loop), so
 permission scoping (private vs workspace/public KBs) is identical to the REST
@@ -63,8 +67,10 @@ def _format(hits, *, query: str) -> str:
         lines.append("")
     lines.append(
         "Cite sources by their [n] / title, and say plainly if the passages do "
-        "not contain the answer. To read a hit in its surrounding document, use "
-        "view_file(chunk_id=…, mode=\"locate\")."
+        "not contain the answer. Keep each cited document's title and source so you "
+        "can list them (title + link, when the source is a URL) in a references "
+        "section (\"参考文献\" / \"References\") at the end of your answer. To read a "
+        "hit in its surrounding document, use view_file(chunk_id=…, mode=\"locate\")."
     )
     return "\n".join(lines).rstrip()
 

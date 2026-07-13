@@ -99,15 +99,22 @@ _WEB_SEARCH_GUIDANCE = (
 
 
 # Added when the knowledge subsystem is wired in (anchored on knowledge_search).
-# Reflex-level: ground answers in ingested docs. Heavier procedures (citation
-# discipline, cross-KB compare) live in the knowledge_qa skill, not here.
+# Knowledge-base QA is a basic capability, not a skill: enabling the `knowledge`
+# capability (i.e. putting knowledge_search in the toolbox) is what mounts this
+# guidance — grounding, citation discipline, and the references section all live
+# here, so there is no separate knowledge_qa skill to enable.
 _KNOWLEDGE_GUIDANCE = (
     "A knowledge base of ingested documents is available. Before answering a "
     "question its contents could cover, search it and ground your answer in what "
     "you find, citing the source; if it does not contain the answer, say so plainly "
     "rather than guessing. Use knowledge_search for meaning/keyword queries; it "
     "searches every accessible base at once unless you pass kb_ids. Prefer it over "
-    "your own recall for anything the docs could cover."
+    "your own recall for anything the docs could cover. When your answer draws on "
+    "knowledge-base documents, end it with a references section — headed in the "
+    "user's language (e.g. \"参考文献\" or \"References\") — listing each cited "
+    "document's title and, when its source is a URL, a link to it, so the reader "
+    "can trace each claim back to its document. List each document once, and use "
+    "only titles and links that appeared in the search results — never invent them."
 )
 
 

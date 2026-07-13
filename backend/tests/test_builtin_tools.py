@@ -1045,12 +1045,25 @@ def test_install_skill_tool_requires_admin(monkeypatch, tmp_path):
 
 def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path):
     from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
-    from app.agent_config import load_agent_config
+    from app.agent_config import CapabilityConfig, load_agent_config, save_agent_config
 
     config_path = str(tmp_path / "config.yaml")
     settings = type("Settings", (), {"config_path": config_path})()
     reloaded = []
-    doc = load_agent_config(config_path)  # -> DEFAULT_DOCUMENT (agent "main", skill.knowledge_qa ready+enabled)
+    # Seed a ready skill enabled on "main" (KB QA is a plain capability, not a
+    # skill, so this test carries its own skill fixture instead of relying on one).
+    doc = load_agent_config(config_path)
+    doc.capabilities.append(
+        CapabilityConfig(
+            id="skill.custom_qa", kind="skill", name="Custom QA",
+            description="A custom skill fixture.", enabled=True,
+            permission="auto", status="ready",
+        )
+    )
+    main = next(a for a in doc.agents if a.id == "main")
+    main.skills.enabled = [*main.skills.enabled, "skill.custom_qa"]
+    save_agent_config(config_path, doc)
+
     tool = make_enable_skill_for_agent_tool(
         settings, doc, on_config_change=lambda: reloaded.append(True)
     )
@@ -1061,25 +1074,25 @@ def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path):
         return asyncio.run(box.dispatch(tc, scope=ToolScope(metadata={"role": role})))
 
     # Non-admin is blocked before any mutation.
-    denied = _call('{"skill_id":"skill.knowledge_qa","enabled":false}', "user")
+    denied = _call('{"skill_id":"skill.custom_qa","enabled":false}', "user")
     assert not denied.ok
     assert "requires admin permission" in denied.error
     assert reloaded == []
 
-    # Admin disables the (default-enabled) skill: a real change, persisted + reloaded.
-    off = _call('{"skill_id":"skill.knowledge_qa","enabled":false}', "admin")
+    # Admin disables the (seeded-enabled) skill: a real change, persisted + reloaded.
+    off = _call('{"skill_id":"skill.custom_qa","enabled":false}', "admin")
     assert off.ok
     assert '"changed": true' in off.content
     assert '"runtime_reloaded": true' in off.content
     persisted = load_agent_config(config_path)
-    assert "skill.knowledge_qa" not in next(a for a in persisted.agents if a.id == "main").skills.enabled
+    assert "skill.custom_qa" not in next(a for a in persisted.agents if a.id == "main").skills.enabled
 
     # Admin re-enables it.
-    on = _call('{"skill_id":"skill.knowledge_qa"}', "admin")
+    on = _call('{"skill_id":"skill.custom_qa"}', "admin")
     assert on.ok
     assert '"changed": true' in on.content
     persisted = load_agent_config(config_path)
-    assert "skill.knowledge_qa" in next(a for a in persisted.agents if a.id == "main").skills.enabled
+    assert "skill.custom_qa" in next(a for a in persisted.agents if a.id == "main").skills.enabled
     assert reloaded == [True, True]
 
 

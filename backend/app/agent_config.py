@@ -215,9 +215,6 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                     "spawn_subagent",
                 ],
             ),
-            skills=AgentSkillsConfig(
-                enabled=["skill.knowledge_qa"]
-            ),
             settings={"max_steps": 20},
         )
     ],
@@ -361,16 +358,6 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
             permission="admin",
             status="disabled",
             settings={"control_plane": True},
-        ),
-        CapabilityConfig(
-            id="skill.knowledge_qa",
-            kind="skill",
-            name="Knowledge QA",
-            description="Answer questions grounded in configured knowledge collections.",
-            enabled=True,
-            permission="auto",
-            status="ready",
-            dependencies=["knowledge"],
         ),
     ],
 )

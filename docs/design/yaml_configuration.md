@@ -188,8 +188,7 @@ agents:
         - shell
       exclude: []
     skills:
-      enabled:
-        - skill.knowledge_qa
+      enabled: []
     settings:
       max_steps: 20
 ```
