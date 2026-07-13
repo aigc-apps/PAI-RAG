@@ -544,4 +544,37 @@ describe("SettingsView", () => {
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     expect(saved.agents[0].knowledge.kb_ids).toEqual(["kb_a"]);
   });
+
+  it("stores rerank policy on the selected agent", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const doc: AgentConfigDocument = {
+      ...baseDoc,
+      models: {
+        ...baseDoc.models,
+        providers: [
+          { name: "dashscope", models: [{ id: "rr", type: "rerank" }] },
+        ],
+      },
+    };
+
+    render(<SettingsView doc={doc} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "编辑知识库" }));
+    await user.selectOptions(
+      screen.getByLabelText("Rerank model"),
+      "dashscope/rr"
+    );
+    const pool = screen.getByLabelText("Candidate pool size");
+    await user.clear(pool);
+    await user.type(pool, "80");
+    await user.tab();
+
+    const saved = save.mock.calls.at(-1)?.[0] as AgentConfigDocument;
+    expect(saved.agents[0].knowledge.rerank).toEqual({
+      enabled: true,
+      model: "dashscope/rr",
+      candidate_pool_size: 80,
+    });
+  });
 });

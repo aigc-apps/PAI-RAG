@@ -113,6 +113,13 @@ export interface SkillLibraryConfig {
 // request server-side). Empty = search every base the user can access.
 export interface AgentKnowledgeConfig {
   kb_ids: string[];
+  rerank?: AgentKnowledgeRerankConfig;
+}
+
+export interface AgentKnowledgeRerankConfig {
+  enabled: boolean;
+  model: string;
+  candidate_pool_size: number;
 }
 
 export interface AgentProfile {
@@ -163,7 +170,10 @@ export function newAgentProfile(
     description: "",
     model: "",
     instructions: doc.default_instructions || "",
-    knowledge: { kb_ids: [] },
+    knowledge: {
+      kb_ids: [],
+      rerank: { enabled: false, model: "", candidate_pool_size: 50 },
+    },
     code_manifest: "",
     tools: { include: [], exclude: [] },
     skills: { enabled: [] },

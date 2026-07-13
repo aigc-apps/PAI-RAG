@@ -12,13 +12,37 @@ from fastapi.testclient import TestClient
 import yaml
 
 from app.deps import AppState
-from app.agent_config import AgentConfigDocument, apply_runtime_status
+from app.agent_config import (
+    AgentConfigDocument,
+    AgentKnowledgeRerankConfig,
+    apply_runtime_status,
+    load_agent_config,
+    save_agent_config,
+)
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
 from app.routes.config import router as config_router
 from app.store.memory import InMemoryStore
 from app.db import create_all, make_engine
 from app.agent_config_store import SqlAgentConfigStore
 from tests.authutil import apply_auth
+
+
+def test_agent_knowledge_rerank_defaults_and_round_trips(tmp_path):
+    path = tmp_path / "config.yaml"
+    doc = load_agent_config(str(path))
+    assert doc.agents[0].knowledge.rerank.enabled is False
+    assert doc.agents[0].knowledge.rerank.model == ""
+    assert doc.agents[0].knowledge.rerank.candidate_pool_size == 50
+
+    doc.agents[0].knowledge.rerank = AgentKnowledgeRerankConfig(
+        enabled=True,
+        model="dashscope/qwen3-rerank",
+        candidate_pool_size=80,
+    )
+    save_agent_config(str(path), doc)
+    loaded = load_agent_config(str(path))
+    assert loaded.agents[0].knowledge.rerank.model == "dashscope/qwen3-rerank"
+    assert loaded.agents[0].knowledge.rerank.candidate_pool_size == 80
 
 
 def _client(tmp_path, monkeypatch):

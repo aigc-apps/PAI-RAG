@@ -119,6 +119,12 @@ class SkillLibraryConfig(BaseModel):
     installed: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class AgentKnowledgeRerankConfig(BaseModel):
+    enabled: bool = False
+    model: str = ""
+    candidate_pool_size: int = Field(default=50, ge=1, le=200)
+
+
 class AgentKnowledgeConfig(BaseModel):
     """Per-agent knowledge scoping. ``kb_ids`` is a *soft default*: when set, the
     agent's knowledge tools default to these bases instead of every base the user
@@ -126,6 +132,9 @@ class AgentKnowledgeConfig(BaseModel):
     can never widen a user's access. Empty = today's behavior (all accessible)."""
 
     kb_ids: List[str] = Field(default_factory=list)
+    rerank: AgentKnowledgeRerankConfig = Field(
+        default_factory=AgentKnowledgeRerankConfig
+    )
 
 
 class AgentProfile(BaseModel):

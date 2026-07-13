@@ -822,6 +822,13 @@ function KnowledgeSection({
 }) {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const initialRerank = agent.knowledge?.rerank ?? {
+    enabled: false,
+    model: "",
+    candidate_pool_size: 50,
+  };
+  const [rerankModel, setRerankModel] = useState(initialRerank.model);
+  const [poolText, setPoolText] = useState(String(initialRerank.candidate_pool_size));
 
   useEffect(() => {
     let alive = true;
@@ -835,13 +842,48 @@ function KnowledgeSection({
 
   const selected = new Set(agent.knowledge?.kb_ids ?? []);
   const scoped = selected.size > 0;
+  const rerankModels = (doc.models.providers ?? []).flatMap((provider) =>
+    (provider.models ?? [])
+      .filter((model) => model.type === "rerank")
+      .map((model) => `${provider.name}/${model.id}`)
+  );
+
+  const saveRerank = (model: string, rawPool: string) => {
+    const parsed = Number(rawPool);
+    const candidatePoolSize = Math.max(
+      1,
+      Math.min(200, Number.isFinite(parsed) ? Math.round(parsed) : 50)
+    );
+    setPoolText(String(candidatePoolSize));
+    void onSave(
+      applyAgentPatch(doc, agent.id, {
+        knowledge: {
+          kb_ids: [...selected],
+          rerank: {
+            enabled: Boolean(model),
+            model,
+            candidate_pool_size: candidatePoolSize,
+          },
+        },
+      })
+    );
+  };
 
   const toggle = (kbId: string) => {
     const next = new Set(selected);
     if (next.has(kbId)) next.delete(kbId);
     else next.add(kbId);
     void onSave(
-      applyAgentPatch(doc, agent.id, { knowledge: { kb_ids: [...next] } })
+      applyAgentPatch(doc, agent.id, {
+        knowledge: {
+          kb_ids: [...next],
+          rerank: {
+            enabled: Boolean(rerankModel),
+            model: rerankModel,
+            candidate_pool_size: Number(poolText) || 50,
+          },
+        },
+      })
     );
   };
 
@@ -874,6 +916,40 @@ function KnowledgeSection({
           ))}
         </div>
       )}
+      <div className="mt-4 grid gap-3 border-t border-[var(--border)] pt-4 sm:grid-cols-[minmax(0,1fr)_150px]">
+        <label className="block text-xs font-medium text-[var(--text-muted)]">
+          <span className="mb-1.5 block">Rerank model</span>
+          <select
+            aria-label="Rerank model"
+            className={INPUT}
+            value={rerankModel}
+            onChange={(event) => {
+              const model = event.target.value;
+              setRerankModel(model);
+              saveRerank(model, poolText);
+            }}
+          >
+            <option value="">Disabled</option>
+            {rerankModels.map((model) => (
+              <option key={model} value={model}>{model}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs font-medium text-[var(--text-muted)]">
+          <span className="mb-1.5 block">Candidate pool size</span>
+          <input
+            aria-label="Candidate pool size"
+            className={cn(INPUT, "font-mono")}
+            type="number"
+            min={1}
+            max={200}
+            disabled={!rerankModel}
+            value={poolText}
+            onChange={(event) => setPoolText(event.target.value)}
+            onBlur={() => saveRerank(rerankModel, poolText)}
+          />
+        </label>
+      </div>
     </>
   );
 
