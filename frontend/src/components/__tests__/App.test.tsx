@@ -170,7 +170,9 @@ describe("App", () => {
     renderApp("/chat/missing");
 
     await screen.findByRole("textbox");
-    expect(screen.getByTestId("location").textContent).toBe("/");
+    await waitFor(() => {
+      expect(screen.getByTestId("location").textContent).toBe("/");
+    });
   });
 
   it("deep-links settings sections and updates the URL on tab changes", async () => {
